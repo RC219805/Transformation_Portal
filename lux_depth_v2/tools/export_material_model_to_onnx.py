@@ -37,9 +37,17 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--ckpt", type=str, required=True)
     ap.add_argument("--onnx-out", type=str, required=True)
-    ap.add_argument("--labels-out", type=str, required=True, help="JSON mapping class index->surface name")
     ap.add_argument(
-        "--surfaces", type=str, required=True, help="Comma-separated list of material names matching model channels"
+        "--labels-out",
+        type=str,
+        required=True,
+        help="JSON mapping class index->surface name",
+    )
+    ap.add_argument(
+        "--surfaces",
+        type=str,
+        required=True,
+        help="Comma-separated list of material names matching model channels",
     )
     ap.add_argument("--opset", type=int, default=17)
     args = ap.parse_args()
@@ -57,7 +65,10 @@ def main() -> None:
     wrapped = nn.Sequential(InputNorm(), model)
 
     dummy = torch.randn(1, 3, 512, 512, dtype=torch.float32)
-    dynamic_axes = {"input": {2: "height", 3: "width"}, "logits": {2: "height", 3: "width"}}
+    dynamic_axes = {
+        "input": {2: "height", 3: "width"},
+        "logits": {2: "height", 3: "width"},
+    }
 
     torch.onnx.export(
         wrapped,

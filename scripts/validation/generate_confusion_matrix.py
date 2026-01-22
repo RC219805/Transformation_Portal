@@ -11,7 +11,6 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict, Tuple
 
-
 # Ground truth scene types (based on stratification)
 EXPECTED_SCENE_TYPES = {
     # Structure-dominated (interiors with strong lines)
@@ -174,8 +173,17 @@ def print_quality_summary(metrics: Dict[str, dict]):
 
 def main():
     parser = argparse.ArgumentParser(description="Generate confusion matrix for scene classification")
-    parser.add_argument("--output-dir", type=Path, required=True, help="Output directory containing metrics JSON files")
-    parser.add_argument("--expected", type=Path, help="Optional JSON file with expected scene types (overrides defaults)")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        required=True,
+        help="Output directory containing metrics JSON files",
+    )
+    parser.add_argument(
+        "--expected",
+        type=Path,
+        help="Optional JSON file with expected scene types (overrides defaults)",
+    )
 
     args = parser.parse_args()
 
@@ -205,9 +213,21 @@ def main():
     accuracy = 100 * correct / total if total > 0 else 0
 
     checks = [
-        (f"{total}/{total} images processed", total == len(metrics), "✅" if total == len(metrics) else "❌"),
-        (f"Classification accuracy ≥85%", accuracy >= 85, "✅" if accuracy >= 85 else "❌"),
-        (f"Classification accuracy ≥90%", accuracy >= 90, "✅" if accuracy >= 90 else "❌"),
+        (
+            f"{total}/{total} images processed",
+            total == len(metrics),
+            "✅" if total == len(metrics) else "❌",
+        ),
+        (
+            f"Classification accuracy ≥85%",
+            accuracy >= 85,
+            "✅" if accuracy >= 85 else "❌",
+        ),
+        (
+            f"Classification accuracy ≥90%",
+            accuracy >= 90,
+            "✅" if accuracy >= 90 else "❌",
+        ),
     ]
 
     for description, passed, symbol in checks:

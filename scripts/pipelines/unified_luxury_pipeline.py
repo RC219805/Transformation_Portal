@@ -233,7 +233,12 @@ def main():
     for i, exr_file in enumerate(exr_files, 1):
         print(f"\n[{i}/{len(exr_files)}] " + "=" * 70)
         try:
-            outputs = process_single_view(input_path=exr_file, output_dir=output_dir, save_jpeg=True, save_tiff=True)
+            outputs = process_single_view(
+                input_path=exr_file,
+                output_dir=output_dir,
+                save_jpeg=True,
+                save_tiff=True,
+            )
             all_outputs.extend(outputs)
         except Exception as e:
             print(f"❌ Error processing {exr_file.name}: {e}")

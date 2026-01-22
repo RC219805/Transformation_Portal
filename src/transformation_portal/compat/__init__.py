@@ -29,16 +29,16 @@ from .version import (
 )
 
 __all__ = [
-    'deprecated',
-    'renamed_function',
-    'renamed_class',
-    'renamed_module',
-    'moved_to',
-    'LegacyAPIShim',
-    'create_compatibility_wrapper',
-    'Version',
-    'check_version_compatibility',
-    'require_version',
+    "deprecated",
+    "renamed_function",
+    "renamed_class",
+    "renamed_module",
+    "moved_to",
+    "LegacyAPIShim",
+    "create_compatibility_wrapper",
+    "Version",
+    "check_version_compatibility",
+    "require_version",
 ]
 
-__version__ = '1.0.0'
+__version__ = "1.0.0"

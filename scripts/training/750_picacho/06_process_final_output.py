@@ -29,7 +29,12 @@ from datetime import datetime
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
 
 from training.property_specific.picacho_analyzer import PicachoAnalyzer
-from training.property_specific.picacho_inference import PicachoInference, InferenceConfig, OutputFormat, EnhancementLevel
+from training.property_specific.picacho_inference import (
+    PicachoInference,
+    InferenceConfig,
+    OutputFormat,
+    EnhancementLevel,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -38,9 +43,17 @@ logger = logging.getLogger(__name__)
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(description="Process final 750 Picacho Lane enhanced outputs")
-    parser.add_argument("--property-dir", type=Path, default=None, help="Path to property images directory")
     parser.add_argument(
-        "--model", type=Path, default=Path("weights/750_picacho/best_model.pth"), help="Path to model checkpoint"
+        "--property-dir",
+        type=Path,
+        default=None,
+        help="Path to property images directory",
+    )
+    parser.add_argument(
+        "--model",
+        type=Path,
+        default=Path("weights/750_picacho/best_model.pth"),
+        help="Path to model checkpoint",
     )
     parser.add_argument(
         "--output-dir",
@@ -51,7 +64,14 @@ def main():
     parser.add_argument(
         "--format",
         type=str,
-        choices=["16bit_tiff", "32bit_tiff", "16bit_png", "8bit_png", "jpeg_high", "jpeg_web"],
+        choices=[
+            "16bit_tiff",
+            "32bit_tiff",
+            "16bit_png",
+            "8bit_png",
+            "jpeg_high",
+            "jpeg_web",
+        ],
         default="16bit_tiff",
         help="Output format",
     )
@@ -62,7 +82,13 @@ def main():
         default="balanced",
         help="Enhancement intensity level",
     )
-    parser.add_argument("--device", type=str, choices=["auto", "cuda", "mps", "cpu"], default="auto", help="Compute device")
+    parser.add_argument(
+        "--device",
+        type=str,
+        choices=["auto", "cuda", "mps", "cpu"],
+        default="auto",
+        help="Compute device",
+    )
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
 
     args = parser.parse_args()

@@ -95,11 +95,23 @@ def validate_single_file(filepath: Path) -> None:
         print("     python luxury_tiff_batch_processor.py input/ output/ --preset signature")
     elif info["is_image"]:
         print("   → Depth Pipeline or Lux Render Pipeline")
-        print("     python depth_pipeline/pipeline.py --input", filepath.name, "--output enhanced/")
-        print("     python lux_render_pipeline.py --input", filepath.name, "--out enhanced/")
+        print(
+            "     python depth_pipeline/pipeline.py --input",
+            filepath.name,
+            "--output enhanced/",
+        )
+        print(
+            "     python lux_render_pipeline.py --input",
+            filepath.name,
+            "--out enhanced/",
+        )
     elif info["is_video"]:
         print("   → Luxury Video Master Grader")
-        print("     python luxury_video_master_grader.py --input", filepath.name, "--output graded.mov")
+        print(
+            "     python luxury_video_master_grader.py --input",
+            filepath.name,
+            "--output graded.mov",
+        )
 
 
 def scan_directory(directory: Path) -> None:

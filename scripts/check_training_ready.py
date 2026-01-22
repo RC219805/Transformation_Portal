@@ -158,7 +158,10 @@ def check_memory():
                 else:
                     print("   ⚠️  Minimum memory - use batch size 2")
             else:
-                print_check(False, f"{avail_gb:.1f} GB available - Need at least {required_gb} GB")
+                print_check(
+                    False,
+                    f"{avail_gb:.1f} GB available - Need at least {required_gb} GB",
+                )
                 print("   Close other applications to free up memory")
 
             return passed

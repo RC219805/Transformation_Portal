@@ -21,7 +21,10 @@ except ImportError as e:
     DEPS_AVAILABLE = False
     SKIP_REASON = f"Dependencies not available: {e}"
 
-pytestmark = pytest.mark.skipif(not DEPS_AVAILABLE, reason=getattr(globals(), "SKIP_REASON", "Dependencies not available"))
+pytestmark = pytest.mark.skipif(
+    not DEPS_AVAILABLE,
+    reason=getattr(globals(), "SKIP_REASON", "Dependencies not available"),
+)
 
 
 class TestMetricDepthConverter:
@@ -154,7 +157,11 @@ class TestMetricDepthResult:
         depth = np.random.rand(50, 50)
 
         original = MetricDepthResult(
-            depth_meters=depth, focal_length_px=750.0, scale_factor=2.5, source_model="DA3METRIC-LARGE", already_metric=False
+            depth_meters=depth,
+            focal_length_px=750.0,
+            scale_factor=2.5,
+            source_model="DA3METRIC-LARGE",
+            already_metric=False,
         )
 
         save_path = tmp_path / "test.npz"

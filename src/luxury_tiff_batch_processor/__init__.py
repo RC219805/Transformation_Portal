@@ -74,7 +74,13 @@ from .adjustments import (
     gaussian_kernel,
     gaussian_kernel_cached,
 )
-from .cli import build_adjustments, default_output_folder, main, parse_args, run_pipeline
+from .cli import (
+    build_adjustments,
+    default_output_folder,
+    main,
+    parse_args,
+    run_pipeline,
+)
 from .io_utils import (
     FloatDynamicRange,
     ImageToFloatResult,

@@ -37,7 +37,6 @@ from ad_editorial_post_pipeline_v2 import (
     vignette,
 )
 
-
 # ============================================================================
 # Helpers & Fixtures
 # ============================================================================
@@ -71,8 +70,18 @@ def sample_config(temp_dir):
         "input_raw_dir": str(temp_dir / "input"),
         "processing": {"workers": 2, "auto_upright": True, "upright_max_deg": 3.0},
         "styles": {
-            "natural": {"exposure": 0.0, "contrast": 0, "saturation": 0, "split_tone": {}},
-            "test": {"exposure": 0.5, "contrast": 10, "saturation": 5, "split_tone": {}},
+            "natural": {
+                "exposure": 0.0,
+                "contrast": 0,
+                "saturation": 0,
+                "split_tone": {},
+            },
+            "test": {
+                "exposure": 0.5,
+                "contrast": 10,
+                "saturation": 5,
+                "split_tone": {},
+            },
         },
         "consistency": {"target_median": 0.42, "wb_neutralize": True},
         "export": {
@@ -239,7 +248,11 @@ class TestImageProcessing:
 
     def test_normalize_exposure_inplace(self, sample_image):
         """Test in-place exposure normalization."""
-        imgs = [sample_image.copy(), sample_image.copy() * 0.5, sample_image.copy() * 1.5]
+        imgs = [
+            sample_image.copy(),
+            sample_image.copy() * 0.5,
+            sample_image.copy() * 1.5,
+        ]
         target = 0.42
 
         normalize_exposure_inplace(imgs, target_median=target)

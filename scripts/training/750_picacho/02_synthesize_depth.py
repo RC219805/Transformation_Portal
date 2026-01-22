@@ -26,7 +26,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
 
 from training.property_specific.picacho_analyzer import PicachoAnalyzer
-from training.property_specific.depth_synthesis import DepthSynthesis, DepthSynthesisConfig, DepthModelVariant, DepthBackend
+from training.property_specific.depth_synthesis import (
+    DepthSynthesis,
+    DepthSynthesisConfig,
+    DepthModelVariant,
+    DepthBackend,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -35,11 +40,25 @@ logger = logging.getLogger(__name__)
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(description="Synthesize depth maps for 750 Picacho Lane")
-    parser.add_argument("--property-dir", type=Path, default=None, help="Path to property images directory")
     parser.add_argument(
-        "--output-dir", type=Path, default=Path("data/training_750picacho/depth"), help="Output directory for depth maps"
+        "--property-dir",
+        type=Path,
+        default=None,
+        help="Path to property images directory",
     )
-    parser.add_argument("--model", type=str, choices=["small", "base", "large"], default="large", help="Depth model variant")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("data/training_750picacho/depth"),
+        help="Output directory for depth maps",
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        choices=["small", "base", "large"],
+        default="large",
+        help="Depth model variant",
+    )
     parser.add_argument("--no-ensemble", action="store_true", help="Disable ensemble (use single model)")
     parser.add_argument(
         "--backend",

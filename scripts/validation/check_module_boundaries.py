@@ -241,7 +241,11 @@ def main():
         default=Path(__file__).parent.parent.parent / "src",
         help="Source directory to check (default: src/)",
     )
-    parser.add_argument("--fail-on-violations", action="store_true", help="Exit with code 1 if violations found (for CI)")
+    parser.add_argument(
+        "--fail-on-violations",
+        action="store_true",
+        help="Exit with code 1 if violations found (for CI)",
+    )
 
     args = parser.parse_args()
 

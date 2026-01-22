@@ -67,7 +67,11 @@ class TestCanaryBlockingDefault:
 
             return PresetRecommendation(
                 preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM,
-                scene=SceneClassification(scene_type=SceneType.INTERIOR, scene_subtype="kitchen", confidence=0.90),
+                scene=SceneClassification(
+                    scene_type=SceneType.INTERIOR,
+                    scene_subtype="kitchen",
+                    confidence=0.90,
+                ),
                 fallback_used=False,
                 reason="Interior kitchen scene detected",
             )
@@ -98,7 +102,11 @@ class TestCanaryAllowedExplicitly:
 
             return PresetRecommendation(
                 preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM,
-                scene=SceneClassification(scene_type=SceneType.INTERIOR, scene_subtype="kitchen", confidence=0.90),
+                scene=SceneClassification(
+                    scene_type=SceneType.INTERIOR,
+                    scene_subtype="kitchen",
+                    confidence=0.90,
+                ),
                 fallback_used=False,
                 reason="Interior kitchen scene detected",
             )
@@ -162,7 +170,12 @@ class TestAutoTierWithComplexity:
         """High complexity + CLIENT intent → APEX tier."""
         from lux_depth_v2.complexity_scorer import ComplexityScore
 
-        high_complexity = ComplexityScore(gradient_energy=0.25, edge_density=0.30, megapixels=15.0, complexity_class="high")
+        high_complexity = ComplexityScore(
+            gradient_energy=0.25,
+            edge_density=0.30,
+            megapixels=15.0,
+            complexity_class="high",
+        )
 
         tier = mock_selector.select_quality_tier(intent=Intent.CLIENT, complexity=high_complexity)
 
@@ -172,7 +185,12 @@ class TestAutoTierWithComplexity:
         """Low complexity + CLIENT intent → MAX tier."""
         from lux_depth_v2.complexity_scorer import ComplexityScore
 
-        low_complexity = ComplexityScore(gradient_energy=0.05, edge_density=0.08, megapixels=5.0, complexity_class="low")
+        low_complexity = ComplexityScore(
+            gradient_energy=0.05,
+            edge_density=0.08,
+            megapixels=5.0,
+            complexity_class="low",
+        )
 
         tier = mock_selector.select_quality_tier(intent=Intent.CLIENT, complexity=low_complexity)
 
@@ -188,7 +206,12 @@ class TestAutoTierWithComplexity:
         """PREVIEW intent → STANDARD tier regardless of complexity."""
         from lux_depth_v2.complexity_scorer import ComplexityScore
 
-        high_complexity = ComplexityScore(gradient_energy=0.25, edge_density=0.30, megapixels=25.0, complexity_class="high")
+        high_complexity = ComplexityScore(
+            gradient_energy=0.25,
+            edge_density=0.30,
+            megapixels=25.0,
+            complexity_class="high",
+        )
 
         tier = mock_selector.select_quality_tier(intent=Intent.PREVIEW, complexity=high_complexity)
 
@@ -198,7 +221,12 @@ class TestAutoTierWithComplexity:
         """HERO intent → APEX tier regardless of complexity."""
         from lux_depth_v2.complexity_scorer import ComplexityScore
 
-        low_complexity = ComplexityScore(gradient_energy=0.02, edge_density=0.05, megapixels=2.0, complexity_class="low")
+        low_complexity = ComplexityScore(
+            gradient_energy=0.02,
+            edge_density=0.05,
+            megapixels=2.0,
+            complexity_class="low",
+        )
 
         tier = mock_selector.select_quality_tier(intent=Intent.HERO, complexity=low_complexity)
 

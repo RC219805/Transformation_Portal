@@ -13,7 +13,10 @@ except ImportError:
     SKLEARN_AVAILABLE = False
 
 # Skip all tests in this module if sklearn is not available
-pytestmark = pytest.mark.skipif(not SKLEARN_AVAILABLE, reason="sklearn is required for board_material_aerial_enhancer module")
+pytestmark = pytest.mark.skipif(
+    not SKLEARN_AVAILABLE,
+    reason="sklearn is required for board_material_aerial_enhancer module",
+)
 
 # Guard the import - only import if sklearn is available
 if SKLEARN_AVAILABLE:
@@ -81,7 +84,10 @@ def test_compute_cluster_stats_basic():
 
 def test_relabel_and_relabel_safe_behavior():
     labels = np.array([0, 1, 2])
-    assignments = {0: MaterialRule("plaster", "tex", 0.5, lambda x: 0.5), 2: MaterialRule("stone", "tex", 0.5, lambda x: 0.5)}
+    assignments = {
+        0: MaterialRule("plaster", "tex", 0.5, lambda x: 0.5),
+        2: MaterialRule("stone", "tex", 0.5, lambda x: 0.5),
+    }
     relabeled = relabel(assignments, labels)
     assert set(relabeled) <= set(range(len(assignments)))
 

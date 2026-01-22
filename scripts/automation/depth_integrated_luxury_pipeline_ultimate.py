@@ -141,7 +141,14 @@ class UltimateDepthPipeline:
 
         try:
             # Use RRDBNet architecture (Real-ESRGAN x4plus)
-            model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=4)
+            model = RRDBNet(
+                num_in_ch=3,
+                num_out_ch=3,
+                num_feat=64,
+                num_block=23,
+                num_grow_ch=32,
+                scale=4,
+            )
 
             # Model download URL
             model_url = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth"
@@ -158,7 +165,7 @@ class UltimateDepthPipeline:
             # Create upsampler
             self.upsampler = RealESRGANer(
                 scale=4,
-                model_path=model_url if not self.config.model_path else str(self.config.model_path),
+                model_path=(model_url if not self.config.model_path else str(self.config.model_path)),
                 model=model,
                 tile=self.config.tile_size,
                 tile_pad=self.config.tile_pad,
@@ -233,7 +240,10 @@ class UltimateDepthPipeline:
 
             # Multi-scale clarity (unsharp mask at different scales)
             for scale in [3, 5, 7]:
-                blurred = np.stack([gaussian_filter(zone_enhanced[:, :, i], scale) for i in range(3)], axis=2)
+                blurred = np.stack(
+                    [gaussian_filter(zone_enhanced[:, :, i], scale) for i in range(3)],
+                    axis=2,
+                )
                 zone_enhanced = zone_enhanced + (zone_config["clarity"] / 3) * (zone_enhanced - blurred)
 
             # Edge enhancement (sharpness)
@@ -330,7 +340,12 @@ class UltimateDepthPipeline:
             h, w = img_float.shape[:2]
             from skimage.transform import resize
 
-            fg_mask = resize(self.zone_masks["foreground"].astype(float), (h, w), order=0, preserve_range=True).astype(bool)
+            fg_mask = resize(
+                self.zone_masks["foreground"].astype(float),
+                (h, w),
+                order=0,
+                preserve_range=True,
+            ).astype(bool)
 
             strength_map = np.ones((h, w))
             strength_map[fg_mask] = 1.5  # 1.5x stronger on foreground
@@ -363,8 +378,18 @@ class UltimateDepthPipeline:
         if "foreground" in self.zone_masks and "background" in self.zone_masks:
             from skimage.transform import resize
 
-            fg_mask = resize(self.zone_masks["foreground"].astype(float), (h, w), order=1, preserve_range=True)
-            bg_mask = resize(self.zone_masks["background"].astype(float), (h, w), order=1, preserve_range=True)
+            fg_mask = resize(
+                self.zone_masks["foreground"].astype(float),
+                (h, w),
+                order=1,
+                preserve_range=True,
+            )
+            bg_mask = resize(
+                self.zone_masks["background"].astype(float),
+                (h, w),
+                order=1,
+                preserve_range=True,
+            )
 
             # Warm foreground (increase red/yellow)
             temp_shift = self.config.color_temperature_shift
@@ -432,7 +457,10 @@ class UltimateDepthPipeline:
 
         # Save downscaled preview
         preview_scale = 0.25
-        preview_size = (int(result.shape[1] * preview_scale), int(result.shape[0] * preview_scale))
+        preview_size = (
+            int(result.shape[1] * preview_scale),
+            int(result.shape[0] * preview_scale),
+        )
         preview = Image.fromarray(result).resize(preview_size, Image.Resampling.LANCZOS)
         preview_path = self.config.output_dir / f"{stem}_ultimate_preview.jpg"
         preview.save(preview_path, quality=95, optimize=True)

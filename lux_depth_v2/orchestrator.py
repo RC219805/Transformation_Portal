@@ -81,7 +81,13 @@ class ProcessOrchestrator:
         logger: Optional logger instance
     """
 
-    def __init__(self, max_workers: int = 1, memory_budget_gb: Optional[float] = None, device: str = "auto", logger=None):
+    def __init__(
+        self,
+        max_workers: int = 1,
+        memory_budget_gb: Optional[float] = None,
+        device: str = "auto",
+        logger=None,
+    ):
         self.max_workers = max_workers
         self.memory_budget_gb = memory_budget_gb
         self.device = device
@@ -130,7 +136,9 @@ class ProcessOrchestrator:
         return task_config.task_id
 
     def process_batch(
-        self, tasks: List[TaskConfig], progress_callback: Optional[Callable[[TaskResult], None]] = None
+        self,
+        tasks: List[TaskConfig],
+        progress_callback: Optional[Callable[[TaskResult], None]] = None,
     ) -> List[TaskResult]:
         """Process a batch of tasks with fault isolation.
 
@@ -188,11 +196,17 @@ class ProcessOrchestrator:
 
         return self.results
 
-    def _start_worker(self, task_config: TaskConfig, progress_callback: Optional[Callable[[TaskResult], None]]):
+    def _start_worker(
+        self,
+        task_config: TaskConfig,
+        progress_callback: Optional[Callable[[TaskResult], None]],
+    ):
         """Start a worker process for a task."""
         # Create process for task execution
         process = mp.Process(
-            target=_worker_task, args=(task_config, self.device, self.logger), name=f"worker-{task_config.task_id}"
+            target=_worker_task,
+            args=(task_config, self.device, self.logger),
+            name=f"worker-{task_config.task_id}",
         )
         process.start()
 
@@ -437,7 +451,10 @@ class ParallelOrchestrator(ProcessOrchestrator):
 
                 # Calculate how many workers can fit
                 possible_workers = int(available_memory_gb / self.memory_budget_per_worker)
-                available_slots = min(possible_workers - active_count, self.max_parallel_workers - active_count)
+                available_slots = min(
+                    possible_workers - active_count,
+                    self.max_parallel_workers - active_count,
+                )
 
                 return max(0, available_slots)
             except Exception as e:
@@ -599,14 +616,20 @@ class ParallelOrchestrator(ProcessOrchestrator):
             # Restore original max workers
             self.max_parallel_workers = original_max
 
-    def _start_parallel_worker(self, task_config: TaskConfig, progress_callback: Optional[Callable[[TaskResult], None]]):
+    def _start_parallel_worker(
+        self,
+        task_config: TaskConfig,
+        progress_callback: Optional[Callable[[TaskResult], None]],
+    ):
         """Start a parallel worker process."""
         worker_id = self.next_worker_id
         self.next_worker_id += 1
 
         # Create worker process
         process = mp.Process(
-            target=_worker_task, args=(task_config, self.device, self.logger), name=f"parallel-worker-{worker_id}"
+            target=_worker_task,
+            args=(task_config, self.device, self.logger),
+            name=f"parallel-worker-{worker_id}",
         )
         process.start()
 
@@ -664,7 +687,10 @@ class ParallelOrchestrator(ProcessOrchestrator):
 
                 # Create result
                 result = TaskResult(
-                    task_id=worker_state.task_id, status=status, input_path=Path("unknown"), elapsed_time=elapsed
+                    task_id=worker_state.task_id,
+                    status=status,
+                    input_path=Path("unknown"),
+                    elapsed_time=elapsed,
                 )
                 self.results.append(result)
 

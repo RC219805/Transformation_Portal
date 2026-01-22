@@ -5,7 +5,11 @@ Unit tests for universal hardening wrapper.
 import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch
-from transformation_portal.hardening import UniversalHardenedWrapper, Pipeline, wrap_function
+from transformation_portal.hardening import (
+    UniversalHardenedWrapper,
+    Pipeline,
+    wrap_function,
+)
 
 
 class MockPipeline:
@@ -43,7 +47,11 @@ def test_wrapper_initialization():
     """Test wrapper can be initialized."""
     pipeline = MockPipeline()
     wrapper = UniversalHardenedWrapper(
-        pipeline, policy=None, enable_profiling=True, enable_stamping=True, enable_input_validation=False
+        pipeline,
+        policy=None,
+        enable_profiling=True,
+        enable_stamping=True,
+        enable_input_validation=False,
     )
 
     assert wrapper.pipeline is pipeline
@@ -81,7 +89,12 @@ def test_wrapper_includes_report_when_enabled(test_image_path, mock_policy):
     """Test wrapper includes report when stamping enabled."""
     pipeline = MockPipeline()
 
-    wrapper = UniversalHardenedWrapper(pipeline, policy=mock_policy, enable_stamping=True, enable_input_validation=False)
+    wrapper = UniversalHardenedWrapper(
+        pipeline,
+        policy=mock_policy,
+        enable_stamping=True,
+        enable_input_validation=False,
+    )
 
     result = wrapper.process(test_image_path, preset="test")
 
@@ -96,7 +109,11 @@ def test_wrapper_measures_duration_when_profiling(test_image_path, mock_policy):
     pipeline = MockPipeline()
 
     wrapper = UniversalHardenedWrapper(
-        pipeline, policy=mock_policy, enable_profiling=True, enable_stamping=True, enable_input_validation=False
+        pipeline,
+        policy=mock_policy,
+        enable_profiling=True,
+        enable_stamping=True,
+        enable_input_validation=False,
     )
 
     result = wrapper.process(test_image_path)
@@ -109,7 +126,12 @@ def test_wrapper_no_report_when_disabled(test_image_path, mock_policy):
     """Test wrapper doesn't include report when stamping disabled."""
     pipeline = MockPipeline()
 
-    wrapper = UniversalHardenedWrapper(pipeline, policy=mock_policy, enable_stamping=False, enable_input_validation=False)
+    wrapper = UniversalHardenedWrapper(
+        pipeline,
+        policy=mock_policy,
+        enable_stamping=False,
+        enable_input_validation=False,
+    )
 
     result = wrapper.process(test_image_path)
 
@@ -158,7 +180,11 @@ def test_wrapper_handles_validation_failure(test_image_path, mock_policy):
     """Test wrapper handles validation failures."""
     pipeline = MockPipeline()
 
-    with patch.object(UniversalHardenedWrapper, "_validate_input", side_effect=ValueError("Invalid file")):
+    with patch.object(
+        UniversalHardenedWrapper,
+        "_validate_input",
+        side_effect=ValueError("Invalid file"),
+    ):
         wrapper = UniversalHardenedWrapper(pipeline, policy=mock_policy, enable_input_validation=True)
 
         result = wrapper.process(test_image_path)

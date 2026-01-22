@@ -37,7 +37,10 @@ except ImportError:
     PIL_AVAILABLE = False
 
 # Skip all tests if dependencies not available
-pytestmark = pytest.mark.skipif(not (TORCH_AVAILABLE and PIL_AVAILABLE), reason="PyTorch and PIL required for dataset tests")
+pytestmark = pytest.mark.skipif(
+    not (TORCH_AVAILABLE and PIL_AVAILABLE),
+    reason="PyTorch and PIL required for dataset tests",
+)
 
 
 class TestDepthDataConfig:
@@ -117,7 +120,10 @@ class TestArchitecturalDepthDataset:
 
     def test_dataset_creation(self, sample_data_dir):
         """Test dataset can be created."""
-        from src.training.depth_dataset import ArchitecturalDepthDataset, DepthDataConfig
+        from src.training.depth_dataset import (
+            ArchitecturalDepthDataset,
+            DepthDataConfig,
+        )
 
         config = DepthDataConfig(
             train_dir=str(Path(sample_data_dir) / "train"),
@@ -131,7 +137,10 @@ class TestArchitecturalDepthDataset:
 
     def test_dataset_getitem(self, sample_data_dir):
         """Test dataset __getitem__ returns correct format."""
-        from src.training.depth_dataset import ArchitecturalDepthDataset, DepthDataConfig
+        from src.training.depth_dataset import (
+            ArchitecturalDepthDataset,
+            DepthDataConfig,
+        )
 
         config = DepthDataConfig(
             train_dir=str(Path(sample_data_dir) / "train"),
@@ -150,7 +159,10 @@ class TestArchitecturalDepthDataset:
 
     def test_dataset_val_split(self, sample_data_dir):
         """Test validation split."""
-        from src.training.depth_dataset import ArchitecturalDepthDataset, DepthDataConfig
+        from src.training.depth_dataset import (
+            ArchitecturalDepthDataset,
+            DepthDataConfig,
+        )
 
         config = DepthDataConfig(
             train_dir=str(Path(sample_data_dir) / "train"),
@@ -166,7 +178,10 @@ class TestArchitecturalDepthDataset:
 
     def test_dataset_with_dataloader(self, sample_data_dir):
         """Test dataset works with DataLoader."""
-        from src.training.depth_dataset import ArchitecturalDepthDataset, DepthDataConfig
+        from src.training.depth_dataset import (
+            ArchitecturalDepthDataset,
+            DepthDataConfig,
+        )
 
         config = DepthDataConfig(
             train_dir=str(Path(sample_data_dir) / "train"),
@@ -185,7 +200,10 @@ class TestArchitecturalDepthDataset:
 
     def test_dataset_stats(self, sample_data_dir):
         """Test statistics computation."""
-        from src.training.depth_dataset import ArchitecturalDepthDataset, DepthDataConfig
+        from src.training.depth_dataset import (
+            ArchitecturalDepthDataset,
+            DepthDataConfig,
+        )
 
         config = DepthDataConfig(
             train_dir=str(Path(sample_data_dir) / "train"),
@@ -203,7 +221,10 @@ class TestArchitecturalDepthDataset:
 
     def test_missing_directory(self):
         """Test error on missing directory."""
-        from src.training.depth_dataset import ArchitecturalDepthDataset, DepthDataConfig
+        from src.training.depth_dataset import (
+            ArchitecturalDepthDataset,
+            DepthDataConfig,
+        )
 
         config = DepthDataConfig(
             train_dir="/nonexistent/path/train",
@@ -247,7 +268,10 @@ class TestDepthFormats:
 
     def test_npy_format(self, multi_format_data):
         """Test NPY depth format loading."""
-        from src.training.depth_dataset import ArchitecturalDepthDataset, DepthDataConfig
+        from src.training.depth_dataset import (
+            ArchitecturalDepthDataset,
+            DepthDataConfig,
+        )
 
         config = DepthDataConfig(
             train_dir=str(Path(multi_format_data) / "train"),
@@ -262,7 +286,10 @@ class TestDepthFormats:
 
     def test_png_format(self, multi_format_data):
         """Test PNG depth format loading."""
-        from src.training.depth_dataset import ArchitecturalDepthDataset, DepthDataConfig
+        from src.training.depth_dataset import (
+            ArchitecturalDepthDataset,
+            DepthDataConfig,
+        )
 
         config = DepthDataConfig(
             train_dir=str(Path(multi_format_data) / "train"),
@@ -352,7 +379,11 @@ class TestDatasetSplitting:
 
     def test_split_dataset(self):
         """Test random split of dataset."""
-        from src.training.depth_dataset import split_dataset, ArchitecturalDepthDataset, DepthDataConfig
+        from src.training.depth_dataset import (
+            split_dataset,
+            ArchitecturalDepthDataset,
+            DepthDataConfig,
+        )
 
         tmpdir = tempfile.mkdtemp()
 

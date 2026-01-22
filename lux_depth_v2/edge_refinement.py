@@ -33,7 +33,6 @@ import cv2
 import numpy as np
 from scipy import ndimage
 
-
 # ============================================================================
 # Configuration Classes
 # ============================================================================
@@ -138,7 +137,10 @@ class EdgeRefinementConfig:
 
 
 def bilateral_depth_filter(
-    depth_map: np.ndarray, d: int = 9, sigma_color: float = 75.0, sigma_space: float = 75.0
+    depth_map: np.ndarray,
+    d: int = 9,
+    sigma_color: float = 75.0,
+    sigma_space: float = 75.0,
 ) -> np.ndarray:
     """Apply bilateral filtering to depth map for edge-preserving smoothing.
 
@@ -271,7 +273,10 @@ def guided_filter_depth(depth_map: np.ndarray, rgb_image: np.ndarray, radius: in
     # Try opencv-contrib guidedFilter, fallback to custom implementation
     try:
         filtered = cv2.ximgproc.guidedFilter(
-            guide=guide_gray.astype(np.float32), src=depth_map.astype(np.float32), radius=radius, eps=eps
+            guide=guide_gray.astype(np.float32),
+            src=depth_map.astype(np.float32),
+            radius=radius,
+            eps=eps,
         )
     except AttributeError:
         # Fallback: Custom guided filter implementation
@@ -325,7 +330,10 @@ def _guided_filter_custom(p: np.ndarray, I: np.ndarray, r: int, eps: float) -> n
 
 
 def enhance_edges_with_guidance(
-    depth_map: np.ndarray, rgb_image: np.ndarray, strength: float = 0.3, threshold: float = 40.0
+    depth_map: np.ndarray,
+    rgb_image: np.ndarray,
+    strength: float = 0.3,
+    threshold: float = 40.0,
 ) -> np.ndarray:
     """Apply edge-guided enhancement to preserve structural details.
 
@@ -589,7 +597,10 @@ def segment_aware_refine(depth_map: np.ndarray, segmentation_mask: np.ndarray, f
 
         # Apply bilateral filter to region
         smoothed_region = bilateral_depth_filter(
-            depth_region, d=2 * filter_radius + 1, sigma_color=50.0, sigma_space=float(filter_radius)
+            depth_region,
+            d=2 * filter_radius + 1,
+            sigma_color=50.0,
+            sigma_space=float(filter_radius),
         )
 
         # Blend smoothed region only where mask is active
@@ -630,7 +641,10 @@ class EdgeRefinementPipeline:
         self.config = config or EdgeRefinementConfig.from_preset(RefinementPreset.BALANCED)
 
     def refine(
-        self, depth_map: np.ndarray, rgb_image: Optional[np.ndarray] = None, segmentation_mask: Optional[np.ndarray] = None
+        self,
+        depth_map: np.ndarray,
+        rgb_image: Optional[np.ndarray] = None,
+        segmentation_mask: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """Apply edge-aware refinement to depth map.
 
@@ -664,7 +678,12 @@ class EdgeRefinementPipeline:
         if self.config.enable_guided:
             if rgb_image is None:
                 raise ValueError("rgb_image required when enable_guided=True")
-            result = guided_filter_depth(result, rgb_image, radius=self.config.guided_radius, eps=self.config.guided_eps)
+            result = guided_filter_depth(
+                result,
+                rgb_image,
+                radius=self.config.guided_radius,
+                eps=self.config.guided_eps,
+            )
 
         # Stage 3: Gradient smoothing (requires RGB)
         if self.config.enable_gradient_smoothing:

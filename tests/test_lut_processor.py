@@ -9,7 +9,13 @@ import pytest
 from pathlib import Path
 import tempfile
 
-from utils.lut_processor import LUTProcessor, LUTConfig, LUTCategory, create_lut_processor, discover_luts
+from utils.lut_processor import (
+    LUTProcessor,
+    LUTConfig,
+    LUTCategory,
+    create_lut_processor,
+    discover_luts,
+)
 
 
 @pytest.fixture
@@ -96,7 +102,11 @@ class TestLUTConfig:
 
     def test_custom_config(self, sample_3d_lut_file):
         """Test custom configuration."""
-        config = LUTConfig(lut_path=sample_3d_lut_file, strength=0.5, category=LUTCategory.LOCATION_AESTHETIC)
+        config = LUTConfig(
+            lut_path=sample_3d_lut_file,
+            strength=0.5,
+            category=LUTCategory.LOCATION_AESTHETIC,
+        )
         assert config.lut_path == sample_3d_lut_file
         assert config.strength == 0.5
         assert config.category == LUTCategory.LOCATION_AESTHETIC
@@ -242,7 +252,11 @@ class TestConvenienceFunction:
 
     def test_create_lut_processor(self, sample_3d_lut_file):
         """Test convenience function."""
-        processor = create_lut_processor(lut_path=sample_3d_lut_file, strength=0.8, category=LUTCategory.MATERIAL_RESPONSE)
+        processor = create_lut_processor(
+            lut_path=sample_3d_lut_file,
+            strength=0.8,
+            category=LUTCategory.MATERIAL_RESPONSE,
+        )
 
         assert isinstance(processor, LUTProcessor)
         assert processor.config.strength == 0.8

@@ -13,6 +13,7 @@ from PIL import Image
 
 from lux_depth_v3.config import ExportConfig, ExportFormat
 from lux_depth_v3.inference import DepthResult
+
 # NOTE: We intentionally do NOT import lux_depth_v3.postprocessing here.
 # That module may include optional dependencies (e.g. edge refinement), and export
 # should remain usable even when those extras aren't installed.

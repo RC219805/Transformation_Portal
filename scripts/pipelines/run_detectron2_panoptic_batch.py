@@ -93,4 +93,10 @@ if __name__ == "__main__":
     ap.add_argument("--device", default="cpu", choices=["cpu", "cuda", "mps"])
     ap.add_argument("--save-panoptic", action="store_true")
     args = ap.parse_args()
-    main(args.images_root, args.depths_root, args.mask_root, device=args.device, save_panoptic=args.save_panoptic)
+    main(
+        args.images_root,
+        args.depths_root,
+        args.mask_root,
+        device=args.device,
+        save_panoptic=args.save_panoptic,
+    )

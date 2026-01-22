@@ -60,7 +60,7 @@ class EdgeDepthEstimator(DepthModelPlugin):
 
     def _create_metadata(self) -> PluginMetadata:
         """Create plugin metadata."""
-        if hasattr(self, '_decorator_metadata'):
+        if hasattr(self, "_decorator_metadata"):
             return self._decorator_metadata
 
         return PluginMetadata(
@@ -90,14 +90,14 @@ class EdgeDepthEstimator(DepthModelPlugin):
             self._config = config
 
         self._initialized = True
-        logger.info(f"EdgeDepthEstimator initialized: "
-                    f"threshold={self._edge_threshold}, blur={self._blur_radius}")
+        logger.info(
+            f"EdgeDepthEstimator initialized: "
+            f"threshold={self._edge_threshold}, blur={self._blur_radius}"
+        )
 
     @measure_performance
     def estimate_depth(
-        self,
-        image: Union[Image.Image, np.ndarray],
-        **kwargs
+        self, image: Union[Image.Image, np.ndarray], **kwargs
     ) -> np.ndarray:
         """Estimate depth from image using edge detection.
 
@@ -120,7 +120,7 @@ class EdgeDepthEstimator(DepthModelPlugin):
             pil_image = image
 
         # Convert to grayscale
-        gray = pil_image.convert('L')
+        gray = pil_image.convert("L")
 
         # Apply edge detection
         edges = gray.filter(ImageFilter.FIND_EDGES)
@@ -133,9 +133,7 @@ class EdgeDepthEstimator(DepthModelPlugin):
         # Smooth edges to create depth gradient
         if self._blur_radius > 0:
             edges_pil = Image.fromarray(edges_array.astype(np.uint8))
-            smoothed = edges_pil.filter(
-                ImageFilter.GaussianBlur(self._blur_radius)
-            )
+            smoothed = edges_pil.filter(ImageFilter.GaussianBlur(self._blur_radius))
             depth_map = np.array(smoothed, dtype=np.float32)
         else:
             depth_map = edges_array
@@ -218,7 +216,7 @@ class GradientDepthEstimator(DepthModelPlugin):
 
     def _create_metadata(self) -> PluginMetadata:
         """Create plugin metadata."""
-        if hasattr(self, '_decorator_metadata'):
+        if hasattr(self, "_decorator_metadata"):
             return self._decorator_metadata
 
         return PluginMetadata(
@@ -240,7 +238,9 @@ class GradientDepthEstimator(DepthModelPlugin):
         """
         if config:
             self._sobel_size = config.get("sobel_size", self._sobel_size)
-            self._smooth_iterations = config.get("smooth_iterations", self._smooth_iterations)
+            self._smooth_iterations = config.get(
+                "smooth_iterations", self._smooth_iterations
+            )
             self._config = config
 
         self._initialized = True
@@ -248,9 +248,7 @@ class GradientDepthEstimator(DepthModelPlugin):
 
     @measure_performance
     def estimate_depth(
-        self,
-        image: Union[Image.Image, np.ndarray],
-        **kwargs
+        self, image: Union[Image.Image, np.ndarray], **kwargs
     ) -> np.ndarray:
         """Estimate depth using gradient analysis.
 
@@ -268,7 +266,7 @@ class GradientDepthEstimator(DepthModelPlugin):
 
         # Convert to array
         if isinstance(image, Image.Image):
-            img_array = np.array(image.convert('L'), dtype=np.float32)
+            img_array = np.array(image.convert("L"), dtype=np.float32)
         else:
             if len(image.shape) == 3:
                 # Convert RGB to grayscale
@@ -333,7 +331,7 @@ class PlaceholderDepthModel(DepthModelPlugin):
 
     def _create_metadata(self) -> PluginMetadata:
         """Create metadata with deprecation flag."""
-        if hasattr(self, '_decorator_metadata'):
+        if hasattr(self, "_decorator_metadata"):
             return self._decorator_metadata
 
         return PluginMetadata(
@@ -353,13 +351,13 @@ class PlaceholderDepthModel(DepthModelPlugin):
             self._config = config
 
         self._initialized = True
-        logger.warning("Using PlaceholderDepthModel - this should be replaced "
-                       "with a proper depth estimation model")
+        logger.warning(
+            "Using PlaceholderDepthModel - this should be replaced "
+            "with a proper depth estimation model"
+        )
 
     def estimate_depth(
-        self,
-        image: Union[Image.Image, np.ndarray],
-        **kwargs
+        self, image: Union[Image.Image, np.ndarray], **kwargs
     ) -> np.ndarray:
         """Return uniform depth map.
 
@@ -378,11 +376,7 @@ class PlaceholderDepthModel(DepthModelPlugin):
         else:
             height, width = image.shape[:2]
 
-        return np.full(
-            (height, width),
-            self._default_depth,
-            dtype=np.float32
-        )
+        return np.full((height, width), self._default_depth, dtype=np.float32)
 
     def validate(self) -> bool:
         """Validate state."""

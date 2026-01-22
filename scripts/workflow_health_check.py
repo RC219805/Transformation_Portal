@@ -121,7 +121,13 @@ def analyze_workflow_health(runs: List[WorkflowRun]) -> Dict[str, WorkflowHealth
 
     for run in runs:
         if run.workflow not in workflows:
-            workflows[run.workflow] = {"runs": [], "success": 0, "failure": 0, "cancelled": 0, "durations": []}
+            workflows[run.workflow] = {
+                "runs": [],
+                "success": 0,
+                "failure": 0,
+                "cancelled": 0,
+                "durations": [],
+            }
 
         wf = workflows[run.workflow]
         wf["runs"].append(run)

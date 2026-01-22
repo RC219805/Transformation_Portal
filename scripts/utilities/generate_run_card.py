@@ -41,7 +41,10 @@ except ImportError:
 # Import scene type taxonomy
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 try:
-    from transformation_portal.scene_types import normalize_scene_type, validate_scene_type
+    from transformation_portal.scene_types import (
+        normalize_scene_type,
+        validate_scene_type,
+    )
 except ImportError:
     print("⚠️  Could not import scene_types module")
     print("   Run from repository root or check src/transformation_portal/scene_types.py")
@@ -174,7 +177,7 @@ def generate_run_card(
         "recipe": recipe_name,
         "recipe_path": f"config/recipes/{recipe_name}.yaml",
         "recipe_settings": recipe_settings or {},
-        "processing_time_seconds": processing_time if processing_time else "TODO: From pipeline log",
+        "processing_time_seconds": (processing_time if processing_time else "TODO: From pipeline log"),
         "date": datetime.now().strftime("%Y-%m-%d"),
         "generated_by": "generate_run_card.py",
         "# HUMAN REVIEW REQUIRED": "Complete the following fields after visual review",
@@ -226,13 +229,30 @@ Examples:
     )
 
     parser.add_argument("image_path", help="Path to source image")
-    parser.add_argument("--baseline-score", "-b", type=float, required=True, help="Quality score of baseline image")
-    parser.add_argument("--processed-score", "-p", type=float, required=True, help="Quality score after processing")
+    parser.add_argument(
+        "--baseline-score",
+        "-b",
+        type=float,
+        required=True,
+        help="Quality score of baseline image",
+    )
+    parser.add_argument(
+        "--processed-score",
+        "-p",
+        type=float,
+        required=True,
+        help="Quality score after processing",
+    )
     parser.add_argument("--recipe", "-r", required=True, help="Recipe name used for processing")
     parser.add_argument("--project", required=True, help="Project name/identifier")
     parser.add_argument("--recipe-settings", "-s", help="Recipe settings as JSON string")
     parser.add_argument("--processing-time", "-t", type=float, help="Processing time in seconds")
-    parser.add_argument("--output-dir", "-o", default="docs/runs", help="Output directory for run cards (default: docs/runs)")
+    parser.add_argument(
+        "--output-dir",
+        "-o",
+        default="docs/runs",
+        help="Output directory for run cards (default: docs/runs)",
+    )
     parser.add_argument("--scene-type", help="Override inferred scene type")
 
     args = parser.parse_args()

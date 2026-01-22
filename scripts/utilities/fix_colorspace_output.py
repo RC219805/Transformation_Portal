@@ -10,7 +10,11 @@ def srgb_to_linear(img_array):
     img_float = img_array.astype(np.float32) / 255.0
 
     # Apply inverse sRGB gamma curve
-    linear = np.where(img_float <= 0.04045, img_float / 12.92, np.power((img_float + 0.055) / 1.055, 2.4))
+    linear = np.where(
+        img_float <= 0.04045,
+        img_float / 12.92,
+        np.power((img_float + 0.055) / 1.055, 2.4),
+    )
 
     return linear
 

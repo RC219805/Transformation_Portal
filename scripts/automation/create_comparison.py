@@ -35,7 +35,11 @@ def create_comparison():
 
     draw.text((web_size[0] // 2, 10), "Original", fill=(0, 0, 0), anchor="mm", font=font)
     draw.text(
-        (web_size[0] + 10 + web_size[0] // 2, 10), "Lux Depth V2 (exterior_showcase)", fill=(0, 0, 0), anchor="mm", font=font
+        (web_size[0] + 10 + web_size[0] // 2, 10),
+        "Lux Depth V2 (exterior_showcase)",
+        fill=(0, 0, 0),
+        anchor="mm",
+        font=font,
     )
 
     # Save comparison

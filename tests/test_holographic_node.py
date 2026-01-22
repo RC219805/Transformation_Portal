@@ -32,7 +32,10 @@ def test_global_state_notifies_subscribers():
 
 
 def test_superposition_collapse_without_observer_returns_first_outcome():
-    sup = Superposition(source="raw", outcomes=[(lambda value: value, "primary"), (lambda v: v, "secondary")])
+    sup = Superposition(
+        source="raw",
+        outcomes=[(lambda value: value, "primary"), (lambda v: v, "secondary")],
+    )
 
     assert sup.collapse() == "primary"
 

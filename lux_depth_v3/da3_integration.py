@@ -72,7 +72,13 @@ class DA3DepthEstimator:
         "nested-giant-large-1.1": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
     }
 
-    def __init__(self, model: str = "large-1.1", device: str = "cpu", auto_cleanup: bool = True, verbose: bool = False):
+    def __init__(
+        self,
+        model: str = "large-1.1",
+        device: str = "cpu",
+        auto_cleanup: bool = True,
+        verbose: bool = False,
+    ):
         """
         Initialize DA3 depth estimator.
 
@@ -123,7 +129,11 @@ class DA3DepthEstimator:
         output_dir = Path(output_dir)
 
         if not input_path.exists():
-            return DA3Result(success=False, output_dir=output_dir, stderr=f"Input file not found: {input_path}")
+            return DA3Result(
+                success=False,
+                output_dir=output_dir,
+                stderr=f"Input file not found: {input_path}",
+            )
 
         cmd = [
             "da3",
@@ -207,7 +217,11 @@ class DA3DepthEstimator:
         output_dir = Path(output_dir)
 
         if not input_dir.exists():
-            return DA3Result(success=False, output_dir=output_dir, stderr=f"Input directory not found: {input_dir}")
+            return DA3Result(
+                success=False,
+                output_dir=output_dir,
+                stderr=f"Input directory not found: {input_dir}",
+            )
 
         cmd = [
             "da3",
@@ -236,7 +250,12 @@ class DA3DepthEstimator:
 
         result = subprocess.run(cmd, capture_output=True, text=True)
 
-        return DA3Result(success=result.returncode == 0, output_dir=output_dir, stdout=result.stdout, stderr=result.stderr)
+        return DA3Result(
+            success=result.returncode == 0,
+            output_dir=output_dir,
+            stdout=result.stdout,
+            stderr=result.stderr,
+        )
 
     def process_video(
         self,
@@ -263,7 +282,11 @@ class DA3DepthEstimator:
         output_dir = Path(output_dir)
 
         if not input_path.exists():
-            return DA3Result(success=False, output_dir=output_dir, stderr=f"Video file not found: {input_path}")
+            return DA3Result(
+                success=False,
+                output_dir=output_dir,
+                stderr=f"Video file not found: {input_path}",
+            )
 
         cmd = [
             "da3",
@@ -292,11 +315,18 @@ class DA3DepthEstimator:
 
         result = subprocess.run(cmd, capture_output=True, text=True)
 
-        return DA3Result(success=result.returncode == 0, output_dir=output_dir, stdout=result.stdout, stderr=result.stderr)
+        return DA3Result(
+            success=result.returncode == 0,
+            output_dir=output_dir,
+            stdout=result.stdout,
+            stderr=result.stderr,
+        )
 
 
 def convert_to_metric_depth(
-    depth_array: np.ndarray, focal_length_px: float, model_type: Literal["metric", "relative"] = "metric"
+    depth_array: np.ndarray,
+    focal_length_px: float,
+    model_type: Literal["metric", "relative"] = "metric",
 ) -> np.ndarray:
     """
     Convert DA3 depth output to metric depth in meters.
@@ -322,7 +352,10 @@ def convert_to_metric_depth(
 
 # Convenience function for quick usage
 def estimate_depth(
-    image_path: Union[str, Path], output_dir: Union[str, Path], model: str = "large-1.1", device: str = "cpu"
+    image_path: Union[str, Path],
+    output_dir: Union[str, Path],
+    model: str = "large-1.1",
+    device: str = "cpu",
 ) -> DA3Result:
     """
     Quick depth estimation helper function.

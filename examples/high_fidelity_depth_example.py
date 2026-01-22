@@ -189,12 +189,22 @@ def main():
     )
     parser.add_argument("--input", type=Path, required=True, help="Input RGB image")
     parser.add_argument(
-        "--output-dir", type=Path, default=Path("output_highfid"), help="Output directory (default: output_highfid/)"
+        "--output-dir",
+        type=Path,
+        default=Path("output_highfid"),
+        help="Output directory (default: output_highfid/)",
     )
     parser.add_argument(
-        "--mode", choices=["tiled", "normals", "quality", "all"], default="all", help="Processing mode (default: all)"
+        "--mode",
+        choices=["tiled", "normals", "quality", "all"],
+        default="all",
+        help="Processing mode (default: all)",
     )
-    parser.add_argument("--depth", type=Path, help="Optional: Pre-computed depth map (for normals/quality only)")
+    parser.add_argument(
+        "--depth",
+        type=Path,
+        help="Optional: Pre-computed depth map (for normals/quality only)",
+    )
 
     args = parser.parse_args()
 

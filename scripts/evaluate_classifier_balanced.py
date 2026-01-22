@@ -11,7 +11,11 @@ import argparse
 import json
 import glob
 import pandas as pd
-from sklearn.metrics import classification_report, balanced_accuracy_score, confusion_matrix
+from sklearn.metrics import (
+    classification_report,
+    balanced_accuracy_score,
+    confusion_matrix,
+)
 
 
 def load_metrics(metrics_dir):

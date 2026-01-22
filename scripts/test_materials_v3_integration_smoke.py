@@ -4,7 +4,11 @@
 from pathlib import Path
 from lux_depth_v2.config import PipelineConfig
 from lux_depth_v2.pipeline import LuxPipelineV2
-from lux_depth_v2.materials_v3 import MaterialsV3Config, MaterialTaxonomy, RefinementStrategy
+from lux_depth_v2.materials_v3 import (
+    MaterialsV3Config,
+    MaterialTaxonomy,
+    RefinementStrategy,
+)
 
 
 def test_materials_v3_integration():

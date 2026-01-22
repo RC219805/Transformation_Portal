@@ -365,7 +365,10 @@ class MaterialsV2Engine:
         return result
 
     def apply_gated_response(
-        self, image: np.ndarray, segmentation: SegmentationResult, material_response_fn: callable
+        self,
+        image: np.ndarray,
+        segmentation: SegmentationResult,
+        material_response_fn: callable,
     ) -> np.ndarray:
         """Apply confidence-gated material response.
 
@@ -963,7 +966,11 @@ class CLIPMaterialClassifier:
 
         return embeddings
 
-    def classify_image(self, rgb: "torch_ops.torch.Tensor", material_classes: Optional[List[str]] = None) -> Dict[str, float]:
+    def classify_image(
+        self,
+        rgb: "torch_ops.torch.Tensor",
+        material_classes: Optional[List[str]] = None,
+    ) -> Dict[str, float]:
         """Classify materials in image using zero-shot CLIP.
 
         Args:
@@ -989,7 +996,10 @@ class CLIPMaterialClassifier:
 
         # Apply CLIP preprocessing
         resize = Resize(target_size, interpolation=torch.nn.functional.interpolate)
-        normalize = Normalize(mean=(0.48145466, 0.4578275, 0.40821073), std=(0.26862954, 0.26130258, 0.27577711))
+        normalize = Normalize(
+            mean=(0.48145466, 0.4578275, 0.40821073),
+            std=(0.26862954, 0.26130258, 0.27577711),
+        )
 
         # Resize maintaining aspect ratio
         _, _, h, w = rgb.shape
@@ -1160,7 +1170,8 @@ class CLIPMaterialClassifier:
                         refined_masks[clip_top_material] = seg_mask * (1.0 - alpha) * clip_top_conf
                     else:
                         refined_masks[clip_top_material] = torch.maximum(
-                            refined_masks[clip_top_material], seg_mask * (1.0 - alpha) * clip_top_conf
+                            refined_masks[clip_top_material],
+                            seg_mask * (1.0 - alpha) * clip_top_conf,
                         )
 
         return refined_masks

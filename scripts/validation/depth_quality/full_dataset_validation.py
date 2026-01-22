@@ -38,7 +38,11 @@ except ImportError:
     PSUTIL_AVAILABLE = False
 
 from high_fidelity_depth.depth_estimator import HighFidelityDepthEstimator, DepthConfig
-from high_fidelity_depth.quality_metrics import EdgeMetrics, validate_depth_quality, save_metrics_atomic
+from high_fidelity_depth.quality_metrics import (
+    EdgeMetrics,
+    validate_depth_quality,
+    save_metrics_atomic,
+)
 from high_fidelity_depth import refinement
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -153,7 +157,10 @@ def compute_halo_score(depth: np.ndarray, rgb: np.ndarray) -> float:
 
 
 def validate_single_image(
-    rgb_path: Path, estimator: HighFidelityDepthEstimator, config: ValidationConfig, output_dir: Path
+    rgb_path: Path,
+    estimator: HighFidelityDepthEstimator,
+    config: ValidationConfig,
+    output_dir: Path,
 ) -> ImageMetrics:
     """
     Run complete validation on single image.
@@ -317,14 +324,30 @@ def validate_single_image(
 
 def main():
     parser = argparse.ArgumentParser(description="Full dataset production validation")
-    parser.add_argument("--input-dir", type=Path, required=True, help="Directory with source TIFF images")
-    parser.add_argument("--output-dir", type=Path, required=True, help="Output directory for results")
-    parser.add_argument("--tile-size", type=int, default=1024, help="Tile size for inference (default: 1024)")
     parser.add_argument(
-        "--no-global-anchor", action="store_true", help="Disable global anchor fusion (recommended per review)"
+        "--input-dir",
+        type=Path,
+        required=True,
+        help="Directory with source TIFF images",
+    )
+    parser.add_argument("--output-dir", type=Path, required=True, help="Output directory for results")
+    parser.add_argument(
+        "--tile-size",
+        type=int,
+        default=1024,
+        help="Tile size for inference (default: 1024)",
+    )
+    parser.add_argument(
+        "--no-global-anchor",
+        action="store_true",
+        help="Disable global anchor fusion (recommended per review)",
     )
     parser.add_argument("--no-edge-snap", action="store_true", help="Disable edge snapping")
-    parser.add_argument("--enable-clahe", action="store_true", help="Enable CLAHE (not recommended for geometry)")
+    parser.add_argument(
+        "--enable-clahe",
+        action="store_true",
+        help="Enable CLAHE (not recommended for geometry)",
+    )
 
     args = parser.parse_args()
 
@@ -360,7 +383,9 @@ def main():
 
     # Initialize pipeline
     depth_config = DepthConfig(
-        tile_size=val_config.tile_size, overlap=val_config.overlap, reconcile_scales=val_config.reconcile_scales
+        tile_size=val_config.tile_size,
+        overlap=val_config.overlap,
+        reconcile_scales=val_config.reconcile_scales,
     )
 
     estimator = HighFidelityDepthEstimator(depth_config)

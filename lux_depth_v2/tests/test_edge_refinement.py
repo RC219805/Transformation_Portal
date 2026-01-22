@@ -34,7 +34,6 @@ from lux_depth_v2.edge_refinement import (
     refine_depth_edge_aware,
 )
 
-
 # ============================================================================
 # Fixtures
 # ============================================================================
@@ -401,7 +400,10 @@ class TestEdgeRefinementPipeline:
     def test_pipeline_bilateral_only(self, simple_depth):
         """Test pipeline with only bilateral filtering enabled."""
         config = EdgeRefinementConfig(
-            enable_bilateral=True, enable_guided=False, enable_edge_enhancement=False, enable_gradient_smoothing=False
+            enable_bilateral=True,
+            enable_guided=False,
+            enable_edge_enhancement=False,
+            enable_gradient_smoothing=False,
         )
         pipeline = EdgeRefinementPipeline(config)
 
@@ -413,7 +415,10 @@ class TestEdgeRefinementPipeline:
     def test_pipeline_full_stack(self, simple_depth, simple_rgb):
         """Test pipeline with all modules enabled."""
         config = EdgeRefinementConfig(
-            enable_bilateral=True, enable_guided=True, enable_edge_enhancement=True, enable_gradient_smoothing=True
+            enable_bilateral=True,
+            enable_guided=True,
+            enable_edge_enhancement=True,
+            enable_gradient_smoothing=True,
         )
         pipeline = EdgeRefinementPipeline(config)
 
@@ -580,9 +585,18 @@ try:
         """Property-based tests using hypothesis."""
 
         @given(
-            depth=st.lists(st.lists(st.floats(min_value=0.0, max_value=1.0), min_size=8, max_size=8), min_size=8, max_size=8)
+            depth=st.lists(
+                st.lists(st.floats(min_value=0.0, max_value=1.0), min_size=8, max_size=8),
+                min_size=8,
+                max_size=8,
+            )
         )
-        @settings(suppress_health_check=[HealthCheck.large_base_example, HealthCheck.data_too_large])
+        @settings(
+            suppress_health_check=[
+                HealthCheck.large_base_example,
+                HealthCheck.data_too_large,
+            ]
+        )
         def test_bilateral_preserves_range(self, depth):
             """Property: Bilateral filter output is bounded [0, 1]."""
             depth_arr = np.array(depth, dtype=np.float32)

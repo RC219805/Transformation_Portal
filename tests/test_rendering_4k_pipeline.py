@@ -41,7 +41,6 @@ from transformation_portal.pipelines.rendering_4k_pipeline import (
     estimate_depth_simple,
 )
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -173,7 +172,9 @@ class TestPipelineConfig:
 
     def test_quality_feedback_config_lpips_fields(self):
         """Test QualityFeedbackConfig LPIPS-related fields."""
-        from transformation_portal.pipelines.rendering_4k_pipeline import QualityFeedbackConfig
+        from transformation_portal.pipelines.rendering_4k_pipeline import (
+            QualityFeedbackConfig,
+        )
 
         config = QualityFeedbackConfig(
             use_lpips=True,

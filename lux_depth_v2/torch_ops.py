@@ -213,7 +213,12 @@ def gaussian_blur(x: "torch.Tensor", sigma: float, autocast: bool = False) -> "t
     return xv
 
 
-def resize(x: "torch.Tensor", size_hw: Tuple[int, int], mode: str = "bilinear", autocast: bool = False) -> "torch.Tensor":
+def resize(
+    x: "torch.Tensor",
+    size_hw: Tuple[int, int],
+    mode: str = "bilinear",
+    autocast: bool = False,
+) -> "torch.Tensor":
     """Resize tensor using interpolation with MPS compatibility.
 
     MPS Compatibility (2026-01-14):
@@ -315,7 +320,12 @@ def apply_luma_ratio(rgb: "torch.Tensor", new_l: "torch.Tensor", old_l: Optional
 
 
 def param_map(
-    wfg: "torch.Tensor", wmid: "torch.Tensor", wbg: "torch.Tensor", fg: float, mid: float, bg: float
+    wfg: "torch.Tensor",
+    wmid: "torch.Tensor",
+    wbg: "torch.Tensor",
+    fg: float,
+    mid: float,
+    bg: float,
 ) -> "torch.Tensor":
     require_torch()
     return (wfg * float(fg) + wmid * float(mid) + wbg * float(bg)).to(dtype=torch.float32)
@@ -359,7 +369,12 @@ class GradeMaps:
 
 
 def grade_core(
-    rgb: "torch.Tensor", wfg: "torch.Tensor", wmid: "torch.Tensor", wbg: "torch.Tensor", cfg, mods: Optional[object] = None
+    rgb: "torch.Tensor",
+    wfg: "torch.Tensor",
+    wmid: "torch.Tensor",
+    wbg: "torch.Tensor",
+    cfg,
+    mods: Optional[object] = None,
 ) -> "torch.Tensor":
     """Depth-aware grading core (temp, sat, exp, con)."""
     require_torch()
@@ -550,7 +565,9 @@ class Tiler:
         self.overlap = int(max(0, overlap))
 
     def run(
-        self, rgb: "torch.Tensor", fn: Callable[["torch.Tensor", int, int, int, int, int, int, int, int], "torch.Tensor"]
+        self,
+        rgb: "torch.Tensor",
+        fn: Callable[["torch.Tensor", int, int, int, int, int, int, int, int], "torch.Tensor"],
     ) -> "torch.Tensor":
         require_torch()
         if self.tile <= 0:

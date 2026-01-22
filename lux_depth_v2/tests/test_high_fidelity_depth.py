@@ -246,7 +246,10 @@ def test_luxury_validation_passes_high_quality(synthetic_rgb_image):
 # ============================================================================
 
 
-@pytest.mark.skipif(not __import__("importlib.util").util.find_spec("torch"), reason="PyTorch not available")
+@pytest.mark.skipif(
+    not __import__("importlib.util").util.find_spec("torch"),
+    reason="PyTorch not available",
+)
 def test_tiled_estimator_initialization():
     """Test tiled depth estimator initialization."""
     from lux_depth_v2.depth_inference import create_tiled_estimator
@@ -258,7 +261,10 @@ def test_tiled_estimator_initialization():
     assert estimator.config.fusion_mode == "median"
 
 
-@pytest.mark.skipif(not __import__("importlib.util").util.find_spec("torch"), reason="PyTorch not available")
+@pytest.mark.skipif(
+    not __import__("importlib.util").util.find_spec("torch"),
+    reason="PyTorch not available",
+)
 def test_tile_extraction():
     """Test tile extraction from image."""
     from lux_depth_v2.depth_inference import TiledDepthEstimator, TiledInferenceConfig
@@ -282,7 +288,10 @@ def test_tile_extraction():
     assert x1 - x0 == 256
 
 
-@pytest.mark.skipif(not __import__("importlib.util").util.find_spec("torch"), reason="PyTorch not available")
+@pytest.mark.skipif(
+    not __import__("importlib.util").util.find_spec("torch"),
+    reason="PyTorch not available",
+)
 def test_blend_window_generation():
     """Test blending window generation."""
     from lux_depth_v2.depth_inference import TiledDepthEstimator, TiledInferenceConfig
@@ -303,7 +312,10 @@ def test_blend_window_generation():
     assert window[128, 128] == pytest.approx(1.0, abs=0.01)
 
 
-@pytest.mark.skipif(not __import__("importlib.util").util.find_spec("torch"), reason="PyTorch not available")
+@pytest.mark.skipif(
+    not __import__("importlib.util").util.find_spec("torch"),
+    reason="PyTorch not available",
+)
 def test_edge_alignment_computation():
     """Test edge alignment score computation."""
     from lux_depth_v2.depth_inference import TiledDepthEstimator, TiledInferenceConfig
@@ -367,7 +379,10 @@ def test_module_imports():
 
 
 @pytest.mark.benchmark
-@pytest.mark.skipif(not __import__("importlib.util").util.find_spec("torch"), reason="PyTorch not available")
+@pytest.mark.skipif(
+    not __import__("importlib.util").util.find_spec("torch"),
+    reason="PyTorch not available",
+)
 def test_benchmark_normal_map_generation():
     """Benchmark normal map generation speed."""
     import time

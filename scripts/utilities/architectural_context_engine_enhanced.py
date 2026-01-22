@@ -467,7 +467,10 @@ def main():
 
     parser = argparse.ArgumentParser(description="Architectural Context Engine")
     parser.add_argument(
-        "--metadata", type=Path, default=Path("750_picacho_metadata.json"), help="Path to unified metadata JSON"
+        "--metadata",
+        type=Path,
+        default=Path("750_picacho_metadata.json"),
+        help="Path to unified metadata JSON",
     )
     parser.add_argument("--view", type=str, help="Get config for specific view")
     parser.add_argument("--export-all", type=Path, help="Export all configs to directory")

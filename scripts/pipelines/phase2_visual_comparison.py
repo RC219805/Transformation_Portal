@@ -56,7 +56,12 @@ def create_depth_comparison(image_path: Path, output_dir: Path, model_variants: 
         variant = variant_map[variant_name]
 
         # Initialize model
-        model = DepthAnythingV2Model(variant=variant, backend=ModelBackend.PYTORCH_MPS, device="mps", precision="fp16")
+        model = DepthAnythingV2Model(
+            variant=variant,
+            backend=ModelBackend.PYTORCH_MPS,
+            device="mps",
+            precision="fp16",
+        )
 
         # Estimate depth
         start = time.time()
@@ -90,7 +95,13 @@ def create_depth_comparison(image_path: Path, output_dir: Path, model_variants: 
     return results
 
 
-def create_comparison_grid(image_path: Path, original_img: Image.Image, depth_maps: dict, results: dict, output_dir: Path):
+def create_comparison_grid(
+    image_path: Path,
+    original_img: Image.Image,
+    depth_maps: dict,
+    results: dict,
+    output_dir: Path,
+):
     """Create a grid comparing original image with depth maps."""
 
     logger.info("\nCreating comparison grid...")

@@ -23,6 +23,7 @@ sys.path.insert(0, str(agents_path))
 
 # pylint: disable=wrong-import-position
 from rag_system.phase1_integration import RAGConfig, RAGSystem  # noqa: E402
+
 # pylint: enable=wrong-import-position
 
 

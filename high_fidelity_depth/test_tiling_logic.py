@@ -173,7 +173,8 @@ def test_blend_weights():
 
     # Check non-overlapping center of first tile (should be ~1.0)
     center_region = weight_accum[
-        config.tile_size // 2 : config.tile_size // 2 + 10, config.tile_size // 2 : config.tile_size // 2 + 10
+        config.tile_size // 2 : config.tile_size // 2 + 10,
+        config.tile_size // 2 : config.tile_size // 2 + 10,
     ]
     center_mean = center_region.mean()
 

@@ -113,11 +113,11 @@ def generate_registry_snippet(model_name: str, sha256: str, size_mb: float, file
     The URL should be preserved from the existing registry or set manually,
     as the registry key (model_name) often differs from the filename.
     """
-    return f'''    "{model_name}": {{
+    return f"""    "{model_name}": {{
         # URL: Preserve existing URL or set manually - filename is {filename}
         "sha256": "{sha256}",
         "size_mb": {size_mb:.1f},
-    }},'''
+    }},"""
 
 
 def main():

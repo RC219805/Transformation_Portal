@@ -22,7 +22,6 @@ import cv2
 import numpy as np
 from PIL import Image
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -41,6 +40,7 @@ class GoldenRatioAnalysis:
         alignments: Feature alignments with grid points
         recommendations: Composition improvement suggestions
     """
+
     score: float
     grid_points: np.ndarray
     feature_positions: List[Tuple[int, int]]
@@ -69,7 +69,7 @@ class GoldenRatioAnalyzer:
     def __init__(
         self,
         tolerance: float = 0.05,  # 5% tolerance for alignment
-        min_feature_strength: float = 0.1
+        min_feature_strength: float = 0.1,
     ):
         """Initialize golden ratio analyzer.
 
@@ -83,9 +83,7 @@ class GoldenRatioAnalyzer:
         logger.info(f"GoldenRatioAnalyzer initialized (tolerance={tolerance})")
 
     def analyze(
-        self,
-        image: Union[str, np.ndarray, Image.Image],
-        detect_features: bool = True
+        self, image: Union[str, np.ndarray, Image.Image], detect_features: bool = True
     ) -> GoldenRatioAnalysis:
         """Analyze image composition using golden ratio.
 
@@ -110,11 +108,7 @@ class GoldenRatioAnalyzer:
             feature_positions = []
 
         # Calculate alignments
-        alignments = self._calculate_alignments(
-            feature_positions,
-            grid_points,
-            w, h
-        )
+        alignments = self._calculate_alignments(feature_positions, grid_points, w, h)
 
         # Calculate overall score
         score = self._calculate_score(alignments, len(feature_positions))
@@ -129,14 +123,11 @@ class GoldenRatioAnalyzer:
             grid_points=grid_points,
             feature_positions=feature_positions,
             alignments=alignments,
-            recommendations=recommendations
+            recommendations=recommendations,
         )
 
     def _generate_grid(
-        self,
-        width: int,
-        height: int,
-        include_phi_reciprocal: bool = True
+        self, width: int, height: int, include_phi_reciprocal: bool = True
     ) -> np.ndarray:
         """Generate golden ratio grid points.
 
@@ -189,10 +180,7 @@ class GoldenRatioAnalyzer:
 
         return np.array(points)
 
-    def _detect_features(
-        self,
-        image: np.ndarray
-    ) -> List[Tuple[int, int]]:
+    def _detect_features(self, image: np.ndarray) -> List[Tuple[int, int]]:
         """Detect salient features using corner detection and saliency.
 
         Args:
@@ -206,10 +194,7 @@ class GoldenRatioAnalyzer:
 
         # Detect corners (architectural features)
         corners = cv2.goodFeaturesToTrack(
-            gray,
-            maxCorners=100,
-            qualityLevel=0.01,
-            minDistance=30
+            gray, maxCorners=100, qualityLevel=0.01, minDistance=30
         )
 
         feature_positions = []
@@ -237,10 +222,10 @@ class GoldenRatioAnalyzer:
                 for i in range(0, h, grid_size):
                     for j in range(0, w, grid_size):
                         region = salient_points[
-                            (salient_points[:, 0] >= i) &
-                            (salient_points[:, 0] < i + grid_size) &
-                            (salient_points[:, 1] >= j) &
-                            (salient_points[:, 1] < j + grid_size)
+                            (salient_points[:, 0] >= i)
+                            & (salient_points[:, 0] < i + grid_size)
+                            & (salient_points[:, 1] >= j)
+                            & (salient_points[:, 1] < j + grid_size)
                         ]
 
                         if len(region) > 10:  # Significant cluster
@@ -255,7 +240,7 @@ class GoldenRatioAnalyzer:
         features: List[Tuple[int, int]],
         grid_points: np.ndarray,
         width: int,
-        height: int
+        height: int,
     ) -> List[Dict]:
         """Calculate how well features align with grid points.
 
@@ -275,8 +260,7 @@ class GoldenRatioAnalyzer:
         for feat_x, feat_y in features:
             # Find closest grid point
             distances = np.sqrt(
-                (grid_points[:, 0] - feat_x) ** 2 +
-                (grid_points[:, 1] - feat_y) ** 2
+                (grid_points[:, 0] - feat_x) ** 2 + (grid_points[:, 1] - feat_y) ** 2
             )
 
             closest_idx = np.argmin(distances)
@@ -290,21 +274,19 @@ class GoldenRatioAnalyzer:
             else:
                 alignment_score = 0.0
 
-            alignments.append({
-                'feature_position': (feat_x, feat_y),
-                'closest_grid_point': tuple(closest_point),
-                'distance': closest_distance,
-                'alignment_score': alignment_score,
-                'is_aligned': closest_distance < tolerance_px
-            })
+            alignments.append(
+                {
+                    "feature_position": (feat_x, feat_y),
+                    "closest_grid_point": tuple(closest_point),
+                    "distance": closest_distance,
+                    "alignment_score": alignment_score,
+                    "is_aligned": closest_distance < tolerance_px,
+                }
+            )
 
         return alignments
 
-    def _calculate_score(
-        self,
-        alignments: List[Dict],
-        total_features: int
-    ) -> float:
+    def _calculate_score(self, alignments: List[Dict], total_features: int) -> float:
         """Calculate overall golden ratio adherence score.
 
         Args:
@@ -318,11 +300,11 @@ class GoldenRatioAnalyzer:
             return 0.5  # Neutral score if no features
 
         # Average alignment score of all features
-        alignment_scores = [a['alignment_score'] for a in alignments]
+        alignment_scores = [a["alignment_score"] for a in alignments]
         avg_alignment = np.mean(alignment_scores)
 
         # Bonus for having features on multiple grid points
-        aligned_count = sum(1 for a in alignments if a['is_aligned'])
+        aligned_count = sum(1 for a in alignments if a["is_aligned"])
         coverage_bonus = min(aligned_count / 4, 1.0) * 0.2  # Up to 20% bonus
 
         score = avg_alignment * 0.8 + coverage_bonus
@@ -335,7 +317,7 @@ class GoldenRatioAnalyzer:
         alignments: List[Dict],
         grid_points: np.ndarray,
         width: int,
-        height: int
+        height: int,
     ) -> List[str]:
         """Generate composition recommendations.
 
@@ -368,7 +350,7 @@ class GoldenRatioAnalyzer:
             )
 
         # Identify poorly aligned features
-        poor_alignments = [a for a in alignments if a['alignment_score'] < 0.3]
+        poor_alignments = [a for a in alignments if a["alignment_score"] < 0.3]
 
         if poor_alignments:
             recommendations.append(
@@ -377,7 +359,9 @@ class GoldenRatioAnalyzer:
             )
 
         # Find empty grid points (opportunities)
-        used_points = set(a['closest_grid_point'] for a in alignments if a['is_aligned'])
+        used_points = set(
+            a["closest_grid_point"] for a in alignments if a["is_aligned"]
+        )
         phi_reciprocal = 1 / PHI
 
         key_points = [
@@ -388,9 +372,10 @@ class GoldenRatioAnalyzer:
         ]
 
         empty_key_points = [
-            p for p in key_points
+            p
+            for p in key_points
             if not any(
-                np.sqrt((p[0] - up[0])**2 + (p[1] - up[1])**2) < width * 0.05
+                np.sqrt((p[0] - up[0]) ** 2 + (p[1] - up[1]) ** 2) < width * 0.05
                 for up in used_points
             )
         ]
@@ -409,7 +394,7 @@ class GoldenRatioAnalyzer:
         analysis: Optional[GoldenRatioAnalysis] = None,
         line_color: Tuple[int, int, int] = (255, 215, 0),  # Gold color
         line_thickness: int = 2,
-        show_features: bool = True
+        show_features: bool = True,
     ) -> np.ndarray:
         """Visualize golden ratio grid on image.
 
@@ -446,25 +431,22 @@ class GoldenRatioAnalyzer:
 
         # Draw grid intersection points
         for point in analysis.grid_points:
-            cv2.circle(
-                image_np,
-                tuple(point.astype(int)),
-                5,
-                line_color,
-                -1
-            )
+            cv2.circle(image_np, tuple(point.astype(int)), 5, line_color, -1)
 
         # Show features if requested
         if show_features and analysis.feature_positions:
             for feat_x, feat_y in analysis.feature_positions:
                 # Color based on alignment
                 alignment = next(
-                    (a for a in analysis.alignments
-                     if a['feature_position'] == (feat_x, feat_y)),
-                    None
+                    (
+                        a
+                        for a in analysis.alignments
+                        if a["feature_position"] == (feat_x, feat_y)
+                    ),
+                    None,
                 )
 
-                if alignment and alignment['is_aligned']:
+                if alignment and alignment["is_aligned"]:
                     color = (0, 255, 0)  # Green for aligned
                 else:
                     color = (255, 0, 0)  # Red for not aligned
@@ -481,7 +463,7 @@ class GoldenRatioAnalyzer:
             1.0,
             (255, 255, 255),
             3,
-            cv2.LINE_AA
+            cv2.LINE_AA,
         )
         cv2.putText(
             image_np,
@@ -491,7 +473,7 @@ class GoldenRatioAnalyzer:
             1.0,
             line_color,
             2,
-            cv2.LINE_AA
+            cv2.LINE_AA,
         )
 
         return image_np
@@ -499,7 +481,7 @@ class GoldenRatioAnalyzer:
     def get_optimal_crop(
         self,
         image: Union[str, np.ndarray, Image.Image],
-        target_aspect: Optional[float] = None
+        target_aspect: Optional[float] = None,
     ) -> Tuple[int, int, int, int]:
         """Calculate optimal crop using golden ratio.
 
@@ -531,10 +513,7 @@ class GoldenRatioAnalyzer:
             y_offset = (h - new_height) // 2
             return (0, y_offset, w, y_offset + new_height)
 
-    def _load_image(
-        self,
-        image: Union[str, np.ndarray, Image.Image]
-    ) -> np.ndarray:
+    def _load_image(self, image: Union[str, np.ndarray, Image.Image]) -> np.ndarray:
         """Load image as RGB numpy array."""
         if isinstance(image, np.ndarray):
             return image
@@ -545,6 +524,4 @@ class GoldenRatioAnalyzer:
             return np.array(pil_img)
 
     def __repr__(self) -> str:
-        return (
-            f"GoldenRatioAnalyzer(tolerance={self.tolerance})"
-        )
+        return f"GoldenRatioAnalyzer(tolerance={self.tolerance})"

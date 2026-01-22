@@ -252,7 +252,11 @@ def create_normal_map_generator(
     z_scale: float = 1.0, gradient_method: str = "scharr", smooth_sigma: float = 0.5
 ) -> NormalMapGenerator:
     """Convenience factory for normal map generator."""
-    config = NormalMapConfig(z_scale=z_scale, gradient_method=gradient_method, gradient_smooth_sigma=smooth_sigma)
+    config = NormalMapConfig(
+        z_scale=z_scale,
+        gradient_method=gradient_method,
+        gradient_smooth_sigma=smooth_sigma,
+    )
     return NormalMapGenerator(config)
 
 
@@ -260,7 +264,11 @@ def create_normal_map_generator(
 
 PRESETS = {
     "architectural": NormalMapConfig(
-        z_scale=1.0, gradient_method="scharr", gradient_smooth_sigma=0.5, smooth_normals=False, tangent_space=True
+        z_scale=1.0,
+        gradient_method="scharr",
+        gradient_smooth_sigma=0.5,
+        smooth_normals=False,
+        tangent_space=True,
     ),
     "subtle": NormalMapConfig(
         z_scale=2.0,  # Flatter normals

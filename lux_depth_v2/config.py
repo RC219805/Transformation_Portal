@@ -9,7 +9,9 @@ import json
 
 # Platform Core integration for unified configuration
 try:
-    from transformation_portal.core.config.schemas import DeviceConfig as CoreDeviceConfig
+    from transformation_portal.core.config.schemas import (
+        DeviceConfig as CoreDeviceConfig,
+    )
     from transformation_portal.core.config.schemas import PathsConfig as CorePathsConfig
     from transformation_portal.core.config.schemas import DeviceType, PrecisionType
 
@@ -1040,7 +1042,10 @@ class PipelineConfig:
             self.post_overlap = 64
             self.validate_ai = True
 
-        elif p in (Preset.INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM, Preset.EXTERIOR_POOL_APEX_QUALITY_EFFICIENTSAM):
+        elif p in (
+            Preset.INTERIOR_LUXURY_APEX_QUALITY_EFFICIENTSAM,
+            Preset.EXTERIOR_POOL_APEX_QUALITY_EFFICIENTSAM,
+        ):
             # CANARY EfficientSAM V3 presets: APEX + FUSED segmentation
             # Inherits all settings from base APEX preset, then enables fusion
 
@@ -1099,7 +1104,10 @@ class PipelineConfig:
 
             # Enable Materials V3 with glass pixel operations
             if self.materials_v3 is None:
-                from lux_depth_v2.materials_v3 import MaterialsV3Config, RefinementStrategy
+                from lux_depth_v2.materials_v3 import (
+                    MaterialsV3Config,
+                    RefinementStrategy,
+                )
 
                 self.materials_v3 = MaterialsV3Config()
             else:
@@ -1163,7 +1171,10 @@ class PipelineConfig:
 
             # Enable Materials V3 with stone pixel operations
             if self.materials_v3 is None:
-                from lux_depth_v2.materials_v3 import MaterialsV3Config, RefinementStrategy
+                from lux_depth_v2.materials_v3 import (
+                    MaterialsV3Config,
+                    RefinementStrategy,
+                )
 
                 self.materials_v3 = MaterialsV3Config()
             else:
@@ -1315,7 +1326,11 @@ class PipelineConfig:
             self.materials_v2.segmentation.quality_threshold = 0.5
 
             # MATERIALS V3: Depth-aware processing
-            from lux_depth_v2.materials_v3 import MaterialsV3Config, MaterialTaxonomy, RefinementStrategy
+            from lux_depth_v2.materials_v3 import (
+                MaterialsV3Config,
+                MaterialTaxonomy,
+                RefinementStrategy,
+            )
 
             self.materials_v3 = MaterialsV3Config()
             self.materials_v3.enabled = True
@@ -1355,11 +1370,11 @@ class PipelineConfig:
             "segmentation_long_side": self.segmentation.input_long_side,
             "segmentation_min_confidence": self.segmentation.min_confidence,
             "depth_zones_mode": self.depth_zones.mode,
-            "materials_v2_enabled": self.materials_v2.enabled if self.materials_v2 else False,
-            "materials_v2_backend": self.materials_v2.backend if self.materials_v2 else None,
-            "materials_v2_confidence": self.materials_v2.confidence.confidence_threshold if self.materials_v2 else None,
-            "materials_v2_max_seg_side": self.materials_v2.segmentation.max_segmentation_side if self.materials_v2 else None,
-            "materials_v3_enabled": self.materials_v3.enabled if self.materials_v3 else False,
+            "materials_v2_enabled": (self.materials_v2.enabled if self.materials_v2 else False),
+            "materials_v2_backend": (self.materials_v2.backend if self.materials_v2 else None),
+            "materials_v2_confidence": (self.materials_v2.confidence.confidence_threshold if self.materials_v2 else None),
+            "materials_v2_max_seg_side": (self.materials_v2.segmentation.max_segmentation_side if self.materials_v2 else None),
+            "materials_v3_enabled": (self.materials_v3.enabled if self.materials_v3 else False),
             # Depth contract parameters (cache invalidation fix)
             "strict_depth": self.strict_depth,
             "depth_mode": self.depth.mode.value,
@@ -1427,6 +1442,6 @@ class PipelineConfig:
             input_dir=self.input_dir,
             output_dir=self.output_dir,
             cache_dir=Path(".cache"),
-            checkpoint_dir=Path(self.orchestrator.checkpoint_dir) if self.orchestrator else Path(".checkpoints"),
+            checkpoint_dir=(Path(self.orchestrator.checkpoint_dir) if self.orchestrator else Path(".checkpoints")),
             model_weights_dir=None,  # Not used in lux_depth_v2
         )

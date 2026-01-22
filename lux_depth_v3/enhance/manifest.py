@@ -418,7 +418,11 @@ def capture_environment() -> EnvironmentMetadata:
             try:
                 # Get driver version if available
                 result = subprocess.run(
-                    ["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"],
+                    [
+                        "nvidia-smi",
+                        "--query-gpu=driver_version",
+                        "--format=csv,noheader",
+                    ],
                     capture_output=True,
                     text=True,
                     timeout=2,

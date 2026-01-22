@@ -33,7 +33,9 @@ def documents(note: str) -> Callable[[Callable], Callable]:
 ConceptType = Union[str, int, Type]
 
 
-def demonstrates(concepts: Union[ConceptType, Sequence[ConceptType]]) -> Callable[[Callable], Callable]:
+def demonstrates(
+    concepts: Union[ConceptType, Sequence[ConceptType]],
+) -> Callable[[Callable], Callable]:
     """Annotate a function as demonstrating one or more concepts."""
     if not isinstance(concepts, (list, tuple)):
         concepts_seq = (concepts,)

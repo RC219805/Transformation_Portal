@@ -192,7 +192,7 @@ class ArchitecturalContext:
             "space_type": self.space_type.value if self.space_type else None,
             "dimensions": self.dimensions.__dict__ if self.dimensions else None,
             "materials": [m.__dict__ for m in self.materials],
-            "spatial_context": self.spatial_context.__dict__ if self.spatial_context else None,
+            "spatial_context": (self.spatial_context.__dict__ if self.spatial_context else None),
             "design_intent": self.design_intent,
             "style_notes": self.style_notes,
             "source_documents": [str(p) for p in self.source_documents],
@@ -445,7 +445,12 @@ class ContextAwareRenderingPipeline:
 
         return context
 
-    def enhance_prompt(self, base_prompt: str, image_path: Path, pdf_documents: Optional[List[Path]] = None) -> str:
+    def enhance_prompt(
+        self,
+        base_prompt: str,
+        image_path: Path,
+        pdf_documents: Optional[List[Path]] = None,
+    ) -> str:
         """Generate context-enhanced prompt."""
 
         context = self.prepare_context(image_path, pdf_documents)

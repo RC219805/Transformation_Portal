@@ -58,7 +58,12 @@ except ImportError:
 sys.path.insert(0, str(Path(__file__).parent))
 
 from high_fidelity_depth.depth_estimator import HighFidelityDepthEstimator, DepthConfig
-from high_fidelity_depth.quality_metrics import EdgeMetrics, validate_depth_quality, save_metrics_atomic, detect_edges
+from high_fidelity_depth.quality_metrics import (
+    EdgeMetrics,
+    validate_depth_quality,
+    save_metrics_atomic,
+    detect_edges,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -445,7 +450,9 @@ def validate_single_image(
             edge_precision=edge_precision,
             edge_recall=edge_recall,
             chamfer_distance_mean=metrics.chamfer_distance,
-            chamfer_distance_p95=np.percentile(np.abs(metrics.chamfer_distance), 95) if metrics.chamfer_distance > 0 else 0.0,
+            chamfer_distance_p95=(
+                np.percentile(np.abs(metrics.chamfer_distance), 95) if metrics.chamfer_distance > 0 else 0.0
+            ),
             edge_overlap=metrics.edge_overlap,
             edge_count_ratio=metrics.edge_count_ratio,
             edge_sharpness_p95=metrics.edge_sharpness_p95,
@@ -565,7 +572,16 @@ def save_validation_visualization(rgb: np.ndarray, depth: np.ndarray, metrics: E
 
     y = 50
     for line in text_lines:
-        cv2.putText(panel4, line, (20, y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
+        cv2.putText(
+            panel4,
+            line,
+            (20, y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (0, 0, 0),
+            1,
+            cv2.LINE_AA,
+        )
         y += 40
 
     # Combine panels
@@ -651,7 +667,7 @@ def generate_dataset_report(
         halo_penalty_worst=np.max(halo_values),
         total_runtime_seconds=sum(r.runtime_seconds for r in valid_results),
         avg_runtime_per_image=np.mean([r.runtime_seconds for r in valid_results]),
-        peak_memory_mb=max(r.peak_memory_mb for r in valid_results) if PSUTIL_AVAILABLE else 0.0,
+        peak_memory_mb=(max(r.peak_memory_mb for r in valid_results) if PSUTIL_AVAILABLE else 0.0),
         critical_scene_results=critical_results,
         failure_modes=dict(failure_modes),
         deployment_recommendation=recommendation["status"],
@@ -703,13 +719,25 @@ def generate_deployment_recommendation(
 
 def main():
     parser = argparse.ArgumentParser(description="Production Validation Suite")
-    parser.add_argument("--input-dir", type=Path, required=True, help="Input directory with source images")
+    parser.add_argument(
+        "--input-dir",
+        type=Path,
+        required=True,
+        help="Input directory with source images",
+    )
     parser.add_argument("--output-dir", type=Path, required=True, help="Output directory for results")
     parser.add_argument(
-        "--preset", type=str, default="production", choices=["preview", "production", "hero"], help="Processing preset"
+        "--preset",
+        type=str,
+        default="production",
+        choices=["preview", "production", "hero"],
+        help="Processing preset",
     )
     parser.add_argument(
-        "--critical-scenes", nargs="+", default=["Kitchen", "GreatRoom", "Aerial", "Pool"], help="Critical scenes to validate"
+        "--critical-scenes",
+        nargs="+",
+        default=["Kitchen", "GreatRoom", "Aerial", "Pool"],
+        help="Critical scenes to validate",
     )
     parser.add_argument("--limit", type=int, default=None, help="Limit number of images (for testing)")
 

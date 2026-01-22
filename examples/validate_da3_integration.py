@@ -366,7 +366,10 @@ def validate_reference_view_strategies(report: DA3ValidationReport):
                 selector = ReferenceViewSelector(strategy=strategy)
 
                 # For saddle strategies, pass class_tokens
-                if strategy in [RefViewStrategy.SADDLE_BALANCED, RefViewStrategy.SADDLE_SIM_RANGE]:
+                if strategy in [
+                    RefViewStrategy.SADDLE_BALANCED,
+                    RefViewStrategy.SADDLE_SIM_RANGE,
+                ]:
                     result = selector.select(num_views=num_views, class_tokens=features)
                 else:
                     result = selector.select(num_views=num_views)
@@ -374,7 +377,10 @@ def validate_reference_view_strategies(report: DA3ValidationReport):
                 if 0 <= result.selected_index < num_views:
                     report.test_passed(f"Strategy: {strategy.value}")
                 else:
-                    report.test_failed(f"Strategy: {strategy.value}", f"Invalid index: {result.selected_index}")
+                    report.test_failed(
+                        f"Strategy: {strategy.value}",
+                        f"Invalid index: {result.selected_index}",
+                    )
             except Exception as e:
                 report.test_failed(f"Strategy: {strategy.value}", str(e))
 

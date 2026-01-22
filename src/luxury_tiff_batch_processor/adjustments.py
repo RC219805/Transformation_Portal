@@ -583,7 +583,10 @@ def apply_glow(arr: np.ndarray, amount: float) -> np.ndarray:
 
 
 def apply_adjustments(
-    arr: np.ndarray, adjustments: AdjustmentSettings, *, profile: ProcessingProfile | None = None
+    arr: np.ndarray,
+    adjustments: AdjustmentSettings,
+    *,
+    profile: ProcessingProfile | None = None,
 ) -> np.ndarray:
     """Apply complete adjustment pipeline to image array.
 

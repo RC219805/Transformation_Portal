@@ -93,7 +93,10 @@ def small_exterior_image(test_data_dir, tmp_path):
     return img_path
 
 
-@pytest.mark.skipif(not CLIP_TESTS_AVAILABLE, reason="Phase 2 CLIP dependencies not available (transformers/torch required)")
+@pytest.mark.skipif(
+    not CLIP_TESTS_AVAILABLE,
+    reason="Phase 2 CLIP dependencies not available (transformers/torch required)",
+)
 @pytest.mark.integration
 class TestPhase2EndToEnd:
     """Integration tests for Phase 2 pipeline."""
@@ -109,7 +112,15 @@ class TestPhase2EndToEnd:
         # We use a lower confidence threshold for synthetic images
         assert scene.scene_type.value in ["interior", "exterior", "unknown"]
         assert scene.confidence >= 0.0  # Just check it returns something
-        assert scene.scene_subtype in ["kitchen", "bathroom", "bedroom", "living_room", "pool", "courtyard", "facade"]
+        assert scene.scene_subtype in [
+            "kitchen",
+            "bathroom",
+            "bedroom",
+            "living_room",
+            "pool",
+            "courtyard",
+            "facade",
+        ]
 
     def test_auto_preset_selection_returns_valid_preset(self, small_interior_image):
         """Test that auto-preset returns a valid Preset enum."""
@@ -138,7 +149,11 @@ class TestPhase2EndToEnd:
 
         # They might be the same if fallback is used, but should all be interior-type
         # (for our warm-toned synthetic image)
-        presets = [standard_rec.preset.value, max_rec.preset.value, apex_rec.preset.value]
+        presets = [
+            standard_rec.preset.value,
+            max_rec.preset.value,
+            apex_rec.preset.value,
+        ]
         assert all("interior" in p or "exterior" in p for p in presets)
 
     def test_scene_classification_confidence_structure(self, small_interior_image):

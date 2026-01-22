@@ -39,7 +39,11 @@ class TestCheckpoint:
         """Test saving checkpoint to file."""
         with tempfile.TemporaryDirectory() as tmpdir:
             checkpoint = Checkpoint(
-                id="test_save", progress=75.0, state={"index": 10}, timestamp=time.time(), metadata={"info": "test"}
+                id="test_save",
+                progress=75.0,
+                state={"index": 10},
+                timestamp=time.time(),
+                metadata={"info": "test"},
             )
 
             checkpoint_path = Path(tmpdir) / "checkpoint.json"
@@ -241,7 +245,11 @@ class TestCheckpointDecorator:
         """Test basic decorator usage."""
         with tempfile.TemporaryDirectory() as tmpdir:
 
-            @checkpoint_decorator(operation_id="test_batch", checkpoint_interval=2, checkpoint_dir=Path(tmpdir))
+            @checkpoint_decorator(
+                operation_id="test_batch",
+                checkpoint_interval=2,
+                checkpoint_dir=Path(tmpdir),
+            )
             def process_batch(items):
                 for i, item in enumerate(items):
                     progress = (i + 1) / len(items) * 100
@@ -263,7 +271,11 @@ class TestCheckpointDecorator:
         """Test that decorator respects checkpoint interval."""
         with tempfile.TemporaryDirectory() as tmpdir:
 
-            @checkpoint_decorator(operation_id="interval_test", checkpoint_interval=3, checkpoint_dir=Path(tmpdir))
+            @checkpoint_decorator(
+                operation_id="interval_test",
+                checkpoint_interval=3,
+                checkpoint_dir=Path(tmpdir),
+            )
             def process_items(items):
                 for i, item in enumerate(items):
                     yield i * 10, {"index": i}, item

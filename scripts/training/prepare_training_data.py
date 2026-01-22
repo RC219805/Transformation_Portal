@@ -538,27 +538,61 @@ def parse_args() -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(description="Prepare training data for depth estimation")
 
-    parser.add_argument("--source-dir", type=str, default="data/raw", help="Source directory containing raw data")
+    parser.add_argument(
+        "--source-dir",
+        type=str,
+        default="data/raw",
+        help="Source directory containing raw data",
+    )
 
-    parser.add_argument("--output-dir", type=str, default="data/architectural", help="Output directory for prepared data")
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="data/architectural",
+        help="Output directory for prepared data",
+    )
 
     parser.add_argument("--val-split", type=float, default=0.1, help="Fraction of data for validation")
 
     parser.add_argument("--test-split", type=float, default=0.1, help="Fraction of data for testing")
 
-    parser.add_argument("--depth-format", type=str, default="npy", choices=["npy", "png", "tiff"], help="Output depth format")
+    parser.add_argument(
+        "--depth-format",
+        type=str,
+        default="npy",
+        choices=["npy", "png", "tiff"],
+        help="Output depth format",
+    )
 
     parser.add_argument(
-        "--resize", type=int, nargs=2, default=None, metavar=("HEIGHT", "WIDTH"), help="Resize images to specified size"
+        "--resize",
+        type=int,
+        nargs=2,
+        default=None,
+        metavar=("HEIGHT", "WIDTH"),
+        help="Resize images to specified size",
     )
 
     parser.add_argument("--seed", type=int, default=42, help="Random seed for splitting")
 
-    parser.add_argument("--stats-only", action="store_true", help="Only compute statistics, don't copy data")
+    parser.add_argument(
+        "--stats-only",
+        action="store_true",
+        help="Only compute statistics, don't copy data",
+    )
 
-    parser.add_argument("--create-sample", action="store_true", help="Create synthetic sample data for testing")
+    parser.add_argument(
+        "--create-sample",
+        action="store_true",
+        help="Create synthetic sample data for testing",
+    )
 
-    parser.add_argument("--num-samples", type=int, default=100, help="Number of synthetic samples to create")
+    parser.add_argument(
+        "--num-samples",
+        type=int,
+        default=100,
+        help="Number of synthetic samples to create",
+    )
 
     return parser.parse_args()
 

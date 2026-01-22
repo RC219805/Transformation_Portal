@@ -3,7 +3,10 @@
 import pytest
 import numpy as np
 
-from src.transformation_portal.core.validation.metrics import MetricsComputer, QualityMetrics
+from src.transformation_portal.core.validation.metrics import (
+    MetricsComputer,
+    QualityMetrics,
+)
 
 
 def test_quality_metrics_to_dict():
@@ -241,7 +244,8 @@ def test_compute_subset_metrics():
 
 
 @pytest.mark.skipif(
-    not pytest.importorskip("skimage", reason="scikit-image not available"), reason="scikit-image not available"
+    not pytest.importorskip("skimage", reason="scikit-image not available"),
+    reason="scikit-image not available",
 )
 def test_compute_ssim_with_skimage():
     """Test SSIM with scikit-image."""

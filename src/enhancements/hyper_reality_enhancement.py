@@ -229,7 +229,11 @@ class AtmosphericSynthesizer(nn.Module):
 
         # Latent manipulation
         self.latent = nn.Sequential(
-            nn.Conv2d(512, 1024, 1), nn.GELU(), nn.Conv2d(1024, 1024, 1), nn.GELU(), nn.Conv2d(1024, 512, 1)
+            nn.Conv2d(512, 1024, 1),
+            nn.GELU(),
+            nn.Conv2d(1024, 1024, 1),
+            nn.GELU(),
+            nn.Conv2d(1024, 512, 1),
         )
 
         # Decoder with skip connections
@@ -254,9 +258,16 @@ class AtmosphericSynthesizer(nn.Module):
 
     def _make_decoder_block(self, in_c: int, out_c: int) -> nn.Module:
         if out_c == 3:
-            return nn.Sequential(nn.Conv2d(in_c, 32, 3, padding=1), nn.GELU(), nn.Conv2d(32, out_c, 1), nn.Sigmoid())
+            return nn.Sequential(
+                nn.Conv2d(in_c, 32, 3, padding=1),
+                nn.GELU(),
+                nn.Conv2d(32, out_c, 1),
+                nn.Sigmoid(),
+            )
         return nn.Sequential(
-            nn.ConvTranspose2d(in_c, out_c, 4, stride=2, padding=1), nn.GroupNorm(min(32, out_c // 2), out_c), nn.GELU()
+            nn.ConvTranspose2d(in_c, out_c, 4, stride=2, padding=1),
+            nn.GroupNorm(min(32, out_c // 2), out_c),
+            nn.GELU(),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -442,7 +453,10 @@ class HyperRealityProcessor:
         self.enhancements_applied = []
 
     def process_image(
-        self, image_path: str, output_path: Optional[str] = None, save_intermediate: bool = False
+        self,
+        image_path: str,
+        output_path: Optional[str] = None,
+        save_intermediate: bool = False,
     ) -> Dict[str, Any]:
         """
         Process image to achieve target quality level
@@ -638,7 +652,10 @@ class HyperRealityProcessor:
 
 
 def enhance_image(
-    image_path: str, output_path: Optional[str] = None, target_quality: int = 105, save_intermediate: bool = False
+    image_path: str,
+    output_path: Optional[str] = None,
+    target_quality: int = 105,
+    save_intermediate: bool = False,
 ) -> Dict[str, Any]:
     """
     Enhance a single image to hyper-reality quality
@@ -656,7 +673,11 @@ def enhance_image(
     config = EnhancementConfig(target_quality=target_quality)
     processor = HyperRealityProcessor(config)
 
-    return processor.process_image(image_path=image_path, output_path=output_path, save_intermediate=save_intermediate)
+    return processor.process_image(
+        image_path=image_path,
+        output_path=output_path,
+        save_intermediate=save_intermediate,
+    )
 
 
 if __name__ == "__main__":
@@ -672,7 +693,10 @@ if __name__ == "__main__":
 
     # Process image
     results = enhance_image(
-        image_path=args.input, output_path=args.output, target_quality=args.quality, save_intermediate=args.intermediate
+        image_path=args.input,
+        output_path=args.output,
+        target_quality=args.quality,
+        save_intermediate=args.intermediate,
     )
 
     # Print results

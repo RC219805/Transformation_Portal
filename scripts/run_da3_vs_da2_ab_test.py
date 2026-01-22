@@ -195,7 +195,12 @@ def run_da3_validation(image_paths: List[Path], output_dir: Path) -> Dict[str, d
                 metrics["strict_pass"] = bool(strict_pass)
             else:
                 # Minimal metrics if quality module unavailable
-                metrics = {"edge_f1": 0.0, "lenient_pass": False, "strict_pass": False, "scene_type": "unknown"}
+                metrics = {
+                    "edge_f1": 0.0,
+                    "lenient_pass": False,
+                    "strict_pass": False,
+                    "scene_type": "unknown",
+                }
 
             # Add inference time
             if isinstance(metrics, dict):
@@ -402,10 +407,23 @@ Total comparisons: {total}
 def main():
     parser = argparse.ArgumentParser(description="DA3 vs DA2 A/B Validation")
     parser.add_argument(
-        "--baseline-dir", type=Path, default=Path("validation_v1_baseline_pack"), help="Baseline metrics directory"
+        "--baseline-dir",
+        type=Path,
+        default=Path("validation_v1_baseline_pack"),
+        help="Baseline metrics directory",
     )
-    parser.add_argument("--image-dir", type=Path, default=Path("data/validation_full"), help="Validation images directory")
-    parser.add_argument("--output-dir", type=Path, default=Path("outputs/da3_ab_validation"), help="Output directory")
+    parser.add_argument(
+        "--image-dir",
+        type=Path,
+        default=Path("data/validation_full"),
+        help="Validation images directory",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("outputs/da3_ab_validation"),
+        help="Output directory",
+    )
 
     args = parser.parse_args()
 

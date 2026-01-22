@@ -213,13 +213,25 @@ class TestAPICompatibility:
         params = list(sig.parameters.keys())
 
         # Expected parameters from original BasicSR
-        expected = ["self", "num_in_ch", "num_out_ch", "scale", "num_feat", "num_block", "num_grow_ch"]
+        expected = [
+            "self",
+            "num_in_ch",
+            "num_out_ch",
+            "scale",
+            "num_feat",
+            "num_block",
+            "num_grow_ch",
+        ]
         assert params == expected
 
     def test_helper_functions_exist(self):
         """Test that required helper functions are available."""
         requires_real_torch()
-        from basicsr_tp.archs.rrdbnet_arch import default_init_weights, make_layer, pixel_unshuffle
+        from basicsr_tp.archs.rrdbnet_arch import (
+            default_init_weights,
+            make_layer,
+            pixel_unshuffle,
+        )
 
         assert callable(default_init_weights)
         assert callable(make_layer)

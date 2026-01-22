@@ -63,7 +63,15 @@ except ImportError:
 
 
 def _is_image_file(p: Path) -> bool:
-    return p.suffix.lower() in (".tif", ".tiff", ".png", ".jpg", ".jpeg", ".webp", ".bmp")
+    return p.suffix.lower() in (
+        ".tif",
+        ".tiff",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".webp",
+        ".bmp",
+    )
 
 
 def _find_depth(depth_dir: Optional[Path], stem: str) -> Optional[Path]:
@@ -203,7 +211,11 @@ class LuxPipelineV2:
         self.materials_v3_engine = None
         self._materials_v3_disabled_reason = None  # Track why V3 is disabled
 
-        disable_materials_v3 = os.getenv("DISABLE_MATERIALS_V3", "").lower() in ("1", "true", "yes")
+        disable_materials_v3 = os.getenv("DISABLE_MATERIALS_V3", "").lower() in (
+            "1",
+            "true",
+            "yes",
+        )
 
         if disable_materials_v3:
             self.logger.info("Materials V3 disabled via DISABLE_MATERIALS_V3 environment variable")
@@ -240,7 +252,9 @@ class LuxPipelineV2:
         if not self._export_manager_autotune_enabled and EXPORT_MANAGER_AVAILABLE and cfg.output_dir:
             # Static config: build ExportManager at init (backward compatible)
             try:
-                from transformation_portal.core.storage.export_manager import MarketingExportConfig
+                from transformation_portal.core.storage.export_manager import (
+                    MarketingExportConfig,
+                )
 
                 marketing_cfg = MarketingExportConfig(png_compression_level=cfg.marketing_png_compression)
                 export_config = ExportConfig(output_dir=Path(cfg.output_dir), marketing_config=marketing_cfg)
@@ -291,7 +305,13 @@ class LuxPipelineV2:
 
         # Git commit hash
         try:
-            result = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, timeout=2, check=False)
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=2,
+                check=False,
+            )
             if result.returncode == 0:
                 metadata["git_commit"] = result.stdout.strip()
         except Exception:
@@ -574,7 +594,9 @@ class LuxPipelineV2:
                     cache_key = None
                     if cache_mgr:
                         cache_key = cache_mgr.compute_cache_key(
-                            img_path=img_path, model_name=cfg.depth.auto_model, params_fingerprint=params_fingerprint
+                            img_path=img_path,
+                            model_name=cfg.depth.auto_model,
+                            params_fingerprint=params_fingerprint,
                         )
 
                         if cache_mgr.is_cached(cache_key):
@@ -618,7 +640,10 @@ class LuxPipelineV2:
                             confidence_proxy = estimator.compute_edge_alignment(rgb01, depth01)
                         except Exception as exc:
                             # Best-effort metric: log and continue without confidence proxy
-                            self.logger.warning("Failed to compute edge-alignment confidence proxy: %s", exc)
+                            self.logger.warning(
+                                "Failed to compute edge-alignment confidence proxy: %s",
+                                exc,
+                            )
 
                         depth_provenance = {
                             "source": "generated",  # AUTO generated this run
@@ -1023,7 +1048,17 @@ class LuxPipelineV2:
         if mods0 is not None:
             mods_final = _resize_mods(mods0, (fH, fW))
 
-        def post_fn(tile_rgb, ya0: int, xa0: int, ya1: int, xa1: int, y0: int, x0: int, y1: int, x1: int):
+        def post_fn(
+            tile_rgb,
+            ya0: int,
+            xa0: int,
+            ya1: int,
+            xa1: int,
+            y0: int,
+            x0: int,
+            y1: int,
+            x1: int,
+        ):
             wfgT = wfgF[:, :, ya0:ya1, xa0:xa1]
             wmidT = wmidF[:, :, ya0:ya1, xa0:xa1]
             wbgT = wbgF[:, :, ya0:ya1, xa0:xa1]
@@ -1032,7 +1067,16 @@ class LuxPipelineV2:
             out = tile_rgb
             if use_ai_details:
                 ai_tile = ai_up[:, :, ya0:ya1, xa0:xa1]
-                out = torch_ops.detail_transfer(out, ai_tile, wfgT, wmidT, wbgT, cfg, mods=tile_mods, autocast=self.autocast)
+                out = torch_ops.detail_transfer(
+                    out,
+                    ai_tile,
+                    wfgT,
+                    wmidT,
+                    wbgT,
+                    cfg,
+                    mods=tile_mods,
+                    autocast=self.autocast,
+                )
 
             out = torch_ops.apply_clarity(out, wfgT, wmidT, wbgT, cfg, mods=tile_mods, autocast=self.autocast)
             out = torch_ops.apply_sharpen(out, wfgT, wmidT, wbgT, cfg, mods=tile_mods, autocast=self.autocast)
@@ -1044,7 +1088,17 @@ class LuxPipelineV2:
         if self.tiler is not None:
             out_up = self.tiler.run(base_up, post_fn)
         else:
-            out_up = post_fn(base_up, 0, 0, base_up.shape[2], base_up.shape[3], 0, 0, base_up.shape[2], base_up.shape[3])
+            out_up = post_fn(
+                base_up,
+                0,
+                0,
+                base_up.shape[2],
+                base_up.shape[3],
+                0,
+                0,
+                base_up.shape[2],
+                base_up.shape[3],
+            )
 
         out01 = torch_ops.from_torch_rgb(out_up)
 
@@ -1085,33 +1139,39 @@ class LuxPipelineV2:
                 # Materials V3 depth conditioning
                 "materials_v3_depth_used": bool(depth01 is not None and self.materials_v3_engine is not None),
                 # Week 2: Materials precedence tracking
-                "materials_precedence": materials_precedence if materials_precedence else None,
+                "materials_precedence": (materials_precedence if materials_precedence else None),
                 "material_mods": mods0.source if mods0 is not None else None,
                 "materials_v2_enabled": bool(self.materials_v2_engine),
-                "materials_v2": {
-                    "enabled": bool(self.materials_v2_engine),
-                    "backend": cfg.materials_v2.backend if cfg.materials_v2 else None,
-                    "confidence_threshold": cfg.materials_v2.confidence.confidence_threshold if cfg.materials_v2 else None,
-                    "material_thresholds": cfg.materials_v2.confidence.material_thresholds if cfg.materials_v2 else None,
-                    "disabled_reason": self._materials_v2_disabled_reason if not self.materials_v2_engine else None,
-                }
-                if cfg.materials_v2
-                else None,
-                "materials_v2_metadata": materials_v2_metadata if materials_v2_metadata else None,
+                "materials_v2": (
+                    {
+                        "enabled": bool(self.materials_v2_engine),
+                        "backend": (cfg.materials_v2.backend if cfg.materials_v2 else None),
+                        "confidence_threshold": (
+                            cfg.materials_v2.confidence.confidence_threshold if cfg.materials_v2 else None
+                        ),
+                        "material_thresholds": (cfg.materials_v2.confidence.material_thresholds if cfg.materials_v2 else None),
+                        "disabled_reason": (self._materials_v2_disabled_reason if not self.materials_v2_engine else None),
+                    }
+                    if cfg.materials_v2
+                    else None
+                ),
+                "materials_v2_metadata": (materials_v2_metadata if materials_v2_metadata else None),
                 "materials_v3_enabled": bool(self.materials_v3_engine),
-                "materials_v3": {
-                    "enabled": bool(self.materials_v3_engine),
-                    "taxonomy": str(cfg.materials_v3.taxonomy) if cfg.materials_v3 else None,
-                    "refine_edges": str(cfg.materials_v3.refine_edges) if cfg.materials_v3 else None,
-                    "backend": cfg.materials_v3.backend if cfg.materials_v3 else None,
-                    "pixel_ops_enabled": cfg.materials_v3.apply_pixel_ops if cfg.materials_v3 else False,
-                    "disabled_reason": self._materials_v3_disabled_reason if not self.materials_v3_engine else None,
-                }
-                if cfg.materials_v3
-                else None,
-                "materials_v3_metadata": materials_v3_metadata if materials_v3_metadata else None,
-                "materials_v3_response_plan": materials_v3_response_plan if materials_v3_response_plan else None,
-                "materials_v3_pixel_ops": materials_v3_pixel_ops if materials_v3_pixel_ops else None,
+                "materials_v3": (
+                    {
+                        "enabled": bool(self.materials_v3_engine),
+                        "taxonomy": (str(cfg.materials_v3.taxonomy) if cfg.materials_v3 else None),
+                        "refine_edges": (str(cfg.materials_v3.refine_edges) if cfg.materials_v3 else None),
+                        "backend": (cfg.materials_v3.backend if cfg.materials_v3 else None),
+                        "pixel_ops_enabled": (cfg.materials_v3.apply_pixel_ops if cfg.materials_v3 else False),
+                        "disabled_reason": (self._materials_v3_disabled_reason if not self.materials_v3_engine else None),
+                    }
+                    if cfg.materials_v3
+                    else None
+                ),
+                "materials_v3_metadata": (materials_v3_metadata if materials_v3_metadata else None),
+                "materials_v3_response_plan": (materials_v3_response_plan if materials_v3_response_plan else None),
+                "materials_v3_pixel_ops": (materials_v3_pixel_ops if materials_v3_pixel_ops else None),
                 "upscaler": ai_status,
                 "ai_color_diff": color_diff,
                 "ai_luma_diff": luma_diff,

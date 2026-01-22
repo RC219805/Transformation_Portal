@@ -19,7 +19,6 @@ import time
 import platform
 import sys
 
-
 # Schema version follows semantic versioning
 SCHEMA_VERSION = "2.0.0"
 PIPELINE_VERSION = "2.0.0"  # Matches lux_depth_v2 version

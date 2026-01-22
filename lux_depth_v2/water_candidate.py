@@ -162,7 +162,13 @@ class WaterCandidateDetector:
         final_mask, component_score = self._component_filtering(refined_mask)
 
         # Compute overall confidence
-        confidence = self._compute_confidence(chroma_score, specular_score, texture_score, planarity_score, component_score)
+        confidence = self._compute_confidence(
+            chroma_score,
+            specular_score,
+            texture_score,
+            planarity_score,
+            component_score,
+        )
 
         # PR-W1.2: Apply confidence suppressors (false trigger reduction)
         # Always call suppressors (they handle enabled flag internally)
@@ -365,7 +371,12 @@ class WaterCandidateDetector:
         return filtered_mask, stability
 
     def _compute_confidence(
-        self, chroma_score: float, specular_score: float, texture_score: float, planarity_score: float, component_score: float
+        self,
+        chroma_score: float,
+        specular_score: float,
+        texture_score: float,
+        planarity_score: float,
+        component_score: float,
     ) -> float:
         """Weighted combination of feature scores."""
         confidence = (
@@ -621,7 +632,9 @@ class WaterCandidateDetector:
 
         if self.params.glass_multiscale_enabled and grid_score > 0.0:
             grid_score_coarse = self._compute_grid_score_at_scale(
-                gray, mask_binary, downsample_factor=self.params.glass_multiscale_downsample_factor
+                gray,
+                mask_binary,
+                downsample_factor=self.params.glass_multiscale_downsample_factor,
             )
 
             if grid_score_coarse is not None:

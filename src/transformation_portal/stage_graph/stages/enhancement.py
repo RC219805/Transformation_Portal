@@ -82,9 +82,7 @@ class EnhancementStage(Stage):
         start = time.time()
 
         # Apply enhancements
-        enhanced_image = self._enhance_image(
-            image, depth_map, material_masks
-        )
+        enhanced_image = self._enhance_image(image, depth_map, material_masks)
 
         duration_ms = (time.time() - start) * 1000
 
@@ -131,9 +129,7 @@ class EnhancementStage(Stage):
         if material_masks:
             # Sort keys for deterministic order
             sorted_keys = sorted(material_masks.keys())
-            material_bytes = b"".join(
-                material_masks[k].tobytes() for k in sorted_keys
-            )
+            material_bytes = b"".join(material_masks[k].tobytes() for k in sorted_keys)
             material_hash = hashlib.sha256(material_bytes).hexdigest()[:8]
 
         # Configuration
@@ -263,7 +259,7 @@ class EnhancementStage(Stage):
                 # Glass: subtle highlight boost
                 result = self._blend(
                     result,
-                    result ** 0.95,  # Slight gamma adjustment
+                    result**0.95,  # Slight gamma adjustment
                     mask_3d * strength * 0.5,  # Subtle
                 )
 

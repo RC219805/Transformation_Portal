@@ -142,18 +142,46 @@ class BIMMetadataExtractor:
         # Common material categories for luxury estates
         luxury_materials = {
             "wood": {
-                "keywords": ["oak", "walnut", "maple", "cherry", "mahogany", "teak", "wood", "hardwood"],
+                "keywords": [
+                    "oak",
+                    "walnut",
+                    "maple",
+                    "cherry",
+                    "mahogany",
+                    "teak",
+                    "wood",
+                    "hardwood",
+                ],
                 "reflectivity": 0.3,
                 "roughness": 0.5,
             },
             "metal": {
-                "keywords": ["stainless", "steel", "brass", "bronze", "copper", "aluminum", "metal"],
+                "keywords": [
+                    "stainless",
+                    "steel",
+                    "brass",
+                    "bronze",
+                    "copper",
+                    "aluminum",
+                    "metal",
+                ],
                 "reflectivity": 0.7,
                 "roughness": 0.2,
             },
-            "glass": {"keywords": ["glass", "glazing", "window", "transparent"], "reflectivity": 0.9, "roughness": 0.1},
+            "glass": {
+                "keywords": ["glass", "glazing", "window", "transparent"],
+                "reflectivity": 0.9,
+                "roughness": 0.1,
+            },
             "stone": {
-                "keywords": ["marble", "granite", "limestone", "travertine", "stone", "quartz"],
+                "keywords": [
+                    "marble",
+                    "granite",
+                    "limestone",
+                    "travertine",
+                    "stone",
+                    "quartz",
+                ],
                 "reflectivity": 0.4,
                 "roughness": 0.3,
             },
@@ -192,12 +220,48 @@ class BIMMetadataExtractor:
             "location": "Montecito, CA",
             "style": "Luxury Mediterranean Estate",
             "typical_materials": [
-                MaterialSpec("white_oak_flooring", "wood", finish="matte", reflectivity=0.3, roughness=0.5),
-                MaterialSpec("venetian_plaster", "stone", finish="polished", reflectivity=0.4, roughness=0.3),
-                MaterialSpec("stainless_steel_fixtures", "metal", finish="brushed", reflectivity=0.7, roughness=0.2),
-                MaterialSpec("floor_to_ceiling_glass", "glass", finish="clear", reflectivity=0.9, roughness=0.1),
-                MaterialSpec("carrara_marble", "stone", finish="honed", reflectivity=0.5, roughness=0.3),
-                MaterialSpec("linen_upholstery", "fabric", color="neutral", reflectivity=0.2, roughness=0.7),
+                MaterialSpec(
+                    "white_oak_flooring",
+                    "wood",
+                    finish="matte",
+                    reflectivity=0.3,
+                    roughness=0.5,
+                ),
+                MaterialSpec(
+                    "venetian_plaster",
+                    "stone",
+                    finish="polished",
+                    reflectivity=0.4,
+                    roughness=0.3,
+                ),
+                MaterialSpec(
+                    "stainless_steel_fixtures",
+                    "metal",
+                    finish="brushed",
+                    reflectivity=0.7,
+                    roughness=0.2,
+                ),
+                MaterialSpec(
+                    "floor_to_ceiling_glass",
+                    "glass",
+                    finish="clear",
+                    reflectivity=0.9,
+                    roughness=0.1,
+                ),
+                MaterialSpec(
+                    "carrara_marble",
+                    "stone",
+                    finish="honed",
+                    reflectivity=0.5,
+                    roughness=0.3,
+                ),
+                MaterialSpec(
+                    "linen_upholstery",
+                    "fabric",
+                    color="neutral",
+                    reflectivity=0.2,
+                    roughness=0.7,
+                ),
             ],
             "lighting_characteristics": [
                 LightingSpec("natural_daylight", intensity=1.0, color_temperature=5500),
@@ -228,9 +292,27 @@ class BIMMetadataExtractor:
                 room_type="exterior",
                 dimensions={"view_angle": 45, "altitude": 150},
                 materials=[
-                    MaterialSpec("roof_tile", "stone", finish="terracotta", reflectivity=0.3, roughness=0.6),
-                    MaterialSpec("pool_tile", "glass", finish="mosaic", reflectivity=0.8, roughness=0.2),
-                    MaterialSpec("landscaping", "organic", color="green", reflectivity=0.2, roughness=0.8),
+                    MaterialSpec(
+                        "roof_tile",
+                        "stone",
+                        finish="terracotta",
+                        reflectivity=0.3,
+                        roughness=0.6,
+                    ),
+                    MaterialSpec(
+                        "pool_tile",
+                        "glass",
+                        finish="mosaic",
+                        reflectivity=0.8,
+                        roughness=0.2,
+                    ),
+                    MaterialSpec(
+                        "landscaping",
+                        "organic",
+                        color="green",
+                        reflectivity=0.2,
+                        roughness=0.8,
+                    ),
                 ],
                 lighting=[
                     LightingSpec("natural_sunlight", intensity=1.0, color_temperature=5800),
@@ -242,10 +324,34 @@ class BIMMetadataExtractor:
                 room_type="living",
                 dimensions={"width": 30, "height": 14, "depth": 25},
                 materials=[
-                    MaterialSpec("white_oak_flooring", "wood", finish="matte", reflectivity=0.3, roughness=0.5),
-                    MaterialSpec("floor_to_ceiling_glass", "glass", finish="clear", reflectivity=0.9, roughness=0.1),
-                    MaterialSpec("venetian_plaster_walls", "stone", finish="smooth", reflectivity=0.4, roughness=0.3),
-                    MaterialSpec("custom_cabinetry", "wood", finish="natural_walnut", reflectivity=0.35, roughness=0.45),
+                    MaterialSpec(
+                        "white_oak_flooring",
+                        "wood",
+                        finish="matte",
+                        reflectivity=0.3,
+                        roughness=0.5,
+                    ),
+                    MaterialSpec(
+                        "floor_to_ceiling_glass",
+                        "glass",
+                        finish="clear",
+                        reflectivity=0.9,
+                        roughness=0.1,
+                    ),
+                    MaterialSpec(
+                        "venetian_plaster_walls",
+                        "stone",
+                        finish="smooth",
+                        reflectivity=0.4,
+                        roughness=0.3,
+                    ),
+                    MaterialSpec(
+                        "custom_cabinetry",
+                        "wood",
+                        finish="natural_walnut",
+                        reflectivity=0.35,
+                        roughness=0.45,
+                    ),
                 ],
                 lighting=[
                     LightingSpec("natural_daylight", intensity=0.9, color_temperature=5500),
@@ -258,10 +364,34 @@ class BIMMetadataExtractor:
                 room_type="kitchen",
                 dimensions={"width": 20, "height": 12, "depth": 18},
                 materials=[
-                    MaterialSpec("carrara_marble_countertops", "stone", finish="honed", reflectivity=0.5, roughness=0.3),
-                    MaterialSpec("custom_cabinetry", "wood", finish="white_oak", reflectivity=0.3, roughness=0.5),
-                    MaterialSpec("stainless_steel_appliances", "metal", finish="brushed", reflectivity=0.7, roughness=0.2),
-                    MaterialSpec("subway_tile_backsplash", "glass", finish="glossy", reflectivity=0.6, roughness=0.2),
+                    MaterialSpec(
+                        "carrara_marble_countertops",
+                        "stone",
+                        finish="honed",
+                        reflectivity=0.5,
+                        roughness=0.3,
+                    ),
+                    MaterialSpec(
+                        "custom_cabinetry",
+                        "wood",
+                        finish="white_oak",
+                        reflectivity=0.3,
+                        roughness=0.5,
+                    ),
+                    MaterialSpec(
+                        "stainless_steel_appliances",
+                        "metal",
+                        finish="brushed",
+                        reflectivity=0.7,
+                        roughness=0.2,
+                    ),
+                    MaterialSpec(
+                        "subway_tile_backsplash",
+                        "glass",
+                        finish="glossy",
+                        reflectivity=0.6,
+                        roughness=0.2,
+                    ),
                 ],
                 lighting=[
                     LightingSpec("natural_window_light", intensity=0.8, color_temperature=5500),
@@ -274,10 +404,34 @@ class BIMMetadataExtractor:
                 room_type="exterior",
                 dimensions={"width": 40, "depth": 60, "pool_length": 50},
                 materials=[
-                    MaterialSpec("blue_mosaic_tile", "glass", finish="iridescent", reflectivity=0.8, roughness=0.2),
-                    MaterialSpec("limestone_coping", "stone", finish="honed", reflectivity=0.4, roughness=0.4),
-                    MaterialSpec("teak_decking", "wood", finish="weathered", reflectivity=0.25, roughness=0.6),
-                    MaterialSpec("water_surface", "liquid", color="azure", reflectivity=0.9, roughness=0.1),
+                    MaterialSpec(
+                        "blue_mosaic_tile",
+                        "glass",
+                        finish="iridescent",
+                        reflectivity=0.8,
+                        roughness=0.2,
+                    ),
+                    MaterialSpec(
+                        "limestone_coping",
+                        "stone",
+                        finish="honed",
+                        reflectivity=0.4,
+                        roughness=0.4,
+                    ),
+                    MaterialSpec(
+                        "teak_decking",
+                        "wood",
+                        finish="weathered",
+                        reflectivity=0.25,
+                        roughness=0.6,
+                    ),
+                    MaterialSpec(
+                        "water_surface",
+                        "liquid",
+                        color="azure",
+                        reflectivity=0.9,
+                        roughness=0.1,
+                    ),
                 ],
                 lighting=[
                     LightingSpec("natural_sunlight", intensity=1.0, color_temperature=5800),
@@ -290,10 +444,34 @@ class BIMMetadataExtractor:
                 room_type="bathroom",
                 dimensions={"width": 16, "height": 10, "depth": 14},
                 materials=[
-                    MaterialSpec("calacatta_marble", "stone", finish="polished", reflectivity=0.6, roughness=0.2),
-                    MaterialSpec("brushed_nickel_fixtures", "metal", finish="brushed", reflectivity=0.6, roughness=0.25),
-                    MaterialSpec("frameless_glass_shower", "glass", finish="clear", reflectivity=0.9, roughness=0.1),
-                    MaterialSpec("heated_tile_floor", "stone", finish="matte", reflectivity=0.3, roughness=0.4),
+                    MaterialSpec(
+                        "calacatta_marble",
+                        "stone",
+                        finish="polished",
+                        reflectivity=0.6,
+                        roughness=0.2,
+                    ),
+                    MaterialSpec(
+                        "brushed_nickel_fixtures",
+                        "metal",
+                        finish="brushed",
+                        reflectivity=0.6,
+                        roughness=0.25,
+                    ),
+                    MaterialSpec(
+                        "frameless_glass_shower",
+                        "glass",
+                        finish="clear",
+                        reflectivity=0.9,
+                        roughness=0.1,
+                    ),
+                    MaterialSpec(
+                        "heated_tile_floor",
+                        "stone",
+                        finish="matte",
+                        reflectivity=0.3,
+                        roughness=0.4,
+                    ),
                 ],
                 lighting=[
                     LightingSpec("natural_skylight", intensity=0.7, color_temperature=5500),
@@ -306,10 +484,34 @@ class BIMMetadataExtractor:
                 room_type="bedroom",
                 dimensions={"width": 22, "height": 11, "depth": 20},
                 materials=[
-                    MaterialSpec("wide_plank_oak", "wood", finish="natural", reflectivity=0.3, roughness=0.5),
-                    MaterialSpec("linen_drapery", "fabric", color="ivory", reflectivity=0.2, roughness=0.7),
-                    MaterialSpec("upholstered_headboard", "fabric", finish="velvet", reflectivity=0.25, roughness=0.65),
-                    MaterialSpec("glass_doors", "glass", finish="clear", reflectivity=0.9, roughness=0.1),
+                    MaterialSpec(
+                        "wide_plank_oak",
+                        "wood",
+                        finish="natural",
+                        reflectivity=0.3,
+                        roughness=0.5,
+                    ),
+                    MaterialSpec(
+                        "linen_drapery",
+                        "fabric",
+                        color="ivory",
+                        reflectivity=0.2,
+                        roughness=0.7,
+                    ),
+                    MaterialSpec(
+                        "upholstered_headboard",
+                        "fabric",
+                        finish="velvet",
+                        reflectivity=0.25,
+                        roughness=0.65,
+                    ),
+                    MaterialSpec(
+                        "glass_doors",
+                        "glass",
+                        finish="clear",
+                        reflectivity=0.9,
+                        roughness=0.1,
+                    ),
                 ],
                 lighting=[
                     LightingSpec("natural_daylight", intensity=0.8, color_temperature=5500),
@@ -394,7 +596,13 @@ def main():
 
     parser = argparse.ArgumentParser(description="Extract BIM metadata from BIMx file")
     parser.add_argument("bim_file", type=Path, help="Path to BIMx file")
-    parser.add_argument("--output", "-o", type=Path, default=Path("bim_metadata.json"), help="Output JSON file")
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        default=Path("bim_metadata.json"),
+        help="Output JSON file",
+    )
     parser.add_argument("--canonical-views", nargs="+", help="Canonical view filenames")
 
     args = parser.parse_args()

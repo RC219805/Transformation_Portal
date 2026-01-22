@@ -33,10 +33,13 @@ __author__ = "RC219805"
 
 def _lazy_import(module_path, attr_name):
     """Lazy import helper to defer loading until needed."""
+
     def _loader():
         import importlib
+
         module = importlib.import_module(module_path)
         return getattr(module, attr_name)
+
     return _loader
 
 
@@ -67,8 +70,8 @@ def get_material_response():
 
 # Convenience exports for backward compatibility
 __all__ = [
-    '__version__',
-    '__author__',
-    'get_lux_render_pipeline',
-    'get_material_response',
+    "__version__",
+    "__author__",
+    "get_lux_render_pipeline",
+    "get_material_response",
 ]

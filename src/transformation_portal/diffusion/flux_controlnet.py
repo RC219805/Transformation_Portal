@@ -20,6 +20,7 @@ from PIL import Image
 
 try:
     from controlnet_aux import CannyDetector, MidasDetector
+
     FLUX_CONTROLNET_AVAILABLE = True
 except ImportError:
     FLUX_CONTROLNET_AVAILABLE = False
@@ -59,7 +60,7 @@ class FLUXControlNet:
         control_types: List[str] = ["depth"],
         device: Optional[str] = None,
         torch_dtype: torch.dtype = torch.bfloat16,
-        cache_dir: Optional[Path] = None
+        cache_dir: Optional[Path] = None,
     ):
         """Initialize FLUX ControlNet pipeline.
 
@@ -90,7 +91,9 @@ class FLUXControlNet:
         if "canny" in control_types:
             self.processors["canny"] = CannyDetector()
         if "depth" in control_types:
-            self.processors["depth"] = MidasDetector.from_pretrained("lllyasviel/Annotators")
+            self.processors["depth"] = MidasDetector.from_pretrained(
+                "lllyasviel/Annotators"
+            )
 
         logger.info("FLUX ControlNet initialized")
 
@@ -106,7 +109,7 @@ class FLUXControlNet:
         self,
         image: Union[str, Path, Image.Image, np.ndarray],
         control_type: str,
-        **kwargs
+        **kwargs,
     ) -> Image.Image:
         """Generate control image from input.
 
@@ -131,10 +134,7 @@ class FLUXControlNet:
             raise ValueError(f"Unsupported control type: {control_type}")
 
     def _generate_canny(
-        self,
-        image: Image.Image,
-        low_threshold: int = 100,
-        high_threshold: int = 200
+        self, image: Image.Image, low_threshold: int = 100, high_threshold: int = 200
     ) -> Image.Image:
         """Generate Canny edge map.
 
@@ -149,9 +149,7 @@ class FLUXControlNet:
         if "canny" in self.processors:
             # Use ControlNet aux processor
             canny_image = self.processors["canny"](
-                image,
-                low_threshold=low_threshold,
-                high_threshold=high_threshold
+                image, low_threshold=low_threshold, high_threshold=high_threshold
             )
         else:
             # Fallback to OpenCV
@@ -162,11 +160,7 @@ class FLUXControlNet:
 
         return canny_image
 
-    def _generate_depth(
-        self,
-        image: Image.Image,
-        **kwargs
-    ) -> Image.Image:
+    def _generate_depth(self, image: Image.Image, **kwargs) -> Image.Image:
         """Generate depth map using MiDaS.
 
         Args:
@@ -184,11 +178,7 @@ class FLUXControlNet:
 
         return depth_image
 
-    def _generate_normal(
-        self,
-        image: Image.Image,
-        **kwargs
-    ) -> Image.Image:
+    def _generate_normal(self, image: Image.Image, **kwargs) -> Image.Image:
         """Generate normal map from depth.
 
         Args:
@@ -223,7 +213,7 @@ class FLUXControlNet:
         strength: float = 0.45,
         num_steps: int = 4,
         guidance_scale: float = 3.5,
-        seed: Optional[int] = None
+        seed: Optional[int] = None,
     ) -> Dict[str, Image.Image]:
         """Enhance image while preserving structure.
 
@@ -251,8 +241,7 @@ class FLUXControlNet:
         for control_type in self.control_types:
             logger.info(f"Generating {control_type} control image")
             control_images[control_type] = self.generate_control_image(
-                pil_image,
-                control_type
+                pil_image, control_type
             )
 
         # NOTE: Actual FLUX ControlNet pipeline would go here
@@ -265,14 +254,13 @@ class FLUXControlNet:
 
         result = {
             "original": pil_image,
-            **{f"control_{k}": v for k, v in control_images.items()}
+            **{f"control_{k}": v for k, v in control_images.items()},
         }
 
         return result
 
     def create_multi_controlnet_config(
-        self,
-        control_scales: Optional[Dict[str, float]] = None
+        self, control_scales: Optional[Dict[str, float]] = None
     ) -> Dict[str, any]:
         """Create configuration for multi-ControlNet composition.
 
@@ -289,17 +277,13 @@ class FLUXControlNet:
         """
         if control_scales is None:
             # Recommended scales from research
-            control_scales = {
-                "depth": 0.75,
-                "canny": 0.70,
-                "normal": 0.65
-            }
+            control_scales = {"depth": 0.75, "canny": 0.70, "normal": 0.65}
 
         config = {
             "control_types": self.control_types,
             "control_scales": control_scales,
             "multi_controlnet": len(self.control_types) > 1,
-            "expected_accuracy": self._estimate_accuracy()
+            "expected_accuracy": self._estimate_accuracy(),
         }
 
         return config
@@ -327,7 +311,7 @@ class FLUXControlNet:
     def visualize_controls(
         self,
         image: Union[str, Path, Image.Image, np.ndarray],
-        output_path: Optional[Path] = None
+        output_path: Optional[Path] = None,
     ) -> Image.Image:
         """Visualize all control images in a grid.
 
@@ -358,9 +342,7 @@ class FLUXControlNet:
         return grid
 
     def _create_image_grid(
-        self,
-        images: List[Image.Image],
-        labels: List[str]
+        self, images: List[Image.Image], labels: List[str]
     ) -> Image.Image:
         """Create grid of images with labels.
 
@@ -386,7 +368,7 @@ class FLUXControlNet:
         grid_width = cols * img_width + (cols + 1) * padding
         grid_height = rows * (img_height + label_height) + (rows + 1) * padding
 
-        grid = Image.new('RGB', (grid_width, grid_height), color='white')
+        grid = Image.new("RGB", (grid_width, grid_height), color="white")
         draw = ImageDraw.Draw(grid)
 
         for idx, (img, label) in enumerate(zip(images, labels)):
@@ -403,15 +385,14 @@ class FLUXControlNet:
             draw.text(
                 (x + img_width // 2, y + img_height + 5),
                 label,
-                fill='black',
-                anchor='mt'
+                fill="black",
+                anchor="mt",
             )
 
         return grid
 
     def _load_image(
-        self,
-        image: Union[str, Path, Image.Image, np.ndarray]
+        self, image: Union[str, Path, Image.Image, np.ndarray]
     ) -> Image.Image:
         """Load image as PIL Image."""
         if isinstance(image, Image.Image):

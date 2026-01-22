@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 class MetricType(Enum):
     """Types of performance metrics."""
+
     LATENCY = "latency"  # Execution time
     THROUGHPUT = "throughput"  # Items per second
     MEMORY = "memory"  # Memory usage
@@ -38,6 +39,7 @@ class MetricType(Enum):
 @dataclass
 class PerformanceMetric:
     """Single performance metric measurement."""
+
     name: str
     metric_type: MetricType
     value: float
@@ -49,10 +51,11 @@ class PerformanceMetric:
 @dataclass
 class OperationProfile:
     """Profile data for a single operation."""
+
     operation_name: str
     total_calls: int = 0
     total_time_seconds: float = 0.0
-    min_time_seconds: float = float('inf')
+    min_time_seconds: float = float("inf")
     max_time_seconds: float = 0.0
     avg_time_seconds: float = 0.0
     total_memory_allocated_mb: float = 0.0
@@ -106,7 +109,7 @@ class MetricsCollector:
         metric_type: MetricType,
         value: float,
         unit: str,
-        tags: Optional[Dict[str, str]] = None
+        tags: Optional[Dict[str, str]] = None,
     ):
         """
         Record a performance metric.
@@ -124,20 +127,17 @@ class MetricsCollector:
             value=value,
             unit=unit,
             timestamp=time.time(),
-            tags=tags or {}
+            tags=tags or {},
         )
 
         self.metrics.append(metric)
 
         # Limit storage
         if len(self.metrics) > self.max_metrics:
-            self.metrics = self.metrics[-self.max_metrics:]
+            self.metrics = self.metrics[-self.max_metrics :]
 
     def record_operation(
-        self,
-        operation_name: str,
-        execution_time: float,
-        memory_mb: float = 0.0
+        self, operation_name: str, execution_time: float, memory_mb: float = 0.0
     ):
         """
         Record operation execution metrics.
@@ -158,7 +158,7 @@ class MetricsCollector:
             MetricType.LATENCY,
             execution_time * 1000,  # Convert to ms
             "ms",
-            tags={"operation": operation_name}
+            tags={"operation": operation_name},
         )
 
         if memory_mb > 0:
@@ -167,7 +167,7 @@ class MetricsCollector:
                 MetricType.MEMORY,
                 memory_mb,
                 "MB",
-                tags={"operation": operation_name}
+                tags={"operation": operation_name},
             )
 
     def get_operation_profile(self, operation_name: str) -> Optional[OperationProfile]:
@@ -182,7 +182,7 @@ class MetricsCollector:
         self,
         metric_type: Optional[MetricType] = None,
         name_filter: Optional[str] = None,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
     ) -> List[PerformanceMetric]:
         """
         Query metrics with filters.
@@ -249,9 +249,7 @@ class PerformanceMonitor:
     """
 
     def __init__(
-        self,
-        device: Optional[torch.device] = None,
-        enable_memory_tracking: bool = True
+        self, device: Optional[torch.device] = None, enable_memory_tracking: bool = True
     ):
         """
         Initialize performance monitor.
@@ -284,6 +282,7 @@ class PerformanceMonitor:
             def my_operation(x):
                 return x * 2
         """
+
         def decorator(func: Callable) -> Callable:
             @functools.wraps(func)
             def wrapper(*args, **kwargs):
@@ -304,15 +303,12 @@ class PerformanceMonitor:
                 memory_delta = memory_after - memory_before
 
                 # Record metrics
-                self.collector.record_operation(
-                    operation_name,
-                    elapsed,
-                    memory_delta
-                )
+                self.collector.record_operation(operation_name, elapsed, memory_delta)
 
                 return result
 
             return wrapper
+
         return decorator
 
     def profile_context(self, context_name: str):
@@ -332,7 +328,7 @@ class PerformanceMonitor:
         num_iterations: int = 100,
         warmup_iterations: int = 10,
         operation_name: str = "benchmark",
-        **kwargs
+        **kwargs,
     ) -> Dict[str, float]:
         """
         Benchmark an operation.
@@ -388,7 +384,7 @@ class PerformanceMonitor:
             MetricType.LATENCY,
             stats["avg_time_ms"],
             "ms",
-            tags={"type": "benchmark"}
+            tags={"type": "benchmark"},
         )
 
         logger.info(
@@ -405,7 +401,7 @@ class PerformanceMonitor:
             return 0.0
 
         if self.device.type == "cuda":
-            return torch.cuda.memory_allocated(self.device) / (1024 ** 2)
+            return torch.cuda.memory_allocated(self.device) / (1024**2)
         elif self.device.type == "mps":
             # MPS doesn't expose detailed memory stats
             return 0.0
@@ -425,7 +421,7 @@ class PerformanceMonitor:
             return 0.0
         mean = sum(values) / len(values)
         variance = sum((x - mean) ** 2 for x in values) / len(values)
-        return variance ** 0.5
+        return variance**0.5
 
     def get_summary(self) -> str:
         """Get human-readable performance summary."""
@@ -484,7 +480,7 @@ class PerformanceMonitor:
             "timestamp": time.time(),
         }
 
-        with open(filepath, 'w') as f:
+        with open(filepath, "w") as f:
             json.dump(data, f, indent=2)
 
         logger.info(f"Metrics exported to {filepath}")
@@ -528,7 +524,5 @@ class _ProfileContext:
         memory_delta = memory_after - self.memory_before
 
         self.monitor.collector.record_operation(
-            self.context_name,
-            elapsed,
-            memory_delta
+            self.context_name, elapsed, memory_delta
         )

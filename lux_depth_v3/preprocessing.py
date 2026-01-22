@@ -140,7 +140,10 @@ class Preprocessor:
 
         # Center pad if maintaining aspect ratio
         if self.config.maintain_aspect and (w_new != w_target or h_new != h_target):
-            padded = np.zeros((h_target, w_target, image.shape[2] if image.ndim == 3 else 1), dtype=np.float32)
+            padded = np.zeros(
+                (h_target, w_target, image.shape[2] if image.ndim == 3 else 1),
+                dtype=np.float32,
+            )
             y_offset = (h_target - h_new) // 2
             x_offset = (w_target - w_new) // 2
 

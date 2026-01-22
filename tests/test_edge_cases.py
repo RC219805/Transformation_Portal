@@ -5,7 +5,10 @@ from pathlib import Path
 import numpy as np
 
 
-@pytest.mark.skipif(not pytest.importorskip("torch", reason="torch not available"), reason="torch not available")
+@pytest.mark.skipif(
+    not pytest.importorskip("torch", reason="torch not available"),
+    reason="torch not available",
+)
 def test_multi_gpu_device_selection():
     """Test explicit GPU selection when multiple GPUs available."""
     import torch
@@ -203,7 +206,12 @@ def test_checkpoint_with_special_characters(tmp_path):
 
     items = [JobItem("input.jpg", "output.jpg")]
 
-    job = BatchJob(job_id="special_test", items=items, checkpoint_path=checkpoint_path, created_at="2025-01-01T00:00:00Z")
+    job = BatchJob(
+        job_id="special_test",
+        items=items,
+        checkpoint_path=checkpoint_path,
+        created_at="2025-01-01T00:00:00Z",
+    )
 
     job.save_checkpoint()
     assert checkpoint_path.exists()
@@ -307,7 +315,11 @@ def test_report_with_very_long_paths(tmp_path):
     config = {"preset": "test"}
 
     report = ProcessingReport.create(
-        config=config, input_path=long_path, output_path=long_path, duration_ms=100.0, metrics={"ssim": 0.95}
+        config=config,
+        input_path=long_path,
+        output_path=long_path,
+        duration_ms=100.0,
+        metrics={"ssim": 0.95},
     )
 
     # Should handle long paths

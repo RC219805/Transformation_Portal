@@ -39,7 +39,10 @@ if TORCH_AVAILABLE:
         TORCH_AVAILABLE = False
 
 # Skip all tests in this module if PyTorch is not available
-pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="PyTorch not installed - training tests require ML dependencies")
+pytestmark = pytest.mark.skipif(
+    not TORCH_AVAILABLE,
+    reason="PyTorch not installed - training tests require ML dependencies",
+)
 
 
 class TestTrainingConfig:
@@ -57,7 +60,12 @@ class TestTrainingConfig:
 
     def test_custom_config(self):
         """Test custom configuration"""
-        config = TrainingConfig(batch_size=8, num_epochs=100, learning_rate=5e-5, checkpoint_dir="custom/path")
+        config = TrainingConfig(
+            batch_size=8,
+            num_epochs=100,
+            learning_rate=5e-5,
+            checkpoint_dir="custom/path",
+        )
 
         assert config.batch_size == 8
         assert config.num_epochs == 100

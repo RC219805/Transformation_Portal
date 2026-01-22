@@ -50,7 +50,12 @@ except ImportError:
 sys.path.insert(0, str(Path(__file__).parent))
 
 from high_fidelity_depth.depth_estimator import HighFidelityDepthEstimator, DepthConfig
-from high_fidelity_depth.quality_metrics import EdgeMetrics, validate_depth_quality, save_metrics_atomic, detect_edges
+from high_fidelity_depth.quality_metrics import (
+    EdgeMetrics,
+    validate_depth_quality,
+    save_metrics_atomic,
+    detect_edges,
+)
 from high_fidelity_depth.refinement import edge_snap_refinement
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -347,7 +352,11 @@ def validate_seams(depth: np.ndarray, tile_size: int, overlap: int, band: int = 
 
 
 def process_single_image(
-    rgb_path: Path, preset: ProductionPreset, output_dir: Path, save_visuals: bool = False, max_dimension: int = 4096
+    rgb_path: Path,
+    preset: ProductionPreset,
+    output_dir: Path,
+    save_visuals: bool = False,
+    max_dimension: int = 4096,
 ) -> Optional[EnhancedMetrics]:
     """
     Process single image with comprehensive metrics.
@@ -571,7 +580,13 @@ def run_production_validation(
         is_priority = image_path.name in priority_scenes
         save_visuals = save_all_visuals or is_priority
 
-        metrics = process_single_image(image_path, preset, output_dir, save_visuals=save_visuals, max_dimension=max_dimension)
+        metrics = process_single_image(
+            image_path,
+            preset,
+            output_dir,
+            save_visuals=save_visuals,
+            max_dimension=max_dimension,
+        )
 
         if metrics:
             results[image_path.name] = metrics.to_dict()
@@ -759,8 +774,8 @@ def run_production_validation(
             "processed": total_processed,
             "lenient_pass": lenient_pass,
             "strict_pass": strict_pass,
-            "lenient_pass_rate": lenient_pass / total_processed if total_processed > 0 else 0,
-            "strict_pass_rate": strict_pass / total_processed if total_processed > 0 else 0,
+            "lenient_pass_rate": (lenient_pass / total_processed if total_processed > 0 else 0),
+            "strict_pass_rate": (strict_pass / total_processed if total_processed > 0 else 0),
         },
         "aggregate_metrics": aggregate,
         "per_image_metrics": results,
@@ -768,11 +783,9 @@ def run_production_validation(
         "yellow_flags": yellow_flags,
         "materials_v3_ready": materials_v3_ready,
         "go_no_go_decision": {
-            "recommendation": "GO"
-            if materials_v3_ready and len(yellow_flags) == 0
-            else "INVESTIGATE"
-            if materials_v3_ready
-            else "NO-GO",
+            "recommendation": (
+                "GO" if materials_v3_ready and len(yellow_flags) == 0 else "INVESTIGATE" if materials_v3_ready else "NO-GO"
+            ),
             "criteria": {
                 "pass_rate_80_percent": lenient_pass >= 0.80 * total_processed,
                 "no_critical_yellow_flags": len(yellow_flags) == 0,
@@ -812,11 +825,21 @@ def main():
         help="Input directory with source images",
     )
     parser.add_argument(
-        "--output-dir", type=Path, default=Path("outputs/production_validation"), help="Output directory for reports"
+        "--output-dir",
+        type=Path,
+        default=Path("outputs/production_validation"),
+        help="Output directory for reports",
     )
-    parser.add_argument("--preset", choices=["preview", "production", "hero"], default="production", help="Processing preset")
     parser.add_argument(
-        "--save-all-visuals", action="store_true", help="Save visual outputs for all images (not just priority scenes)"
+        "--preset",
+        choices=["preview", "production", "hero"],
+        default="production",
+        help="Processing preset",
+    )
+    parser.add_argument(
+        "--save-all-visuals",
+        action="store_true",
+        help="Save visual outputs for all images (not just priority scenes)",
     )
     parser.add_argument(
         "--max-dimension",

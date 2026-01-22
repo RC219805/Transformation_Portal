@@ -6,7 +6,14 @@ from typing import Mapping, Optional, Tuple
 
 PROM_AVAILABLE = True
 try:
-    from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, Counter, Gauge, Histogram, generate_latest
+    from prometheus_client import (
+        CONTENT_TYPE_LATEST,
+        CollectorRegistry,
+        Counter,
+        Gauge,
+        Histogram,
+        generate_latest,
+    )
 except Exception:  # pragma: no cover
     PROM_AVAILABLE = False
     CONTENT_TYPE_LATEST = "text/plain; charset=utf-8"
@@ -73,7 +80,23 @@ class PrometheusMetrics:
             "Per-stage pipeline duration in seconds.",
             ["stage"],
             registry=self.registry,
-            buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 25, 60, 120),
+            buckets=(
+                0.001,
+                0.005,
+                0.01,
+                0.025,
+                0.05,
+                0.1,
+                0.25,
+                0.5,
+                1,
+                2.5,
+                5,
+                10,
+                25,
+                60,
+                120,
+            ),
         )
         self.pipeline_total_duration = Histogram(
             "lux_pipeline_total_duration_seconds",

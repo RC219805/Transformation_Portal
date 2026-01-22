@@ -197,7 +197,19 @@ class RepositoryIndexer:
             return False
 
         # Index specific file types
-        valid_extensions = {".py", ".md", ".rst", ".txt", ".yaml", ".yml", ".json", ".toml", ".cfg", ".sh", ".bash"}
+        valid_extensions = {
+            ".py",
+            ".md",
+            ".rst",
+            ".txt",
+            ".yaml",
+            ".yml",
+            ".json",
+            ".toml",
+            ".cfg",
+            ".sh",
+            ".bash",
+        }
 
         return file_path.suffix in valid_extensions
 

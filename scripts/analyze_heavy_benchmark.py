@@ -49,8 +49,8 @@ def analyze_stage_breakdown(reports: List[Dict[str, Any]], config_name: str) -> 
         if times:
             results["stages"][stage] = {
                 "median_s": statistics.median(times),
-                "p75_s": statistics.quantiles(times, n=4)[2] if len(times) >= 4 else statistics.median(times),
-                "p95_s": statistics.quantiles(times, n=20)[18] if len(times) >= 20 else statistics.median(times),
+                "p75_s": (statistics.quantiles(times, n=4)[2] if len(times) >= 4 else statistics.median(times)),
+                "p95_s": (statistics.quantiles(times, n=20)[18] if len(times) >= 20 else statistics.median(times)),
             }
 
     return results
@@ -155,7 +155,9 @@ def compare_configs(baseline: Dict[str, Any], heavy: Dict[str, Any]) -> None:
 def main():
     parser = argparse.ArgumentParser(description="Analyze heavy quality benchmark results.")
     parser.add_argument(
-        "benchmark_dir", type=Path, help="Benchmark directory containing baseline_* and heavy_* subdirectories"
+        "benchmark_dir",
+        type=Path,
+        help="Benchmark directory containing baseline_* and heavy_* subdirectories",
     )
     args = parser.parse_args()
 

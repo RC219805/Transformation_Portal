@@ -31,6 +31,7 @@ from rag_system.indexer import RepositoryIndexer  # noqa: E402
 from rag_system.logger import get_logger  # noqa: E402
 from rag_system.reranker import ResultReranker  # noqa: E402
 from rag_system.retriever import HybridRetriever  # noqa: E402
+
 # pylint: enable=wrong-import-position
 
 

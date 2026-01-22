@@ -47,7 +47,11 @@ def cmd_index(args):
     """Index repository content."""
     print(f"Indexing repository: {args.repo_root}")
 
-    indexer = RepositoryIndexer(repo_root=args.repo_root, chunk_size_tokens=args.chunk_size, overlap_tokens=args.chunk_overlap)
+    indexer = RepositoryIndexer(
+        repo_root=args.repo_root,
+        chunk_size_tokens=args.chunk_size,
+        overlap_tokens=args.chunk_overlap,
+    )
 
     chunks = indexer.index_repository()
 
@@ -299,7 +303,8 @@ def cmd_analyze(args):
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
-        description="RAG System CLI for Transformation Portal", formatter_class=argparse.RawDescriptionHelpFormatter
+        description="RAG System CLI for Transformation Portal",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -325,7 +330,12 @@ def main():
     cite_parser.add_argument("query", help="Search query")
     cite_parser.add_argument("--repo-root", default=".", help="Repository root directory")
     cite_parser.add_argument("--max-citations", type=int, default=5, help="Max citations")
-    cite_parser.add_argument("--format", choices=["markdown", "text", "json"], default="markdown", help="Output format")
+    cite_parser.add_argument(
+        "--format",
+        choices=["markdown", "text", "json"],
+        default="markdown",
+        help="Output format",
+    )
     cite_parser.add_argument("--output", help="Save citations to file")
 
     # Template command

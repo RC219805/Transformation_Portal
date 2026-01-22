@@ -66,7 +66,8 @@ def create_hardened_app(policy: Optional[HardeningPolicy] = None):
                 elapsed = now - bucket["t"]
                 bucket["t"] = now
                 bucket["tokens"] = min(
-                    float(p.rate_limit_per_minute), bucket["tokens"] + elapsed * (p.rate_limit_per_minute / 60.0)
+                    float(p.rate_limit_per_minute),
+                    bucket["tokens"] + elapsed * (p.rate_limit_per_minute / 60.0),
                 )
                 if bucket["tokens"] < 1.0:
                     return JSONResponse({"error": "rate_limited"}, status_code=429)

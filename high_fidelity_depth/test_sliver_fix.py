@@ -77,7 +77,10 @@ def test_dimension(h: int, w: int, pattern: str = "gradient") -> dict:
         logger.info(f"✓ Depth estimation successful: {depth.shape}")
 
         # Validate output shape
-        assert depth.shape == (h, w), f"Shape mismatch: expected {(h, w)}, got {depth.shape}"
+        assert depth.shape == (
+            h,
+            w,
+        ), f"Shape mismatch: expected {(h, w)}, got {depth.shape}"
 
         # Compute quality metrics
         # Seam analysis (boundary gradient energy)
@@ -131,7 +134,12 @@ def test_dimension(h: int, w: int, pattern: str = "gradient") -> dict:
 
     except Exception as e:
         logger.error(f"✗ FAILED: {e}", exc_info=True)
-        return {"dimension": (h, w), "pattern": pattern, "passed": False, "error": str(e)}
+        return {
+            "dimension": (h, w),
+            "pattern": pattern,
+            "passed": False,
+            "error": str(e),
+        }
 
 
 def main():

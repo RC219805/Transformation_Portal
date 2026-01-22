@@ -30,7 +30,10 @@ EXIT_ERROR = 2
 try:
     import yaml
 except ImportError as e:
-    print(f"ERROR: Missing PyYAML ({e}). Install with: pip install pyyaml", file=sys.stderr)
+    print(
+        f"ERROR: Missing PyYAML ({e}). Install with: pip install pyyaml",
+        file=sys.stderr,
+    )
     raise SystemExit(EXIT_ERROR)
 
 
@@ -91,15 +94,24 @@ def bench_index(bench_json: dict) -> dict:
     idx = {}
     for i, b in enumerate(benchmarks):
         if not isinstance(b, dict):
-            print(f"WARNING: Skipping non-dict benchmark entry at index {i}", file=sys.stderr)
+            print(
+                f"WARNING: Skipping non-dict benchmark entry at index {i}",
+                file=sys.stderr,
+            )
             continue
         # Use fullname for matching (includes module::class::test)
         key = b.get("fullname", b.get("name"))
         if not key:
-            print(f"WARNING: Skipping benchmark at index {i} (no name/fullname)", file=sys.stderr)
+            print(
+                f"WARNING: Skipping benchmark at index {i} (no name/fullname)",
+                file=sys.stderr,
+            )
             continue
         if key in idx:
-            print(f"WARNING: Duplicate benchmark key '{key}' (overwriting)", file=sys.stderr)
+            print(
+                f"WARNING: Duplicate benchmark key '{key}' (overwriting)",
+                file=sys.stderr,
+            )
         idx[key] = b
     return idx
 
@@ -137,7 +149,11 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Validate pytest-benchmark results against performance budgets")
     ap.add_argument("--budgets", required=True, help="Path to performance_budgets.yaml")
     ap.add_argument("--bench-json", required=True, help="Path to pytest-benchmark JSON output")
-    ap.add_argument("--baseline-json", default=None, help="Optional baseline benchmark JSON for regression checks")
+    ap.add_argument(
+        "--baseline-json",
+        default=None,
+        help="Optional baseline benchmark JSON for regression checks",
+    )
     ap.add_argument(
         "--metric",
         default="median",
@@ -262,7 +278,14 @@ def main() -> int:
                         continue
                     if t > t0 * (1 + max_reg):
                         regression_pct = (t / t0 - 1) * 100
-                        violations.append((group, name, f"{t:.6f}s", f"regressed {regression_pct:.1f}% > {max_reg_pct:.1f}%"))
+                        violations.append(
+                            (
+                                group,
+                                name,
+                                f"{t:.6f}s",
+                                f"regressed {regression_pct:.1f}% > {max_reg_pct:.1f}%",
+                            )
+                        )
                 else:
                     warnings.append(f"⚠️  Baseline missing benchmark '{name}' (no regression check).")
 

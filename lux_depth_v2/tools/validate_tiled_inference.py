@@ -49,7 +49,8 @@ def create_instrumented_estimator():
 
 
 def validate_tile_inference(
-    tile_sizes: list = [512, 1024, 1536], test_image_size: Tuple[int, int] = (2048, 2048)
+    tile_sizes: list = [512, 1024, 1536],
+    test_image_size: Tuple[int, int] = (2048, 2048),
 ) -> Dict[str, any]:
     """
     Validate that tiles are processed at intended resolution.
@@ -217,7 +218,11 @@ def generate_validation_report(output_path: Path):
     logger.info("\n\n")
     tile_results = validate_tile_inference()
     report["critical_validations"].append(
-        {"name": "No Internal Resize", "status": tile_results.get("overall_verdict", "N/A"), "details": tile_results}
+        {
+            "name": "No Internal Resize",
+            "status": tile_results.get("overall_verdict", "N/A"),
+            "details": tile_results,
+        }
     )
 
     # Validation 2: Global consistency
@@ -246,9 +251,18 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Validate tiled depth inference implementation")
     parser.add_argument(
-        "--output", type=Path, default=Path("validation_report_tiled_inference.json"), help="Output path for validation report"
+        "--output",
+        type=Path,
+        default=Path("validation_report_tiled_inference.json"),
+        help="Output path for validation report",
     )
-    parser.add_argument("--tile-sizes", nargs="+", type=int, default=[512, 1024, 1536], help="Tile sizes to test")
+    parser.add_argument(
+        "--tile-sizes",
+        nargs="+",
+        type=int,
+        default=[512, 1024, 1536],
+        help="Tile sizes to test",
+    )
 
     args = parser.parse_args()
 

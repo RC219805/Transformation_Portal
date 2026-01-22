@@ -36,7 +36,6 @@ from lux_depth_v2.config import PipelineConfig, Preset
 from lux_depth_v2.pipeline import LuxPipelineV2
 from lux_depth_v2.metrics.boundary_metrics import compute_full_boundary_metrics
 
-
 BENCHMARK_SET = {
     "interior_kitchen_750": {
         "path": "assets/phase2_bench/750Picacho_Kitchen_Ultimate.tif",

@@ -99,7 +99,10 @@ class ArchitecturalContextExtractor:
         "leather": r"leather",
     }
 
-    DIMENSION_PATTERN = re.compile(r"(\d+(?:\.\d+)?)\s*[\'\"]?\s*(?:x|×|by)\s*(\d+(?:\.\d+)?)\s*[\'\"]?", re.IGNORECASE)
+    DIMENSION_PATTERN = re.compile(
+        r"(\d+(?:\.\d+)?)\s*[\'\"]?\s*(?:x|×|by)\s*(\d+(?:\.\d+)?)\s*[\'\"]?",
+        re.IGNORECASE,
+    )
 
     def __init__(self, output_dir: Path = None):
         """Initialize extractor."""
@@ -215,7 +218,11 @@ class ArchitecturalContextExtractor:
 
             # Look for architect
             if not context.architect:
-                arch_match = re.search(r"(?:architect|designer)\s*:?\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)", line, re.I)
+                arch_match = re.search(
+                    r"(?:architect|designer)\s*:?\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)",
+                    line,
+                    re.I,
+                )
                 if arch_match:
                     context.architect = arch_match.group(1)
 
@@ -261,7 +268,11 @@ class ArchitecturalContextExtractor:
                                 pass
 
                         # Extract ceiling height
-                        height_match = re.search(r"(\d+(?:\.\d+)?)\s*[\'\"]?\s*(?:ceiling|clg|ht)", room_context_text, re.I)
+                        height_match = re.search(
+                            r"(\d+(?:\.\d+)?)\s*[\'\"]?\s*(?:ceiling|clg|ht)",
+                            room_context_text,
+                            re.I,
+                        )
                         if height_match:
                             try:
                                 room.ceiling_height = float(height_match.group(1))
@@ -393,7 +404,11 @@ def main():
     parser = argparse.ArgumentParser(description="Extract architectural context from construction documents")
     parser.add_argument("pd", type=Path, help="PDF file to analyze")
     parser.add_argument(
-        "--output", "-o", type=Path, default=Path("extracted_context"), help="Output directory for extracted context"
+        "--output",
+        "-o",
+        type=Path,
+        default=Path("extracted_context"),
+        help="Output directory for extracted context",
     )
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
 

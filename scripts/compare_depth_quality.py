@@ -53,7 +53,11 @@ try:
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 logger = logging.getLogger(__name__)
 
 
@@ -75,7 +79,11 @@ def load_and_generate_depth(image_path: Path, model: str = "depth-anything/Depth
     img = Image.open(image_path).convert("RGB")
 
     logger.info(f"Generating depth map with {model}")
-    depth_pipe = pipeline(task="depth-estimation", model=model, device="mps" if torch.backends.mps.is_available() else "cpu")
+    depth_pipe = pipeline(
+        task="depth-estimation",
+        model=model,
+        device="mps" if torch.backends.mps.is_available() else "cpu",
+    )
     depth_result = depth_pipe(img)
 
     # Convert to numpy and normalize
@@ -266,8 +274,17 @@ def main() -> int:
     )
     parser.add_argument("--master", type=Path, required=True, help="Master 16-bit TIFF input")
     parser.add_argument("--upscaled", type=Path, required=True, help="Upscaled 16-bit TIFF input")
-    parser.add_argument("--output-dir", type=Path, default=Path("depth_comparison_results"), help="Output directory")
-    parser.add_argument("--model", default="depth-anything/Depth-Anything-V2-Large", help="Depth model ID")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("depth_comparison_results"),
+        help="Output directory",
+    )
+    parser.add_argument(
+        "--model",
+        default="depth-anything/Depth-Anything-V2-Large",
+        help="Depth model ID",
+    )
     parser.add_argument("--skip-viz", action="store_true", help="Skip visualization generation")
 
     args = parser.parse_args()

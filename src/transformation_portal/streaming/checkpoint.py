@@ -57,6 +57,7 @@ class Checkpoint:
         timestamp: When checkpoint was created
         metadata: Additional metadata
     """
+
     id: str
     progress: float
     state: Dict[str, Any]
@@ -72,18 +73,18 @@ class Checkpoint:
         path.parent.mkdir(parents=True, exist_ok=True)
 
         checkpoint_data = {
-            'id': self.id,
-            'progress': self.progress,
-            'state': self.state,
-            'timestamp': self.timestamp,
-            'metadata': self.metadata,
+            "id": self.id,
+            "progress": self.progress,
+            "state": self.state,
+            "timestamp": self.timestamp,
+            "metadata": self.metadata,
         }
 
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             json.dump(checkpoint_data, f, indent=2)
 
     @classmethod
-    def load(cls, path: Path) -> 'Checkpoint':
+    def load(cls, path: Path) -> "Checkpoint":
         """Load checkpoint from file.
 
         Args:
@@ -131,7 +132,7 @@ class CheckpointManager:
         """
         self.operation_id = operation_id
         # Always append operation_id to checkpoint_dir for isolation
-        base_dir = checkpoint_dir or Path('.checkpoints')
+        base_dir = checkpoint_dir or Path(".checkpoints")
         self.checkpoint_dir = base_dir / operation_id
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         self._counter = 0
@@ -141,7 +142,7 @@ class CheckpointManager:
         self,
         progress: float,
         state: Dict[str, Any],
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Checkpoint:
         """Create a new checkpoint.
 
@@ -175,7 +176,7 @@ class CheckpointManager:
             progress=progress,
             state=state,
             timestamp=timestamp,
-            metadata=metadata or {}
+            metadata=metadata or {},
         )
 
     def save(self, checkpoint: Checkpoint) -> Path:
@@ -197,7 +198,7 @@ class CheckpointManager:
         Returns:
             Latest checkpoint or None if no checkpoints exist
         """
-        checkpoint_files = list(self.checkpoint_dir.glob('*.json'))
+        checkpoint_files = list(self.checkpoint_dir.glob("*.json"))
 
         if not checkpoint_files:
             return None
@@ -226,7 +227,7 @@ class CheckpointManager:
         """
         checkpoints = []
 
-        for checkpoint_file in self.checkpoint_dir.glob('*.json'):
+        for checkpoint_file in self.checkpoint_dir.glob("*.json"):
             try:
                 checkpoint = Checkpoint.load(checkpoint_file)
                 checkpoints.append(checkpoint)
@@ -237,7 +238,7 @@ class CheckpointManager:
 
     def clear(self) -> None:
         """Delete all checkpoints for this operation."""
-        for checkpoint_file in self.checkpoint_dir.glob('*.json'):
+        for checkpoint_file in self.checkpoint_dir.glob("*.json"):
             checkpoint_file.unlink()
 
         # Remove directory if empty
@@ -250,7 +251,7 @@ class CheckpointManager:
 def checkpoint(
     operation_id: str,
     checkpoint_interval: int = 10,
-    checkpoint_dir: Optional[Path] = None
+    checkpoint_dir: Optional[Path] = None,
 ):
     """Decorator to add automatic checkpointing to a function.
 
@@ -270,6 +271,7 @@ def checkpoint(
         ...         state = {'current_index': i, 'file': file}
         ...         yield progress, state, result
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -284,8 +286,7 @@ def checkpoint(
                     # Save checkpoint at intervals
                     if iteration % checkpoint_interval == 0:
                         checkpoint_obj = manager.create_checkpoint(
-                            progress=progress,
-                            state=state
+                            progress=progress, state=state
                         )
                         manager.save(checkpoint_obj)
 
@@ -300,8 +301,7 @@ def checkpoint(
 
 
 def resume_from_checkpoint(
-    operation_id: str,
-    checkpoint_dir: Optional[Path] = None
+    operation_id: str, checkpoint_dir: Optional[Path] = None
 ) -> Optional[Dict[str, Any]]:
     """Resume operation from last checkpoint.
 

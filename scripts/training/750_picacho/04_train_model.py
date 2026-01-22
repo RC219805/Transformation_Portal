@@ -38,14 +38,28 @@ def main():
         help="Path to training configuration YAML",
     )
     parser.add_argument(
-        "--data-dir", type=Path, default=Path("data/training_750picacho"), help="Path to training data directory"
+        "--data-dir",
+        type=Path,
+        default=Path("data/training_750picacho"),
+        help="Path to training data directory",
     )
-    parser.add_argument("--checkpoint-dir", type=Path, default=Path("weights/750_picacho"), help="Path to save checkpoints")
+    parser.add_argument(
+        "--checkpoint-dir",
+        type=Path,
+        default=Path("weights/750_picacho"),
+        help="Path to save checkpoints",
+    )
     parser.add_argument("--resume", type=Path, default=None, help="Path to checkpoint to resume from")
     parser.add_argument("--stage1-epochs", type=int, default=20, help="Number of epochs for Stage 1")
     parser.add_argument("--stage2-epochs", type=int, default=20, help="Number of epochs for Stage 2")
     parser.add_argument("--stage3-epochs", type=int, default=10, help="Number of epochs for Stage 3")
-    parser.add_argument("--device", type=str, choices=["auto", "cuda", "mps", "cpu"], default="auto", help="Compute device")
+    parser.add_argument(
+        "--device",
+        type=str,
+        choices=["auto", "cuda", "mps", "cpu"],
+        default="auto",
+        help="Compute device",
+    )
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
 
     args = parser.parse_args()

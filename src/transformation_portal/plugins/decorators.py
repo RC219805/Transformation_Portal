@@ -16,7 +16,7 @@ def plugin(
     version: str = "1.0.0",
     description: str = "",
     auto_register: bool = True,
-    **metadata_kwargs
+    **metadata_kwargs,
 ):
     """Decorator to mark a class as a plugin and automatically register it.
 
@@ -45,6 +45,7 @@ def plugin(
         ...     def estimate_depth(self, image):
         ...         return process_image(image)
     """
+
     def decorator(cls):
         # Store metadata for the plugin class
         metadata = PluginMetadata(
@@ -52,7 +53,7 @@ def plugin(
             version=version,
             plugin_type=plugin_type,
             description=description,
-            **metadata_kwargs
+            **metadata_kwargs,
         )
 
         # Add metadata as class attribute
@@ -65,8 +66,7 @@ def plugin(
                 get_global_registry().register(instance, replace_existing=True)
             except Exception as e:
                 warnings.warn(
-                    f"Failed to auto-register plugin {name}: {e}",
-                    RuntimeWarning
+                    f"Failed to auto-register plugin {name}: {e}", RuntimeWarning
                 )
 
         return cls
@@ -75,8 +75,7 @@ def plugin(
 
 
 def requires_version(
-    min_version: Optional[str] = None,
-    max_version: Optional[str] = None
+    min_version: Optional[str] = None, max_version: Optional[str] = None
 ):
     """Decorator to enforce Transformation Portal version requirements.
 
@@ -89,6 +88,7 @@ def requires_version(
         ... class MyPlugin(PluginInterface):
         ...     pass
     """
+
     def decorator(cls):
         original_init = cls.__init__
 
@@ -109,7 +109,7 @@ def requires_version(
                     warnings.warn(
                         f"Plugin may not be compatible with Transformation Portal > {max_version}. "
                         f"Current version is {portal_version}.",
-                        RuntimeWarning
+                        RuntimeWarning,
                     )
 
             original_init(self, *args, **kwargs)
@@ -123,7 +123,7 @@ def requires_version(
 def deprecated_plugin(
     replacement: Optional[str] = None,
     removal_version: Optional[str] = None,
-    message: Optional[str] = None
+    message: Optional[str] = None,
 ):
     """Decorator to mark a plugin as deprecated.
 
@@ -140,15 +140,14 @@ def deprecated_plugin(
         ... class OldDepthModel(DepthModelPlugin):
         ...     pass
     """
+
     def decorator(cls):
         original_init = cls.__init__
 
         @functools.wraps(original_init)
         def new_init(self, *args, **kwargs):
             # Show deprecation warning
-            warning_msg = message or (
-                f"Plugin {cls.__name__} is deprecated"
-            )
+            warning_msg = message or (f"Plugin {cls.__name__} is deprecated")
 
             if replacement:
                 warning_msg += f" and will be replaced by '{replacement}'"
@@ -161,7 +160,7 @@ def deprecated_plugin(
             original_init(self, *args, **kwargs)
 
             # Mark metadata as deprecated
-            if hasattr(self, 'metadata'):
+            if hasattr(self, "metadata"):
                 self.metadata.deprecated = True
                 self.metadata.replacement = replacement
 
@@ -183,6 +182,7 @@ def cached_execution(maxsize: int = 128):
         ...     def execute(self, image_hash):
         ...         return expensive_computation(image_hash)
     """
+
     def decorator(func: Callable) -> Callable:
         return functools.lru_cache(maxsize=maxsize)(func)
 
@@ -198,16 +198,18 @@ def measure_performance(func: Callable) -> Callable:
         ...     def execute(self, image):
         ...         return process(image)
     """
+
     @functools.wraps(func)
     def wrapper(self, *args, **kwargs):
         import time
+
         start = time.perf_counter()
 
         try:
             result = func(self, *args, **kwargs)
             elapsed = time.perf_counter() - start
 
-            if hasattr(self, 'metadata'):
+            if hasattr(self, "metadata"):
                 plugin_name = self.metadata.name
             else:
                 plugin_name = self.__class__.__name__
@@ -219,7 +221,9 @@ def measure_performance(func: Callable) -> Callable:
 
         except Exception as e:
             elapsed = time.perf_counter() - start
-            print(f"[Performance] {func.__name__} failed after {elapsed*1000:.2f}ms: {e}")
+            print(
+                f"[Performance] {func.__name__} failed after {elapsed*1000:.2f}ms: {e}"
+            )
             raise
 
     return wrapper

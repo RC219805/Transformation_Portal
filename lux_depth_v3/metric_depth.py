@@ -123,12 +123,19 @@ class MetricDepthConverter:
         # Check if model already outputs metric depth
         if self.is_metric_model:
             return MetricDepthResult(
-                depth_meters=depth, focal_length_px=0.0, scale_factor=1.0, source_model=self.model_name, already_metric=True
+                depth_meters=depth,
+                focal_length_px=0.0,
+                scale_factor=1.0,
+                source_model=self.model_name,
+                already_metric=True,
             )
 
         # Determine focal length
         focal = self._determine_focal_length(
-            intrinsics=intrinsics, focal_length_px=focal_length_px, image_width=image_width, fov_degrees=fov_degrees
+            intrinsics=intrinsics,
+            focal_length_px=focal_length_px,
+            image_width=image_width,
+            fov_degrees=fov_degrees,
         )
 
         if focal is None:
@@ -273,7 +280,11 @@ def convert_to_metric_depth(
     """
     converter = MetricDepthConverter(model_name=model_name)
     return converter.convert(
-        depth=depth, intrinsics=intrinsics, focal_length_px=focal_length_px, image_width=image_width, fov_degrees=fov_degrees
+        depth=depth,
+        intrinsics=intrinsics,
+        focal_length_px=focal_length_px,
+        image_width=image_width,
+        fov_degrees=fov_degrees,
     )
 
 

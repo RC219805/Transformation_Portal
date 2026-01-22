@@ -31,7 +31,6 @@ from transformation_portal.streaming.async_pipeline import (
     run_async_pipeline,
 )
 
-
 # ============================================================================
 # BackpressureQueue Tests
 # ============================================================================

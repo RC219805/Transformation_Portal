@@ -19,6 +19,7 @@ from PIL import Image
 
 try:
     from transformers import CLIPVisionModelWithProjection, CLIPImageProcessor
+
     ENCODER_AVAILABLE = True
 except ImportError:
     ENCODER_AVAILABLE = False
@@ -54,7 +55,7 @@ class ReferenceImageEncoder:
         self,
         device: Optional[str] = None,
         torch_dtype: torch.dtype = torch.float32,
-        cache_dir: Optional[Path] = None
+        cache_dir: Optional[Path] = None,
     ):
         """Initialize reference image encoder.
 
@@ -82,8 +83,7 @@ class ReferenceImageEncoder:
         # nosec B615 - revision pinning intentionally omitted for development flexibility
         # Production deployments should pin specific model revisions
         self.model = CLIPVisionModelWithProjection.from_pretrained(
-            self.MODEL_NAME,
-            torch_dtype=torch_dtype
+            self.MODEL_NAME, torch_dtype=torch_dtype
         ).to(self.device)
 
         self.processor = CLIPImageProcessor.from_pretrained(self.MODEL_NAME)
@@ -99,9 +99,7 @@ class ReferenceImageEncoder:
         return "cpu"
 
     def encode(
-        self,
-        image: Union[str, Path, Image.Image, np.ndarray],
-        normalize: bool = True
+        self, image: Union[str, Path, Image.Image, np.ndarray], normalize: bool = True
     ) -> torch.Tensor:
         """Encode image to style features.
 
@@ -116,10 +114,7 @@ class ReferenceImageEncoder:
         pil_image = self._load_image(image)
 
         # Preprocess
-        inputs = self.processor(
-            images=pil_image,
-            return_tensors="pt"
-        ).to(self.device)
+        inputs = self.processor(images=pil_image, return_tensors="pt").to(self.device)
 
         # Encode
         with torch.inference_mode():
@@ -135,7 +130,7 @@ class ReferenceImageEncoder:
         self,
         images: List[Union[str, Path, Image.Image, np.ndarray]],
         weights: Optional[List[float]] = None,
-        normalize: bool = True
+        normalize: bool = True,
     ) -> torch.Tensor:
         """Encode collection of images and average.
 
@@ -162,8 +157,7 @@ class ReferenceImageEncoder:
 
         # Weighted average
         averaged = sum(
-            features * weight
-            for features, weight in zip(features_list, weights)
+            features * weight for features, weight in zip(features_list, weights)
         )
 
         # Normalize if requested
@@ -177,7 +171,7 @@ class ReferenceImageEncoder:
     def encode_batch(
         self,
         images: List[Union[str, Path, Image.Image, np.ndarray]],
-        batch_size: int = 8
+        batch_size: int = 8,
     ) -> torch.Tensor:
         """Encode batch of images efficiently.
 
@@ -193,16 +187,15 @@ class ReferenceImageEncoder:
         all_features = []
 
         for i in range(0, len(images), batch_size):
-            batch = images[i:i + batch_size]
+            batch = images[i : i + batch_size]
 
             # Load batch
             pil_images = [self._load_image(img) for img in batch]
 
             # Preprocess batch
-            inputs = self.processor(
-                images=pil_images,
-                return_tensors="pt"
-            ).to(self.device)
+            inputs = self.processor(images=pil_images, return_tensors="pt").to(
+                self.device
+            )
 
             # Encode batch
             with torch.inference_mode():
@@ -221,7 +214,7 @@ class ReferenceImageEncoder:
         self,
         features: torch.Tensor,
         path: Union[str, Path],
-        metadata: Optional[Dict] = None
+        metadata: Optional[Dict] = None,
     ) -> None:
         """Save encoded features to file.
 
@@ -237,18 +230,15 @@ class ReferenceImageEncoder:
             "features": features.cpu().numpy(),
             "shape": features.shape,
             "dtype": str(features.dtype),
-            "metadata": metadata or {}
+            "metadata": metadata or {},
         }
 
-        with open(path, 'wb') as f:
+        with open(path, "wb") as f:
             pickle.dump(data, f)
 
         logger.info(f"Features saved to {path}")
 
-    def load_features(
-        self,
-        path: Union[str, Path]
-    ) -> Tuple[torch.Tensor, Dict]:
+    def load_features(self, path: Union[str, Path]) -> Tuple[torch.Tensor, Dict]:
         """Load encoded features from file.
 
         Args:
@@ -259,7 +249,7 @@ class ReferenceImageEncoder:
         """
         path = Path(path)
 
-        with open(path, 'rb') as f:
+        with open(path, "rb") as f:
             data = pickle.load(f)  # nosec B301 - loading self-generated cache
 
         features = torch.from_numpy(data["features"]).to(self.device)
@@ -270,9 +260,7 @@ class ReferenceImageEncoder:
         return features, metadata
 
     def compute_similarity(
-        self,
-        features1: torch.Tensor,
-        features2: torch.Tensor
+        self, features1: torch.Tensor, features2: torch.Tensor
     ) -> float:
         """Compute cosine similarity between feature vectors.
 
@@ -284,9 +272,7 @@ class ReferenceImageEncoder:
             Similarity score (0-1)
         """
         similarity = torch.nn.functional.cosine_similarity(
-            features1,
-            features2,
-            dim=-1
+            features1, features2, dim=-1
         ).item()
 
         # Normalize to 0-1
@@ -296,7 +282,7 @@ class ReferenceImageEncoder:
         self,
         query_features: torch.Tensor,
         reference_features: torch.Tensor,
-        top_k: int = 5
+        top_k: int = 5,
     ) -> List[Tuple[int, float]]:
         """Find most similar references to query.
 
@@ -310,9 +296,7 @@ class ReferenceImageEncoder:
         """
         # Compute similarities
         similarities = torch.nn.functional.cosine_similarity(
-            query_features.unsqueeze(0),
-            reference_features,
-            dim=-1
+            query_features.unsqueeze(0), reference_features, dim=-1
         )
 
         # Normalize to 0-1
@@ -322,10 +306,7 @@ class ReferenceImageEncoder:
         top_k = min(top_k, len(similarities))
         values, indices = torch.topk(similarities, top_k)
 
-        results = [
-            (idx.item(), val.item())
-            for idx, val in zip(indices, values)
-        ]
+        results = [(idx.item(), val.item()) for idx, val in zip(indices, values)]
 
         return results
 
@@ -333,7 +314,7 @@ class ReferenceImageEncoder:
         self,
         reference_dir: Union[str, Path],
         output_path: Union[str, Path],
-        pattern: str = "*.jpg"
+        pattern: str = "*.jpg",
     ) -> None:
         """Create style library from directory of references.
 
@@ -361,7 +342,7 @@ class ReferenceImageEncoder:
             "num_images": len(image_paths),
             "image_paths": [str(p) for p in image_paths],
             "pattern": pattern,
-            "source_dir": str(reference_dir)
+            "source_dir": str(reference_dir),
         }
 
         # Save library
@@ -370,8 +351,7 @@ class ReferenceImageEncoder:
         logger.info(f"Style library created with {len(image_paths)} references")
 
     def _load_image(
-        self,
-        image: Union[str, Path, Image.Image, np.ndarray]
+        self, image: Union[str, Path, Image.Image, np.ndarray]
     ) -> Image.Image:
         """Load image as PIL Image."""
         if isinstance(image, Image.Image):
@@ -388,4 +368,4 @@ class ReferenceImageEncoder:
 
 
 # Export
-__all__ = ['ReferenceImageEncoder']
+__all__ = ["ReferenceImageEncoder"]

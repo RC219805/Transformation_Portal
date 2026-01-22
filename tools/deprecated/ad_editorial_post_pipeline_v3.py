@@ -84,6 +84,7 @@ try:
 except ImportError:
     tifffile = None
     import warnings
+
     warnings.warn("tifffile not available, falling back to PIL for TIFFs")
 
 # Optional deps
@@ -116,9 +117,7 @@ def setup_logging(verbosity: int) -> None:
     level = (
         logging.WARNING
         if verbosity == 0
-        else logging.INFO
-        if verbosity == 1
-        else logging.DEBUG
+        else logging.INFO if verbosity == 1 else logging.DEBUG
     )
     logging.basicConfig(
         level=level,
@@ -301,10 +300,12 @@ class StyleRegistry:
     @classmethod
     def register(cls, name: str) -> Callable[[StyleFunc], StyleFunc]:
         """Decorator to register a style function."""
+
         def decorator(func: StyleFunc) -> StyleFunc:
             cls._styles[name] = func
             LOG.debug("Registered style: %s", name)
             return func
+
         return decorator
 
     @classmethod
@@ -345,7 +346,9 @@ class PipelineConfig:
     dry_run: bool = False
 
     @staticmethod
-    def from_yaml(path: Path, resume: bool = False, dry_run: bool = False) -> "PipelineConfig":
+    def from_yaml(
+        path: Path, resume: bool = False, dry_run: bool = False
+    ) -> "PipelineConfig":
         """Load config from YAML file."""
         data = json.loads(json.dumps(_read_yaml(path)))
         root = Path(data["project_root"]).expanduser().resolve()
@@ -376,7 +379,9 @@ class PipelineConfig:
             consistency=data.get(
                 "consistency", {"target_median": 0.42, "wb_neutralize": True}
             ),
-            retouch=data.get("retouch", {"dust_remove": False, "hotspot_reduce": False}),
+            retouch=data.get(
+                "retouch", {"dust_remove": False, "hotspot_reduce": False}
+            ),
             export=data.get(
                 "export",
                 {
@@ -426,7 +431,10 @@ class PipelineConfig:
 
         # Consistency validation
         target_median = self.consistency.get("target_median", 0.42)
-        if not isinstance(target_median, (int, float)) or not 0.1 <= target_median <= 0.9:
+        if (
+            not isinstance(target_median, (int, float))
+            or not 0.1 <= target_median <= 0.9
+        ):
             errors.append(
                 f"consistency.target_median must be 0.1-0.9, got {target_median}"
             )
@@ -453,7 +461,10 @@ class PipelineConfig:
                 )
 
             saturation = style_params.get("saturation", 0)
-            if not isinstance(saturation, (int, float)) or not -100 <= saturation <= 100:
+            if (
+                not isinstance(saturation, (int, float))
+                or not -100 <= saturation <= 100
+            ):
                 errors.append(
                     f"Style '{style_name}' saturation must be -100 to 100, got {saturation}"
                 )
@@ -501,7 +512,9 @@ class Layout:
 
         return Layout(
             raw_orig=root / "RAW" / "Originals",
-            raw_backup=cfg.backup_raw_dir / cfg.project_name if cfg.backup_raw_dir else None,
+            raw_backup=(
+                cfg.backup_raw_dir / cfg.project_name if cfg.backup_raw_dir else None
+            ),
             work_base=root / "WORK" / "BaseTIFF",
             work_hdr=root / "WORK" / "HDR",
             work_pano=root / "WORK" / "Pano",
@@ -563,7 +576,9 @@ def save_tiff16_prophoto(
         else:
             # Fallback to PIL
             im = Image.fromarray(img16, mode="RGB")
-            im.save(str(p), format="TIFF", compression="tiff_lzw", icc_profile=icc_bytes)
+            im.save(
+                str(p), format="TIFF", compression="tiff_lzw", icc_profile=icc_bytes
+            )
 
     atomic_write(path, _write)
 
@@ -576,7 +591,9 @@ def save_jpeg_srgb(
     im = Image.fromarray(img8, mode="RGB")
 
     def _write(p: Path):
-        im.save(str(p), format="JPEG", quality=quality, icc_profile=icc_bytes, optimize=True)
+        im.save(
+            str(p), format="JPEG", quality=quality, icc_profile=icc_bytes, optimize=True
+        )
 
     atomic_write(path, _write)
 
@@ -624,7 +641,9 @@ def raw_to_prophoto_tiff(raw_path: Path) -> np.ndarray:
     return img.astype(np.float32) / 65535.0
 
 
-def process_raw_file(args: Tuple[Path, Path, Optional[bytes]]) -> Tuple[Path, Optional[Path]]:
+def process_raw_file(
+    args: Tuple[Path, Path, Optional[bytes]],
+) -> Tuple[Path, Optional[Path]]:
     """Process single RAW file (for multiprocessing)."""
     raw_path, output_dir, icc_bytes = args
     try:
@@ -652,23 +671,17 @@ def decode_raws_parallel(
     Smart worker limiting (from optimized version).
     """
     # Smart worker limiting: don't exceed CPU cores or number of tasks
-    max_workers = min(
-        workers,
-        len(raws),
-        os.cpu_count() or 1
-    )
+    max_workers = min(workers, len(raws), os.cpu_count() or 1)
     LOG.info(
         "Decoding %d RAW files with %d workers (requested: %d)",
         len(raws),
         max_workers,
-        workers
+        workers,
     )
 
     # Filter out already-completed files (v2 fine-grained tracking)
     if tracker:
-        pending = [
-            r for r in raws if not tracker.is_completed(f"raw_decode:{r.name}")
-        ]
+        pending = [r for r in raws if not tracker.is_completed(f"raw_decode:{r.name}")]
         if len(pending) < len(raws):
             LOG.info("Skipping %d already-processed RAWs", len(raws) - len(pending))
         raws = pending
@@ -682,8 +695,7 @@ def decode_raws_parallel(
 
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
         futures = {
-            executor.submit(process_raw_file, args): args[0]
-            for args in args_list
+            executor.submit(process_raw_file, args): args[0] for args in args_list
         }
 
         for future in tqdm(
@@ -777,7 +789,9 @@ def median_luma(img: np.ndarray) -> float:
     return float(np.median(img @ np.array([0.2126, 0.7152, 0.0722])))
 
 
-def normalize_exposure_inplace(imgs: List[np.ndarray], target_median: float = 0.42) -> None:
+def normalize_exposure_inplace(
+    imgs: List[np.ndarray], target_median: float = 0.42
+) -> None:
     """
     Normalize exposure in-place to save memory (from v2).
     Adjusts each image to target median luminance.
@@ -891,11 +905,13 @@ def split_tone(
 
     # Apply shadow tone
     if sh_h is not None and sh_s > 0:
-        sh_color = np.array([
-            0.5 + 0.5 * np.cos(sh_h),
-            0.5 + 0.5 * np.cos(sh_h + 2 * np.pi / 3),
-            0.5 + 0.5 * np.cos(sh_h + 4 * np.pi / 3),
-        ])
+        sh_color = np.array(
+            [
+                0.5 + 0.5 * np.cos(sh_h),
+                0.5 + 0.5 * np.cos(sh_h + 2 * np.pi / 3),
+                0.5 + 0.5 * np.cos(sh_h + 4 * np.pi / 3),
+            ]
+        )
         for c in range(3):
             result[:, :, c] = (
                 result[:, :, c] * (1 - sh_s * shadow_mask)
@@ -904,11 +920,13 @@ def split_tone(
 
     # Apply highlight tone
     if hl_h is not None and hl_s > 0:
-        hl_color = np.array([
-            0.5 + 0.5 * np.cos(hl_h),
-            0.5 + 0.5 * np.cos(hl_h + 2 * np.pi / 3),
-            0.5 + 0.5 * np.cos(hl_h + 4 * np.pi / 3),
-        ])
+        hl_color = np.array(
+            [
+                0.5 + 0.5 * np.cos(hl_h),
+                0.5 + 0.5 * np.cos(hl_h + 2 * np.pi / 3),
+                0.5 + 0.5 * np.cos(hl_h + 4 * np.pi / 3),
+            ]
+        )
         for c in range(3):
             result[:, :, c] = (
                 result[:, :, c] * (1 - hl_s * highlight_mask)
@@ -919,9 +937,7 @@ def split_tone(
     return srgb_to_linear(result)
 
 
-def apply_vignette(
-    img: np.ndarray, strength: float = 0.3
-) -> np.ndarray:
+def apply_vignette(img: np.ndarray, strength: float = 0.3) -> np.ndarray:
     """Apply subtle vignette in sRGB space."""
     if strength < 1e-6:
         return img
@@ -945,7 +961,9 @@ def sharpen_image(img: np.ndarray, amount: float = 0.35) -> np.ndarray:
 
     img_srgb = linear_to_srgb(img)
     pil = Image.fromarray((img_srgb * 255).astype(np.uint8), "RGB")
-    sharpened = ImageOps.unsharp_mask(pil, radius=1.0, percent=int(amount * 100), threshold=0)
+    sharpened = ImageOps.unsharp_mask(
+        pil, radius=1.0, percent=int(amount * 100), threshold=0
+    )
     result_srgb = np.array(sharpened).astype(np.float32) / 255.0
 
     return srgb_to_linear(result_srgb)
@@ -1086,13 +1104,8 @@ def stage_1_offload_and_backup(
         return []
 
     # Find RAW files
-    raw_exts = {
-        ".cr2", ".cr3", ".nef", ".arw", ".dng", ".raf", ".orf", ".rw2"
-    }
-    raws = [
-        p for p in cfg.input_raw_dir.iterdir()
-        if p.suffix.lower() in raw_exts
-    ]
+    raw_exts = {".cr2", ".cr3", ".nef", ".arw", ".dng", ".raf", ".orf", ".rw2"}
+    raws = [p for p in cfg.input_raw_dir.iterdir() if p.suffix.lower() in raw_exts]
 
     if not raws:
         LOG.warning("No RAW files found in %s", cfg.input_raw_dir)
@@ -1134,7 +1147,7 @@ def stage_2_decode_raws(
         LOG.info(
             "[DRY-RUN] Would decode %d RAWs with %d workers",
             len(raws),
-            cfg.processing.get("workers", 4)
+            cfg.processing.get("workers", 4),
         )
         return []
 
@@ -1219,19 +1232,24 @@ def stage_4_grade_and_export(
     LOG.info("=== Stage 4: Grading & Export ===")
 
     if dry_run:
-        LOG.info("[DRY-RUN] Would grade and export %d images with styles: %s",
-                 len(aligned_paths), list(cfg.styles.keys()))
+        LOG.info(
+            "[DRY-RUN] Would grade and export %d images with styles: %s",
+            len(aligned_paths),
+            list(cfg.styles.keys()),
+        )
         return
 
     style_names = list(cfg.styles.keys())
 
     # Ensure all output directories exist
     for style in style_names:
-        ensure_dirs([
-            layout.work_variants[style],
-            layout.export_print[style],
-            layout.export_web[style]
-        ])
+        ensure_dirs(
+            [
+                layout.work_variants[style],
+                layout.export_print[style],
+                layout.export_web[style],
+            ]
+        )
 
     # Process each image
     for src in tqdm(aligned_paths, desc="Grade+Export"):
@@ -1296,7 +1314,9 @@ def stage_4_grade_and_export(
                 web_img = sharpen_image(web_img, cfg.export["sharpen_web_amount"])
 
             web_out = layout.export_web[style] / (src.stem + ".jpg")
-            save_jpeg_srgb(web_img, web_out, icc_srgb, cfg.export.get("jpeg_quality", 96))
+            save_jpeg_srgb(
+                web_img, web_out, icc_srgb, cfg.export.get("jpeg_quality", 96)
+            )
 
             if tracker:
                 tracker.mark_completed(f"export:{style}:{src.name}")
@@ -1346,10 +1366,18 @@ def stage_5_documentation(
     if not metadata_csv.exists():
         with metadata_csv.open("w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
-            writer.writerow([
-                "filename", "title", "description", "keywords",
-                "creator", "copyright", "credit", "location"
-            ])
+            writer.writerow(
+                [
+                    "filename",
+                    "title",
+                    "description",
+                    "keywords",
+                    "creator",
+                    "copyright",
+                    "credit",
+                    "location",
+                ]
+            )
         LOG.info("Created metadata.csv template")
 
     LOG.info("Documentation complete")
@@ -1393,7 +1421,7 @@ def stage_6_deliver(
     LOG.info(
         "Deliverable ZIP created: %s (%.1f MB)",
         zip_path,
-        zip_path.stat().st_size / 1024 / 1024
+        zip_path.stat().st_size / 1024 / 1024,
     )
 
 
@@ -1427,9 +1455,13 @@ def run_pipeline(cfg: PipelineConfig) -> int:
     )
 
     if not icc_prophoto:
-        LOG.warning("ProPhoto ICC profile not loaded, output may lack proper color space metadata")
+        LOG.warning(
+            "ProPhoto ICC profile not loaded, output may lack proper color space metadata"
+        )
     if not icc_srgb:
-        LOG.warning("sRGB ICC profile not loaded, web exports may lack proper color space metadata")
+        LOG.warning(
+            "sRGB ICC profile not loaded, web exports may lack proper color space metadata"
+        )
 
     # Stage 1: Offload & Backup
     raws = stage_1_offload_and_backup(cfg, layout, cfg.dry_run)
@@ -1483,7 +1515,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "--dry-run",
         "-n",
         action="store_true",
-        help="Dry-run mode (show what would be done)"
+        help="Dry-run mode (show what would be done)",
     )
     parser.add_argument(
         "--verbose", "-v", action="count", default=0, help="Increase verbosity"

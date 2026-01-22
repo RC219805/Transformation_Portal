@@ -244,7 +244,10 @@ class TestEnhancementTracker:
     def mock_analysis_results(self, tmp_path):
         """Create mock analysis results."""
         from transformation_portal.perceptual.analyzer import AnalysisResult
-        from transformation_portal.perceptual.image_loader import ImageMetadata, ImageType
+        from transformation_portal.perceptual.image_loader import (
+            ImageMetadata,
+            ImageType,
+        )
         from transformation_portal.perceptual.metrics import PerceptualScore, MetricType
 
         results = []
@@ -269,7 +272,11 @@ class TestEnhancementTracker:
 
             scores = {
                 MetricType.PSNR: PerceptualScore(
-                    metric_type=MetricType.PSNR, score=30.0, higher_is_better=True, normalized_score=0.7, metadata={}
+                    metric_type=MetricType.PSNR,
+                    score=30.0,
+                    higher_is_better=True,
+                    normalized_score=0.7,
+                    metadata={},
                 )
             }
 

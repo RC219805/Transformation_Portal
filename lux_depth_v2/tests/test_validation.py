@@ -91,7 +91,10 @@ def test_quality_validator_init():
 def test_validation_report_to_dict():
     """Test ValidationReport serialization."""
     report = ValidationReport(
-        mode="real", test_images=["img1.tif", "img2.tif"], metrics_scores={"ssim": 0.95, "psnr": 38.2}, composite_score=0.87
+        mode="real",
+        test_images=["img1.tif", "img2.tif"],
+        metrics_scores={"ssim": 0.95, "psnr": 38.2},
+        composite_score=0.87,
     )
 
     report_dict = report.to_dict()

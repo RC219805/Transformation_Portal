@@ -15,9 +15,21 @@ def test_patch_multiple_computation():
     test_cases = [
         # (original_shape, input_size, (expected_h, expected_w))
         ((512, 512), 1022, (1022, 1022)),  # Small square: both get same size
-        ((1920, 1080), 518, (910, 518)),  # HD landscape: width=518 (shorter), height scaled
-        ((1080, 1920), 518, (518, 910)),  # HD portrait: height=518 (shorter), width scaled
-        ((4000, 3000), 518, (686, 518)),  # Large landscape: width=518 (shorter), height scaled
+        (
+            (1920, 1080),
+            518,
+            (910, 518),
+        ),  # HD landscape: width=518 (shorter), height scaled
+        (
+            (1080, 1920),
+            518,
+            (518, 910),
+        ),  # HD portrait: height=518 (shorter), width scaled
+        (
+            (4000, 3000),
+            518,
+            (686, 518),
+        ),  # Large landscape: width=518 (shorter), height scaled
     ]
 
     for (h, w), input_size, expected in test_cases:
@@ -95,7 +107,10 @@ def test_roundtrip_dimension_preservation():
         depth_restored = estimator.postprocess_depth(depth, metadata)
 
         # Verify original dimensions restored
-        assert depth_restored.shape == (h, w), f"Expected {(h, w)}, got {depth_restored.shape}"
+        assert depth_restored.shape == (
+            h,
+            w,
+        ), f"Expected {(h, w)}, got {depth_restored.shape}"
 
 
 if __name__ == "__main__":

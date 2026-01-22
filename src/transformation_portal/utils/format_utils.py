@@ -37,21 +37,29 @@ from typing import Dict, List, Union
 
 # Supported image extensions (case-insensitive)
 SUPPORTED_IMAGE_EXTENSIONS = {
-    '.png', '.jpg', '.jpeg', '.tif', '.tiff',
-    '.webp', '.bmp', '.gif', '.ico',
-    '.ppm', '.pgm', '.pbm', '.tga'
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".tif",
+    ".tiff",
+    ".webp",
+    ".bmp",
+    ".gif",
+    ".ico",
+    ".ppm",
+    ".pgm",
+    ".pbm",
+    ".tga",
 }
 
 # Primary formats for luxury processing
-LUXURY_IMAGE_EXTENSIONS = {'.tif', '.tiff', '.png'}
+LUXURY_IMAGE_EXTENSIONS = {".tif", ".tiff", ".png"}
 
 # Supported video extensions (case-insensitive)
-SUPPORTED_VIDEO_EXTENSIONS = {
-    '.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v', '.flv'
-}
+SUPPORTED_VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v", ".flv"}
 
 # TIFF-specific extensions
-TIFF_EXTENSIONS = {'.tif', '.tiff'}
+TIFF_EXTENSIONS = {".tif", ".tiff"}
 
 
 class UnsupportedFormatError(ValueError):
@@ -82,14 +90,14 @@ def normalize_extension(path: Union[str, Path]) -> str:
     if not ext:
         # If no suffix, treat entire string as extension
         ext = str(path).lower()
-        if not ext.startswith('.'):
-            ext = '.' + ext
+        if not ext.startswith("."):
+            ext = "." + ext
 
     # Normalize TIFF extensions
-    if ext == '.tiff':
-        ext = '.tif'
-    elif ext == '.jpeg':
-        ext = '.jpg'
+    if ext == ".tiff":
+        ext = ".tif"
+    elif ext == ".jpeg":
+        ext = ".jpg"
 
     return ext
 
@@ -179,9 +187,7 @@ def is_luxury_format(path: Union[str, Path]) -> bool:
 
 
 def validate_format(
-    path: Union[str, Path],
-    allowed_types: str = 'image',
-    raise_error: bool = True
+    path: Union[str, Path], allowed_types: str = "image", raise_error: bool = True
 ) -> bool:
     """Validate that a file format is supported.
 
@@ -205,27 +211,29 @@ def validate_format(
         >>> validate_format('document.pd', 'image', raise_error=False)
         False
     """
-    if allowed_types not in {'image', 'video', 'both'}:
-        raise ValueError(f"allowed_types must be 'image', 'video', or 'both', got '{allowed_types}'")
+    if allowed_types not in {"image", "video", "both"}:
+        raise ValueError(
+            f"allowed_types must be 'image', 'video', or 'both', got '{allowed_types}'"
+        )
 
     path_obj = Path(path) if isinstance(path, str) else path
     ext = normalize_extension(path_obj)
 
     is_valid = False
-    if allowed_types in {'image', 'both'}:
+    if allowed_types in {"image", "both"}:
         is_valid = is_valid or is_supported_image_format(path_obj)
-    if allowed_types in {'video', 'both'}:
+    if allowed_types in {"video", "both"}:
         is_valid = is_valid or is_supported_video_format(path_obj)
 
     if not is_valid and raise_error:
-        if allowed_types == 'image':
+        if allowed_types == "image":
             supported = SUPPORTED_IMAGE_EXTENSIONS
-        elif allowed_types == 'video':
+        elif allowed_types == "video":
             supported = SUPPORTED_VIDEO_EXTENSIONS
         else:
             supported = SUPPORTED_IMAGE_EXTENSIONS | SUPPORTED_VIDEO_EXTENSIONS
 
-        supported_list = ', '.join(sorted(supported))
+        supported_list = ", ".join(sorted(supported))
         raise UnsupportedFormatError(
             f"Unsupported file format '{ext}' for file: {path_obj.name}\n"
             f"Supported {allowed_types} formats: {supported_list}\n"
@@ -269,50 +277,59 @@ def get_format_info(path: Union[str, Path]) -> Dict[str, Union[str, bool, List[s
     recommendations = []
 
     if is_tiff:
-        recommendations.extend([
-            "Best for 16-bit precision with Luxury TIFF Batch Processor",
-            "Install 'tifffile' for full 16-bit support: pip install -e '.[tiff]'",
-            "Preserves metadata (EXIF, IPTC, XMP)"
-        ])
-    elif ext == '.png':
-        recommendations.extend([
-            "Lossless format, good for web delivery",
-            "Supports transparency (alpha channel)",
-            "Recommended for depth maps and architectural renders"
-        ])
-    elif ext in {'.jpg', '.jpeg'}:
-        recommendations.extend([
-            "Lossy compression, good for web and fast preview",
-            "Not recommended for 16-bit workflows",
-            "Use quality=95 or higher for best results"
-        ])
-    elif ext == '.webp':
-        recommendations.extend([
-            "Modern format with good compression",
-            "Supports both lossy and lossless modes",
-            "Good alternative to JPEG for web"
-        ])
+        recommendations.extend(
+            [
+                "Best for 16-bit precision with Luxury TIFF Batch Processor",
+                "Install 'tifffile' for full 16-bit support: pip install -e '.[tiff]'",
+                "Preserves metadata (EXIF, IPTC, XMP)",
+            ]
+        )
+    elif ext == ".png":
+        recommendations.extend(
+            [
+                "Lossless format, good for web delivery",
+                "Supports transparency (alpha channel)",
+                "Recommended for depth maps and architectural renders",
+            ]
+        )
+    elif ext in {".jpg", ".jpeg"}:
+        recommendations.extend(
+            [
+                "Lossy compression, good for web and fast preview",
+                "Not recommended for 16-bit workflows",
+                "Use quality=95 or higher for best results",
+            ]
+        )
+    elif ext == ".webp":
+        recommendations.extend(
+            [
+                "Modern format with good compression",
+                "Supports both lossy and lossless modes",
+                "Good alternative to JPEG for web",
+            ]
+        )
     elif is_video:
-        recommendations.extend([
-            "Process with Luxury Video Master Grader",
-            "FFmpeg required: sudo apt install ffmpeg (Linux) or brew install ffmpeg (macOS)",
-            "HDR support available for PQ and HLG"
-        ])
+        recommendations.extend(
+            [
+                "Process with Luxury Video Master Grader",
+                "FFmpeg required: sudo apt install ffmpeg (Linux) or brew install ffmpeg (macOS)",
+                "HDR support available for PQ and HLG",
+            ]
+        )
 
     return {
-        'extension': ext,
-        'is_image': is_image,
-        'is_video': is_video,
-        'is_tif': is_tiff,
-        'is_luxury': is_luxury,
-        'is_supported': is_image or is_video,
-        'recommendations': recommendations
+        "extension": ext,
+        "is_image": is_image,
+        "is_video": is_video,
+        "is_tif": is_tiff,
+        "is_luxury": is_luxury,
+        "is_supported": is_image or is_video,
+        "recommendations": recommendations,
     }
 
 
 def suggest_output_format(
-    input_path: Union[str, Path],
-    preserve_quality: bool = True
+    input_path: Union[str, Path], preserve_quality: bool = True
 ) -> str:
     """Suggest an appropriate output format based on input format.
 
@@ -348,19 +365,19 @@ def suggest_output_format(
     if preserve_quality:
         # TIFF stays TIFF
         if ext in TIFF_EXTENSIONS:
-            return '.tif'
+            return ".tif"
         # PNG stays PNG
-        if ext == '.png':
-            return '.png'
+        if ext == ".png":
+            return ".png"
         # For other formats, suggest PNG as a high-quality lossless default
-        return '.png'
+        return ".png"
 
     # For non-quality-preservation (web optimization)
     # JPEG is more efficient for web delivery
-    if ext == '.jpg':
-        return '.jpg'
+    if ext == ".jpg":
+        return ".jpg"
     # For other formats, default to JPEG for web
-    return '.jpg'
+    return ".jpg"
 
 
 def get_supported_formats_summary() -> Dict[str, List[str]]:
@@ -377,15 +394,15 @@ def get_supported_formats_summary() -> Dict[str, List[str]]:
         True
     """
     return {
-        'image': sorted(SUPPORTED_IMAGE_EXTENSIONS),
-        'video': sorted(SUPPORTED_VIDEO_EXTENSIONS),
-        'tif': sorted(TIFF_EXTENSIONS),
-        'luxury': sorted(LUXURY_IMAGE_EXTENSIONS)
+        "image": sorted(SUPPORTED_IMAGE_EXTENSIONS),
+        "video": sorted(SUPPORTED_VIDEO_EXTENSIONS),
+        "tif": sorted(TIFF_EXTENSIONS),
+        "luxury": sorted(LUXURY_IMAGE_EXTENSIONS),
     }
 
 
 # Convenience function for CLI help text
-def format_help_text(format_type: str = 'image') -> str:
+def format_help_text(format_type: str = "image") -> str:
     """Generate help text for supported formats.
 
     Args:
@@ -400,11 +417,11 @@ def format_help_text(format_type: str = 'image') -> str:
     """
     summary = get_supported_formats_summary()
 
-    if format_type == 'image':
+    if format_type == "image":
         return f"Supported image formats: {', '.join(summary['image'])}"
-    elif format_type == 'video':
+    elif format_type == "video":
         return f"Supported video formats: {', '.join(summary['video'])}"
-    elif format_type == 'both':
+    elif format_type == "both":
         return (
             f"Supported image formats: {', '.join(summary['image'])}\n"
             f"Supported video formats: {', '.join(summary['video'])}"
@@ -413,38 +430,38 @@ def format_help_text(format_type: str = 'image') -> str:
         raise ValueError(f"Invalid format_type: {format_type}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Example usage and testing
     test_files = [
-        'render.jpg',
-        'photo.TIFF',
-        'depth_map.png',
-        'video.mp4',
-        'document.pd',
-        'archive.WebP'
+        "render.jpg",
+        "photo.TIFF",
+        "depth_map.png",
+        "video.mp4",
+        "document.pd",
+        "archive.WebP",
     ]
 
     print("Format Validation Examples:\n")
     for file in test_files:
         try:
-            is_valid = validate_format(file, 'both', raise_error=False)
+            is_valid = validate_format(file, "both", raise_error=False)
             info = get_format_info(file)
 
             print(f"File: {file}")
             print(f"  Valid: {is_valid}")
             print(f"  Extension: {info['extension']}")
-            print("  Type: ", end='')
-            if info['is_image']:
-                print("Image", end='')
-            if info['is_video']:
-                print("Video", end='')
-            if not info['is_image'] and not info['is_video']:
-                print("Unsupported", end='')
+            print("  Type: ", end="")
+            if info["is_image"]:
+                print("Image", end="")
+            if info["is_video"]:
+                print("Video", end="")
+            if not info["is_image"] and not info["is_video"]:
+                print("Unsupported", end="")
             print()
 
-            if info['recommendations']:
+            if info["recommendations"]:
                 print("  Recommendations:")
-                for rec in info['recommendations']:
+                for rec in info["recommendations"]:
                     print(f"    - {rec}")
             print()
         except UnsupportedFormatError as e:

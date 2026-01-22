@@ -219,7 +219,10 @@ class PropertyEnhancementDataset(Dataset if TORCH_AVAILABLE else object):
         # Base transforms
         self.to_tensor = transforms.ToTensor() if TORCH_AVAILABLE else None
         self.resize = (
-            transforms.Resize((resolution, resolution), interpolation=transforms.InterpolationMode.LANCZOS)
+            transforms.Resize(
+                (resolution, resolution),
+                interpolation=transforms.InterpolationMode.LANCZOS,
+            )
             if TORCH_AVAILABLE
             else None
         )
@@ -433,7 +436,11 @@ class MaterialAwareLoss(nn.Module if TORCH_AVAILABLE else object):
         if any(m in ["stone", "wood", "fabric"] for m in materials):
             # Sobel edge detection
             sobel_x = (
-                torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=pred.dtype, device=pred.device)
+                torch.tensor(
+                    [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],
+                    dtype=pred.dtype,
+                    device=pred.device,
+                )
                 .view(1, 1, 3, 3)
                 .repeat(3, 1, 1, 1)
             )
@@ -460,7 +467,11 @@ class PicachoTrainer:
         device: Compute device
     """
 
-    def __init__(self, config: Optional[TrainingConfig] = None, config_path: Optional[Path] = None):
+    def __init__(
+        self,
+        config: Optional[TrainingConfig] = None,
+        config_path: Optional[Path] = None,
+    ):
         """
         Initialize trainer.
 
@@ -702,10 +713,14 @@ class PicachoTrainer:
 
         # Create dataloaders
         train_loader = self._create_dataloader(
-            split="train", resolution=stage_config["resolution"], batch_size=stage_config["batch_size"]
+            split="train",
+            resolution=stage_config["resolution"],
+            batch_size=stage_config["batch_size"],
         )
         val_loader = self._create_dataloader(
-            split="val", resolution=stage_config["resolution"], batch_size=stage_config["batch_size"]
+            split="val",
+            resolution=stage_config["resolution"],
+            batch_size=stage_config["batch_size"],
         )
 
         logger.info(f"Resolution: {stage_config['resolution']}px")
@@ -891,7 +906,10 @@ class PicachoTrainer:
     def _create_dataloader(self, split: str, resolution: int, batch_size: int) -> DataLoader:
         """Create dataloader for split."""
         dataset = PropertyEnhancementDataset(
-            data_dir=self.config.data_dir, split=split, resolution=resolution, include_depth=True
+            data_dir=self.config.data_dir,
+            split=split,
+            resolution=resolution,
+            include_depth=True,
         )
 
         return DataLoader(
@@ -936,9 +954,15 @@ class PicachoTrainer:
         return {
             "model_name": self.config.model_name,
             "property": "750 Picacho Lane",
-            "total_epochs": sum([self.config.stage1_epochs, self.config.stage2_epochs, self.config.stage3_epochs]),
+            "total_epochs": sum(
+                [
+                    self.config.stage1_epochs,
+                    self.config.stage2_epochs,
+                    self.config.stage3_epochs,
+                ]
+            ),
             "best_val_loss": self.best_val_loss,
-            "final_train_loss": self.history["train_loss"][-1] if self.history["train_loss"] else None,
+            "final_train_loss": (self.history["train_loss"][-1] if self.history["train_loss"] else None),
             "checkpoint_dir": str(self.config.checkpoint_dir),
             "device": self.device,
             "history": self.history,

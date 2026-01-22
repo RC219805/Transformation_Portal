@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 class SceneType(str, Enum):
     """Scene classification for context-aware processing."""
+
     INTERIOR = "interior"
     EXTERIOR = "exterior"
     AERIAL = "aerial"
@@ -30,9 +31,10 @@ class SceneType(str, Enum):
 
 class QualityPreset(str, Enum):
     """Quality preset levels."""
-    DRAFT = "draft"           # Fast preview
-    STANDARD = "standard"     # Good quality, reasonable speed
-    HIGH = "high"             # High quality, slower
+
+    DRAFT = "draft"  # Fast preview
+    STANDARD = "standard"  # Good quality, reasonable speed
+    HIGH = "high"  # High quality, slower
     PRODUCTION = "production"  # Maximum quality, slow
 
 
@@ -44,6 +46,7 @@ class DevicePolicy:
     Determines which device to use for each stage based on
     availability and performance characteristics.
     """
+
     # Available devices
     has_cuda: bool = False
     has_mps: bool = False
@@ -67,7 +70,11 @@ class DevicePolicy:
             Device string ("cuda", "mps", "cpu")
         """
         # Depth estimation: prefer CoreML on Apple Silicon
-        if "depth" in stage_name.lower() and self.has_coreml and self.prefer_coreml_depth:
+        if (
+            "depth" in stage_name.lower()
+            and self.has_coreml
+            and self.prefer_coreml_depth
+        ):
             return "coreml"
 
         # General GPU preference
@@ -104,6 +111,7 @@ class QualityPolicy:
 
     Maps quality presets to stage-specific parameters.
     """
+
     preset: QualityPreset = QualityPreset.STANDARD
 
     # Upscaling
@@ -155,6 +163,7 @@ class CachingPolicy:
     """
     Caching behavior configuration.
     """
+
     enabled: bool = True
     cache_dir: Optional[Path] = None
 
@@ -191,6 +200,7 @@ class ProcessingPolicy:
 
     This is the main policy object passed to the pipeline.
     """
+
     device: DevicePolicy = None
     quality: QualityPolicy = None
     caching: CachingPolicy = None
@@ -266,11 +276,14 @@ class PolicyEngine:
         """Detect available devices."""
         try:
             import torch
-            device_policy.has_cuda = torch.cuda.is_available() if hasattr(torch, 'cuda') else False
+
+            device_policy.has_cuda = (
+                torch.cuda.is_available() if hasattr(torch, "cuda") else False
+            )
             device_policy.has_mps = (
-                hasattr(torch, 'backends') and
-                hasattr(torch.backends, 'mps') and
-                torch.backends.mps.is_available()
+                hasattr(torch, "backends")
+                and hasattr(torch.backends, "mps")
+                and torch.backends.mps.is_available()
             )
         except (ImportError, AttributeError):
             pass
@@ -279,6 +292,7 @@ class PolicyEngine:
         try:
             import coremltools  # noqa: F401
             import platform
+
             device_policy.has_coreml = platform.system() == "Darwin"
         except ImportError:
             pass
@@ -286,8 +300,9 @@ class PolicyEngine:
         # Estimate available memory
         try:
             import psutil
-            device_policy.available_memory_gb = (
-                psutil.virtual_memory().available / (1024 ** 3)
+
+            device_policy.available_memory_gb = psutil.virtual_memory().available / (
+                1024**3
             )
         except ImportError:
             pass

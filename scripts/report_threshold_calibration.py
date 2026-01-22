@@ -56,7 +56,13 @@ def main():
     print(f"Labels loaded: {len(df_labels)}")
 
     # Join on filename to get expected scene type
-    df = df_metrics.merge(df_labels, left_on="image", right_on="filename", how="left", suffixes=("_pred", "_true"))
+    df = df_metrics.merge(
+        df_labels,
+        left_on="image",
+        right_on="filename",
+        how="left",
+        suffixes=("_pred", "_true"),
+    )
 
     # Rename columns for clarity
     if "scene_type" in df.columns and "scene_type_pred" not in df.columns:

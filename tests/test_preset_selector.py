@@ -17,7 +17,13 @@ from unittest.mock import Mock, patch, MagicMock
 from lux_depth_v2.config import Preset
 
 try:
-    from lux_depth_v2.preset_selector import PresetSelector, SceneType, QualityTier, SceneClassification, auto_select_preset
+    from lux_depth_v2.preset_selector import (
+        PresetSelector,
+        SceneType,
+        QualityTier,
+        SceneClassification,
+        auto_select_preset,
+    )
 
     PRESET_SELECTOR_AVAILABLE = True
 except ImportError:

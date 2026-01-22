@@ -227,7 +227,11 @@ class QualityValidator:
         return degradation.save_synthetic_pair(degraded, reference, output_dir, basename)
 
     def compare_baselines(
-        self, ours: Path, baseline: Path, reference: Optional[Path] = None, metrics_list: Optional[List[str]] = None
+        self,
+        ours: Path,
+        baseline: Path,
+        reference: Optional[Path] = None,
+        metrics_list: Optional[List[str]] = None,
     ) -> ComparisonReport:
         """Compare our output against baseline (Topaz/Adobe/etc.).
 
@@ -280,7 +284,7 @@ class QualityValidator:
                 "image": str(ours),
                 "our_metrics": our_metrics,
                 "baseline_metrics": baseline_metrics,
-                "winner": "ours" if our_better > 0 else ("baseline" if our_better < 0 else "tie"),
+                "winner": ("ours" if our_better > 0 else ("baseline" if our_better < 0 else "tie")),
             }
         )
 
@@ -428,7 +432,11 @@ class QualityValidator:
         return np.sign(score_diff)
 
     def _compare_with_baseline(
-        self, test_images: List[Path], baseline_dir: Path, mode: str, metrics_list: List[str]
+        self,
+        test_images: List[Path],
+        baseline_dir: Path,
+        mode: str,
+        metrics_list: List[str],
     ) -> Dict[str, object]:
         """Compare test images with baseline outputs."""
         baseline_dir = Path(baseline_dir)
@@ -446,7 +454,12 @@ class QualityValidator:
                 reference_path = self._find_reference(test_path) if mode == "synthetic" else None
 
                 # Compare
-                comp = self.compare_baselines(test_path, baseline_path, reference=reference_path, metrics_list=metrics_list)
+                comp = self.compare_baselines(
+                    test_path,
+                    baseline_path,
+                    reference=reference_path,
+                    metrics_list=metrics_list,
+                )
                 comparisons.append(comp.per_image_comparisons[0])
 
         # Aggregate comparison results

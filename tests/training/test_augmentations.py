@@ -33,7 +33,8 @@ except ImportError:
 
 # Skip all tests if dependencies not available
 pytestmark = pytest.mark.skipif(
-    not (TORCH_AVAILABLE and PIL_AVAILABLE), reason="PyTorch and PIL required for augmentation tests"
+    not (TORCH_AVAILABLE and PIL_AVAILABLE),
+    reason="PyTorch and PIL required for augmentation tests",
 )
 
 
@@ -186,7 +187,10 @@ class TestDepthAwareAugmentation:
 
     def test_training_augmentation(self, sample_data):
         """Test training augmentation pipeline."""
-        from src.training.augmentations import DepthAwareAugmentation, AugmentationConfig
+        from src.training.augmentations import (
+            DepthAwareAugmentation,
+            AugmentationConfig,
+        )
 
         image, depth = sample_data
 
@@ -200,7 +204,10 @@ class TestDepthAwareAugmentation:
 
     def test_validation_no_augmentation(self, sample_data):
         """Test validation mode doesn't augment."""
-        from src.training.augmentations import DepthAwareAugmentation, AugmentationConfig
+        from src.training.augmentations import (
+            DepthAwareAugmentation,
+            AugmentationConfig,
+        )
 
         image, depth = sample_data
 
@@ -214,7 +221,10 @@ class TestDepthAwareAugmentation:
 
     def test_normalization(self, sample_data):
         """Test ImageNet normalization is applied."""
-        from src.training.augmentations import DepthAwareAugmentation, AugmentationConfig
+        from src.training.augmentations import (
+            DepthAwareAugmentation,
+            AugmentationConfig,
+        )
 
         image, depth = sample_data
 
@@ -229,7 +239,10 @@ class TestDepthAwareAugmentation:
 
     def test_depth_normalization(self, sample_data):
         """Test depth is normalized to [0, 1]."""
-        from src.training.augmentations import DepthAwareAugmentation, AugmentationConfig
+        from src.training.augmentations import (
+            DepthAwareAugmentation,
+            AugmentationConfig,
+        )
 
         image, depth = sample_data
 
@@ -243,7 +256,10 @@ class TestDepthAwareAugmentation:
 
     def test_to_tensor(self, sample_data):
         """Test conversion to PyTorch tensors."""
-        from src.training.augmentations import DepthAwareAugmentation, AugmentationConfig
+        from src.training.augmentations import (
+            DepthAwareAugmentation,
+            AugmentationConfig,
+        )
 
         image, depth = sample_data
 

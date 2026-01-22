@@ -10,7 +10,16 @@ from collections import defaultdict
 def get_filename_hint(filename):
     """Extract filename hint."""
     filename_lower = filename.lower()
-    texture_patterns = ["pool", "ocean", "water", "glass", "aerial", "foliage", "trees", "shores"]
+    texture_patterns = [
+        "pool",
+        "ocean",
+        "water",
+        "glass",
+        "aerial",
+        "foliage",
+        "trees",
+        "shores",
+    ]
     structure_patterns = [
         "kitchen",
         "bathroom",
@@ -86,7 +95,18 @@ def infer_expected(filename):
     """Infer expected scene type."""
     f = filename.lower()
     tex = ["pool", "ocean", "water", "glass", "aerial", "foliage", "trees", "shores"]
-    struct = ["kitchen", "bathroom", "bedroom", "living", "great", "interior", "entry", "dining", "office", "courtyard"]
+    struct = [
+        "kitchen",
+        "bathroom",
+        "bedroom",
+        "living",
+        "great",
+        "interior",
+        "entry",
+        "dining",
+        "office",
+        "courtyard",
+    ]
     for p in tex:
         if p in f:
             return "texture_dominated"

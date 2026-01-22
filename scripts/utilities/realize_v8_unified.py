@@ -80,7 +80,11 @@ def _open_any(path: Union[str, Path]) -> Tuple[Image.Image, Dict[str, Any]]:
 
 
 def _save_with_meta(
-    img: Image.Image, arr: Optional[np.ndarray], path: Union[str, Path], meta: Dict[str, Any], out_bitdepth: int = 16
+    img: Image.Image,
+    arr: Optional[np.ndarray],
+    path: Union[str, Path],
+    meta: Dict[str, Any],
+    out_bitdepth: int = 16,
 ) -> None:
     """
     Save image with metadata preservation.

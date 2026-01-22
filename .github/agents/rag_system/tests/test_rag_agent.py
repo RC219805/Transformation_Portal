@@ -138,7 +138,11 @@ class TestRAGAgent:
 
         context = QueryContext(user_intent=UserIntent.IMPLEMENTATION)
 
-        response = agent.query("depth map processing", context=context, strategy=RetrievalStrategy.MULTI_SOURCE)
+        response = agent.query(
+            "depth map processing",
+            context=context,
+            strategy=RetrievalStrategy.MULTI_SOURCE,
+        )
 
         assert isinstance(response, RAGResponse)
         assert response.metrics.retrieval_strategy == RetrievalStrategy.MULTI_SOURCE.value
@@ -464,7 +468,11 @@ class TestQueryContext:
 
     def test_query_context_creation(self):
         """Test QueryContext creation."""
-        context = QueryContext(conversation_history=["previous query"], user_intent=UserIntent.IMPLEMENTATION, priority="high")
+        context = QueryContext(
+            conversation_history=["previous query"],
+            user_intent=UserIntent.IMPLEMENTATION,
+            priority="high",
+        )
 
         assert context.conversation_history == ["previous query"]
         assert context.user_intent == UserIntent.IMPLEMENTATION

@@ -119,7 +119,10 @@ class PDFSpecParser:
         # Material patterns for luxury estates
         material_patterns = [
             # Wood
-            (r"(white oak|walnut|maple|cherry|mahogany|teak)\s+(\w+\s+)?finish", "wood"),
+            (
+                r"(white oak|walnut|maple|cherry|mahogany|teak)\s+(\w+\s+)?finish",
+                "wood",
+            ),
             (r"custom\s+cabinetry.*?(\w+\s+oak|\w+\s+walnut)", "wood"),
             (r"flooring.*?(oak|walnut|maple|hardwood)", "wood"),
             # Stone
@@ -183,14 +186,26 @@ class PDFSpecParser:
             matches = re.finditer(pattern, self.text_content, re.IGNORECASE)
             for match in matches:
                 if category == "hex":
-                    colors.append(ColorSpec(name=f"Color #{match.group(1)}", category="accent", hex_code=f"#{match.group(1)}"))
+                    colors.append(
+                        ColorSpec(
+                            name=f"Color #{match.group(1)}",
+                            category="accent",
+                            hex_code=f"#{match.group(1)}",
+                        )
+                    )
                 elif category == "rgb":
-                    r, g, b = int(match.group(1)), int(match.group(2)), int(match.group(3))
+                    r, g, b = (
+                        int(match.group(1)),
+                        int(match.group(2)),
+                        int(match.group(3)),
+                    )
                     colors.append(ColorSpec(name="RGB Color", category="custom", rgb=(r, g, b)))
                 else:
                     colors.append(
                         ColorSpec(
-                            name=match.group(0), category=category, application=self._find_location_context(match.start())
+                            name=match.group(0),
+                            category=category,
+                            application=self._find_location_context(match.start()),
                         )
                     )
 
@@ -235,7 +250,11 @@ class PDFSpecParser:
                         )
                     elif dim_type == "ceiling_height":
                         dimensions.append(
-                            DimensionSpec(element="ceiling_height", dimension=float(match.group(1)), unit="feet")
+                            DimensionSpec(
+                                element="ceiling_height",
+                                dimension=float(match.group(1)),
+                                unit="feet",
+                            )
                         )
                 except (ValueError, IndexError):
                     continue
@@ -328,7 +347,15 @@ class PDFSpecParser:
         context = self.text_content[start:end]
 
         # Look for room names
-        room_patterns = ["kitchen", "bath", "bedroom", "living", "dining", "entry", "pool"]
+        room_patterns = [
+            "kitchen",
+            "bath",
+            "bedroom",
+            "living",
+            "dining",
+            "entry",
+            "pool",
+        ]
         for room in room_patterns:
             if room in context.lower():
                 return room
@@ -429,7 +456,12 @@ class PDFSpecParser:
             "design_intent": {
                 "style_keywords": ["mediterranean", "luxury", "coastal", "elegant"],
                 "ambiance": ["bright", "airy", "serene", "sophisticated"],
-                "key_features": ["floor-to-ceiling", "pool", "ocean view", "custom cabinetry"],
+                "key_features": [
+                    "floor-to-ceiling",
+                    "pool",
+                    "ocean view",
+                    "custom cabinetry",
+                ],
             },
             "extraction_summary": {
                 "materials_count": 4,
@@ -452,7 +484,13 @@ def main():
 
     parser = argparse.ArgumentParser(description="Parse architectural specifications from PDF")
     parser.add_argument("pdf_file", type=Path, help="Path to PDF file")
-    parser.add_argument("--output", "-o", type=Path, default=Path("pdf_specs.json"), help="Output JSON file")
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        default=Path("pdf_specs.json"),
+        help="Output JSON file",
+    )
 
     args = parser.parse_args()
 

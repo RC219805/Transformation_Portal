@@ -38,7 +38,15 @@ def test_auto_preset_cli_integration(temp_image, mock_auto_select, tmp_path):
     output_dir.mkdir()
 
     # Simulate CLI args with --auto-preset
-    cli_args = ["--input", str(temp_image), "--output-dir", str(output_dir), "--auto-preset", "--quality-tier", "apex"]
+    cli_args = [
+        "--input",
+        str(temp_image),
+        "--output-dir",
+        str(output_dir),
+        "--auto-preset",
+        "--quality-tier",
+        "apex",
+    ]
 
     parser = build_parser()
     args = parser.parse_args(cli_args)
@@ -77,7 +85,14 @@ def test_preset_and_auto_preset_both_work():
 
     parser = build_parser()
     args = parser.parse_args(
-        ["--input", "/tmp/test.jpg", "--output-dir", "/tmp/output", "--preset", "interior_luxury_apex_quality"]
+        [
+            "--input",
+            "/tmp/test.jpg",
+            "--output-dir",
+            "/tmp/output",
+            "--preset",
+            "interior_luxury_apex_quality",
+        ]
     )
 
     assert args.auto_preset is False  # Not set

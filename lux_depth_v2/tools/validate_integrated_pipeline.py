@@ -92,7 +92,10 @@ def run_full_pipeline(rgb: np.ndarray):
 
 def compute_metrics(depth: np.ndarray, rgb: np.ndarray) -> dict:
     """Compute comprehensive quality metrics."""
-    from lux_depth_v2.depth_refinement import compute_robust_edge_metrics, compute_depth_statistics
+    from lux_depth_v2.depth_refinement import (
+        compute_robust_edge_metrics,
+        compute_depth_statistics,
+    )
 
     edge_metrics = compute_robust_edge_metrics(depth, rgb)
     depth_stats = compute_depth_statistics(depth)
@@ -155,7 +158,11 @@ def compare_pipelines(rgb: np.ndarray, output_dir: Path):
             "bypass_image_processor": True,
             "use_global_anchor": True,
             "use_production_refinement": True,
-            "refinement_stages": ["CLAHE", "Guided Filter (bilateral fallback)", "Edge Snap"],
+            "refinement_stages": [
+                "CLAHE",
+                "Guided Filter (bilateral fallback)",
+                "Edge Snap",
+            ],
         },
     }
 
@@ -214,7 +221,12 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Validate integrated high-fidelity pipeline")
     parser.add_argument("--input", type=Path, required=True, help="Input RGB image")
-    parser.add_argument("--output", type=Path, default=Path("outputs/integrated_validation"), help="Output directory")
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("outputs/integrated_validation"),
+        help="Output directory",
+    )
 
     args = parser.parse_args()
 

@@ -45,7 +45,14 @@ class TestWeightsFromAssets:
     def test_depth_percentile_weights(self, torch_device, sample_depth_array):
         """Test weights from depth percentiles."""
         cfg = PipelineConfig(fg_q=0.3, bg_q=0.7, transition=0.1)
-        w = weights_mod.weights_from_assets(h=64, w=64, device=torch_device, depth01=sample_depth_array, masks={}, cfg=cfg)
+        w = weights_mod.weights_from_assets(
+            h=64,
+            w=64,
+            device=torch_device,
+            depth01=sample_depth_array,
+            masks={},
+            cfg=cfg,
+        )
 
         assert w.source == "depth_percentiles"
         assert w.wfg.shape == (1, 1, 64, 64)

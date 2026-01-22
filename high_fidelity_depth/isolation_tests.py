@@ -37,7 +37,12 @@ class IsolationTestResult:
 
     def to_dict(self) -> Dict:
         """Convert to JSON-serializable dict."""
-        return {"name": self.name, "description": self.description, "passed": bool(self.passed), **self.metrics.to_dict()}
+        return {
+            "name": self.name,
+            "description": self.description,
+            "passed": bool(self.passed),
+            **self.metrics.to_dict(),
+        }
 
     def __str__(self) -> str:
         status = "✅ PASS" if self.passed else "❌ FAIL"
@@ -279,7 +284,10 @@ def test_edge_snapping(rgb: np.ndarray, baseline_metrics: EdgeMetrics) -> Isolat
     passed = f1_ok and count_ok
 
     result = IsolationTestResult(
-        name="Edge Snapping", description="AND-gated edge sharpening (RGB + depth edges)", metrics=metrics, passed=passed
+        name="Edge Snapping",
+        description="AND-gated edge sharpening (RGB + depth edges)",
+        metrics=metrics,
+        passed=passed,
     )
 
     logger.info(str(result))

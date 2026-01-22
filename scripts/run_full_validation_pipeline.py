@@ -43,19 +43,33 @@ def timestamp_tag():
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--validation-dir", required=True, help="Path to an existing validation output directory with *_metrics.json files"
+        "--validation-dir",
+        required=True,
+        help="Path to an existing validation output directory with *_metrics.json files",
     )
     parser.add_argument("--labels", required=True, help="CSV file path for ground-truth labels")
     parser.add_argument(
-        "--structure-input-dir", required=True, help="Directory containing structure-dominated images for sweep"
+        "--structure-input-dir",
+        required=True,
+        help="Directory containing structure-dominated images for sweep",
     )
     parser.add_argument(
-        "--sweep-sizes", nargs="+", type=int, required=True, help="list of DepthAnything V2 input sizes for the sweep"
+        "--sweep-sizes",
+        nargs="+",
+        type=int,
+        required=True,
+        help="list of DepthAnything V2 input sizes for the sweep",
     )
     parser.add_argument(
-        "--model-id", default="depth-anything/Depth-Anything-V2-Large-hf", help="HF model to use for the sweep"
+        "--model-id",
+        default="depth-anything/Depth-Anything-V2-Large-hf",
+        help="HF model to use for the sweep",
     )
-    parser.add_argument("--output-root", default="outputs/full_validation_pipeline", help="Base output directory")
+    parser.add_argument(
+        "--output-root",
+        default="outputs/full_validation_pipeline",
+        help="Base output directory",
+    )
 
     args = parser.parse_args()
 

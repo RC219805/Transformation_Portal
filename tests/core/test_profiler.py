@@ -2,7 +2,11 @@
 
 import pytest
 import time
-from src.transformation_portal.core.device.profiler import PerformanceProfiler, GPUProfiler, ProfileResult
+from src.transformation_portal.core.device.profiler import (
+    PerformanceProfiler,
+    GPUProfiler,
+    ProfileResult,
+)
 
 
 def test_performance_profiler_basic():
@@ -74,7 +78,10 @@ def test_performance_profiler_metadata():
     assert result.metadata["num"] == 42
 
 
-@pytest.mark.skipif(not pytest.importorskip("psutil", reason="psutil not available"), reason="psutil not available")
+@pytest.mark.skipif(
+    not pytest.importorskip("psutil", reason="psutil not available"),
+    reason="psutil not available",
+)
 def test_performance_profiler_memory_tracking():
     """Test memory tracking."""
     profiler = PerformanceProfiler(enable_memory_tracking=True)
@@ -127,7 +134,10 @@ def test_gpu_profiler_clear():
     assert len(profiler.report()["stages"]) == 0
 
 
-@pytest.mark.skipif(not pytest.importorskip("torch", reason="torch not available"), reason="torch not available")
+@pytest.mark.skipif(
+    not pytest.importorskip("torch", reason="torch not available"),
+    reason="torch not available",
+)
 def test_performance_profiler_with_torch():
     """Test profiler with torch tensors."""
     import torch

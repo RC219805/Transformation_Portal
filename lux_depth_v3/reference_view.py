@@ -89,7 +89,9 @@ class ReferenceViewSelector:
         # No reordering for 1-2 views
         if num_views < 3:
             return RefViewSelectionResult(
-                selected_index=0, strategy=RefViewStrategy.FIRST, metrics={"reason": "num_views < 3, no reordering"}
+                selected_index=0,
+                strategy=RefViewStrategy.FIRST,
+                metrics={"reason": "num_views < 3, no reordering"},
             )
 
         if self.strategy == RefViewStrategy.FIRST:
@@ -110,14 +112,18 @@ class ReferenceViewSelector:
     def _select_first(self, num_views: int) -> RefViewSelectionResult:
         """Always select first view."""
         return RefViewSelectionResult(
-            selected_index=0, strategy=RefViewStrategy.FIRST, metrics={"reason": "first view strategy"}
+            selected_index=0,
+            strategy=RefViewStrategy.FIRST,
+            metrics={"reason": "first view strategy"},
         )
 
     def _select_middle(self, num_views: int) -> RefViewSelectionResult:
         """Select middle view (good for temporal sequences)."""
         middle_idx = num_views // 2
         return RefViewSelectionResult(
-            selected_index=middle_idx, strategy=RefViewStrategy.MIDDLE, metrics={"reason": "middle view for temporal sequence"}
+            selected_index=middle_idx,
+            strategy=RefViewStrategy.MIDDLE,
+            metrics={"reason": "middle view for temporal sequence"},
         )
 
     def _select_saddle_balanced(self, class_tokens: np.ndarray) -> RefViewSelectionResult:
@@ -220,12 +226,17 @@ class ReferenceViewSelector:
             selected_index=selected_idx,
             strategy=RefViewStrategy.SADDLE_SIM_RANGE,
             scores=similarity_ranges,
-            metrics={"similarity_ranges": similarity_ranges.tolist(), "similarity_matrix": similarity_matrix.tolist()},
+            metrics={
+                "similarity_ranges": similarity_ranges.tolist(),
+                "similarity_matrix": similarity_matrix.tolist(),
+            },
         )
 
 
 def select_reference_view(
-    num_views: int, strategy: str = "saddle_balanced", class_tokens: Optional[np.ndarray] = None
+    num_views: int,
+    strategy: str = "saddle_balanced",
+    class_tokens: Optional[np.ndarray] = None,
 ) -> RefViewSelectionResult:
     """
     Convenience function for reference view selection.

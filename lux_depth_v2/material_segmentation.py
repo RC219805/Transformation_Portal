@@ -9,7 +9,6 @@ import numpy as np
 
 from . import torch_ops
 
-
 # Water detection color science thresholds (derived from empirical pool/ocean analysis)
 # Pool water: Vibrant cyan/blue with high saturation, medium brightness
 POOL_BLUE_DOMINANCE_R = 0.18  # Blue channel must exceed red by this amount
@@ -294,9 +293,37 @@ class SegFormerAdekMaterialSegmenter(MaterialSegmenter):
         # Build token sets for mapping semantics -> our buckets
         self.bucket_rules = {
             "glass": ["window", "windowpane", "glass", "mirror", "screen"],
-            "wood": ["wood", "door", "cabinet", "table", "chair", "desk", "floor", "stairs", "shelf"],
-            "metal": ["sink", "faucet", "rail", "refrigerator", "oven", "microwave", "stove", "dishwasher"],
-            "stone": ["wall", "concrete", "brick", "tile", "counter", "countertop", "ceiling", "pavement"],
+            "wood": [
+                "wood",
+                "door",
+                "cabinet",
+                "table",
+                "chair",
+                "desk",
+                "floor",
+                "stairs",
+                "shelf",
+            ],
+            "metal": [
+                "sink",
+                "faucet",
+                "rail",
+                "refrigerator",
+                "oven",
+                "microwave",
+                "stove",
+                "dishwasher",
+            ],
+            "stone": [
+                "wall",
+                "concrete",
+                "brick",
+                "tile",
+                "counter",
+                "countertop",
+                "ceiling",
+                "pavement",
+            ],
             "sky": ["sky"],
             "foliage": ["tree", "plant", "grass", "foliage"],
         }
@@ -327,7 +354,12 @@ class SegFormerAdekMaterialSegmenter(MaterialSegmenter):
             probs = torch_ops.torch.softmax(logits.to(dtype=torch_ops.torch.float32), dim=1)
 
             # upsample to rgb_in resolution
-            probs = torch_ops.resize(probs, (rgb_in.shape[2], rgb_in.shape[3]), mode="bilinear", autocast=True)
+            probs = torch_ops.resize(
+                probs,
+                (rgb_in.shape[2], rgb_in.shape[3]),
+                mode="bilinear",
+                autocast=True,
+            )
 
             masks: Dict[str, torch_ops.torch.Tensor] = {}
             for bucket, ids in self.bucket_ids.items():

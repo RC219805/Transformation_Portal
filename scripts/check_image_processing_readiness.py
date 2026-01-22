@@ -132,7 +132,13 @@ def check_ffmpeg() -> Tuple[bool, str]:
     try:
         import subprocess
 
-        result = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True, timeout=5, check=False)
+        result = subprocess.run(
+            ["ffmpeg", "-version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
         if result.returncode == 0:
             # Extract version from first line
             version_line = result.stdout.split("\n")[0]
@@ -282,7 +288,11 @@ def print_available_operations(capabilities: Dict) -> None:
         operations.extend(
             [
                 ("○", "AI-powered depth estimation (requires torch)", Colors.WARNING),
-                ("○", "Stable Diffusion enhancement (requires ML packages)", Colors.WARNING),
+                (
+                    "○",
+                    "Stable Diffusion enhancement (requires ML packages)",
+                    Colors.WARNING,
+                ),
                 ("○", "Real-ESRGAN upscaling (requires ML packages)", Colors.WARNING),
             ]
         )
@@ -376,27 +386,67 @@ def print_recommendations(disk: Dict, capabilities: Dict) -> None:
     if "free_gb" in disk:
         if disk["free_gb"] < 5.0:
             recommendations.append(
-                ("⚠", f"Low disk space: {disk['free_gb']:.1f}GB free. Need 5GB+ for ML packages.", Colors.WARNING)
+                (
+                    "⚠",
+                    f"Low disk space: {disk['free_gb']:.1f}GB free. Need 5GB+ for ML packages.",
+                    Colors.WARNING,
+                )
             )
             recommendations.append(("→", "Clear pip cache: rm -rf ~/.cache/pip", Colors.OKCYAN))
         else:
-            recommendations.append(("✓", f"Sufficient disk space: {disk['free_gb']:.1f}GB free", Colors.OKGREEN))
+            recommendations.append(
+                (
+                    "✓",
+                    f"Sufficient disk space: {disk['free_gb']:.1f}GB free",
+                    Colors.OKGREEN,
+                )
+            )
 
     # Package recommendations
     if not capabilities["minimal_ready"]:
-        recommendations.append(("🔧", "Install core packages: pip install numpy Pillow PyYAML typer tqdm", Colors.WARNING))
+        recommendations.append(
+            (
+                "🔧",
+                "Install core packages: pip install numpy Pillow PyYAML typer tqdm",
+                Colors.WARNING,
+            )
+        )
     elif not capabilities["standard_ready"]:
-        recommendations.append(("🔧", "Upgrade to Standard: pip install scipy tifffile imagecodecs", Colors.OKCYAN))
+        recommendations.append(
+            (
+                "🔧",
+                "Upgrade to Standard: pip install scipy tifffile imagecodecs",
+                Colors.OKCYAN,
+            )
+        )
     elif not capabilities["full_ready"]:
         if disk.get("sufficient", False):
-            recommendations.append(("🔧", "Upgrade to Full: pip install -r requirements.txt", Colors.OKCYAN))
+            recommendations.append(
+                (
+                    "🔧",
+                    "Upgrade to Full: pip install -r requirements.txt",
+                    Colors.OKCYAN,
+                )
+            )
         else:
-            recommendations.append(("⚠", "Full tier requires more disk space. Free up space first.", Colors.WARNING))
+            recommendations.append(
+                (
+                    "⚠",
+                    "Full tier requires more disk space. Free up space first.",
+                    Colors.WARNING,
+                )
+            )
 
     # Model downloads
     repo_root = Path(__file__).parent.parent
     if (repo_root / "scripts" / "download_depth_models.py").exists():
-        recommendations.append(("📦", "Download ML models: python scripts/download_depth_models.py", Colors.OKCYAN))
+        recommendations.append(
+            (
+                "📦",
+                "Download ML models: python scripts/download_depth_models.py",
+                Colors.OKCYAN,
+            )
+        )
 
     # Print all recommendations
     for symbol, message, color in recommendations:

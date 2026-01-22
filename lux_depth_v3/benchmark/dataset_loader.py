@@ -175,9 +175,21 @@ class ETH3DDataset(DA3BenchmarkDataset):
         """Convert quaternion to rotation matrix."""
         R = np.array(
             [
-                [1 - 2 * qy * qy - 2 * qz * qz, 2 * qx * qy - 2 * qz * qw, 2 * qx * qz + 2 * qy * qw],
-                [2 * qx * qy + 2 * qz * qw, 1 - 2 * qx * qx - 2 * qz * qz, 2 * qy * qz - 2 * qx * qw],
-                [2 * qx * qz - 2 * qy * qw, 2 * qy * qz + 2 * qx * qw, 1 - 2 * qx * qx - 2 * qy * qy],
+                [
+                    1 - 2 * qy * qy - 2 * qz * qz,
+                    2 * qx * qy - 2 * qz * qw,
+                    2 * qx * qz + 2 * qy * qw,
+                ],
+                [
+                    2 * qx * qy + 2 * qz * qw,
+                    1 - 2 * qx * qx - 2 * qz * qz,
+                    2 * qy * qz - 2 * qx * qw,
+                ],
+                [
+                    2 * qx * qz - 2 * qy * qw,
+                    2 * qy * qz + 2 * qx * qw,
+                    1 - 2 * qx * qx - 2 * qy * qy,
+                ],
             ]
         )
         return R
@@ -256,7 +268,13 @@ class ScanNetPPDataset(DA3BenchmarkDataset):
         intrinsics_file = scene_dir / "intrinsics.npy"
         intrinsics = np.load(intrinsics_file) if intrinsics_file.exists() else None
 
-        return {"images": image_paths, "depth_gt": None, "poses_gt": poses, "intrinsics": intrinsics, "metadata": metadata}
+        return {
+            "images": image_paths,
+            "depth_gt": None,
+            "poses_gt": poses,
+            "intrinsics": intrinsics,
+            "metadata": metadata,
+        }
 
 
 class HiRoomDataset(DA3BenchmarkDataset):

@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 class ComparisonStatus(Enum):
     """Status of baseline comparison."""
+
     NO_BASELINE = "no_baseline"
     REGRESSION = "regression"
     STABLE = "stable"
@@ -27,6 +28,7 @@ class ComparisonStatus(Enum):
 @dataclass
 class ComparisonResult:
     """Result of baseline comparison."""
+
     status: ComparisonStatus
     delta: Dict[str, float]
     baseline: Dict[str, float]
@@ -40,7 +42,7 @@ class ComparisonResult:
             "delta": self.delta,
             "baseline": self.baseline,
             "current": self.current,
-            "threshold": self.threshold
+            "threshold": self.threshold,
         }
 
     def __str__(self) -> str:
@@ -68,7 +70,9 @@ class ComparisonResult:
                     status = "stable"
 
                 lines.append(f"  {metric:.<15} {symbol} {delta_val:+.4f} ({status})")
-                lines.append(f"    Baseline: {baseline_val:.4f}, Current: {current_val:.4f}")
+                lines.append(
+                    f"    Baseline: {baseline_val:.4f}, Current: {current_val:.4f}"
+                )
 
         return "\n".join(lines)
 
@@ -111,11 +115,7 @@ class BaselineComparator:
             logger.error(f"Failed to load baseline metrics: {e}")
             return {}
 
-    def compare(
-        self,
-        preset: str,
-        metrics: Dict[str, float]
-    ) -> ComparisonResult:
+    def compare(self, preset: str, metrics: Dict[str, float]) -> ComparisonResult:
         """
         Compare metrics against baseline.
 
@@ -133,7 +133,7 @@ class BaselineComparator:
                 delta={},
                 baseline={},
                 current=metrics,
-                threshold=self.threshold
+                threshold=self.threshold,
             )
 
         baseline = self.baseline_metrics[preset]
@@ -152,7 +152,7 @@ class BaselineComparator:
             delta=delta,
             baseline=baseline,
             current=metrics,
-            threshold=self.threshold
+            threshold=self.threshold,
         )
 
     def _determine_status(self, delta: Dict[str, float]) -> ComparisonStatus:
@@ -179,11 +179,7 @@ class BaselineComparator:
         else:
             return ComparisonStatus.STABLE
 
-    def update_baseline(
-        self,
-        preset: str,
-        metrics: Dict[str, float]
-    ):
+    def update_baseline(self, preset: str, metrics: Dict[str, float]):
         """
         Update baseline metrics for a preset.
 

@@ -21,6 +21,7 @@ class Event:
         user: Optional user identifier
         correlation_id: Optional correlation ID for related events
     """
+
     id: str
     type: str
     timestamp: float
@@ -34,7 +35,7 @@ class Event:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'Event':
+    def from_dict(cls, data: Dict[str, Any]) -> "Event":
         """Create event from dictionary."""
         return cls(**data)
 
@@ -65,7 +66,7 @@ class EventStore:
         Args:
             storage_path: Path to store events (defaults to .events/)
         """
-        self.storage_path = storage_path or Path('.events')
+        self.storage_path = storage_path or Path(".events")
         self.storage_path.mkdir(parents=True, exist_ok=True)
         self._events: List[Event] = []
         self._lock = Lock()
@@ -82,10 +83,7 @@ class EventStore:
             self._persist_event(event)
 
     def get_events(
-        self,
-        limit: Optional[int] = None,
-        offset: int = 0,
-        reverse: bool = True
+        self, limit: Optional[int] = None, offset: int = 0, reverse: bool = True
     ) -> List[Event]:
         """Get events from store.
 
@@ -112,9 +110,7 @@ class EventStore:
         return events
 
     def get_events_by_type(
-        self,
-        event_type: str,
-        limit: Optional[int] = None
+        self, event_type: str, limit: Optional[int] = None
     ) -> List[Event]:
         """Get events of a specific type.
 
@@ -145,11 +141,7 @@ class EventStore:
         with self._lock:
             return [e for e in self._events if e.correlation_id == correlation_id]
 
-    def get_events_in_range(
-        self,
-        start_time: float,
-        end_time: float
-    ) -> List[Event]:
+    def get_events_in_range(self, start_time: float, end_time: float) -> List[Event]:
         """Get events within a time range.
 
         Args:
@@ -160,17 +152,14 @@ class EventStore:
             List of events in range
         """
         with self._lock:
-            return [
-                e for e in self._events
-                if start_time <= e.timestamp <= end_time
-            ]
+            return [e for e in self._events if start_time <= e.timestamp <= end_time]
 
     def clear(self) -> None:
         """Clear all events from store."""
         with self._lock:
             self._events.clear()
             # Clear persisted events
-            for event_file in self.storage_path.glob('*.json'):
+            for event_file in self.storage_path.glob("*.json"):
                 event_file.unlink()
 
     def _persist_event(self, event: Event) -> None:
@@ -180,16 +169,18 @@ class EventStore:
             event: Event to persist
         """
         # Store events by date for easier management
-        date_dir = self.storage_path / time.strftime('%Y-%m-%d', time.localtime(event.timestamp))
+        date_dir = self.storage_path / time.strftime(
+            "%Y-%m-%d", time.localtime(event.timestamp)
+        )
         date_dir.mkdir(exist_ok=True)
 
         event_file = date_dir / f"{event.id}.json"
-        with open(event_file, 'w') as f:
+        with open(event_file, "w") as f:
             json.dump(event.to_dict(), f, indent=2)
 
     def _load_events(self) -> None:
         """Load persisted events from disk."""
-        for event_file in self.storage_path.rglob('*.json'):
+        for event_file in self.storage_path.rglob("*.json"):
             try:
                 with open(event_file) as f:
                     event_data = json.load(f)

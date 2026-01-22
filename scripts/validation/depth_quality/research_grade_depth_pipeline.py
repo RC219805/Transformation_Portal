@@ -154,7 +154,11 @@ def ensemble_depth_maps(depth_maps: List[Tuple[np.ndarray, float]], target_shape
     for depth, weight in depth_maps:
         # Resize to target shape
         if depth.shape != target_shape:
-            depth_resized = cv2.resize(depth, (target_shape[1], target_shape[0]), interpolation=cv2.INTER_LINEAR)
+            depth_resized = cv2.resize(
+                depth,
+                (target_shape[1], target_shape[0]),
+                interpolation=cv2.INTER_LINEAR,
+            )
         else:
             depth_resized = depth.copy()
 
@@ -241,7 +245,10 @@ def apply_guided_filter(depth: np.ndarray, guide: np.ndarray, radius: int = 8, e
 
 
 def normalize_depth_advanced(
-    depth: np.ndarray, percentile_low: float = 0.5, percentile_high: float = 99.5, gamma: float = 1.0
+    depth: np.ndarray,
+    percentile_low: float = 0.5,
+    percentile_high: float = 99.5,
+    gamma: float = 1.0,
 ) -> np.ndarray:
     """
     Advanced normalization with percentile clipping and optional gamma correction.
@@ -378,7 +385,11 @@ def generate_uncertainty_map(depth_maps: List[np.ndarray], target_shape: Tuple[i
     for depth in depth_maps:
         # Resize
         if depth.shape != target_shape:
-            depth_resized = cv2.resize(depth, (target_shape[1], target_shape[0]), interpolation=cv2.INTER_LINEAR)
+            depth_resized = cv2.resize(
+                depth,
+                (target_shape[1], target_shape[0]),
+                interpolation=cv2.INTER_LINEAR,
+            )
         else:
             depth_resized = depth.copy()
 
@@ -415,7 +426,10 @@ def generate_uncertainty_map(depth_maps: List[np.ndarray], target_shape: Tuple[i
 
 
 def create_comparison_visualization(
-    original: Image.Image, depth: np.ndarray, normals: np.ndarray, uncertainty: np.ndarray
+    original: Image.Image,
+    depth: np.ndarray,
+    normals: np.ndarray,
+    uncertainty: np.ndarray,
 ) -> Image.Image:
     """
     Create a 2x2 grid visualization.

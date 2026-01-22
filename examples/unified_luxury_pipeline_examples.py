@@ -28,7 +28,9 @@ def example_basic_usage():
 
     # Process with balanced profile (default)
     outputs = process_luxury_render(
-        Path("input/kitchen.jpg"), output_dir=Path("output/example1"), profile=ProcessingProfile.BALANCED
+        Path("input/kitchen.jpg"),
+        output_dir=Path("output/example1"),
+        profile=ProcessingProfile.BALANCED,
     )
 
     print(f"Generated {len(outputs)} outputs:")
@@ -47,7 +49,11 @@ def example_premium_quality():
         profile=ProcessingProfile.PREMIUM,
         output_dir=Path("output/hero_shot"),
         # Select specific output formats
-        output_formats=[OutputFormat.MASTER_TIFF, OutputFormat.PRINT_8K, OutputFormat.WEB_4K],
+        output_formats=[
+            OutputFormat.MASTER_TIFF,
+            OutputFormat.PRINT_8K,
+            OutputFormat.WEB_4K,
+        ],
         # Enable all enhancements
         enable_depth=True,
         enable_material_response=True,
@@ -108,7 +114,9 @@ def example_batch_processing():
 
     # Process all images in directory
     results = batch_process_luxury_renders(
-        input_dir=Path("input/renders"), output_dir=Path("output/batch"), profile=ProcessingProfile.BALANCED
+        input_dir=Path("input/renders"),
+        output_dir=Path("output/batch"),
+        profile=ProcessingProfile.BALANCED,
     )
 
     print(f"Processed {len(results)} images:")

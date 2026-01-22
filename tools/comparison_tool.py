@@ -33,7 +33,13 @@ except ImportError:
 class ImageComparison:
     """Compare two images with comprehensive quality metrics."""
 
-    def __init__(self, image1_path: Path, image2_path: Path, label1: str = "Image 1", label2: str = "Image 2"):
+    def __init__(
+        self,
+        image1_path: Path,
+        image2_path: Path,
+        label1: str = "Image 1",
+        label2: str = "Image 2",
+    ):
         self.image1_path = image1_path
         self.image2_path = image2_path
         self.label1 = label1
@@ -93,7 +99,10 @@ class ImageComparison:
         if img2.shape[2] == 4:
             img2 = img2[:, :, :3]
 
-        metrics = {"resolution": img1.shape[:2], "megapixels": img1.shape[0] * img1.shape[1] / 1_000_000}
+        metrics = {
+            "resolution": img1.shape[:2],
+            "megapixels": img1.shape[0] * img1.shape[1] / 1_000_000,
+        }
 
         # Basic statistics
         metrics["img1_stats"] = {
@@ -168,7 +177,10 @@ class ImageComparison:
             union = np.maximum(hist1, hist2).sum()
             similarity = intersection / union if union > 0 else 0
 
-            hist_stats[channel] = {"similarity": float(similarity), "correlation": float(np.corrcoef(hist1, hist2)[0, 1])}
+            hist_stats[channel] = {
+                "similarity": float(similarity),
+                "correlation": float(np.corrcoef(hist1, hist2)[0, 1]),
+            }
 
         return hist_stats
 
@@ -251,8 +263,20 @@ class ImageComparison:
         composite.paste(pil_diff, (w, h + label_height * 2))
 
         # Add labels
-        draw.text((w // 2, label_height // 2), self.label1, fill=(255, 255, 255), anchor="mm", font=font)
-        draw.text((w + w // 2, label_height // 2), self.label2, fill=(255, 255, 255), anchor="mm", font=font)
+        draw.text(
+            (w // 2, label_height // 2),
+            self.label1,
+            fill=(255, 255, 255),
+            anchor="mm",
+            font=font,
+        )
+        draw.text(
+            (w + w // 2, label_height // 2),
+            self.label2,
+            fill=(255, 255, 255),
+            anchor="mm",
+            font=font,
+        )
         draw.text(
             (w, h + label_height + label_height // 2),
             "Difference (5x amplified)",
@@ -290,7 +314,12 @@ class BatchComparisonTool:
         self.comparisons: List[Dict[str, Any]] = []
 
     def add_comparison(
-        self, image1: Path, image2: Path, name: str, label1: str = "16-bit", label2: str = "32-bit HDR"
+        self,
+        image1: Path,
+        image2: Path,
+        name: str,
+        label1: str = "16-bit",
+        label2: str = "32-bit HDR",
     ) -> Dict[str, Any]:
         """Add and process a comparison."""
         print(f"\n🔍 Comparing: {name}")
@@ -396,7 +425,14 @@ class BatchComparisonTool:
         # Also save JSON
         json_path = self.output_dir / "comparison_results.json"
         with open(json_path, "w") as f:
-            json.dump({"timestamp": datetime.now().isoformat(), "comparisons": self.comparisons}, f, indent=2)
+            json.dump(
+                {
+                    "timestamp": datetime.now().isoformat(),
+                    "comparisons": self.comparisons,
+                },
+                f,
+                indent=2,
+            )
 
         print(f"📄 JSON data saved: {json_path}")
 
@@ -408,9 +444,24 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Compare image processing outputs")
-    parser.add_argument("--dir1", type=Path, required=True, help="First directory (e.g., 16-bit outputs)")
-    parser.add_argument("--dir2", type=Path, required=True, help="Second directory (e.g., 32-bit HDR outputs)")
-    parser.add_argument("--output", type=Path, default=Path("output_comparisons"), help="Output directory")
+    parser.add_argument(
+        "--dir1",
+        type=Path,
+        required=True,
+        help="First directory (e.g., 16-bit outputs)",
+    )
+    parser.add_argument(
+        "--dir2",
+        type=Path,
+        required=True,
+        help="Second directory (e.g., 32-bit HDR outputs)",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("output_comparisons"),
+        help="Output directory",
+    )
     parser.add_argument("--pattern", default="*.tif", help="File pattern to match")
     parser.add_argument("--label1", default="16-bit", help="Label for first set")
     parser.add_argument("--label2", default="32-bit HDR", help="Label for second set")

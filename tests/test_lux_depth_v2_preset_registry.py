@@ -169,7 +169,14 @@ class TestPresetMetadataFields:
 
     def test_all_presets_have_required_fields(self):
         """Verify all presets have required metadata fields."""
-        required_fields = ["name", "display_name", "description", "intended_use", "quality_tier", "stability"]
+        required_fields = [
+            "name",
+            "display_name",
+            "description",
+            "intended_use",
+            "quality_tier",
+            "stability",
+        ]
 
         for preset_name, metadata in PRESET_REGISTRY.items():
             for field in required_fields:

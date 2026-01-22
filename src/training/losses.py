@@ -153,10 +153,12 @@ class GradientLoss(_BaseModule):
 
         # Sobel filters for gradient computation
         self.register_buffer(
-            "sobel_x", torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32).view(1, 1, 3, 3)
+            "sobel_x",
+            torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32).view(1, 1, 3, 3),
         )
         self.register_buffer(
-            "sobel_y", torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32).view(1, 1, 3, 3)
+            "sobel_y",
+            torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32).view(1, 1, 3, 3),
         )
 
     def _compute_gradient(self, x: "torch.Tensor") -> Tuple["torch.Tensor", "torch.Tensor"]:
@@ -322,10 +324,32 @@ class SSIMLoss(_BaseModule):
         mu_pred_target = mu_pred * mu_target
 
         # Compute local variances and covariance
-        sigma_pred_sq = F.conv2d(pred_norm**2, window, padding=self.window_size // 2, groups=self.channels) - mu_pred_sq
-        sigma_target_sq = F.conv2d(target_norm**2, window, padding=self.window_size // 2, groups=self.channels) - mu_target_sq
+        sigma_pred_sq = (
+            F.conv2d(
+                pred_norm**2,
+                window,
+                padding=self.window_size // 2,
+                groups=self.channels,
+            )
+            - mu_pred_sq
+        )
+        sigma_target_sq = (
+            F.conv2d(
+                target_norm**2,
+                window,
+                padding=self.window_size // 2,
+                groups=self.channels,
+            )
+            - mu_target_sq
+        )
         sigma_pred_target = (
-            F.conv2d(pred_norm * target_norm, window, padding=self.window_size // 2, groups=self.channels) - mu_pred_target
+            F.conv2d(
+                pred_norm * target_norm,
+                window,
+                padding=self.window_size // 2,
+                groups=self.channels,
+            )
+            - mu_pred_target
         )
 
         # SSIM formula

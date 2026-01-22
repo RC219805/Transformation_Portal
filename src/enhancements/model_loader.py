@@ -63,7 +63,11 @@ class ModelLoader:
             warnings.warn(f"Failed to load checkpoint from {checkpoint_path}: {e}")
             return None
 
-    def load_model_weights(self, models: Dict[str, torch.nn.Module], checkpoint: Optional[Dict[str, Any]] = None) -> bool:
+    def load_model_weights(
+        self,
+        models: Dict[str, torch.nn.Module],
+        checkpoint: Optional[Dict[str, Any]] = None,
+    ) -> bool:
         """
         Load weights into models
 
@@ -121,7 +125,9 @@ class ModelLoader:
 
 
 def load_pretrained_weights(
-    models: Dict[str, torch.nn.Module], checkpoint_dir: str = "weights/hyper_reality", verbose: bool = True
+    models: Dict[str, torch.nn.Module],
+    checkpoint_dir: str = "weights/hyper_reality",
+    verbose: bool = True,
 ) -> bool:
     """
     Convenience function to load pre-trained weights into models

@@ -443,7 +443,10 @@ class ArchitecturalAugmentation:
             [
                 [random.uniform(0, margin * w), random.uniform(0, margin * h)],
                 [random.uniform(w * (1 - margin), w), random.uniform(0, margin * h)],
-                [random.uniform(w * (1 - margin), w), random.uniform(h * (1 - margin), h)],
+                [
+                    random.uniform(w * (1 - margin), w),
+                    random.uniform(h * (1 - margin), h),
+                ],
                 [random.uniform(0, margin * w), random.uniform(h * (1 - margin), h)],
             ]
         )

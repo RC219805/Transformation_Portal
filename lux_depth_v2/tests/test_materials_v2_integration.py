@@ -25,7 +25,11 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from lux_depth_v2.config import PipelineConfig, Preset
 from lux_depth_v2.pipeline import LuxPipelineV2
-from lux_depth_v2.materials_v2 import MaterialsV2Config, ConfidenceConfig, SegmentationConfig
+from lux_depth_v2.materials_v2 import (
+    MaterialsV2Config,
+    ConfidenceConfig,
+    SegmentationConfig,
+)
 from lux_depth_v2.logging_utils import setup_logging
 
 
@@ -338,7 +342,12 @@ def main():
     parser.add_argument("--quick", action="store_true", help="Run quick test only")
     parser.add_argument("--full", action="store_true", help="Run all tests")
     parser.add_argument("--input", type=str, default=None, help="Input image path")
-    parser.add_argument("--output", type=str, default="output_materials_v2_integration_test", help="Output directory")
+    parser.add_argument(
+        "--output",
+        type=str,
+        default="output_materials_v2_integration_test",
+        help="Output directory",
+    )
     args = parser.parse_args()
 
     # Find test image

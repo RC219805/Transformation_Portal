@@ -173,7 +173,12 @@ class EnhanceOrchestrator:
         self.manifests_dir = self.output_root / "manifests"
         self.logs_dir = self.output_root / "logs"
 
-        for dir_path in [self.depth_dir, self.v2_dir, self.manifests_dir, self.logs_dir]:
+        for dir_path in [
+            self.depth_dir,
+            self.v2_dir,
+            self.manifests_dir,
+            self.logs_dir,
+        ]:
             dir_path.mkdir(parents=True, exist_ok=True)
 
         # Initialize V3 inference engine
@@ -367,7 +372,7 @@ class EnhanceOrchestrator:
             current_config_fp = self.compute_config_fingerprint()
             manifest_fp = ConfigFingerprint(
                 model_variant=manifest.depth.model if manifest.depth else "",
-                depth_quantization=manifest.depth.scaling.get("method", "") if manifest.depth else "",
+                depth_quantization=(manifest.depth.scaling.get("method", "") if manifest.depth else ""),
                 depth_device=self.config.depth_device,
                 preset=self.config.preset.value if self.config.preset else None,
                 v2_preset=manifest.v2.preset if manifest.v2 else "",
@@ -465,7 +470,7 @@ class EnhanceOrchestrator:
             current_config_fp = self.compute_config_fingerprint()
             manifest_fp = ConfigFingerprint(
                 model_variant=manifest.depth.model if manifest.depth else "",
-                depth_quantization=manifest.depth.scaling.get("method", "") if manifest.depth else "",
+                depth_quantization=(manifest.depth.scaling.get("method", "") if manifest.depth else ""),
                 depth_device=self.config.depth_device,
                 preset=self.config.preset.value if self.config.preset else None,
                 v2_preset=manifest.v2.preset if manifest.v2 else "",
@@ -532,7 +537,10 @@ class EnhanceOrchestrator:
         v2_log_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Pre-normalize EXIF orientation for PIL/OpenCV alignment
-        from .preprocessing import normalize_exif_orientation, validate_depth_image_alignment
+        from .preprocessing import (
+            normalize_exif_orientation,
+            validate_depth_image_alignment,
+        )
 
         tmp_inputs_dir = self.output_root / "tmp_inputs"
         tmp_inputs_dir.mkdir(parents=True, exist_ok=True)
@@ -812,8 +820,8 @@ class EnhanceOrchestrator:
                 {
                     "stem": Path(r["image"]).stem,
                     "status": r.get("status", "unknown"),
-                    "manifest": str(r.get("manifest", "")) if r.get("status") == "ok" else None,
-                    "runtime_s": r.get("runtime_s", 0.0) if r.get("status") == "ok" else None,
+                    "manifest": (str(r.get("manifest", "")) if r.get("status") == "ok" else None),
+                    "runtime_s": (r.get("runtime_s", 0.0) if r.get("status") == "ok" else None),
                     "error": r.get("error") if r.get("status") == "error" else None,
                 }
                 for r in results

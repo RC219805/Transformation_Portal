@@ -123,7 +123,11 @@ class ContextAwarePipeline:
         return image
 
     def process_view_with_context(
-        self, input_path: Path, output_dir: Path, save_jpeg: bool = True, save_tiff: bool = True
+        self,
+        input_path: Path,
+        output_dir: Path,
+        save_jpeg: bool = True,
+        save_tiff: bool = True,
     ) -> list:
         """
         Process single view with architectural context.
@@ -164,7 +168,12 @@ class ContextAwarePipeline:
 
         # Process with standard pipeline
         process_start = time.time()
-        outputs = process_single_view(input_path=input_path, output_dir=output_dir, save_jpeg=save_jpeg, save_tiff=save_tiff)
+        outputs = process_single_view(
+            input_path=input_path,
+            output_dir=output_dir,
+            save_jpeg=save_jpeg,
+            save_tiff=save_tiff,
+        )
         process_time = time.time() - process_start
 
         total_time = time.time() - start_time
@@ -230,7 +239,12 @@ def main():
         default=Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/Final_Production"),
         help="Output directory",
     )
-    parser.add_argument("--metadata", type=Path, default=Path("750_picacho_metadata.json"), help="Architectural metadata JSON")
+    parser.add_argument(
+        "--metadata",
+        type=Path,
+        default=Path("750_picacho_metadata.json"),
+        help="Architectural metadata JSON",
+    )
     parser.add_argument("--save-jpeg", action="store_true", default=True, help="Save JPEG outputs")
     parser.add_argument("--save-tif", action="store_true", default=True, help="Save 16-bit TIFF outputs")
     parser.add_argument("--export-configs", type=Path, help="Export view configs to directory")
@@ -274,7 +288,10 @@ def main():
         print(f"\n[{i}/{len(source_files)}] " + "-" * 70)
         try:
             outputs = pipeline.process_view_with_context(
-                input_path=source_file, output_dir=args.output_dir, save_jpeg=args.save_jpeg, save_tiff=args.save_tiff
+                input_path=source_file,
+                output_dir=args.output_dir,
+                save_jpeg=args.save_jpeg,
+                save_tiff=args.save_tiff,
             )
             all_outputs.extend(outputs)
         except Exception as e:

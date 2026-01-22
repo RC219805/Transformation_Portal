@@ -202,7 +202,12 @@ class TestBuildFFmpegCommand:
         output_file = tmp_path / "output.mp4"
         input_file.touch()
 
-        cmd = build_ffmpeg_command(input_file, output_file, filters=["scale=1920:1080", "fps=30"], validate_paths=False)
+        cmd = build_ffmpeg_command(
+            input_file,
+            output_file,
+            filters=["scale=1920:1080", "fps=30"],
+            validate_paths=False,
+        )
 
         # Filters should be comma-separated in -vf argument
         vf_index = cmd.index("-vf")
@@ -216,7 +221,12 @@ class TestBuildFFmpegCommand:
         input_file.touch()
 
         with pytest.raises(SecurityError, match="dangerous characters"):
-            build_ffmpeg_command(input_file, output_file, filters=["scale=1920:1080; rm -rf /"], validate_paths=False)
+            build_ffmpeg_command(
+                input_file,
+                output_file,
+                filters=["scale=1920:1080; rm -rf /"],
+                validate_paths=False,
+            )
 
     def test_additional_args(self, tmp_path):
         """Test FFmpeg command with additional arguments."""
@@ -224,7 +234,12 @@ class TestBuildFFmpegCommand:
         output_file = tmp_path / "output.mp4"
         input_file.touch()
 
-        cmd = build_ffmpeg_command(input_file, output_file, additional_args=["-preset", "fast"], validate_paths=False)
+        cmd = build_ffmpeg_command(
+            input_file,
+            output_file,
+            additional_args=["-preset", "fast"],
+            validate_paths=False,
+        )
 
         assert "-preset" in cmd
         assert "fast" in cmd
@@ -263,7 +278,10 @@ class TestValidateFilterGraph:
 class TestTimeout:
     """Test timeout context manager."""
 
-    @pytest.mark.skipif(not hasattr(__import__("signal"), "SIGALRM"), reason="timeout() requires SIGALRM (Unix-only)")
+    @pytest.mark.skipif(
+        not hasattr(__import__("signal"), "SIGALRM"),
+        reason="timeout() requires SIGALRM (Unix-only)",
+    )
     def test_timeout_successful_operation(self):
         """Test that fast operations complete successfully."""
         import time
@@ -271,7 +289,10 @@ class TestTimeout:
         with timeout(2):
             time.sleep(0.1)  # Fast operation
 
-    @pytest.mark.skipif(not hasattr(__import__("signal"), "SIGALRM"), reason="timeout() requires SIGALRM (Unix-only)")
+    @pytest.mark.skipif(
+        not hasattr(__import__("signal"), "SIGALRM"),
+        reason="timeout() requires SIGALRM (Unix-only)",
+    )
     def test_timeout_slow_operation(self):
         """Test that slow operations raise TimeoutError."""
         import time

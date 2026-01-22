@@ -24,7 +24,6 @@ from typing import Any, Dict, Optional
 
 from memory_profiler import memory_usage, profile
 
-
 # Memory usage thresholds (in MiB)
 MEMORY_THRESHOLDS = {
     "import_core": 50.0,  # Core imports shouldn't exceed 50 MiB
@@ -262,8 +261,17 @@ def run_with_knowledge_integration(
 def main():
     """Main entry point with optional RAG integration."""
     parser = argparse.ArgumentParser(description="Memory profiling tests with optional RAG integration")
-    parser.add_argument("--enable-rag", action="store_true", help="Enable RAG/Knowledge Base integration for memory tracking")
-    parser.add_argument("--export-kb", type=str, metavar="PATH", help="Export memory metrics to knowledge base JSON file")
+    parser.add_argument(
+        "--enable-rag",
+        action="store_true",
+        help="Enable RAG/Knowledge Base integration for memory tracking",
+    )
+    parser.add_argument(
+        "--export-kb",
+        type=str,
+        metavar="PATH",
+        help="Export memory metrics to knowledge base JSON file",
+    )
     parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose output")
 
     args = parser.parse_args()

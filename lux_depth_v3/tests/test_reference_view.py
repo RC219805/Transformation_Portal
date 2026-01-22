@@ -2,7 +2,12 @@
 
 import pytest
 import numpy as np
-from lux_depth_v3.reference_view import ReferenceViewSelector, RefViewStrategy, select_reference_view, RefViewSelectionResult
+from lux_depth_v3.reference_view import (
+    ReferenceViewSelector,
+    RefViewStrategy,
+    select_reference_view,
+    RefViewSelectionResult,
+)
 
 
 def test_first_strategy():

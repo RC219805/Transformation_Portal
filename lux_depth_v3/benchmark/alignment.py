@@ -12,7 +12,10 @@ logger = logging.getLogger(__name__)
 
 
 def align_poses_ransac(
-    pred_poses: np.ndarray, gt_poses: np.ndarray, ransac_iterations: int = 1000, inlier_threshold: float = 0.1
+    pred_poses: np.ndarray,
+    gt_poses: np.ndarray,
+    ransac_iterations: int = 1000,
+    inlier_threshold: float = 0.1,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Align predicted poses to ground truth using RANSAC.
@@ -220,7 +223,10 @@ def align_poses_umeyama(pred_poses: np.ndarray, gt_poses: np.ndarray) -> Tuple[f
 
 
 def compute_alignment_error(
-    pred_poses: np.ndarray, gt_poses: np.ndarray, rotation: np.ndarray, translation: np.ndarray
+    pred_poses: np.ndarray,
+    gt_poses: np.ndarray,
+    rotation: np.ndarray,
+    translation: np.ndarray,
 ) -> float:
     """
     Compute alignment error after applying transformation.

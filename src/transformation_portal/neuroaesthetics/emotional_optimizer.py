@@ -34,23 +34,23 @@ from PIL import Image
 
 from transformation_portal.neuroaesthetics.golden_ratio import (
     GoldenRatioAnalyzer,
-    GoldenRatioAnalysis
+    GoldenRatioAnalysis,
 )
 from transformation_portal.neuroaesthetics.color_harmony import (
     ColorHarmonyAnalyzer,
-    HarmonyAnalysis
+    HarmonyAnalysis,
 )
 from transformation_portal.neuroaesthetics.spatial_frequency import (
     SpatialFrequencyAnalyzer,
-    SpatialFrequencyAnalysis
+    SpatialFrequencyAnalysis,
 )
-
 
 logger = logging.getLogger(__name__)
 
 
 class EmotionalTarget(Enum):
     """Target emotional response."""
+
     NOSTALGIA = "nostalgia"
     ASPIRATION = "aspiration"
     DESIRE = "desire"
@@ -73,6 +73,7 @@ class EmotionalProfile:
         optimization_priority: Ordered list of improvements
         enhancement_strategy: Specific enhancement recommendations
     """
+
     golden_ratio_analysis: GoldenRatioAnalysis
     color_harmony_analysis: HarmonyAnalysis
     spatial_frequency_analysis: SpatialFrequencyAnalysis
@@ -110,42 +111,42 @@ class EmotionalOptimizer:
             "temperature": 0.5,  # Warm
             "golden_ratio_min": 0.6,
             "visual_comfort_min": 0.7,
-            "preferred_harmony": ["analogous", "warm"]
+            "preferred_harmony": ["analogous", "warm"],
         },
         EmotionalTarget.ASPIRATION: {
             "golden_ratio_min": 0.75,
             "avg_lightness_min": 60,
             "visual_comfort_min": 0.75,
-            "spatial_quality": "high"
+            "spatial_quality": "high",
         },
         EmotionalTarget.DESIRE: {
             "golden_ratio_min": 0.7,
             "color_harmony_min": 0.7,
             "visual_comfort_min": 0.75,
-            "material_quality": "premium"
+            "material_quality": "premium",
         },
         EmotionalTarget.LUXURY: {
             "avg_saturation_max": 30,  # Sophisticated = low saturation
             "avg_lightness_min": 50,
             "golden_ratio_min": 0.7,
-            "visual_comfort_min": 0.8
+            "visual_comfort_min": 0.8,
         },
         EmotionalTarget.COMFORT: {
             "temperature": 0.3,  # Warm
             "preferred_harmony": ["analogous"],
-            "visual_comfort_min": 0.8
+            "visual_comfort_min": 0.8,
         },
         EmotionalTarget.SERENITY: {
             "temperature": -0.3,  # Cool
             "preferred_harmony": ["analogous", "cool"],
             "visual_comfort_min": 0.85,
-            "balance_score_min": 0.75
+            "balance_score_min": 0.75,
         },
         EmotionalTarget.ENERGY: {
             "avg_saturation_min": 40,
             "preferred_harmony": ["complementary"],
-            "hsf_min": 0.15  # More detail = energy
-        }
+            "hsf_min": 0.15,  # More detail = energy
+        },
     }
 
     def __init__(self):
@@ -156,10 +157,7 @@ class EmotionalOptimizer:
 
         logger.info("EmotionalOptimizer initialized")
 
-    def analyze(
-        self,
-        image: Union[str, np.ndarray, Image.Image]
-    ) -> EmotionalProfile:
+    def analyze(self, image: Union[str, np.ndarray, Image.Image]) -> EmotionalProfile:
         """Analyze complete emotional and aesthetic profile.
 
         Args:
@@ -177,23 +175,17 @@ class EmotionalOptimizer:
 
         # Calculate emotional scores
         emotional_scores = self._calculate_emotional_scores(
-            golden_ratio_analysis,
-            color_harmony_analysis,
-            spatial_frequency_analysis
+            golden_ratio_analysis, color_harmony_analysis, spatial_frequency_analysis
         )
 
         # Calculate overall quality
         overall_quality = self._calculate_overall_quality(
-            golden_ratio_analysis,
-            color_harmony_analysis,
-            spatial_frequency_analysis
+            golden_ratio_analysis, color_harmony_analysis, spatial_frequency_analysis
         )
 
         # Determine optimization priorities
         optimization_priority = self._determine_optimization_priority(
-            golden_ratio_analysis,
-            color_harmony_analysis,
-            spatial_frequency_analysis
+            golden_ratio_analysis, color_harmony_analysis, spatial_frequency_analysis
         )
 
         # Generate enhancement strategy
@@ -201,7 +193,7 @@ class EmotionalOptimizer:
             golden_ratio_analysis,
             color_harmony_analysis,
             spatial_frequency_analysis,
-            emotional_scores
+            emotional_scores,
         )
 
         return EmotionalProfile(
@@ -211,13 +203,13 @@ class EmotionalOptimizer:
             emotional_scores=emotional_scores,
             overall_quality=overall_quality,
             optimization_priority=optimization_priority,
-            enhancement_strategy=enhancement_strategy
+            enhancement_strategy=enhancement_strategy,
         )
 
     def optimize_for_emotion(
         self,
         image: Union[str, np.ndarray, Image.Image],
-        target_emotion: EmotionalTarget
+        target_emotion: EmotionalTarget,
     ) -> Dict[str, Any]:
         """Generate optimization strategy for target emotion.
 
@@ -243,7 +235,7 @@ class EmotionalOptimizer:
             "current_score": profile.emotional_scores.get(target_emotion.value, 0.0),
             "gaps": gaps,
             "recommended_adjustments": self._generate_adjustments(gaps, requirements),
-            "processing_parameters": self._get_processing_parameters(requirements)
+            "processing_parameters": self._get_processing_parameters(requirements),
         }
 
         return strategy
@@ -252,7 +244,7 @@ class EmotionalOptimizer:
         self,
         golden_ratio: GoldenRatioAnalysis,
         color_harmony: HarmonyAnalysis,
-        spatial_frequency: SpatialFrequencyAnalysis
+        spatial_frequency: SpatialFrequencyAnalysis,
     ) -> Dict[str, float]:
         """Calculate scores for each emotional target.
 
@@ -276,8 +268,11 @@ class EmotionalOptimizer:
             scores["luxury"] = max(scores.get("luxury", 0), 0.75)
 
         # Overall quality affects luxury and aspiration
-        overall = (golden_ratio.score + color_harmony.harmony_score +
-                   spatial_frequency.visual_comfort_score) / 3
+        overall = (
+            golden_ratio.score
+            + color_harmony.harmony_score
+            + spatial_frequency.visual_comfort_score
+        ) / 3
 
         if overall > 0.8:
             scores["luxury"] = max(scores.get("luxury", 0), 0.85)
@@ -289,7 +284,7 @@ class EmotionalOptimizer:
         self,
         golden_ratio: GoldenRatioAnalysis,
         color_harmony: HarmonyAnalysis,
-        spatial_frequency: SpatialFrequencyAnalysis
+        spatial_frequency: SpatialFrequencyAnalysis,
     ) -> float:
         """Calculate overall neuroaesthetic quality.
 
@@ -305,13 +300,13 @@ class EmotionalOptimizer:
         weights = {
             "golden_ratio": 0.3,
             "color_harmony": 0.35,
-            "spatial_frequency": 0.35
+            "spatial_frequency": 0.35,
         }
 
         quality = (
-            golden_ratio.score * weights["golden_ratio"] +
-            color_harmony.harmony_score * weights["color_harmony"] +
-            spatial_frequency.visual_comfort_score * weights["spatial_frequency"]
+            golden_ratio.score * weights["golden_ratio"]
+            + color_harmony.harmony_score * weights["color_harmony"]
+            + spatial_frequency.visual_comfort_score * weights["spatial_frequency"]
         )
 
         return quality
@@ -320,7 +315,7 @@ class EmotionalOptimizer:
         self,
         golden_ratio: GoldenRatioAnalysis,
         color_harmony: HarmonyAnalysis,
-        spatial_frequency: SpatialFrequencyAnalysis
+        spatial_frequency: SpatialFrequencyAnalysis,
     ) -> List[Tuple[str, float]]:
         """Determine which aspects need optimization most.
 
@@ -359,7 +354,7 @@ class EmotionalOptimizer:
         golden_ratio: GoldenRatioAnalysis,
         color_harmony: HarmonyAnalysis,
         spatial_frequency: SpatialFrequencyAnalysis,
-        emotional_scores: Dict[str, float]
+        emotional_scores: Dict[str, float],
     ) -> Dict[str, Any]:
         """Generate comprehensive enhancement strategy.
 
@@ -376,7 +371,7 @@ class EmotionalOptimizer:
             "crop_adjustment": None,
             "color_adjustments": {},
             "frequency_adjustments": {},
-            "processing_order": []
+            "processing_order": [],
         }
 
         # Crop recommendation based on golden ratio
@@ -384,7 +379,7 @@ class EmotionalOptimizer:
             strategy["crop_adjustment"] = {
                 "recommended": True,
                 "target_aspect_ratio": 1.618,  # Golden ratio
-                "reason": "Improve compositional balance"
+                "reason": "Improve compositional balance",
             }
             strategy["processing_order"].append("crop")
 
@@ -393,7 +388,7 @@ class EmotionalOptimizer:
             strategy["color_adjustments"] = {
                 "target_temperature": color_harmony.temperature,
                 "harmony_type": color_harmony.harmony_type.value,
-                "adjustments": color_harmony.recommendations
+                "adjustments": color_harmony.recommendations,
             }
             strategy["processing_order"].append("color_harmony")
 
@@ -402,7 +397,7 @@ class EmotionalOptimizer:
             strategy["frequency_adjustments"] = {
                 "reduce_hsf": spatial_frequency.hsf_energy > 0.25,
                 "enhance_lsf": spatial_frequency.lsf_energy < 0.35,
-                "adjustments": spatial_frequency.recommendations
+                "adjustments": spatial_frequency.recommendations,
             }
             strategy["processing_order"].append("spatial_frequency")
 
@@ -413,9 +408,7 @@ class EmotionalOptimizer:
         return strategy
 
     def _identify_gaps(
-        self,
-        profile: EmotionalProfile,
-        requirements: Dict
+        self, profile: EmotionalProfile, requirements: Dict
     ) -> List[Dict[str, Any]]:
         """Identify gaps between current state and requirements.
 
@@ -431,43 +424,54 @@ class EmotionalOptimizer:
         # Check golden ratio
         if "golden_ratio_min" in requirements:
             if profile.golden_ratio_analysis.score < requirements["golden_ratio_min"]:
-                gaps.append({
-                    "aspect": "composition",
-                    "current": profile.golden_ratio_analysis.score,
-                    "target": requirements["golden_ratio_min"],
-                    "gap": requirements["golden_ratio_min"] - profile.golden_ratio_analysis.score
-                })
+                gaps.append(
+                    {
+                        "aspect": "composition",
+                        "current": profile.golden_ratio_analysis.score,
+                        "target": requirements["golden_ratio_min"],
+                        "gap": requirements["golden_ratio_min"]
+                        - profile.golden_ratio_analysis.score,
+                    }
+                )
 
         # Check color harmony
         if "color_harmony_min" in requirements:
-            if profile.color_harmony_analysis.harmony_score < requirements["color_harmony_min"]:
-                gaps.append({
-                    "aspect": "color_harmony",
-                    "current": profile.color_harmony_analysis.harmony_score,
-                    "target": requirements["color_harmony_min"],
-                    "gap": requirements["color_harmony_min"] - profile.color_harmony_analysis.harmony_score
-                })
+            if (
+                profile.color_harmony_analysis.harmony_score
+                < requirements["color_harmony_min"]
+            ):
+                gaps.append(
+                    {
+                        "aspect": "color_harmony",
+                        "current": profile.color_harmony_analysis.harmony_score,
+                        "target": requirements["color_harmony_min"],
+                        "gap": requirements["color_harmony_min"]
+                        - profile.color_harmony_analysis.harmony_score,
+                    }
+                )
 
         # Check visual comfort
         if "visual_comfort_min" in requirements:
-            if profile.spatial_frequency_analysis.visual_comfort_score < requirements["visual_comfort_min"]:
-                gaps.append({
-                    "aspect": "visual_comfort",
-                    "current": profile.spatial_frequency_analysis.visual_comfort_score,
-                    "target": requirements["visual_comfort_min"],
-                    "gap": requirements["visual_comfort_min"] - profile.spatial_frequency_analysis.visual_comfort_score
-                })
+            if (
+                profile.spatial_frequency_analysis.visual_comfort_score
+                < requirements["visual_comfort_min"]
+            ):
+                gaps.append(
+                    {
+                        "aspect": "visual_comfort",
+                        "current": profile.spatial_frequency_analysis.visual_comfort_score,
+                        "target": requirements["visual_comfort_min"],
+                        "gap": requirements["visual_comfort_min"]
+                        - profile.spatial_frequency_analysis.visual_comfort_score,
+                    }
+                )
 
         # Sort by gap size
         gaps.sort(key=lambda x: x["gap"], reverse=True)
 
         return gaps
 
-    def _generate_adjustments(
-        self,
-        gaps: List[Dict],
-        requirements: Dict
-    ) -> List[str]:
+    def _generate_adjustments(self, gaps: List[Dict], requirements: Dict) -> List[str]:
         """Generate specific adjustment recommendations.
 
         Args:
@@ -502,10 +506,7 @@ class EmotionalOptimizer:
 
         return adjustments
 
-    def _get_processing_parameters(
-        self,
-        requirements: Dict
-    ) -> Dict[str, Any]:
+    def _get_processing_parameters(self, requirements: Dict) -> Dict[str, Any]:
         """Get specific processing parameters for requirements.
 
         Args:
@@ -519,12 +520,14 @@ class EmotionalOptimizer:
             "saturation": 1.0,
             "temperature_shift": 0.0,
             "sharpness": 0.5,
-            "smoothing": 0.0
+            "smoothing": 0.0,
         }
 
         # Temperature adjustments
         if "temperature" in requirements:
-            params["temperature_shift"] = requirements["temperature"] * 10  # Scale for processing
+            params["temperature_shift"] = (
+                requirements["temperature"] * 10
+            )  # Scale for processing
 
         # Saturation adjustments
         if "avg_saturation_max" in requirements:
@@ -538,7 +541,10 @@ class EmotionalOptimizer:
             params["sharpness"] = 0.7  # Increase detail
 
         # Smoothing for visual comfort
-        if "visual_comfort_min" in requirements and requirements["visual_comfort_min"] > 0.8:
+        if (
+            "visual_comfort_min" in requirements
+            and requirements["visual_comfort_min"] > 0.8
+        ):
             params["smoothing"] = 0.3  # Gentle smoothing
 
         return params

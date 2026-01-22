@@ -136,7 +136,11 @@ class MaximumQualityPipeline:
         return depth_map
 
     def apply_depth_aware_enhancement(
-        self, image: np.ndarray, depth: np.ndarray, clarity_strength: float = 0.15, atmospheric_strength: float = 0.10
+        self,
+        image: np.ndarray,
+        depth: np.ndarray,
+        clarity_strength: float = 0.15,
+        atmospheric_strength: float = 0.10,
     ) -> np.ndarray:
         """
         Apply depth-aware enhancements with conservative settings.
@@ -207,7 +211,11 @@ class MaximumQualityPipeline:
 
         for c in range(3):
             deviation = image[:, :, c] - luminance
-            enhanced[:, :, c] = np.where(midtone_mask, luminance + deviation * saturation_boost, enhanced[:, :, c])
+            enhanced[:, :, c] = np.where(
+                midtone_mask,
+                luminance + deviation * saturation_boost,
+                enhanced[:, :, c],
+            )
 
         return np.clip(enhanced, 0, 1)
 
@@ -282,7 +290,12 @@ class MaximumQualityPipeline:
         print(f"✓ Saved high-quality JPEG: {output_path.name}")
 
     def process_image(
-        self, input_path: Path, output_dir: Path, save_tiff: bool = True, save_jpeg: bool = True, save_depth: bool = False
+        self,
+        input_path: Path,
+        output_dir: Path,
+        save_tiff: bool = True,
+        save_jpeg: bool = True,
+        save_depth: bool = False,
     ) -> dict:
         """
         Process single image through maximum quality pipeline.
@@ -346,9 +359,25 @@ def main():
 
     parser = argparse.ArgumentParser(description="Maximum Quality Pipeline for 750 Picacho Lane")
     parser.add_argument("input", type=str, help="Input image path or directory")
-    parser.add_argument("--output", "-o", type=str, default="Maximum_Quality_Output", help="Output directory")
-    parser.add_argument("--tif", action="store_true", default=True, help="Save 16-bit TIFF (default: True)")
-    parser.add_argument("--jpeg", action="store_true", default=True, help="Save high-quality JPEG (default: True)")
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=str,
+        default="Maximum_Quality_Output",
+        help="Output directory",
+    )
+    parser.add_argument(
+        "--tif",
+        action="store_true",
+        default=True,
+        help="Save 16-bit TIFF (default: True)",
+    )
+    parser.add_argument(
+        "--jpeg",
+        action="store_true",
+        default=True,
+        help="Save high-quality JPEG (default: True)",
+    )
     parser.add_argument("--depth", action="store_true", help="Save depth map visualization")
     parser.add_argument("--small-model", action="store_true", help="Use smaller/faster depth model")
 
@@ -363,7 +392,13 @@ def main():
 
     if input_path.is_file():
         # Single file
-        pipeline.process_image(input_path, output_dir, save_tiff=args.tiff, save_jpeg=args.jpeg, save_depth=args.depth)
+        pipeline.process_image(
+            input_path,
+            output_dir,
+            save_tiff=args.tiff,
+            save_jpeg=args.jpeg,
+            save_depth=args.depth,
+        )
     elif input_path.is_dir():
         # Batch process directory
         image_files = []
@@ -374,7 +409,13 @@ def main():
 
         for img_path in image_files:
             try:
-                pipeline.process_image(img_path, output_dir, save_tiff=args.tiff, save_jpeg=args.jpeg, save_depth=args.depth)
+                pipeline.process_image(
+                    img_path,
+                    output_dir,
+                    save_tiff=args.tiff,
+                    save_jpeg=args.jpeg,
+                    save_depth=args.depth,
+                )
             except Exception as e:
                 print(f"✗ Error processing {img_path.name}: {e}")
                 continue

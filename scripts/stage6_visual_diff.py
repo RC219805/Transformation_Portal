@@ -220,9 +220,17 @@ def main() -> int:
     import argparse
 
     parser = argparse.ArgumentParser(description="Generate visual diff crops for Stage 6 A/B test")
-    parser.add_argument("--ab-dir", type=Path, default=Path("outputs/stage6_ab"), help="Stage 6 A/B output directory")
     parser.add_argument(
-        "--output", type=Path, default=Path("outputs/stage6_visual_diffs"), help="Output directory for diff crops"
+        "--ab-dir",
+        type=Path,
+        default=Path("outputs/stage6_ab"),
+        help="Stage 6 A/B output directory",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("outputs/stage6_visual_diffs"),
+        help="Output directory for diff crops",
     )
     parser.add_argument("--crop-size", type=int, default=256, help="Crop size in pixels")
     parser.add_argument("--num-crops", type=int, default=6, help="Number of crops per scene")

@@ -35,7 +35,9 @@ except ImportError:
         from board_material_aerial_enhancer import enhance_aerial
     except ImportError:
         try:
-            from src.transformation_portal.enhancers.board_material_aerial_enhancer import enhance_aerial
+            from src.transformation_portal.enhancers.board_material_aerial_enhancer import (
+                enhance_aerial,
+            )
         except ImportError:
             print("❌ Error: board_material_aerial_enhancer module not found")
             print("   Expected locations:")

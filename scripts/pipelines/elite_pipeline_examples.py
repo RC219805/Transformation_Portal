@@ -101,7 +101,11 @@ def example_3_maximum_quality():
     preset.ai_enhancement.num_steps = 40  # More inference steps
     preset.ai_enhancement.strength = 0.30  # Lower strength for faithfulness
 
-    pipeline = EliteArchitecturalPipeline(preset=preset, output_dir=Path("output_example_3_maximum_quality"), dry_run=False)
+    pipeline = EliteArchitecturalPipeline(
+        preset=preset,
+        output_dir=Path("output_example_3_maximum_quality"),
+        dry_run=False,
+    )
 
     input_path = Path("input_images/750_Picacho_HDR_sRGB_alpha_32-bit_TIFFs/750Picacho_Aerial_HDR_32-bit.tif")
     if input_path.exists():

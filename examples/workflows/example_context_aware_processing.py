@@ -72,10 +72,20 @@ if not context.dimensions:
 # Add material specifications
 if not context.materials:
     context.materials = [
-        MaterialSpec(material_type="wood", location="cabinetry", finish="white oak", color="natural"),
+        MaterialSpec(
+            material_type="wood",
+            location="cabinetry",
+            finish="white oak",
+            color="natural",
+        ),
         MaterialSpec(material_type="stone", location="countertop", finish="quartz", color="white"),
         MaterialSpec(material_type="metal", location="hardware", finish="brushed brass"),
-        MaterialSpec(material_type="stone", location="backsplash", finish="marble", color="carrara white"),
+        MaterialSpec(
+            material_type="stone",
+            location="backsplash",
+            finish="marble",
+            color="carrara white",
+        ),
         MaterialSpec(material_type="metal", location="appliances", finish="stainless steel"),
     ]
     print(f"  Added {len(context.materials)} material specifications")
@@ -97,7 +107,13 @@ if not context.spatial_context:
 
 # Add design intent
 if not context.design_intent:
-    context.design_intent = ["open concept", "natural light", "luxury finishes", "contemporary design", "indoor-outdoor flow"]
+    context.design_intent = [
+        "open concept",
+        "natural light",
+        "luxury finishes",
+        "contemporary design",
+        "indoor-outdoor flow",
+    ]
     print(f"  Added design intent: {', '.join(context.design_intent)}")
 
 # Step 4: Generate enhanced prompts

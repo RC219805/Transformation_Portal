@@ -25,6 +25,7 @@ class GraphExecution:
 
     Tracks all stage results and overall metrics.
     """
+
     # Execution identification
     run_id: str
     graph_name: str
@@ -55,7 +56,7 @@ class GraphExecution:
 
         # Calculate speedup: if hit_rate is 1.0, avoid division by zero
         if hit_rate >= 1.0:
-            speedup_estimate = float('inf')  # Perfect caching
+            speedup_estimate = float("inf")  # Perfect caching
         elif hit_rate > 0:
             speedup_estimate = 1.0 / (1.0 - hit_rate)
         else:
@@ -195,9 +196,7 @@ class StageGraph:
             execution_order = self.get_execution_order()
 
             if parallel:
-                self._execute_parallel(
-                    execution_order, context, execution, max_workers
-                )
+                self._execute_parallel(execution_order, context, execution, max_workers)
             else:
                 self._execute_sequential(execution_order, context, execution)
 

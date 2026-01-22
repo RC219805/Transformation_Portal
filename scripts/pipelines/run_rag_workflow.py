@@ -46,7 +46,11 @@ def run_workflow():
     # Step 3: Search Query
     print("\n[3/7] EXECUTING SEARCH QUERIES...")
     print("-" * 80)
-    queries = ["depth pipeline atmospheric effects", "material response enhancement", "FFmpeg video processing HDR"]
+    queries = [
+        "depth pipeline atmospheric effects",
+        "material response enhancement",
+        "FFmpeg video processing HDR",
+    ]
 
     all_results = {}
     for query in queries:
@@ -84,7 +88,8 @@ def run_workflow():
 
     context = citation_gen.format_citations(citations, format_type="text")
     template = PromptTemplates.feature_implementation(
-        feature_description="Add real-time depth map visualization overlay", context=context
+        feature_description="Add real-time depth map visualization overlay",
+        context=context,
     )
     print(f"✓ Generated feature implementation template ({len(template)} chars)")
     print("\nTemplate Preview (first 400 chars):")

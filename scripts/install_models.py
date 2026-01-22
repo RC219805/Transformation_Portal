@@ -209,7 +209,11 @@ def verify_checksum(file_path: Path, expected_sha256: Optional[str]) -> bool:
 
 
 def download_file_with_retry(
-    url: str, output_path: Path, description: str, expected_sha256: Optional[str] = None, max_retries: int = 3
+    url: str,
+    output_path: Path,
+    description: str,
+    expected_sha256: Optional[str] = None,
+    max_retries: int = 3,
 ) -> bool:
     """Download file with retry logic and checksum verification."""
 
@@ -475,7 +479,11 @@ Examples:
     )
 
     parser.add_argument("--all", action="store_true", help="Install all models including optional ones")
-    parser.add_argument("--dry-run", action="store_true", help="Show what would be downloaded without downloading")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be downloaded without downloading",
+    )
     parser.add_argument("--force", action="store_true", help="Force re-download even if files exist")
 
     args = parser.parse_args()

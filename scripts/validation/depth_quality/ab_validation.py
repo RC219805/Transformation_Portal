@@ -89,7 +89,13 @@ def run_baseline(rgb: np.ndarray) -> tuple[np.ndarray, EdgeMetrics]:
 
 def run_high_fidelity(rgb: np.ndarray) -> tuple[np.ndarray, EdgeMetrics]:
     """Run high-fidelity tiled inference with scale reconciliation."""
-    config = DepthConfig(tile_size=1024, overlap=128, reconcile_scales=True, fusion_mode="weighted", validate_seams=True)
+    config = DepthConfig(
+        tile_size=1024,
+        overlap=128,
+        reconcile_scales=True,
+        fusion_mode="weighted",
+        validate_seams=True,
+    )
 
     estimator = HighFidelityDepthEstimator(config)
     depth = estimator.estimate_depth(rgb, use_global_anchor=True)
@@ -126,8 +132,17 @@ def main():
     parser = argparse.ArgumentParser(description="A/B validation for high-fidelity depth pipeline")
     parser.add_argument("--input-dir", type=Path, required=True, help="Input directory with images")
     parser.add_argument("--output-dir", type=Path, required=True, help="Output directory for depth maps")
-    parser.add_argument("--run-isolation", action="store_true", help="Run isolation tests on first image")
-    parser.add_argument("--max-images", type=int, default=None, help="Maximum number of images to process")
+    parser.add_argument(
+        "--run-isolation",
+        action="store_true",
+        help="Run isolation tests on first image",
+    )
+    parser.add_argument(
+        "--max-images",
+        type=int,
+        default=None,
+        help="Maximum number of images to process",
+    )
 
     args = parser.parse_args()
 

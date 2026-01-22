@@ -8,7 +8,12 @@ import pytest
 from pathlib import Path
 
 try:
-    from utils.material_responder import MaterialResponder, MaterialResponseConfig, SurfaceType, create_material_responder
+    from utils.material_responder import (
+        MaterialResponder,
+        MaterialResponseConfig,
+        SurfaceType,
+        create_material_responder,
+    )
 
     MATERIAL_RESPONDER_AVAILABLE = True
 except ImportError:
@@ -30,7 +35,10 @@ class TestMaterialResponseConfig:
     def test_custom_config(self):
         """Test custom configuration."""
         config = MaterialResponseConfig(
-            strength=0.9, surface_types=["wood", "fabric"], depth_aware=False, preserve_highlights=False
+            strength=0.9,
+            surface_types=["wood", "fabric"],
+            depth_aware=False,
+            preserve_highlights=False,
         )
         assert config.strength == 0.9
         assert config.surface_types == ["wood", "fabric"]
@@ -44,7 +52,16 @@ class TestSurfaceType:
 
     def test_surface_types(self):
         """Test all surface types are defined."""
-        expected = ["wood", "metal", "glass", "stone", "fabric", "concrete", "ceramic", "water"]
+        expected = [
+            "wood",
+            "metal",
+            "glass",
+            "stone",
+            "fabric",
+            "concrete",
+            "ceramic",
+            "water",
+        ]
 
         for surface in expected:
             assert any(s.value == surface for s in SurfaceType)

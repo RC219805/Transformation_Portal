@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class TrajectoryPoint:
     """Single point in enhancement trajectory."""
+
     step: int
     timestamp: float
     overall_quality: float
@@ -31,6 +32,7 @@ class TrajectoryPoint:
 @dataclass
 class EnhancementTrajectory:
     """Complete enhancement trajectory for an image."""
+
     image_name: str
     baseline_quality: float
     points: List[TrajectoryPoint] = field(default_factory=list)
@@ -89,7 +91,9 @@ class EnhancementTracker:
         self.trajectories: Dict[str, EnhancementTrajectory] = {}
         self.baseline_established = False
 
-        logger.info(f"Initialized EnhancementTracker (target: {target_quality_multiplier}x baseline)")
+        logger.info(
+            f"Initialized EnhancementTracker (target: {target_quality_multiplier}x baseline)"
+        )
 
     def establish_baseline(self, results: List[AnalysisResult]):
         """
@@ -108,7 +112,7 @@ class EnhancementTracker:
             trajectory = EnhancementTrajectory(
                 image_name=image_name,
                 baseline_quality=baseline_quality,
-                target_quality=target_quality
+                target_quality=target_quality,
             )
 
             # Add baseline as first point
@@ -120,7 +124,7 @@ class EnhancementTracker:
                     metric.value: score.normalized_score
                     for metric, score in result.quality_scores.items()
                 },
-                description="Baseline (original image)"
+                description="Baseline (original image)",
             )
             trajectory.add_point(baseline_point)
 
@@ -130,10 +134,7 @@ class EnhancementTracker:
         logger.info(f"Baseline established for {len(self.trajectories)} images")
 
     def track_enhancement(
-        self,
-        result: AnalysisResult,
-        step: int,
-        description: str = ""
+        self, result: AnalysisResult, step: int, description: str = ""
     ):
         """
         Track enhancement step.
@@ -144,7 +145,9 @@ class EnhancementTracker:
             description: Description of enhancement applied
         """
         if not self.baseline_established:
-            raise RuntimeError("Baseline not established. Call establish_baseline() first.")
+            raise RuntimeError(
+                "Baseline not established. Call establish_baseline() first."
+            )
 
         image_name = result.image_path.stem
 
@@ -153,7 +156,7 @@ class EnhancementTracker:
             self.trajectories[image_name] = EnhancementTrajectory(
                 image_name=image_name,
                 baseline_quality=result.overall_quality,
-                target_quality=result.overall_quality * self.target_quality_multiplier
+                target_quality=result.overall_quality * self.target_quality_multiplier,
             )
 
         # Create trajectory point
@@ -165,7 +168,7 @@ class EnhancementTracker:
                 metric.value: score.normalized_score
                 for metric, score in result.quality_scores.items()
             },
-            description=description
+            description=description,
         )
 
         self.trajectories[image_name].add_point(point)
@@ -202,15 +205,13 @@ class EnhancementTracker:
             "min_improvement": np.min(improvements),
             "max_improvement": np.max(improvements),
             "avg_progress": np.mean(progresses),
-            "images_improving": sum(1 for t in self.trajectories.values() if t.is_improving()),
+            "images_improving": sum(
+                1 for t in self.trajectories.values() if t.is_improving()
+            ),
             "images_at_target": sum(1 for p in progresses if p >= 1.0),
         }
 
-    def plot_trajectories(
-        self,
-        output_path: Optional[Path] = None,
-        show: bool = False
-    ):
+    def plot_trajectories(self, output_path: Optional[Path] = None, show: bool = False):
         """
         Plot enhancement trajectories.
 
@@ -237,20 +238,17 @@ class EnhancementTracker:
             steps = [p.step for p in trajectory.points]
             qualities = [p.overall_quality for p in trajectory.points]
 
-            ax1.plot(steps, qualities, marker='o', label=name, linewidth=2)
+            ax1.plot(steps, qualities, marker="o", label=name, linewidth=2)
 
             # Add target line
             if trajectory.target_quality:
                 ax1.axhline(
-                    y=trajectory.target_quality,
-                    linestyle='--',
-                    alpha=0.3,
-                    color='gray'
+                    y=trajectory.target_quality, linestyle="--", alpha=0.3, color="gray"
                 )
 
-        ax1.set_xlabel('Enhancement Step')
-        ax1.set_ylabel('Overall Quality')
-        ax1.set_title('Enhancement Trajectories')
+        ax1.set_xlabel("Enhancement Step")
+        ax1.set_ylabel("Overall Quality")
+        ax1.set_title("Enhancement Trajectories")
         ax1.legend()
         ax1.grid(True, alpha=0.3)
 
@@ -262,12 +260,12 @@ class EnhancementTracker:
                 for p in trajectory.points
             ]
 
-            ax2.plot(steps, improvements, marker='o', label=name, linewidth=2)
+            ax2.plot(steps, improvements, marker="o", label=name, linewidth=2)
 
-        ax2.axhline(y=0, color='gray', linestyle='-', linewidth=1)
-        ax2.set_xlabel('Enhancement Step')
-        ax2.set_ylabel('Quality Improvement')
-        ax2.set_title('Improvement from Baseline')
+        ax2.axhline(y=0, color="gray", linestyle="-", linewidth=1)
+        ax2.set_xlabel("Enhancement Step")
+        ax2.set_ylabel("Quality Improvement")
+        ax2.set_title("Improvement from Baseline")
         ax2.legend()
         ax2.grid(True, alpha=0.3)
 
@@ -276,7 +274,7 @@ class EnhancementTracker:
         if output_path:
             output_path = Path(output_path)
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            plt.savefig(output_path, dpi=300, bbox_inches='tight')
+            plt.savefig(output_path, dpi=300, bbox_inches="tight")
             logger.info(f"Trajectory plot saved to {output_path}")
 
         if show:
@@ -285,10 +283,7 @@ class EnhancementTracker:
             plt.close()
 
     def plot_metric_breakdown(
-        self,
-        image_name: str,
-        output_path: Optional[Path] = None,
-        show: bool = False
+        self, image_name: str, output_path: Optional[Path] = None, show: bool = False
     ):
         """
         Plot metric breakdown for specific image.
@@ -321,19 +316,19 @@ class EnhancementTracker:
             steps = [p.step for p in trajectory.points]
             scores = [p.metric_scores[metric_name] for p in trajectory.points]
 
-            axes[idx].plot(steps, scores, marker='o', linewidth=2, color='blue')
-            axes[idx].set_title(f'{metric_name.upper()}')
-            axes[idx].set_xlabel('Step')
-            axes[idx].set_ylabel('Normalized Score')
+            axes[idx].plot(steps, scores, marker="o", linewidth=2, color="blue")
+            axes[idx].set_title(f"{metric_name.upper()}")
+            axes[idx].set_xlabel("Step")
+            axes[idx].set_ylabel("Normalized Score")
             axes[idx].grid(True, alpha=0.3)
 
-        plt.suptitle(f'Metric Breakdown: {image_name}')
+        plt.suptitle(f"Metric Breakdown: {image_name}")
         plt.tight_layout()
 
         if output_path:
             output_path = Path(output_path)
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            plt.savefig(output_path, dpi=300, bbox_inches='tight')
+            plt.savefig(output_path, dpi=300, bbox_inches="tight")
             logger.info(f"Metric breakdown plot saved to {output_path}")
 
         if show:
@@ -351,14 +346,16 @@ class EnhancementTracker:
         data = {
             "target_quality_multiplier": self.target_quality_multiplier,
             "baseline_established": self.baseline_established,
-            "trajectories": {}
+            "trajectories": {},
         }
 
         for name, trajectory in self.trajectories.items():
             data["trajectories"][name] = {
                 "baseline_quality": trajectory.baseline_quality,
                 "target_quality": trajectory.target_quality,
-                "current_quality": trajectory.points[-1].overall_quality if trajectory.points else 0,
+                "current_quality": (
+                    trajectory.points[-1].overall_quality if trajectory.points else 0
+                ),
                 "improvement": trajectory.get_improvement(),
                 "progress": trajectory.get_progress(),
                 "points": [
@@ -367,16 +364,16 @@ class EnhancementTracker:
                         "timestamp": p.timestamp,
                         "overall_quality": p.overall_quality,
                         "metric_scores": p.metric_scores,
-                        "description": p.description
+                        "description": p.description,
                     }
                     for p in trajectory.points
-                ]
+                ],
             }
 
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             json.dump(data, f, indent=2)
 
         logger.info(f"Trajectories exported to {output_path}")
@@ -397,18 +394,20 @@ class EnhancementTracker:
             lines.append("No trajectories available.")
             return "\n".join(lines)
 
-        lines.extend([
-            "OVERALL SUMMARY",
-            "-" * 80,
-            f"Number of Images: {summary['num_images']}",
-            f"Average Improvement: {summary['avg_improvement']:+.3f}",
-            f"Min Improvement: {summary['min_improvement']:+.3f}",
-            f"Max Improvement: {summary['max_improvement']:+.3f}",
-            f"Average Progress: {summary['avg_progress']:.1%}",
-            f"Images Improving: {summary['images_improving']}/{summary['num_images']}",
-            f"Images at Target: {summary['images_at_target']}/{summary['num_images']}",
-            "",
-        ])
+        lines.extend(
+            [
+                "OVERALL SUMMARY",
+                "-" * 80,
+                f"Number of Images: {summary['num_images']}",
+                f"Average Improvement: {summary['avg_improvement']:+.3f}",
+                f"Min Improvement: {summary['min_improvement']:+.3f}",
+                f"Max Improvement: {summary['max_improvement']:+.3f}",
+                f"Average Progress: {summary['avg_progress']:.1%}",
+                f"Images Improving: {summary['images_improving']}/{summary['num_images']}",
+                f"Images at Target: {summary['images_at_target']}/{summary['num_images']}",
+                "",
+            ]
+        )
 
         lines.append("INDIVIDUAL TRAJECTORIES")
         lines.append("-" * 80)
@@ -416,18 +415,24 @@ class EnhancementTracker:
         for name, trajectory in sorted(self.trajectories.items()):
             improvement = trajectory.get_improvement()
             progress = trajectory.get_progress()
-            status = "✓ At target" if progress >= 1.0 else "↑ Improving" if trajectory.is_improving() else "→ Stable"
+            status = (
+                "✓ At target"
+                if progress >= 1.0
+                else "↑ Improving" if trajectory.is_improving() else "→ Stable"
+            )
 
-            lines.extend([
-                f"\n{name}:",
-                f"  Baseline: {trajectory.baseline_quality:.3f}",
-                f"  Current: {trajectory.points[-1].overall_quality:.3f}",
-                f"  Target: {trajectory.target_quality:.3f}",
-                f"  Improvement: {improvement:+.3f}",
-                f"  Progress: {progress:.1%}",
-                f"  Status: {status}",
-                f"  Steps: {len(trajectory.points) - 1}",
-            ])
+            lines.extend(
+                [
+                    f"\n{name}:",
+                    f"  Baseline: {trajectory.baseline_quality:.3f}",
+                    f"  Current: {trajectory.points[-1].overall_quality:.3f}",
+                    f"  Target: {trajectory.target_quality:.3f}",
+                    f"  Improvement: {improvement:+.3f}",
+                    f"  Progress: {progress:.1%}",
+                    f"  Status: {status}",
+                    f"  Steps: {len(trajectory.points) - 1}",
+                ]
+            )
 
         lines.append("=" * 80)
         return "\n".join(lines)

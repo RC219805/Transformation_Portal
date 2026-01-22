@@ -12,7 +12,10 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from high_fidelity_depth.quality_metrics import validate_depth_quality, save_metrics_atomic
+from high_fidelity_depth.quality_metrics import (
+    validate_depth_quality,
+    save_metrics_atomic,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)

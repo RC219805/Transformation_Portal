@@ -34,7 +34,15 @@ def test_fake_pipeline_with_sleep_stages():
     timings = profiler.summary_s()
 
     # Verify all stages present
-    expected_stages = ["load", "depth", "material", "grade", "upscale_infer", "export_master", "export_upscaled"]
+    expected_stages = [
+        "load",
+        "depth",
+        "material",
+        "grade",
+        "upscale_infer",
+        "export_master",
+        "export_upscaled",
+    ]
     for stage in expected_stages:
         assert stage in timings, f"Stage {stage} missing from timings"
 
@@ -52,7 +60,15 @@ def test_pipeline_stage_ordering():
     """Test that stages maintain insertion order."""
     profiler = StageProfiler(enabled=True)
 
-    stages = ["load", "depth", "material", "grade", "upscale_infer", "export_master", "export_upscaled"]
+    stages = [
+        "load",
+        "depth",
+        "material",
+        "grade",
+        "upscale_infer",
+        "export_master",
+        "export_upscaled",
+    ]
 
     for stage in stages:
         with profiler.stage(stage):
@@ -174,7 +190,15 @@ def test_pipeline_stage_keys_snake_case():
     profiler = StageProfiler(enabled=True)
 
     # Standard pipeline stages
-    stages = ["load", "depth", "material", "grade", "upscale_infer", "export_master", "export_upscaled"]
+    stages = [
+        "load",
+        "depth",
+        "material",
+        "grade",
+        "upscale_infer",
+        "export_master",
+        "export_upscaled",
+    ]
 
     for stage in stages:
         with profiler.stage(stage):

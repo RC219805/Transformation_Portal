@@ -43,6 +43,7 @@ def _get_default_device() -> torch.device:
 
 class AllocationStrategy(Enum):
     """Memory allocation strategies."""
+
     IMMEDIATE = "immediate"  # Allocate immediately, no pooling
     POOLED = "pooled"  # Use memory pools for reuse
     LAZY = "lazy"  # Delay allocation until first use
@@ -53,6 +54,7 @@ class AllocationStrategy(Enum):
 @dataclass
 class MemoryConfig:
     """Configuration for memory management."""
+
     strategy: AllocationStrategy = AllocationStrategy.POOLED
     max_memory_gb: float = 100.0  # Maximum memory to use
     high_watermark: float = 0.85  # Trigger cleanup above this threshold
@@ -65,6 +67,7 @@ class MemoryConfig:
 @dataclass
 class AllocationInfo:
     """Information about a tensor allocation."""
+
     tensor_id: int
     shape: Tuple[int, ...]
     dtype: torch.dtype
@@ -154,7 +157,9 @@ class MemoryPool:
             "total_tensors": sum(len(v) for v in self.available.values()),
             "allocated_mb": self.allocated_bytes / (1024 * 1024),
             "capacity_mb": self.size_bytes / (1024 * 1024),
-            "utilization": self.allocated_bytes / self.size_bytes if self.size_bytes > 0 else 0
+            "utilization": (
+                self.allocated_bytes / self.size_bytes if self.size_bytes > 0 else 0
+            ),
         }
 
 
@@ -169,7 +174,7 @@ class MemoryManager:
     def __init__(
         self,
         config: Optional[MemoryConfig] = None,
-        device: Optional[torch.device] = None
+        device: Optional[torch.device] = None,
     ):
         """
         Initialize memory manager.
@@ -196,15 +201,17 @@ class MemoryManager:
         # Weak references to tracked tensors
         self.tracked_tensors = weakref.WeakValueDictionary()
 
-        logger.info(f"Initialized MemoryManager with strategy={self.config.strategy.value}")
+        logger.info(
+            f"Initialized MemoryManager with strategy={self.config.strategy.value}"
+        )
 
     def _init_pools(self):
         """Initialize memory pools for different tensor sizes."""
         # Create pools for common tensor sizes
         pool_configs = {
-            "small": 256,    # 256MB for small tensors (< 10MB)
-            "medium": 512,   # 512MB for medium tensors (10-100MB)
-            "large": 1024,   # 1GB for large tensors (> 100MB)
+            "small": 256,  # 256MB for small tensors (< 10MB)
+            "medium": 512,  # 512MB for medium tensors (10-100MB)
+            "large": 1024,  # 1GB for large tensors (> 100MB)
         }
 
         for name, size_mb in pool_configs.items():
@@ -215,7 +222,7 @@ class MemoryManager:
         shape: Tuple[int, ...],
         dtype: torch.dtype = torch.float32,
         tag: Optional[str] = None,
-        use_pool: bool = True
+        use_pool: bool = True,
     ) -> Tensor:
         """
         Allocate tensor with intelligent memory management.
@@ -236,7 +243,10 @@ class MemoryManager:
 
         # Try to get from pool if using pooled strategy
         tensor = None
-        if use_pool and self.config.strategy in [AllocationStrategy.POOLED, AllocationStrategy.AGGRESSIVE_CACHE]:
+        if use_pool and self.config.strategy in [
+            AllocationStrategy.POOLED,
+            AllocationStrategy.AGGRESSIVE_CACHE,
+        ]:
             pool_name = self._get_pool_name(size_mb)
             tensor = self.pools[pool_name].get(shape, dtype)
 
@@ -271,7 +281,10 @@ class MemoryManager:
             del self.allocations[tensor_id]
 
         # Return to pool if requested
-        if return_to_pool and self.config.strategy in [AllocationStrategy.POOLED, AllocationStrategy.AGGRESSIVE_CACHE]:
+        if return_to_pool and self.config.strategy in [
+            AllocationStrategy.POOLED,
+            AllocationStrategy.AGGRESSIVE_CACHE,
+        ]:
             size_mb = (tensor.element_size() * tensor.numel()) / (1024 * 1024)
             pool_name = self._get_pool_name(size_mb)
             return self.pools[pool_name].put(tensor)
@@ -283,7 +296,7 @@ class MemoryManager:
         batch_size: int,
         shape: Tuple[int, ...],
         dtype: torch.dtype = torch.float32,
-        tag: Optional[str] = None
+        tag: Optional[str] = None,
     ) -> List[Tensor]:
         """
         Allocate batch of tensors efficiently.
@@ -300,7 +313,9 @@ class MemoryManager:
         # For unified memory, it's more efficient to allocate a single
         # large tensor and split it
         batch_shape = (batch_size,) + shape
-        batch_tensor = self.allocate(batch_shape, dtype, tag=f"{tag}_batch" if tag else None)
+        batch_tensor = self.allocate(
+            batch_shape, dtype, tag=f"{tag}_batch" if tag else None
+        )
 
         # Split into individual tensors
         tensors = list(torch.split(batch_tensor, 1, dim=0))
@@ -321,17 +336,23 @@ class MemoryManager:
 
         # Device-specific stats
         if self.device.type == "cuda":
-            stats.update({
-                "allocated_gb": torch.cuda.memory_allocated(self.device) / (1024**3),
-                "reserved_gb": torch.cuda.memory_reserved(self.device) / (1024**3),
-                "max_allocated_gb": torch.cuda.max_memory_allocated(self.device) / (1024**3),
-                "cached_gb": torch.cuda.memory_reserved(self.device) / (1024**3),
-            })
+            stats.update(
+                {
+                    "allocated_gb": torch.cuda.memory_allocated(self.device)
+                    / (1024**3),
+                    "reserved_gb": torch.cuda.memory_reserved(self.device) / (1024**3),
+                    "max_allocated_gb": torch.cuda.max_memory_allocated(self.device)
+                    / (1024**3),
+                    "cached_gb": torch.cuda.memory_reserved(self.device) / (1024**3),
+                }
+            )
         elif self.device.type == "mps":
-            stats.update({
-                "unified_memory": True,
-                "allocated_gb": self.peak_memory_bytes / (1024**3),
-            })
+            stats.update(
+                {
+                    "unified_memory": True,
+                    "allocated_gb": self.peak_memory_bytes / (1024**3),
+                }
+            )
 
         # Pool stats
         pool_stats = {}
@@ -343,7 +364,10 @@ class MemoryManager:
         if self.config.enable_profiling:
             stats["allocations"] = {
                 "active_count": len(self.allocations),
-                "total_allocated_mb": sum(a.size_bytes for a in self.allocations.values()) / (1024**2),
+                "total_allocated_mb": sum(
+                    a.size_bytes for a in self.allocations.values()
+                )
+                / (1024**2),
                 "by_tag": dict(self.allocation_stats),
             }
 
@@ -360,6 +384,7 @@ class MemoryManager:
             torch.cuda.empty_cache()
         elif self.device.type == "mps":
             import gc
+
             gc.collect()
 
         logger.info("Memory cache cleared")
@@ -385,12 +410,16 @@ class MemoryManager:
 
         # If above high watermark, aggressive cleanup
         if usage_ratio > self.config.high_watermark:
-            logger.info(f"Memory pressure high ({usage_ratio:.1%}), performing aggressive cleanup")
+            logger.info(
+                f"Memory pressure high ({usage_ratio:.1%}), performing aggressive cleanup"
+            )
             self._aggressive_cleanup()
 
         # If above low watermark but below high, moderate cleanup
         elif usage_ratio > self.config.low_watermark:
-            logger.debug(f"Memory pressure moderate ({usage_ratio:.1%}), performing moderate cleanup")
+            logger.debug(
+                f"Memory pressure moderate ({usage_ratio:.1%}), performing moderate cleanup"
+            )
             self._moderate_cleanup()
 
         self.last_gc_time = current_time
@@ -402,7 +431,9 @@ class MemoryManager:
         max_bytes = self.config.max_memory_gb * 1024**3
 
         if projected_usage > max_bytes * self.config.high_watermark:
-            logger.warning("Memory pressure detected, running optimization before allocation")
+            logger.warning(
+                "Memory pressure detected, running optimization before allocation"
+            )
             self.optimize_memory()
 
     def _get_memory_usage(self) -> int:
@@ -423,6 +454,7 @@ class MemoryManager:
 
         # Force garbage collection
         import gc
+
         gc.collect()
 
         # Clear device cache
@@ -436,6 +468,7 @@ class MemoryManager:
 
         # Force garbage collection
         import gc
+
         gc.collect()
 
     def _get_pool_name(self, size_mb: float) -> str:
@@ -453,7 +486,7 @@ class MemoryManager:
         shape: Tuple[int, ...],
         dtype: torch.dtype,
         size_bytes: int,
-        tag: Optional[str]
+        tag: Optional[str],
     ):
         """Track tensor allocation for profiling."""
         tensor_id = id(tensor)
@@ -463,7 +496,7 @@ class MemoryManager:
             dtype=dtype,
             size_bytes=size_bytes,
             timestamp=time.time(),
-            tag=tag
+            tag=tag,
         )
 
         self.allocations[tensor_id] = info
@@ -506,8 +539,12 @@ class MemoryManager:
                 )
 
         if "allocations" in stats:
-            lines.append(f"\nActive Allocations: {stats['allocations']['active_count']}")
-            lines.append(f"Total Allocated: {stats['allocations']['total_allocated_mb']:.1f} MB")
+            lines.append(
+                f"\nActive Allocations: {stats['allocations']['active_count']}"
+            )
+            lines.append(
+                f"Total Allocated: {stats['allocations']['total_allocated_mb']:.1f} MB"
+            )
 
         lines.append("=" * 70)
         return "\n".join(lines)

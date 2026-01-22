@@ -188,7 +188,10 @@ class WaterValidationHarness:
         water_mask = None
 
         if self.engine.config.water_detection_enabled:
-            from lux_depth_v2.water_candidate import WaterCandidateDetector, SceneContext
+            from lux_depth_v2.water_candidate import (
+                WaterCandidateDetector,
+                SceneContext,
+            )
 
             detector = WaterCandidateDetector()
             # Call with same signature as Materials V3 will use
@@ -404,18 +407,18 @@ class WaterValidationHarness:
             "pool_recall": float(pool_recall),
             "ocean_recall": float(ocean_recall),
             # Coverage stats (mean + median)
-            "pool_avg_coverage": float(np.mean(pool_coverages)) if pool_coverages else 0.0,
-            "pool_median_coverage": float(np.median(pool_coverages)) if pool_coverages else 0.0,
-            "ocean_avg_coverage": float(np.mean(ocean_coverages)) if ocean_coverages else 0.0,
-            "ocean_median_coverage": float(np.median(ocean_coverages)) if ocean_coverages else 0.0,
+            "pool_avg_coverage": (float(np.mean(pool_coverages)) if pool_coverages else 0.0),
+            "pool_median_coverage": (float(np.median(pool_coverages)) if pool_coverages else 0.0),
+            "ocean_avg_coverage": (float(np.mean(ocean_coverages)) if ocean_coverages else 0.0),
+            "ocean_median_coverage": (float(np.median(ocean_coverages)) if ocean_coverages else 0.0),
             # PR-W4: New coverage metrics
-            "pool_avg_coverage_all": float(np.mean(pool_coverages_all)) if pool_coverages_all else 0.0,
-            "pool_avg_coverage_detected": float(np.mean(pool_coverages_detected)) if pool_coverages_detected else 0.0,
-            "ocean_avg_coverage_all": float(np.mean(ocean_coverages_all)) if ocean_coverages_all else 0.0,
-            "ocean_avg_coverage_detected": float(np.mean(ocean_coverages_detected)) if ocean_coverages_detected else 0.0,
+            "pool_avg_coverage_all": (float(np.mean(pool_coverages_all)) if pool_coverages_all else 0.0),
+            "pool_avg_coverage_detected": (float(np.mean(pool_coverages_detected)) if pool_coverages_detected else 0.0),
+            "ocean_avg_coverage_all": (float(np.mean(ocean_coverages_all)) if ocean_coverages_all else 0.0),
+            "ocean_avg_coverage_detected": (float(np.mean(ocean_coverages_detected)) if ocean_coverages_detected else 0.0),
             # Confidence
-            "pool_avg_confidence": float(np.mean([r.confidence for r in pool_detected])) if pool_detected else 0.0,
-            "ocean_avg_confidence": float(np.mean([r.confidence for r in ocean_detected])) if ocean_detected else 0.0,
+            "pool_avg_confidence": (float(np.mean([r.confidence for r in pool_detected])) if pool_detected else 0.0),
+            "ocean_avg_confidence": (float(np.mean([r.confidence for r in ocean_detected])) if ocean_detected else 0.0),
             # PR-W4: Three-stage confidence tracking
             "pool_avg_confidence_raw": (float(np.mean([r.confidence_raw for r in pool_detected])) if pool_detected else 0.0),
             "pool_avg_confidence_after_suppressors": (
@@ -441,8 +444,8 @@ class WaterValidationHarness:
                 float(np.mean([r.edge_alignment_score for r in ocean_detected])) if ocean_detected else 0.0
             ),
             # Stability
-            "pool_avg_stability": float(np.mean([r.stability_score for r in pool_true])) if pool_true else 0.0,
-            "ocean_avg_stability": float(np.mean([r.stability_score for r in ocean_true])) if ocean_true else 0.0,
+            "pool_avg_stability": (float(np.mean([r.stability_score for r in pool_true])) if pool_true else 0.0),
+            "ocean_avg_stability": (float(np.mean([r.stability_score for r in ocean_true])) if ocean_true else 0.0),
             # False triggers (should_detect=false but detected)
             "false_trigger_count": sum(r.is_false_trigger for r in results),
             "false_trigger_rate": float(sum(r.is_false_trigger for r in results) / max(len(should_detect_false), 1)),
@@ -493,7 +496,10 @@ def main():
         ),
     )
     parser.add_argument(
-        "--ground-truth", type=Path, required=True, help="Ground truth JSON (v0 schema with root, labels, images)"
+        "--ground-truth",
+        type=Path,
+        required=True,
+        help="Ground truth JSON (v0 schema with root, labels, images)",
     )
     parser.add_argument(
         "--output",
@@ -502,12 +508,22 @@ def main():
         help="Output JSON path (default: water_validation_report.json)",
     )
     parser.add_argument(
-        "--subset-file", type=Path, default=None, help="Text file with image paths (one per line) to validate subset (for CI)"
+        "--subset-file",
+        type=Path,
+        default=None,
+        help="Text file with image paths (one per line) to validate subset (for CI)",
     )
     parser.add_argument(
-        "--seed", type=int, default=None, help="Random seed for deterministic stability tests (recommended for CI)"
+        "--seed",
+        type=int,
+        default=None,
+        help="Random seed for deterministic stability tests (recommended for CI)",
     )
-    parser.add_argument("--no-scipy-warning", action="store_true", help="Suppress SciPy warning (for CI)")
+    parser.add_argument(
+        "--no-scipy-warning",
+        action="store_true",
+        help="Suppress SciPy warning (for CI)",
+    )
     args = parser.parse_args()
 
     # Suppress SciPy warning if requested

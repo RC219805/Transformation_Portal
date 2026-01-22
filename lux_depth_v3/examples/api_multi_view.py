@@ -19,7 +19,11 @@ def example_multiview_auto_pose():
     # Multiple views of the same scene
     images = [f"views/view_{i:03d}.jpg" for i in range(10)]
 
-    prediction = wrapper.inference(image=images, export_dir="output/multiview/auto_pose", export_format="full_npz-glb")
+    prediction = wrapper.inference(
+        image=images,
+        export_dir="output/multiview/auto_pose",
+        export_format="full_npz-glb",
+    )
 
     print(f"Processed {len(images)} views")
     print(f"Depth shape: {prediction.depth.shape}")
@@ -85,7 +89,10 @@ def example_reference_view_strategies():
         print(f"\nTesting strategy: {strategy}")
 
         prediction = wrapper.inference(
-            image=images, ref_view_strategy=strategy, export_dir=f"output/ref_strategies/{strategy}", export_format="mini_npz"
+            image=images,
+            ref_view_strategy=strategy,
+            export_dir=f"output/ref_strategies/{strategy}",
+            export_format="mini_npz",
         )
 
         # Analyze depth consistency
@@ -107,12 +114,18 @@ def example_ray_pose_estimation():
     # Compare standard vs ray-based pose estimation
     print("Standard pose estimation...")
     pred_standard = wrapper.inference(
-        image=images, use_ray_pose=False, export_dir="output/pose_methods/standard", export_format="full_npz"
+        image=images,
+        use_ray_pose=False,
+        export_dir="output/pose_methods/standard",
+        export_format="full_npz",
     )
 
     print("Ray-based pose estimation...")
     pred_ray = wrapper.inference(
-        image=images, use_ray_pose=True, export_dir="output/pose_methods/ray", export_format="full_npz"
+        image=images,
+        use_ray_pose=True,
+        export_dir="output/pose_methods/ray",
+        export_format="full_npz",
     )
 
     # Compare results

@@ -64,7 +64,14 @@ def main():
     repo_root = Path("/Users/rc/Transformation_Portal")
 
     # Directories to exclude
-    exclude_dirs = {"deprecated", "src/transformation_portal", ".venv", "__pycache__", ".git", ".github"}
+    exclude_dirs = {
+        "deprecated",
+        "src/transformation_portal",
+        ".venv",
+        "__pycache__",
+        ".git",
+        ".github",
+    }
 
     # Find all Python files
     python_files = []

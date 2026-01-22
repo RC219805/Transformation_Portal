@@ -150,7 +150,13 @@ class DA3Backend:
         env.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 
         # Keep output quiet by default. For debugging, change DEVNULL to PIPE.
-        self._process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True, env=env)
+        self._process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            env=env,
+        )
 
         start_time = time.time()
         while time.time() - start_time < timeout:
@@ -253,7 +259,13 @@ class DA3CLI:
             "returncode": result.returncode,
         }
 
-    def process_auto(self, input_path: Path, export_dir: Path, export_format: str = "mini_npz", **kwargs) -> Dict[str, Any]:
+    def process_auto(
+        self,
+        input_path: Path,
+        export_dir: Path,
+        export_format: str = "mini_npz",
+        **kwargs,
+    ) -> Dict[str, Any]:
         cmd = self._build_base_cmd(
             "auto",
             input_path=input_path,
@@ -263,7 +275,13 @@ class DA3CLI:
         )
         return self._run_command(cmd)
 
-    def process_image(self, image_path: Path, export_dir: Path, export_format: str = "mini_npz", **kwargs) -> Dict[str, Any]:
+    def process_image(
+        self,
+        image_path: Path,
+        export_dir: Path,
+        export_format: str = "mini_npz",
+        **kwargs,
+    ) -> Dict[str, Any]:
         cmd = self._build_base_cmd(
             "image",
             input_path=image_path,
@@ -292,7 +310,12 @@ class DA3CLI:
         return self._run_command(cmd)
 
     def process_video(
-        self, video_path: Path, export_dir: Path, fps: float = 1.0, export_format: str = "mini_npz", **kwargs
+        self,
+        video_path: Path,
+        export_dir: Path,
+        fps: float = 1.0,
+        export_format: str = "mini_npz",
+        **kwargs,
     ) -> Dict[str, Any]:
         cmd = self._build_base_cmd(
             "video",
@@ -305,7 +328,11 @@ class DA3CLI:
         return self._run_command(cmd)
 
     def process_colmap(
-        self, colmap_dir: Path, export_dir: Path, export_format: str = "mini_npz-glb", **kwargs
+        self,
+        colmap_dir: Path,
+        export_dir: Path,
+        export_format: str = "mini_npz-glb",
+        **kwargs,
     ) -> Dict[str, Any]:
         cmd = self._build_base_cmd(
             "colmap",
@@ -433,9 +460,15 @@ class DepthAnything3Wrapper:
             return self.model
 
         if local_files_only is None:
-            local_files_only = os.environ.get("HF_HUB_OFFLINE", "").lower() in {"1", "true", "yes"} or os.environ.get(
-                "TRANSFORMERS_OFFLINE", ""
-            ).lower() in {"1", "true", "yes"}
+            local_files_only = os.environ.get("HF_HUB_OFFLINE", "").lower() in {
+                "1",
+                "true",
+                "yes",
+            } or os.environ.get("TRANSFORMERS_OFFLINE", "").lower() in {
+                "1",
+                "true",
+                "yes",
+            }
 
         hf_id = self._resolve_hf_id()
         api_model_name = self._resolve_api_model_name()

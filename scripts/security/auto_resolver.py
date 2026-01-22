@@ -279,7 +279,10 @@ class PatternLearner:
                     data = json.load(f)
                     for pattern_data in data.get("patterns", []):
                         # Update existing or add new
-                        existing = next((p for p in self.patterns if p.pattern_id == pattern_data["pattern_id"]), None)
+                        existing = next(
+                            (p for p in self.patterns if p.pattern_id == pattern_data["pattern_id"]),
+                            None,
+                        )
                         if existing:
                             existing.success_count = pattern_data.get("success_count", existing.success_count)
                             existing.failure_count = pattern_data.get("failure_count", existing.failure_count)
@@ -306,7 +309,10 @@ class PatternLearner:
             logger.error(f"Failed to save patterns: {e}")
 
     def find_matching_patterns(
-        self, package_name: str, vulnerability_type: Optional[str] = None, has_patch: bool = False
+        self,
+        package_name: str,
+        vulnerability_type: Optional[str] = None,
+        has_patch: bool = False,
     ) -> List[Tuple[ResolutionPattern, float]]:
         """Find patterns matching a vulnerability, sorted by confidence."""
         matches = []
@@ -317,7 +323,11 @@ class PatternLearner:
                 continue
 
             # Check vulnerability type match
-            if vulnerability_type and pattern.vulnerability_type not in ["any", "any_with_patch", vulnerability_type]:
+            if vulnerability_type and pattern.vulnerability_type not in [
+                "any",
+                "any_with_patch",
+                vulnerability_type,
+            ]:
                 continue
 
             # Check if pattern requires patch availability
@@ -518,7 +528,14 @@ class AutoFixer:
             # Execute commands
             for cmd in commands:
                 logger.info(f"Executing: {cmd}")
-                result = subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=self.repo_root, check=False)
+                result = subprocess.run(
+                    cmd,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    cwd=self.repo_root,
+                    check=False,
+                )
                 if result.returncode != 0:
                     raise RuntimeError(f"Command failed: {cmd}\n{result.stderr}")
 
@@ -618,7 +635,13 @@ class AutoFixer:
         for step in verification_steps:
             step = step.replace("{package}", safe_package)
             try:
-                result = subprocess.run(step, shell=True, capture_output=True, cwd=self.repo_root, check=False)
+                result = subprocess.run(
+                    step,
+                    shell=True,
+                    capture_output=True,
+                    cwd=self.repo_root,
+                    check=False,
+                )
                 if result.returncode != 0:
                     logger.warning(f"Verification step failed: {step}")
                     return False

@@ -13,7 +13,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 try:
     import typer
 
-    from transformation_portal.pipelines.lux_render_pipeline import validate_sd_dimensions
+    from transformation_portal.pipelines.lux_render_pipeline import (
+        validate_sd_dimensions,
+    )
 
     HAS_DEPENDENCIES = True
 except ImportError:
@@ -172,7 +174,10 @@ try:
     from hypothesis import given
     from hypothesis import strategies as st
 
-    @given(width=st.integers(min_value=64, max_value=2048), height=st.integers(min_value=64, max_value=2048))
+    @given(
+        width=st.integers(min_value=64, max_value=2048),
+        height=st.integers(min_value=64, max_value=2048),
+    )
     def test_dimension_validation_always_returns_valid(width, height):
         """Property test: validation always returns multiples of 64."""
         result_w, result_h = validate_sd_dimensions(width, height, auto_correct=True)

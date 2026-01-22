@@ -24,8 +24,9 @@ try:
         FluxPipeline,
         FluxControlNetPipeline,
         FluxControlNetModel,
-        FlowMatchEulerDiscreteScheduler
+        FlowMatchEulerDiscreteScheduler,
     )
+
     FLUX_AVAILABLE = True
 except ImportError:
     FLUX_AVAILABLE = False
@@ -79,7 +80,7 @@ class FLUXPipeline:
         torch_dtype: torch.dtype = torch.bfloat16,
         enable_cpu_offload: bool = False,
         enable_attention_slicing: bool = True,
-        cache_dir: Optional[Path] = None
+        cache_dir: Optional[Path] = None,
     ):
         """Initialize FLUX pipeline.
 
@@ -102,7 +103,9 @@ class FLUXPipeline:
             )
 
         if variant not in self.VARIANTS:
-            raise ValueError(f"Invalid variant: {variant}. Choose from {list(self.VARIANTS.keys())}")
+            raise ValueError(
+                f"Invalid variant: {variant}. Choose from {list(self.VARIANTS.keys())}"
+            )
 
         self.variant = variant
         self.model_id = self.VARIANTS[variant]
@@ -113,9 +116,7 @@ class FLUXPipeline:
 
         # Load pipeline
         self.pipe = FluxPipeline.from_pretrained(
-            self.model_id,
-            torch_dtype=torch_dtype,
-            cache_dir=cache_dir
+            self.model_id, torch_dtype=torch_dtype, cache_dir=cache_dir
         )
 
         # Optimize for memory/speed
@@ -153,7 +154,7 @@ class FLUXPipeline:
         num_steps: int = 4,
         guidance_scale: float = 3.5,
         seed: Optional[int] = None,
-        output_size: Optional[Tuple[int, int]] = None
+        output_size: Optional[Tuple[int, int]] = None,
     ) -> Image.Image:
         """Enhance image using FLUX img2img.
 
@@ -200,7 +201,7 @@ class FLUXPipeline:
                 num_inference_steps=num_steps,
                 guidance_scale=guidance_scale,
                 generator=generator,
-                negative_prompt=negative_prompt
+                negative_prompt=negative_prompt,
             )
 
         enhanced_image = result.images[0]
@@ -213,7 +214,7 @@ class FLUXPipeline:
         self,
         images: List[Union[str, Path, Image.Image, np.ndarray]],
         prompts: Optional[List[str]] = None,
-        **kwargs
+        **kwargs,
     ) -> List[Image.Image]:
         """Enhance batch of images.
 
@@ -250,7 +251,7 @@ class FLUXPipeline:
         num_steps: int = 4,
         guidance_scale: float = 3.5,
         seed: Optional[int] = None,
-        **kwargs
+        **kwargs,
     ) -> Image.Image:
         """Enhance with ControlNet guidance for structure preservation.
 
@@ -282,7 +283,7 @@ class FLUXPipeline:
         """
         from transformation_portal.diffusion.flux_controlnet import (
             FLUXControlNet,
-            FLUX_CONTROLNET_AVAILABLE
+            FLUX_CONTROLNET_AVAILABLE,
         )
 
         # Load and prepare input image
@@ -300,14 +301,14 @@ class FLUXPipeline:
                 strength=strength,
                 num_steps=num_steps,
                 guidance_scale=guidance_scale,
-                seed=seed
+                seed=seed,
             )
 
         # Create FLUXControlNet instance for control image processing
         controlnet = FLUXControlNet(
             control_types=[controlnet_type],
             device=self.device,
-            torch_dtype=self.torch_dtype
+            torch_dtype=self.torch_dtype,
         )
 
         # Generate control image if not provided
@@ -315,9 +316,7 @@ class FLUXPipeline:
         if control_image is None:
             logger.info(f"Generating {controlnet_type} control image")
             control_img = controlnet.generate_control_image(
-                pil_image,
-                controlnet_type,
-                **kwargs
+                pil_image, controlnet_type, **kwargs
             )
         else:
             control_img = self._load_image(control_image)
@@ -364,7 +363,7 @@ class FLUXPipeline:
             strength=strength,
             num_steps=num_steps,
             guidance_scale=guidance_scale,
-            seed=seed
+            seed=seed,
         )
 
         logger.info("ControlNet-guided enhancement complete")
@@ -372,10 +371,7 @@ class FLUXPipeline:
         return enhanced_image
 
     def _build_controlnet_prompt(
-        self,
-        prompt: str,
-        controlnet_type: str,
-        conditioning_scale: float
+        self, prompt: str, controlnet_type: str, conditioning_scale: float
     ) -> str:
         """Build structure-aware prompt for ControlNet enhancement.
 
@@ -391,12 +387,11 @@ class FLUXPipeline:
         structure_keywords = {
             "depth": "preserve spatial depth, maintain perspective",
             "canny": "preserve edges, maintain architectural lines",
-            "normal": "preserve surface geometry, maintain material details"
+            "normal": "preserve surface geometry, maintain material details",
         }
 
         structure_emphasis = structure_keywords.get(
-            controlnet_type,
-            "preserve structure"
+            controlnet_type, "preserve structure"
         )
 
         # Scale the structural emphasis based on conditioning scale
@@ -413,8 +408,7 @@ class FLUXPipeline:
         return enhanced_prompt
 
     def _load_image(
-        self,
-        image: Union[str, Path, Image.Image, np.ndarray]
+        self, image: Union[str, Path, Image.Image, np.ndarray]
     ) -> Image.Image:
         """Load image as PIL Image.
 
@@ -456,7 +450,7 @@ class FLUXPipeline:
             "vram_minimum": "16GB (with CPU offload)",
             "vram_recommended": "24GB",
             "dtype": str(self.torch_dtype),
-            "device": self.device
+            "device": self.device,
         }
 
         return requirements

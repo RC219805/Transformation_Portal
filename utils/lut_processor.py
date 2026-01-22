@@ -222,7 +222,11 @@ class LUTProcessor:
         result = np.zeros_like(pixels)
         for ch in range(3):
             interpolator = RegularGridInterpolator(
-                (coords, coords, coords), self.lut_data[:, :, :, ch], method="linear", bounds_error=False, fill_value=None
+                (coords, coords, coords),
+                self.lut_data[:, :, :, ch],
+                method="linear",
+                bounds_error=False,
+                fill_value=None,
             )
 
             # Map pixel values to LUT grid coordinates

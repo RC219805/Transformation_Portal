@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 try:
     import numpy as np
+
     NUMPY_AVAILABLE = True
 except ImportError:
     NUMPY_AVAILABLE = False
@@ -21,6 +22,7 @@ except ImportError:
 
 try:
     import torch
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -30,6 +32,7 @@ except ImportError:
 @dataclass
 class QualityMetrics:
     """Container for quality metrics."""
+
     ssim: Optional[float] = None
     psnr: Optional[float] = None
     lpips: Optional[float] = None
@@ -40,14 +43,16 @@ class QualityMetrics:
     def to_dict(self) -> Dict[str, float]:
         """Convert to dictionary, excluding None values."""
         return {
-            k: v for k, v in {
+            k: v
+            for k, v in {
                 "ssim": self.ssim,
                 "psnr": self.psnr,
                 "lpips": self.lpips,
                 "nima": self.nima,
                 "mae": self.mae,
                 "mse": self.mse,
-            }.items() if v is not None
+            }.items()
+            if v is not None
         }
 
     def __str__(self) -> str:
@@ -87,12 +92,7 @@ class MetricsComputer:
             raise ImportError("MetricsComputer requires numpy")
 
         # Metric weights for weighted score
-        self.weights = {
-            "ssim": 0.3,
-            "psnr": 0.2,
-            "lpips": 0.3,
-            "nima": 0.2
-        }
+        self.weights = {"ssim": 0.3, "psnr": 0.2, "lpips": 0.3, "nima": 0.2}
 
         # Cache for heavy models (LPIPS, NIMA)
         self._lpips_model = None
@@ -102,7 +102,7 @@ class MetricsComputer:
         self,
         reference: np.ndarray,
         processed: np.ndarray,
-        metrics: Optional[list[str]] = None
+        metrics: Optional[list[str]] = None,
     ) -> QualityMetrics:
         """
         Compute quality metrics.
@@ -190,7 +190,9 @@ class MetricsComputer:
             return float(ssim)
 
         except ImportError:
-            logger.warning("scikit-image not available, using simple SSIM approximation")
+            logger.warning(
+                "scikit-image not available, using simple SSIM approximation"
+            )
             return self._compute_simple_ssim(ref, proc)
 
     def _compute_simple_ssim(self, ref: np.ndarray, proc: np.ndarray) -> float:
@@ -207,11 +209,12 @@ class MetricsComputer:
 
         covar = np.mean((ref_flat - mean_ref) * (proc_flat - mean_proc))
 
-        c1 = 0.01 ** 2
-        c2 = 0.03 ** 2
+        c1 = 0.01**2
+        c2 = 0.03**2
 
-        ssim = ((2 * mean_ref * mean_proc + c1) * (2 * covar + c2)) / \
-               ((mean_ref**2 + mean_proc**2 + c1) * (var_ref + var_proc + c2))
+        ssim = ((2 * mean_ref * mean_proc + c1) * (2 * covar + c2)) / (
+            (mean_ref**2 + mean_proc**2 + c1) * (var_ref + var_proc + c2)
+        )
 
         return float(ssim)
 
@@ -248,7 +251,7 @@ class MetricsComputer:
 
         # Load model (cached)
         if self._lpips_model is None:
-            self._lpips_model = lpips.LPIPS(net='alex', verbose=False)
+            self._lpips_model = lpips.LPIPS(net="alex", verbose=False)
             if torch.cuda.is_available():
                 self._lpips_model = self._lpips_model.cuda()
 

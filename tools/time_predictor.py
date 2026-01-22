@@ -205,7 +205,7 @@ class ProcessingTimePredictor:
                 "alpha_multiplier": alpha_multiplier,
                 "historical_adjustment": historical_adjustment,
             },
-            "similar_records_count": len(self._find_similar_images(meta)) if self.history else 0,
+            "similar_records_count": (len(self._find_similar_images(meta)) if self.history else 0),
         }
 
     def _find_similar_images(self, meta: Dict[str, Any], tolerance: float = 0.3) -> List[Dict[str, Any]]:
@@ -251,7 +251,7 @@ class ProcessingTimePredictor:
             "total_predicted_min": total_predicted / 60,
             "total_predicted_hours": total_predicted / 3600,
             "estimated_completion": (datetime.now() + timedelta(seconds=total_predicted)).isoformat(),
-            "average_time_per_image_min": (total_predicted / len(image_paths)) / 60 if image_paths else 0,
+            "average_time_per_image_min": ((total_predicted / len(image_paths)) / 60 if image_paths else 0),
             "predictions": predictions,
             "statistics": {
                 "min_time_sec": min(predicted_times) if predicted_times else 0,
@@ -263,7 +263,12 @@ class ProcessingTimePredictor:
 
         return batch_result
 
-    def record_actual_time(self, metadata: ImageMetadata, actual_time_sec: float, predicted_time_sec: Optional[float] = None):
+    def record_actual_time(
+        self,
+        metadata: ImageMetadata,
+        actual_time_sec: float,
+        predicted_time_sec: Optional[float] = None,
+    ):
         """Record actual processing time for future prediction improvement."""
         record = {
             "timestamp": datetime.now().isoformat(),
@@ -280,7 +285,11 @@ class ProcessingTimePredictor:
     def _save_history(self):
         """Save processing history to disk."""
         try:
-            data = {"last_updated": datetime.now().isoformat(), "total_records": len(self.history), "records": self.history}
+            data = {
+                "last_updated": datetime.now().isoformat(),
+                "total_records": len(self.history),
+                "records": self.history,
+            }
 
             with open(self.history_path, "w") as f:
                 json.dump(data, f, indent=2)

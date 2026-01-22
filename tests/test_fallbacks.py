@@ -14,7 +14,11 @@ def test_disk_full_recovery(tmp_path):
     def disk_full_processor(path):
         raise OSError("No space left on device")
 
-    processor = BatchProcessor(processor_fn=disk_full_processor, checkpoint_dir=tmp_path / "checkpoints", max_retries=0)
+    processor = BatchProcessor(
+        processor_fn=disk_full_processor,
+        checkpoint_dir=tmp_path / "checkpoints",
+        max_retries=0,
+    )
 
     # Create test input
     input_file = tmp_path / "input.txt"
@@ -48,7 +52,11 @@ def test_corrupted_input_file(tmp_path):
 
         return Result()
 
-    processor = BatchProcessor(processor_fn=processor_with_validation, checkpoint_dir=tmp_path / "checkpoints", max_retries=0)
+    processor = BatchProcessor(
+        processor_fn=processor_with_validation,
+        checkpoint_dir=tmp_path / "checkpoints",
+        max_retries=0,
+    )
 
     # Create corrupted file
     corrupted = tmp_path / "corrupted.txt"
@@ -117,7 +125,10 @@ def test_concurrent_checkpoint_access(tmp_path):
     items = [JobItem(f"input{i}.jpg", f"output{i}.jpg") for i in range(5)]
 
     job = BatchJob(
-        job_id="concurrent_test", items=items, checkpoint_path=tmp_path / "job.json", created_at="2025-01-01T00:00:00Z"
+        job_id="concurrent_test",
+        items=items,
+        checkpoint_path=tmp_path / "job.json",
+        created_at="2025-01-01T00:00:00Z",
     )
 
     # Save from multiple threads
@@ -228,7 +239,10 @@ def test_symlink_attack_prevention(tmp_path):
 
 def test_path_traversal_prevention():
     """Test prevention of path traversal attacks."""
-    from src.transformation_portal.core.security.path import PathValidator, safe_resolve_path
+    from src.transformation_portal.core.security.path import (
+        PathValidator,
+        safe_resolve_path,
+    )
     import tempfile
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -273,7 +287,10 @@ def test_large_batch_checkpoint_performance(tmp_path):
     items = [JobItem(f"input{i}.jpg", f"output{i}.jpg") for i in range(10000)]
 
     job = BatchJob(
-        job_id="large_batch", items=items, checkpoint_path=tmp_path / "large.json", created_at="2025-01-01T00:00:00Z"
+        job_id="large_batch",
+        items=items,
+        checkpoint_path=tmp_path / "large.json",
+        created_at="2025-01-01T00:00:00Z",
     )
 
     # Measure checkpoint save time
@@ -293,7 +310,10 @@ def test_large_batch_checkpoint_performance(tmp_path):
     assert len(loaded.items) == 10000
 
 
-@pytest.mark.skipif(not pytest.importorskip("torch", reason="torch not available"), reason="torch not available")
+@pytest.mark.skipif(
+    not pytest.importorskip("torch", reason="torch not available"),
+    reason="torch not available",
+)
 def test_cuda_out_of_memory_handling():
     """Test handling of CUDA out of memory errors."""
     import torch
@@ -343,7 +363,11 @@ def test_processor_timeout_handling(tmp_path):
 
     # This test demonstrates structure but doesn't actually implement timeout
     # Real implementation would need timeout wrapper
-    processor = BatchProcessor(processor_fn=slow_processor, checkpoint_dir=tmp_path / "checkpoints", max_retries=0)
+    processor = BatchProcessor(
+        processor_fn=slow_processor,
+        checkpoint_dir=tmp_path / "checkpoints",
+        max_retries=0,
+    )
 
     # Note: Current implementation doesn't have timeout
     # This is a placeholder for future enhancement

@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 try:
     from jsonschema import Draft7Validator
+
     HAS_JSONSCHEMA = True
 except ImportError:
     HAS_JSONSCHEMA = False
@@ -27,7 +28,12 @@ except ImportError:
 
 
 # Default schema path relative to repo root
-DEFAULT_SCHEMA_PATH = Path(__file__).parent.parent.parent.parent / "config" / "schemas" / "recipe_schema.json"
+DEFAULT_SCHEMA_PATH = (
+    Path(__file__).parent.parent.parent.parent
+    / "config"
+    / "schemas"
+    / "recipe_schema.json"
+)
 
 
 def get_recipe_schema() -> Dict[str, Any]:
@@ -46,12 +52,9 @@ def get_recipe_schema() -> Dict[str, Any]:
             "name": {
                 "type": "string",
                 "description": "Human-readable recipe name",
-                "minLength": 1
+                "minLength": 1,
             },
-            "description": {
-                "type": "string",
-                "description": "Recipe description"
-            },
+            "description": {"type": "string", "description": "Recipe description"},
             "stages": {
                 "type": "array",
                 "description": "Processing stages to execute",
@@ -65,11 +68,11 @@ def get_recipe_schema() -> Dict[str, Any]:
                         "photo_finishing",
                         "branding",
                         "upscaling_4k",
-                        "quality_assessment"
-                    ]
+                        "quality_assessment",
+                    ],
                 },
                 "minItems": 1,
-                "uniqueItems": True
+                "uniqueItems": True,
             },
             "depth_estimation": {
                 "type": "object",
@@ -79,14 +82,14 @@ def get_recipe_schema() -> Dict[str, Any]:
                     "model": {
                         "type": "string",
                         "description": "Depth model name",
-                        "default": "depth-anything-v2-small"
+                        "default": "depth-anything-v2-small",
                     },
                     "device": {
                         "type": "string",
                         "enum": ["auto", "cpu", "cuda", "mps"],
-                        "default": "auto"
-                    }
-                }
+                        "default": "auto",
+                    },
+                },
             },
             "ai_enhancement": {
                 "type": "object",
@@ -98,15 +101,15 @@ def get_recipe_schema() -> Dict[str, Any]:
                         "type": "number",
                         "minimum": 0.0,
                         "maximum": 1.0,
-                        "default": 0.5
+                        "default": 0.5,
                     },
                     "steps": {
                         "type": "integer",
                         "minimum": 1,
                         "maximum": 100,
-                        "default": 30
-                    }
-                }
+                        "default": 30,
+                    },
+                },
             },
             "material_response": {
                 "type": "object",
@@ -116,74 +119,71 @@ def get_recipe_schema() -> Dict[str, Any]:
                     "profile": {
                         "type": "string",
                         "description": "Material profile name",
-                        "default": "luxury_interior"
+                        "default": "luxury_interior",
                     },
                     "texture_boost": {
                         "type": "number",
                         "minimum": 0.0,
                         "maximum": 1.0,
-                        "default": 0.25
+                        "default": 0.25,
                     },
                     "ambient_occlusion": {
                         "type": "number",
                         "minimum": 0.0,
                         "maximum": 1.0,
-                        "default": 0.12
+                        "default": 0.12,
                     },
                     "highlight_warmth": {
                         "type": "number",
                         "minimum": 0.0,
                         "maximum": 1.0,
-                        "default": 0.08
+                        "default": 0.08,
                     },
                     "window_light_wrap": {
                         "type": "number",
                         "minimum": 0.0,
                         "maximum": 1.0,
-                        "default": 0.14
-                    }
-                }
+                        "default": 0.14,
+                    },
+                },
             },
             "color_grading": {
                 "type": "object",
                 "description": "Color grading stage configuration",
                 "properties": {
                     "enabled": {"type": "boolean", "default": True},
-                    "lut": {
-                        "type": "string",
-                        "description": "Path to LUT file"
-                    },
+                    "lut": {"type": "string", "description": "Path to LUT file"},
                     "lut_strength": {
                         "type": "number",
                         "minimum": 0.0,
                         "maximum": 1.0,
-                        "default": 0.7
+                        "default": 0.7,
                     },
                     "contrast": {
                         "type": "number",
                         "minimum": 0.5,
                         "maximum": 2.0,
-                        "default": 1.0
+                        "default": 1.0,
                     },
                     "saturation": {
                         "type": "number",
                         "minimum": 0.0,
                         "maximum": 2.0,
-                        "default": 1.0
+                        "default": 1.0,
                     },
                     "warmth": {
                         "type": "number",
                         "minimum": -0.5,
                         "maximum": 0.5,
-                        "default": 0.0
+                        "default": 0.0,
                     },
                     "exposure": {
                         "type": "number",
                         "minimum": -2.0,
                         "maximum": 2.0,
-                        "default": 0.0
-                    }
-                }
+                        "default": 0.0,
+                    },
+                },
             },
             "photo_finishing": {
                 "type": "object",
@@ -193,7 +193,7 @@ def get_recipe_schema() -> Dict[str, Any]:
                     "aces": {
                         "type": "boolean",
                         "description": "Apply ACES tone mapping",
-                        "default": True
+                        "default": True,
                     },
                     "bloom": {
                         "type": "object",
@@ -203,15 +203,15 @@ def get_recipe_schema() -> Dict[str, Any]:
                                 "type": "number",
                                 "minimum": 0.0,
                                 "maximum": 1.0,
-                                "default": 0.8
+                                "default": 0.8,
                             },
                             "intensity": {
                                 "type": "number",
                                 "minimum": 0.0,
                                 "maximum": 1.0,
-                                "default": 0.25
-                            }
-                        }
+                                "default": 0.25,
+                            },
+                        },
                     },
                     "vignette": {
                         "type": "object",
@@ -221,9 +221,9 @@ def get_recipe_schema() -> Dict[str, Any]:
                                 "type": "number",
                                 "minimum": 0.0,
                                 "maximum": 1.0,
-                                "default": 0.18
-                            }
-                        }
+                                "default": 0.18,
+                            },
+                        },
                     },
                     "grain": {
                         "type": "object",
@@ -233,11 +233,11 @@ def get_recipe_schema() -> Dict[str, Any]:
                                 "type": "number",
                                 "minimum": 0.0,
                                 "maximum": 0.1,
-                                "default": 0.012
-                            }
-                        }
-                    }
-                }
+                                "default": 0.012,
+                            },
+                        },
+                    },
+                },
             },
             "branding": {
                 "type": "object",
@@ -246,8 +246,8 @@ def get_recipe_schema() -> Dict[str, Any]:
                     "enabled": {"type": "boolean", "default": False},
                     "logo": {"type": "string", "description": "Path to logo file"},
                     "text": {"type": "string", "description": "Brand text overlay"},
-                    "watermark": {"type": "boolean", "default": False}
-                }
+                    "watermark": {"type": "boolean", "default": False},
+                },
             },
             "output": {
                 "type": "object",
@@ -256,23 +256,23 @@ def get_recipe_schema() -> Dict[str, Any]:
                     "format": {
                         "type": "string",
                         "enum": ["jpeg", "png", "tiff", "exr"],
-                        "default": "tiff"
+                        "default": "tiff",
                     },
                     "quality": {
                         "type": "integer",
                         "minimum": 1,
                         "maximum": 100,
-                        "default": 95
+                        "default": 95,
                     },
                     "bit_depth": {
                         "type": "integer",
                         "enum": [8, 16, 32],
-                        "default": 16
-                    }
-                }
-            }
+                        "default": 16,
+                    },
+                },
+            },
         },
-        "additionalProperties": True
+        "additionalProperties": True,
     }
 
 
@@ -286,7 +286,7 @@ class RecipeValidator:
             schema_path: Optional path to a custom schema file.
         """
         if schema_path and schema_path.exists():
-            with open(schema_path, 'r', encoding='utf-8') as f:
+            with open(schema_path, "r", encoding="utf-8") as f:
                 self.schema = json.load(f)
         else:
             self.schema = get_recipe_schema()
@@ -329,24 +329,29 @@ class RecipeValidator:
         errors: List[str] = []
 
         # Required fields
-        if 'name' not in recipe_dict:
+        if "name" not in recipe_dict:
             errors.append("root: 'name' is a required property")
-        elif not isinstance(recipe_dict['name'], str):
+        elif not isinstance(recipe_dict["name"], str):
             errors.append("name: must be a string")
 
-        if 'stages' not in recipe_dict:
+        if "stages" not in recipe_dict:
             errors.append("root: 'stages' is a required property")
-        elif not isinstance(recipe_dict['stages'], list):
+        elif not isinstance(recipe_dict["stages"], list):
             errors.append("stages: must be an array")
-        elif len(recipe_dict['stages']) == 0:
+        elif len(recipe_dict["stages"]) == 0:
             errors.append("stages: must have at least 1 item")
 
         # Validate stage names
         valid_stages = {
-            'depth_estimation', 'ai_enhancement', 'material_response',
-            'color_grading', 'photo_finishing', 'branding', 'output'
+            "depth_estimation",
+            "ai_enhancement",
+            "material_response",
+            "color_grading",
+            "photo_finishing",
+            "branding",
+            "output",
         }
-        for stage in recipe_dict.get('stages', []):
+        for stage in recipe_dict.get("stages", []):
             if stage not in valid_stages:
                 errors.append(f"stages: '{stage}' is not a valid stage")
 
@@ -367,7 +372,7 @@ class RecipeValidator:
             return (False, [f"File not found: {recipe_path}"])
 
         try:
-            with open(recipe_path, 'r', encoding='utf-8') as f:
+            with open(recipe_path, "r", encoding="utf-8") as f:
                 recipe_dict = yaml.safe_load(f)
         except yaml.YAMLError as e:
             return (False, [f"Invalid YAML: {e}"])
@@ -392,7 +397,7 @@ def validate_recipe_file(recipe_path: Path) -> Tuple[bool, List[str]]:
 
 
 __all__ = [
-    'RecipeValidator',
-    'get_recipe_schema',
-    'validate_recipe_file',
+    "RecipeValidator",
+    "get_recipe_schema",
+    "validate_recipe_file",
 ]

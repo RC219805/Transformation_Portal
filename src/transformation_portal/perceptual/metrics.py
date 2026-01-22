@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 class MetricType(Enum):
     """Types of quality metrics."""
+
     LPIPS = "lpips"  # Perceptual similarity (lower is better)
     FID = "fid"  # Distribution distance (lower is better)
     BRISQUE = "brisque"  # No-reference quality (lower is better)
@@ -39,6 +40,7 @@ class MetricType(Enum):
 @dataclass
 class PerceptualScore:
     """Result of perceptual quality assessment."""
+
     metric_type: MetricType
     score: float
     higher_is_better: bool
@@ -75,7 +77,9 @@ class QualityMetrics:
         self.substrate = substrate
         self.cache_models = cache_models
         device = substrate.get_device()
-        self.device = device if isinstance(device, torch.device) else torch.device(device)
+        self.device = (
+            device if isinstance(device, torch.device) else torch.device(device)
+        )
 
         # Model cache
         self._lpips_model = None
@@ -90,9 +94,7 @@ class QualityMetrics:
         return tensor
 
     def compute_all(
-        self,
-        image: Tensor,
-        reference: Optional[Tensor] = None
+        self, image: Tensor, reference: Optional[Tensor] = None
     ) -> Dict[MetricType, PerceptualScore]:
         """
         Compute all available metrics.
@@ -120,10 +122,7 @@ class QualityMetrics:
         return scores
 
     def compute_lpips(
-        self,
-        image: Tensor,
-        reference: Tensor,
-        network: str = "alex"
+        self, image: Tensor, reference: Tensor, network: str = "alex"
     ) -> PerceptualScore:
         """
         Compute LPIPS (Learned Perceptual Image Patch Similarity).
@@ -149,6 +148,7 @@ class QualityMetrics:
         if self._lpips_model is None or not self.cache_models:
             try:
                 import lpips
+
                 self._lpips_model = lpips.LPIPS(net=network).to(self.device)
                 self._lpips_model.eval()
             except ImportError:
@@ -172,14 +172,11 @@ class QualityMetrics:
             score=score,
             higher_is_better=False,
             normalized_score=normalized,
-            metadata={"network": network}
+            metadata={"network": network},
         )
 
     def compute_psnr(
-        self,
-        image: Tensor,
-        reference: Tensor,
-        max_value: float = 1.0
+        self, image: Tensor, reference: Tensor, max_value: float = 1.0
     ) -> PerceptualScore:
         """
         Compute PSNR (Peak Signal-to-Noise Ratio).
@@ -197,7 +194,7 @@ class QualityMetrics:
         mse = F.mse_loss(image, reference).item()
 
         if mse == 0:
-            psnr = float('inf')
+            psnr = float("inf")
             normalized = 1.0
         else:
             psnr = 20 * np.log10(max_value / np.sqrt(mse))
@@ -209,7 +206,7 @@ class QualityMetrics:
             score=psnr,
             higher_is_better=True,
             normalized_score=normalized,
-            metadata={"mse": mse}
+            metadata={"mse": mse},
         )
 
     def compute_ssim(
@@ -218,7 +215,7 @@ class QualityMetrics:
         reference: Tensor,
         window_size: int = 11,
         k1: float = 0.01,
-        k2: float = 0.03
+        k2: float = 0.03,
     ) -> PerceptualScore:
         """
         Compute SSIM (Structural Similarity Index).
@@ -246,10 +243,7 @@ class QualityMetrics:
         window = window.to(image.device)
 
         # Compute SSIM
-        ssim_val = self._ssim(
-            image, reference, window, window_size,
-            k1=k1, k2=k2
-        )
+        ssim_val = self._ssim(image, reference, window, window_size, k1=k1, k2=k2)
 
         score = ssim_val.item()
 
@@ -258,14 +252,10 @@ class QualityMetrics:
             score=score,
             higher_is_better=True,
             normalized_score=score,  # Already in [0, 1]
-            metadata={"window_size": window_size}
+            metadata={"window_size": window_size},
         )
 
-    def compute_mse(
-        self,
-        image: Tensor,
-        reference: Tensor
-    ) -> PerceptualScore:
+    def compute_mse(self, image: Tensor, reference: Tensor) -> PerceptualScore:
         """
         Compute MSE (Mean Squared Error).
 
@@ -288,7 +278,7 @@ class QualityMetrics:
             score=mse,
             higher_is_better=False,
             normalized_score=normalized,
-            metadata={}
+            metadata={},
         )
 
     def compute_brisque(self, image: Tensor) -> PerceptualScore:
@@ -325,10 +315,19 @@ class QualityMetrics:
             # Since these are not bundled with this repo (and CI/offline environments
             # should not download them), treat BRISQUE as "optional" and fall back
             # to a lightweight sharpness proxy unless explicit file paths are provided.
-            model_path = os.environ.get("TP_BRISQUE_MODEL_PATH") or os.environ.get("BRISQUE_MODEL_PATH")
-            range_path = os.environ.get("TP_BRISQUE_RANGE_PATH") or os.environ.get("BRISQUE_RANGE_PATH")
+            model_path = os.environ.get("TP_BRISQUE_MODEL_PATH") or os.environ.get(
+                "BRISQUE_MODEL_PATH"
+            )
+            range_path = os.environ.get("TP_BRISQUE_RANGE_PATH") or os.environ.get(
+                "BRISQUE_RANGE_PATH"
+            )
 
-            if not model_path or not range_path or not Path(model_path).exists() or not Path(range_path).exists():
+            if (
+                not model_path
+                or not range_path
+                or not Path(model_path).exists()
+                or not Path(range_path).exists()
+            ):
                 raise FileNotFoundError(
                     "BRISQUE model/range files not configured. Set TP_BRISQUE_MODEL_PATH and "
                     "TP_BRISQUE_RANGE_PATH (or BRISQUE_MODEL_PATH/BRISQUE_RANGE_PATH)."
@@ -352,7 +351,7 @@ class QualityMetrics:
             score=score,
             higher_is_better=False,
             normalized_score=normalized,
-            metadata={}
+            metadata={},
         )
 
     def compute_niqe(self, image: Tensor) -> PerceptualScore:
@@ -379,7 +378,7 @@ class QualityMetrics:
             score=score,
             higher_is_better=False,
             normalized_score=normalized,
-            metadata={"simplified": True}
+            metadata={"simplified": True},
         )
 
     # ========================================================================
@@ -390,10 +389,12 @@ class QualityMetrics:
         """Create Gaussian window for SSIM."""
         # Create 1D Gaussian
         sigma = 1.5
-        gauss = torch.Tensor([
-            np.exp(-(x - window_size // 2) ** 2 / (2 * sigma ** 2))
-            for x in range(window_size)
-        ])
+        gauss = torch.Tensor(
+            [
+                np.exp(-((x - window_size // 2) ** 2) / (2 * sigma**2))
+                for x in range(window_size)
+            ]
+        )
         gauss = gauss / gauss.sum()
 
         # Create 2D window
@@ -412,7 +413,7 @@ class QualityMetrics:
         window: Tensor,
         window_size: int,
         k1: float = 0.01,
-        k2: float = 0.03
+        k2: float = 0.03,
     ) -> Tensor:
         """Compute SSIM between two images."""
         L = 1.0  # Dynamic range
@@ -424,18 +425,34 @@ class QualityMetrics:
         mu1 = F.conv2d(img1, window, padding=window_size // 2, groups=img1.shape[1])
         mu2 = F.conv2d(img2, window, padding=window_size // 2, groups=img2.shape[1])
 
-        mu1_sq = mu1 ** 2
-        mu2_sq = mu2 ** 2
+        mu1_sq = mu1**2
+        mu2_sq = mu2**2
         mu1_mu2 = mu1 * mu2
 
         # Compute variances
-        sigma1_sq = F.conv2d(img1 * img1, window, padding=window_size // 2, groups=img1.shape[1]) - mu1_sq
-        sigma2_sq = F.conv2d(img2 * img2, window, padding=window_size // 2, groups=img2.shape[1]) - mu2_sq
-        sigma12 = F.conv2d(img1 * img2, window, padding=window_size // 2, groups=img1.shape[1]) - mu1_mu2
+        sigma1_sq = (
+            F.conv2d(
+                img1 * img1, window, padding=window_size // 2, groups=img1.shape[1]
+            )
+            - mu1_sq
+        )
+        sigma2_sq = (
+            F.conv2d(
+                img2 * img2, window, padding=window_size // 2, groups=img2.shape[1]
+            )
+            - mu2_sq
+        )
+        sigma12 = (
+            F.conv2d(
+                img1 * img2, window, padding=window_size // 2, groups=img1.shape[1]
+            )
+            - mu1_mu2
+        )
 
         # Compute SSIM
-        ssim_map = ((2 * mu1_mu2 + c1) * (2 * sigma12 + c2)) / \
-                   ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2))
+        ssim_map = ((2 * mu1_mu2 + c1) * (2 * sigma12 + c2)) / (
+            (mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2)
+        )
 
         return ssim_map.mean()
 
@@ -445,7 +462,11 @@ class QualityMetrics:
             image = image[0]
 
         # Compute gradients
-        sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32, device=image.device)
+        sobel_x = torch.tensor(
+            [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],
+            dtype=torch.float32,
+            device=image.device,
+        )
         sobel_y = sobel_x.t()
 
         sobel_x = sobel_x.view(1, 1, 3, 3).repeat(image.shape[0], 1, 1, 1)
@@ -456,7 +477,7 @@ class QualityMetrics:
         grad_y = F.conv2d(image.unsqueeze(0), sobel_y, padding=1, groups=image.shape[0])
 
         # Gradient magnitude
-        grad_mag = torch.sqrt(grad_x ** 2 + grad_y ** 2)
+        grad_mag = torch.sqrt(grad_x**2 + grad_y**2)
 
         # Average sharpness
         sharpness = grad_mag.mean().item()
@@ -489,12 +510,14 @@ class QualityMetrics:
 
 # Convenience functions for direct metric computation
 
+
 def compute_lpips(image: Tensor, reference: Tensor, device: torch.device) -> float:
     """Compute LPIPS score."""
-    substrate = type('obj', (object,), {
-        'get_device': lambda: device,
-        'to_device': lambda x: x.to(device)
-    })()
+    substrate = type(
+        "obj",
+        (object,),
+        {"get_device": lambda: device, "to_device": lambda x: x.to(device)},
+    )()
     metrics = QualityMetrics(substrate, cache_models=True)
     score = metrics.compute_lpips(image, reference)
     return score.score
@@ -504,14 +527,14 @@ def compute_psnr(image: Tensor, reference: Tensor) -> float:
     """Compute PSNR score."""
     mse = F.mse_loss(image, reference).item()
     if mse == 0:
-        return float('inf')
+        return float("inf")
     return 20 * np.log10(1.0 / np.sqrt(mse))
 
 
 def compute_ssim(image: Tensor, reference: Tensor) -> float:
     """Compute SSIM score."""
     device = image.device
-    substrate = type('obj', (object,), {'get_device': lambda: device})()
+    substrate = type("obj", (object,), {"get_device": lambda: device})()
     metrics = QualityMetrics(substrate)
     score = metrics.compute_ssim(image, reference)
     return score.score
@@ -520,7 +543,7 @@ def compute_ssim(image: Tensor, reference: Tensor) -> float:
 def compute_brisque(image: Tensor) -> float:
     """Compute BRISQUE score."""
     device = image.device
-    substrate = type('obj', (object,), {'get_device': lambda: device})()
+    substrate = type("obj", (object,), {"get_device": lambda: device})()
     metrics = QualityMetrics(substrate)
     score = metrics.compute_brisque(image)
     return score.score
@@ -529,7 +552,7 @@ def compute_brisque(image: Tensor) -> float:
 def compute_niqe(image: Tensor) -> float:
     """Compute NIQE score."""
     device = image.device
-    substrate = type('obj', (object,), {'get_device': lambda: device})()
+    substrate = type("obj", (object,), {"get_device": lambda: device})()
     metrics = QualityMetrics(substrate)
     score = metrics.compute_niqe(image)
     return score.score

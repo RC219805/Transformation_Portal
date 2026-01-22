@@ -19,25 +19,45 @@ class TestComplexityScore:
 
     def test_high_complexity_flag(self):
         """High complexity class sets is_high_complexity."""
-        score = ComplexityScore(gradient_energy=0.20, edge_density=0.25, megapixels=15.0, complexity_class="high")
+        score = ComplexityScore(
+            gradient_energy=0.20,
+            edge_density=0.25,
+            megapixels=15.0,
+            complexity_class="high",
+        )
         assert score.is_high_complexity is True
         assert score.is_medium_complexity is False
 
     def test_medium_complexity_flag(self):
         """Medium complexity class sets is_medium_complexity."""
-        score = ComplexityScore(gradient_energy=0.12, edge_density=0.15, megapixels=8.0, complexity_class="medium")
+        score = ComplexityScore(
+            gradient_energy=0.12,
+            edge_density=0.15,
+            megapixels=8.0,
+            complexity_class="medium",
+        )
         assert score.is_high_complexity is False
         assert score.is_medium_complexity is True
 
     def test_low_complexity_flags(self):
         """Low complexity class sets neither flag."""
-        score = ComplexityScore(gradient_energy=0.05, edge_density=0.08, megapixels=5.0, complexity_class="low")
+        score = ComplexityScore(
+            gradient_energy=0.05,
+            edge_density=0.08,
+            megapixels=5.0,
+            complexity_class="low",
+        )
         assert score.is_high_complexity is False
         assert score.is_medium_complexity is False
 
     def test_to_dict_serialization(self):
         """to_dict() produces JSON-safe dict."""
-        score = ComplexityScore(gradient_energy=0.15, edge_density=0.20, megapixels=12.5, complexity_class="medium")
+        score = ComplexityScore(
+            gradient_energy=0.15,
+            edge_density=0.20,
+            megapixels=12.5,
+            complexity_class="medium",
+        )
         d = score.to_dict()
         assert isinstance(d, dict)
         assert d["gradient_energy"] == pytest.approx(0.15)
@@ -165,7 +185,12 @@ class TestComplexityComputation:
         assert score_low.complexity_class == "low"
 
         # Very low thresholds → likely high
-        score_high = compute_complexity(img, gradient_threshold=0.001, edge_density_threshold=0.001, megapixel_threshold=0.001)
+        score_high = compute_complexity(
+            img,
+            gradient_threshold=0.001,
+            edge_density_threshold=0.001,
+            megapixel_threshold=0.001,
+        )
         assert score_high.complexity_class == "high"
 
 

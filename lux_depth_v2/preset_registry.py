@@ -15,7 +15,6 @@ from typing import Dict, List, Optional
 from .config import Preset
 from .schemas import PresetMetadata
 
-
 # Preset Registry - Single source of truth
 PRESET_REGISTRY: Dict[str, PresetMetadata] = {
     Preset.PHOTO_REALISTIC.value: PresetMetadata(

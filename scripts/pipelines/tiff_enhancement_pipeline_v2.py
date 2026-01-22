@@ -33,7 +33,11 @@ import numpy as np
 from PIL import Image
 
 # Setup logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
 log = logging.getLogger("pipeline_v2")
 
 
@@ -83,7 +87,11 @@ class MaterialClusterer:
         # K-means clustering
         from sklearn.cluster import KMeans
 
-        kmeans = KMeans(n_clusters=self.config.n_clusters, random_state=self.config.seed, max_iter=self.config.max_iter)
+        kmeans = KMeans(
+            n_clusters=self.config.n_clusters,
+            random_state=self.config.seed,
+            max_iter=self.config.max_iter,
+        )
         labels = kmeans.fit_predict(features)
         label_map = labels.reshape(h, w)
 
@@ -145,7 +153,7 @@ class MaterialClusterer:
                 "count": int(mask.sum()),
                 "percentage": float(mask.sum() / len(labels) * 100),
                 "centroid": centroids[i].tolist(),
-                "std": cluster_features.std(axis=0).tolist() if len(cluster_features) > 0 else [0, 0, 0],
+                "std": (cluster_features.std(axis=0).tolist() if len(cluster_features) > 0 else [0, 0, 0]),
             }
             stats["clusters"].append(cluster_stat)
 
@@ -194,7 +202,10 @@ class AdaptiveSegmentationStage:
         if mode in ["material", "hybrid", "auto"]:
             # Type system ensures config has required attributes via Protocol
             self.material_clusterer = MaterialClusterer(
-                MaterialClusterConfig(n_clusters=config.material_clusters, texture_config=config.material_textures)
+                MaterialClusterConfig(
+                    n_clusters=config.material_clusters,
+                    texture_config=config.material_textures,
+                )
             )
 
     def execute(self, enhanced_images_dir: Path, depth_maps_dir: Path, output_dir: Path) -> Tuple[bool, int]:
@@ -348,7 +359,8 @@ class EnhancedPipelineConfig:
 def build_enhanced_parser() -> argparse.ArgumentParser:
     """Build enhanced CLI parser with material clustering options."""
     ap = argparse.ArgumentParser(
-        description="Enhanced TIFF pipeline with adaptive segmentation", formatter_class=argparse.RawDescriptionHelpFormatter
+        description="Enhanced TIFF pipeline with adaptive segmentation",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
     # Original arguments
@@ -366,10 +378,22 @@ def build_enhanced_parser() -> argparse.ArgumentParser:
         default="semantic",
         help="Segmentation strategy (semantic=Detectron2, material=K-means)",
     )
-    seg.add_argument("--material-clusters", type=int, default=6, help="Number of material clusters for K-means")
-    seg.add_argument("--material-textures", type=Path, default=None, help="JSON config file for material texture rules")
     seg.add_argument(
-        "--aerial-mode", action="store_true", help="Optimize for aerial/drone imagery (implies --segmentation-mode material)"
+        "--material-clusters",
+        type=int,
+        default=6,
+        help="Number of material clusters for K-means",
+    )
+    seg.add_argument(
+        "--material-textures",
+        type=Path,
+        default=None,
+        help="JSON config file for material texture rules",
+    )
+    seg.add_argument(
+        "--aerial-mode",
+        action="store_true",
+        help="Optimize for aerial/drone imagery (implies --segmentation-mode material)",
     )
 
     return ap

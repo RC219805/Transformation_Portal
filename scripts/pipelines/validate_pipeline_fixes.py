@@ -257,12 +257,22 @@ def test_depth_model_download() -> Dict:
         transformers_available = True
         transformers_version = transformers.__version__
         logger.info(f"✅ transformers library available: v{transformers_version}")
-        results["checks"].append({"name": "transformers_library", "status": "PASS", "version": transformers_version})
+        results["checks"].append(
+            {
+                "name": "transformers_library",
+                "status": "PASS",
+                "version": transformers_version,
+            }
+        )
     except ImportError:
         transformers_available = False
         logger.warning("⚠️  transformers library not available")
         results["checks"].append(
-            {"name": "transformers_library", "status": "FAIL", "message": "Install with: pip install transformers"}
+            {
+                "name": "transformers_library",
+                "status": "FAIL",
+                "message": "Install with: pip install transformers",
+            }
         )
 
     # Check if depth model is cached
@@ -301,15 +311,22 @@ def test_depth_model_download() -> Dict:
 def main():
     """Main test runner."""
     parser = argparse.ArgumentParser(
-        description="Test Luxury Estate Pipeline Fixes", formatter_class=argparse.RawDescriptionHelpFormatter
+        description="Test Luxury Estate Pipeline Fixes",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
     parser.add_argument("--input-dir", type=Path, help="Directory containing test images")
     parser.add_argument(
-        "--output-report", type=Path, default="pipeline_fixes_test_report.json", help="Output JSON report path"
+        "--output-report",
+        type=Path,
+        default="pipeline_fixes_test_report.json",
+        help="Output JSON report path",
     )
     parser.add_argument(
-        "--test", choices=["shadow", "ai", "depth", "all"], default="all", help="Which test to run (default: all)"
+        "--test",
+        choices=["shadow", "ai", "depth", "all"],
+        default="all",
+        help="Which test to run (default: all)",
     )
 
     args = parser.parse_args()

@@ -28,6 +28,7 @@ from scipy import linalg
 
 try:
     from torchvision.models import inception_v3, Inception_V3_Weights
+
     INCEPTION_AVAILABLE = True
 except ImportError:
     INCEPTION_AVAILABLE = False
@@ -58,11 +59,7 @@ class FIDMetric:
     VERY_GOOD_THRESHOLD = 20.0
     GOOD_THRESHOLD = 50.0
 
-    def __init__(
-        self,
-        device: Optional[str] = None,
-        dims: int = 2048
-    ):
+    def __init__(self, device: Optional[str] = None, dims: int = 2048):
         """Initialize FID metric.
 
         Args:
@@ -74,8 +71,7 @@ class FIDMetric:
         """
         if not INCEPTION_AVAILABLE:
             raise ImportError(
-                "torchvision required for FID. "
-                "Install with: pip install torchvision"
+                "torchvision required for FID. " "Install with: pip install torchvision"
             )
 
         self.device = device or self._detect_device()
@@ -85,8 +81,7 @@ class FIDMetric:
 
         # Load Inception-v3
         self.model = inception_v3(
-            weights=Inception_V3_Weights.IMAGENET1K_V1,
-            transform_input=False
+            weights=Inception_V3_Weights.IMAGENET1K_V1, transform_input=False
         ).to(self.device)
 
         self.model.eval()
@@ -108,7 +103,7 @@ class FIDMetric:
         self,
         images1: List[Union[str, Path, Image.Image, np.ndarray]],
         images2: List[Union[str, Path, Image.Image, np.ndarray]],
-        batch_size: int = 32
+        batch_size: int = 32,
     ) -> float:
         """Calculate FID between two sets of images.
 
@@ -138,9 +133,7 @@ class FIDMetric:
         return fid
 
     def _extract_features(
-        self,
-        images: List[Union[str, Path, Image.Image, np.ndarray]],
-        batch_size: int
+        self, images: List[Union[str, Path, Image.Image, np.ndarray]], batch_size: int
     ) -> np.ndarray:
         """Extract Inception features for images.
 
@@ -155,7 +148,7 @@ class FIDMetric:
 
         # Process in batches
         for i in range(0, len(images), batch_size):
-            batch = images[i:i + batch_size]
+            batch = images[i : i + batch_size]
 
             # Prepare batch
             batch_tensors = [self._prepare_image(img) for img in batch]
@@ -173,8 +166,7 @@ class FIDMetric:
         return features
 
     def _prepare_image(
-        self,
-        image: Union[str, Path, Image.Image, np.ndarray]
+        self, image: Union[str, Path, Image.Image, np.ndarray]
     ) -> torch.Tensor:
         """Prepare image for Inception.
 
@@ -211,8 +203,7 @@ class FIDMetric:
         return tensor.to(self.device)
 
     def _calculate_statistics(
-        self,
-        features: np.ndarray
+        self, features: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Calculate mean and covariance of features.
 
@@ -233,7 +224,7 @@ class FIDMetric:
         sigma1: np.ndarray,
         mu2: np.ndarray,
         sigma2: np.ndarray,
-        eps: float = 1e-6
+        eps: float = 1e-6,
     ) -> float:
         """Calculate Fréchet distance between two Gaussians.
 
@@ -267,7 +258,9 @@ class FIDMetric:
             covmean = covmean.real
 
         # Calculate FID
-        fid = diff.dot(diff) + np.trace(sigma1) + np.trace(sigma2) - 2 * np.trace(covmean)
+        fid = (
+            diff.dot(diff) + np.trace(sigma1) + np.trace(sigma2) - 2 * np.trace(covmean)
+        )
 
         return float(fid)
 
@@ -298,7 +291,7 @@ class FIDMetric:
             "quality": quality,
             "description": description,
             "photorealistic": fid_score < self.VERY_GOOD_THRESHOLD,
-            "acceptable_for_enhancement": fid_score < self.GOOD_THRESHOLD
+            "acceptable_for_enhancement": fid_score < self.GOOD_THRESHOLD,
         }
 
     def __repr__(self) -> str:

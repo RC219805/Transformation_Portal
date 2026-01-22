@@ -185,7 +185,13 @@ class EnhancedOutput:
                 "Software": "Transformation_Portal 750 Picacho Enhancement",
             }
 
-            tifffile.imwrite(output_path, image_16bit, photometric="rgb", metadata=metadata, compression="lzw")
+            tifffile.imwrite(
+                output_path,
+                image_16bit,
+                photometric="rgb",
+                metadata=metadata,
+                compression="lzw",
+            )
         else:
             # Fallback to PIL (limited 16-bit support)
             image_16bit = self._to_16bit()
@@ -304,7 +310,11 @@ class PicachoInference:
         device: Compute device
     """
 
-    def __init__(self, config: Optional[InferenceConfig] = None, model_path: Optional[Path] = None):
+    def __init__(
+        self,
+        config: Optional[InferenceConfig] = None,
+        model_path: Optional[Path] = None,
+    ):
         """
         Initialize inference pipeline.
 

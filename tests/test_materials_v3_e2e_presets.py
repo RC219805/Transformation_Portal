@@ -143,7 +143,9 @@ class TestMaterialsV3GlassPreset:
     def test_glass_preset_validate_mode(self, test_image, test_depth_path, output_dir):
         """Test glass preset in validation mode (forced enablement)."""
         config = PipelineConfig(
-            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS_VALIDATE, output_dir=output_dir, write_outputs=False
+            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS_VALIDATE,
+            output_dir=output_dir,
+            write_outputs=False,
         )
 
         pipeline = LuxPipelineV2(config)
@@ -158,7 +160,9 @@ class TestMaterialsV3GlassPreset:
     def test_glass_pixel_ops_applied(self, test_image, test_depth_path, output_dir):
         """Verify glass pixel operations are applied when enabled."""
         config = PipelineConfig(
-            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS, output_dir=output_dir, write_outputs=False
+            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
+            output_dir=output_dir,
+            write_outputs=False,
         )
 
         pipeline = LuxPipelineV2(config)
@@ -180,7 +184,9 @@ class TestMaterialsV3StonePreset:
     def test_stone_preset_basic(self, test_image, test_depth_path, output_dir):
         """Verify stone preset executes without errors."""
         config = PipelineConfig(
-            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE, output_dir=output_dir, write_outputs=False
+            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE,
+            output_dir=output_dir,
+            write_outputs=False,
         )
 
         pipeline = LuxPipelineV2(config)
@@ -198,7 +204,9 @@ class TestMaterialsV3StonePreset:
     def test_stone_preset_validate_mode(self, test_image, test_depth_path, output_dir):
         """Test stone preset in validation mode."""
         config = PipelineConfig(
-            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE_VALIDATE, output_dir=output_dir, write_outputs=False
+            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE_VALIDATE,
+            output_dir=output_dir,
+            write_outputs=False,
         )
 
         pipeline = LuxPipelineV2(config)
@@ -211,7 +219,9 @@ class TestMaterialsV3StonePreset:
     def test_stone_pixel_ops_applied(self, test_image, test_depth_path, output_dir):
         """Verify stone pixel operations are applied when enabled."""
         config = PipelineConfig(
-            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE, output_dir=output_dir, write_outputs=False
+            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_STONE,
+            output_dir=output_dir,
+            write_outputs=False,
         )
 
         pipeline = LuxPipelineV2(config)
@@ -234,7 +244,9 @@ class TestMaterialsV3ResponsePlan:
     def test_response_plan_generated(self, test_image, test_depth_path, output_dir):
         """Verify MaterialsV3 generates response plan."""
         config = PipelineConfig(
-            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS, output_dir=output_dir, write_outputs=False
+            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
+            output_dir=output_dir,
+            write_outputs=False,
         )
 
         pipeline = LuxPipelineV2(config)
@@ -248,7 +260,9 @@ class TestMaterialsV3ResponsePlan:
     def test_response_plan_contains_materials(self, test_image, test_depth_path, output_dir):
         """Verify response plan identifies materials."""
         config = PipelineConfig(
-            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS, output_dir=output_dir, write_outputs=False
+            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
+            output_dir=output_dir,
+            write_outputs=False,
         )
 
         pipeline = LuxPipelineV2(config)
@@ -275,7 +289,9 @@ class TestMaterialsV3EdgeCasesE2E:
         depth_path = _write_synthetic_depth(tmp_path / "small_depth.tiff", (64, 64))
 
         config = PipelineConfig(
-            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS, output_dir=output_dir, write_outputs=False
+            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
+            output_dir=output_dir,
+            write_outputs=False,
         )
 
         pipeline = LuxPipelineV2(config)
@@ -293,7 +309,9 @@ class TestMaterialsV3EdgeCasesE2E:
         depth_path = _write_synthetic_depth(tmp_path / "gray_depth.tiff", (256, 256))
 
         config = PipelineConfig(
-            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS, output_dir=output_dir, write_outputs=False
+            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
+            output_dir=output_dir,
+            write_outputs=False,
         )
 
         pipeline = LuxPipelineV2(config)
@@ -308,7 +326,9 @@ class TestMaterialsV3EdgeCasesE2E:
         monkeypatch.setenv("DISABLE_MATERIALS_V3", "true")
 
         config = PipelineConfig(
-            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS, output_dir=output_dir, write_outputs=False
+            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
+            output_dir=output_dir,
+            write_outputs=False,
         )
 
         pipeline = LuxPipelineV2(config)
@@ -329,7 +349,9 @@ class TestMaterialsV3Performance:
         import time
 
         config = PipelineConfig(
-            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS, output_dir=output_dir, write_outputs=False
+            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
+            output_dir=output_dir,
+            write_outputs=False,
         )
 
         pipeline = LuxPipelineV2(config)
@@ -347,7 +369,9 @@ class TestMaterialsV3Performance:
         import gc
 
         config = PipelineConfig(
-            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS, output_dir=output_dir, write_outputs=False
+            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
+            output_dir=output_dir,
+            write_outputs=False,
         )
 
         pipeline = LuxPipelineV2(config)
@@ -367,7 +391,9 @@ class TestMaterialsV3Metadata:
     def test_metadata_structure(self, test_image, test_depth_path, output_dir):
         """Verify MaterialsV3 metadata has expected structure."""
         config = PipelineConfig(
-            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS, output_dir=output_dir, write_outputs=False
+            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
+            output_dir=output_dir,
+            write_outputs=False,
         )
 
         pipeline = LuxPipelineV2(config)
@@ -388,7 +414,9 @@ class TestMaterialsV3Metadata:
     def test_all_metadata_fields_present(self, test_image, test_depth_path, output_dir):
         """Verify all expected metadata fields are populated."""
         config = PipelineConfig(
-            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS, output_dir=output_dir, write_outputs=False
+            preset=Preset.INTERIOR_LUXURY_APEX_QUALITY_MATERIALS_V3_GLASS,
+            output_dir=output_dir,
+            write_outputs=False,
         )
 
         pipeline = LuxPipelineV2(config)
@@ -402,7 +430,12 @@ class TestMaterialsV3Metadata:
         if pipeline.materials_v3_engine is not None:
             # At least one of these should be present
             has_v3_data = any(
-                key in result for key in ["materials_v3", "materials_v3_response_plan", "materials_v3_pixel_ops"]
+                key in result
+                for key in [
+                    "materials_v3",
+                    "materials_v3_response_plan",
+                    "materials_v3_pixel_ops",
+                ]
             )
             # If no data, it's okay - may not have been processed yet
             # The important thing is pipeline didn't crash

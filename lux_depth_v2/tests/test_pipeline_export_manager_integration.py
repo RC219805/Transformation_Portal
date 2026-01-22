@@ -130,7 +130,13 @@ class TestExportManagerIntegration:
             assert "export_report" in timing_stages, "export_report timing missing"
 
             # Verify timings are reasonable
-            for stage in ["export_master", "export_upscaled", "export_marketing", "export_preview", "export_report"]:
+            for stage in [
+                "export_master",
+                "export_upscaled",
+                "export_marketing",
+                "export_preview",
+                "export_report",
+            ]:
                 t = timing_stages[stage]
                 assert t > 0, f"{stage} timing should be > 0"
                 assert t < 60.0, f"{stage} timing unexpectedly high: {t}s"

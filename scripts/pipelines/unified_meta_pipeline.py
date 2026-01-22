@@ -49,7 +49,11 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 # Setup logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
 log = logging.getLogger("meta_pipeline")
 
 
@@ -492,10 +496,21 @@ def build_parser() -> argparse.ArgumentParser:
     # Enhancement parameters
     enh = ap.add_argument_group("Enhancement Pipeline")
     enh.add_argument(
-        "--enhancement-preset", default="dramatic", choices=["natural", "punchy", "dramatic", "golden", "vibrant"]
+        "--enhancement-preset",
+        default="dramatic",
+        choices=["natural", "punchy", "dramatic", "golden", "vibrant"],
     )
-    enh.add_argument("--enhancement-tone-curve", default="agx", choices=["agx", "agx-base", "agx-medium", "agx-high", "hable"])
-    enh.add_argument("--depth-effects", nargs="+", default=["haze", "clarity"], choices=["haze", "clarity", "do"])
+    enh.add_argument(
+        "--enhancement-tone-curve",
+        default="agx",
+        choices=["agx", "agx-base", "agx-medium", "agx-high", "hable"],
+    )
+    enh.add_argument(
+        "--depth-effects",
+        nargs="+",
+        default=["haze", "clarity"],
+        choices=["haze", "clarity", "do"],
+    )
     enh.add_argument("--enhancement-workers", type=int, default=6)
     enh.add_argument("--skip-stages", nargs="+", choices=["1", "2", "3", "4", "5"], default=[])
 

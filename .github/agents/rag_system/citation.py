@@ -259,7 +259,12 @@ def main():
     parser.add_argument("--repo-root", default=".", help="Repository root directory")
     parser.add_argument("--query", required=True, help="Search query")
     parser.add_argument("--max-citations", type=int, default=5, help="Max citations")
-    parser.add_argument("--format", choices=["markdown", "text", "json"], default="markdown", help="Output format")
+    parser.add_argument(
+        "--format",
+        choices=["markdown", "text", "json"],
+        default="markdown",
+        help="Output format",
+    )
 
     args = parser.parse_args()
 

@@ -4,7 +4,11 @@ import pytest
 from pathlib import Path
 import json
 
-from src.transformation_portal.core.validation.comparison import BaselineComparator, ComparisonResult, ComparisonStatus
+from src.transformation_portal.core.validation.comparison import (
+    BaselineComparator,
+    ComparisonResult,
+    ComparisonStatus,
+)
 
 
 def test_baseline_comparator_no_baseline(tmp_path):
@@ -158,7 +162,11 @@ def test_comparison_result_to_dict():
 def test_comparison_result_str_no_baseline():
     """Test string representation with no baseline."""
     result = ComparisonResult(
-        status=ComparisonStatus.NO_BASELINE, delta={}, baseline={}, current={"ssim": 0.95}, threshold=0.05
+        status=ComparisonStatus.NO_BASELINE,
+        delta={},
+        baseline={},
+        current={"ssim": 0.95},
+        threshold=0.05,
     )
 
     string = str(result)

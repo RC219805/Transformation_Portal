@@ -19,7 +19,12 @@ class QualityControlPipeline:
     def __init__(self, project_name: str = "750_Picacho"):
         self.project_name = project_name
         self.canonical_sources = []
-        self.quality_report = {"project": project_name, "sources": {}, "outputs": {}, "verification": {}}
+        self.quality_report = {
+            "project": project_name,
+            "sources": {},
+            "outputs": {},
+            "verification": {},
+        }
 
     def verify_source_integrity(self, source_dir: Path) -> Dict:
         """Verify all source files are present and valid"""
@@ -74,12 +79,21 @@ class QualityControlPipeline:
             try:
                 with Image.open(output_file) as img:
                     # Quality checks
-                    checks = {"exists": True, "readable": True, "size": img.size, "mode": img.mode, "format": img.format}
+                    checks = {
+                        "exists": True,
+                        "readable": True,
+                        "size": img.size,
+                        "mode": img.mode,
+                        "format": img.format,
+                    }
 
                     # Format-specific checks
                     if format_type == "ti":
                         checks["bit_depth"] = "16-bit" if img.mode in ["I;16", "I;16B", "RGB;16"] else img.mode
-                        checks["tiff_quality_ok"] = img.mode not in ["L", "P"]  # Should be RGB or better
+                        checks["tiff_quality_ok"] = img.mode not in [
+                            "L",
+                            "P",
+                        ]  # Should be RGB or better
 
                     # Size validation (should match source approximately)
                     source_file_obj = next((s for s in self.canonical_sources if s.stem == base_name), None)
@@ -88,14 +102,23 @@ class QualityControlPipeline:
                             size_match = img.size == src_img.size
                             checks["size_matches_source"] = size_match
 
-                    results[output_file.name] = {"status": "OK", "valid": True, **checks}
+                    results[output_file.name] = {
+                        "status": "OK",
+                        "valid": True,
+                        **checks,
+                    }
 
             except Exception as e:
                 results[output_file.name] = {"status": f"ERROR: {e}", "valid": False}
 
         return results
 
-    def run_pipeline(self, input_dir: Path, output_dir: Path, formats: List[str] = ["jpeg", "png", "tif"]):
+    def run_pipeline(
+        self,
+        input_dir: Path,
+        output_dir: Path,
+        formats: List[str] = ["jpeg", "png", "tif"],
+    ):
         """Run the unified luxury pipeline with quality controls"""
 
         # Step 1: Verify sources

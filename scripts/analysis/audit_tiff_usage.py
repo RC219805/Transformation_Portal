@@ -48,7 +48,17 @@ def main():
     for pattern in ["*.py", "*/*.py", "*/*/*.py"]:
         for f in repo_root.glob(pattern):
             # Skip test files, deprecated, venv, .git
-            if any(skip in str(f) for skip in ["test_", "deprecated", ".venv", "venv", ".git", "__pycache__"]):
+            if any(
+                skip in str(f)
+                for skip in [
+                    "test_",
+                    "deprecated",
+                    ".venv",
+                    "venv",
+                    ".git",
+                    "__pycache__",
+                ]
+            ):
                 continue
             python_files.append(f)
 

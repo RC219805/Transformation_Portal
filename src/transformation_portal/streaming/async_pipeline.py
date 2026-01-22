@@ -55,15 +55,15 @@ from typing import (
     runtime_checkable,
 )
 
-
 # Type variables for generic pipeline stages
-T = TypeVar('T')
-InputT = TypeVar('InputT')
-OutputT = TypeVar('OutputT')
+T = TypeVar("T")
+InputT = TypeVar("InputT")
+OutputT = TypeVar("OutputT")
 
 
 class DeviceType(Enum):
     """Device types for worker affinity."""
+
     CPU = auto()
     CUDA = auto()
     MPS = auto()  # Apple Metal Performance Shaders
@@ -72,6 +72,7 @@ class DeviceType(Enum):
 
 class StageStatus(Enum):
     """Status of a pipeline stage."""
+
     IDLE = auto()
     RUNNING = auto()
     PAUSED = auto()
@@ -82,6 +83,7 @@ class StageStatus(Enum):
 @dataclass
 class PipelineMetrics:
     """Metrics for pipeline performance monitoring."""
+
     items_processed: int = 0
     items_failed: int = 0
     total_processing_time: float = 0.0
@@ -93,12 +95,15 @@ class PipelineMetrics:
     def update_throughput(self) -> None:
         """Calculate current throughput."""
         if self.total_processing_time > 0:
-            self.throughput_items_per_sec = self.items_processed / self.total_processing_time
+            self.throughput_items_per_sec = (
+                self.items_processed / self.total_processing_time
+            )
 
 
 @dataclass
 class StageResult(Generic[T]):
     """Result from a pipeline stage."""
+
     data: Optional[T]
     stage_name: str
     elapsed_time: float
@@ -115,6 +120,7 @@ class StageResult(Generic[T]):
 @dataclass
 class WorkItem(Generic[T]):
     """Item being processed through the pipeline."""
+
     id: str
     data: T
     created_at: float = field(default_factory=time.time)
@@ -164,7 +170,7 @@ class BackpressureQueue(Generic[T]):
         maxsize: int = 10,
         high_water_mark: float = 0.8,
         low_water_mark: float = 0.3,
-        name: str = "queue"
+        name: str = "queue",
     ):
         """Initialize backpressure queue.
 
@@ -210,23 +216,18 @@ class BackpressureQueue(Generic[T]):
     def stats(self) -> Dict[str, Any]:
         """Get queue statistics."""
         return {
-            'name': self._name,
-            'size': self.size,
-            'maxsize': self._maxsize,
-            'items_put': self._items_put,
-            'items_got': self._items_got,
-            'backpressured': self._backpressured,
-            'avg_wait_time': (
-                self._total_wait_time / self._items_got
-                if self._items_got > 0 else 0.0
+            "name": self._name,
+            "size": self.size,
+            "maxsize": self._maxsize,
+            "items_put": self._items_put,
+            "items_got": self._items_got,
+            "backpressured": self._backpressured,
+            "avg_wait_time": (
+                self._total_wait_time / self._items_got if self._items_got > 0 else 0.0
             ),
         }
 
-    async def put(
-        self,
-        item: T,
-        timeout: Optional[float] = None
-    ) -> None:
+    async def put(self, item: T, timeout: Optional[float] = None) -> None:
         """Put item into queue with optional timeout.
 
         Args:
@@ -244,10 +245,7 @@ class BackpressureQueue(Generic[T]):
 
         try:
             if timeout is not None:
-                await asyncio.wait_for(
-                    self._queue.put(item),
-                    timeout=timeout
-                )
+                await asyncio.wait_for(self._queue.put(item), timeout=timeout)
             else:
                 await self._queue.put(item)
         finally:
@@ -258,10 +256,7 @@ class BackpressureQueue(Generic[T]):
         if self._maxsize > 0 and self.size >= self._high_water:
             self._backpressured = True
 
-    async def get(
-        self,
-        timeout: Optional[float] = None
-    ) -> T:
+    async def get(self, timeout: Optional[float] = None) -> T:
         """Get item from queue with optional timeout.
 
         Args:
@@ -277,10 +272,7 @@ class BackpressureQueue(Generic[T]):
 
         try:
             if timeout is not None:
-                item = await asyncio.wait_for(
-                    self._queue.get(),
-                    timeout=timeout
-                )
+                item = await asyncio.wait_for(self._queue.get(), timeout=timeout)
             else:
                 item = await self._queue.get()
         finally:
@@ -363,7 +355,7 @@ class AsyncStage(ABC, Generic[InputT, OutputT]):
         device: DeviceType = DeviceType.CPU,
         max_concurrent: int = 1,
         timeout: Optional[float] = None,
-        required: bool = True
+        required: bool = True,
     ):
         """Initialize async stage.
 
@@ -394,14 +386,15 @@ class AsyncStage(ABC, Generic[InputT, OutputT]):
     def metrics(self) -> Dict[str, Any]:
         """Get stage metrics."""
         return {
-            'name': self.name,
-            'status': self._status.name,
-            'items_processed': self._items_processed,
-            'items_failed': self._items_failed,
-            'total_time': self._total_time,
-            'avg_time': (
+            "name": self.name,
+            "status": self._status.name,
+            "items_processed": self._items_processed,
+            "items_failed": self._items_failed,
+            "total_time": self._total_time,
+            "avg_time": (
                 self._total_time / self._items_processed
-                if self._items_processed > 0 else 0.0
+                if self._items_processed > 0
+                else 0.0
             ),
         }
 
@@ -443,8 +436,7 @@ class AsyncStage(ABC, Generic[InputT, OutputT]):
             try:
                 if self.timeout is not None:
                     result = await asyncio.wait_for(
-                        self.process(item),
-                        timeout=self.timeout
+                        self.process(item), timeout=self.timeout
                     )
                 else:
                     result = await self.process(item)
@@ -457,7 +449,7 @@ class AsyncStage(ABC, Generic[InputT, OutputT]):
                     data=result,
                     stage_name=self.name,
                     elapsed_time=elapsed,
-                    success=True
+                    success=True,
                 )
 
             except asyncio.TimeoutError as e:
@@ -470,7 +462,7 @@ class AsyncStage(ABC, Generic[InputT, OutputT]):
                     elapsed_time=elapsed,
                     success=False,
                     error=e,
-                    metadata={'error_type': 'timeout'}
+                    metadata={"error_type": "timeout"},
                 )
 
             except Exception as e:
@@ -483,7 +475,7 @@ class AsyncStage(ABC, Generic[InputT, OutputT]):
                     elapsed_time=elapsed,
                     success=False,
                     error=e,
-                    metadata={'error_type': type(e).__name__}
+                    metadata={"error_type": type(e).__name__},
                 )
 
 
@@ -513,7 +505,7 @@ class WorkerPool:
         cpu_workers: Optional[int] = None,
         io_workers: Optional[int] = None,
         use_process_pool: bool = False,
-        process_workers: Optional[int] = None
+        process_workers: Optional[int] = None,
     ):
         """Initialize worker pool.
 
@@ -534,7 +526,7 @@ class WorkerPool:
         self._process_pool: Optional[ProcessPoolExecutor] = None
         self._active = False
 
-    async def __aenter__(self) -> 'WorkerPool':
+    async def __aenter__(self) -> "WorkerPool":
         """Async context manager entry."""
         await self.startup()
         return self
@@ -546,18 +538,14 @@ class WorkerPool:
     async def startup(self) -> None:
         """Initialize worker pools."""
         self._cpu_pool = ThreadPoolExecutor(
-            max_workers=self._cpu_workers,
-            thread_name_prefix="cpu_worker"
+            max_workers=self._cpu_workers, thread_name_prefix="cpu_worker"
         )
         self._io_pool = ThreadPoolExecutor(
-            max_workers=self._io_workers,
-            thread_name_prefix="io_worker"
+            max_workers=self._io_workers, thread_name_prefix="io_worker"
         )
 
         if self._use_process_pool:
-            self._process_pool = ProcessPoolExecutor(
-                max_workers=self._process_workers
-            )
+            self._process_pool = ProcessPoolExecutor(max_workers=self._process_workers)
 
         self._active = True
 
@@ -577,12 +565,7 @@ class WorkerPool:
             self._process_pool.shutdown(wait=True)
             self._process_pool = None
 
-    async def run_cpu(
-        self,
-        func: Callable[..., T],
-        *args: Any,
-        **kwargs: Any
-    ) -> T:
+    async def run_cpu(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
         """Run CPU-bound task in thread pool.
 
         Args:
@@ -603,12 +586,7 @@ class WorkerPool:
 
         return await loop.run_in_executor(self._cpu_pool, func, *args)
 
-    async def run_io(
-        self,
-        func: Callable[..., T],
-        *args: Any,
-        **kwargs: Any
-    ) -> T:
+    async def run_io(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
         """Run I/O-bound task in dedicated I/O pool.
 
         Args:
@@ -629,11 +607,7 @@ class WorkerPool:
 
         return await loop.run_in_executor(self._io_pool, func, *args)
 
-    async def run_process(
-        self,
-        func: Callable[..., T],
-        *args: Any
-    ) -> T:
+    async def run_process(self, func: Callable[..., T], *args: Any) -> T:
         """Run CPU-intensive task in process pool.
 
         Note: Function and arguments must be picklable.
@@ -676,7 +650,7 @@ class StreamingImageLoader:
         self,
         prefetch_size: int = 4,
         max_memory_mb: int = 2048,
-        worker_pool: Optional[WorkerPool] = None
+        worker_pool: Optional[WorkerPool] = None,
     ):
         """Initialize streaming image loader.
 
@@ -724,10 +698,10 @@ class StreamingImageLoader:
         with Image.open(path) as img:
             # Get metadata
             metadata = {
-                'path': str(path),
-                'format': img.format,
-                'mode': img.mode,
-                'size': img.size,
+                "path": str(path),
+                "format": img.format,
+                "mode": img.mode,
+                "size": img.size,
             }
 
             # Convert to numpy array
@@ -735,7 +709,7 @@ class StreamingImageLoader:
 
             # Estimate memory usage
             memory_mb = image_array.nbytes / (1024 * 1024)
-            metadata['memory_mb'] = memory_mb
+            metadata["memory_mb"] = memory_mb
 
             return image_array, metadata
 
@@ -754,9 +728,7 @@ class StreamingImageLoader:
         return await self._worker_pool.run_io(self._load_image_sync, path)
 
     async def load_batch(
-        self,
-        paths: Sequence[Path],
-        yield_on_error: bool = True
+        self, paths: Sequence[Path], yield_on_error: bool = True
     ) -> AsyncIterator[Tuple[Any, Path, Optional[Exception]]]:
         """Stream load batch of images with prefetching.
 
@@ -771,9 +743,8 @@ class StreamingImageLoader:
             await self.startup()
 
         # Create prefetch queue
-        prefetch_queue: BackpressureQueue[Tuple[Path, asyncio.Task]] = BackpressureQueue(
-            maxsize=self._prefetch_size,
-            name="prefetch"
+        prefetch_queue: BackpressureQueue[Tuple[Path, asyncio.Task]] = (
+            BackpressureQueue(maxsize=self._prefetch_size, name="prefetch")
         )
 
         async def prefetch_producer():
@@ -792,8 +763,7 @@ class StreamingImageLoader:
             while items_remaining > 0:
                 try:
                     path, task = await asyncio.wait_for(
-                        prefetch_queue.get(),
-                        timeout=1.0
+                        prefetch_queue.get(), timeout=1.0
                     )
                 except asyncio.TimeoutError:
                     if prefetch_queue.is_empty and producer_task.done():
@@ -852,7 +822,7 @@ class AsyncPipeline:
         self,
         max_queue_size: int = 10,
         worker_pool: Optional[WorkerPool] = None,
-        stop_on_error: bool = False
+        stop_on_error: bool = False,
     ):
         """Initialize async pipeline.
 
@@ -881,7 +851,7 @@ class AsyncPipeline:
         """Number of stages in pipeline."""
         return len(self._stages)
 
-    def add_stage(self, stage: AsyncStage) -> 'AsyncPipeline':
+    def add_stage(self, stage: AsyncStage) -> "AsyncPipeline":
         """Add a stage to the pipeline.
 
         Args:
@@ -893,7 +863,7 @@ class AsyncPipeline:
         self._stages.append(stage)
         return self
 
-    async def __aenter__(self) -> 'AsyncPipeline':
+    async def __aenter__(self) -> "AsyncPipeline":
         """Async context manager entry."""
         await self.startup()
         return self
@@ -909,10 +879,7 @@ class AsyncPipeline:
 
         # Create worker pool if needed
         if self._owns_pool:
-            self._worker_pool = WorkerPool(
-                cpu_workers=4,
-                io_workers=8
-            )
+            self._worker_pool = WorkerPool(cpu_workers=4, io_workers=8)
             await self._worker_pool.startup()
 
         # Initialize stages
@@ -921,10 +888,7 @@ class AsyncPipeline:
 
         # Create queues between stages
         self._queues = [
-            BackpressureQueue(
-                maxsize=self._max_queue_size,
-                name=f"queue_{i}"
-            )
+            BackpressureQueue(maxsize=self._max_queue_size, name=f"queue_{i}")
             for i in range(len(self._stages))
         ]
 
@@ -958,10 +922,7 @@ class AsyncPipeline:
         Returns:
             WorkItem with all stage results
         """
-        work_item = WorkItem(
-            id=str(id(item)),
-            data=item
-        )
+        work_item = WorkItem(id=str(id(item)), data=item)
 
         current_data = item
 
@@ -982,9 +943,7 @@ class AsyncPipeline:
         return work_item
 
     async def process_batch(
-        self,
-        items: Sequence[Any],
-        max_concurrent: int = 4
+        self, items: Sequence[Any], max_concurrent: int = 4
     ) -> AsyncIterator[WorkItem]:
         """Process batch of items with concurrent execution.
 
@@ -1006,10 +965,7 @@ class AsyncPipeline:
                 return await self.process_item(item)
 
         # Create all tasks
-        tasks = [
-            asyncio.create_task(process_with_semaphore(item))
-            for item in items
-        ]
+        tasks = [asyncio.create_task(process_with_semaphore(item)) for item in items]
 
         # Yield results as they complete
         for coro in asyncio.as_completed(tasks):
@@ -1018,18 +974,13 @@ class AsyncPipeline:
                 yield work_item
             except Exception as e:
                 # Create failed work item
-                yield WorkItem(
-                    id="error",
-                    data=None,
-                    metadata={'error': str(e)}
-                )
+                yield WorkItem(id="error", data=None, metadata={"error": str(e)})
 
         self._metrics.total_processing_time = time.time() - start_time
         self._metrics.update_throughput()
 
     async def process_streaming(
-        self,
-        items: AsyncIterator[Any]
+        self, items: AsyncIterator[Any]
     ) -> AsyncIterator[WorkItem]:
         """Process items from async iterator (true streaming).
 
@@ -1089,7 +1040,7 @@ class AsyncBatchProcessor:
         prefetch_size: int = 4,
         max_concurrent: int = 2,
         max_queue_size: int = 10,
-        checkpoint_interval: int = 10
+        checkpoint_interval: int = 10,
     ):
         """Initialize batch processor.
 
@@ -1113,22 +1064,19 @@ class AsyncBatchProcessor:
         """Initialize processor resources."""
         # Create shared worker pool
         self._worker_pool = WorkerPool(
-            cpu_workers=4,
-            io_workers=self._prefetch_size * 2
+            cpu_workers=4, io_workers=self._prefetch_size * 2
         )
         await self._worker_pool.startup()
 
         # Create image loader
         self._loader = StreamingImageLoader(
-            prefetch_size=self._prefetch_size,
-            worker_pool=self._worker_pool
+            prefetch_size=self._prefetch_size, worker_pool=self._worker_pool
         )
         await self._loader.startup()
 
         # Create pipeline
         self._pipeline = AsyncPipeline(
-            max_queue_size=self._max_queue_size,
-            worker_pool=self._worker_pool
+            max_queue_size=self._max_queue_size, worker_pool=self._worker_pool
         )
         for stage in self._stages:
             self._pipeline.add_stage(stage)
@@ -1143,17 +1091,14 @@ class AsyncBatchProcessor:
         if self._worker_pool:
             await self._worker_pool.shutdown()
 
-    async def __aenter__(self) -> 'AsyncBatchProcessor':
+    async def __aenter__(self) -> "AsyncBatchProcessor":
         await self.startup()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         await self.shutdown()
 
-    async def process_paths(
-        self,
-        paths: Sequence[Path]
-    ) -> AsyncIterator[WorkItem]:
+    async def process_paths(self, paths: Sequence[Path]) -> AsyncIterator[WorkItem]:
         """Process list of image paths.
 
         Args:
@@ -1166,16 +1111,12 @@ class AsyncBatchProcessor:
             await self.startup()
 
         async for result in self._pipeline.process_batch(
-            list(paths),
-            max_concurrent=self._max_concurrent
+            list(paths), max_concurrent=self._max_concurrent
         ):
             yield result
 
     async def process_directory(
-        self,
-        input_dir: Path,
-        output_dir: Optional[Path] = None,
-        pattern: str = "*.jpg"
+        self, input_dir: Path, output_dir: Optional[Path] = None, pattern: str = "*.jpg"
     ) -> AsyncIterator[WorkItem]:
         """Process all images in a directory.
 
@@ -1198,10 +1139,7 @@ class AsyncBatchProcessor:
 
 
 # Convenience function to run async pipeline
-def run_async_pipeline(
-    coro: Awaitable[T],
-    debug: bool = False
-) -> T:
+def run_async_pipeline(coro: Awaitable[T], debug: bool = False) -> T:
     """Run async pipeline in sync context.
 
     Args:
@@ -1224,17 +1162,17 @@ def run_async_pipeline(
 
 # Export public API
 __all__ = [
-    'DeviceType',
-    'StageStatus',
-    'PipelineMetrics',
-    'StageResult',
-    'WorkItem',
-    'BackpressureQueue',
-    'AsyncStage',
-    'AsyncStageProtocol',
-    'WorkerPool',
-    'StreamingImageLoader',
-    'AsyncPipeline',
-    'AsyncBatchProcessor',
-    'run_async_pipeline',
+    "DeviceType",
+    "StageStatus",
+    "PipelineMetrics",
+    "StageResult",
+    "WorkItem",
+    "BackpressureQueue",
+    "AsyncStage",
+    "AsyncStageProtocol",
+    "WorkerPool",
+    "StreamingImageLoader",
+    "AsyncPipeline",
+    "AsyncBatchProcessor",
+    "run_async_pipeline",
 ]

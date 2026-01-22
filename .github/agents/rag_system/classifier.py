@@ -310,7 +310,10 @@ class ArtifactClassifier:
         # Extract resolution from filename
         resolution_match = re.search(r"(\d{3,4})x(\d{3,4})", file_path)
         if resolution_match:
-            metadata.resolution = (int(resolution_match.group(1)), int(resolution_match.group(2)))
+            metadata.resolution = (
+                int(resolution_match.group(1)),
+                int(resolution_match.group(2)),
+            )
 
         # Extract parameters from JSON content
         if content and artifact_type == ArtifactType.METRIC:
@@ -613,7 +616,7 @@ class ArtifactClassifier:
                 "tags": list(node.tags),
                 "version": node.version,
                 "metadata": {
-                    "timestamp": node.metadata.timestamp.isoformat() if node.metadata.timestamp else None,
+                    "timestamp": (node.metadata.timestamp.isoformat() if node.metadata.timestamp else None),
                     "parameters": node.metadata.parameters,
                     "hardware": node.metadata.hardware,
                     "success": node.metadata.success,

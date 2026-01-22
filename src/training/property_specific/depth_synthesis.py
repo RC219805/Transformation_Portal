@@ -312,7 +312,9 @@ class DepthSynthesis:
                     DepthModelVariant.LARGE: "depth-anything/Depth-Anything-V2-Large-hf",
                 }
                 return pipeline(
-                    "depth-estimation", model=model_names[variant], device=self.device if self.device != "mps" else -1
+                    "depth-estimation",
+                    model=model_names[variant],
+                    device=self.device if self.device != "mps" else -1,
                 )
             except Exception as e:
                 logger.warning(f"Could not load model {variant.value}: {e}")
@@ -362,7 +364,7 @@ class DepthSynthesis:
         confidence_map = self._compute_confidence(depth_map)
 
         return SynthesizedDepth(
-            source_path=source_path if isinstance(source_path, Path) else Path(str(source_path)),
+            source_path=(source_path if isinstance(source_path, Path) else Path(str(source_path))),
             depth_map=depth_map,
             confidence_map=confidence_map,
             edge_map=edge_map,
@@ -426,9 +428,9 @@ class DepthSynthesis:
 
         # Create variant to weight mapping
         variant_weights = {
-            DepthModelVariant.LARGE: self.config.ensemble_weights[0] if len(self.config.ensemble_weights) > 0 else 0.7,
-            DepthModelVariant.BASE: self.config.ensemble_weights[1] if len(self.config.ensemble_weights) > 1 else 0.3,
-            DepthModelVariant.SMALL: self.config.ensemble_weights[2] if len(self.config.ensemble_weights) > 2 else 0.2,
+            DepthModelVariant.LARGE: (self.config.ensemble_weights[0] if len(self.config.ensemble_weights) > 0 else 0.7),
+            DepthModelVariant.BASE: (self.config.ensemble_weights[1] if len(self.config.ensemble_weights) > 1 else 0.3),
+            DepthModelVariant.SMALL: (self.config.ensemble_weights[2] if len(self.config.ensemble_weights) > 2 else 0.2),
         }
 
         for variant, model in self.models.items():

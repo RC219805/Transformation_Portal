@@ -301,10 +301,20 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Benchmark Materials v2 performance")
     parser.add_argument(
-        "--input-dir", default="input_images/750_Picacho/Optimized_TIFFs", help="Directory containing test images"
+        "--input-dir",
+        default="input_images/750_Picacho/Optimized_TIFFs",
+        help="Directory containing test images",
     )
-    parser.add_argument("--output-base", default="output_Benchmark_Materials_V2", help="Base directory for benchmark outputs")
-    parser.add_argument("--report", default="materials_v2_benchmark_report.json", help="Output report file")
+    parser.add_argument(
+        "--output-base",
+        default="output_Benchmark_Materials_V2",
+        help="Base directory for benchmark outputs",
+    )
+    parser.add_argument(
+        "--report",
+        default="materials_v2_benchmark_report.json",
+        help="Output report file",
+    )
     parser.add_argument("--quick", action="store_true", help="Run quick test on single image")
 
     args = parser.parse_args()

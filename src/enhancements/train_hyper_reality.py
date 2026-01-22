@@ -472,7 +472,14 @@ class HyperRealityTrainer:
         # Training state
         self.current_epoch = 0
         self.best_val_loss = float("inf")
-        self.training_history = {"train_loss": [], "val_loss": [], "mse": [], "perceptual": [], "style": [], "lpips": []}
+        self.training_history = {
+            "train_loss": [],
+            "val_loss": [],
+            "mse": [],
+            "perceptual": [],
+            "style": [],
+            "lpips": [],
+        }
 
     def _init_models(self):
         """Initialize all enhancement models"""
@@ -639,7 +646,8 @@ class HyperRealityTrainer:
 
             # Gradient clipping
             torch.nn.utils.clip_grad_norm_(
-                [p for model in self.models.values() for p in model.parameters()], self.config.gradient_clip
+                [p for model in self.models.values() for p in model.parameters()],
+                self.config.gradient_clip,
             )
 
             self.optimizer.step()
@@ -749,13 +757,28 @@ class HyperRealityTrainer:
 
 def main():
     parser = argparse.ArgumentParser(description="Train Hyper-Reality Enhancement Models")
-    parser.add_argument("--data-dir", type=str, default="data/training", help="Directory for training data")
+    parser.add_argument(
+        "--data-dir",
+        type=str,
+        default="data/training",
+        help="Directory for training data",
+    )
     parser.add_argument("--generate-data", action="store_true", help="Generate synthetic training data")
-    parser.add_argument("--num-pairs", type=int, default=1000, help="Number of synthetic pairs to generate")
+    parser.add_argument(
+        "--num-pairs",
+        type=int,
+        default=1000,
+        help="Number of synthetic pairs to generate",
+    )
     parser.add_argument("--epochs", type=int, default=50, help="Number of training epochs")
     parser.add_argument("--batch-size", type=int, default=4, help="Training batch size")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
-    parser.add_argument("--checkpoint-dir", type=str, default="weights/hyper_reality", help="Directory for checkpoints")
+    parser.add_argument(
+        "--checkpoint-dir",
+        type=str,
+        default="weights/hyper_reality",
+        help="Directory for checkpoints",
+    )
 
     args = parser.parse_args()
 
@@ -789,9 +812,21 @@ def main():
     train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
 
     # Create dataloaders
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=4,
+        pin_memory=True,
+    )
 
-    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4, pin_memory=True)
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=4,
+        pin_memory=True,
+    )
 
     # Create training config
     config = TrainingConfig(

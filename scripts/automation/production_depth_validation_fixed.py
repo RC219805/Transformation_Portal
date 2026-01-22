@@ -48,7 +48,10 @@ except ImportError:
     # Will fail gracefully in main() with clear message
 
 try:
-    from high_fidelity_depth.depth_estimator import HighFidelityDepthEstimator, DepthConfig
+    from high_fidelity_depth.depth_estimator import (
+        HighFidelityDepthEstimator,
+        DepthConfig,
+    )
     from high_fidelity_depth.quality_metrics import (
         validate_depth_quality,
         detect_edges,
@@ -92,7 +95,13 @@ def validate_metrics_complete(metrics_dict: dict, image_name: str) -> None:
     """
     from datetime import datetime
 
-    required_fields = ["scene_type", "edge_f1", "lenient_pass", "strict_pass", "classification_factors"]
+    required_fields = [
+        "scene_type",
+        "edge_f1",
+        "lenient_pass",
+        "strict_pass",
+        "classification_factors",
+    ]
 
     missing = [f for f in required_fields if metrics_dict.get(f) is None]
 
@@ -231,11 +240,20 @@ def evaluate_quality_gates(metrics: dict, scene_type: str, seam_passed: bool = T
 
     else:
         # Unknown scene type: conservative gates
-        return {"lenient": False, "strict": False, "gate_type": "unknown", "reason": "Scene type unknown, cannot evaluate"}
+        return {
+            "lenient": False,
+            "strict": False,
+            "gate_type": "unknown",
+            "reason": "Scene type unknown, cannot evaluate",
+        }
 
 
 def process_single_image(
-    rgb_path: Path, output_dir: Path, config: DepthConfig, use_global_anchor: bool = False, smooth_calibrations: bool = True
+    rgb_path: Path,
+    output_dir: Path,
+    config: DepthConfig,
+    use_global_anchor: bool = False,
+    smooth_calibrations: bool = True,
 ) -> Dict:
     """Process single image and return metrics."""
 
@@ -275,7 +293,11 @@ def process_single_image(
 
         # Estimate depth
         estimator = HighFidelityDepthEstimator(config)
-        depth = estimator.estimate_depth(rgb, use_global_anchor=use_global_anchor, smooth_calibrations=smooth_calibrations)
+        depth = estimator.estimate_depth(
+            rgb,
+            use_global_anchor=use_global_anchor,
+            smooth_calibrations=smooth_calibrations,
+        )
 
         # Capture inference metadata
         if hasattr(estimator, "_last_inference_metadata"):
@@ -488,8 +510,8 @@ def process_single_image(
                 "depth_variance": float(scene_metadata.get("depth_variance", 0)),
                 "depth_gradient_var": float(scene_metadata.get("depth_gradient_var", 0)),
                 "edge_density": float(scene_metadata.get("edge_density", 0)),
-                "hf_energy": float(hf_energy) if scene_type == "texture_dominated" else None,
-                "depth_range": float(depth_range) if scene_type == "texture_dominated" else None,
+                "hf_energy": (float(hf_energy) if scene_type == "texture_dominated" else None),
+                "depth_range": (float(depth_range) if scene_type == "texture_dominated" else None),
                 "decision_rule": scene_metadata.get("decision", "unknown"),
                 "method": scene_metadata.get("method", "unknown"),
                 "filename_hint": scene_metadata.get("filename_hint"),
@@ -540,9 +562,22 @@ def main():
     )
     parser.add_argument("--output-dir", type=Path, required=True, help="Output directory")
     parser.add_argument("--tile-size", type=int, default=1024, help="Tile size (default: 1024)")
-    parser.add_argument("--overlap", type=int, default=192, help="Tile overlap (default: 192 for texture-heavy)")
-    parser.add_argument("--use-global-anchor", action="store_true", help="Enable global anchor fusion (OFF by default)")
-    parser.add_argument("--no-smooth-calibrations", action="store_true", help="Disable spatial smoothing of calibrations")
+    parser.add_argument(
+        "--overlap",
+        type=int,
+        default=192,
+        help="Tile overlap (default: 192 for texture-heavy)",
+    )
+    parser.add_argument(
+        "--use-global-anchor",
+        action="store_true",
+        help="Enable global anchor fusion (OFF by default)",
+    )
+    parser.add_argument(
+        "--no-smooth-calibrations",
+        action="store_true",
+        help="Disable spatial smoothing of calibrations",
+    )
     parser.add_argument("--device", type=str, default="auto", help="Device: auto | cuda | mps | cpu")
 
     args = parser.parse_args()
@@ -692,12 +727,12 @@ def main():
             "lenient": {
                 "passed": quality_lenient_passed,
                 "failed": succeeded - quality_lenient_passed,
-                "pass_rate": quality_lenient_passed / succeeded if succeeded > 0 else 0.0,
+                "pass_rate": (quality_lenient_passed / succeeded if succeeded > 0 else 0.0),
             },
             "strict": {
                 "passed": quality_strict_passed,
                 "failed": succeeded - quality_strict_passed,
-                "pass_rate": quality_strict_passed / succeeded if succeeded > 0 else 0.0,
+                "pass_rate": (quality_strict_passed / succeeded if succeeded > 0 else 0.0),
             },
         },
         "overall_status": "COMPLETE" if len(failed_images) == 0 else "INCOMPLETE",

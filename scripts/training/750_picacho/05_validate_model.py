@@ -27,7 +27,10 @@ from PIL import Image
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
 
-from training.property_specific.picacho_inference import PicachoInference, InferenceConfig
+from training.property_specific.picacho_inference import (
+    PicachoInference,
+    InferenceConfig,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -270,10 +273,16 @@ def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(description="Validate 750 Picacho Lane enhancement model")
     parser.add_argument(
-        "--model", type=Path, default=Path("weights/750_picacho/best_model.pth"), help="Path to model checkpoint"
+        "--model",
+        type=Path,
+        default=Path("weights/750_picacho/best_model.pth"),
+        help="Path to model checkpoint",
     )
     parser.add_argument(
-        "--test-dir", type=Path, default=Path("data/training_750picacho/test"), help="Path to test data directory"
+        "--test-dir",
+        type=Path,
+        default=Path("data/training_750picacho/test"),
+        help="Path to test data directory",
     )
     parser.add_argument(
         "--output-dir",
@@ -281,7 +290,13 @@ def main():
         default=Path("output/750_picacho/validation"),
         help="Output directory for validation results",
     )
-    parser.add_argument("--device", type=str, choices=["auto", "cuda", "mps", "cpu"], default="auto", help="Compute device")
+    parser.add_argument(
+        "--device",
+        type=str,
+        choices=["auto", "cuda", "mps", "cpu"],
+        default="auto",
+        help="Compute device",
+    )
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
 
     args = parser.parse_args()
@@ -314,7 +329,12 @@ def main():
     # Run validation
     print("\nRunning validation...")
     try:
-        results = validate_model(model_path=args.model, test_dir=args.test_dir, output_dir=args.output_dir, device=args.device)
+        results = validate_model(
+            model_path=args.model,
+            test_dir=args.test_dir,
+            output_dir=args.output_dir,
+            device=args.device,
+        )
 
         # Save results
         results_path = args.output_dir / "validation_results.json"

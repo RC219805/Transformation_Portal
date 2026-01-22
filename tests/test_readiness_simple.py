@@ -127,7 +127,13 @@ def test_simple_processor():
         # Process it
         output_path = tmpdir / "test_output.jpg"
         success = processor.process_image(
-            input_path, output_path, brightness=1.1, contrast=1.05, saturation=1.0, quality=90, verbose=False
+            input_path,
+            output_path,
+            brightness=1.1,
+            contrast=1.05,
+            saturation=1.0,
+            quality=90,
+            verbose=False,
         )
 
         assert success is True, "Processing should succeed"

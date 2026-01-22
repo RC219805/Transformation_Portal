@@ -84,7 +84,8 @@ class ProductionDepthRefiner:
 
         # Create CLAHE object
         clahe = cv2.createCLAHE(
-            clipLimit=self.config.clahe_clip_limit, tileGridSize=(self.config.clahe_tile_grid, self.config.clahe_tile_grid)
+            clipLimit=self.config.clahe_clip_limit,
+            tileGridSize=(self.config.clahe_tile_grid, self.config.clahe_tile_grid),
         )
 
         # Apply CLAHE
@@ -124,7 +125,10 @@ class ProductionDepthRefiner:
                     guide_uint8 = guide
 
                 filtered = cv2.ximgproc.guidedFilter(
-                    guide=guide_uint8, src=depth_uint8, radius=self.config.edge_filter_radius, eps=self.config.edge_filter_eps
+                    guide=guide_uint8,
+                    src=depth_uint8,
+                    radius=self.config.edge_filter_radius,
+                    eps=self.config.edge_filter_eps,
                 )
                 logger.info(f"✓ Guided filter applied: r={self.config.edge_filter_radius} eps={self.config.edge_filter_eps}")
 
@@ -376,7 +380,11 @@ def refine_depth_production(
     Returns:
         Refined depth as float32 [0, 1]
     """
-    config = DepthRefinementConfig(use_clahe=use_clahe, use_edge_filter=use_edge_filter, use_edge_snap=use_edge_snap)
+    config = DepthRefinementConfig(
+        use_clahe=use_clahe,
+        use_edge_filter=use_edge_filter,
+        use_edge_snap=use_edge_snap,
+    )
 
     refiner = ProductionDepthRefiner(config)
     return refiner.refine(depth, rgb)

@@ -34,7 +34,12 @@ def load_canonical_manifest(manifest_path: Path) -> Dict:
         return json.load(f)
 
 
-def process_single_image(source_path: Path, output_dir: Path, scene_name: str, pipeline_config: Optional[Dict] = None) -> Dict:
+def process_single_image(
+    source_path: Path,
+    output_dir: Path,
+    scene_name: str,
+    pipeline_config: Optional[Dict] = None,
+) -> Dict:
     """
     Process a single image through the optimized pipeline.
 
@@ -130,7 +135,10 @@ def process_single_image(source_path: Path, output_dir: Path, scene_name: str, p
 
 
 def batch_process_canonical_sources(
-    manifest_path: Path, output_base_dir: Path, scene_filter: Optional[List[str]] = None, continue_on_error: bool = True
+    manifest_path: Path,
+    output_base_dir: Path,
+    scene_filter: Optional[List[str]] = None,
+    continue_on_error: bool = True,
 ) -> Dict:
     """
     Batch process all canonical sources.
@@ -192,7 +200,13 @@ def batch_process_canonical_sources(
         # Validate source exists
         if not source_path.exists():
             print(f"⚠️  Source file not found, skipping: {source_path}")
-            results_summary["skipped"].append({"scene": scene_name, "reason": "source_not_found", "path": str(source_path)})
+            results_summary["skipped"].append(
+                {
+                    "scene": scene_name,
+                    "reason": "source_not_found",
+                    "path": str(source_path),
+                }
+            )
             continue
 
         # Process the scene
@@ -204,14 +218,23 @@ def batch_process_canonical_sources(
             if scene_results["status"] == "success":
                 results_summary["successes"].append(scene_name)
             else:
-                results_summary["failures"].append({"scene": scene_name, "error": scene_results.get("error", "Unknown error")})
+                results_summary["failures"].append(
+                    {
+                        "scene": scene_name,
+                        "error": scene_results.get("error", "Unknown error"),
+                    }
+                )
 
                 if not continue_on_error:
                     print("\n❌ Stopping batch processing due to error (continue_on_error=False)")
                     break
 
         except Exception as e:
-            error_info = {"scene": scene_name, "error": str(e), "traceback": traceback.format_exc()}
+            error_info = {
+                "scene": scene_name,
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+            }
             results_summary["failures"].append(error_info)
             print(f"\n❌ Unexpected error processing {scene_name}: {e}")
             print(f"   Traceback:\n{error_info['traceback']}")
@@ -281,8 +304,17 @@ def main():
         default=Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views"),
         help="Base output directory",
     )
-    parser.add_argument("--scenes", nargs="+", default=None, help="Specific scenes to process (space-separated)")
-    parser.add_argument("--stop-on-error", action="store_true", help="Stop processing if any scene fails (default: continue)")
+    parser.add_argument(
+        "--scenes",
+        nargs="+",
+        default=None,
+        help="Specific scenes to process (space-separated)",
+    )
+    parser.add_argument(
+        "--stop-on-error",
+        action="store_true",
+        help="Stop processing if any scene fails (default: continue)",
+    )
 
     args = parser.parse_args()
 
@@ -294,7 +326,10 @@ def main():
 
     # Run batch processing
     results = batch_process_canonical_sources(
-        args.manifest, args.output_dir, scene_filter=args.scenes, continue_on_error=not args.stop_on_error
+        args.manifest,
+        args.output_dir,
+        scene_filter=args.scenes,
+        continue_on_error=not args.stop_on_error,
     )
 
     # Exit with appropriate code

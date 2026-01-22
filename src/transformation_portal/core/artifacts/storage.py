@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 class StorageBackend(str, Enum):
     """Storage backend types."""
+
     LOCAL = "local"
     EXTERNAL = "external"
     CLOUD = "cloud"
@@ -26,20 +27,20 @@ class StorageBackend(str, Enum):
 class ArtifactStorage:
     """
     Artifact storage manager.
-    
+
     Manages storage of pipeline artifacts with support for
     multiple storage backends and automatic migration.
     """
-    
+
     def __init__(
         self,
         primary_path: Path,
         external_path: Optional[Path] = None,
-        auto_migrate_threshold_mb: float = 2000.0
+        auto_migrate_threshold_mb: float = 2000.0,
     ):
         """
         Initialize artifact storage.
-        
+
         Args:
             primary_path: Primary storage path (fast local storage)
             external_path: External storage path (e.g., external drive)
@@ -48,10 +49,10 @@ class ArtifactStorage:
         self.primary_path = Path(primary_path)
         self.external_path = Path(external_path) if external_path else None
         self.auto_migrate_threshold_mb = auto_migrate_threshold_mb
-        
+
         # Ensure primary path exists
         self.primary_path.mkdir(parents=True, exist_ok=True)
-        
+
         # Ensure external path exists if configured
         if self.external_path:
             try:
@@ -59,40 +60,40 @@ class ArtifactStorage:
             except Exception as e:
                 logger.warning(f"External storage not available: {e}")
                 self.external_path = None
-    
+
     def store(
         self,
         file_path: Path,
         relative_path: str,
-        backend: Optional[StorageBackend] = None
+        backend: Optional[StorageBackend] = None,
     ) -> Path:
         """
         Store artifact file.
-        
+
         Args:
             file_path: Source file path
             relative_path: Relative path within storage
             backend: Storage backend (auto-select if None)
-            
+
         Returns:
             Destination path
         """
         if not file_path.exists():
             raise FileNotFoundError(f"Source file not found: {file_path}")
-        
+
         # Auto-select backend if not specified
         if backend is None:
             backend = self._select_backend(file_path)
-        
+
         # Determine destination
         if backend == StorageBackend.EXTERNAL and self.external_path:
             dest_path = self.external_path / relative_path
         else:
             dest_path = self.primary_path / relative_path
-        
+
         # Create parent directory
         dest_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # Copy file
         try:
             shutil.copy2(file_path, dest_path)
@@ -101,16 +102,16 @@ class ArtifactStorage:
         except Exception as e:
             logger.error(f"Failed to store artifact: {e}")
             raise
-    
+
     def retrieve(self, relative_path: str) -> Optional[Path]:
         """
         Retrieve artifact file.
-        
+
         Searches across all storage backends.
-        
+
         Args:
             relative_path: Relative path within storage
-            
+
         Returns:
             Path to artifact or None if not found
         """
@@ -118,23 +119,25 @@ class ArtifactStorage:
         primary_file = self.primary_path / relative_path
         if primary_file.exists():
             return primary_file
-        
+
         # Check external storage
         if self.external_path:
             external_file = self.external_path / relative_path
             if external_file.exists():
                 return external_file
-        
+
         return None
-    
-    def migrate(self, relative_path: str, target_backend: StorageBackend) -> Optional[Path]:
+
+    def migrate(
+        self, relative_path: str, target_backend: StorageBackend
+    ) -> Optional[Path]:
         """
         Migrate artifact to different backend.
-        
+
         Args:
             relative_path: Relative path within storage
             target_backend: Target storage backend
-            
+
         Returns:
             New path or None if migration failed
         """
@@ -143,17 +146,17 @@ class ArtifactStorage:
         if source_path is None:
             logger.warning(f"Cannot migrate, artifact not found: {relative_path}")
             return None
-        
+
         # Determine target
         if target_backend == StorageBackend.EXTERNAL and self.external_path:
             target_path = self.external_path / relative_path
         else:
             target_path = self.primary_path / relative_path
-        
+
         # Skip if already at target
         if source_path == target_path:
             return target_path
-        
+
         # Migrate
         try:
             target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -163,14 +166,14 @@ class ArtifactStorage:
         except Exception as e:
             logger.error(f"Migration failed: {e}")
             return None
-    
+
     def _select_backend(self, file_path: Path) -> StorageBackend:
         """
         Auto-select storage backend based on file size.
-        
+
         Args:
             file_path: File to store
-            
+
         Returns:
             Selected backend
         """
@@ -180,22 +183,22 @@ class ArtifactStorage:
         except Exception:
             # Default to primary if cannot get size
             return StorageBackend.LOCAL
-        
+
         # Use external for large files
         if self.external_path and size_mb > self.auto_migrate_threshold_mb:
             return StorageBackend.EXTERNAL
-        
+
         return StorageBackend.LOCAL
-    
+
     def get_storage_stats(self) -> dict:
         """
         Get storage statistics.
-        
+
         Returns:
             Dictionary with storage stats
         """
         stats = {}
-        
+
         # Primary storage
         try:
             total, used, free = shutil.disk_usage(self.primary_path)
@@ -207,7 +210,7 @@ class ArtifactStorage:
             }
         except Exception as e:
             logger.debug(f"Failed to get primary storage stats: {e}")
-        
+
         # External storage
         if self.external_path:
             try:
@@ -220,5 +223,5 @@ class ArtifactStorage:
                 }
             except Exception as e:
                 logger.debug(f"Failed to get external storage stats: {e}")
-        
+
         return stats

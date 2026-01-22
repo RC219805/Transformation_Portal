@@ -21,7 +21,12 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.metrics import classification_report, confusion_matrix, balanced_accuracy_score, accuracy_score
+from sklearn.metrics import (
+    classification_report,
+    confusion_matrix,
+    balanced_accuracy_score,
+    accuracy_score,
+)
 
 
 def load_metrics(results_dir: Path) -> List[Dict]:
@@ -50,7 +55,18 @@ def infer_ground_truth(filename: str) -> str:
     filename_lower = filename.lower()
 
     # Texture patterns
-    texture_patterns = ["pool", "ocean", "water", "glass", "aerial", "foliage", "trees", "shores", "beach", "sea"]
+    texture_patterns = [
+        "pool",
+        "ocean",
+        "water",
+        "glass",
+        "aerial",
+        "foliage",
+        "trees",
+        "shores",
+        "beach",
+        "sea",
+    ]
 
     # Structure patterns
     structure_patterns = [
@@ -129,7 +145,11 @@ def generate_classification_report(metrics_list: List[Dict]) -> str:
 
     # Generate report
     report = classification_report(
-        y_true, y_pred, target_names=["structure_dominated", "texture_dominated"], digits=3, zero_division=0
+        y_true,
+        y_pred,
+        target_names=["structure_dominated", "texture_dominated"],
+        digits=3,
+        zero_division=0,
     )
 
     # Add accuracy scores
@@ -216,8 +236,18 @@ def plot_confusion_matrix(cm: np.ndarray, labels: List[str], output_path: Path):
 def plot_feature_separability(metrics_list: List[Dict], output_path: Path):
     """Plot features vs ground truth to assess separability."""
     # Extract features
-    structure_data = {"ratio": [], "depth_var": [], "edge_density": [], "depth_grad_var": []}
-    texture_data = {"ratio": [], "depth_var": [], "edge_density": [], "depth_grad_var": []}
+    structure_data = {
+        "ratio": [],
+        "depth_var": [],
+        "edge_density": [],
+        "depth_grad_var": [],
+    }
+    texture_data = {
+        "ratio": [],
+        "depth_var": [],
+        "edge_density": [],
+        "depth_grad_var": [],
+    }
 
     for m in metrics_list:
         gt = infer_ground_truth(m["image"])
@@ -247,8 +277,22 @@ def plot_feature_separability(metrics_list: List[Dict], output_path: Path):
         ax = axes[idx // 2, idx % 2]
 
         # Scatter plot
-        ax.scatter(structure_data[key], [0] * len(structure_data[key]), c="blue", alpha=0.6, s=100, label="Structure")
-        ax.scatter(texture_data[key], [1] * len(texture_data[key]), c="red", alpha=0.6, s=100, label="Texture")
+        ax.scatter(
+            structure_data[key],
+            [0] * len(structure_data[key]),
+            c="blue",
+            alpha=0.6,
+            s=100,
+            label="Structure",
+        )
+        ax.scatter(
+            texture_data[key],
+            [1] * len(texture_data[key]),
+            c="red",
+            alpha=0.6,
+            s=100,
+            label="Texture",
+        )
 
         ax.set_xlabel(label, fontsize=12)
         ax.set_yticks([0, 1])
@@ -314,9 +358,17 @@ def stratified_pass_rates(metrics_list: List[Dict]) -> str:
 
 def main():
     parser = argparse.ArgumentParser(description="Analyze validation V2 results")
-    parser.add_argument("--results-dir", type=Path, required=True, help="Directory with *_metrics.json files")
     parser.add_argument(
-        "--output-dir", type=Path, default=None, help="Output directory for plots (default: same as results-dir)"
+        "--results-dir",
+        type=Path,
+        required=True,
+        help="Directory with *_metrics.json files",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Output directory for plots (default: same as results-dir)",
     )
 
     args = parser.parse_args()

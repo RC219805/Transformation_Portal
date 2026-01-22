@@ -44,7 +44,13 @@ class CIMonitor:
 
     def _get_test_summary(self) -> Dict:
         """Get test execution summary"""
-        return {"total": 150, "passed": 148, "failed": 2, "skipped": 0, "coverage": 87.5}
+        return {
+            "total": 150,
+            "passed": 148,
+            "failed": 2,
+            "skipped": 0,
+            "coverage": 87.5,
+        }
 
     def _get_build_time(self) -> int:
         """Get average build time in seconds"""

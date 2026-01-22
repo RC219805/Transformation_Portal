@@ -103,7 +103,7 @@ class EventReplayer:
     def __init__(
         self,
         event_store: EventStore,
-        operation_registry: Optional[OperationRegistry] = None
+        operation_registry: Optional[OperationRegistry] = None,
     ):
         """Initialize replayer.
 
@@ -120,7 +120,7 @@ class EventReplayer:
         events: List[Event],
         on_event: Optional[Callable[[Event], Any]] = None,
         dry_run: bool = True,
-        skip_unregistered: bool = True
+        skip_unregistered: bool = True,
     ) -> List[Any]:
         """Replay events.
 
@@ -155,12 +155,14 @@ class EventReplayer:
                 if handler is not None:
                     try:
                         replay_result = handler(event)
-                        results.append({
-                            'event_id': event.id,
-                            'event_type': event.type,
-                            'status': 'success',
-                            'result': replay_result
-                        })
+                        results.append(
+                            {
+                                "event_id": event.id,
+                                "event_type": event.type,
+                                "status": "success",
+                                "result": replay_result,
+                            }
+                        )
                     except (KeyboardInterrupt, SystemExit):
                         # Re-raise system exceptions to allow proper shutdown
                         raise
@@ -168,12 +170,14 @@ class EventReplayer:
                         logger.exception(
                             f"Handler failed for event {event.id} (type: {event.type})"
                         )
-                        results.append({
-                            'event_id': event.id,
-                            'event_type': event.type,
-                            'status': 'error',
-                            'error': str(e)
-                        })
+                        results.append(
+                            {
+                                "event_id": event.id,
+                                "event_type": event.type,
+                                "status": "error",
+                                "error": str(e),
+                            }
+                        )
                 elif not skip_unregistered:
                     raise ValueError(
                         f"No handler registered for event type: {event.type}"
@@ -182,9 +186,7 @@ class EventReplayer:
         return results
 
     def replay_correlation(
-        self,
-        correlation_id: str,
-        on_event: Optional[Callable[[Event], Any]] = None
+        self, correlation_id: str, on_event: Optional[Callable[[Event], Any]] = None
     ) -> List[Any]:
         """Replay all events with a specific correlation ID.
 
@@ -202,7 +204,7 @@ class EventReplayer:
 def replay_events(
     event_store: EventStore,
     event_type: Optional[str] = None,
-    limit: Optional[int] = None
+    limit: Optional[int] = None,
 ) -> List[Event]:
     """Replay events from store.
 

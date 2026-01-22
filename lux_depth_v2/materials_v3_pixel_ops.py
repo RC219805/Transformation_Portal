@@ -313,8 +313,8 @@ def apply_glass_response(
         "edge_pixels": edge_px,
         "blend_pixels": blend_px,
         "total_glass_pixels": int((glass_mask > 0.5).sum()),
-        "mean_delta_core": float(delta_magnitude[core_mask].mean()) if core_px > 0 else 0.0,
-        "mean_delta_edge": float(delta_magnitude[edge_mask].mean()) if edge_px > 0 else 0.0,
+        "mean_delta_core": (float(delta_magnitude[core_mask].mean()) if core_px > 0 else 0.0),
+        "mean_delta_edge": (float(delta_magnitude[edge_mask].mean()) if edge_px > 0 else 0.0),
         "max_delta": float(delta_magnitude.max()),
         "pixels_clamped": int((delta_magnitude > cfg.max_delta).sum()),
     }

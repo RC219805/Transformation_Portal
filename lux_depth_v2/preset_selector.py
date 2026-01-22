@@ -30,7 +30,6 @@ except ImportError:
 from lux_depth_v2.config import Preset
 from lux_depth_v2.complexity_scorer import compute_complexity, ComplexityScore
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -104,8 +103,18 @@ class PresetSelector:
 
     # Scene type detection prompts
     SCENE_TYPE_PROMPTS = {
-        SceneType.INTERIOR: ["interior room", "indoor space", "inside a building", "interior design"],
-        SceneType.EXTERIOR: ["exterior view", "outdoor space", "outside building", "landscape architecture"],
+        SceneType.INTERIOR: [
+            "interior room",
+            "indoor space",
+            "inside a building",
+            "interior design",
+        ],
+        SceneType.EXTERIOR: [
+            "exterior view",
+            "outdoor space",
+            "outside building",
+            "landscape architecture",
+        ],
     }
 
     # Scene subtype prompts (room types)
@@ -122,28 +131,76 @@ class PresetSelector:
     # Preset mapping: (scene_type, subtype, tier) → Preset
     PRESET_MAP: Dict[Tuple[SceneType, str, QualityTier], Preset] = {
         # Interior APEX
-        (SceneType.INTERIOR, "kitchen", QualityTier.APEX): Preset.INTERIOR_LUXURY_APEX_QUALITY,
-        (SceneType.INTERIOR, "bathroom", QualityTier.APEX): Preset.INTERIOR_LUXURY_APEX_QUALITY,
-        (SceneType.INTERIOR, "bedroom", QualityTier.APEX): Preset.INTERIOR_LUXURY_APEX_QUALITY,
-        (SceneType.INTERIOR, "living_room", QualityTier.APEX): Preset.INTERIOR_LUXURY_APEX_QUALITY,
+        (
+            SceneType.INTERIOR,
+            "kitchen",
+            QualityTier.APEX,
+        ): Preset.INTERIOR_LUXURY_APEX_QUALITY,
+        (
+            SceneType.INTERIOR,
+            "bathroom",
+            QualityTier.APEX,
+        ): Preset.INTERIOR_LUXURY_APEX_QUALITY,
+        (
+            SceneType.INTERIOR,
+            "bedroom",
+            QualityTier.APEX,
+        ): Preset.INTERIOR_LUXURY_APEX_QUALITY,
+        (
+            SceneType.INTERIOR,
+            "living_room",
+            QualityTier.APEX,
+        ): Preset.INTERIOR_LUXURY_APEX_QUALITY,
         # Interior Max
-        (SceneType.INTERIOR, "kitchen", QualityTier.MAX): Preset.INTERIOR_LUXURY_MAX_QUALITY,
-        (SceneType.INTERIOR, "bathroom", QualityTier.MAX): Preset.INTERIOR_LUXURY_MAX_QUALITY,
-        (SceneType.INTERIOR, "bedroom", QualityTier.MAX): Preset.INTERIOR_LUXURY_MAX_QUALITY,
-        (SceneType.INTERIOR, "living_room", QualityTier.MAX): Preset.INTERIOR_LUXURY_MAX_QUALITY,
+        (
+            SceneType.INTERIOR,
+            "kitchen",
+            QualityTier.MAX,
+        ): Preset.INTERIOR_LUXURY_MAX_QUALITY,
+        (
+            SceneType.INTERIOR,
+            "bathroom",
+            QualityTier.MAX,
+        ): Preset.INTERIOR_LUXURY_MAX_QUALITY,
+        (
+            SceneType.INTERIOR,
+            "bedroom",
+            QualityTier.MAX,
+        ): Preset.INTERIOR_LUXURY_MAX_QUALITY,
+        (
+            SceneType.INTERIOR,
+            "living_room",
+            QualityTier.MAX,
+        ): Preset.INTERIOR_LUXURY_MAX_QUALITY,
         # Interior Standard
         (SceneType.INTERIOR, "kitchen", QualityTier.STANDARD): Preset.INTERIOR_LUXURY,
         (SceneType.INTERIOR, "bathroom", QualityTier.STANDARD): Preset.INTERIOR_LUXURY,
         (SceneType.INTERIOR, "bedroom", QualityTier.STANDARD): Preset.INTERIOR_LUXURY,
-        (SceneType.INTERIOR, "living_room", QualityTier.STANDARD): Preset.INTERIOR_LUXURY,
+        (
+            SceneType.INTERIOR,
+            "living_room",
+            QualityTier.STANDARD,
+        ): Preset.INTERIOR_LUXURY,
         # Exterior Pool APEX
-        (SceneType.EXTERIOR, "pool", QualityTier.APEX): Preset.EXTERIOR_POOL_APEX_QUALITY,
-        (SceneType.EXTERIOR, "courtyard", QualityTier.APEX): Preset.EXTERIOR_POOL_APEX_QUALITY,
+        (
+            SceneType.EXTERIOR,
+            "pool",
+            QualityTier.APEX,
+        ): Preset.EXTERIOR_POOL_APEX_QUALITY,
+        (
+            SceneType.EXTERIOR,
+            "courtyard",
+            QualityTier.APEX,
+        ): Preset.EXTERIOR_POOL_APEX_QUALITY,
         # Exterior Pool Max/Standard (use showcase preset)
         (SceneType.EXTERIOR, "pool", QualityTier.MAX): Preset.EXTERIOR_SHOWCASE,
         (SceneType.EXTERIOR, "pool", QualityTier.STANDARD): Preset.EXTERIOR_SHOWCASE,
         (SceneType.EXTERIOR, "courtyard", QualityTier.MAX): Preset.EXTERIOR_SHOWCASE,
-        (SceneType.EXTERIOR, "courtyard", QualityTier.STANDARD): Preset.EXTERIOR_SHOWCASE,
+        (
+            SceneType.EXTERIOR,
+            "courtyard",
+            QualityTier.STANDARD,
+        ): Preset.EXTERIOR_SHOWCASE,
         (SceneType.EXTERIOR, "facade", QualityTier.MAX): Preset.EXTERIOR_SHOWCASE,
         (SceneType.EXTERIOR, "facade", QualityTier.STANDARD): Preset.EXTERIOR_SHOWCASE,
     }
@@ -153,16 +210,25 @@ class PresetSelector:
         (SceneType.INTERIOR, QualityTier.APEX): Preset.INTERIOR_LUXURY_APEX_QUALITY,
         (SceneType.INTERIOR, QualityTier.MAX): Preset.INTERIOR_LUXURY_MAX_QUALITY,
         (SceneType.INTERIOR, QualityTier.STANDARD): Preset.INTERIOR_LUXURY,
-        (SceneType.EXTERIOR, QualityTier.APEX): Preset.EXTERIOR_SHOWCASE,  # Conservative fallback
+        (
+            SceneType.EXTERIOR,
+            QualityTier.APEX,
+        ): Preset.EXTERIOR_SHOWCASE,  # Conservative fallback
         (SceneType.EXTERIOR, QualityTier.MAX): Preset.EXTERIOR_SHOWCASE,
         (SceneType.EXTERIOR, QualityTier.STANDARD): Preset.EXTERIOR_SHOWCASE,
-        (SceneType.UNKNOWN, QualityTier.APEX): Preset.INTERIOR_LUXURY_APEX_QUALITY,  # Most conservative
+        (
+            SceneType.UNKNOWN,
+            QualityTier.APEX,
+        ): Preset.INTERIOR_LUXURY_APEX_QUALITY,  # Most conservative
         (SceneType.UNKNOWN, QualityTier.MAX): Preset.INTERIOR_LUXURY_MAX_QUALITY,
         (SceneType.UNKNOWN, QualityTier.STANDARD): Preset.INTERIOR_LUXURY,
     }
 
     def __init__(
-        self, clip_model: str = "openai/clip-vit-base-patch32", confidence_threshold: float = 0.5, device: Optional[str] = None
+        self,
+        clip_model: str = "openai/clip-vit-base-patch32",
+        confidence_threshold: float = 0.5,
+        device: Optional[str] = None,
     ):
         """
         Initialize preset selector.
@@ -238,10 +304,16 @@ class PresetSelector:
             f"(type: {type_confidence:.3f}, subtype: {subtype_confidence:.3f})"
         )
 
-        return SceneClassification(scene_type=scene_type, scene_subtype=scene_subtype, confidence=overall_confidence)
+        return SceneClassification(
+            scene_type=scene_type,
+            scene_subtype=scene_subtype,
+            confidence=overall_confidence,
+        )
 
     def select_preset(
-        self, image: Union[str, Path, Image.Image], quality_tier: QualityTier = QualityTier.MAX
+        self,
+        image: Union[str, Path, Image.Image],
+        quality_tier: QualityTier = QualityTier.MAX,
     ) -> PresetRecommendation:
         """
         Select optimal preset for image based on scene and quality tier.
@@ -445,7 +517,11 @@ class PresetSelector:
         return canary_map.get(preset, preset)
 
 
-def auto_select_preset(image_path: Union[str, Path], quality_tier: str = "max", confidence_threshold: float = 0.5) -> Preset:
+def auto_select_preset(
+    image_path: Union[str, Path],
+    quality_tier: str = "max",
+    confidence_threshold: float = 0.5,
+) -> Preset:
     """
     Convenience function for auto preset selection.
 
@@ -461,7 +537,11 @@ def auto_select_preset(image_path: Union[str, Path], quality_tier: str = "max", 
         >>> preset = auto_select_preset("kitchen.jpg", quality_tier="apex")
         >>> print(preset)  # Preset.INTERIOR_LUXURY_APEX_QUALITY
     """
-    tier_map = {"standard": QualityTier.STANDARD, "max": QualityTier.MAX, "apex": QualityTier.APEX}
+    tier_map = {
+        "standard": QualityTier.STANDARD,
+        "max": QualityTier.MAX,
+        "apex": QualityTier.APEX,
+    }
 
     tier = tier_map.get(quality_tier.lower(), QualityTier.MAX)
     selector = PresetSelector(confidence_threshold=confidence_threshold)

@@ -170,7 +170,8 @@ def example_prompt_template():
     # Generate template with context
     print("\nGenerating feature implementation template...")
     template = PromptTemplates.feature_implementation(
-        feature_description="Add HDR tone mapping with custom transfer function", context=context
+        feature_description="Add HDR tone mapping with custom transfer function",
+        context=context,
     )
 
     print("\nTemplate (first 500 chars):")
@@ -273,14 +274,36 @@ def example_knowledge_engine():
 
     # Add some sample feedback
     sample_feedback = [
-        ("depth_pipeline", "img001", True, 0.045, {"model": "depth_anything_v2", "tone_mapping": "agx"}),
-        ("depth_pipeline", "img002", True, 0.052, {"model": "depth_anything_v2", "tone_mapping": "agx"}),
-        ("material_response", "img003", True, 0.120, {"strength": 0.7, "surfaces": ["wood", "metal"]}),
+        (
+            "depth_pipeline",
+            "img001",
+            True,
+            0.045,
+            {"model": "depth_anything_v2", "tone_mapping": "agx"},
+        ),
+        (
+            "depth_pipeline",
+            "img002",
+            True,
+            0.052,
+            {"model": "depth_anything_v2", "tone_mapping": "agx"},
+        ),
+        (
+            "material_response",
+            "img003",
+            True,
+            0.120,
+            {"strength": 0.7, "surfaces": ["wood", "metal"]},
+        ),
     ]
 
     for pipeline, artifact_id, success, time, params in sample_feedback:
         engine.add_feedback(
-            pipeline=pipeline, artifact_id=artifact_id, success=success, processing_time=time, parameters=params
+            pipeline=pipeline,
+            artifact_id=artifact_id,
+            success=success,
+            processing_time=time,
+            parameters=params,
         )
 
     # Analyze pipeline

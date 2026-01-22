@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 try:
     import torch
     import torch.nn.functional as F
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -25,6 +26,7 @@ except ImportError:
 @dataclass
 class TileConfig:
     """Configuration for tiled processing."""
+
     tile_size: int = 512
     overlap: int = 64
     blend_mode: str = "linear"  # "linear", "gaussian", "none"
@@ -33,10 +35,14 @@ class TileConfig:
     def __post_init__(self):
         """Validate configuration."""
         if self.overlap >= self.tile_size:
-            raise ValueError(f"Overlap ({self.overlap}) must be less than tile size ({self.tile_size})")
+            raise ValueError(
+                f"Overlap ({self.overlap}) must be less than tile size ({self.tile_size})"
+            )
 
         if self.tile_size < self.min_tile_size:
-            raise ValueError(f"Tile size ({self.tile_size}) must be at least {self.min_tile_size}")
+            raise ValueError(
+                f"Tile size ({self.tile_size}) must be at least {self.min_tile_size}"
+            )
 
         if self.blend_mode not in ("linear", "gaussian", "none"):
             raise ValueError(f"Invalid blend_mode: {self.blend_mode}")
@@ -55,10 +61,7 @@ class TiledProcessor:
     """
 
     def __init__(
-        self,
-        tile_size: int = 512,
-        overlap: int = 64,
-        blend_mode: str = "linear"
+        self, tile_size: int = 512, overlap: int = 64, blend_mode: str = "linear"
     ):
         """
         Initialize tiled processor.
@@ -72,15 +75,11 @@ class TiledProcessor:
             raise ImportError("TiledProcessor requires torch")
 
         self.config = TileConfig(
-            tile_size=tile_size,
-            overlap=overlap,
-            blend_mode=blend_mode
+            tile_size=tile_size, overlap=overlap, blend_mode=blend_mode
         )
 
     def process(
-        self,
-        image: torch.Tensor,
-        processor_fn: Callable[[torch.Tensor], torch.Tensor]
+        self, image: torch.Tensor, processor_fn: Callable[[torch.Tensor], torch.Tensor]
     ) -> torch.Tensor:
         """
         Process image with tiling.
@@ -121,9 +120,7 @@ class TiledProcessor:
         return result
 
     def _process_tiled(
-        self,
-        image: torch.Tensor,
-        processor_fn: Callable[[torch.Tensor], torch.Tensor]
+        self, image: torch.Tensor, processor_fn: Callable[[torch.Tensor], torch.Tensor]
     ) -> torch.Tensor:
         """Process image in tiles with blending."""
         _, c, h, w = image.shape
@@ -197,10 +194,7 @@ class TiledProcessor:
         return tiles
 
     def _create_blend_weight(
-        self,
-        h: int,
-        w: int,
-        device: torch.device
+        self, h: int, w: int, device: torch.device
     ) -> torch.Tensor:
         """
         Create blend weight for tile.

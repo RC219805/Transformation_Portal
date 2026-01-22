@@ -33,18 +33,18 @@ from transformation_portal.comfyui.custom_nodes import (
     SceneAnalysisNode,
     MaterialSegmentationNode,
     NeuroaestheticsNode,
-    QualityValidationNode
+    QualityValidationNode,
 )
 
 __all__ = [
-    'WorkflowBuilder',
-    'WorkflowTemplates',
-    'WorkflowExecutor',
-    'CustomNodeRegistry',
-    'FluxEnhancementNode',
-    'SkyGANNode',
-    'SceneAnalysisNode',
-    'MaterialSegmentationNode',
-    'NeuroaestheticsNode',
-    'QualityValidationNode',
+    "WorkflowBuilder",
+    "WorkflowTemplates",
+    "WorkflowExecutor",
+    "CustomNodeRegistry",
+    "FluxEnhancementNode",
+    "SkyGANNode",
+    "SceneAnalysisNode",
+    "MaterialSegmentationNode",
+    "NeuroaestheticsNode",
+    "QualityValidationNode",
 ]

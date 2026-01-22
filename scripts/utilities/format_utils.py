@@ -425,7 +425,14 @@ def format_help_text(format_type: str = "image") -> str:
 
 if __name__ == "__main__":
     # Example usage and testing
-    test_files = ["render.jpg", "photo.TIFF", "depth_map.png", "video.mp4", "document.pd", "archive.WebP"]
+    test_files = [
+        "render.jpg",
+        "photo.TIFF",
+        "depth_map.png",
+        "video.mp4",
+        "document.pd",
+        "archive.WebP",
+    ]
 
     print("Format Validation Examples:\n")
     for file in test_files:

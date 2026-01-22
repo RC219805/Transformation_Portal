@@ -182,7 +182,12 @@ def example_gs_custom_rendering():
 
     # First pass: Generate GS representation
     print("Generating GS representation...")
-    gs_prediction = wrapper.inference(image=images, infer_gs=True, export_format="gs_ply", export_dir="output/gs/custom/model")
+    gs_prediction = wrapper.inference(
+        image=images,
+        infer_gs=True,
+        export_format="gs_ply",
+        export_dir="output/gs/custom/model",
+    )
 
     # Second pass: Render custom views
     print("Rendering custom views...")
@@ -236,7 +241,11 @@ def example_gs_quality_comparison():
         print(f"\nTesting process_res={res}...")
 
         prediction = wrapper.inference(
-            image=images, infer_gs=True, process_res=res, export_dir=f"output/gs/quality/res_{res}", export_format="gs_ply"
+            image=images,
+            infer_gs=True,
+            process_res=res,
+            export_dir=f"output/gs/quality/res_{res}",
+            export_format="gs_ply",
         )
 
         # Quality metrics

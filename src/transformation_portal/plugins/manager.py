@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 class PluginState(Enum):
     """State of a plugin in its lifecycle."""
+
     DISCOVERED = "discovered"
     LOADED = "loaded"
     VALIDATED = "validated"
@@ -33,6 +34,7 @@ class PluginState(Enum):
 @dataclass
 class PluginContext:
     """Context for plugin execution with configuration and state."""
+
     config: Dict[str, Any] = field(default_factory=dict)
     state: PluginState = PluginState.DISCOVERED
     error_message: Optional[str] = None
@@ -44,6 +46,7 @@ class PluginContext:
 @dataclass
 class ExecutionResult:
     """Result of plugin execution."""
+
     success: bool
     result: Any = None
     error: Optional[str] = None
@@ -101,8 +104,7 @@ class PluginManager:
             self.discover_plugins()
 
     def discover_plugins(
-        self,
-        search_paths: Optional[List[Path]] = None
+        self, search_paths: Optional[List[Path]] = None
     ) -> Dict[str, LoadedPlugin]:
         """Discover and load all plugins.
 
@@ -122,10 +124,7 @@ class PluginManager:
         for loaded_plugin in loaded:
             if loaded_plugin.is_valid and loaded_plugin.plugin:
                 try:
-                    self._registry.register(
-                        loaded_plugin.plugin,
-                        replace_existing=True
-                    )
+                    self._registry.register(loaded_plugin.plugin, replace_existing=True)
 
                     # Initialize context for plugin
                     with self._lock:
@@ -134,7 +133,9 @@ class PluginManager:
                         )
 
                 except Exception as e:
-                    logger.error(f"Failed to register plugin {loaded_plugin.manifest.name}: {e}")
+                    logger.error(
+                        f"Failed to register plugin {loaded_plugin.manifest.name}: {e}"
+                    )
 
         return self._loader.get_loaded_plugins()
 
@@ -142,7 +143,7 @@ class PluginManager:
         self,
         name: str,
         initialize: bool = False,
-        config: Optional[Dict[str, Any]] = None
+        config: Optional[Dict[str, Any]] = None,
     ) -> Optional[PluginInterface]:
         """Get a plugin by name.
 
@@ -176,9 +177,7 @@ class PluginManager:
         return [lp.plugin for lp in loaded if lp.plugin]
 
     def initialize_plugin(
-        self,
-        name: str,
-        config: Optional[Dict[str, Any]] = None
+        self, name: str, config: Optional[Dict[str, Any]] = None
     ) -> bool:
         """Initialize a plugin with configuration.
 
@@ -224,14 +223,12 @@ class PluginManager:
                     self._contexts[name].state = PluginState.ERROR
                     self._contexts[name].error_message = str(e)
 
-            raise PluginInitializationError(f"Failed to initialize '{name}': {e}") from e
+            raise PluginInitializationError(
+                f"Failed to initialize '{name}': {e}"
+            ) from e
 
     def execute(
-        self,
-        name: str,
-        *args,
-        fallback_plugins: Optional[List[str]] = None,
-        **kwargs
+        self, name: str, *args, fallback_plugins: Optional[List[str]] = None, **kwargs
     ) -> ExecutionResult:
         """Execute a plugin's main function.
 
@@ -310,7 +307,7 @@ class PluginManager:
         plugin_type: PluginType,
         *args,
         prefer_plugin: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ) -> ExecutionResult:
         """Execute a plugin by type with automatic selection.
 
@@ -340,17 +337,12 @@ class PluginManager:
             plugin_names.insert(0, prefer_plugin)
 
         return self.execute(
-            plugin_names[0],
-            *args,
-            fallback_plugins=plugin_names[1:],
-            **kwargs
+            plugin_names[0], *args, fallback_plugins=plugin_names[1:], **kwargs
         )
 
     @contextmanager
     def plugin_session(
-        self,
-        name: str,
-        config: Optional[Dict[str, Any]] = None
+        self, name: str, config: Optional[Dict[str, Any]] = None
     ) -> Iterator[PluginInterface]:
         """Context manager for plugin session with automatic cleanup.
 
@@ -443,11 +435,7 @@ class PluginManager:
         # Unload from loader
         return self._loader.unload_plugin(name)
 
-    def reload_plugin(
-        self,
-        name: str,
-        config: Optional[Dict[str, Any]] = None
-    ) -> bool:
+    def reload_plugin(self, name: str, config: Optional[Dict[str, Any]] = None) -> bool:
         """Hot-reload a plugin.
 
         Args:
@@ -481,7 +469,7 @@ class PluginManager:
     def list_plugins(
         self,
         plugin_type: Optional[PluginType] = None,
-        state: Optional[PluginState] = None
+        state: Optional[PluginState] = None,
     ) -> List[Dict[str, Any]]:
         """List plugins with optional filtering.
 

@@ -10,14 +10,22 @@ from datetime import datetime
 try:
     import cv2  # noqa: F401
     import torch  # noqa: F401
-    from lux_depth_v3.model_cache import ModelCacheInfo, CacheStrategy, ModelCacheManager, precache_models
+    from lux_depth_v3.model_cache import (
+        ModelCacheInfo,
+        CacheStrategy,
+        ModelCacheManager,
+        precache_models,
+    )
 
     DEPS_AVAILABLE = True
 except ImportError as e:
     DEPS_AVAILABLE = False
     SKIP_REASON = f"Dependencies not available: {e}"
 
-pytestmark = pytest.mark.skipif(not DEPS_AVAILABLE, reason=getattr(globals(), "SKIP_REASON", "Dependencies not available"))
+pytestmark = pytest.mark.skipif(
+    not DEPS_AVAILABLE,
+    reason=getattr(globals(), "SKIP_REASON", "Dependencies not available"),
+)
 
 
 class TestModelCacheInfo:
@@ -187,7 +195,10 @@ class TestModelCacheManager:
         """Test saving metadata to file."""
         manager = ModelCacheManager(cache_dir=temp_cache_dir)
 
-        manager.metadata["models"]["test-model"] = {"model_id": "test-model", "size_bytes": 1000000}
+        manager.metadata["models"]["test-model"] = {
+            "model_id": "test-model",
+            "size_bytes": 1000000,
+        }
 
         manager._save_metadata()
 

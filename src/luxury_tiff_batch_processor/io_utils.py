@@ -385,7 +385,7 @@ def image_to_float(  # pylint: disable=too-many-locals,too-many-branches,too-man
     result = ImageToFloatResult(
         array=np.ascontiguousarray(working, dtype=np.float32),
         dtype=np.dtype(color_data.dtype),
-        alpha=None if alpha_float is None else np.ascontiguousarray(alpha_float, dtype=np.float32),
+        alpha=(None if alpha_float is None else np.ascontiguousarray(alpha_float, dtype=np.float32)),
         base_channels=base_channels,
         float_normalisation=float_norm,
     )

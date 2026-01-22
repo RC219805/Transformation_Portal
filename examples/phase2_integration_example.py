@@ -11,12 +11,23 @@ from PIL import Image
 
 # Phase 2 imports
 from tools.material_detector import MaterialDetector
-from tools.depth_aware_lut import DepthAwareLUT, DepthAwareLUTConfig, ZoneLUTConfig, DepthZone
+from tools.depth_aware_lut import (
+    DepthAwareLUT,
+    DepthAwareLUTConfig,
+    ZoneLUTConfig,
+    DepthZone,
+)
 from utils.performance_profiler import PerformanceProfiler
 from utils.exposure_fusion import ExposureFusion, ExposureTarget
 
 
-def process_luxury_image_phase2(image_path: Path, output_dir: Path, lut_fg: Path, lut_bg: Path, enable_profiling: bool = True):
+def process_luxury_image_phase2(
+    image_path: Path,
+    output_dir: Path,
+    lut_fg: Path,
+    lut_bg: Path,
+    enable_profiling: bool = True,
+):
     """
     Process luxury real estate image with Phase 2 features.
 
@@ -77,7 +88,9 @@ def process_luxury_image_phase2(image_path: Path, output_dir: Path, lut_fg: Path
 
     # Generate heatmap for dominant material
     detector.generate_heatmap(
-        material_result, material_result.dominant_material, output_dir / f"{image_path.stem}_material_heatmap.png"
+        material_result,
+        material_result.dominant_material,
+        output_dir / f"{image_path.stem}_material_heatmap.png",
     )
 
     # Step 2: Depth-Aware LUT Application
@@ -93,7 +106,10 @@ def process_luxury_image_phase2(image_path: Path, output_dir: Path, lut_fg: Path
         config = DepthAwareLUTConfig(
             zone_configs={
                 DepthZone.FOREGROUND: ZoneLUTConfig(
-                    zone=DepthZone.FOREGROUND, lut_path=lut_fg, strength=0.8, color_temp_shift=0
+                    zone=DepthZone.FOREGROUND,
+                    lut_path=lut_fg,
+                    strength=0.8,
+                    color_temp_shift=0,
                 ),
                 DepthZone.BACKGROUND: ZoneLUTConfig(
                     zone=DepthZone.BACKGROUND,
@@ -127,7 +143,11 @@ def process_luxury_image_phase2(image_path: Path, output_dir: Path, lut_fg: Path
     print(f"\n{'Exposure Optimization':-^70}")
 
     # Check if input is HDR (simplified check)
-    is_hdr = img_array.max() > 1.0 or image_path.suffix.lower() in [".tif", ".tiff", ".exr"]
+    is_hdr = img_array.max() > 1.0 or image_path.suffix.lower() in [
+        ".tif",
+        ".tiff",
+        ".exr",
+    ]
 
     if is_hdr:
         if profiler:
@@ -174,12 +194,23 @@ def main():
 
     parser = argparse.ArgumentParser(description="Phase 2 Integration Example - Luxury Image Processing")
     parser.add_argument("input", type=Path, help="Input image path")
-    parser.add_argument("--output-dir", type=Path, default=Path("output_phase2_example"), help="Output directory")
     parser.add_argument(
-        "--lut-fg", type=Path, default=Path("assets/luts/film_emulation/Kodak_2383.cube"), help="Foreground LUT path"
+        "--output-dir",
+        type=Path,
+        default=Path("output_phase2_example"),
+        help="Output directory",
     )
     parser.add_argument(
-        "--lut-bg", type=Path, default=Path("assets/luts/film_emulation/Kodak_2393.cube"), help="Background LUT path"
+        "--lut-fg",
+        type=Path,
+        default=Path("assets/luts/film_emulation/Kodak_2383.cube"),
+        help="Foreground LUT path",
+    )
+    parser.add_argument(
+        "--lut-bg",
+        type=Path,
+        default=Path("assets/luts/film_emulation/Kodak_2393.cube"),
+        help="Background LUT path",
     )
     parser.add_argument("--no-profiling", action="store_true", help="Disable performance profiling")
 
@@ -189,7 +220,13 @@ def main():
         print(f"❌ Error: Input file not found: {args.input}")
         return 1
 
-    process_luxury_image_phase2(args.input, args.output_dir, args.lut_fg, args.lut_bg, enable_profiling=not args.no_profiling)
+    process_luxury_image_phase2(
+        args.input,
+        args.output_dir,
+        args.lut_fg,
+        args.lut_bg,
+        enable_profiling=not args.no_profiling,
+    )
 
     return 0
 

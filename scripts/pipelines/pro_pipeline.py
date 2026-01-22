@@ -45,12 +45,18 @@ from PIL import Image
 from tqdm import tqdm
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
 log = logging.getLogger("pro_pipeline")
 
 # Typer app for CLI
 app = typer.Typer(
-    name="pro-pipeline", help="Transformation Portal - Fully-Integrated Professional Pipeline", add_completion=False
+    name="pro-pipeline",
+    help="Transformation Portal - Fully-Integrated Professional Pipeline",
+    add_completion=False,
 )
 
 
@@ -126,31 +132,64 @@ class ProPipelineConfig:
         """Apply preset-specific configurations."""
         presets = {
             PipelinePreset.ARCHITECTURAL_HERO: {
-                "depth_stage": {"enabled": True, "config": {"model": "depth-anything-v2-large"}},
-                "ai_stage": {"enabled": True, "config": {"strength": 0.45, "steps": 30}},
+                "depth_stage": {
+                    "enabled": True,
+                    "config": {"model": "depth-anything-v2-large"},
+                },
+                "ai_stage": {
+                    "enabled": True,
+                    "config": {"strength": 0.45, "steps": 30},
+                },
                 "material_stage": {"enabled": True, "config": {"strength": 0.7}},
-                "grading_stage": {"enabled": True, "config": {"lut": "Kodak_2393.cube", "intensity": 0.8}},
-                "finishing_stage": {"enabled": True, "config": {"clarity": 0.18, "sharpen": 0.14}},
+                "grading_stage": {
+                    "enabled": True,
+                    "config": {"lut": "Kodak_2393.cube", "intensity": 0.8},
+                },
+                "finishing_stage": {
+                    "enabled": True,
+                    "config": {"clarity": 0.18, "sharpen": 0.14},
+                },
             },
             PipelinePreset.INTERIOR_DRAMATIC: {
-                "depth_stage": {"enabled": True, "config": {"model": "depth-anything-v2-base"}},
+                "depth_stage": {
+                    "enabled": True,
+                    "config": {"model": "depth-anything-v2-base"},
+                },
                 "ai_stage": {"enabled": False},
                 "material_stage": {"enabled": True, "config": {"strength": 0.65}},
-                "grading_stage": {"enabled": True, "config": {"preset": "dramatic", "contrast": 1.12}},
-                "finishing_stage": {"enabled": True, "config": {"clarity": 0.15, "micro_contrast": 0.04}},
+                "grading_stage": {
+                    "enabled": True,
+                    "config": {"preset": "dramatic", "contrast": 1.12},
+                },
+                "finishing_stage": {
+                    "enabled": True,
+                    "config": {"clarity": 0.15, "micro_contrast": 0.04},
+                },
             },
             PipelinePreset.EXTERIOR_GOLDEN_HOUR: {
                 "depth_stage": {"enabled": True, "config": {"atmospheric_haze": True}},
                 "ai_stage": {"enabled": True, "config": {"strength": 0.35}},
                 "material_stage": {"enabled": True, "config": {"strength": 0.6}},
-                "grading_stage": {"enabled": True, "config": {"lut": "California_Golden_Hour.cube"}},
+                "grading_stage": {
+                    "enabled": True,
+                    "config": {"lut": "California_Golden_Hour.cube"},
+                },
                 "finishing_stage": {"enabled": True, "config": {"warm_glow": 0.12}},
             },
             PipelinePreset.AERIAL_ESTATE: {
-                "depth_stage": {"enabled": True, "config": {"aerial_perspective": True}},
+                "depth_stage": {
+                    "enabled": True,
+                    "config": {"aerial_perspective": True},
+                },
                 "ai_stage": {"enabled": False},
-                "material_stage": {"enabled": True, "config": {"surfaces": ["grass", "water", "roof"]}},
-                "grading_stage": {"enabled": True, "config": {"preset": "aerial_vibrant"}},
+                "material_stage": {
+                    "enabled": True,
+                    "config": {"surfaces": ["grass", "water", "roof"]},
+                },
+                "grading_stage": {
+                    "enabled": True,
+                    "config": {"preset": "aerial_vibrant"},
+                },
                 "finishing_stage": {"enabled": True, "config": {"clarity": 0.20}},
             },
         }
@@ -217,7 +256,9 @@ class ProPipeline:
         if self._depth_pipeline is None:
             try:
                 # Try installed package import first (correct for editable installs)
-                from transformation_portal.depth.pipeline import ArchitecturalDepthPipeline
+                from transformation_portal.depth.pipeline import (
+                    ArchitecturalDepthPipeline,
+                )
 
                 config_path = Path("config/interior_preset.yaml")
                 if config_path.exists():
@@ -239,7 +280,9 @@ class ProPipeline:
         if self._ai_pipeline is None:
             try:
                 # Try installed package import first (correct for editable installs)
-                from transformation_portal.pipelines.lux_render_pipeline import apply_material_response_finishing  # noqa: F401
+                from transformation_portal.pipelines.lux_render_pipeline import (
+                    apply_material_response_finishing,
+                )  # noqa: F401
 
                 self._ai_pipeline = "available"
                 log.info("AI enhancement pipeline loaded")
@@ -511,7 +554,11 @@ class ProPipeline:
 
                 # Convert sRGB to linear
                 img_float = img_array.astype(np.float32) / 255.0
-                linear_array = np.where(img_float <= 0.04045, img_float / 12.92, np.power((img_float + 0.055) / 1.055, 2.4))
+                linear_array = np.where(
+                    img_float <= 0.04045,
+                    img_float / 12.92,
+                    np.power((img_float + 0.055) / 1.055, 2.4),
+                )
 
                 # Scale to bit depth
                 if self.config.bit_depth == 16:
@@ -523,7 +570,11 @@ class ProPipeline:
 
                 # Save with tifffile
                 tifffile.imwrite(
-                    output_path, output_array, compression="deflate", photometric="rgb", metadata={"colorspace": "linear"}
+                    output_path,
+                    output_array,
+                    compression="deflate",
+                    photometric="rgb",
+                    metadata={"colorspace": "linear"},
                 )
 
                 log.info(f"  ✓ Saved as {self.config.bit_depth}-bit linear TIFF")
@@ -631,7 +682,12 @@ class ProPipeline:
 def process(
     input_path: Path = typer.Argument(..., help="Input image path"),
     output_dir: Path = typer.Option("./output", "--out", "-o", help="Output directory"),
-    preset: PipelinePreset = typer.Option(PipelinePreset.ARCHITECTURAL_HERO, "--preset", "-p", help="Pipeline preset to use"),
+    preset: PipelinePreset = typer.Option(
+        PipelinePreset.ARCHITECTURAL_HERO,
+        "--preset",
+        "-p",
+        help="Pipeline preset to use",
+    ),
     # Stage toggles
     depth_aware: bool = typer.Option(True, "--depth-aware/--no-depth", help="Enable depth-aware processing"),
     ai_enhance: bool = typer.Option(True, "--ai-enhance/--no-ai", help="Enable AI enhancement"),
@@ -644,7 +700,12 @@ def process(
     linear_output: bool = typer.Option(True, "--linear/--gamma", help="Save in linear colorspace (recommended)"),
     # Performance
     device: str = typer.Option("auto", "--device", help="Device to use (auto, cpu, cuda, mps)"),
-    quality: str = typer.Option("high", "--quality", "-q", help="Processing quality (draft, standard, high, ultra)"),
+    quality: str = typer.Option(
+        "high",
+        "--quality",
+        "-q",
+        help="Processing quality (draft, standard, high, ultra)",
+    ),
     # Other
     keep_intermediates: bool = typer.Option(False, "--keep-intermediates", help="Keep intermediate outputs"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be done without processing"),
@@ -704,7 +765,12 @@ def process(
 def batch(
     input_dir: Path = typer.Argument(..., help="Input directory with images"),
     output_dir: Path = typer.Option("./output", "--out", "-o", help="Output directory"),
-    preset: PipelinePreset = typer.Option(PipelinePreset.ARCHITECTURAL_HERO, "--preset", "-p", help="Pipeline preset to use"),
+    preset: PipelinePreset = typer.Option(
+        PipelinePreset.ARCHITECTURAL_HERO,
+        "--preset",
+        "-p",
+        help="Pipeline preset to use",
+    ),
     pattern: str = typer.Option("*.{jpg,jpeg,png,tiff,tif}", "--pattern", help="File pattern to match"),
     # Same options as process command
     depth_aware: bool = typer.Option(True, "--depth-aware/--no-depth"),

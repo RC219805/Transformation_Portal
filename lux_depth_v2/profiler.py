@@ -69,9 +69,9 @@ class StageMetrics:
             "elapsed_time": round(self.elapsed_time, 3),
             "io_time": round(self.io_time, 3),
             "compute_time": round(self.compute_time, 3),
-            "memory_delta_mb": round(self.memory_delta_mb, 1) if self.memory_delta_mb else None,
-            "memory_peak_mb": round(self.memory_peak_mb, 1) if self.memory_peak_mb else None,
-            "gpu_memory_peak_mb": round(self.gpu_memory_peak_mb, 1) if self.gpu_memory_peak_mb else None,
+            "memory_delta_mb": (round(self.memory_delta_mb, 1) if self.memory_delta_mb else None),
+            "memory_peak_mb": (round(self.memory_peak_mb, 1) if self.memory_peak_mb else None),
+            "gpu_memory_peak_mb": (round(self.gpu_memory_peak_mb, 1) if self.gpu_memory_peak_mb else None),
             "metadata": self.metadata,
         }
 
@@ -125,11 +125,15 @@ class PerformanceReport:
             "io_compute_ratio": round(self.total_io_time / max(self.total_compute_time, 0.001), 2),
             "stages": [s.to_dict() for s in self.stages],
             "bottlenecks": [
-                {"stage": name, "time": round(time_val, 3), "percent": round(100 * time_val / max(self.total_time, 0.001), 1)}
+                {
+                    "stage": name,
+                    "time": round(time_val, 3),
+                    "percent": round(100 * time_val / max(self.total_time, 0.001), 1),
+                }
                 for name, time_val in self.bottlenecks
             ],
-            "peak_memory_mb": round(self.peak_memory_mb, 1) if self.peak_memory_mb else None,
-            "peak_gpu_memory_mb": round(self.peak_gpu_memory_mb, 1) if self.peak_gpu_memory_mb else None,
+            "peak_memory_mb": (round(self.peak_memory_mb, 1) if self.peak_memory_mb else None),
+            "peak_gpu_memory_mb": (round(self.peak_gpu_memory_mb, 1) if self.peak_gpu_memory_mb else None),
         }
 
     def summary(self) -> str:
@@ -228,9 +232,15 @@ class PerformanceProfiler:
             metrics.gpu_memory_end_mb = self._get_gpu_memory_usage()
 
             # Track peak memory during stage
-            metrics.memory_peak_mb = max(metrics.memory_start_mb or 0, metrics.memory_end_mb or 0, self._global_peak_memory_mb)
+            metrics.memory_peak_mb = max(
+                metrics.memory_start_mb or 0,
+                metrics.memory_end_mb or 0,
+                self._global_peak_memory_mb,
+            )
             metrics.gpu_memory_peak_mb = max(
-                metrics.gpu_memory_start_mb or 0, metrics.gpu_memory_end_mb or 0, self._global_peak_gpu_memory_mb
+                metrics.gpu_memory_start_mb or 0,
+                metrics.gpu_memory_end_mb or 0,
+                self._global_peak_gpu_memory_mb,
             )
 
             # Finalize metrics

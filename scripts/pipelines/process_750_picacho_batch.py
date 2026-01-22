@@ -33,7 +33,12 @@ def process_750_picacho():
     print(f"Timestamp: {timestamp}\n")
 
     # Initialize pipeline
-    pipeline = LuxRenderPipeline(use_depth_estimation=True, use_advanced_grading=True, output_format="jpg", quality=98)
+    pipeline = LuxRenderPipeline(
+        use_depth_estimation=True,
+        use_advanced_grading=True,
+        output_format="jpg",
+        quality=98,
+    )
 
     results = {}
 

@@ -39,7 +39,6 @@ from lux_depth_v2.material_segmentation import create_material_segmenter
 from lux_depth_v2.metrics.boundary_metrics import compute_full_boundary_metrics
 from lux_depth_v2 import io_utils, torch_ops
 
-
 BENCHMARK_SET = {
     "interior_kitchen_750": {
         "path": "assets/phase2_bench/750Picacho_Kitchen_Ultimate.tif",
@@ -215,12 +214,18 @@ def compute_per_class_metrics(
     # Compute full boundary metrics using PR-3A module
     # Baseline vs gradients
     base_metrics = compute_full_boundary_metrics(
-        pred_mask=baseline_mask, ref_mask=None, image_gradients=image_gradients, radius_px=2
+        pred_mask=baseline_mask,
+        ref_mask=None,
+        image_gradients=image_gradients,
+        radius_px=2,
     )
 
     # Canary vs gradients
     canary_metrics = compute_full_boundary_metrics(
-        pred_mask=canary_mask, ref_mask=None, image_gradients=image_gradients, radius_px=2
+        pred_mask=canary_mask,
+        ref_mask=None,
+        image_gradients=image_gradients,
+        radius_px=2,
     )
 
     # Canary vs baseline (regression guard)

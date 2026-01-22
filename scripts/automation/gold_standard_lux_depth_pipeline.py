@@ -372,7 +372,13 @@ def blur(x: np.ndarray, sigma: float) -> np.ndarray:
     if sigma <= 0:
         return x.astype(np.float32)
     k = int(round(sigma * 3)) * 2 + 1
-    return cv2.GaussianBlur(x.astype(np.float32), (k, k), sigmaX=sigma, sigmaY=sigma, borderType=cv2.BORDER_REFLECT)
+    return cv2.GaussianBlur(
+        x.astype(np.float32),
+        (k, k),
+        sigmaX=sigma,
+        sigmaY=sigma,
+        borderType=cv2.BORDER_REFLECT,
+    )
 
 
 def resize(x: np.ndarray, w: int, h: int, interp: int) -> np.ndarray:
@@ -467,7 +473,13 @@ def load_mask_any(p: Path) -> np.ndarray:
     return (m.astype(np.float32) / 255.0).astype(np.float32)
 
 
-def weights_from_assets(h: int, w: int, depth: Optional[np.ndarray], masks: Dict[str, np.ndarray], cfg: Config) -> Weights:
+def weights_from_assets(
+    h: int,
+    w: int,
+    depth: Optional[np.ndarray],
+    masks: Dict[str, np.ndarray],
+    cfg: Config,
+) -> Weights:
     have = all(k in masks for k in ("foreground", "midground", "background"))
     if have:
         wfg, wmid, wbg = masks["foreground"], masks["midground"], masks["background"]
@@ -483,7 +495,10 @@ def weights_from_assets(h: int, w: int, depth: Optional[np.ndarray], masks: Dict
         sm = np.maximum(wfg + wmid + wbg, EPS)
         wfg, wmid, wbg = wfg / sm, wmid / sm, wbg / sm
         return Weights(
-            wfg=wfg.astype(np.float32), wmid=wmid.astype(np.float32), wbg=wbg.astype(np.float32), source="zone_masks"
+            wfg=wfg.astype(np.float32),
+            wmid=wmid.astype(np.float32),
+            wbg=wbg.astype(np.float32),
+            source="zone_masks",
         )
     if depth is None:
         # fall back to uniform
@@ -502,7 +517,10 @@ def weights_from_assets(h: int, w: int, depth: Optional[np.ndarray], masks: Dict
         sm = np.maximum(wfg + wmid + wbg, EPS)
         wfg, wmid, wbg = wfg / sm, wmid / sm, wbg / sm
     return Weights(
-        wfg=wfg.astype(np.float32), wmid=wmid.astype(np.float32), wbg=wbg.astype(np.float32), source="depth_quantiles"
+        wfg=wfg.astype(np.float32),
+        wmid=wmid.astype(np.float32),
+        wbg=wbg.astype(np.float32),
+        source="depth_quantiles",
     )
 
 
@@ -549,7 +567,14 @@ class RealESRGAN(Upscaler):
             device = "cuda" if torch.cuda.is_available() else "cpu"
 
         # RRDBNet configuration matches Real-ESRGAN x4plus
-        model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=cfg.upscale)
+        model = RRDBNet(
+            num_in_ch=3,
+            num_out_ch=3,
+            num_feat=64,
+            num_block=23,
+            num_grow_ch=32,
+            scale=cfg.upscale,
+        )
 
         self._er = RealESRGANer(
             scale=cfg.upscale,
@@ -628,10 +653,20 @@ class SurfaceProfile:
 SURFACE_PROFILES: Dict[str, SurfaceProfile] = {
     # Subtle defaults; they're meant to be *barely noticeable*.
     "wood": SurfaceProfile(
-        temp_offset=0.006, sat_mult=1.05, con_mult=1.015, detail_mult=1.05, clarity_mult=1.08, sharpen_mult=1.03
+        temp_offset=0.006,
+        sat_mult=1.05,
+        con_mult=1.015,
+        detail_mult=1.05,
+        clarity_mult=1.08,
+        sharpen_mult=1.03,
     ),
     "metal": SurfaceProfile(
-        temp_offset=-0.001, sat_mult=0.99, con_mult=1.010, detail_mult=1.03, clarity_mult=1.06, sharpen_mult=1.03
+        temp_offset=-0.001,
+        sat_mult=0.99,
+        con_mult=1.010,
+        detail_mult=1.03,
+        clarity_mult=1.06,
+        sharpen_mult=1.03,
     ),
     "glass": SurfaceProfile(
         temp_offset=-0.002,
@@ -643,11 +678,21 @@ SURFACE_PROFILES: Dict[str, SurfaceProfile] = {
         highlight_compress=0.20,
     ),
     "stone": SurfaceProfile(
-        temp_offset=0.000, sat_mult=1.00, con_mult=1.012, detail_mult=1.02, clarity_mult=1.05, sharpen_mult=1.02
+        temp_offset=0.000,
+        sat_mult=1.00,
+        con_mult=1.012,
+        detail_mult=1.02,
+        clarity_mult=1.05,
+        sharpen_mult=1.02,
     ),
     # Optional extra surfaces you can add by providing matching masks.
     "foliage": SurfaceProfile(
-        temp_offset=0.000, sat_mult=1.02, con_mult=1.005, detail_mult=0.95, clarity_mult=0.92, sharpen_mult=0.92
+        temp_offset=0.000,
+        sat_mult=1.02,
+        con_mult=1.005,
+        detail_mult=0.95,
+        clarity_mult=0.92,
+        sharpen_mult=0.92,
     ),
     "sky": SurfaceProfile(
         temp_offset=-0.003,
@@ -987,7 +1032,13 @@ def apply_lut(rgb01: np.ndarray, lut: CubeLUT, cfg: Config) -> np.ndarray:
 # --------------------------- Enhancements ---------------------------
 
 
-def detail_transfer(base01: np.ndarray, ai01: np.ndarray, W: Weights, cfg: Config, mods: Optional[MaterialMods]) -> np.ndarray:
+def detail_transfer(
+    base01: np.ndarray,
+    ai01: np.ndarray,
+    W: Weights,
+    cfg: Config,
+    mods: Optional[MaterialMods],
+) -> np.ndarray:
     if ai01.shape != base01.shape:
         ai01 = resize(ai01, base01.shape[1], base01.shape[0], cv2.INTER_LANCZOS4)
 
@@ -1078,7 +1129,12 @@ def grade_core(rgb01: np.ndarray, W: Weights, cfg: Config, mods: Optional[Materi
             e_mul = resize(mods.exp_mult, temp.shape[1], temp.shape[0], cv2.INTER_LINEAR)
             c_mul = resize(mods.con_mult, temp.shape[1], temp.shape[0], cv2.INTER_LINEAR)
         else:
-            t_off, s_mul, e_mul, c_mul = mods.temp_offset, mods.sat_mult, mods.exp_mult, mods.con_mult
+            t_off, s_mul, e_mul, c_mul = (
+                mods.temp_offset,
+                mods.sat_mult,
+                mods.exp_mult,
+                mods.con_mult,
+            )
 
         temp = (temp + t_off).astype(np.float32)
         sat = (sat * s_mul).astype(np.float32)
@@ -1274,14 +1330,39 @@ def process_one(path: Path, cfg: Config, up: Upscaler, ctx: Context) -> Tuple[bo
             mods = None
             if mods0 is not None:
                 mods = MaterialMods(
-                    temp_offset=resize(mods0.temp_offset, base.shape[1], base.shape[0], cv2.INTER_LINEAR),
+                    temp_offset=resize(
+                        mods0.temp_offset,
+                        base.shape[1],
+                        base.shape[0],
+                        cv2.INTER_LINEAR,
+                    ),
                     sat_mult=resize(mods0.sat_mult, base.shape[1], base.shape[0], cv2.INTER_LINEAR),
                     exp_mult=resize(mods0.exp_mult, base.shape[1], base.shape[0], cv2.INTER_LINEAR),
                     con_mult=resize(mods0.con_mult, base.shape[1], base.shape[0], cv2.INTER_LINEAR),
-                    detail_mult=resize(mods0.detail_mult, base.shape[1], base.shape[0], cv2.INTER_LINEAR),
-                    clarity_mult=resize(mods0.clarity_mult, base.shape[1], base.shape[0], cv2.INTER_LINEAR),
-                    sharpen_mult=resize(mods0.sharpen_mult, base.shape[1], base.shape[0], cv2.INTER_LINEAR),
-                    highlight_compress=resize(mods0.highlight_compress, base.shape[1], base.shape[0], cv2.INTER_LINEAR),
+                    detail_mult=resize(
+                        mods0.detail_mult,
+                        base.shape[1],
+                        base.shape[0],
+                        cv2.INTER_LINEAR,
+                    ),
+                    clarity_mult=resize(
+                        mods0.clarity_mult,
+                        base.shape[1],
+                        base.shape[0],
+                        cv2.INTER_LINEAR,
+                    ),
+                    sharpen_mult=resize(
+                        mods0.sharpen_mult,
+                        base.shape[1],
+                        base.shape[0],
+                        cv2.INTER_LINEAR,
+                    ),
+                    highlight_compress=resize(
+                        mods0.highlight_compress,
+                        base.shape[1],
+                        base.shape[0],
+                        cv2.INTER_LINEAR,
+                    ),
                     source=mods0.source,
                 )
 
@@ -1456,7 +1537,12 @@ def parse(argv: Optional[List[str]] = None) -> Config:
     )
 
     p.add_argument("--upscale", type=int, default=4, choices=[2, 4])
-    p.add_argument("--backend", type=str, default="realesrgan", choices=["realesrgan", "onnx", "none"])
+    p.add_argument(
+        "--backend",
+        type=str,
+        default="realesrgan",
+        choices=["realesrgan", "onnx", "none"],
+    )
     p.add_argument("--device", type=str, default="auto")
     p.add_argument("--model-path", type=Path, default=None)
     p.add_argument("--model-sha256", type=str, default=None)
@@ -1597,7 +1683,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         else:
             print(f"\n❌ {pth.name}: {rep.get('error')}")
 
-    batch = {"ok": ok, "total": len(tiffs), "output_dir": str(cfg.output_dir), "images": reps, "epoch": time.time()}
+    batch = {
+        "ok": ok,
+        "total": len(tiffs),
+        "output_dir": str(cfg.output_dir),
+        "images": reps,
+        "epoch": time.time(),
+    }
     bp = cfg.output_dir / "_batch_report.json"
     tmp = bp.with_suffix(bp.suffix + ".tmp")
     with tmp.open("w", encoding="utf-8") as f:

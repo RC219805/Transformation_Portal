@@ -23,7 +23,6 @@ import numpy as np
 from .logging_utils import setup_logging
 from .backends.prompt_generation import PromptGenerationConfig  # Use PR-2 tested config
 
-
 log = setup_logging(__name__)
 
 
@@ -329,7 +328,11 @@ class MaterialsV3Engine:
         self.water_detector = None
         if config.water_detection_enabled:
             try:
-                from .water_candidate import WaterCandidateDetector, SCIPY_AVAILABLE, SKIMAGE_AVAILABLE
+                from .water_candidate import (
+                    WaterCandidateDetector,
+                    SCIPY_AVAILABLE,
+                    SKIMAGE_AVAILABLE,
+                )
 
                 if not (SCIPY_AVAILABLE and SKIMAGE_AVAILABLE):
                     log.warning(
@@ -599,7 +602,7 @@ class MaterialsV3Engine:
                         confidence=1.0,  # Trust SegFormer when it emits water
                         source="segformer",
                         reason="segformer_emitted_sufficient_coverage",
-                        mask=water_mask.astype(np.float32) if water_mask.dtype == bool else water_mask,
+                        mask=(water_mask.astype(np.float32) if water_mask.dtype == bool else water_mask),
                     )
 
         # Run heuristic detector (if available)
@@ -658,7 +661,10 @@ class MaterialsV3Engine:
             # Glass suppressor indicates architectural glass (false positive), not a pool
             # Flat surface suppressor indicates a desaturated pool (legitimate, needs rescue)
             if avg_saturation < self.config.water_saturation_boost_threshold and not glass_grid_suppressed:
-                confidence_final = min(1.0, confidence_after_suppressors + self.config.water_saturation_boost_amount)
+                confidence_final = min(
+                    1.0,
+                    confidence_after_suppressors + self.config.water_saturation_boost_amount,
+                )
                 saturation_boost_applied = True
 
         # Stage A: Candidate detection (high recall threshold)
@@ -682,7 +688,9 @@ class MaterialsV3Engine:
         if present and self.config.water_edge_refinement_enabled:
             if confidence_final >= self.config.water_edge_refinement_min_confidence:
                 refined_mask = self._refine_water_edges(
-                    rgb01=rgb01, water_candidate_mask=result.mask, water_confidence=confidence_final
+                    rgb01=rgb01,
+                    water_candidate_mask=result.mask,
+                    water_confidence=confidence_final,
                 )
 
                 if refined_mask is not None:
@@ -873,7 +881,10 @@ class MaterialsV3Engine:
         return image[y0:y1, x0:x1]
 
     def _uncrop_from_roi(
-        self, mask_roi: np.ndarray, bbox: Tuple[int, int, int, int], full_shape: Tuple[int, int]
+        self,
+        mask_roi: np.ndarray,
+        bbox: Tuple[int, int, int, int],
+        full_shape: Tuple[int, int],
     ) -> np.ndarray:
         """Map ROI mask back to full resolution (PR-W3).
 
@@ -891,7 +902,10 @@ class MaterialsV3Engine:
         return full_mask
 
     def _refine_water_edges(
-        self, rgb01: np.ndarray, water_candidate_mask: np.ndarray, water_confidence: float
+        self,
+        rgb01: np.ndarray,
+        water_candidate_mask: np.ndarray,
+        water_confidence: float,
     ) -> Optional[np.ndarray]:
         """Refine water edges using EfficientSAM (PR-W3).
 
@@ -1048,7 +1062,9 @@ class MaterialsV3Engine:
 
         # NEW: Class presence audit (addresses Stage 6 "water missing" issue)
         class_audit = self._audit_class_presence(
-            raw_materials, canonical_materials, requested_targets=["glass", "water", "foliage"]
+            raw_materials,
+            canonical_materials,
+            requested_targets=["glass", "water", "foliage"],
         )
 
         # PR-3A Step 2: Compute per-class stats
@@ -1383,6 +1399,6 @@ class MaterialsV3Engine:
             "applied": stats.get("applied", False),
             "applied_to": ["stone"] if stats.get("applied", False) else [],
             "forced": forced,
-            "reason": plan_reason if stats.get("applied", False) else stats.get("reason", "unknown"),
+            "reason": (plan_reason if stats.get("applied", False) else stats.get("reason", "unknown")),
             "stone_stats": stats,
         }

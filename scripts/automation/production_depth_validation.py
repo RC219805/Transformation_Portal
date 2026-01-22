@@ -28,14 +28,23 @@ import psutil
 from PIL import Image
 
 from high_fidelity_depth.depth_estimator import HighFidelityDepthEstimator, DepthConfig
-from high_fidelity_depth.quality_metrics import validate_depth_quality, save_metrics_atomic
+from high_fidelity_depth.quality_metrics import (
+    validate_depth_quality,
+    save_metrics_atomic,
+)
 from high_fidelity_depth.refinement import edge_snap_refinement
-from high_fidelity_depth.comprehensive_validation import validate_seams, create_edge_overlay
+from high_fidelity_depth.comprehensive_validation import (
+    validate_seams,
+    create_edge_overlay,
+)
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("production_validation.log"), logging.StreamHandler(sys.stdout)],
+    handlers=[
+        logging.FileHandler("production_validation.log"),
+        logging.StreamHandler(sys.stdout),
+    ],
 )
 logger = logging.getLogger(__name__)
 
@@ -44,7 +53,11 @@ def get_memory_usage() -> Dict[str, float]:
     """Get current memory usage in MB."""
     process = psutil.Process()
     mem_info = process.memory_info()
-    return {"rss_mb": mem_info.rss / 1024**2, "vms_mb": mem_info.vms / 1024**2, "percent": process.memory_percent()}
+    return {
+        "rss_mb": mem_info.rss / 1024**2,
+        "vms_mb": mem_info.vms / 1024**2,
+        "percent": process.memory_percent(),
+    }
 
 
 def log_memory(stage: str):
@@ -54,7 +67,11 @@ def log_memory(stage: str):
 
 
 def process_single_image(
-    rgb_path: Path, output_dir: Path, config: DepthConfig, refinement_config: Optional[Dict] = None, force: bool = False
+    rgb_path: Path,
+    output_dir: Path,
+    config: DepthConfig,
+    refinement_config: Optional[Dict] = None,
+    force: bool = False,
 ) -> Dict:
     """
     Process single image with full error handling and telemetry.
@@ -83,7 +100,13 @@ def process_single_image(
 
     log_memory("start")
 
-    result = {"image_name": image_name, "rgb_path": str(rgb_path), "success": False, "error": None, "traceback": None}
+    result = {
+        "image_name": image_name,
+        "rgb_path": str(rgb_path),
+        "success": False,
+        "error": None,
+        "traceback": None,
+    }
 
     try:
         # Load image
@@ -362,10 +385,14 @@ def run_production_validation(
                 "pass_rate": quality_passed_strict / max(execution_succeeded, 1),
             },
         },
-        "overall_status": "COMPLETE" if execution_failed == 0 and seam_passed == execution_succeeded else "INCOMPLETE",
+        "overall_status": ("COMPLETE" if execution_failed == 0 and seam_passed == execution_succeeded else "INCOMPLETE"),
         "failed_images": failed_images,
         "category_stats": category_stats,
-        "config": {"tile_size": tile_size, "overlap": overlap, "refinement": refinement_config},
+        "config": {
+            "tile_size": tile_size,
+            "overlap": overlap,
+            "refinement": refinement_config,
+        },
         "results": results,
     }
 
@@ -387,7 +414,10 @@ def run_production_validation(
                 "min": float(np.min(edge_f1_scores)),
                 "max": float(np.max(edge_f1_scores)),
             },
-            "seam_ratio": {"mean": float(np.mean(seam_ratios)), "max": float(np.max(seam_ratios))},
+            "seam_ratio": {
+                "mean": float(np.mean(seam_ratios)),
+                "max": float(np.max(seam_ratios)),
+            },
         }
 
     # Save aggregate report (atomic)
@@ -410,10 +440,25 @@ def run_production_validation(
 
 def main():
     parser = argparse.ArgumentParser(description="Production depth validation (stability-first)")
-    parser.add_argument("--input-dir", type=Path, required=True, help="Input directory with source images")
-    parser.add_argument("--output-dir", type=Path, required=True, help="Output directory for depth + metrics")
+    parser.add_argument(
+        "--input-dir",
+        type=Path,
+        required=True,
+        help="Input directory with source images",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        required=True,
+        help="Output directory for depth + metrics",
+    )
     parser.add_argument("--tile-size", type=int, default=1024, help="Tile size (default: 1024)")
-    parser.add_argument("--overlap", type=int, default=192, help="Tile overlap (default: 192, PRIORITY 2)")
+    parser.add_argument(
+        "--overlap",
+        type=int,
+        default=192,
+        help="Tile overlap (default: 192, PRIORITY 2)",
+    )
     parser.add_argument("--force", action="store_true", help="Force reprocess (skip resumability)")
     parser.add_argument("--no-refinement", action="store_true", help="Disable refinement (depth only)")
 

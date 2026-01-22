@@ -260,7 +260,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument("workflows", nargs="*", help="Specific workflow files to validate (default: all)")
+    parser.add_argument(
+        "workflows",
+        nargs="*",
+        help="Specific workflow files to validate (default: all)",
+    )
     parser.add_argument("--fix", action="store_true", help="Auto-fix common issues where possible")
 
     args = parser.parse_args()
@@ -269,7 +273,12 @@ def main():
     try:
         import subprocess
 
-        result = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
         repo_root = Path(result.stdout.strip())
     except (subprocess.CalledProcessError, FileNotFoundError):
         repo_root = Path.cwd()

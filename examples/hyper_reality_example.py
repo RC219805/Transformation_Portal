@@ -5,7 +5,12 @@ Demonstrates how to integrate quantum caustics and neural atmosphere synthesis
 with existing Transformation_Portal pipelines
 """
 
-from enhancements import HyperRealityProcessor, EnhancementConfig, QualityMode, enhance_image
+from enhancements import (
+    HyperRealityProcessor,
+    EnhancementConfig,
+    QualityMode,
+    enhance_image,
+)
 import sys
 from pathlib import Path
 
@@ -61,7 +66,9 @@ def example_custom_configuration():
 
     # Process image
     results = processor.process_image(
-        image_path="input_images/pool_scene.jpg", output_path="outputs/pool_hyper_120.jpg", save_intermediate=True
+        image_path="input_images/pool_scene.jpg",
+        output_path="outputs/pool_hyper_120.jpg",
+        save_intermediate=True,
     )
 
     print(f"✓ Enhanced to {results['quality_score']}/100 quality")
@@ -92,7 +99,8 @@ def example_material_specific():
     processor = HyperRealityProcessor(config)
 
     results = processor.process_image(
-        image_path="input_images/architectural_facade.jpg", output_path="outputs/facade_hyper_110.jpg"
+        image_path="input_images/architectural_facade.jpg",
+        output_path="outputs/facade_hyper_110.jpg",
     )
 
     print(f"✓ Enhanced to {results['quality_score']}/100 quality")
@@ -138,9 +146,19 @@ def example_batch_processing():
         print(f"\n→ Processing: {img_name}")
 
         try:
-            results = processor.process_image(image_path=str(img_path), output_path=str(output_path), save_intermediate=False)
+            results = processor.process_image(
+                image_path=str(img_path),
+                output_path=str(output_path),
+                save_intermediate=False,
+            )
 
-            results_summary.append({"name": img_name, "quality": results["quality_score"], "time": results["processing_time"]})
+            results_summary.append(
+                {
+                    "name": img_name,
+                    "quality": results["quality_score"],
+                    "time": results["processing_time"],
+                }
+            )
 
             print(f"  ✓ Quality: {results['quality_score']}/100")
             print(f"  ✓ Time: {results['processing_time']:.2f}s")
@@ -223,7 +241,8 @@ def example_selective_enhancement():
     processor = HyperRealityProcessor(config)
 
     results = processor.process_image(
-        image_path="input_images/interior_shot.jpg", output_path="outputs/interior_selective_95.jpg"
+        image_path="input_images/interior_shot.jpg",
+        output_path="outputs/interior_selective_95.jpg",
     )
 
     print(f"✓ Selective enhancement complete: {results['quality_score']}/100")

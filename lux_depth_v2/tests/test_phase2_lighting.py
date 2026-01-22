@@ -3,7 +3,11 @@
 import pytest
 import torch
 
-from lux_depth_v2.lighting_detector import LightingConditionDetector, TimeOfDay, LightingCondition
+from lux_depth_v2.lighting_detector import (
+    LightingConditionDetector,
+    TimeOfDay,
+    LightingCondition,
+)
 
 
 @pytest.fixture

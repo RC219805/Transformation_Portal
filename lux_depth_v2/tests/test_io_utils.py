@@ -20,7 +20,10 @@ try:
 except ImportError:
     TIFFFILE_AVAILABLE = False
 
-pytestmark = pytest.mark.skipif(not (CV2_AVAILABLE and TIFFFILE_AVAILABLE), reason="opencv-python and tifffile required")
+pytestmark = pytest.mark.skipif(
+    not (CV2_AVAILABLE and TIFFFILE_AVAILABLE),
+    reason="opencv-python and tifffile required",
+)
 
 from lux_depth_v2 import io_utils
 

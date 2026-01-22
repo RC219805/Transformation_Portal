@@ -91,7 +91,10 @@ class TestConfiguration:
     def test_enhancement_config_creation(self):
         """Test that EnhancementConfig can be created with default values."""
         try:
-            from enhancements.hyper_reality_enhancement import EnhancementConfig, QualityMode
+            from enhancements.hyper_reality_enhancement import (
+                EnhancementConfig,
+                QualityMode,
+            )
 
             config = EnhancementConfig()
             assert config is not None
@@ -146,7 +149,10 @@ class TestModuleStructure:
             pytest.skip(f"Cannot test enhance_image function: {e}")
 
 
-@pytest.mark.skipif(not TORCH_AVAILABLE, reason="PyTorch not installed - training module tests require ML dependencies")
+@pytest.mark.skipif(
+    not TORCH_AVAILABLE,
+    reason="PyTorch not installed - training module tests require ML dependencies",
+)
 class TestTrainingModuleAvailability:
     """Test training module availability (skipped if PyTorch not installed)."""
 

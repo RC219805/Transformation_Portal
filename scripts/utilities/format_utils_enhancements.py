@@ -161,7 +161,10 @@ def validate_image_integrity(path: Union[str, Path]) -> Tuple[bool, Optional[str
             return True, None
 
     except Image.UnidentifiedImageError:
-        return False, "Cannot identify image file (may be corrupted or unsupported format)"
+        return (
+            False,
+            "Cannot identify image file (may be corrupted or unsupported format)",
+        )
     except OSError as e:
         return False, f"Cannot open image: {str(e)}"
     except Exception as e:
@@ -396,7 +399,10 @@ def batch_convert_directory(
 
 
 def smart_convert(
-    input_path: Union[str, Path], output_path: Union[str, Path], auto_quality: bool = True, preserve_bit_depth: bool = True
+    input_path: Union[str, Path],
+    output_path: Union[str, Path],
+    auto_quality: bool = True,
+    preserve_bit_depth: bool = True,
 ) -> bool:
     """Intelligently convert image choosing best quality settings.
 
@@ -463,7 +469,10 @@ def check_tifffile_available() -> bool:
 
 
 def save_tiff_16bit(
-    image_array: "np.ndarray", output_path: Union[str, Path], compression: str = "lzw", metadata: Optional[Dict] = None
+    image_array: "np.ndarray",
+    output_path: Union[str, Path],
+    compression: str = "lzw",
+    metadata: Optional[Dict] = None,
 ) -> bool:
     """Save image as 16-bit TIFF with metadata and compression.
 
@@ -515,7 +524,9 @@ def save_tiff_16bit(
         return False
 
 
-def load_tiff_preserve_depth(path: Union[str, Path]) -> Tuple[Optional[np.ndarray], Optional[int]]:
+def load_tiff_preserve_depth(
+    path: Union[str, Path],
+) -> Tuple[Optional[np.ndarray], Optional[int]]:
     """Load TIFF preserving original bit depth.
 
     Args:
@@ -566,7 +577,11 @@ def load_tiff_preserve_depth(path: Union[str, Path]) -> Tuple[Optional[np.ndarra
         return None, None
 
 
-def convert_tiff_preserve_depth(input_path: Union[str, Path], output_path: Union[str, Path], compression: str = "lzw") -> bool:
+def convert_tiff_preserve_depth(
+    input_path: Union[str, Path],
+    output_path: Union[str, Path],
+    compression: str = "lzw",
+) -> bool:
     """Convert TIFF while preserving bit depth and metadata.
 
     Args:
@@ -611,7 +626,9 @@ def get_tiff_compression_info(path: Union[str, Path]) -> Optional[str]:
 
 
 def optimize_tiff_compression(
-    input_path: Union[str, Path], output_path: Union[str, Path], target_compression: str = "lzw"
+    input_path: Union[str, Path],
+    output_path: Union[str, Path],
+    target_compression: str = "lzw",
 ) -> Tuple[bool, Optional[float]]:
     """Re-compress TIFF with optimal compression, preserving quality.
 

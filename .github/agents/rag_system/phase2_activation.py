@@ -35,7 +35,14 @@ OBSERVED_CI_RESULTS = {
     "workflow": "Running Copilot #386",
     "duration_seconds": 734,  # ~12m 14s from log
     "python_version": "3.12.3",
-    "summary": {"total_tests": 1117, "passed": 913, "skipped": 204, "failed": 0, "errors": 0, "duration_seconds": 12.79},
+    "summary": {
+        "total_tests": 1117,
+        "passed": 913,
+        "skipped": 204,
+        "failed": 0,
+        "errors": 0,
+        "duration_seconds": 12.79,
+    },
     "codeql_results": {
         "language": "python",
         "alerts": 0,
@@ -269,7 +276,10 @@ class Phase2Activator:
                 value=codeql.get("alerts", 0),
                 unit="count",
                 source="CodeQL Analysis",
-                context={"queries_run": codeql.get("queries_run"), "modules_analyzed": codeql.get("modules_extracted")},
+                context={
+                    "queries_run": codeql.get("queries_run"),
+                    "modules_analyzed": codeql.get("modules_extracted"),
+                },
             )
         )
         ingestion_report["metrics_recorded"] += 1
@@ -336,7 +346,13 @@ class Phase2Activator:
                 "style_transfer/",
                 "pipelines/",
             ],
-            "tests": ["test_rag_*.py", "test_streaming_*.py", "test_unified_*.py", "test_plugin_*.py", "test_depth_*.py"],
+            "tests": [
+                "test_rag_*.py",
+                "test_streaming_*.py",
+                "test_unified_*.py",
+                "test_plugin_*.py",
+                "test_depth_*.py",
+            ],
             "scripts": ["pipelines/", "utilities/", "analysis/", "setup/"],
         }
 
@@ -392,7 +408,10 @@ class Phase2Activator:
                 "test_rag_system.py",
                 "test_rag_integration.py",
             ],
-            "streaming": ["test_streaming_processor.py", "test_streaming_checkpoint.py"],
+            "streaming": [
+                "test_streaming_processor.py",
+                "test_streaming_checkpoint.py",
+            ],
             "depth": ["test_depth_tools.py", "test_depth_anything_v2_onnx.py"],
         }
 
@@ -464,7 +483,12 @@ class Phase2Activator:
             json.dump(asdict(state), f, indent=2)
 
         return {
-            "exported_files": [str(test_results_path), str(metrics_path), str(patterns_path), str(state_path)],
+            "exported_files": [
+                str(test_results_path),
+                str(metrics_path),
+                str(patterns_path),
+                str(state_path),
+            ],
             "state": asdict(state),
         }
 

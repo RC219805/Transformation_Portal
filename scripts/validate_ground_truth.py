@@ -127,9 +127,15 @@ def check_path_consistency(data: dict, gt_file: Path) -> list[str]:
 def main():
     parser = argparse.ArgumentParser(description="Validate water detection ground truth JSON against schema")
     parser.add_argument("ground_truth", type=Path, help="Path to ground_truth.json file")
-    parser.add_argument("--schema", type=Path, help="Path to schema file (default: auto-detect in same directory)")
     parser.add_argument(
-        "--skip-file-check", action="store_true", help="Skip checking if image files exist (useful for CI with synthetic data)"
+        "--schema",
+        type=Path,
+        help="Path to schema file (default: auto-detect in same directory)",
+    )
+    parser.add_argument(
+        "--skip-file-check",
+        action="store_true",
+        help="Skip checking if image files exist (useful for CI with synthetic data)",
     )
 
     args = parser.parse_args()

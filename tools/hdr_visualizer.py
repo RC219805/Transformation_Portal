@@ -104,7 +104,14 @@ class HDRVisualizer:
             else:
                 bins = np.linspace(0, 1, 256)
 
-            ax.hist(channel_data, bins=bins, color=color, alpha=0.7, edgecolor="black", linewidth=0.5)
+            ax.hist(
+                channel_data,
+                bins=bins,
+                color=color,
+                alpha=0.7,
+                edgecolor="black",
+                linewidth=0.5,
+            )
             ax.set_title(f"{name} Channel - Before", fontweight="bold")
             ax.set_xlabel("Value")
             ax.set_ylabel("Frequency")
@@ -131,7 +138,14 @@ class HDRVisualizer:
             channel_data = after[:, :, i].flatten()
 
             bins = np.linspace(0, 1, 256)
-            ax.hist(channel_data, bins=bins, color=color, alpha=0.7, edgecolor="black", linewidth=0.5)
+            ax.hist(
+                channel_data,
+                bins=bins,
+                color=color,
+                alpha=0.7,
+                edgecolor="black",
+                linewidth=0.5,
+            )
             ax.set_title(f"{name} Channel - After", fontweight="bold")
             ax.set_xlabel("Value")
             ax.set_ylabel("Frequency")
@@ -206,8 +220,22 @@ class HDRVisualizer:
         ax = axes[2]
         # Normalize before histogram to [0, 1] range for comparison
         lum_before_norm = np.clip(lum_before, 0, 1)
-        ax.hist(lum_before_norm.flatten(), bins=100, color="red", alpha=0.5, label="Before (clipped)", edgecolor="none")
-        ax.hist(lum_after.flatten(), bins=100, color="blue", alpha=0.5, label="After", edgecolor="none")
+        ax.hist(
+            lum_before_norm.flatten(),
+            bins=100,
+            color="red",
+            alpha=0.5,
+            label="Before (clipped)",
+            edgecolor="none",
+        )
+        ax.hist(
+            lum_after.flatten(),
+            bins=100,
+            color="blue",
+            alpha=0.5,
+            label="After",
+            edgecolor="none",
+        )
         ax.set_title("Overlay Comparison", fontweight="bold")
         ax.set_xlabel("Luminance (normalized)")
         ax.set_ylabel("Frequency")
@@ -300,7 +328,14 @@ class HDRVisualizer:
             # Add percentage labels on bars
             for bar, pct in zip(bars, percentages):
                 height = bar.get_height()
-                ax.text(bar.get_x() + bar.get_width() / 2.0, height, f"{pct:.2f}%", ha="center", va="bottom", fontsize=9)
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2.0,
+                    height,
+                    f"{pct:.2f}%",
+                    ha="center",
+                    va="bottom",
+                    fontsize=9,
+                )
 
         plt.tight_layout()
 
@@ -359,8 +394,22 @@ class HDRVisualizer:
         x = np.arange(len(channels))
         width = 0.35
 
-        bars1 = ax.bar(x - width / 2, before_ranges, width, label="Before", alpha=0.8, color="darkred")
-        bars2 = ax.bar(x + width / 2, after_ranges, width, label="After", alpha=0.8, color="darkblue")
+        bars1 = ax.bar(
+            x - width / 2,
+            before_ranges,
+            width,
+            label="Before",
+            alpha=0.8,
+            color="darkred",
+        )
+        bars2 = ax.bar(
+            x + width / 2,
+            after_ranges,
+            width,
+            label="After",
+            alpha=0.8,
+            color="darkblue",
+        )
 
         ax.set_ylabel("Dynamic Range", fontweight="bold")
         ax.set_title(f"Dynamic Range Compression: {scene_name}", fontsize=14, fontweight="bold")
@@ -405,7 +454,11 @@ def main():
     parser.add_argument("--after", type=Path, required=True, help="Tone-mapped output image")
     parser.add_argument("--name", required=True, help="Scene name")
     parser.add_argument("--output", type=Path, default=Path("output_hdr_viz"), help="Output directory")
-    parser.add_argument("--is-hdr", action="store_true", help="Input is HDR (may have values outside [0, 1])")
+    parser.add_argument(
+        "--is-hdr",
+        action="store_true",
+        help="Input is HDR (may have values outside [0, 1])",
+    )
 
     args = parser.parse_args()
 

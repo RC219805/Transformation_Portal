@@ -52,7 +52,11 @@ except ImportError:
 # Test 4: Depth pipeline
 print("\n[4/8] Checking depth pipeline...")
 try:
-    from transformation_portal.depth.models import DepthAnythingV2Model, ModelBackend, ModelVariant  # noqa: F401
+    from transformation_portal.depth.models import (
+        DepthAnythingV2Model,
+        ModelBackend,
+        ModelVariant,
+    )  # noqa: F401
     from transformation_portal.depth.processors import (  # noqa: F401
         AtmosphericEffects,
         DepthAwareDenoise,
@@ -98,7 +102,10 @@ except ImportError:
 # Test 7: AI enhancement
 print("\n[7/8] Checking AI enhancement...")
 try:
-    from diffusers import ControlNetModel, StableDiffusionControlNetImg2ImgPipeline  # noqa: F401
+    from diffusers import (
+        ControlNetModel,
+        StableDiffusionControlNetImg2ImgPipeline,
+    )  # noqa: F401
     from controlnet_aux import CannyDetector  # noqa: F401
 
     print("  ✓ ControlNet + Stable Diffusion available")
@@ -210,7 +217,9 @@ except ImportError:
     critical_ok = False
 
 try:
-    from luxury_estate_master_pipeline import LuxuryEstateMasterPipeline  # noqa: F401, F811
+    from luxury_estate_master_pipeline import (
+        LuxuryEstateMasterPipeline,
+    )  # noqa: F401, F811
 except ImportError:
     critical_ok = False
 
@@ -221,7 +230,9 @@ except ImportError:
     warnings.append("tifffile missing - limited 16/32-bit TIFF support")
 
 try:
-    from transformation_portal.depth.models import DepthAnythingV2Model  # noqa: F401, F811
+    from transformation_portal.depth.models import (
+        DepthAnythingV2Model,
+    )  # noqa: F401, F811
 except ImportError:
     warnings.append("Depth pipeline unavailable - will skip depth processing")
 

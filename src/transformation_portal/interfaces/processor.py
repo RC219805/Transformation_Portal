@@ -11,20 +11,21 @@ import numpy as np
 
 class ProcessingError(Exception):
     """Raised when image processing fails."""
+
     pass
 
 
 class ImageProcessor(ABC):
     """
     Base interface for all image processing operations.
-    
+
     Contract Specifications:
     - **Input**: numpy array (H, W, C) in [0, 1] float32 or [0, 255] uint8
     - **Output**: numpy array of same shape and dtype as input
     - **State**: Processors should be stateless OR clearly document state
     - **Config**: Configuration must be JSON-serializable for reproducibility
     """
-    
+
     @abstractmethod
     def process(self, image: np.ndarray, **kwargs) -> np.ndarray:
         """
@@ -41,7 +42,7 @@ class ImageProcessor(ABC):
             ProcessingError: If processing fails
         """
         pass
-    
+
     @abstractmethod
     def get_config(self) -> Dict[str, Any]:
         """
@@ -55,12 +56,12 @@ class ImageProcessor(ABC):
 
 class VideoProcessor(ABC):
     """Base interface for video processing operations."""
-    
+
     @abstractmethod
     def process_video(self, input_path: str, output_path: str, **kwargs) -> None:
         """Process entire video file."""
         pass
-    
+
     @abstractmethod
     def get_config(self) -> Dict[str, Any]:
         """Return current processor configuration."""

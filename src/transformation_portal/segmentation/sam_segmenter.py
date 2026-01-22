@@ -25,8 +25,9 @@ try:
     from segment_anything import (
         SamAutomaticMaskGenerator,
         SamPredictor,
-        sam_model_registry
+        sam_model_registry,
     )
+
     SAM_AVAILABLE = True
 except ImportError:
     SAM_AVAILABLE = False
@@ -169,7 +170,7 @@ class SAMSegmenter:
         image: Union[str, Path, Image.Image, np.ndarray],
         filter_by_area: bool = True,
         min_area: int = 500,
-        max_masks: Optional[int] = None
+        max_masks: Optional[int] = None,
     ) -> List[Dict]:
         """Automatic segmentation without prompts.
 
@@ -199,11 +200,11 @@ class SAMSegmenter:
 
         # Filter by area
         if filter_by_area:
-            masks = [m for m in masks if m['area'] >= min_area]
+            masks = [m for m in masks if m["area"] >= min_area]
             logger.info(f"After area filtering: {len(masks)} masks")
 
         # Sort by area (largest first)
-        masks = sorted(masks, key=lambda x: x['area'], reverse=True)
+        masks = sorted(masks, key=lambda x: x["area"], reverse=True)
 
         # Limit number
         if max_masks is not None:
@@ -216,7 +217,7 @@ class SAMSegmenter:
         image: Union[str, Path, Image.Image, np.ndarray],
         point_coords: List[List[int]],
         point_labels: Optional[List[int]] = None,
-        multimask_output: bool = False
+        multimask_output: bool = False,
     ) -> np.ndarray:
         """Segment using point prompts.
 
@@ -246,7 +247,7 @@ class SAMSegmenter:
         masks, scores, logits = self.predictor.predict(
             point_coords=point_coords,
             point_labels=point_labels,
-            multimask_output=multimask_output
+            multimask_output=multimask_output,
         )
 
         if multimask_output:
@@ -259,7 +260,7 @@ class SAMSegmenter:
     def segment_from_box(
         self,
         image: Union[str, Path, Image.Image, np.ndarray],
-        box: List[int]  # [x1, y1, x2, y2]
+        box: List[int],  # [x1, y1, x2, y2]
     ) -> np.ndarray:
         """Segment using bounding box prompt.
 
@@ -278,8 +279,7 @@ class SAMSegmenter:
 
         # Predict mask
         masks, scores, logits = self.predictor.predict(
-            box=np.array(box),
-            multimask_output=False
+            box=np.array(box), multimask_output=False
         )
 
         return masks[0]
@@ -288,7 +288,7 @@ class SAMSegmenter:
         self,
         image: Union[str, Path, Image.Image, np.ndarray],
         masks: List[Dict],
-        alpha: float = 0.5
+        alpha: float = 0.5,
     ) -> np.ndarray:
         """Create visualization with colored masks overlaid.
 
@@ -309,16 +309,12 @@ class SAMSegmenter:
 
         # Apply each mask with different color
         for mask_dict, color in zip(masks, colors):
-            mask = mask_dict['segmentation']
+            mask = mask_dict["segmentation"]
             overlay[mask] = overlay[mask] * (1 - alpha) + color * alpha
 
         return overlay.astype(np.uint8)
 
-    def extract_largest_segments(
-        self,
-        masks: List[Dict],
-        n: int = 10
-    ) -> List[Dict]:
+    def extract_largest_segments(self, masks: List[Dict], n: int = 10) -> List[Dict]:
         """Extract N largest segments.
 
         Args:
@@ -328,13 +324,11 @@ class SAMSegmenter:
         Returns:
             List of N largest masks
         """
-        sorted_masks = sorted(masks, key=lambda x: x['area'], reverse=True)
+        sorted_masks = sorted(masks, key=lambda x: x["area"], reverse=True)
         return sorted_masks[:n]
 
     def merge_masks(
-        self,
-        masks: List[np.ndarray],
-        image_shape: Optional[Tuple[int, int]] = None
+        self, masks: List[np.ndarray], image_shape: Optional[Tuple[int, int]] = None
     ) -> np.ndarray:
         """Merge multiple masks into single mask.
 
@@ -370,11 +364,11 @@ class SAMSegmenter:
                 "total_area": 0,
                 "avg_area": 0,
                 "median_area": 0,
-                "avg_iou": 0
+                "avg_iou": 0,
             }
 
-        areas = [m['area'] for m in masks]
-        ious = [m['predicted_iou'] for m in masks]
+        areas = [m["area"] for m in masks]
+        ious = [m["predicted_iou"] for m in masks]
 
         return {
             "num_masks": len(masks),
@@ -384,12 +378,11 @@ class SAMSegmenter:
             "min_area": min(areas),
             "max_area": max(areas),
             "avg_iou": np.mean(ious),
-            "avg_stability": np.mean([m['stability_score'] for m in masks])
+            "avg_stability": np.mean([m["stability_score"] for m in masks]),
         }
 
     def _load_image_rgb(
-        self,
-        image: Union[str, Path, Image.Image, np.ndarray]
+        self, image: Union[str, Path, Image.Image, np.ndarray]
     ) -> np.ndarray:
         """Load image as RGB numpy array.
 
@@ -422,7 +415,4 @@ class SAMSegmenter:
             raise ValueError(f"Unsupported image type: {type(image)}")
 
     def __repr__(self) -> str:
-        return (
-            f"SAMSegmenter(model='{self.model_type}', "
-            f"device='{self.device}')"
-        )
+        return f"SAMSegmenter(model='{self.model_type}', " f"device='{self.device}')"

@@ -19,7 +19,10 @@ except ImportError:
     TQDM_AVAILABLE = False
 
 # Skip all tests in this module if tqdm is not available
-pytestmark = pytest.mark.skipif(not TQDM_AVAILABLE, reason="tqdm is required for lux_render_pipeline module (via pipelines)")
+pytestmark = pytest.mark.skipif(
+    not TQDM_AVAILABLE,
+    reason="tqdm is required for lux_render_pipeline module (via pipelines)",
+)
 
 # Only set up stubs and import if tqdm is available
 if TQDM_AVAILABLE:
@@ -109,7 +112,9 @@ if TQDM_AVAILABLE:
     # pylint: disable=wrong-import-position
     # Import must be after stubs are in place to prevent lux_render_pipeline from loading
     # heavy ML dependencies during test setup
-    from transformation_portal.pipelines.lux_render_pipeline import apply_material_response_finishing  # noqa: E402
+    from transformation_portal.pipelines.lux_render_pipeline import (
+        apply_material_response_finishing,
+    )  # noqa: E402
 else:
     # Provide dummy value to prevent NameError during test collection
     apply_material_response_finishing = None  # type: ignore

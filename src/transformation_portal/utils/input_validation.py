@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 class ValidationSeverity(Enum):
     """Severity levels for validation issues."""
+
     INFO = "info"
     WARNING = "warning"
     ERROR = "error"
@@ -40,6 +41,7 @@ class ValidationSeverity(Enum):
 @dataclass
 class ValidationIssue:
     """A single validation issue."""
+
     code: str
     message: str
     severity: ValidationSeverity
@@ -56,6 +58,7 @@ class ValidationIssue:
 @dataclass
 class ValidationResult:
     """Result of validation with all issues found."""
+
     is_valid: bool = True
     issues: List[ValidationIssue] = field(default_factory=list)
 
@@ -66,36 +69,32 @@ class ValidationResult:
             self.is_valid = False
 
     def add_error(
-        self,
-        code: str,
-        message: str,
-        suggestion: Optional[str] = None,
-        **details
+        self, code: str, message: str, suggestion: Optional[str] = None, **details
     ) -> None:
         """Add an error issue."""
-        self.add_issue(ValidationIssue(
-            code=code,
-            message=message,
-            severity=ValidationSeverity.ERROR,
-            suggestion=suggestion,
-            details=details,
-        ))
+        self.add_issue(
+            ValidationIssue(
+                code=code,
+                message=message,
+                severity=ValidationSeverity.ERROR,
+                suggestion=suggestion,
+                details=details,
+            )
+        )
 
     def add_warning(
-        self,
-        code: str,
-        message: str,
-        suggestion: Optional[str] = None,
-        **details
+        self, code: str, message: str, suggestion: Optional[str] = None, **details
     ) -> None:
         """Add a warning issue."""
-        self.add_issue(ValidationIssue(
-            code=code,
-            message=message,
-            severity=ValidationSeverity.WARNING,
-            suggestion=suggestion,
-            details=details,
-        ))
+        self.add_issue(
+            ValidationIssue(
+                code=code,
+                message=message,
+                severity=ValidationSeverity.WARNING,
+                suggestion=suggestion,
+                details=details,
+            )
+        )
 
     @property
     def errors(self) -> List[ValidationIssue]:
@@ -145,10 +144,10 @@ class ImageValidator:
     """
 
     # Common image formats for architectural rendering
-    DEFAULT_FORMATS = {'JPEG', 'PNG', 'TIFF', 'WEBP', 'BMP', 'EXR', 'HDR'}
+    DEFAULT_FORMATS = {"JPEG", "PNG", "TIFF", "WEBP", "BMP", "EXR", "HDR"}
 
     # Supported color modes
-    SUPPORTED_MODES = {'RGB', 'RGBA', 'L', 'LA', 'P', 'I', 'F'}
+    SUPPORTED_MODES = {"RGB", "RGBA", "L", "LA", "P", "I", "F"}
 
     def __init__(
         self,
@@ -357,7 +356,7 @@ class ImageValidator:
                 suggestion=f"Convert to one of: {', '.join(sorted(self.allowed_modes))}",
             )
 
-        if self.require_rgb and image.mode not in ('RGB', 'RGBA'):
+        if self.require_rgb and image.mode not in ("RGB", "RGBA"):
             result.add_error(
                 "RGB_REQUIRED",
                 f"{prefix}RGB/RGBA mode required, got '{image.mode}'",
@@ -546,9 +545,9 @@ class BatchValidator:
 
 # Convenience functions
 
+
 def validate_image(
-    image_input: Union[str, Path, Image.Image, np.ndarray],
-    **kwargs
+    image_input: Union[str, Path, Image.Image, np.ndarray], **kwargs
 ) -> ValidationResult:
     """Validate an image with default settings.
 
@@ -584,15 +583,14 @@ def validate_image_strict(
         max_width=max_size,
         max_height=max_size,
         require_rgb=True,
-        allowed_formats={'JPEG', 'PNG', 'TIFF'},
+        allowed_formats={"JPEG", "PNG", "TIFF"},
         check_corruption=True,
     )
     return validator.validate(image_input)
 
 
 def require_valid_image(
-    image_input: Union[str, Path, Image.Image, np.ndarray],
-    **kwargs
+    image_input: Union[str, Path, Image.Image, np.ndarray], **kwargs
 ) -> None:
     """Validate an image and raise exception if invalid.
 
@@ -608,8 +606,7 @@ def require_valid_image(
 
 
 def is_valid_image(
-    image_input: Union[str, Path, Image.Image, np.ndarray],
-    **kwargs
+    image_input: Union[str, Path, Image.Image, np.ndarray], **kwargs
 ) -> bool:
     """Quick check if an image is valid.
 

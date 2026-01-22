@@ -15,11 +15,32 @@ import argparse
 
 def main():
     parser = argparse.ArgumentParser(description="Test Lux Depth V2 pipeline on 750 Picacho TIFF files")
-    parser.add_argument("--preset", default="interior_luxury", help="Processing preset (default: interior_luxury)")
-    parser.add_argument("--device", default="cpu", choices=["cpu", "cuda", "mps"], help="Device to use (default: cpu)")
-    parser.add_argument("--output-dir", type=Path, help="Output directory (default: lux_depth_v2/test_outputs/750_picacho)")
-    parser.add_argument("--edge-refinement", action="store_true", help="Enable edge refinement (opt-in feature)")
-    parser.add_argument("--dry-run", action="store_true", help="Dry run - check dependencies and files only")
+    parser.add_argument(
+        "--preset",
+        default="interior_luxury",
+        help="Processing preset (default: interior_luxury)",
+    )
+    parser.add_argument(
+        "--device",
+        default="cpu",
+        choices=["cpu", "cuda", "mps"],
+        help="Device to use (default: cpu)",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Output directory (default: lux_depth_v2/test_outputs/750_picacho)",
+    )
+    parser.add_argument(
+        "--edge-refinement",
+        action="store_true",
+        help="Enable edge refinement (opt-in feature)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Dry run - check dependencies and files only",
+    )
 
     args = parser.parse_args()
 
@@ -64,7 +85,13 @@ def main():
     print("-" * 40)
 
     deps_ok = True
-    required_deps = {"numpy": "numpy", "cv2": "opencv-python", "tifffile": "tifffile", "torch": "torch", "tqdm": "tqdm"}
+    required_deps = {
+        "numpy": "numpy",
+        "cv2": "opencv-python",
+        "tifffile": "tifffile",
+        "torch": "torch",
+        "tqdm": "tqdm",
+    }
 
     for module_name, package_name in required_deps.items():
         try:

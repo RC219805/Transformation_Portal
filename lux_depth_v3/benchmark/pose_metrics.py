@@ -7,7 +7,10 @@ from typing import Dict, List, Tuple
 
 
 def compute_pose_error(
-    pred_rotation: np.ndarray, gt_rotation: np.ndarray, pred_translation: np.ndarray, gt_translation: np.ndarray
+    pred_rotation: np.ndarray,
+    gt_rotation: np.ndarray,
+    pred_translation: np.ndarray,
+    gt_translation: np.ndarray,
 ) -> Tuple[float, float]:
     """
     Compute rotation and translation error between predicted and GT poses.

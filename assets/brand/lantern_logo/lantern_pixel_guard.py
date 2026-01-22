@@ -152,7 +152,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Optional path to write a channel-difference visualization",
     )
-    parser.add_argument("--json", type=Path, default=None, help="Optional path to export metrics as JSON")
+    parser.add_argument(
+        "--json",
+        type=Path,
+        default=None,
+        help="Optional path to export metrics as JSON",
+    )
     parser.add_argument(
         "--max-pixel-change",
         type=int,

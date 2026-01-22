@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 class BackendType(Enum):
     """Supported hardware backends."""
+
     MPS = "mps"  # Metal Performance Shaders
     CUDA = "cuda"  # NVIDIA CUDA
     COREML = "coreml"  # Apple Neural Engine via CoreML
@@ -35,6 +36,7 @@ class BackendType(Enum):
 @dataclass
 class BackendCapability:
     """Capabilities of a specific backend."""
+
     backend: BackendType
     available: bool
     supports_fp16: bool
@@ -66,7 +68,11 @@ class BackendRegistry:
                 max_tensor_size_gb=100.0,  # Unified memory allows large tensors
                 recommended_for_inference=True,
                 recommended_for_training=True,
-                special_features=["unified_memory", "metal_simd", "neural_engine_access"]
+                special_features=[
+                    "unified_memory",
+                    "metal_simd",
+                    "neural_engine_access",
+                ],
             )
             logger.info("✓ MPS backend available")
 
@@ -78,10 +84,11 @@ class BackendRegistry:
                 supports_fp16=True,
                 supports_bf16=torch.cuda.is_bf16_supported(),
                 supports_int8=True,
-                max_tensor_size_gb=torch.cuda.get_device_properties(0).total_memory / (1024**3),
+                max_tensor_size_gb=torch.cuda.get_device_properties(0).total_memory
+                / (1024**3),
                 recommended_for_inference=True,
                 recommended_for_training=True,
-                special_features=["tensor_cores", "flash_attention", "cudnn"]
+                special_features=["tensor_cores", "flash_attention", "cudnn"],
             )
             logger.info("✓ CUDA backend available")
 
@@ -96,7 +103,7 @@ class BackendRegistry:
                 max_tensor_size_gb=10.0,  # ANE has limitations
                 recommended_for_inference=True,
                 recommended_for_training=False,
-                special_features=["neural_engine", "low_power", "optimized_inference"]
+                special_features=["neural_engine", "low_power", "optimized_inference"],
             )
             logger.info("✓ CoreML backend available")
         except ImportError:
@@ -112,7 +119,7 @@ class BackendRegistry:
             max_tensor_size_gb=1000.0,  # Limited by system RAM
             recommended_for_inference=False,
             recommended_for_training=False,
-            special_features=["universal_compatibility"]
+            special_features=["universal_compatibility"],
         )
 
     def get_capability(self, backend: BackendType) -> Optional[BackendCapability]:
@@ -124,9 +131,7 @@ class BackendRegistry:
         return [b for b, cap in self.backends.items() if cap.available]
 
     def get_optimal_backend(
-        self,
-        for_inference: bool = True,
-        prefer_performance: bool = True
+        self, for_inference: bool = True, prefer_performance: bool = True
     ) -> BackendType:
         """
         Get optimal backend for the task.
@@ -145,10 +150,20 @@ class BackendRegistry:
 
         # Priority for inference with performance preference
         if for_inference and prefer_performance:
-            priority = [BackendType.MPS, BackendType.CUDA, BackendType.COREML, BackendType.CPU]
+            priority = [
+                BackendType.MPS,
+                BackendType.CUDA,
+                BackendType.COREML,
+                BackendType.CPU,
+            ]
         # Priority for inference with power efficiency
         elif for_inference and not prefer_performance:
-            priority = [BackendType.COREML, BackendType.MPS, BackendType.CUDA, BackendType.CPU]
+            priority = [
+                BackendType.COREML,
+                BackendType.MPS,
+                BackendType.CUDA,
+                BackendType.CPU,
+            ]
         # Priority for training
         else:
             priority = [BackendType.MPS, BackendType.CUDA, BackendType.CPU]
@@ -175,7 +190,7 @@ class HardwareAbstraction:
     def __init__(
         self,
         primary_backend: Optional[BackendType] = None,
-        enable_auto_fallback: bool = True
+        enable_auto_fallback: bool = True,
     ):
         """
         Initialize hardware abstraction layer.
@@ -199,8 +214,12 @@ class HardwareAbstraction:
         # Get primary device
         self.primary_device = self._backend_to_device(self.primary_backend)
 
-        logger.info(f"Hardware abstraction initialized with primary backend: {self.primary_backend.value}")
-        logger.info(f"Fallback chain: {' -> '.join(b.value for b in self.fallback_chain)}")
+        logger.info(
+            f"Hardware abstraction initialized with primary backend: {self.primary_backend.value}"
+        )
+        logger.info(
+            f"Fallback chain: {' -> '.join(b.value for b in self.fallback_chain)}"
+        )
 
     def _create_fallback_chain(self) -> List[BackendType]:
         """Create backend fallback chain."""
@@ -208,7 +227,12 @@ class HardwareAbstraction:
         chain = [self.primary_backend]
 
         # Add remaining backends in priority order
-        priority = [BackendType.MPS, BackendType.CUDA, BackendType.COREML, BackendType.CPU]
+        priority = [
+            BackendType.MPS,
+            BackendType.CUDA,
+            BackendType.COREML,
+            BackendType.CPU,
+        ]
         for backend in priority:
             if backend in available and backend not in chain:
                 chain.append(backend)
@@ -225,11 +249,7 @@ class HardwareAbstraction:
             return torch.device("cpu")
 
     def execute_with_fallback(
-        self,
-        operation: Callable,
-        *args,
-        operation_name: str = "operation",
-        **kwargs
+        self, operation: Callable, *args, operation_name: str = "operation", **kwargs
     ) -> Any:
         """
         Execute operation with automatic fallback on failure.
@@ -316,9 +336,7 @@ class HardwareAbstraction:
         return self._backend_to_device(backend)
 
     def supports_operation(
-        self,
-        operation_name: str,
-        backend: Optional[BackendType] = None
+        self, operation_name: str, backend: Optional[BackendType] = None
     ) -> bool:
         """
         Check if backend supports specific operation.
@@ -358,7 +376,7 @@ class HardwareAbstraction:
         *args,
         num_iterations: int = 100,
         warmup_iterations: int = 10,
-        **kwargs
+        **kwargs,
     ) -> Dict[BackendType, float]:
         """
         Benchmark operation across available backends.
@@ -410,11 +428,13 @@ class HardwareAbstraction:
                 avg_time = elapsed / num_iterations
                 results[backend] = avg_time
 
-                logger.info(f"Benchmark {backend.value}: {avg_time*1000:.3f}ms per iteration")
+                logger.info(
+                    f"Benchmark {backend.value}: {avg_time*1000:.3f}ms per iteration"
+                )
 
             except Exception as e:
                 logger.warning(f"Benchmark failed on {backend.value}: {e}")
-                results[backend] = float('inf')
+                results[backend] = float("inf")
 
         return results
 
@@ -427,21 +447,20 @@ class HardwareAbstraction:
             def my_operation(x):
                 return x * 2
         """
+
         def decorator(func: Callable) -> Callable:
             @functools.wraps(func)
             def wrapper(*args, **kwargs):
                 return self.execute_with_fallback(
-                    func, *args,
-                    operation_name=operation_name,
-                    **kwargs
+                    func, *args, operation_name=operation_name, **kwargs
                 )
+
             return wrapper
+
         return decorator
 
     def get_optimal_dtype(
-        self,
-        backend: Optional[BackendType] = None,
-        prefer_speed: bool = True
+        self, backend: Optional[BackendType] = None, prefer_speed: bool = True
     ) -> torch.dtype:
         """
         Get optimal data type for backend.

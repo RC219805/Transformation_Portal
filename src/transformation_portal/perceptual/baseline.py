@@ -53,6 +53,7 @@ def _convert_to_json_serializable(obj: Any) -> Any:
 @dataclass
 class BaselineConfig:
     """Configuration for baseline calibration."""
+
     # Image loading
     target_size: Optional[tuple] = None  # (H, W) or None for original
     normalize: bool = True
@@ -81,7 +82,7 @@ class BaselineConfig:
             target_size=(2048, 2048),
             target_quality_multiplier=1.5,  # Target 50% improvement
             save_visualizations=True,
-            save_reports=True
+            save_reports=True,
         )
 
 
@@ -116,11 +117,7 @@ class PerceptualBaseline:
         report = baseline.generate_report()
     """
 
-    def __init__(
-        self,
-        substrate,
-        config: Optional[BaselineConfig] = None
-    ):
+    def __init__(self, substrate, config: Optional[BaselineConfig] = None):
         """
         Initialize perceptual baseline system.
 
@@ -136,12 +133,11 @@ class PerceptualBaseline:
             substrate,
             target_size=self.config.target_size,
             normalize=self.config.normalize,
-            preserve_aspect=self.config.preserve_aspect
+            preserve_aspect=self.config.preserve_aspect,
         )
 
         self.analyzer = PerceptualAnalyzer(
-            substrate,
-            metric_weights=self.config.metric_weights
+            substrate, metric_weights=self.config.metric_weights
         )
 
         self.tracker = EnhancementTracker(
@@ -164,7 +160,7 @@ class PerceptualBaseline:
     def calibrate(
         self,
         image_paths: List[Union[str, Path]],
-        image_types: Optional[List[ImageType]] = None
+        image_types: Optional[List[ImageType]] = None,
     ) -> List[AnalysisResult]:
         """
         Calibrate baseline with source images.
@@ -225,7 +221,7 @@ class PerceptualBaseline:
         image_path: Union[str, Path],
         step: int,
         description: str = "",
-        image_type: Optional[ImageType] = None
+        image_type: Optional[ImageType] = None,
     ) -> AnalysisResult:
         """
         Analyze enhanced version of an image.
@@ -259,9 +255,7 @@ class PerceptualBaseline:
         return result
 
     def compare_to_baseline(
-        self,
-        enhanced_path: Union[str, Path],
-        baseline_name: str
+        self, enhanced_path: Union[str, Path], baseline_name: str
     ) -> Dict[str, Any]:
         """
         Compare enhanced image to its baseline.
@@ -285,8 +279,7 @@ class PerceptualBaseline:
 
         # Compare
         comparison = self.analyzer.compare(
-            baseline_tensor, enhanced_tensor,
-            baseline_metadata, enhanced_metadata
+            baseline_tensor, enhanced_tensor, baseline_metadata, enhanced_metadata
         )
 
         return comparison
@@ -347,15 +340,17 @@ class PerceptualBaseline:
             return "\n".join(lines)
 
         # Configuration
-        lines.extend([
-            "CONFIGURATION",
-            "-" * 80,
-            f"Target Size: {self.config.target_size or 'Original'}",
-            f"Target Quality Multiplier: {self.config.target_quality_multiplier}x",
-            f"Normalization: {self.config.normalize}",
-            f"Preserve Aspect: {self.config.preserve_aspect}",
-            "",
-        ])
+        lines.extend(
+            [
+                "CONFIGURATION",
+                "-" * 80,
+                f"Target Size: {self.config.target_size or 'Original'}",
+                f"Target Quality Multiplier: {self.config.target_quality_multiplier}x",
+                f"Normalization: {self.config.normalize}",
+                f"Preserve Aspect: {self.config.preserve_aspect}",
+                "",
+            ]
+        )
 
         # Baseline analysis report
         lines.append("BASELINE ANALYSIS")
@@ -410,24 +405,28 @@ class PerceptualBaseline:
                 "target_quality_multiplier": self.config.target_quality_multiplier,
             },
             "baseline_metrics": self.get_baseline_metrics(),
-            "images": []
+            "images": [],
         }
 
         for result in self.baseline_results:
             image_data = {
                 "name": result.image_path.stem,
                 "path": str(result.image_path),
-                "type": result.image_metadata.image_type.value if result.image_metadata.image_type else None,
+                "type": (
+                    result.image_metadata.image_type.value
+                    if result.image_metadata.image_type
+                    else None
+                ),
                 "dimensions": {
                     "width": result.image_metadata.width,
-                    "height": result.image_metadata.height
+                    "height": result.image_metadata.height,
                 },
                 "statistics": {
                     "mean_intensity": result.image_metadata.mean_intensity,
                     "std_intensity": result.image_metadata.std_intensity,
-                    "dynamic_range": result.image_metadata.dynamic_range
+                    "dynamic_range": result.image_metadata.dynamic_range,
                 },
-                "quality": result.get_summary()
+                "quality": result.get_summary(),
             }
             data["images"].append(image_data)
 
@@ -435,7 +434,7 @@ class PerceptualBaseline:
         data = _convert_to_json_serializable(data)
 
         # Write JSON
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             json.dump(data, f, indent=2)
 
         logger.info(f"Baseline data exported to {output_path}")
@@ -467,38 +466,38 @@ class PerceptualBaseline:
             fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
             # Plot 1: Overall Quality
-            axes[0, 0].bar(range(len(image_names)), qualities, color='steelblue')
+            axes[0, 0].bar(range(len(image_names)), qualities, color="steelblue")
             axes[0, 0].set_xticks(range(len(image_names)))
-            axes[0, 0].set_xticklabels(image_names, rotation=45, ha='right')
-            axes[0, 0].set_ylabel('Overall Quality')
-            axes[0, 0].set_title('Baseline Overall Quality')
-            axes[0, 0].grid(axis='y', alpha=0.3)
+            axes[0, 0].set_xticklabels(image_names, rotation=45, ha="right")
+            axes[0, 0].set_ylabel("Overall Quality")
+            axes[0, 0].set_title("Baseline Overall Quality")
+            axes[0, 0].grid(axis="y", alpha=0.3)
 
             # Plot 2: Sharpness
-            axes[0, 1].bar(range(len(image_names)), sharpness, color='green')
+            axes[0, 1].bar(range(len(image_names)), sharpness, color="green")
             axes[0, 1].set_xticks(range(len(image_names)))
-            axes[0, 1].set_xticklabels(image_names, rotation=45, ha='right')
-            axes[0, 1].set_ylabel('Sharpness')
-            axes[0, 1].set_title('Baseline Sharpness')
-            axes[0, 1].grid(axis='y', alpha=0.3)
+            axes[0, 1].set_xticklabels(image_names, rotation=45, ha="right")
+            axes[0, 1].set_ylabel("Sharpness")
+            axes[0, 1].set_title("Baseline Sharpness")
+            axes[0, 1].grid(axis="y", alpha=0.3)
 
             # Plot 3: Contrast
-            axes[1, 0].bar(range(len(image_names)), contrast, color='orange')
+            axes[1, 0].bar(range(len(image_names)), contrast, color="orange")
             axes[1, 0].set_xticks(range(len(image_names)))
-            axes[1, 0].set_xticklabels(image_names, rotation=45, ha='right')
-            axes[1, 0].set_ylabel('Contrast')
-            axes[1, 0].set_title('Baseline Contrast')
-            axes[1, 0].grid(axis='y', alpha=0.3)
+            axes[1, 0].set_xticklabels(image_names, rotation=45, ha="right")
+            axes[1, 0].set_ylabel("Contrast")
+            axes[1, 0].set_title("Baseline Contrast")
+            axes[1, 0].grid(axis="y", alpha=0.3)
 
             # Plot 4: Colorfulness
-            axes[1, 1].bar(range(len(image_names)), colorfulness, color='purple')
+            axes[1, 1].bar(range(len(image_names)), colorfulness, color="purple")
             axes[1, 1].set_xticks(range(len(image_names)))
-            axes[1, 1].set_xticklabels(image_names, rotation=45, ha='right')
-            axes[1, 1].set_ylabel('Colorfulness')
-            axes[1, 1].set_title('Baseline Colorfulness')
-            axes[1, 1].grid(axis='y', alpha=0.3)
+            axes[1, 1].set_xticklabels(image_names, rotation=45, ha="right")
+            axes[1, 1].set_ylabel("Colorfulness")
+            axes[1, 1].set_title("Baseline Colorfulness")
+            axes[1, 1].grid(axis="y", alpha=0.3)
 
-            plt.suptitle('Baseline Quality Metric Distribution')
+            plt.suptitle("Baseline Quality Metric Distribution")
             plt.tight_layout()
 
             if output_path:
@@ -507,7 +506,7 @@ class PerceptualBaseline:
                 output_path = self.config.output_dir / "baseline_distribution.png"
 
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            plt.savefig(output_path, dpi=300, bbox_inches='tight')
+            plt.savefig(output_path, dpi=300, bbox_inches="tight")
             plt.close()
 
             logger.info(f"Baseline distribution plot saved to {output_path}")

@@ -135,7 +135,9 @@ def estimate_depth_v2_large(image: Image.Image, device: str) -> np.ndarray:
     print(f"  Loading Depth Anything V2 Large on {device}...")
 
     depth_estimator = pipeline(
-        "depth-estimation", model="depth-anything/Depth-Anything-V2-Large-hf", device=device if device != "cpu" else -1
+        "depth-estimation",
+        model="depth-anything/Depth-Anything-V2-Large-hf",
+        device=device if device != "cpu" else -1,
     )
 
     print("  Estimating depth...")
@@ -309,7 +311,10 @@ def process_scene_hdr_enhanced(
         # Generate alpha variants
         alpha_dir = output_dir / "alpha_variants" / scene_name
         alpha_paths = compositor.save_variants(
-            enhanced_rgba, alpha_dir, f"750Picacho_{scene_name}", modes=["preserve", "flatten-white", "flatten-black"]
+            enhanced_rgba,
+            alpha_dir,
+            f"750Picacho_{scene_name}",
+            modes=["preserve", "flatten-white", "flatten-black"],
         )
 
     # Stage 8: Save Deliverables
@@ -372,7 +377,11 @@ def process_scene_hdr_enhanced(
             "parameters_used": params,
             "reasoning": analysis["reasoning"],
         },
-        "depth": {"min": float(depth_map.min()), "max": float(depth_map.max()), "mean": float(depth_map.mean())},
+        "depth": {
+            "min": float(depth_map.min()),
+            "max": float(depth_map.max()),
+            "mean": float(depth_map.mean()),
+        },
     }
 
 
@@ -468,7 +477,14 @@ def main():
         print(f"\n[{i}/{len(scenes_to_process)}]")
         try:
             result = process_scene_hdr_enhanced(
-                tiff_path, output_dir, scene_name, config, device, tone_mapper, visualizer, compositor
+                tiff_path,
+                output_dir,
+                scene_name,
+                config,
+                device,
+                tone_mapper,
+                visualizer,
+                compositor,
             )
             results.append(result)
 

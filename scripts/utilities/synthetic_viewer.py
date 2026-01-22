@@ -145,7 +145,10 @@ class DigitalConsciousness:
     def __init__(self, archetype: str):
         self.archetype = archetype
 
-    def traverse(self, video_stream: Iterable[Mapping[str, float] | JourneyMoment] | EmotionalJourney) -> EmotionalJourney:
+    def traverse(
+        self,
+        video_stream: Iterable[Mapping[str, float] | JourneyMoment] | EmotionalJourney,
+    ) -> EmotionalJourney:
         if isinstance(video_stream, EmotionalJourney):
             return video_stream
 
@@ -304,7 +307,10 @@ class SyntheticViewer:
             desire_quotient=fmean(score.desire_quotient for score in scores),
         )
 
-    def experience_content(self, video_stream: Iterable[Mapping[str, float] | JourneyMoment] | EmotionalJourney) -> ACUScore:
+    def experience_content(
+        self,
+        video_stream: Iterable[Mapping[str, float] | JourneyMoment] | EmotionalJourney,
+    ) -> ACUScore:
         """Experience a video stream and return the consensus ``ACUScore``."""
 
         journey = self.consciousness.traverse(video_stream)

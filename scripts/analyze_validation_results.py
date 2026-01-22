@@ -20,7 +20,13 @@ def load_metrics(output_dir: Path) -> List[Dict]:
 
 def validate_completeness(metrics: List[Dict]) -> Tuple[bool, List[str]]:
     """Check all metrics are populated (no None/null values)."""
-    required_keys = ["scene_type", "edge_f1", "lenient_pass", "strict_pass", "classification_factors"]
+    required_keys = [
+        "scene_type",
+        "edge_f1",
+        "lenient_pass",
+        "strict_pass",
+        "classification_factors",
+    ]
     errors = []
 
     for m in metrics:
@@ -83,7 +89,12 @@ def compute_confusion_matrix(metrics: List[Dict]) -> Dict:
 
     accuracy = (correct / total * 100) if total > 0 else 0.0
 
-    return {"accuracy_pct": accuracy, "correct": correct, "total": total, "confusion": dict(confusion)}
+    return {
+        "accuracy_pct": accuracy,
+        "correct": correct,
+        "total": total,
+        "confusion": dict(confusion),
+    }
 
 
 def compute_pass_rates(metrics: List[Dict]) -> Dict:
@@ -229,7 +240,15 @@ def main():
     # Save summary
     summary_path = output_dir / "analysis_summary.json"
     with open(summary_path, "w") as f:
-        json.dump({"confusion": confusion, "pass_rates": pass_rates, "total_images": len(metrics)}, f, indent=2)
+        json.dump(
+            {
+                "confusion": confusion,
+                "pass_rates": pass_rates,
+                "total_images": len(metrics),
+            },
+            f,
+            indent=2,
+        )
     print(f"Summary saved to: {summary_path}")
 
 

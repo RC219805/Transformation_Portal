@@ -1408,7 +1408,12 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
         if zip_path.exists():
             zip_path.unlink()
 
-        shutil.make_archive(str(zip_path.with_suffix("")), "zip", root_dir=cfg.project_root, base_dir="EXPORT")
+        shutil.make_archive(
+            str(zip_path.with_suffix("")),
+            "zip",
+            root_dir=cfg.project_root,
+            base_dir="EXPORT",
+        )
         LOG.info("Deliverable zip: %s", zip_path)
 
     LOG.info("Done. Print TIFFs in EXPORT/Print_TIFF/**; Web JPEGs in EXPORT/Web_JPEG/**")
@@ -1421,7 +1426,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="AD Editorial Interior Post-Production Pipeline")
     ap.add_argument("run", nargs="?", help="Run the full pipeline", default="run")
     ap.add_argument("--config", required=True, type=Path, help="Path to YAML config")
-    ap.add_argument("-v", "--verbose", action="count", default=1, help="Increase verbosity (-v, -vv)")
+    ap.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=1,
+        help="Increase verbosity (-v, -vv)",
+    )
 
     args = ap.parse_args(argv)
 

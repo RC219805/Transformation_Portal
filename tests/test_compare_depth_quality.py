@@ -64,7 +64,13 @@ class TestDepthQualityComparison:
 
     def test_recommendation_generation(self, tmp_path):
         """Test recommendation text generation."""
-        metrics = {"l1_mae": 0.015, "l2_rmse": 0.025, "ssim": 0.92, "edge_correlation": 0.88, "flat_noise_ratio": 1.05}
+        metrics = {
+            "l1_mae": 0.015,
+            "l2_rmse": 0.025,
+            "ssim": 0.92,
+            "edge_correlation": 0.88,
+            "flat_noise_ratio": 1.05,
+        }
 
         output_path = tmp_path / "recommendation.md"
         recommendation = generate_recommendation(metrics, output_path)

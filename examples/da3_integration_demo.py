@@ -8,7 +8,11 @@ for luxury real estate rendering workflows.
 
 import os
 from pathlib import Path
-from lux_depth_v3.da3_integration import DA3DepthEstimator, estimate_depth, convert_to_metric_depth
+from lux_depth_v3.da3_integration import (
+    DA3DepthEstimator,
+    estimate_depth,
+    convert_to_metric_depth,
+)
 
 # Set environment for Mac compatibility
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
@@ -21,7 +25,10 @@ def example_1_quick_start():
     print("=" * 60)
 
     result = estimate_depth(
-        "input_images/750_Picacho/Kitchen_2K_test.png", "test_output/demo_example1", model="large-1.1", device="cpu"
+        "input_images/750_Picacho/Kitchen_2K_test.png",
+        "test_output/demo_example1",
+        model="large-1.1",
+        device="cpu",
     )
 
     if result.success:
@@ -120,7 +127,9 @@ def example_4_metric_conversion():
     estimator = DA3DepthEstimator(model="large-1.1", device="cpu")
 
     result = estimator.process_image(
-        "input_images/750_Picacho/Kitchen_2K_test.png", "test_output/demo_example4", export_format="mini_npz"
+        "input_images/750_Picacho/Kitchen_2K_test.png",
+        "test_output/demo_example4",
+        export_format="mini_npz",
     )
 
     if result.success and result.depth_array is not None:
@@ -164,7 +173,9 @@ def example_5_model_comparison():
         estimator = DA3DepthEstimator(model=model_name, device="cpu")
 
         result = estimator.process_image(
-            "input_images/750_Picacho/Kitchen_2K_test.png", f"test_output/demo_example5_{model_name}", export_format="mini_npz"
+            "input_images/750_Picacho/Kitchen_2K_test.png",
+            f"test_output/demo_example5_{model_name}",
+            export_format="mini_npz",
         )
 
         if result.success and result.depth_array is not None:
@@ -226,7 +237,10 @@ def example_6_pipeline_integration():
     # Use the pipeline
     pipeline = MockRenderingPipeline()
 
-    result = pipeline.process_property("input_images/750_Picacho/Kitchen_2K_test.png", "test_output/demo_example6_pipeline")
+    result = pipeline.process_property(
+        "input_images/750_Picacho/Kitchen_2K_test.png",
+        "test_output/demo_example6_pipeline",
+    )
 
     if result:
         print("\n✅ Pipeline processing complete!")

@@ -125,8 +125,14 @@ class TestComputeBatchRuntimeStats:
         results = [
             {"status": "ok", "runtime_s": 1.0},
             {"status": "ok", "runtime_s": 1.0},
-            {"status": "error", "runtime_s": 10.0},  # Counted in total runtime but not in ok count
-            {"status": "skipped", "runtime_s": 5.0},  # Counted in total runtime but not in ok count
+            {
+                "status": "error",
+                "runtime_s": 10.0,
+            },  # Counted in total runtime but not in ok count
+            {
+                "status": "skipped",
+                "runtime_s": 5.0,
+            },  # Counted in total runtime but not in ok count
         ]
         stats = compute_batch_runtime_stats(results)
 

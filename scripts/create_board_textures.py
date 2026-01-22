@@ -48,7 +48,12 @@ MATERIAL_COLORS: Dict[str, Tuple[int, int, int]] = {
 }
 
 
-def create_texture(base_color: Tuple[int, int, int], size: int = 512, noise_intensity: float = 8.0, seed: int = 42):
+def create_texture(
+    base_color: Tuple[int, int, int],
+    size: int = 512,
+    noise_intensity: float = 8.0,
+    seed: int = 42,
+):
     """Create a subtle procedural texture with color variation.
 
     Optimized with NumPy broadcasting for 3-5x speedup over naive loops.

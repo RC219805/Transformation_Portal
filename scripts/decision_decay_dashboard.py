@@ -186,7 +186,9 @@ def _format_violation_location(module_path: Path, violation: Violation) -> str:
     return f"{location} – {violation.message}"
 
 
-def collect_color_token_report(tokens_path: Path) -> ColorTokenReport:  # pylint: disable=too-many-locals
+def collect_color_token_report(
+    tokens_path: Path,
+) -> ColorTokenReport:  # pylint: disable=too-many-locals
     """Return usage information for brand color tokens defined in *tokens_path*."""
 
     try:
@@ -239,7 +241,10 @@ def render_dashboard(
     try:
         from rich.console import Console  # pylint: disable=import-outside-toplevel
         from rich.table import Table  # pylint: disable=import-outside-toplevel
-    except (ImportError, ModuleNotFoundError):  # pragma: no cover - fallback when Rich unavailable
+    except (
+        ImportError,
+        ModuleNotFoundError,
+    ):  # pragma: no cover - fallback when Rich unavailable
         _render_plain_dashboard(valid_until_records, principle_summaries, color_report)
         return
 

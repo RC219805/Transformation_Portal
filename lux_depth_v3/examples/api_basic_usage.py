@@ -84,7 +84,11 @@ def example_different_models():
 
         wrapper = DepthAnything3Wrapper(model_name=model_name)
 
-        prediction = wrapper.inference(image=[image_path], export_dir=f"output/models/{model_name}", export_format="mini_npz")
+        prediction = wrapper.inference(
+            image=[image_path],
+            export_dir=f"output/models/{model_name}",
+            export_format="mini_npz",
+        )
 
         depth = prediction.depth[0]
         print(f"  Depth range: {depth.min():.3f} - {depth.max():.3f}")
@@ -98,7 +102,11 @@ def example_metric_depth():
 
     wrapper = DepthAnything3Wrapper(model_name="da3metric-large", device="cuda")
 
-    prediction = wrapper.inference(image=["outdoor_scene.jpg"], export_dir="output/metric", export_format="full_npz")
+    prediction = wrapper.inference(
+        image=["outdoor_scene.jpg"],
+        export_dir="output/metric",
+        export_format="full_npz",
+    )
 
     # Metric depth is in absolute units (meters)
     depth_meters = prediction.depth[0]
@@ -142,7 +150,11 @@ def example_export_formats():
 
     # 4. Combined exports
     print("Exporting combined formats...")
-    wrapper.inference(image=["image.jpg"], export_dir="output/exports/combined", export_format="mini_npz-glb-depth_vis")
+    wrapper.inference(
+        image=["image.jpg"],
+        export_dir="output/exports/combined",
+        export_format="mini_npz-glb-depth_vis",
+    )
 
     print("✅ All exports complete")
 

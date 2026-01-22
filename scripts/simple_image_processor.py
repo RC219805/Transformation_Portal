@@ -267,7 +267,17 @@ if HAS_TYPER:
         verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
     ):
         """Process image with basic adjustments."""
-        return main_simple(input_path, output, brightness, contrast, saturation, width, height, quality, verbose)
+        return main_simple(
+            input_path,
+            output,
+            brightness,
+            contrast,
+            saturation,
+            width,
+            height,
+            quality,
+            verbose,
+        )
 
     if __name__ == "__main__":
         sys.exit(app())

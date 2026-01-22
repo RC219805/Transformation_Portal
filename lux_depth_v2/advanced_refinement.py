@@ -118,7 +118,11 @@ class DepthRefiner:
             normalized_depth: float32 [0, 1]
             metadata: {dtype, min, max} for denormalization
         """
-        metadata = {"original_dtype": depth.dtype, "original_min": float(depth.min()), "original_max": float(depth.max())}
+        metadata = {
+            "original_dtype": depth.dtype,
+            "original_min": float(depth.min()),
+            "original_max": float(depth.max()),
+        }
 
         if depth.dtype == np.uint16:
             depth_norm = depth.astype(np.float32) / 65535.0
@@ -192,7 +196,11 @@ class DepthRefiner:
         return self._denormalize_depth(filtered_norm, metadata)
 
     def guided_filter(
-        self, depth: np.ndarray, rgb: np.ndarray, radius: Optional[int] = None, eps: Optional[float] = None
+        self,
+        depth: np.ndarray,
+        rgb: np.ndarray,
+        radius: Optional[int] = None,
+        eps: Optional[float] = None,
     ) -> np.ndarray:
         """
         Apply guided filter using RGB image for edge-aware smoothing.
@@ -411,7 +419,12 @@ class DepthRefiner:
 
         return self._denormalize_depth(depth_norm, metadata)
 
-    def refine(self, depth: np.ndarray, rgb: Optional[np.ndarray] = None, technique: str = "hybrid") -> np.ndarray:
+    def refine(
+        self,
+        depth: np.ndarray,
+        rgb: Optional[np.ndarray] = None,
+        technique: str = "hybrid",
+    ) -> np.ndarray:
         """
         Apply depth refinement with specified technique.
 
@@ -450,7 +463,9 @@ class DepthRefiner:
 
 
 def compute_edge_metrics(
-    depth: np.ndarray, rgb: Optional[np.ndarray] = None, metric_type: str = "comprehensive"
+    depth: np.ndarray,
+    rgb: Optional[np.ndarray] = None,
+    metric_type: str = "comprehensive",
 ) -> Dict[str, float]:
     """
     Compute edge quality metrics for depth maps.

@@ -48,7 +48,7 @@ class ContrastEnhancer(EnhancerPlugin):
 
     def _create_metadata(self) -> PluginMetadata:
         """Create plugin metadata."""
-        if hasattr(self, '_decorator_metadata'):
+        if hasattr(self, "_decorator_metadata"):
             return self._decorator_metadata
 
         return PluginMetadata(
@@ -80,14 +80,13 @@ class ContrastEnhancer(EnhancerPlugin):
             raise ValueError("min_factor cannot be greater than max_factor")
 
         self._initialized = True
-        logger.info(f"ContrastEnhancer initialized with base_factor={self._base_factor}")
+        logger.info(
+            f"ContrastEnhancer initialized with base_factor={self._base_factor}"
+        )
 
     @measure_performance
     def enhance(
-        self,
-        image: Union[Image.Image, np.ndarray],
-        strength: float = 1.0,
-        **kwargs
+        self, image: Union[Image.Image, np.ndarray], strength: float = 1.0, **kwargs
     ) -> Union[Image.Image, np.ndarray]:
         """Enhance image contrast.
 
@@ -118,11 +117,11 @@ class ContrastEnhancer(EnhancerPlugin):
         factor = max(self._min_factor, min(self._max_factor, factor))
 
         # Apply contrast enhancement
-        if pil_image.mode == 'RGBA':
+        if pil_image.mode == "RGBA":
             # Handle alpha separately
-            rgb = pil_image.convert('RGB')
+            rgb = pil_image.convert("RGB")
             enhanced_rgb = ImageEnhance.Contrast(rgb).enhance(factor)
-            enhanced = enhanced_rgb.convert('RGBA')
+            enhanced = enhanced_rgb.convert("RGBA")
             enhanced.putalpha(pil_image.split()[3])
         else:
             enhanced = ImageEnhance.Contrast(pil_image).enhance(factor)
@@ -132,8 +131,8 @@ class ContrastEnhancer(EnhancerPlugin):
     def validate(self) -> bool:
         """Validate enhancer state."""
         return (
-            self._initialized and
-            self._min_factor <= self._base_factor <= self._max_factor
+            self._initialized
+            and self._min_factor <= self._base_factor <= self._max_factor
         )
 
     def cleanup(self) -> None:
@@ -169,7 +168,7 @@ class SharpenEnhancer(EnhancerPlugin):
 
     def _create_metadata(self) -> PluginMetadata:
         """Create plugin metadata."""
-        if hasattr(self, '_decorator_metadata'):
+        if hasattr(self, "_decorator_metadata"):
             return self._decorator_metadata
 
         return PluginMetadata(
@@ -197,15 +196,14 @@ class SharpenEnhancer(EnhancerPlugin):
             self._config = config
 
         self._initialized = True
-        logger.info(f"SharpenEnhancer initialized: radius={self._radius}, "
-                    f"percent={self._percent}, threshold={self._threshold}")
+        logger.info(
+            f"SharpenEnhancer initialized: radius={self._radius}, "
+            f"percent={self._percent}, threshold={self._threshold}"
+        )
 
     @measure_performance
     def enhance(
-        self,
-        image: Union[Image.Image, np.ndarray],
-        strength: float = 1.0,
-        **kwargs
+        self, image: Union[Image.Image, np.ndarray], strength: float = 1.0, **kwargs
     ) -> Union[Image.Image, np.ndarray]:
         """Sharpen image using unsharp mask.
 
@@ -242,9 +240,7 @@ class SharpenEnhancer(EnhancerPlugin):
         # Apply unsharp mask
         sharpened = pil_image.filter(
             ImageFilter.UnsharpMask(
-                radius=radius,
-                percent=effective_percent,
-                threshold=threshold
+                radius=radius, percent=effective_percent, threshold=threshold
             )
         )
 
@@ -253,10 +249,10 @@ class SharpenEnhancer(EnhancerPlugin):
     def validate(self) -> bool:
         """Validate state."""
         return (
-            self._initialized and
-            self._radius >= 0 and
-            self._percent >= 0 and
-            self._threshold >= 0
+            self._initialized
+            and self._radius >= 0
+            and self._percent >= 0
+            and self._threshold >= 0
         )
 
     def cleanup(self) -> None:
@@ -286,7 +282,7 @@ class BrightnessEnhancer(EnhancerPlugin):
 
     def _create_metadata(self) -> PluginMetadata:
         """Create plugin metadata."""
-        if hasattr(self, '_decorator_metadata'):
+        if hasattr(self, "_decorator_metadata"):
             return self._decorator_metadata
 
         return PluginMetadata(
@@ -312,10 +308,7 @@ class BrightnessEnhancer(EnhancerPlugin):
         self._initialized = True
 
     def enhance(
-        self,
-        image: Union[Image.Image, np.ndarray],
-        strength: float = 1.0,
-        **kwargs
+        self, image: Union[Image.Image, np.ndarray], strength: float = 1.0, **kwargs
     ) -> Union[Image.Image, np.ndarray]:
         """Adjust image brightness.
 

@@ -266,7 +266,14 @@ class TestTaxonomyConsistency:
             # Most should be in CANONICAL_MATERIALS
             if canonical not in CANONICAL_MATERIALS:
                 # It's OK if it's a deliberate alias
-                assert canonical in {"wall", "floor", "ceiling", "ground", "sky", "stone"}
+                assert canonical in {
+                    "wall",
+                    "floor",
+                    "ceiling",
+                    "ground",
+                    "sky",
+                    "stone",
+                }
 
     def test_canonical_materials_are_strings(self):
         """Test all canonical materials are strings."""

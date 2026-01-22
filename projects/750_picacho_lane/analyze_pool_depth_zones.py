@@ -27,7 +27,11 @@ def analyze_depth_zones(depth_map_path, output_dir):
     print()
 
     # Define zone boundaries
-    zones = [("Foreground (Pool)", 0.0, 0.33), ("Midground (Landscape)", 0.33, 0.67), ("Background (Sky)", 0.67, 1.0)]
+    zones = [
+        ("Foreground (Pool)", 0.0, 0.33),
+        ("Midground (Landscape)", 0.33, 0.67),
+        ("Background (Sky)", 0.67, 1.0),
+    ]
 
     # Analyze zones
     print("=" * 70)
@@ -64,7 +68,13 @@ def analyze_depth_zones(depth_map_path, output_dir):
     colors = ["red", "orange", "green"]
     for i, (zone_name, z_min, z_max) in enumerate(zones):
         if i < len(zones) - 1:
-            ax.axvline(z_max, color=colors[i], linestyle="--", linewidth=2, label=f"{zone_name} boundary")
+            ax.axvline(
+                z_max,
+                color=colors[i],
+                linestyle="--",
+                linewidth=2,
+                label=f"{zone_name} boundary",
+            )
 
     ax.set_xlabel("Depth Value (0=near, 1=far)", fontsize=12)
     ax.set_ylabel("Pixel Count", fontsize=12)
@@ -87,7 +97,11 @@ def analyze_depth_zones(depth_map_path, output_dir):
     plt.colorbar(im0, ax=axes[0, 0], fraction=0.046)
 
     # Zone masks
-    zone_titles = ["Foreground Zone (Pool)", "Midground Zone (Landscape)", "Background Zone (Sky)"]
+    zone_titles = [
+        "Foreground Zone (Pool)",
+        "Midground Zone (Landscape)",
+        "Background Zone (Sky)",
+    ]
     zone_cmaps = ["Blues", "Greens", "Reds"]
 
     for i, (zone_name, z_min, z_max) in enumerate(zones):
@@ -100,7 +114,12 @@ def analyze_depth_zones(depth_map_path, output_dir):
         axes[ax_idx].axis("off")
         plt.colorbar(im, ax=axes[ax_idx], fraction=0.046)
 
-    plt.suptitle("Depth Zone Segmentation - 750 Picacho Pool", fontsize=16, fontweight="bold", y=0.98)
+    plt.suptitle(
+        "Depth Zone Segmentation - 750 Picacho Pool",
+        fontsize=16,
+        fontweight="bold",
+        y=0.98,
+    )
 
     segmentation_path = output_dir / "depth_zone_segmentation.png"
     plt.savefig(segmentation_path, dpi=150, bbox_inches="tight")
@@ -132,7 +151,15 @@ def analyze_depth_zones(depth_map_path, output_dir):
             )
 
     # Add overall statistics
-    stats_data.append(["Full Image", "[0.00, 1.00]", "100.0%", f"{depth.mean():.3f}", f"{depth.std():.3f}"])
+    stats_data.append(
+        [
+            "Full Image",
+            "[0.00, 1.00]",
+            "100.0%",
+            f"{depth.mean():.3f}",
+            f"{depth.std():.3f}",
+        ]
+    )
 
     table = ax.table(
         cellText=stats_data,
@@ -157,7 +184,12 @@ def analyze_depth_zones(depth_map_path, output_dir):
         for j in range(5):
             table[(i, j)].set_facecolor(color)
 
-    ax.set_title("Depth Zone Statistics - 750 Picacho Luxury Pool\n", fontsize=14, fontweight="bold", pad=20)
+    ax.set_title(
+        "Depth Zone Statistics - 750 Picacho Luxury Pool\n",
+        fontsize=14,
+        fontweight="bold",
+        pad=20,
+    )
 
     stats_path = output_dir / "depth_statistics_table.png"
     plt.savefig(stats_path, dpi=150, bbox_inches="tight")

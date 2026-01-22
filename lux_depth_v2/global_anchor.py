@@ -173,7 +173,12 @@ class GlobalAnchorFusion:
 
         return edge_weights
 
-    def fuse(self, global_depth: np.ndarray, tiled_depth: np.ndarray, rgb: Optional[np.ndarray] = None) -> np.ndarray:
+    def fuse(
+        self,
+        global_depth: np.ndarray,
+        tiled_depth: np.ndarray,
+        rgb: Optional[np.ndarray] = None,
+    ) -> np.ndarray:
         """
         Fuse global and tiled depth maps.
 
@@ -220,7 +225,10 @@ class GlobalAnchorFusion:
 
 
 def fuse_with_global_anchor(
-    depth_estimator, rgb: np.ndarray, tiled_depth: np.ndarray, config: Optional[GlobalAnchorConfig] = None
+    depth_estimator,
+    rgb: np.ndarray,
+    tiled_depth: np.ndarray,
+    config: Optional[GlobalAnchorConfig] = None,
 ) -> np.ndarray:
     """
     Convenience function: run global pass and fuse with tiled depth.
@@ -260,10 +268,18 @@ def fuse_with_global_anchor(
 
 PRESETS = {
     "conservative": GlobalAnchorConfig(
-        global_max_size=384, global_weight=0.2, tile_weight=0.8, use_frequency_split=True, edge_aware_fusion=False
+        global_max_size=384,
+        global_weight=0.2,
+        tile_weight=0.8,
+        use_frequency_split=True,
+        edge_aware_fusion=False,
     ),
     "balanced": GlobalAnchorConfig(
-        global_max_size=512, global_weight=0.3, tile_weight=0.7, use_frequency_split=True, edge_aware_fusion=True
+        global_max_size=512,
+        global_weight=0.3,
+        tile_weight=0.7,
+        use_frequency_split=True,
+        edge_aware_fusion=True,
     ),
     "aggressive": GlobalAnchorConfig(
         global_max_size=768,

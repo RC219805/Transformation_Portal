@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 class DeviceType(Enum):
     """Supported device types for computation."""
+
     MPS = "mps"  # Metal Performance Shaders (Apple Silicon)
     CUDA = "cuda"  # NVIDIA GPUs
     COREML = "coreml"  # Apple Neural Engine
@@ -35,6 +36,7 @@ class DeviceType(Enum):
 @dataclass
 class DeviceCapabilities:
     """Hardware capabilities for a specific device."""
+
     device_type: DeviceType
     device_name: str
     total_memory_gb: float
@@ -56,6 +58,7 @@ class DeviceCapabilities:
 @dataclass
 class DeviceInfo:
     """Complete device information and configuration."""
+
     primary_device: torch.device
     capabilities: DeviceCapabilities
     backend_priority: List[DeviceType]
@@ -116,7 +119,7 @@ class DeviceManager:
             primary_device=primary_device,
             capabilities=capabilities,
             backend_priority=backend_priority,
-            optimization_config=optimization_config
+            optimization_config=optimization_config,
         )
 
         self._log_device_info()
@@ -154,7 +157,7 @@ class DeviceManager:
                 ["sysctl", "-n", "machdep.cpu.brand_string"],
                 capture_output=True,
                 text=True,
-                timeout=2
+                timeout=2,
             )
 
             chip_name = result.stdout.strip()
@@ -167,7 +170,7 @@ class DeviceManager:
                     ["sysctl", "-n", "hw.ncpu"],
                     capture_output=True,
                     text=True,
-                    timeout=2
+                    timeout=2,
                 ).stdout.strip()
 
                 if cpu_count == "16":
@@ -238,7 +241,9 @@ class DeviceManager:
 
             return DeviceCapabilities(
                 device_type=DeviceType.MPS,
-                device_name=self._detection_cache.get("chip_name", "Apple Silicon M4 Max"),
+                device_name=self._detection_cache.get(
+                    "chip_name", "Apple Silicon M4 Max"
+                ),
                 total_memory_gb=total_memory_gb,
                 available_memory_gb=available_memory_gb,
                 supports_fp16=supports_fp16,
@@ -252,7 +257,7 @@ class DeviceManager:
                 max_buffer_size_gb=max_buffer_size_gb,
                 recommended_batch_size=recommended_batch_size,
                 metal_version=metal_version,
-                torch_version=torch.__version__
+                torch_version=torch.__version__,
             )
 
         except Exception as e:
@@ -284,7 +289,7 @@ class DeviceManager:
             unified_memory=False,
             max_buffer_size_gb=available_memory * 0.8,
             recommended_batch_size=max(1, int(available_memory / 2)),
-            torch_version=torch.__version__
+            torch_version=torch.__version__,
         )
 
     def _detect_cpu_capabilities(self) -> DeviceCapabilities:
@@ -312,7 +317,7 @@ class DeviceManager:
             unified_memory=False,
             max_buffer_size_gb=available_memory * 0.5,
             recommended_batch_size=max(1, cpu_count // 2),
-            torch_version=torch.__version__
+            torch_version=torch.__version__,
         )
 
     def _get_macos_memory(self) -> Dict[str, float]:
@@ -322,7 +327,7 @@ class DeviceManager:
                 ["sysctl", "-n", "hw.memsize"],
                 capture_output=True,
                 text=True,
-                timeout=2
+                timeout=2,
             )
             mem_bytes = int(result.stdout.strip())
             mem_gb = mem_bytes / (1024**3)
@@ -340,7 +345,7 @@ class DeviceManager:
                     ["sysctl", "-n", "hw.perflevel0.physicalcpu"],
                     capture_output=True,
                     text=True,
-                    timeout=2
+                    timeout=2,
                 )
                 perf_cores = int(perf_result.stdout.strip())
 
@@ -348,7 +353,7 @@ class DeviceManager:
                     ["sysctl", "-n", "hw.perflevel1.physicalcpu"],
                     capture_output=True,
                     text=True,
-                    timeout=2
+                    timeout=2,
                 )
                 eff_cores = int(eff_result.stdout.strip())
 
@@ -367,10 +372,10 @@ class DeviceManager:
                 ["sw_vers", "-productVersion"],
                 capture_output=True,
                 text=True,
-                timeout=2
+                timeout=2,
             )
             macos_version = result.stdout.strip()
-            major_version = int(macos_version.split('.')[0])
+            major_version = int(macos_version.split(".")[0])
 
             if major_version >= 14:
                 return "Metal 3.1"
@@ -382,7 +387,9 @@ class DeviceManager:
             logger.debug(f"Could not determine Metal version: {e}")
             return "Metal 3.1"  # Assume latest for M4 Max
 
-    def _calculate_optimal_batch_size(self, available_memory_gb: float, gpu_cores: int) -> int:
+    def _calculate_optimal_batch_size(
+        self, available_memory_gb: float, gpu_cores: int
+    ) -> int:
         """
         Calculate optimal batch size based on available memory and GPU cores.
 
@@ -419,13 +426,11 @@ class DeviceManager:
             max_buffer_size_gb=48.0,
             recommended_batch_size=16,
             metal_version="Metal 3.0",
-            torch_version=torch.__version__
+            torch_version=torch.__version__,
         )
 
     def _determine_backend_priority(
-        self,
-        device_type: DeviceType,
-        capabilities: DeviceCapabilities
+        self, device_type: DeviceType, capabilities: DeviceCapabilities
     ) -> List[DeviceType]:
         """Determine backend priority order."""
         if device_type == DeviceType.MPS:
@@ -438,7 +443,9 @@ class DeviceManager:
         else:
             return [DeviceType.CPU]
 
-    def _create_optimization_config(self, capabilities: DeviceCapabilities) -> Dict[str, Any]:
+    def _create_optimization_config(
+        self, capabilities: DeviceCapabilities
+    ) -> Dict[str, Any]:
         """Create optimization configuration based on capabilities."""
         config = {
             "device_type": capabilities.device_type.value,
@@ -456,21 +463,25 @@ class DeviceManager:
 
         # M4 Max-specific optimizations
         if capabilities.device_type == DeviceType.MPS:
-            config.update({
-                "mps_allocator_strategy": "unified",  # Use unified memory allocator
-                "mps_high_watermark_ratio": 0.9,  # Allow high memory usage
-                "enable_metal_simd": True,  # SIMD optimizations
-                "enable_neural_engine": capabilities.neural_engine_available,
-                "metal_version": capabilities.metal_version,
-            })
+            config.update(
+                {
+                    "mps_allocator_strategy": "unified",  # Use unified memory allocator
+                    "mps_high_watermark_ratio": 0.9,  # Allow high memory usage
+                    "enable_metal_simd": True,  # SIMD optimizations
+                    "enable_neural_engine": capabilities.neural_engine_available,
+                    "metal_version": capabilities.metal_version,
+                }
+            )
 
         # CUDA-specific optimizations
         elif capabilities.device_type == DeviceType.CUDA:
-            config.update({
-                "enable_tf32": True,
-                "enable_cudnn_benchmark": True,
-                "enable_flash_attention": True,
-            })
+            config.update(
+                {
+                    "enable_tf32": True,
+                    "enable_cudnn_benchmark": True,
+                    "enable_flash_attention": True,
+                }
+            )
 
         return config
 
@@ -491,7 +502,9 @@ class DeviceManager:
         logger.info(f"Efficiency Cores: {cap.efficiency_cores}")
         logger.info(f"GPU Cores: {cap.gpu_cores}")
         logger.info(f"Unified Memory: {cap.unified_memory}")
-        logger.info(f"Neural Engine: {'Available' if cap.neural_engine_available else 'Not Available'}")
+        logger.info(
+            f"Neural Engine: {'Available' if cap.neural_engine_available else 'Not Available'}"
+        )
         logger.info(f"FP16 Support: {cap.supports_fp16}")
         logger.info(f"BF16 Support: {cap.supports_bf16}")
         logger.info(f"Recommended Batch Size: {cap.recommended_batch_size}")

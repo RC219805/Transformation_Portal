@@ -279,7 +279,12 @@ class DepthQualityAnalyzer:
 
         return float(detail_score)
 
-    def analyze(self, rgb: np.ndarray, depth: np.ndarray, depth_uint16: Optional[np.ndarray] = None) -> DepthQualityMetrics:
+    def analyze(
+        self,
+        rgb: np.ndarray,
+        depth: np.ndarray,
+        depth_uint16: Optional[np.ndarray] = None,
+    ) -> DepthQualityMetrics:
         """
         Comprehensive depth quality analysis.
 

@@ -7,7 +7,11 @@ use cases for multi-view depth estimation.
 from pathlib import Path
 import numpy as np
 from lux_depth_v3.config import DA3Config, DA3APIConfig, DA3CLIConfig
-from lux_depth_v3.reference_view import select_reference_view, RefViewStrategy, ReferenceViewSelector
+from lux_depth_v3.reference_view import (
+    select_reference_view,
+    RefViewStrategy,
+    ReferenceViewSelector,
+)
 
 
 def example_1_default_strategy():
@@ -109,7 +113,10 @@ def example_5_strategy_comparison():
     print(f"Comparing strategies for {num_views} views:\n")
 
     for strategy in strategies:
-        if strategy in [RefViewStrategy.SADDLE_BALANCED, RefViewStrategy.SADDLE_SIM_RANGE]:
+        if strategy in [
+            RefViewStrategy.SADDLE_BALANCED,
+            RefViewStrategy.SADDLE_SIM_RANGE,
+        ]:
             selector = ReferenceViewSelector(strategy=strategy)
             result = selector.select(num_views, class_tokens)
         else:

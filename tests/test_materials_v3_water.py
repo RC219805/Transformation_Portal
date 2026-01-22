@@ -212,7 +212,12 @@ def test_water_candidate_report_fields():
     PR-W0 Acceptance: Report schema complete with all specified fields.
     """
     report = WaterCandidateReport(
-        present=True, coverage=0.15, coverage_px=1500, confidence=0.75, source="heuristic", reason="heuristic_confidence_0.750"
+        present=True,
+        coverage=0.15,
+        coverage_px=1500,
+        confidence=0.75,
+        source="heuristic",
+        reason="heuristic_confidence_0.750",
     )
 
     # Verify all fields accessible
@@ -322,7 +327,10 @@ def test_water_injected_when_segformer_missing():
     # Verify water_candidate report
     water_candidate = result["materials_v3"]["water_candidate"]
     assert water_candidate["present"] is True
-    assert water_candidate["source"] in ["heuristic", "efficientsam_refined"]  # May be refined
+    assert water_candidate["source"] in [
+        "heuristic",
+        "efficientsam_refined",
+    ]  # May be refined
     assert water_candidate["confidence"] > 0.0
     assert water_candidate["coverage"] > 0.0
 
@@ -504,7 +512,10 @@ def test_water_injection_modifies_canonical_materials():
     canonical_materials_list = result["materials_v3"]["canonical_materials"]
     water_candidate = result["materials_v3"]["water_candidate"]
 
-    if water_candidate["present"] and water_candidate["source"] in ["heuristic", "efficientsam_refined"]:
+    if water_candidate["present"] and water_candidate["source"] in [
+        "heuristic",
+        "efficientsam_refined",
+    ]:
         assert "water" in canonical_materials_list
 
 

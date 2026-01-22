@@ -726,8 +726,8 @@ class RAGAgent:
         return {
             "total_queries": self.query_count,
             "cache_hits": self.cache_hits,
-            "cache_hit_rate": self.cache_hits / self.query_count if self.query_count > 0 else 0.0,
-            "avg_query_time_ms": self.total_query_time_ms / self.query_count if self.query_count > 0 else 0.0,
+            "cache_hit_rate": (self.cache_hits / self.query_count if self.query_count > 0 else 0.0),
+            "avg_query_time_ms": (self.total_query_time_ms / self.query_count if self.query_count > 0 else 0.0),
             "indexed_chunks": len(self.indexed_chunks) if self.indexed_chunks else 0,
             "conversation_turns": len(self.conversation_history),
             "feedback_count": len(self.feedback_history),
@@ -859,6 +859,12 @@ class RAGAgent:
         else:
             return 0.3
 
-    def _record_query(self, query: str, strategy: RetrievalStrategy, context: QueryContext, response: RAGResponse):
+    def _record_query(
+        self,
+        query: str,
+        strategy: RetrievalStrategy,
+        context: QueryContext,
+        response: RAGResponse,
+    ):
         """Record query for learning."""
         self.query_patterns[strategy.value] += 1

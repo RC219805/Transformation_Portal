@@ -32,7 +32,14 @@ class ImageQualityAnalyzer:
         self.output_dir = output_dir
         self.input_dir = input_dir
         self.results = {}
-        self.room_types = ["Aerial", "Bathroom", "Bedroom", "Great_Room", "Kitchen", "Pool"]
+        self.room_types = [
+            "Aerial",
+            "Bathroom",
+            "Bedroom",
+            "Great_Room",
+            "Kitchen",
+            "Pool",
+        ]
 
     def analyze_all(self) -> Dict[str, Any]:
         """Run complete analysis on all images."""
@@ -62,7 +69,11 @@ class ImageQualityAnalyzer:
         # Generate summary
         summary = self.generate_summary()
 
-        return {"individual_results": self.results, "summary": summary, "processing_report": self.processing_report}
+        return {
+            "individual_results": self.results,
+            "summary": summary,
+            "processing_report": self.processing_report,
+        }
 
     def analyze_room(self, room: str) -> Dict[str, Any]:
         """Analyze all outputs for a specific room."""
@@ -284,12 +295,39 @@ class ImageQualityAnalyzer:
 
         # Define expected challenges per room type
         challenges = {
-            "Aerial": ["Outdoor lighting", "Atmospheric depth", "Sky rendering", "Wide dynamic range"],
-            "Bathroom": ["Reflective surfaces (metal, glass, tile)", "Specular highlights", "Color accuracy"],
-            "Bedroom": ["Textile rendering", "Soft lighting", "Fabric detail preservation"],
-            "Great_Room": ["Complex mixed lighting", "Multiple materials", "Large dynamic range"],
-            "Kitchen": ["Metal appliances", "Stone counters", "Specular highlights", "Color accuracy"],
-            "Pool": ["Water rendering", "Outdoor materials", "Sky/reflections", "Wet surfaces"],
+            "Aerial": [
+                "Outdoor lighting",
+                "Atmospheric depth",
+                "Sky rendering",
+                "Wide dynamic range",
+            ],
+            "Bathroom": [
+                "Reflective surfaces (metal, glass, tile)",
+                "Specular highlights",
+                "Color accuracy",
+            ],
+            "Bedroom": [
+                "Textile rendering",
+                "Soft lighting",
+                "Fabric detail preservation",
+            ],
+            "Great_Room": [
+                "Complex mixed lighting",
+                "Multiple materials",
+                "Large dynamic range",
+            ],
+            "Kitchen": [
+                "Metal appliances",
+                "Stone counters",
+                "Specular highlights",
+                "Color accuracy",
+            ],
+            "Pool": [
+                "Water rendering",
+                "Outdoor materials",
+                "Sky/reflections",
+                "Wet surfaces",
+            ],
         }
 
         insights["expected_challenges"] = challenges.get(room, [])

@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class AnalysisResult:
     """Result of perceptual analysis."""
+
     image_path: Path
     image_metadata: ImageMetadata
     quality_scores: Dict[MetricType, PerceptualScore]
@@ -47,7 +48,11 @@ class AnalysisResult:
         """Get summary of analysis."""
         return {
             "path": str(self.image_path),
-            "image_type": self.image_metadata.image_type.value if self.image_metadata.image_type else None,
+            "image_type": (
+                self.image_metadata.image_type.value
+                if self.image_metadata.image_type
+                else None
+            ),
             "dimensions": f"{self.image_metadata.width}x{self.image_metadata.height}",
             "overall_quality": round(self.overall_quality, 3),
             "sharpness": round(self.sharpness, 3),
@@ -56,7 +61,7 @@ class AnalysisResult:
             "scores": {
                 metric.value: round(score.normalized_score, 3)
                 for metric, score in self.quality_scores.items()
-            }
+            },
         }
 
 
@@ -69,9 +74,7 @@ class PerceptualAnalyzer:
     """
 
     def __init__(
-        self,
-        substrate,
-        metric_weights: Optional[Dict[MetricType, float]] = None
+        self, substrate, metric_weights: Optional[Dict[MetricType, float]] = None
     ):
         """
         Initialize perceptual analyzer.
@@ -95,10 +98,7 @@ class PerceptualAnalyzer:
         logger.info("Initialized PerceptualAnalyzer")
 
     def analyze(
-        self,
-        image: Tensor,
-        metadata: ImageMetadata,
-        reference: Optional[Tensor] = None
+        self, image: Tensor, metadata: ImageMetadata, reference: Optional[Tensor] = None
     ) -> AnalysisResult:
         """
         Perform comprehensive perceptual analysis.
@@ -131,8 +131,10 @@ class PerceptualAnalyzer:
         comparison_scores = {}
         if reference is not None:
             comparison_scores = {
-                k: v for k, v in quality_scores.items()
-                if k in [MetricType.LPIPS, MetricType.PSNR, MetricType.SSIM, MetricType.MSE]
+                k: v
+                for k, v in quality_scores.items()
+                if k
+                in [MetricType.LPIPS, MetricType.PSNR, MetricType.SSIM, MetricType.MSE]
             }
 
         analysis_time = time.time() - start_time
@@ -162,7 +164,7 @@ class PerceptualAnalyzer:
         self,
         images: List[Tensor],
         metadatas: List[ImageMetadata],
-        references: Optional[List[Tensor]] = None
+        references: Optional[List[Tensor]] = None,
     ) -> List[AnalysisResult]:
         """
         Analyze batch of images.
@@ -190,7 +192,7 @@ class PerceptualAnalyzer:
         image1: Tensor,
         image2: Tensor,
         metadata1: ImageMetadata,
-        metadata2: ImageMetadata
+        metadata2: ImageMetadata,
     ) -> Dict[str, Any]:
         """
         Compare two images and determine which is better.
@@ -233,12 +235,11 @@ class PerceptualAnalyzer:
             "image1_quality": result1.overall_quality,
             "image2_quality": result2.overall_quality,
             "metric_comparisons": metric_comparisons,
-            "summary": f"Image {winner} is better (quality diff: {quality_diff:.3f})"
+            "summary": f"Image {winner} is better (quality diff: {quality_diff:.3f})",
         }
 
     def _compute_overall_quality(
-        self,
-        quality_scores: Dict[MetricType, PerceptualScore]
+        self, quality_scores: Dict[MetricType, PerceptualScore]
     ) -> float:
         """Compute weighted average overall quality."""
         total_weight = 0.0
@@ -262,16 +263,16 @@ class PerceptualAnalyzer:
 
         # Laplacian kernel
         laplacian = torch.tensor(
-            [[0, 1, 0], [1, -4, 1], [0, 1, 0]],
-            dtype=torch.float32,
-            device=image.device
+            [[0, 1, 0], [1, -4, 1], [0, 1, 0]], dtype=torch.float32, device=image.device
         ).view(1, 1, 3, 3)
 
         # Apply to each channel and average
         sharpness_per_channel = []
         for c in range(image.shape[0]):
-            channel = image[c:c + 1].unsqueeze(0)
-            laplacian_response = torch.nn.functional.conv2d(channel, laplacian, padding=1)
+            channel = image[c : c + 1].unsqueeze(0)
+            laplacian_response = torch.nn.functional.conv2d(
+                channel, laplacian, padding=1
+            )
             variance = laplacian_response.var().item()
             sharpness_per_channel.append(variance)
 
@@ -316,7 +317,9 @@ class PerceptualAnalyzer:
         yb_mean = np.mean(yb)
 
         # Colorfulness metric
-        colorfulness = np.sqrt(rg_std**2 + yb_std**2) + 0.3 * np.sqrt(rg_mean**2 + yb_mean**2)
+        colorfulness = np.sqrt(rg_std**2 + yb_std**2) + 0.3 * np.sqrt(
+            rg_mean**2 + yb_mean**2
+        )
 
         return float(colorfulness)
 
@@ -348,9 +351,7 @@ class PerceptualAnalyzer:
         return naturalness
 
     def generate_report(
-        self,
-        results: List[AnalysisResult],
-        output_path: Optional[Path] = None
+        self, results: List[AnalysisResult], output_path: Optional[Path] = None
     ) -> str:
         """
         Generate human-readable analysis report.
@@ -377,15 +378,17 @@ class PerceptualAnalyzer:
         avg_contrast = np.mean([r.contrast for r in results])
         avg_colorfulness = np.mean([r.colorfulness for r in results])
 
-        lines.extend([
-            "OVERALL STATISTICS",
-            "-" * 80,
-            f"Average Overall Quality: {avg_quality:.3f}",
-            f"Average Sharpness: {avg_sharpness:.3f}",
-            f"Average Contrast: {avg_contrast:.3f}",
-            f"Average Colorfulness: {avg_colorfulness:.3f}",
-            "",
-        ])
+        lines.extend(
+            [
+                "OVERALL STATISTICS",
+                "-" * 80,
+                f"Average Overall Quality: {avg_quality:.3f}",
+                f"Average Sharpness: {avg_sharpness:.3f}",
+                f"Average Contrast: {avg_contrast:.3f}",
+                f"Average Colorfulness: {avg_colorfulness:.3f}",
+                "",
+            ]
+        )
 
         # Individual results
         lines.append("INDIVIDUAL RESULTS")
@@ -393,18 +396,20 @@ class PerceptualAnalyzer:
 
         for i, result in enumerate(results, 1):
             summary = result.get_summary()
-            lines.extend([
-                f"\n{i}. {summary['path']}",
-                f"   Type: {summary['image_type'] or 'Unknown'}",
-                f"   Dimensions: {summary['dimensions']}",
-                f"   Overall Quality: {summary['overall_quality']}",
-                f"   Sharpness: {result.sharpness:.3f}",
-                f"   Contrast: {result.contrast:.3f}",
-                f"   Colorfulness: {result.colorfulness:.3f}",
-                "   Metric Scores:",
-            ])
+            lines.extend(
+                [
+                    f"\n{i}. {summary['path']}",
+                    f"   Type: {summary['image_type'] or 'Unknown'}",
+                    f"   Dimensions: {summary['dimensions']}",
+                    f"   Overall Quality: {summary['overall_quality']}",
+                    f"   Sharpness: {result.sharpness:.3f}",
+                    f"   Contrast: {result.contrast:.3f}",
+                    f"   Colorfulness: {result.colorfulness:.3f}",
+                    "   Metric Scores:",
+                ]
+            )
 
-            for metric_name, score in summary['scores'].items():
+            for metric_name, score in summary["scores"].items():
                 lines.append(f"     {metric_name}: {score}")
 
         lines.append("=" * 80)

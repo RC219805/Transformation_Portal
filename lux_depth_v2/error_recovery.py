@@ -89,13 +89,29 @@ class ErrorRecovery:
             return ErrorCategory.RESOURCE
 
         # Transient errors (network, temporary failures)
-        if any(keyword in error_str for keyword in ["timeout", "connection", "temporary", "busy", "locked", "unavailable"]):
+        if any(
+            keyword in error_str
+            for keyword in [
+                "timeout",
+                "connection",
+                "temporary",
+                "busy",
+                "locked",
+                "unavailable",
+            ]
+        ):
             return ErrorCategory.TRANSIENT
 
         # Input errors (bad data, corrupted files)
         if any(
             keyword in error_str
-            for keyword in ["cannot identify", "invalid image", "corrupt", "unsupported format", "decode error"]
+            for keyword in [
+                "cannot identify",
+                "invalid image",
+                "corrupt",
+                "unsupported format",
+                "decode error",
+            ]
         ):
             return ErrorCategory.INPUT
 

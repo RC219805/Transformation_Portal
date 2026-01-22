@@ -12,7 +12,7 @@ Key Components:
 Example:
     >>> from transformation_portal.hardening import UniversalHardenedWrapper
     >>> from lux_depth_v2.hardening.policy import HardeningPolicy
-    >>> 
+    >>>
     >>> policy = HardeningPolicy.load()
     >>> wrapped = UniversalHardenedWrapper(my_pipeline, policy)
     >>> result = wrapped.process(input_path)

@@ -36,7 +36,11 @@ def estimate_depth_mps(image: Image.Image, device: str = "mps") -> np.ndarray:
 
     print(f"Loading Depth Anything V2 Large on {device}...")
 
-    depth_estimator = pipeline("depth-estimation", model="depth-anything/Depth-Anything-V2-Large-h", device=device)
+    depth_estimator = pipeline(
+        "depth-estimation",
+        model="depth-anything/Depth-Anything-V2-Large-h",
+        device=device,
+    )
 
     print("Estimating depth...")
     result = depth_estimator(image)
@@ -259,7 +263,10 @@ def main():
 
         try:
             outputs = process_ultimate_quality(tiff_file, output_dir, device=device)
-            results[tiff_file.name] = {"status": "success", "outputs": {k: str(v) for k, v in outputs.items()}}
+            results[tiff_file.name] = {
+                "status": "success",
+                "outputs": {k: str(v) for k, v in outputs.items()},
+            }
         except Exception as e:
             print(f"ERROR processing {tiff_file.name}: {e}")
             results[tiff_file.name] = {"status": "error", "error": str(e)}

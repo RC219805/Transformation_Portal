@@ -217,7 +217,14 @@ class PremiumPipelineFixed:
             from realesrgan import RealESRGANer
             from realesrgan.archs.srvgg_arch import SRVGGNetCompact
 
-            model = SRVGGNetCompact(num_in_ch=3, num_out_ch=3, num_feat=64, num_conv=32, upscale=4, act_type="prelu")
+            model = SRVGGNetCompact(
+                num_in_ch=3,
+                num_out_ch=3,
+                num_feat=64,
+                num_conv=32,
+                upscale=4,
+                act_type="prelu",
+            )
 
             upsampler = RealESRGANer(
                 scale=4,
@@ -366,9 +373,19 @@ def main():
     parser.add_argument("input", type=Path, help="Input image")
     parser.add_argument("--preset", default="kitchen-bright", help="Processing preset")
     parser.add_argument("--output", type=Path, default=None, help="Output directory")
-    parser.add_argument("--enable-4k", action="store_true", default=True, help="Enable 4K upscaling (default: True)")
+    parser.add_argument(
+        "--enable-4k",
+        action="store_true",
+        default=True,
+        help="Enable 4K upscaling (default: True)",
+    )
     parser.add_argument("--no-4k", dest="enable_4k", action="store_false", help="Disable 4K upscaling")
-    parser.add_argument("--enable-ai", action="store_true", default=False, help="Enable AI enhancement (conservative)")
+    parser.add_argument(
+        "--enable-ai",
+        action="store_true",
+        default=False,
+        help="Enable AI enhancement (conservative)",
+    )
     parser.add_argument("--quiet", action="store_true", help="Suppress verbose output")
 
     args = parser.parse_args()
@@ -378,7 +395,10 @@ def main():
 
     # Process image
     outputs = pipeline.process_image(
-        input_path=args.input, preset=args.preset, enable_4k_upscale=args.enable_4k, enable_ai_enhance=args.enable_ai
+        input_path=args.input,
+        preset=args.preset,
+        enable_4k_upscale=args.enable_4k,
+        enable_ai_enhance=args.enable_ai,
     )
 
     print("\n✅ Premium processing complete")

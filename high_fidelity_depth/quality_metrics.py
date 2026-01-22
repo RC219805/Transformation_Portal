@@ -172,7 +172,12 @@ def extract_structure_edges(
     # - d=9: moderate spatial extent (balance speed vs quality)
     # - sigma_color=75: significant color smoothing (kills texture)
     # - sigma_space=75: matches spatial extent
-    filtered = cv2.bilateralFilter(gray, d=bilateral_d, sigmaColor=bilateral_sigma_color, sigmaSpace=bilateral_sigma_space)
+    filtered = cv2.bilateralFilter(
+        gray,
+        d=bilateral_d,
+        sigmaColor=bilateral_sigma_color,
+        sigmaSpace=bilateral_sigma_space,
+    )
 
     # Extract edges from texture-suppressed image
     edges = cv2.Canny(filtered, canny_low, canny_high)
@@ -180,7 +185,11 @@ def extract_structure_edges(
     return edges
 
 
-def classify_scene_type(rgb_edges_raw: np.ndarray, rgb_edges_structure: np.ndarray, texture_threshold: float = 3.0) -> str:
+def classify_scene_type(
+    rgb_edges_raw: np.ndarray,
+    rgb_edges_structure: np.ndarray,
+    texture_threshold: float = 3.0,
+) -> str:
     """
     Classify scene as texture-dominated or structure-dominated (legacy).
 
@@ -282,7 +291,18 @@ def classify_scene_type_v2(
         filename_lower = image_filename.lower()
 
         # Texture patterns: water, reflective surfaces, aerial views, organic textures
-        texture_patterns = ["pool", "ocean", "water", "glass", "aerial", "foliage", "trees", "shores", "beach", "sea"]
+        texture_patterns = [
+            "pool",
+            "ocean",
+            "water",
+            "glass",
+            "aerial",
+            "foliage",
+            "trees",
+            "shores",
+            "beach",
+            "sea",
+        ]
 
         # Structure patterns: architectural interiors with clear geometric features
         structure_patterns = [
@@ -736,8 +756,8 @@ def compute_overshoot_heatmap(depth: np.ndarray, rgb: np.ndarray) -> Tuple[np.nd
         "total_pixels": int(overshoot_mask.size),
         "depth_edge_threshold": float(depth_edge_threshold),
         "rgb_smooth_threshold": float(rgb_smooth_threshold),
-        "mean_depth_gradient_at_overshoot": float(grad_mag[overshoot_mask].mean()) if overshoot_mask.sum() > 0 else 0.0,
-        "mean_rgb_detail_at_overshoot": float(rgb_detail[overshoot_mask].mean()) if overshoot_mask.sum() > 0 else 0.0,
+        "mean_depth_gradient_at_overshoot": (float(grad_mag[overshoot_mask].mean()) if overshoot_mask.sum() > 0 else 0.0),
+        "mean_rgb_detail_at_overshoot": (float(rgb_detail[overshoot_mask].mean()) if overshoot_mask.sum() > 0 else 0.0),
     }
 
     logger.info(f"Overshoot analysis: {overshoot_ratio * 100:.2f}% of pixels ({components['overshoot_pixel_count']} px)")
@@ -821,7 +841,13 @@ def compute_high_frequency_energy(depth_map: np.ndarray, sigma: float = 15.0) ->
     if ksize % 2 == 0:
         ksize += 1
 
-    depth_lowfreq = cv2.GaussianBlur(depth_map, (ksize, ksize), sigmaX=sigma, sigmaY=sigma, borderType=cv2.BORDER_REFLECT_101)
+    depth_lowfreq = cv2.GaussianBlur(
+        depth_map,
+        (ksize, ksize),
+        sigmaX=sigma,
+        sigmaY=sigma,
+        borderType=cv2.BORDER_REFLECT_101,
+    )
 
     # High-frequency residual (texture artifacts, ripples, speckles)
     depth_highfreq = depth_map - depth_lowfreq
@@ -888,7 +914,10 @@ def validate_depth_quality(
     if use_structure_edges:
         rgb_edges_raw = detect_edges(gray)
         scene_type, scene_metadata = classify_scene_type_v2(
-            rgb_edges_raw=rgb_edges_raw, rgb_edges_structure=rgb_edges, depth_map=depth, image_filename=image_filename
+            rgb_edges_raw=rgb_edges_raw,
+            rgb_edges_structure=rgb_edges,
+            depth_map=depth,
+            image_filename=image_filename,
         )
     else:
         scene_type = "unknown"

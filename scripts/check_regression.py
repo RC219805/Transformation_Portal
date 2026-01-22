@@ -155,10 +155,23 @@ def check_regression(baseline_path: Path, current_path: Path, mode: str) -> bool
 
 def main():
     parser = argparse.ArgumentParser(description="Check for quality regression in water detection validation reports")
-    parser.add_argument("--baseline", type=Path, required=True, help="Path to baseline validation report (JSON)")
-    parser.add_argument("--current", type=Path, required=True, help="Path to current validation report (JSON)")
     parser.add_argument(
-        "--mode", choices=["warning", "error"], default="warning", help="Failure mode: 'warning' (exit 0) or 'error' (exit 1)"
+        "--baseline",
+        type=Path,
+        required=True,
+        help="Path to baseline validation report (JSON)",
+    )
+    parser.add_argument(
+        "--current",
+        type=Path,
+        required=True,
+        help="Path to current validation report (JSON)",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["warning", "error"],
+        default="warning",
+        help="Failure mode: 'warning' (exit 0) or 'error' (exit 1)",
     )
 
     args = parser.parse_args()

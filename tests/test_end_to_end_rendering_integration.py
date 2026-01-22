@@ -30,7 +30,6 @@ sys.path.insert(0, str(scripts_dir))
 # Import shared mock context classes
 from tests.test_helpers import MockRoomContext, MockProjectContext  # noqa: E402
 
-
 # Seed for reproducible random number generation in tests
 TEST_RNG_SEED = 42
 
@@ -111,7 +110,11 @@ def luxury_estate_context():
             dimensions=(30.0, 25.0),
             ceiling_height=12.0,
             materials=["oak", "limestone", "leather", "silk"],
-            features=["fireplace", "built-in entertainment", "floor-to-ceiling windows"],
+            features=[
+                "fireplace",
+                "built-in entertainment",
+                "floor-to-ceiling windows",
+            ],
         ),
         "bedroom_primary": MockRoomContext(
             name="Primary Suite",
@@ -143,7 +146,15 @@ def luxury_estate_context():
         total_sqft=12500.0,
         floors=["Lower Level", "Main Level", "Upper Level"],
         rooms=rooms,
-        materials_palette=["marble", "oak", "walnut", "limestone", "stainless steel", "glass", "leather"],
+        materials_palette=[
+            "marble",
+            "oak",
+            "walnut",
+            "limestone",
+            "stainless steel",
+            "glass",
+            "leather",
+        ],
         design_style="Modern Mediterranean",
     )
 
@@ -154,7 +165,14 @@ def test_images(tmp_path):
     images = {}
     rng = np.random.default_rng(seed=TEST_RNG_SEED)
 
-    room_types = ["kitchen", "living_room", "bedroom_master", "bathroom_spa", "outdoor_pool", "unknown_space"]
+    room_types = [
+        "kitchen",
+        "living_room",
+        "bedroom_master",
+        "bathroom_spa",
+        "outdoor_pool",
+        "unknown_space",
+    ]
 
     for room in room_types:
         img_path = tmp_path / f"{room}_render.jpg"
@@ -694,7 +712,10 @@ class TestErrorHandling:
                     mock_depth_module = MagicMock()
                     mock_depth_module.ArchitecturalDepthPipeline.side_effect = RuntimeError("Simulated processor failure")
 
-                    with patch.dict(sys.modules, {"transformation_portal.depth.pipeline": mock_depth_module}):
+                    with patch.dict(
+                        sys.modules,
+                        {"transformation_portal.depth.pipeline": mock_depth_module},
+                    ):
                         # The internal try/except in _apply_depth_processing should catch this
                         result = pipeline_with_mocks.process_render(
                             test_images["kitchen"],

@@ -7,7 +7,15 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from utils.incremental_cache import CacheConfig, CacheEntry, IncrementalCache, CachedPipeline, hash_file, hash_array, hash_dict
+from utils.incremental_cache import (
+    CacheConfig,
+    CacheEntry,
+    IncrementalCache,
+    CachedPipeline,
+    hash_file,
+    hash_array,
+    hash_dict,
+)
 
 
 class TestCacheConfig:
@@ -38,7 +46,11 @@ class TestCacheEntry:
     def test_cache_entry_creation(self):
         """Test cache entry creation"""
         entry = CacheEntry(
-            key="test_key", path=Path("/tmp/test.pkl"), size_bytes=1024, created_at=time.time(), last_accessed=time.time()
+            key="test_key",
+            path=Path("/tmp/test.pkl"),
+            size_bytes=1024,
+            created_at=time.time(),
+            last_accessed=time.time(),
         )
         assert entry.key == "test_key"
         assert entry.size_bytes == 1024
@@ -46,11 +58,21 @@ class TestCacheEntry:
     def test_expiration_check(self):
         """Test expiration check"""
         old_time = time.time() - (31 * 86400)
-        entry = CacheEntry(key="test", path=Path("/tmp/test.pkl"), size_bytes=100, created_at=old_time, last_accessed=old_time)
+        entry = CacheEntry(
+            key="test",
+            path=Path("/tmp/test.pkl"),
+            size_bytes=100,
+            created_at=old_time,
+            last_accessed=old_time,
+        )
         assert entry.is_expired(30.0)
 
         recent_entry = CacheEntry(
-            key="test", path=Path("/tmp/test.pkl"), size_bytes=100, created_at=time.time(), last_accessed=time.time()
+            key="test",
+            path=Path("/tmp/test.pkl"),
+            size_bytes=100,
+            created_at=time.time(),
+            last_accessed=time.time(),
         )
         assert not recent_entry.is_expired(30.0)
 

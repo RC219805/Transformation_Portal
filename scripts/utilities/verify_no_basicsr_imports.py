@@ -39,7 +39,12 @@ def check_basicsr_installed() -> bool:
         True if basicsr is installed (security violation), False otherwise.
     """
     try:
-        result = subprocess.run([sys.executable, "-m", "pip", "show", "basicsr"], capture_output=True, text=True, check=False)
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "show", "basicsr"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
         return result.returncode == 0
     except (subprocess.SubprocessError, OSError):
         # If we can't check, assume it's not installed
@@ -48,7 +53,11 @@ def check_basicsr_installed() -> bool:
 
 def main():
     p = argparse.ArgumentParser(description="Verify that the vulnerable basicsr package is not importable.")
-    p.add_argument("--check-pkg", action="store_true", help="Check if basicsr is importable and exit non-zero if present")
+    p.add_argument(
+        "--check-pkg",
+        action="store_true",
+        help="Check if basicsr is importable and exit non-zero if present",
+    )
     args = p.parse_args()
 
     if not args.check_pkg:

@@ -54,7 +54,11 @@ except ImportError:
 
 try:
     from controlnet_aux import CannyDetector
-    from diffusers import ControlNetModel, StableDiffusionControlNetImg2ImgPipeline, UniPCMultistepScheduler
+    from diffusers import (
+        ControlNetModel,
+        StableDiffusionControlNetImg2ImgPipeline,
+        UniPCMultistepScheduler,
+    )
 
     AI_ENHANCEMENT_AVAILABLE = True
 except ImportError:
@@ -62,7 +66,11 @@ except ImportError:
     logging.warning("AI enhancement not available - will skip ControlNet/SDXL stage")
 
 try:
-    from transformation_portal.depth.models import DepthAnythingV2Model, ModelBackend, ModelVariant
+    from transformation_portal.depth.models import (
+        DepthAnythingV2Model,
+        ModelBackend,
+        ModelVariant,
+    )
 
     DEPTH_PIPELINE_AVAILABLE = True
 except ImportError:
@@ -81,7 +89,10 @@ from tonemapper_agx_filmic import apply_agx_ocio, apply_filmic_hable
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("luxury_estate_pipeline.log"), logging.StreamHandler()],
+    handlers=[
+        logging.FileHandler("luxury_estate_pipeline.log"),
+        logging.StreamHandler(),
+    ],
 )
 logger = logging.getLogger(__name__)
 
@@ -143,7 +154,10 @@ class ColorGradingConfig:
     enabled: bool = True
     lut_stack: List[Tuple[str, float]] = field(
         default_factory=lambda: [
-            ("assets/luts/location_aesthetic/California/Montecito_Golden_Hour_HDR.cube", 0.70),
+            (
+                "assets/luts/location_aesthetic/California/Montecito_Golden_Hour_HDR.cube",
+                0.70,
+            ),
             ("assets/luts/film_emulation/Kodak/Kodak_2393_D55_HDR.cube", 0.50),
         ]
     )
@@ -249,7 +263,10 @@ def get_750_picacho_preset() -> PipelinePreset:
         color_grading=ColorGradingConfig(
             enabled=True,  # Re-enabled - LUTs are good!
             lut_stack=[
-                ("assets/luts/location_aesthetic/California/Montecito_Golden_Hour_HDR.cube", 0.70),
+                (
+                    "assets/luts/location_aesthetic/California/Montecito_Golden_Hour_HDR.cube",
+                    0.70,
+                ),
                 ("assets/luts/film_emulation/Kodak/Kodak_2393_D55_HDR.cube", 0.50),
             ],
             saturation=1.08,
@@ -516,7 +533,10 @@ class LuxuryEstateMasterPipeline:
 
             logger.info("Loading Stable Diffusion pipeline...")
             self.ai_pipeline = StableDiffusionControlNetImg2ImgPipeline.from_pretrained(
-                self.preset.ai_enhancement.model_id, controlnet=self.controlnet, torch_dtype=torch.float32, safety_checker=None
+                self.preset.ai_enhancement.model_id,
+                controlnet=self.controlnet,
+                torch_dtype=torch.float32,
+                safety_checker=None,
             ).to(self.device)
             self.ai_pipeline.scheduler = UniPCMultistepScheduler.from_config(self.ai_pipeline.scheduler.config)
 
@@ -637,7 +657,7 @@ class LuxuryEstateMasterPipeline:
         metadata = {
             "original_size": (image_data.shape[1], image_data.shape[0]),
             "bit_depth": image_data.dtype,
-            "has_alpha": image_data.shape[2] == 4 if len(image_data.shape) == 3 else False,
+            "has_alpha": (image_data.shape[2] == 4 if len(image_data.shape) == 3 else False),
         }
 
         # Convert to float32 linear RGB
@@ -745,9 +765,11 @@ class LuxuryEstateMasterPipeline:
         # Enhance micro-contrast (material detail)
         strength = self.preset.material_response.strength
         enhanced = (
-            cv2.detailEnhance((np.clip(image_linear, 0, 1) * 255).astype(np.uint8), sigma_s=10, sigma_r=0.15).astype(
-                np.float32
-            )
+            cv2.detailEnhance(
+                (np.clip(image_linear, 0, 1) * 255).astype(np.uint8),
+                sigma_s=10,
+                sigma_r=0.15,
+            ).astype(np.float32)
             / 255.0
         )
 
@@ -767,7 +789,10 @@ class LuxuryEstateMasterPipeline:
         return image_enhanced
 
     def _stage_4_tone_mapping(
-        self, image_linear: np.ndarray, depth_map: Optional[np.ndarray] = None, scene_type: Optional[str] = None
+        self,
+        image_linear: np.ndarray,
+        depth_map: Optional[np.ndarray] = None,
+        scene_type: Optional[str] = None,
     ) -> np.ndarray:
         """Stage 4: Intelligent HDR tone mapping with adaptive shadow handling."""
         logger.info("\n[Stage 4/7] HDR tone mapping...")
@@ -818,7 +843,10 @@ class LuxuryEstateMasterPipeline:
         return image_tonemapped
 
     def _apply_shadow_boost(
-        self, image_linear: np.ndarray, boost_strength: float, depth_map: Optional[np.ndarray] = None
+        self,
+        image_linear: np.ndarray,
+        boost_strength: float,
+        depth_map: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """
         Apply adaptive shadow boost for outdoor scenes to reduce clipping.
@@ -978,7 +1006,10 @@ class LuxuryEstateMasterPipeline:
             canny = self.canny_detector(image_padded_pil, 100, 200)
 
             # Build prompt
-            prompt = cfg.prompt_template.format(room_type=room_type, style="montecito coastal estate, golden hour lighting")
+            prompt = cfg.prompt_template.format(
+                room_type=room_type,
+                style="montecito coastal estate, golden hour lighting",
+            )
 
             # Generate
             generator = torch.Generator(device=self.device).manual_seed(cfg.seed)
@@ -1059,7 +1090,13 @@ class LuxuryEstateMasterPipeline:
             logger.info("  → Falling back to Lanczos")
             return self._stage_7_upscaling(image, original_size)  # Retry with Lanczos
 
-    def _save_outputs(self, source_path: Path, image_final: np.ndarray, image_tonemapped: np.ndarray, results: Dict):
+    def _save_outputs(
+        self,
+        source_path: Path,
+        image_final: np.ndarray,
+        image_tonemapped: np.ndarray,
+        results: Dict,
+    ):
         """Save output files (TIFF master + JPEG delivery)."""
         logger.info("\n[Output] Saving files...")
 
@@ -1183,9 +1220,16 @@ Examples:
 
     parser.add_argument("images", nargs="*", help="Input image path(s)")
     parser.add_argument(
-        "--preset", choices=["750_picacho", "aerial"], default="750_picacho", help="Pipeline preset (default: 750_picacho)"
+        "--preset",
+        choices=["750_picacho", "aerial"],
+        default="750_picacho",
+        help="Pipeline preset (default: 750_picacho)",
     )
-    parser.add_argument("--room-type", default="interior", help="Room type for AI prompts (default: interior)")
+    parser.add_argument(
+        "--room-type",
+        default="interior",
+        help="Room type for AI prompts (default: interior)",
+    )
     parser.add_argument("--output-dir", help="Output directory (overrides preset)")
     parser.add_argument("--dry-run", action="store_true", help="Show configuration and exit")
     parser.add_argument("--save-preset", help="Save preset to YAML file")

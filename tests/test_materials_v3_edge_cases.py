@@ -392,7 +392,9 @@ class TestMaterialsV3EdgeCases:
 
         if pipeline.materials_v3_engine is not None:
             with patch.object(
-                pipeline.materials_v3_engine, "apply_glass_response_if_enabled", side_effect=mock_pixel_ops_fail
+                pipeline.materials_v3_engine,
+                "apply_glass_response_if_enabled",
+                side_effect=mock_pixel_ops_fail,
             ):
                 try:
                     result = pipeline.process_one(valid_test_image)

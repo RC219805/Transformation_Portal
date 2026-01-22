@@ -217,8 +217,8 @@ class RenderEnhancementPlanner:
                         "current": base_luminance,
                         "target": target,
                         "focus_areas": [
-                            "specular_pool_reflections" if scene.name == "pool" else "roofline_glow",
-                            "interior_window_bloom" if scene.name == "aerial" else "architectural_whites",
+                            ("specular_pool_reflections" if scene.name == "pool" else "roofline_glow"),
+                            ("interior_window_bloom" if scene.name == "aerial" else "architectural_whites"),
                         ],
                         "approach": "sculpted masks and dodge layers to avoid uniform brightening",
                     }

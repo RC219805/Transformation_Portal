@@ -36,7 +36,17 @@ def validate_raw_mode(test_image: str) -> bool:
 
         # Run raw mode
         print("\n1. Running RAW mode...")
-        cmd = ["python", "-m", "lux_depth_v2.cli", "--mode", "raw", "--input", test_image, "--output-dir", str(output_dir)]
+        cmd = [
+            "python",
+            "-m",
+            "lux_depth_v2.cli",
+            "--mode",
+            "raw",
+            "--input",
+            test_image,
+            "--output-dir",
+            str(output_dir),
+        ]
 
         exit_code, stdout, stderr = run_command(cmd)
 
@@ -102,7 +112,12 @@ def validate_raw_mode(test_image: str) -> bool:
         # Validate stages executed
         print("\n3. Validating stages executed...")
         stages = report.get("stages_executed", [])
-        expected_stages = {"io/read_input", "io/read_depth", "export_master", "verify_raw"}
+        expected_stages = {
+            "io/read_input",
+            "io/read_depth",
+            "export_master",
+            "verify_raw",
+        }
 
         # Check that only expected stages ran (no grading, upscaling, material, etc.)
         forbidden_stages = {
@@ -136,7 +151,17 @@ def validate_raw_mode(test_image: str) -> bool:
         print("\n4. Testing determinism (2 runs)...")
         output_dir2 = Path(tmpdir) / "output2"
 
-        cmd2 = ["python", "-m", "lux_depth_v2.cli", "--mode", "raw", "--input", test_image, "--output-dir", str(output_dir2)]
+        cmd2 = [
+            "python",
+            "-m",
+            "lux_depth_v2.cli",
+            "--mode",
+            "raw",
+            "--input",
+            test_image,
+            "--output-dir",
+            str(output_dir2),
+        ]
 
         exit_code2, stdout2, stderr2 = run_command(cmd2)
 

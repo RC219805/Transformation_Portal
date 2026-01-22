@@ -25,9 +25,18 @@ def main():
     parser.add_argument("input_dir", type=str, help="Input directory")
     parser.add_argument("output_dir", type=str, help="Output directory")
     parser.add_argument(
-        "--preset", type=str, choices=["default", "interior", "exterior"], default="default", help="Configuration preset"
+        "--preset",
+        type=str,
+        choices=["default", "interior", "exterior"],
+        default="default",
+        help="Configuration preset",
     )
-    parser.add_argument("--pattern", type=str, default="*.jpg", help='File pattern (e.g., "*.png", "render_*.jpg")')
+    parser.add_argument(
+        "--pattern",
+        type=str,
+        default="*.jpg",
+        help='File pattern (e.g., "*.png", "render_*.jpg")',
+    )
     parser.add_argument("--no-depth", action="store_true", help="Skip saving depth maps")
     parser.add_argument("--no-viz", action="store_true", help="Skip depth visualizations")
 

@@ -392,10 +392,19 @@ def main():
 
     parser = argparse.ArgumentParser(description="Multi-Exposure Fusion")
     parser.add_argument("input", type=Path, help="Input HDR image (TIFF/EXR)")
-    parser.add_argument("--output-dir", type=Path, default=Path("output_exposure_fusion"), help="Output directory")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("output_exposure_fusion"),
+        help="Output directory",
+    )
     parser.add_argument("--brackets", type=int, default=3, help="Number of brackets")
     parser.add_argument("--ev-range", type=float, default=2.0, help="EV range for brackets")
-    parser.add_argument("--generate-variants", action="store_true", help="Generate web/print/social variants")
+    parser.add_argument(
+        "--generate-variants",
+        action="store_true",
+        help="Generate web/print/social variants",
+    )
     parser.add_argument("--fuse", action="store_true", help="Fuse brackets into single image")
 
     args = parser.parse_args()

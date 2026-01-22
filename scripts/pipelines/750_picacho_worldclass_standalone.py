@@ -152,15 +152,22 @@ class WorldClassProPipeline:
         if curve_type == "landscape":
             # S-curve for landscapes: lift shadows, compress highlights
             def curve_func(x):
-                return np.where(x < 0.5, 0.5 * np.power(2 * x, 0.9), 1.0 - 0.5 * np.power(2 * (1 - x), 0.9))
+                return np.where(
+                    x < 0.5,
+                    0.5 * np.power(2 * x, 0.9),
+                    1.0 - 0.5 * np.power(2 * (1 - x), 0.9),
+                )
+
         elif curve_type == "interior":
             # Gentle curve for interiors: preserve midtones
             def curve_func(x):
                 return np.power(x, 0.95)
+
         elif curve_type == "detail":
             # Enhance midtones for detail shots
             def curve_func(x):
                 return np.power(x, 0.92)
+
         else:
             return image
 

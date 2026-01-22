@@ -87,7 +87,11 @@ def demo_feature_integration():
     print("\n✅ Step 4: Configuration Presets")
     from lux_depth_v3.config import Preset
 
-    for preset in [Preset.INTERIOR_LUXURY, Preset.EXTERIOR_SHOWCASE, Preset.METRIC_SCAN]:
+    for preset in [
+        Preset.INTERIOR_LUXURY,
+        Preset.EXTERIOR_SHOWCASE,
+        Preset.METRIC_SCAN,
+    ]:
         config = DA3Config.from_preset(preset)
         print(f"   • {preset.value}: {config.model_variant.info.display_name}")
 
@@ -184,7 +188,12 @@ def main():
     )
     parser.add_argument("--demo", action="store_true", help="Run feature demonstration (no inference)")
     parser.add_argument("--input", type=str, help="Input image path")
-    parser.add_argument("--output-dir", type=str, default="./output", help="Output directory (default: ./output)")
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="./output",
+        help="Output directory (default: ./output)",
+    )
 
     args = parser.parse_args()
 

@@ -292,7 +292,11 @@ class AutomatedRefactoringEngine:
         # Detect missing type hints
         opportunities.extend(self._detect_missing_types(tree, code, file_path))
 
-        return sorted(opportunities, key=lambda x: {"high": 3, "medium": 2, "low": 1}[x.priority], reverse=True)
+        return sorted(
+            opportunities,
+            key=lambda x: {"high": 3, "medium": 2, "low": 1}[x.priority],
+            reverse=True,
+        )
 
     def _calculate_complexity(self, node: ast.AST) -> int:
         """Calculate cyclomatic complexity."""
@@ -365,7 +369,10 @@ def {node.name}():
                             description=f"Function '{node.name}' missing return type hint",
                             current_code=f"def {node.name}(...)",
                             proposed_code=f"def {node.name}(...) -> ReturnType",
-                            impact={"ide_support": "Improved", "type_safety": "Improved"},
+                            impact={
+                                "ide_support": "Improved",
+                                "type_safety": "Improved",
+                            },
                             auto_applicable=False,
                             estimated_time_minutes=3.0,
                         )
@@ -432,7 +439,10 @@ class IntelligentTestGenerator:
         # Parse function
         try:
             tree = ast.parse(func_code)
-            func_node = next((node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)), None)
+            func_node = next(
+                (node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)),
+                None,
+            )
         except SyntaxError:
             return tests
 
@@ -665,7 +675,12 @@ Data points: {len(recent)}
 
         return dashboard
 
-    def _calculate_change(self, baseline: Optional[float], current: Optional[float], lower_is_better: bool = False) -> float:
+    def _calculate_change(
+        self,
+        baseline: Optional[float],
+        current: Optional[float],
+        lower_is_better: bool = False,
+    ) -> float:
         """Calculate percentage change."""
         if baseline is None or current is None or baseline == 0:
             return 0.0
@@ -766,7 +781,10 @@ def main():
 
     parser = argparse.ArgumentParser(description="Advanced RAG Features v3.0")
     parser.add_argument(
-        "--mode", required=True, choices=["predict", "refactor", "test-gen", "benchmark"], help="Operation mode"
+        "--mode",
+        required=True,
+        choices=["predict", "refactor", "test-gen", "benchmark"],
+        help="Operation mode",
     )
     parser.add_argument("--file", help="File to analyze")
     parser.add_argument("--function", help="Function name for test generation")
@@ -782,7 +800,10 @@ def main():
         context = WorkContext(
             current_file=args.file or "example.py",
             cursor_position=100,
-            recent_edits=["def process_image(image):", "depth_map = estimate_depth(image)"],
+            recent_edits=[
+                "def process_image(image):",
+                "depth_map = estimate_depth(image)",
+            ],
         )
         predictions = engine.predict_next_steps(context)
 

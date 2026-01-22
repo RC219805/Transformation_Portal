@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 class StageStatus(str, Enum):
     """Stage execution status."""
+
     PENDING = "pending"
     RUNNING = "running"
     CACHED = "cached"
@@ -42,6 +43,7 @@ class StageContext:
 
     Contains input artifacts, configuration, and runtime environment.
     """
+
     # Input artifacts from previous stages
     artifacts: Dict[str, Any] = field(default_factory=dict)
 
@@ -77,6 +79,7 @@ class StageResult:
 
     Contains output artifacts, metrics, and execution metadata.
     """
+
     # Stage identification
     stage_name: str
     stage_version: str
@@ -214,6 +217,7 @@ class Stage(ABC):
 
         except Exception as e:
             import traceback
+
             duration_ms = (time.time() - start_time) * 1000
 
             self.logger.error(f"Stage {self.name} failed: {e}")
@@ -227,7 +231,9 @@ class Stage(ABC):
                 error_traceback=traceback.format_exc(),
             )
 
-    def _load_from_cache(self, cache_key: str, cache_dir: Path) -> Optional[StageResult]:
+    def _load_from_cache(
+        self, cache_key: str, cache_dir: Path
+    ) -> Optional[StageResult]:
         """Load result from cache."""
         cache_path = cache_dir / f"{cache_key}.json"
         if not cache_path.exists():

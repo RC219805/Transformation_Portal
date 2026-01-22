@@ -18,7 +18,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List
 
-
 # Standard baseline IDs for validation_v1 dataset
 BASELINE_IDS = [
     "topaz_photo",

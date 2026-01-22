@@ -328,7 +328,12 @@ class RefinedPremiumPipeline:
             return image
 
         denoised = cv2.fastNlMeansDenoisingColored(
-            img_uint8, None, h=h, hColor=hColor, templateWindowSize=7, searchWindowSize=21
+            img_uint8,
+            None,
+            h=h,
+            hColor=hColor,
+            templateWindowSize=7,
+            searchWindowSize=21,
         )
 
         return denoised.astype(np.float32) / 255.0
@@ -358,7 +363,11 @@ class RefinedPremiumPipeline:
 
         # Gentle S-curve for luxury images
         def curve(x):
-            return np.where(x < 0.5, 0.5 * np.power(2 * x, 0.95), 1.0 - 0.5 * np.power(2 * (1 - x), 0.95))
+            return np.where(
+                x < 0.5,
+                0.5 * np.power(2 * x, 0.95),
+                1.0 - 0.5 * np.power(2 * (1 - x), 0.95),
+            )
 
         return np.clip(curve(image), 0, 1)
 

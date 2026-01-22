@@ -43,7 +43,12 @@ class DA3InferenceEngine:
     - Official CLI wrapper (use_cli=True)
     """
 
-    def __init__(self, config: DA3Config, commercial_use: bool = False, validate_license_strict: bool = False):
+    def __init__(
+        self,
+        config: DA3Config,
+        commercial_use: bool = False,
+        validate_license_strict: bool = False,
+    ):
         """Initialize inference engine.
 
         Args:
@@ -67,7 +72,11 @@ class DA3InferenceEngine:
                 "either restore lux_depth_v3/license.py or remove the license validation call."
             ) from e
 
-        validate_license(config.model_variant, commercial_use=commercial_use, strict=validate_license_strict)
+        validate_license(
+            config.model_variant,
+            commercial_use=commercial_use,
+            strict=validate_license_strict,
+        )
 
         # Initialize based on mode
         self.use_cli = config.cli.use_cli
@@ -206,10 +215,24 @@ class DA3InferenceEngine:
             ... )
         """
         if self.use_cli:
-            return self._infer_cli(images, export_dir, convert_to_metric, focal_length_px, fov_degrees, **kwargs)
+            return self._infer_cli(
+                images,
+                export_dir,
+                convert_to_metric,
+                focal_length_px,
+                fov_degrees,
+                **kwargs,
+            )
         else:
             return self._infer_api(
-                images, extrinsics, intrinsics, export_dir, convert_to_metric, focal_length_px, fov_degrees, **kwargs
+                images,
+                extrinsics,
+                intrinsics,
+                export_dir,
+                convert_to_metric,
+                focal_length_px,
+                fov_degrees,
+                **kwargs,
             )
 
     def _infer_api(
@@ -234,7 +257,11 @@ class DA3InferenceEngine:
 
         # Run inference
         prediction = self.wrapper.inference(
-            image=images, extrinsics=extrinsics, intrinsics=intrinsics, export_dir=export_dir, **api_kwargs
+            image=images,
+            extrinsics=extrinsics,
+            intrinsics=intrinsics,
+            export_dir=export_dir,
+            **api_kwargs,
         )
 
         # Convert to metric depth if requested
@@ -255,7 +282,7 @@ class DA3InferenceEngine:
             metric_result = convert_to_metric_depth(
                 depth=prediction.depth,
                 model_name=model_name,
-                intrinsics=intrinsics if intrinsics is not None else getattr(prediction, "intrinsics", None),
+                intrinsics=(intrinsics if intrinsics is not None else getattr(prediction, "intrinsics", None)),
                 focal_length_px=focal_length_px,
                 image_width=image_width,
                 fov_degrees=fov_degrees,
@@ -414,7 +441,7 @@ class DA3InferenceEngine:
                 self.config.model_variant.value,
                 device=str(self.device),
                 dtype=self.dtype,
-                cache_dir=str(self._model_cache_path) if self.config.enable_model_cache else None,
+                cache_dir=(str(self._model_cache_path) if self.config.enable_model_cache else None),
             )
 
             # Apply torch.compile if enabled (PyTorch 2.0+)

@@ -41,7 +41,10 @@ except ImportError as e:
 
 
 # Skip all tests if stages module dependencies not available
-pytestmark = pytest.mark.skipif(not STAGES_AVAILABLE, reason=f"Stages module dependencies not available: {IMPORT_ERROR}")
+pytestmark = pytest.mark.skipif(
+    not STAGES_AVAILABLE,
+    reason=f"Stages module dependencies not available: {IMPORT_ERROR}",
+)
 
 
 # ============================================================================
@@ -204,7 +207,8 @@ class TestImageSaveStage:
 
             try:
                 image_data = ImageData(
-                    array=np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8), path=Path("/original/test_image.jpg")
+                    array=np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8),
+                    path=Path("/original/test_image.jpg"),
                 )
 
                 result = await stage(image_data)
@@ -230,7 +234,10 @@ class TestImageSaveStage:
 
             try:
                 # Float32 array in 0-1 range
-                image_data = ImageData(array=np.random.rand(100, 100, 3).astype(np.float32), path=Path("/original/test.png"))
+                image_data = ImageData(
+                    array=np.random.rand(100, 100, 3).astype(np.float32),
+                    path=Path("/original/test.png"),
+                )
 
                 result = await stage(image_data)
 
@@ -271,7 +278,10 @@ class TestDepthEstimationStage:
         await stage.startup()
 
         try:
-            image_data = ImageData(array=np.random.rand(100, 100, 3).astype(np.float32), path=Path("/test/image.jpg"))
+            image_data = ImageData(
+                array=np.random.rand(100, 100, 3).astype(np.float32),
+                path=Path("/test/image.jpg"),
+            )
 
             result = await stage(image_data)
 
@@ -312,7 +322,10 @@ class TestMaterialResponseStage:
         await stage.startup()
 
         try:
-            image_data = ImageData(array=np.random.rand(100, 100, 3).astype(np.float32), path=Path("/test/image.jpg"))
+            image_data = ImageData(
+                array=np.random.rand(100, 100, 3).astype(np.float32),
+                path=Path("/test/image.jpg"),
+            )
 
             result = await stage(image_data)
 
@@ -349,7 +362,10 @@ class TestColorGradingStage:
         await stage.startup()
 
         try:
-            image_data = ImageData(array=np.random.rand(100, 100, 3).astype(np.float32), path=Path("/test/image.jpg"))
+            image_data = ImageData(
+                array=np.random.rand(100, 100, 3).astype(np.float32),
+                path=Path("/test/image.jpg"),
+            )
 
             result = await stage(image_data)
 
@@ -381,7 +397,10 @@ class TestColorGradingStage:
         await stage.startup()
 
         try:
-            image_data = ImageData(array=np.random.rand(100, 100, 3).astype(np.float32), path=Path("/test/image.jpg"))
+            image_data = ImageData(
+                array=np.random.rand(100, 100, 3).astype(np.float32),
+                path=Path("/test/image.jpg"),
+            )
 
             result = await stage(image_data)
 
@@ -421,7 +440,8 @@ class TestResizeStage:
 
         try:
             image_data = ImageData(
-                array=np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8), path=Path("/test/image.jpg")
+                array=np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8),
+                path=Path("/test/image.jpg"),
             )
 
             result = await stage(image_data)
@@ -445,7 +465,8 @@ class TestResizeStage:
 
         try:
             image_data = ImageData(
-                array=np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8), path=Path("/test/image.jpg")
+                array=np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8),
+                path=Path("/test/image.jpg"),
             )
 
             result = await stage(image_data)
@@ -485,7 +506,10 @@ class TestDenoiseStage:
 
         try:
             # Create noisy image
-            image_data = ImageData(array=np.random.rand(100, 100, 3).astype(np.float32), path=Path("/test/image.jpg"))
+            image_data = ImageData(
+                array=np.random.rand(100, 100, 3).astype(np.float32),
+                path=Path("/test/image.jpg"),
+            )
 
             result = await stage(image_data)
 
@@ -547,7 +571,10 @@ class TestCreateLuxuryPipelineStages:
         """Test creating minimal pipeline (load + save only)."""
         with tempfile.TemporaryDirectory() as tmpdir:
             stages = create_luxury_pipeline_stages(
-                output_dir=tmpdir, enable_depth=False, enable_material=False, enable_color_grading=False
+                output_dir=tmpdir,
+                enable_depth=False,
+                enable_material=False,
+                enable_color_grading=False,
             )
 
             # Should have only: load, save
@@ -561,7 +588,10 @@ class TestCreateLuxuryPipelineStages:
         """Test creating stages with LUT path."""
         with tempfile.TemporaryDirectory() as tmpdir:
             stages = create_luxury_pipeline_stages(
-                output_dir=tmpdir, enable_depth=False, enable_material=False, lut_path="/path/to/lut.cube"
+                output_dir=tmpdir,
+                enable_depth=False,
+                enable_material=False,
+                lut_path="/path/to/lut.cube",
             )
 
             # Find color grading stage and check LUT path

@@ -9,13 +9,14 @@ from packaging import version as pkg_version
 @dataclass
 class Version:
     """Represents a semantic version."""
+
     major: int
     minor: int
     patch: int
     prerelease: Optional[str] = None
 
     @classmethod
-    def from_string(cls, version_str: str) -> 'Version':
+    def from_string(cls, version_str: str) -> "Version":
         """Parse version string.
 
         Args:
@@ -31,7 +32,7 @@ class Version:
                 major=parsed.major,
                 minor=parsed.minor,
                 patch=parsed.micro,
-                prerelease=str(parsed.pre) if parsed.pre else None
+                prerelease=str(parsed.pre) if parsed.pre else None,
             )
         else:
             raise ValueError(f"Invalid version string: {version_str}")
@@ -43,19 +44,19 @@ class Version:
             version_str += f"-{self.prerelease}"
         return version_str
 
-    def __lt__(self, other: 'Version') -> bool:
+    def __lt__(self, other: "Version") -> bool:
         """Less than comparison."""
         return pkg_version.parse(str(self)) < pkg_version.parse(str(other))
 
-    def __le__(self, other: 'Version') -> bool:
+    def __le__(self, other: "Version") -> bool:
         """Less than or equal comparison."""
         return pkg_version.parse(str(self)) <= pkg_version.parse(str(other))
 
-    def __gt__(self, other: 'Version') -> bool:
+    def __gt__(self, other: "Version") -> bool:
         """Greater than comparison."""
         return pkg_version.parse(str(self)) > pkg_version.parse(str(other))
 
-    def __ge__(self, other: 'Version') -> bool:
+    def __ge__(self, other: "Version") -> bool:
         """Greater than or equal comparison."""
         return pkg_version.parse(str(self)) >= pkg_version.parse(str(other))
 
@@ -69,7 +70,7 @@ class Version:
 def check_version_compatibility(
     current_version: str,
     min_version: Optional[str] = None,
-    max_version: Optional[str] = None
+    max_version: Optional[str] = None,
 ) -> Tuple[bool, Optional[str]]:
     """Check if current version is compatible with requirements.
 
@@ -90,19 +91,24 @@ def check_version_compatibility(
     if min_version:
         minimum = pkg_version.parse(min_version)
         if current < minimum:
-            return False, f"Version {current_version} is below minimum required {min_version}"
+            return (
+                False,
+                f"Version {current_version} is below minimum required {min_version}",
+            )
 
     if max_version:
         maximum = pkg_version.parse(max_version)
         if current > maximum:
-            return False, f"Version {current_version} exceeds maximum supported {max_version}"
+            return (
+                False,
+                f"Version {current_version} exceeds maximum supported {max_version}",
+            )
 
     return True, None
 
 
 def require_version(
-    min_version: Optional[str] = None,
-    max_version: Optional[str] = None
+    min_version: Optional[str] = None, max_version: Optional[str] = None
 ):
     """Decorator to enforce version requirements.
 
@@ -115,6 +121,7 @@ def require_version(
         ... def my_function():
         ...     pass
     """
+
     def decorator(func):
         import functools
 
@@ -146,6 +153,7 @@ def get_portal_version() -> str:
     """
     try:
         from transformation_portal import __version__
+
         return __version__
     except ImportError:
         return "0.0.0"

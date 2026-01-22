@@ -335,10 +335,26 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Compare Materials v2 quality")
-    parser.add_argument("--baseline-dir", required=True, help="Directory with baseline (no Materials v2) outputs")
-    parser.add_argument("--enhanced-dir", required=True, help="Directory with Materials v2 enhanced outputs")
-    parser.add_argument("--cache-dir", default=".materials_v2_cache", help="Materials v2 cache directory")
-    parser.add_argument("--output", default="materials_v2_quality_report.json", help="Output report file")
+    parser.add_argument(
+        "--baseline-dir",
+        required=True,
+        help="Directory with baseline (no Materials v2) outputs",
+    )
+    parser.add_argument(
+        "--enhanced-dir",
+        required=True,
+        help="Directory with Materials v2 enhanced outputs",
+    )
+    parser.add_argument(
+        "--cache-dir",
+        default=".materials_v2_cache",
+        help="Materials v2 cache directory",
+    )
+    parser.add_argument(
+        "--output",
+        default="materials_v2_quality_report.json",
+        help="Output report file",
+    )
 
     args = parser.parse_args()
 

@@ -110,7 +110,12 @@ class TestDepthAnything3Wrapper:
         wrapper = DepthAnything3Wrapper.__new__(DepthAnything3Wrapper)
 
         # Test Path to string conversion
-        images = [Path("/path/to/image1.jpg"), Path("/path/to/image2.jpg"), "image3.jpg", Mock(spec=np.ndarray)]
+        images = [
+            Path("/path/to/image1.jpg"),
+            Path("/path/to/image2.jpg"),
+            "image3.jpg",
+            Mock(spec=np.ndarray),
+        ]
 
         prepared = wrapper._prepare_images(images)
 
@@ -204,7 +209,10 @@ class TestDepthAnything3Wrapper:
         intrinsics = np.random.rand(3, 3, 3)
 
         result = wrapper.inference(
-            image=["img1.jpg", "img2.jpg", "img3.jpg"], extrinsics=extrinsics, intrinsics=intrinsics, export_dir="output"
+            image=["img1.jpg", "img2.jpg", "img3.jpg"],
+            extrinsics=extrinsics,
+            intrinsics=intrinsics,
+            export_dir="output",
         )
 
         assert result.extrinsics.shape == (3, 4, 4)
@@ -238,7 +246,12 @@ class TestDA3APIConfig:
         """Test conversion to API kwargs."""
         from lux_depth_v3.config import DA3APIConfig
 
-        config = DA3APIConfig(model_name="da3-giant", infer_gs=True, export_format="gs_ply-gs_video", process_res=672)
+        config = DA3APIConfig(
+            model_name="da3-giant",
+            infer_gs=True,
+            export_format="gs_ply-gs_video",
+            process_res=672,
+        )
 
         kwargs = config.to_api_kwargs()
 

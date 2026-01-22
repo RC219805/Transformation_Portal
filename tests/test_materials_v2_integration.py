@@ -25,7 +25,6 @@ from lux_depth_v2.materials_v2 import (
 )
 from lux_depth_v2.cache_manager import MaskCacheManager
 
-
 # Utility functions
 
 
@@ -59,7 +58,12 @@ class TestConfidenceGating:
 
     def test_confidence_mask_generation_soft(self):
         """Test soft confidence mask generation."""
-        config = ConfidenceConfig(confidence_threshold=0.6, blend_range=0.1, blend_mode="soft", fallback_strength=0.2)
+        config = ConfidenceConfig(
+            confidence_threshold=0.6,
+            blend_range=0.1,
+            blend_mode="soft",
+            fallback_strength=0.2,
+        )
 
         # Create confidence map with various values
         confidence_map = np.array(
@@ -217,7 +221,10 @@ class TestVRAMLifecycle:
         import torch
 
         # Mock CUDA operations on the actual torch module
-        with patch.object(torch.cuda, "empty_cache") as mock_empty, patch.object(torch.cuda, "synchronize") as mock_sync:
+        with (
+            patch.object(torch.cuda, "empty_cache") as mock_empty,
+            patch.object(torch.cuda, "synchronize") as mock_sync,
+        ):
             config = MaterialsV2Config(enabled=True)
             engine = MaterialsV2Engine(config, device="cuda")
             engine._segmenter = Mock()
@@ -318,7 +325,11 @@ class TestMaskCaching:
         metrics = ConfidenceMetrics(material_counts={"wood": 5000})
 
         manager.save_masks(
-            task_id="test_001", masks=masks, confidence_metrics=metrics, input_hash="sha256:original", config={}
+            task_id="test_001",
+            masks=masks,
+            confidence_metrics=metrics,
+            input_hash="sha256:original",
+            config={},
         )
 
         # Check cache valid with correct hash
@@ -338,7 +349,11 @@ class TestMaskCaching:
             metrics = ConfidenceMetrics(material_counts={"wood": 5000})
 
             manager.save_masks(
-                task_id=f"test_{i:03d}", masks=masks, confidence_metrics=metrics, input_hash=f"sha256:hash{i}", config={}
+                task_id=f"test_{i:03d}",
+                masks=masks,
+                confidence_metrics=metrics,
+                input_hash=f"sha256:hash{i}",
+                config={},
             )
 
         # Get stats
@@ -435,5 +450,8 @@ def test_image():
 def materials_v2_config():
     """Provide a Materials v2 config."""
     return MaterialsV2Config(
-        enabled=True, backend="heuristic", confidence=ConfidenceConfig(), segmentation=SegmentationConfig()
+        enabled=True,
+        backend="heuristic",
+        confidence=ConfidenceConfig(),
+        segmentation=SegmentationConfig(),
     )

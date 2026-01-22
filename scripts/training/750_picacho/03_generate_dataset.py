@@ -33,13 +33,30 @@ logger = logging.getLogger(__name__)
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(description="Generate training dataset for 750 Picacho Lane")
-    parser.add_argument("--property-dir", type=Path, default=None, help="Path to property images directory")
     parser.add_argument(
-        "--output-dir", type=Path, default=Path("data/training_750picacho"), help="Output directory for dataset"
+        "--property-dir",
+        type=Path,
+        default=None,
+        help="Path to property images directory",
     )
-    parser.add_argument("--num-samples", type=int, default=600, help="Total number of training samples to generate")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("data/training_750picacho"),
+        help="Output directory for dataset",
+    )
+    parser.add_argument(
+        "--num-samples",
+        type=int,
+        default=600,
+        help="Total number of training samples to generate",
+    )
     parser.add_argument("--no-depth", action="store_true", help="Skip depth map generation/inclusion")
-    parser.add_argument("--no-augmentation", action="store_true", help="Skip augmentation (raw crops only)")
+    parser.add_argument(
+        "--no-augmentation",
+        action="store_true",
+        help="Skip augmentation (raw crops only)",
+    )
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
 

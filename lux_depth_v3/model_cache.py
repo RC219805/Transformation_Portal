@@ -77,12 +77,29 @@ class ModelCacheManager:
     # Recommended models for different use cases
     RECOMMENDED_SETS = {
         "essential": ["nested-giant-large-v1.1", "metric-large"],
-        "production": ["nested-giant-large-v1.1", "giant-v1.1", "large-v1.1", "metric-large"],
-        "benchmark": ["nested-giant-large-v1.1", "giant-v1.1", "large-v1.1", "base", "small", "metric-large", "mono-large"],
+        "production": [
+            "nested-giant-large-v1.1",
+            "giant-v1.1",
+            "large-v1.1",
+            "metric-large",
+        ],
+        "benchmark": [
+            "nested-giant-large-v1.1",
+            "giant-v1.1",
+            "large-v1.1",
+            "base",
+            "small",
+            "metric-large",
+            "mono-large",
+        ],
         "all": list(OFFICIAL_MODELS.keys()),
     }
 
-    def __init__(self, cache_dir: Optional[Path] = None, strategy: CacheStrategy = CacheStrategy.HF_CACHE):
+    def __init__(
+        self,
+        cache_dir: Optional[Path] = None,
+        strategy: CacheStrategy = CacheStrategy.HF_CACHE,
+    ):
         """
         Initialize cache manager.
 
@@ -204,11 +221,19 @@ class ModelCacheManager:
         size = self._get_directory_size(local_dir)
 
         return ModelCacheInfo(
-            model_id=model_id, local_path=local_dir, size_bytes=size, cached_at=datetime.now().isoformat(), verified=False
+            model_id=model_id,
+            local_path=local_dir,
+            size_bytes=size,
+            cached_at=datetime.now().isoformat(),
+            verified=False,
         )
 
     def download_models(
-        self, model_set: str = "essential", model_keys: Optional[List[str]] = None, force: bool = False, verify: bool = True
+        self,
+        model_set: str = "essential",
+        model_keys: Optional[List[str]] = None,
+        force: bool = False,
+        verify: bool = True,
     ) -> List[ModelCacheInfo]:
         """
         Download multiple models.

@@ -243,9 +243,15 @@ class UpscalingEngine:
         logger.info(f"Loading model: {model_type.value}")
         start_time = time.time()
 
-        if model_type in (UpscalingModel.REALESRGAN_4X, UpscalingModel.REALESRGAN_GENERAL_4X):
+        if model_type in (
+            UpscalingModel.REALESRGAN_4X,
+            UpscalingModel.REALESRGAN_GENERAL_4X,
+        ):
             model = self._load_realesrgan(model_type)
-        elif model_type in (UpscalingModel.SWINIR_REAL_4X, UpscalingModel.SWINIR_CLASSICAL_4X):
+        elif model_type in (
+            UpscalingModel.SWINIR_REAL_4X,
+            UpscalingModel.SWINIR_CLASSICAL_4X,
+        ):
             model = self._load_swinir(model_type)
         else:
             raise ValueError(f"Unsupported model: {model_type}")
@@ -273,10 +279,24 @@ class UpscalingEngine:
 
         # Standard 4x model
         if model_type == UpscalingModel.REALESRGAN_4X:
-            model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=4)
+            model = RRDBNet(
+                num_in_ch=3,
+                num_out_ch=3,
+                num_feat=64,
+                num_block=23,
+                num_grow_ch=32,
+                scale=4,
+            )
         # General x4v3 model (better for diverse inputs)
         else:
-            model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=4)
+            model = RRDBNet(
+                num_in_ch=3,
+                num_out_ch=3,
+                num_feat=64,
+                num_block=23,
+                num_grow_ch=32,
+                scale=4,
+            )
 
         # Load pretrained weights if available
         weights_dir = Path("weights/upscaling")
@@ -337,7 +357,10 @@ class UpscalingEngine:
         if weights_file.exists():
             logger.info(f"Loading SwinIR weights from {weights_file}")
             state_dict = torch.load(weights_file, map_location=self.device)
-            model.load_state_dict(state_dict["params"] if "params" in state_dict else state_dict, strict=True)
+            model.load_state_dict(
+                state_dict["params"] if "params" in state_dict else state_dict,
+                strict=True,
+            )
         else:
             logger.warning(f"SwinIR weights not found: {weights_file}")
 
@@ -574,7 +597,10 @@ class UpscalingEngine:
         return upscaled, metrics
 
     def batch_upscale(
-        self, input_paths: List[Path], output_dir: Path, progress_callback: Optional[callable] = None
+        self,
+        input_paths: List[Path],
+        output_dir: Path,
+        progress_callback: Optional[callable] = None,
     ) -> Dict[Path, UpscalingMetrics]:
         """
         Batch upscale multiple images with model caching.
@@ -693,7 +719,12 @@ def upscale_cli():
     parser = argparse.ArgumentParser(description="Advanced Image Upscaling Engine")
     parser.add_argument("input", type=Path, help="Input image or directory")
     parser.add_argument("output", type=Path, help="Output path or directory")
-    parser.add_argument("--model", choices=[m.value for m in UpscalingModel], default="swinir_real_4x", help="Upscaling model")
+    parser.add_argument(
+        "--model",
+        choices=[m.value for m in UpscalingModel],
+        default="swinir_real_4x",
+        help="Upscaling model",
+    )
     parser.add_argument("--tile-size", type=int, default=0, help="Tile size (0=auto)")
     parser.add_argument("--device", default="auto", help="Device (auto, cpu, cuda, mps)")
     parser.add_argument("--no-16bit", action="store_true", help="Disable 16-bit output")
@@ -703,7 +734,10 @@ def upscale_cli():
 
     # Configure
     config = UpscalingConfig(
-        model=UpscalingModel(args.model), tile_size=args.tile_size, device=args.device, preserve_16bit=not args.no_16bit
+        model=UpscalingModel(args.model),
+        tile_size=args.tile_size,
+        device=args.device,
+        preserve_16bit=not args.no_16bit,
     )
 
     engine = UpscalingEngine(config)

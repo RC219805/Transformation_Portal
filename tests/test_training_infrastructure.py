@@ -58,7 +58,8 @@ if TORCH_AVAILABLE:
 
 # Skip all tests in this module if PyTorch is not available
 pytestmark = pytest.mark.skipif(
-    not TORCH_AVAILABLE, reason="PyTorch not installed - training infrastructure tests require ML dependencies"
+    not TORCH_AVAILABLE,
+    reason="PyTorch not installed - training infrastructure tests require ML dependencies",
 )
 
 
@@ -428,7 +429,12 @@ class TestTrainingIntegration:
 
             # Train for 1 epoch
             checkpoint_dir = Path(tmpdir) / "checkpoints"
-            config = TrainingConfig(checkpoint_dir=str(checkpoint_dir), num_epochs=1, batch_size=2, save_frequency=1)
+            config = TrainingConfig(
+                checkpoint_dir=str(checkpoint_dir),
+                num_epochs=1,
+                batch_size=2,
+                save_frequency=1,
+            )
 
             trainer = HyperRealityTrainer(config)
 

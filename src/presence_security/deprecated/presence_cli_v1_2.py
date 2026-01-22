@@ -77,7 +77,9 @@ def main():
     a.add_argument("--out", default="anchor_payload.json")
     a.set_defaults(func=cmd_anchor)
 
-    w = sub.add_parser("watermark", help="Embed watermark (lsb|dct) from manifest/session")
+    w = sub.add_parser(
+        "watermark", help="Embed watermark (lsb|dct) from manifest/session"
+    )
     w.add_argument("--image", required=True)
     w.add_argument("--manifest", required=True)
     w.add_argument("--session", required=True)

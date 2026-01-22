@@ -32,7 +32,12 @@ logger = logging.getLogger(__name__)
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(description="Analyze 750 Picacho Lane property images")
-    parser.add_argument("--property-dir", type=Path, default=None, help="Path to property images directory")
+    parser.add_argument(
+        "--property-dir",
+        type=Path,
+        default=None,
+        help="Path to property images directory",
+    )
     parser.add_argument(
         "--output",
         type=Path,

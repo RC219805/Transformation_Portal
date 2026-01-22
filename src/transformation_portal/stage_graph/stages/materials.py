@@ -154,16 +154,17 @@ class MaterialSegmentationStage(Stage):
             # Wood: warm tones
             hsv = self._rgb_to_hsv(image)
             wood_mask = (
-                (hsv[:, :, 0] > 10) & (hsv[:, :, 0] < 40) &  # Hue
-                (hsv[:, :, 1] > 0.2) &  # Saturation
-                (hsv[:, :, 2] > 0.3)    # Value
+                (hsv[:, :, 0] > 10)
+                & (hsv[:, :, 0] < 40)  # Hue
+                & (hsv[:, :, 1] > 0.2)  # Saturation
+                & (hsv[:, :, 2] > 0.3)  # Value
             ).astype(np.float32)
             materials["wood"] = wood_mask
 
             # Metal: high value, low saturation
             metal_mask = (
-                (hsv[:, :, 1] < 0.2) &  # Low saturation
-                (hsv[:, :, 2] > 0.5)    # High value
+                (hsv[:, :, 1] < 0.2)  # Low saturation
+                & (hsv[:, :, 2] > 0.5)  # High value
             ).astype(np.float32)
             materials["metal"] = metal_mask
 
@@ -195,4 +196,5 @@ class MaterialSegmentationStage(Stage):
     def _rgb_to_hsv(rgb: np.ndarray) -> np.ndarray:
         """Convert RGB to HSV."""
         from skimage import color
+
         return color.rgb2hsv(rgb / 255.0 if rgb.max() > 1 else rgb)

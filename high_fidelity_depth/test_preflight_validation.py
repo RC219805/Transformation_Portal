@@ -42,7 +42,10 @@ class TestPadCropCorrectness:
         cropped = estimator._crop_to_original(padded, crop_coords)
 
         # Verify dimensions preserved
-        assert cropped.shape[:2] == (h, w), f"{name}: Expected {(h, w)}, got {cropped.shape[:2]}"
+        assert cropped.shape[:2] == (
+            h,
+            w,
+        ), f"{name}: Expected {(h, w)}, got {cropped.shape[:2]}"
 
         print(f"✓ PASS: {name} - {h}×{w} preserved (padded to {padded.shape[:2]})")
 

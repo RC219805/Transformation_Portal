@@ -178,7 +178,12 @@ def test_torch_upscaler_tiled_method():
 
     # Verify dimensions
     expected_h, expected_w = test_h * 4, test_w * 4
-    assert result.shape == (1, 3, expected_h, expected_w), f"Tiled upscale failed: {result.shape}"
+    assert result.shape == (
+        1,
+        3,
+        expected_h,
+        expected_w,
+    ), f"Tiled upscale failed: {result.shape}"
 
     print(f"✅ TorchUpscaler tiled method working: {test_h}×{test_w} → {expected_h}×{expected_w}")
 

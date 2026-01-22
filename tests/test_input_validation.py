@@ -28,7 +28,6 @@ from transformation_portal.utils.input_validation import (
     validate_image_strict,
 )
 
-
 # =============================================================================
 # Test Fixtures
 # =============================================================================

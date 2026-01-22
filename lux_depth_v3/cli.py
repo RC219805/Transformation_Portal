@@ -310,7 +310,7 @@ def process(
     else:
         config = DA3Config(
             model_variant=model_variant,
-            inference_mode=InferenceMode.MULTI_VIEW if multi_view else InferenceMode.MONOCULAR,
+            inference_mode=(InferenceMode.MULTI_VIEW if multi_view else InferenceMode.MONOCULAR),
         )
 
     # Override configuration with CLI options
@@ -619,10 +619,16 @@ def backend_status(
 @app.command("benchmark-quality")
 def benchmark_quality(
     datasets: List[str] = typer.Option(
-        ["eth3d", "7scenes", "scannetpp", "hiroom", "dtu", "dtu64"], "--dataset", "-d", help="Datasets to evaluate"
+        ["eth3d", "7scenes", "scannetpp", "hiroom", "dtu", "dtu64"],
+        "--dataset",
+        "-d",
+        help="Datasets to evaluate",
     ),
     modes: List[str] = typer.Option(
-        ["pose", "recon_unposed", "recon_posed"], "--mode", "-m", help="Evaluation modes (pose, recon_unposed, recon_posed)"
+        ["pose", "recon_unposed", "recon_posed"],
+        "--mode",
+        "-m",
+        help="Evaluation modes (pose, recon_unposed, recon_posed)",
     ),
     data_root: Path = typer.Option(Path("workspace/benchmark_dataset"), help="Benchmark data root directory"),
     work_dir: Path = typer.Option(Path("workspace/evaluation"), help="Working directory for outputs"),
@@ -657,7 +663,11 @@ def benchmark_quality(
 
     # Create config
     config = BenchmarkConfig(
-        datasets=datasets, modes=eval_modes, max_frames=max_frames, data_root=data_root, work_dir=work_dir
+        datasets=datasets,
+        modes=eval_modes,
+        max_frames=max_frames,
+        data_root=data_root,
+        work_dir=work_dir,
     )
 
     # Initialize evaluator
@@ -682,7 +692,10 @@ def benchmark_quality(
 @app.command()
 def benchmark_download(
     datasets: List[str] = typer.Option(
-        ["all"], "--dataset", "-d", help="Datasets to download (all, eth3d, 7scenes, scannetpp, hiroom, dtu, dtu64)"
+        ["all"],
+        "--dataset",
+        "-d",
+        help="Datasets to download (all, eth3d, 7scenes, scannetpp, hiroom, dtu, dtu64)",
     ),
     data_root: Path = typer.Option(Path("workspace/benchmark_dataset"), help="Download destination"),
 ):
@@ -723,15 +736,26 @@ def api_process(
     ),
     # License validation
     commercial_use: bool = typer.Option(
-        False, "--commercial", help="Declare this is commercial use (triggers license validation)"
+        False,
+        "--commercial",
+        help="Declare this is commercial use (triggers license validation)",
     ),
     strict_license: bool = typer.Option(
-        False, "--strict-license", help="Raise error instead of warning on license violations"
+        False,
+        "--strict-license",
+        help="Raise error instead of warning on license violations",
     ),
-    show_license: bool = typer.Option(False, "--show-license", help="Show license information for selected model and exit"),
+    show_license: bool = typer.Option(
+        False,
+        "--show-license",
+        help="Show license information for selected model and exit",
+    ),
     # Export formats
     export_format: str = typer.Option(
-        "mini_npz", "--export-format", "-f", help="Export format(s), separated by '-' (e.g., 'mini_npz-glb-gs_ply')"
+        "mini_npz",
+        "--export-format",
+        "-f",
+        help="Export format(s), separated by '-' (e.g., 'mini_npz-glb-gs_ply')",
     ),
     # Pose parameters
     use_ray_pose: bool = typer.Option(False, "--use-ray-pose", help="Use ray-based pose estimation"),
@@ -760,7 +784,11 @@ def api_process(
     focal_length: Optional[float] = typer.Option(
         None, "--focal-length", help="Focal length in pixels (for metric conversion)"
     ),
-    fov: Optional[float] = typer.Option(None, "--fov", help="Horizontal field of view in degrees (for metric estimation)"),
+    fov: Optional[float] = typer.Option(
+        None,
+        "--fov",
+        help="Horizontal field of view in degrees (for metric estimation)",
+    ),
     show_depth_stats: bool = typer.Option(False, "--depth-stats", help="Show depth statistics in meters"),
 ):
     """Process images with full DA3 Python API support.
@@ -891,7 +919,11 @@ def api_process(
 
     # Initialize engine with license validation
     try:
-        engine = DA3InferenceEngine(config, commercial_use=commercial_use, validate_license_strict=strict_license)
+        engine = DA3InferenceEngine(
+            config,
+            commercial_use=commercial_use,
+            validate_license_strict=strict_license,
+        )
     except Exception as e:
         typer.echo(f"❌ Failed to initialize engine: {e}", err=True)
         sys.exit(1)
@@ -957,7 +989,10 @@ def api_process(
 @app.command()
 def cache_download(
     model_set: str = typer.Option(
-        "essential", "--set", "-s", help="Model set to download (essential/production/benchmark/all)"
+        "essential",
+        "--set",
+        "-s",
+        help="Model set to download (essential/production/benchmark/all)",
     ),
     models: Optional[str] = typer.Option(None, "--models", "-m", help="Comma-separated model keys (overrides --set)"),
     cache_dir: Optional[Path] = typer.Option(None, "--cache-dir", help="Custom cache directory (default: HF cache)"),
@@ -1350,8 +1385,8 @@ def enhance(
                 {
                     "stem": Path(r["image"]).stem,
                     "status": r.get("status", "unknown"),
-                    "manifest": str(r.get("manifest", "")) if r.get("status") == "ok" else None,
-                    "runtime_s": r.get("runtime_s", 0.0) if r.get("status") == "ok" else None,
+                    "manifest": (str(r.get("manifest", "")) if r.get("status") == "ok" else None),
+                    "runtime_s": (r.get("runtime_s", 0.0) if r.get("status") == "ok" else None),
                     "error": r.get("error") if r.get("status") == "error" else None,
                 }
                 for r in results

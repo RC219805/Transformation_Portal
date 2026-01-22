@@ -46,7 +46,10 @@ def apply_blur_degradation(img: np.ndarray, sigma: float = 1.5) -> np.ndarray:
         from scipy.ndimage import gaussian_filter
 
         if img.ndim == 3:
-            return np.stack([gaussian_filter(img[..., i], sigma=sigma) for i in range(img.shape[-1])], axis=-1)
+            return np.stack(
+                [gaussian_filter(img[..., i], sigma=sigma) for i in range(img.shape[-1])],
+                axis=-1,
+            )
         else:
             return gaussian_filter(img, sigma=sigma)
     except ImportError:

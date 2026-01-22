@@ -6,7 +6,12 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from utils.parallel_processor import ParallelProcessor, ProcessingMode, WorkerConfig, process_images_parallel
+from utils.parallel_processor import (
+    ParallelProcessor,
+    ProcessingMode,
+    WorkerConfig,
+    process_images_parallel,
+)
 
 
 def _cpu_test_process_fn(x):
@@ -34,7 +39,12 @@ class TestWorkerConfig:
 
     def test_custom_config(self):
         """Test custom configuration"""
-        config = WorkerConfig(num_workers=4, memory_limit_gb=16.0, mode=ProcessingMode.MULTI_GPU, gpu_ids=[0, 1])
+        config = WorkerConfig(
+            num_workers=4,
+            memory_limit_gb=16.0,
+            mode=ProcessingMode.MULTI_GPU,
+            gpu_ids=[0, 1],
+        )
         assert config.num_workers == 4
         assert config.memory_limit_gb == 16.0
         assert config.mode == ProcessingMode.MULTI_GPU

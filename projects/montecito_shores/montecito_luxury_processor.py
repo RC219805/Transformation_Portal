@@ -166,7 +166,11 @@ def main():
         help="Enhancement preset",
     )
     parser.add_argument("--pattern", default="*.tif", help="File pattern to process")
-    parser.add_argument("--auto-wb", action="store_true", help="Apply automatic white balance (gray world algorithm)")
+    parser.add_argument(
+        "--auto-wb",
+        action="store_true",
+        help="Apply automatic white balance (gray world algorithm)",
+    )
 
     args = parser.parse_args()
 

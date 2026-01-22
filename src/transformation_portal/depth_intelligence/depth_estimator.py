@@ -19,7 +19,7 @@ from PIL import Image
 from ..depth.models.depth_anything_v2 import (
     DepthAnythingV2Model,
     ModelVariant,
-    ModelBackend
+    ModelBackend,
 )
 
 logger = logging.getLogger(__name__)
@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class DepthConfig:
     """Configuration for depth estimation."""
+
     variant: ModelVariant = ModelVariant.SMALL
     backend: Optional[ModelBackend] = None  # Auto-detect
     precision: str = "fp16"
@@ -39,6 +40,7 @@ class DepthConfig:
 @dataclass
 class DepthMap:
     """Depth map with metadata."""
+
     depth: Tensor  # (H, W) normalized to [0, 1], 0=near, 1=far
     confidence: Optional[Tensor] = None  # (H, W) confidence scores
     min_depth: float = 0.0  # Minimum depth in scene
@@ -67,7 +69,7 @@ class DepthMap:
         else:
             # Grayscale
             depth_uint8 = (depth_np * 255).astype(np.uint8)
-            return Image.fromarray(depth_uint8, mode='L')
+            return Image.fromarray(depth_uint8, mode="L")
 
     def _apply_colormap(self, depth: np.ndarray) -> np.ndarray:
         """Apply perceptually uniform colormap to depth."""
@@ -89,7 +91,7 @@ class DepthMap:
             min_depth=1.0 - self.max_depth,
             max_depth=1.0 - self.min_depth,
             resolution=self.resolution,
-            metadata={**self.metadata, "inverted": True}
+            metadata={**self.metadata, "inverted": True},
         )
 
     def normalize_to_range(self, min_val: float, max_val: float) -> Tensor:
@@ -108,11 +110,7 @@ class DepthEstimator:
     - Baseline quality tracking
     """
 
-    def __init__(
-        self,
-        substrate,
-        config: Optional[DepthConfig] = None
-    ):
+    def __init__(self, substrate, config: Optional[DepthConfig] = None):
         """
         Initialize depth estimator.
 
@@ -131,8 +129,10 @@ class DepthEstimator:
         self.model = None
         self._initialize_model()
 
-        logger.info(f"Initialized DepthEstimator with {self.config.variant.value}, "
-                    f"backend={self.config.backend.value}")
+        logger.info(
+            f"Initialized DepthEstimator with {self.config.variant.value}, "
+            f"backend={self.config.backend.value}"
+        )
 
     def _auto_detect_backend(self) -> ModelBackend:
         """Auto-detect optimal backend."""
@@ -157,7 +157,7 @@ class DepthEstimator:
             self.model = DepthAnythingV2Model(
                 variant=self.config.variant,
                 backend=self.config.backend,
-                precision=self.config.precision
+                precision=self.config.precision,
             )
             logger.info("✓ Depth model loaded successfully")
         except Exception as e:
@@ -167,14 +167,10 @@ class DepthEstimator:
             self.model = DepthAnythingV2Model(
                 variant=self.config.variant,
                 backend=self.config.backend,
-                precision=self.config.precision
+                precision=self.config.precision,
             )
 
-    def estimate(
-        self,
-        image: Tensor,
-        return_confidence: bool = False
-    ) -> DepthMap:
+    def estimate(self, image: Tensor, return_confidence: bool = False) -> DepthMap:
         """
         Estimate depth from image.
 
@@ -201,7 +197,7 @@ class DepthEstimator:
             result = self.model.estimate_depth(pil_image)
 
         # Extract depth map
-        depth_np = result['depth']  # (H, W) normalized to [0, 1]
+        depth_np = result["depth"]  # (H, W) normalized to [0, 1]
 
         # Convert to tensor and move to device
         depth_tensor = torch.from_numpy(depth_np).float()
@@ -212,8 +208,8 @@ class DepthEstimator:
             depth_tensor = torch.nn.functional.interpolate(
                 depth_tensor.unsqueeze(0).unsqueeze(0),
                 size=original_size,
-                mode='bilinear',
-                align_corners=False
+                mode="bilinear",
+                align_corners=False,
             ).squeeze()
 
         # Compute confidence if requested
@@ -231,16 +227,14 @@ class DepthEstimator:
             metadata={
                 "variant": self.config.variant.value,
                 "backend": self.config.backend.value,
-                "original_size": original_size
-            }
+                "original_size": original_size,
+            },
         )
 
         return depth_map
 
     def estimate_batch(
-        self,
-        images: list[Tensor],
-        return_confidence: bool = False
+        self, images: list[Tensor], return_confidence: bool = False
     ) -> list[DepthMap]:
         """
         Estimate depth for batch of images.
@@ -273,9 +267,7 @@ class DepthEstimator:
 
         # Unfold to get local patches
         depth_unfold = torch.nn.functional.unfold(
-            depth.unsqueeze(0).unsqueeze(0),
-            kernel_size=kernel_size,
-            padding=padding
+            depth.unsqueeze(0).unsqueeze(0), kernel_size=kernel_size, padding=padding
         )
 
         # Compute variance per patch
@@ -293,7 +285,7 @@ class DepthEstimator:
         self,
         depth_map: DepthMap,
         output_path: Optional[Path] = None,
-        show: bool = False
+        show: bool = False,
     ) -> Image.Image:
         """
         Visualize depth map with colormap.

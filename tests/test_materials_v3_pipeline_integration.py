@@ -23,7 +23,11 @@ pytestmark = [
 
 from lux_depth_v2.config import PipelineConfig, Preset
 from lux_depth_v2.pipeline import LuxPipelineV2
-from lux_depth_v2.materials_v3 import MaterialsV3Config, RefinementStrategy, MaterialTaxonomy
+from lux_depth_v2.materials_v3 import (
+    MaterialsV3Config,
+    RefinementStrategy,
+    MaterialTaxonomy,
+)
 
 
 # Dummy segmenter for offline CI (no HuggingFace model download)

@@ -430,7 +430,10 @@ class CachedPipeline:
         return self.cache.get_or_compute(
             "material_masks",
             lambda: self._compute_material_masks(image_path, material_types),
-            inputs={"image_path": image_path, "material_types": tuple(sorted(material_types))},
+            inputs={
+                "image_path": image_path,
+                "material_types": tuple(sorted(material_types)),
+            },
         )
 
     def _compute_depth(self, image_path: Path, model_name: str) -> np.ndarray:

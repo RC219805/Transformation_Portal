@@ -298,7 +298,10 @@ class DependencyScanner:
         """Get installed packages and versions."""
         try:
             result = subprocess.run(
-                [sys.executable, "-m", "pip", "list", "--format=json"], capture_output=True, text=True, check=True
+                [sys.executable, "-m", "pip", "list", "--format=json"],
+                capture_output=True,
+                text=True,
+                check=True,
             )
             packages = json.loads(result.stdout)
             return {pkg["name"].lower(): pkg["version"] for pkg in packages}
@@ -457,7 +460,14 @@ class MitigationEngine:
 
         for step in mitigation.verification_steps:
             try:
-                result = subprocess.run(step, shell=True, capture_output=True, text=True, cwd=self.repo_root, check=False)
+                result = subprocess.run(
+                    step,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    cwd=self.repo_root,
+                    check=False,
+                )
                 passed = result.returncode == 0
                 all_passed = all_passed and passed
                 results.append(f"{'✅' if passed else '❌'} {step}")

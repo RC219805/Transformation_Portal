@@ -32,9 +32,21 @@ def analyze_channels(img: Image.Image) -> dict:
     r, g, b = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2]
 
     return {
-        "R": {"mean": float(np.mean(r)), "std": float(np.std(r)), "max": int(np.max(r))},
-        "G": {"mean": float(np.mean(g)), "std": float(np.std(g)), "max": int(np.max(g))},
-        "B": {"mean": float(np.mean(b)), "std": float(np.std(b)), "max": int(np.max(b))},
+        "R": {
+            "mean": float(np.mean(r)),
+            "std": float(np.std(r)),
+            "max": int(np.max(r)),
+        },
+        "G": {
+            "mean": float(np.mean(g)),
+            "std": float(np.std(g)),
+            "max": int(np.max(g)),
+        },
+        "B": {
+            "mean": float(np.mean(b)),
+            "std": float(np.std(b)),
+            "max": int(np.max(b)),
+        },
         "brightness": float(np.mean(arr)),
         "contrast": float(np.std(arr)),
         "is_neutral_gray": abs(np.mean(r) - np.mean(g)) < 1 and abs(np.mean(g) - np.mean(b)) < 1,
@@ -113,7 +125,12 @@ def compare_scene(scene_name: str, base_dir: Path) -> dict:
         img = Image.open(source_path)
         metrics = analyze_channels(img)
         score, reason = assess_quality(metrics, scene_type)
-        results["Source"] = {"path": source_path, "metrics": metrics, "score": score, "reason": reason}
+        results["Source"] = {
+            "path": source_path,
+            "metrics": metrics,
+            "score": score,
+            "reason": reason,
+        }
 
     # Final Production
     final_path = base_dir / "Final_Production" / f"750Picacho_{scene_name}_luxury.tif"
@@ -121,7 +138,12 @@ def compare_scene(scene_name: str, base_dir: Path) -> dict:
         img = Image.open(final_path)
         metrics = analyze_channels(img)
         score, reason = assess_quality(metrics, scene_type)
-        results["Final Production"] = {"path": final_path, "metrics": metrics, "score": score, "reason": reason}
+        results["Final Production"] = {
+            "path": final_path,
+            "metrics": metrics,
+            "score": score,
+            "reason": reason,
+        }
 
     # Ultimate Quality
     ultimate_path = base_dir / "Ultimate_Quality" / f"750Picacho_{scene_name}_ultimate.tif"
@@ -129,7 +151,12 @@ def compare_scene(scene_name: str, base_dir: Path) -> dict:
         img = Image.open(ultimate_path)
         metrics = analyze_channels(img)
         score, reason = assess_quality(metrics, scene_type)
-        results["Ultimate Quality"] = {"path": ultimate_path, "metrics": metrics, "score": score, "reason": reason}
+        results["Ultimate Quality"] = {
+            "path": ultimate_path,
+            "metrics": metrics,
+            "score": score,
+            "reason": reason,
+        }
 
     # Phase3 Refined
     refined_path = base_dir / "Phase3_Refined" / f"750Picacho_{scene_name}_refined.tif"
@@ -137,7 +164,12 @@ def compare_scene(scene_name: str, base_dir: Path) -> dict:
         img = Image.open(refined_path)
         metrics = analyze_channels(img)
         score, reason = assess_quality(metrics, scene_type)
-        results["Phase3 Refined"] = {"path": refined_path, "metrics": metrics, "score": score, "reason": reason}
+        results["Phase3 Refined"] = {
+            "path": refined_path,
+            "metrics": metrics,
+            "score": score,
+            "reason": reason,
+        }
 
     return results
 

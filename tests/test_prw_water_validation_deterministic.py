@@ -93,7 +93,14 @@ def test_full_validation_deterministic():
             "version": "v0",
             "root": str(tmpdir / "images"),
             "labels": ["pool"],
-            "images": {"pool/test_001.jpg": {"label": "pool", "should_detect": True, "difficulty": "easy", "tags": []}},
+            "images": {
+                "pool/test_001.jpg": {
+                    "label": "pool",
+                    "should_detect": True,
+                    "difficulty": "easy",
+                    "tags": [],
+                }
+            },
         }
 
         # Save ground truth to file (required for validate_dataset)

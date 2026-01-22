@@ -84,7 +84,9 @@ def _normalise_config_keys(raw: Mapping[str, Any]) -> dict[str, Any]:
     return normalised
 
 
-def _build_parser_aliases(parser: argparse.ArgumentParser) -> tuple[dict[str, argparse.Action], dict[str, str]]:
+def _build_parser_aliases(
+    parser: argparse.ArgumentParser,
+) -> tuple[dict[str, argparse.Action], dict[str, str]]:
     """Build lookup tables mapping argument names to parser actions.
 
     Args:
@@ -218,7 +220,11 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         default=None,
         help="Optionally resize the longest image edge to this many pixels while preserving aspect ratio",
     )
-    parser.add_argument("--dry-run", action="store_true", help="Preview the work without writing any files")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview the work without writing any files",
+    )
     parser.add_argument(
         "--no-progress",
         action="store_true",
@@ -255,11 +261,25 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         help="Highlight compression strength (0-1)",
     )
     parser.add_argument(
-        "--midtone-contrast", type=float, default=None, dest="midtone_contrast", help="Midtone contrast strength"
+        "--midtone-contrast",
+        type=float,
+        default=None,
+        dest="midtone_contrast",
+        help="Midtone contrast strength",
     )
     parser.add_argument("--vibrance", type=float, default=None, help="Vibrance strength (0-1)")
-    parser.add_argument("--saturation", type=float, default=None, help="Additional saturation multiplier delta")
-    parser.add_argument("--clarity", type=float, default=None, help="Local contrast boost strength (0-1)")
+    parser.add_argument(
+        "--saturation",
+        type=float,
+        default=None,
+        help="Additional saturation multiplier delta",
+    )
+    parser.add_argument(
+        "--clarity",
+        type=float,
+        default=None,
+        help="Local contrast boost strength (0-1)",
+    )
     parser.add_argument(
         "--chroma-denoise",
         type=float,
@@ -267,7 +287,13 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         dest="chroma_denoise",
         help="Chrominance denoising amount (0-1)",
     )
-    parser.add_argument("--luxury-glow", type=float, default=None, dest="glow", help="Diffusion glow strength (0-1)")
+    parser.add_argument(
+        "--luxury-glow",
+        type=float,
+        default=None,
+        dest="glow",
+        help="Diffusion glow strength (0-1)",
+    )
 
     parser.add_argument(
         "--log-level",

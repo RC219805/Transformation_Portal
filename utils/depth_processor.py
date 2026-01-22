@@ -225,7 +225,10 @@ class DepthProcessor:
         if self.config.background_soften != 1.0:
             from scipy.ndimage import gaussian_filter
 
-            bg_softened = np.stack([gaussian_filter(enhanced[:, :, c], sigma=1.5) for c in range(3)], axis=-1)
+            bg_softened = np.stack(
+                [gaussian_filter(enhanced[:, :, c], sigma=1.5) for c in range(3)],
+                axis=-1,
+            )
 
             enhanced = enhanced * (1 - background[:, :, None]) + bg_softened * background[:, :, None]
 
@@ -270,7 +273,9 @@ class DepthProcessor:
 
 
 def create_depth_processor(
-    model_name: str = "depth_anything_v2", enable_zone_processing: bool = True, device: str = "auto"
+    model_name: str = "depth_anything_v2",
+    enable_zone_processing: bool = True,
+    device: str = "auto",
 ) -> DepthProcessor:
     """
     Convenience function to create depth processor.
@@ -283,7 +288,11 @@ def create_depth_processor(
     Returns:
         Configured DepthProcessor
     """
-    config = DepthConfig(model_name=model_name, enable_zone_processing=enable_zone_processing, device=device)
+    config = DepthConfig(
+        model_name=model_name,
+        enable_zone_processing=enable_zone_processing,
+        device=device,
+    )
     return DepthProcessor(config)
 
 

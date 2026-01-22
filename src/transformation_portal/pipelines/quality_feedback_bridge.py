@@ -78,6 +78,7 @@ def _check_torch_available() -> bool:
     if _TORCH_AVAILABLE is None:
         try:
             import torch  # noqa: F401
+
             _TORCH_AVAILABLE = True
         except ImportError:
             _TORCH_AVAILABLE = False
@@ -90,6 +91,7 @@ def _check_lpips_available() -> bool:
     if _LPIPS_AVAILABLE is None:
         try:
             import lpips  # noqa: F401
+
             _LPIPS_AVAILABLE = True
         except ImportError:
             _LPIPS_AVAILABLE = False
@@ -103,11 +105,15 @@ def _check_perceptual_assessor_available() -> bool:
         try:
             import sys
             from pathlib import Path
+
             # Add src directory to path if not already there
             src_dir = Path(__file__).parent.parent.parent.parent / "src"
             if str(src_dir) not in sys.path:
                 sys.path.insert(0, str(src_dir))
-            from enhancements.perceptual_quality_assessment import PerceptualQualityAssessor  # noqa: F401
+            from enhancements.perceptual_quality_assessment import (
+                PerceptualQualityAssessor,
+            )  # noqa: F401
+
             _PERCEPTUAL_ASSESSOR_AVAILABLE = True
         except ImportError as e:
             logger.debug(f"PerceptualQualityAssessor not available: {e}")
@@ -118,6 +124,7 @@ def _check_perceptual_assessor_available() -> bool:
 # =============================================================================
 # Quality Target Constants
 # =============================================================================
+
 
 @dataclass
 class QualityTargets:
@@ -133,16 +140,18 @@ class QualityTargets:
     material_fidelity_target: float = 0.98  # 98% material fidelity
 
     # Per-material thresholds
-    material_thresholds: Dict[str, float] = field(default_factory=lambda: {
-        'quartzite': 0.96,
-        'oak': 0.95,
-        'metal': 0.97,
-        'glass': 0.94,
-        'stucco': 0.95,
-        'water': 0.92,
-        'vegetation': 0.90,
-        'sky': 0.88,
-    })
+    material_thresholds: Dict[str, float] = field(
+        default_factory=lambda: {
+            "quartzite": 0.96,
+            "oak": 0.95,
+            "metal": 0.97,
+            "glass": 0.94,
+            "stucco": 0.95,
+            "water": 0.92,
+            "vegetation": 0.90,
+            "sky": 0.88,
+        }
+    )
 
     # Structural thresholds
     ssim_target: float = 0.92
@@ -159,9 +168,11 @@ class QualityTargets:
 # Unified Quality Metrics
 # =============================================================================
 
+
 @dataclass
 class HeuristicMetrics:
     """Traditional heuristic-based quality metrics."""
+
     sharpness: float = 0.0  # 0-1 (Laplacian variance based)
     contrast: float = 0.0  # 0-1 (luminance std based)
     colorfulness: float = 0.0  # 0-1 (Hasler & Süsstrunk)
@@ -177,6 +188,7 @@ class HeuristicMetrics:
 @dataclass
 class PerceptualMetrics:
     """LPIPS-based perceptual quality metrics."""
+
     lpips_score: float = 0.0  # 0-1 (lower is better)
     lpips_percentile: float = 0.0  # 0-100 (higher is better)
     ssim_score: float = 0.0  # 0-1 (higher is better)
@@ -194,14 +206,15 @@ class PerceptualMetrics:
 @dataclass
 class MaterialFidelityMetrics:
     """Per-material fidelity metrics."""
+
     per_material: Dict[str, float] = field(default_factory=dict)
     overall_fidelity: float = 0.0
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
-            'per_material': self.per_material,
-            'overall_fidelity': self.overall_fidelity,
+            "per_material": self.per_material,
+            "overall_fidelity": self.overall_fidelity,
         }
 
 
@@ -226,7 +239,9 @@ class UnifiedQualityMetrics:
     perceptual: PerceptualMetrics = field(default_factory=PerceptualMetrics)
 
     # Material-specific fidelity
-    material_fidelity: MaterialFidelityMetrics = field(default_factory=MaterialFidelityMetrics)
+    material_fidelity: MaterialFidelityMetrics = field(
+        default_factory=MaterialFidelityMetrics
+    )
 
     # Composite scores
     perceptual_composite: float = 0.0  # 0-100+ primary score
@@ -246,24 +261,24 @@ class UnifiedQualityMetrics:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         doc = {
-            'image_id': self.image_id,
-            'pipeline_config_name': self.pipeline_config_name,
-            'timestamp': self.timestamp,
-            'heuristic': self.heuristic.to_dict(),
-            'perceptual': self.perceptual.to_dict(),
-            'material_fidelity': self.material_fidelity.to_dict(),
-            'scores': {
-                'perceptual_composite': round(self.perceptual_composite, 2),
-                'heuristic_composite': round(self.heuristic_composite, 2),
-                'hybrid_score': round(self.hybrid_score, 2),
+            "image_id": self.image_id,
+            "pipeline_config_name": self.pipeline_config_name,
+            "timestamp": self.timestamp,
+            "heuristic": self.heuristic.to_dict(),
+            "perceptual": self.perceptual.to_dict(),
+            "material_fidelity": self.material_fidelity.to_dict(),
+            "scores": {
+                "perceptual_composite": round(self.perceptual_composite, 2),
+                "heuristic_composite": round(self.heuristic_composite, 2),
+                "hybrid_score": round(self.hybrid_score, 2),
             },
-            'targets_met': self.targets_met,
-            'targets_summary': self.targets_summary,
-            'metadata': {
-                'processing_time_ms': round(self.processing_time_ms, 1),
-                'lpips_available': self.lpips_available,
-                'hybrid_mode': self.hybrid_mode,
-                'warnings': self.warnings,
+            "targets_met": self.targets_met,
+            "targets_summary": self.targets_summary,
+            "metadata": {
+                "processing_time_ms": round(self.processing_time_ms, 1),
+                "lpips_available": self.lpips_available,
+                "hybrid_mode": self.hybrid_mode,
+                "warnings": self.warnings,
             },
         }
         return _to_jsonable(doc)
@@ -271,15 +286,16 @@ class UnifiedQualityMetrics:
     def to_rag_document(self) -> Dict[str, Any]:
         """Convert to RAG-indexable document format."""
         doc = self.to_dict()
-        doc['_type'] = 'unified_quality_metrics'
-        doc['_version'] = '1.0.0'
-        doc['_indexed_at'] = datetime.utcnow().isoformat()
+        doc["_type"] = "unified_quality_metrics"
+        doc["_version"] = "1.0.0"
+        doc["_indexed_at"] = datetime.utcnow().isoformat()
         return doc
 
 
 # =============================================================================
 # Quality Feedback Bridge
 # =============================================================================
+
 
 class QualityFeedbackBridge:
     """
@@ -301,7 +317,7 @@ class QualityFeedbackBridge:
         self,
         targets: Optional[QualityTargets] = None,
         hybrid_mode: bool = True,
-        lpips_network: str = 'alex',
+        lpips_network: str = "alex",
         enable_material_fidelity: bool = True,
         rag_callback: Optional[Callable[[Dict], None]] = None,
     ):
@@ -363,6 +379,7 @@ class QualityFeedbackBridge:
         try:
             import sys
             from pathlib import Path
+
             # Add src directory to path if not already there
             src_dir = Path(__file__).parent.parent.parent.parent / "src"
             if str(src_dir) not in sys.path:
@@ -370,6 +387,7 @@ class QualityFeedbackBridge:
             from enhancements.perceptual_quality_assessment import (
                 PerceptualQualityAssessor,
             )
+
             self._perceptual_assessor = PerceptualQualityAssessor(
                 use_lpips_package=_check_lpips_available()
             )
@@ -425,8 +443,8 @@ class QualityFeedbackBridge:
                 perceptual_result = self._compute_perceptual_metrics(
                     enhanced_np, original_np
                 )
-                metrics.perceptual = perceptual_result['perceptual']
-                metrics.material_fidelity = perceptual_result['material_fidelity']
+                metrics.perceptual = perceptual_result["perceptual"]
+                metrics.material_fidelity = perceptual_result["material_fidelity"]
                 metrics.perceptual_composite = metrics.perceptual.composite_score
             except Exception as e:
                 logger.warning(f"Perceptual assessment failed: {e}")
@@ -439,7 +457,8 @@ class QualityFeedbackBridge:
             metrics.hybrid_score = self._compute_hybrid_score(metrics)
         else:
             metrics.hybrid_score = (
-                metrics.perceptual_composite if metrics.lpips_available
+                metrics.perceptual_composite
+                if metrics.lpips_available
                 else metrics.heuristic_composite
             )
 
@@ -460,7 +479,9 @@ class QualityFeedbackBridge:
 
         return metrics
 
-    def _to_numpy(self, image: Union[np.ndarray, Image.Image, None]) -> Optional[np.ndarray]:
+    def _to_numpy(
+        self, image: Union[np.ndarray, Image.Image, None]
+    ) -> Optional[np.ndarray]:
         """Convert image to numpy array [0, 1] float32."""
         if image is None:
             return None
@@ -472,7 +493,7 @@ class QualityFeedbackBridge:
             return arr
 
         if isinstance(image, Image.Image):
-            arr = np.array(image.convert('RGB')).astype(np.float32) / 255.0
+            arr = np.array(image.convert("RGB")).astype(np.float32) / 255.0
             return arr
 
         raise ValueError(f"Unsupported image type: {type(image)}")
@@ -502,19 +523,19 @@ class QualityFeedbackBridge:
 
         # Overall weighted score
         weights = {
-            'sharpness': 0.25,
-            'contrast': 0.20,
-            'colorfulness': 0.20,
-            'exposure': 0.20,
-            'noise': 0.15,
+            "sharpness": 0.25,
+            "contrast": 0.20,
+            "colorfulness": 0.20,
+            "exposure": 0.20,
+            "noise": 0.15,
         }
 
         score = (
-            weights['sharpness'] * metrics.sharpness +
-            weights['contrast'] * metrics.contrast +
-            weights['colorfulness'] * metrics.colorfulness +
-            weights['exposure'] * metrics.exposure_balance -
-            weights['noise'] * metrics.noise_level
+            weights["sharpness"] * metrics.sharpness
+            + weights["contrast"] * metrics.contrast
+            + weights["colorfulness"] * metrics.colorfulness
+            + weights["exposure"] * metrics.exposure_balance
+            - weights["noise"] * metrics.noise_level
         )
         metrics.overall_score = float(np.clip(score, 0, 1))
 
@@ -529,22 +550,23 @@ class QualityFeedbackBridge:
         # Try scipy for convolution, fall back to manual implementation
         try:
             from scipy.ndimage import convolve
-            laplacian = convolve(gray, kernel, mode='reflect')
+
+            laplacian = convolve(gray, kernel, mode="reflect")
         except ImportError:
             # Vectorized convolution fallback (faster than loops, but slower than scipy)
             # For 3x3 Laplacian kernel, use slicing and weighted sums
             # WARNING: For large 4K+ images, consider installing scipy for 10-100x speedup
             h, w = gray.shape
             pad_h, pad_w = 1, 1
-            padded = np.pad(gray, ((pad_h, pad_h), (pad_w, pad_w)), mode='reflect')
+            padded = np.pad(gray, ((pad_h, pad_h), (pad_w, pad_w)), mode="reflect")
 
             # Vectorized 3x3 Laplacian convolution using slicing
             laplacian = (
-                kernel[0, 1] * padded[0:h, 1:w+1] +
-                kernel[1, 0] * padded[1:h+1, 0:w] +
-                kernel[1, 1] * padded[1:h+1, 1:w+1] +
-                kernel[1, 2] * padded[1:h+1, 2:w+2] +
-                kernel[2, 1] * padded[2:h+2, 1:w+1]
+                kernel[0, 1] * padded[0:h, 1 : w + 1]
+                + kernel[1, 0] * padded[1 : h + 1, 0:w]
+                + kernel[1, 1] * padded[1 : h + 1, 1 : w + 1]
+                + kernel[1, 2] * padded[1 : h + 1, 2 : w + 2]
+                + kernel[2, 1] * padded[2 : h + 2, 1 : w + 1]
             )
 
         variance = float(np.var(laplacian))
@@ -568,8 +590,8 @@ class QualityFeedbackBridge:
         mean_rg = float(np.mean(rg))
         mean_yb = float(np.mean(yb))
 
-        std_root = np.sqrt(std_rg ** 2 + std_yb ** 2)
-        mean_root = np.sqrt(mean_rg ** 2 + mean_yb ** 2)
+        std_root = np.sqrt(std_rg**2 + std_yb**2)
+        mean_root = np.sqrt(mean_rg**2 + mean_yb**2)
 
         colorfulness = std_root + 0.3 * mean_root
         return float(np.clip(colorfulness * 2, 0, 1))
@@ -591,12 +613,14 @@ class QualityFeedbackBridge:
         # Try scipy median filter first, fall back to PIL
         try:
             from scipy.ndimage import median_filter
+
             smoothed = median_filter(gray, size=3)
         except ImportError:
             # Fallback to PIL-based smoothing
             from PIL import ImageFilter
+
             img_uint8 = (np.clip(gray, 0, 1) * 255).astype(np.uint8)
-            pil_img = Image.fromarray(img_uint8, mode='L')
+            pil_img = Image.fromarray(img_uint8, mode="L")
             smoothed_pil = pil_img.filter(ImageFilter.MedianFilter(3))
             smoothed = np.array(smoothed_pil).astype(np.float32) / 255.0
 
@@ -615,16 +639,16 @@ class QualityFeedbackBridge:
         """
         if self._perceptual_assessor is None:
             return {
-                'perceptual': PerceptualMetrics(),
-                'material_fidelity': MaterialFidelityMetrics(),
+                "perceptual": PerceptualMetrics(),
+                "material_fidelity": MaterialFidelityMetrics(),
             }
 
         # Convert to PIL for assessor
         enhanced_pil = Image.fromarray(
-            (np.clip(enhanced, 0, 1) * 255).astype(np.uint8), mode='RGB'
+            (np.clip(enhanced, 0, 1) * 255).astype(np.uint8), mode="RGB"
         )
         original_pil = Image.fromarray(
-            (np.clip(original, 0, 1) * 255).astype(np.uint8), mode='RGB'
+            (np.clip(original, 0, 1) * 255).astype(np.uint8), mode="RGB"
         )
 
         # Run assessment
@@ -651,8 +675,8 @@ class QualityFeedbackBridge:
         )
 
         return {
-            'perceptual': perceptual,
-            'material_fidelity': material_fidelity,
+            "perceptual": perceptual,
+            "material_fidelity": material_fidelity,
         }
 
     def _compute_hybrid_score(self, metrics: UnifiedQualityMetrics) -> float:
@@ -670,8 +694,8 @@ class QualityFeedbackBridge:
         heuristic_weight = 0.3
 
         return (
-            perceptual_weight * metrics.perceptual_composite +
-            heuristic_weight * metrics.heuristic_composite
+            perceptual_weight * metrics.perceptual_composite
+            + heuristic_weight * metrics.heuristic_composite
         )
 
     def _check_targets(self, metrics: UnifiedQualityMetrics) -> Dict[str, bool]:
@@ -679,34 +703,36 @@ class QualityFeedbackBridge:
         targets_met = {}
 
         # Heuristic targets
-        targets_met['heuristic_sharpness'] = (
+        targets_met["heuristic_sharpness"] = (
             metrics.heuristic.sharpness >= self.targets.sharpness_target
         )
-        targets_met['heuristic_contrast'] = (
+        targets_met["heuristic_contrast"] = (
             metrics.heuristic.contrast >= self.targets.contrast_target
         )
-        targets_met['heuristic_colorfulness'] = (
+        targets_met["heuristic_colorfulness"] = (
             metrics.heuristic.colorfulness >= self.targets.colorfulness_target
         )
-        targets_met['heuristic_exposure'] = (
+        targets_met["heuristic_exposure"] = (
             metrics.heuristic.exposure_balance >= self.targets.exposure_target
         )
 
         # Perceptual targets (if available)
         if metrics.lpips_available:
-            targets_met['perceptual_95th'] = (
-                metrics.perceptual.lpips_percentile >= self.targets.perceptual_percentile_target
+            targets_met["perceptual_95th"] = (
+                metrics.perceptual.lpips_percentile
+                >= self.targets.perceptual_percentile_target
             )
-            targets_met['lpips_excellent'] = (
+            targets_met["lpips_excellent"] = (
                 metrics.perceptual.lpips_score <= self.targets.lpips_threshold_excellent
             )
-            targets_met['ssim'] = (
+            targets_met["ssim"] = (
                 metrics.perceptual.ssim_score >= self.targets.ssim_target
             )
 
             # Material fidelity target
-            targets_met['material_98pct'] = (
-                metrics.material_fidelity.overall_fidelity >= self.targets.material_fidelity_target
+            targets_met["material_98pct"] = (
+                metrics.material_fidelity.overall_fidelity
+                >= self.targets.material_fidelity_target
             )
 
         return targets_met
@@ -730,6 +756,7 @@ class QualityFeedbackBridge:
 # Pipeline Integration Helpers
 # =============================================================================
 
+
 def create_quality_callback_for_pipeline(
     pipeline_config_name: str,
     rag_index_path: Optional[str] = None,
@@ -747,6 +774,7 @@ def create_quality_callback_for_pipeline(
     Returns:
         Callback function that receives UnifiedQualityMetrics
     """
+
     def callback(metrics: UnifiedQualityMetrics) -> None:
         # Log quality summary
         logger.info(
@@ -786,13 +814,13 @@ def index_quality_metrics_to_rag(
         index_dir.mkdir(parents=True, exist_ok=True)
 
         # Create document filename
-        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
         filename = f"quality_{metrics.image_id}_{timestamp}.json"
         filepath = index_dir / filename
 
         # Write document
         document = metrics.to_rag_document()
-        with open(filepath, 'w') as f:
+        with open(filepath, "w") as f:
             json.dump(document, f, indent=2)
 
         logger.debug(f"Indexed quality metrics to {filepath}")
@@ -815,6 +843,7 @@ def create_rag_indexing_callback(
     Returns:
         Callback function for RAG indexing
     """
+
     def callback(document: Dict) -> None:
         if index_path is None:
             logger.debug("RAG indexing disabled (no index path)")
@@ -824,12 +853,12 @@ def create_rag_indexing_callback(
             index_dir = Path(index_path)
             index_dir.mkdir(parents=True, exist_ok=True)
 
-            timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-            image_id = document.get('image_id', 'unknown')
+            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            image_id = document.get("image_id", "unknown")
             filename = f"unified_quality_{image_id}_{timestamp}.json"
             filepath = index_dir / filename
 
-            with open(filepath, 'w') as f:
+            with open(filepath, "w") as f:
                 json.dump(document, f, indent=2)
 
             logger.debug(f"RAG indexed: {filepath}")

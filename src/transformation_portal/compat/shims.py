@@ -20,7 +20,9 @@ class LegacyAPIShim:
         ...         return NewProcessor
     """
 
-    def __init__(self, old_name: str, new_location: str, removal_version: Optional[str] = None):
+    def __init__(
+        self, old_name: str, new_location: str, removal_version: Optional[str] = None
+    ):
         """Initialize shim.
 
         Args:
@@ -37,6 +39,7 @@ class LegacyAPIShim:
         """Show deprecation warning (only once)."""
         if not self._warned:
             import warnings
+
             msg = f"'{self._old_name}' is deprecated. Import from '{self._new_location}' instead"
             if self._removal_version:
                 msg += f". Will be removed in version {self._removal_version}"
@@ -64,7 +67,7 @@ def create_compatibility_wrapper(
     old_func: Callable,
     new_func: Callable,
     param_mapping: Optional[Dict[str, str]] = None,
-    removal_version: Optional[str] = None
+    removal_version: Optional[str] = None,
 ) -> Callable:
     """Create a compatibility wrapper that maps old parameters to new ones.
 
@@ -118,7 +121,9 @@ def create_compatibility_wrapper(
     return wrapper
 
 
-def create_alias(original: Any, alias_name: str, removal_version: Optional[str] = None) -> Any:
+def create_alias(
+    original: Any, alias_name: str, removal_version: Optional[str] = None
+) -> Any:
     """Create a deprecated alias for a function or class.
 
     Args:
@@ -140,6 +145,7 @@ def create_alias(original: Any, alias_name: str, removal_version: Optional[str] 
         class AliasedClass(original):
             def __init__(self, *args, **kwargs):
                 import warnings
+
                 msg = f"'{alias_name}' is deprecated. Use '{original.__name__}' instead"
                 if removal_version:
                     msg += f". Will be removed in version {removal_version}"
@@ -153,6 +159,7 @@ def create_alias(original: Any, alias_name: str, removal_version: Optional[str] 
         @functools.wraps(original)
         def aliased_function(*args, **kwargs):
             import warnings
+
             msg = f"'{alias_name}' is deprecated. Use '{original.__name__}' instead"
             if removal_version:
                 msg += f". Will be removed in version {removal_version}"

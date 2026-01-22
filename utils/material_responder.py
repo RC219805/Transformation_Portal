@@ -177,7 +177,11 @@ class MaterialResponder:
         return material_maps
 
     def enhance_surface(
-        self, image: np.ndarray, surface_type: SurfaceType, confidence_map: np.ndarray, depth_map: Optional[np.ndarray] = None
+        self,
+        image: np.ndarray,
+        surface_type: SurfaceType,
+        confidence_map: np.ndarray,
+        depth_map: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """
         Apply material-specific enhancement.
@@ -244,7 +248,10 @@ class MaterialResponder:
 
             emphasis = profile["texture_emphasis"]
 
-            blurred = np.stack([gaussian_filter(enhanced[:, :, c], sigma=1.0) for c in range(3)], axis=-1)
+            blurred = np.stack(
+                [gaussian_filter(enhanced[:, :, c], sigma=1.0) for c in range(3)],
+                axis=-1,
+            )
 
             detail = enhanced - blurred
             texture_enhanced = enhanced + detail * emphasis * effective_confidence[:, :, None]
@@ -253,7 +260,10 @@ class MaterialResponder:
         return np.clip(enhanced, 0, 1)
 
     def enhance(
-        self, image: np.ndarray, surfaces: Optional[List[str]] = None, depth_map: Optional[np.ndarray] = None
+        self,
+        image: np.ndarray,
+        surfaces: Optional[List[str]] = None,
+        depth_map: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """
         Apply material response to image.
@@ -297,7 +307,9 @@ class MaterialResponder:
 
 
 def create_material_responder(
-    strength: float = 0.75, surfaces: Optional[List[str]] = None, depth_aware: bool = True
+    strength: float = 0.75,
+    surfaces: Optional[List[str]] = None,
+    depth_aware: bool = True,
 ) -> MaterialResponder:
     """
     Convenience function to create material responder.

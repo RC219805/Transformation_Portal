@@ -94,11 +94,11 @@ class LRUCache:
         hit_rate = self.hits / total if total > 0 else 0
 
         return {
-            'size': len(self.cache),
-            'max_size': self.max_size,
-            'hits': self.hits,
-            'misses': self.misses,
-            'hit_rate': hit_rate,
+            "size": len(self.cache),
+            "max_size": self.max_size,
+            "hits": self.hits,
+            "misses": self.misses,
+            "hit_rate": hit_rate,
         }
 
     def __len__(self) -> int:
@@ -226,7 +226,9 @@ class DepthCache:
         # Convert to bytes
         if image.dtype != np.uint8:
             # Normalize to 0-255 for consistent hashing
-            image_norm = ((image - image.min()) / (image.max() - image.min() + 1e-8) * 255)
+            image_norm = (
+                (image - image.min()) / (image.max() - image.min() + 1e-8) * 255
+            )
             image_bytes = image_norm.astype(np.uint8).tobytes()
         else:
             image_bytes = image.tobytes()
@@ -258,12 +260,12 @@ class DepthCache:
 
             # Convert to FP16 for space efficiency
             result_fp16 = result.copy()
-            if 'depth' in result_fp16:
-                result_fp16['depth'] = result_fp16['depth'].astype(np.float16)
-            if 'depth_raw' in result_fp16:
-                result_fp16['depth_raw'] = result_fp16['depth_raw'].astype(np.float16)
+            if "depth" in result_fp16:
+                result_fp16["depth"] = result_fp16["depth"].astype(np.float16)
+            if "depth_raw" in result_fp16:
+                result_fp16["depth_raw"] = result_fp16["depth_raw"].astype(np.float16)
 
-            with open(cache_file, 'wb') as f:
+            with open(cache_file, "wb") as f:
                 pickle.dump(result_fp16, f, protocol=pickle.HIGHEST_PROTOCOL)
 
             logger.debug(f"Saved to disk cache: {key[:8]}")
@@ -279,14 +281,14 @@ class DepthCache:
             if not cache_file.exists():
                 return None
 
-            with open(cache_file, 'rb') as f:
+            with open(cache_file, "rb") as f:
                 result = pickle.load(f)  # nosec B301 - loading self-generated cache
 
             # Convert back to FP32
-            if 'depth' in result:
-                result['depth'] = result['depth'].astype(np.float32)
-            if 'depth_raw' in result:
-                result['depth_raw'] = result['depth_raw'].astype(np.float32)
+            if "depth" in result:
+                result["depth"] = result["depth"].astype(np.float32)
+            if "depth_raw" in result:
+                result["depth_raw"] = result["depth_raw"].astype(np.float32)
 
             return result
 
@@ -321,10 +323,12 @@ class DepthCache:
                 f.stat().st_size for f in self.cache_dir.glob("*.pkl")
             ) / (1024 * 1024)
 
-            stats.update({
-                'disk_entries': disk_size,
-                'disk_size_mb': disk_size_mb,
-            })
+            stats.update(
+                {
+                    "disk_entries": disk_size,
+                    "disk_size_mb": disk_size_mb,
+                }
+            )
 
         return stats
 

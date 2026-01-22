@@ -33,7 +33,10 @@ def setup_logging(log_file: Path) -> logging.Logger:
     ch.setLevel(logging.INFO)
 
     # Formatter
-    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
     fh.setFormatter(formatter)
     ch.setFormatter(formatter)
 

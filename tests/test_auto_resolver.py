@@ -189,7 +189,11 @@ class TestAutoFixer:
 
     def test_invalid_package_rejected_in_generate_commands(self, tmp_path):
         """Test that invalid packages are rejected in command generation."""
-        from security.auto_resolver import AutoFixer, ResolutionPattern, ResolutionStrategy
+        from security.auto_resolver import (
+            AutoFixer,
+            ResolutionPattern,
+            ResolutionStrategy,
+        )
 
         fixer = AutoFixer(tmp_path)
 

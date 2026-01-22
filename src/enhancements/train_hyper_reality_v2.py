@@ -670,11 +670,21 @@ class EnhancedHyperRealityTrainer:
 
         for name, model in self.models.items():
             lr_scale = self.config.model_lr_scales.get(name, 1.0)
-            param_groups.append({"params": model.parameters(), "lr": self.config.learning_rate * lr_scale, "name": name})
+            param_groups.append(
+                {
+                    "params": model.parameters(),
+                    "lr": self.config.learning_rate * lr_scale,
+                    "name": name,
+                }
+            )
 
         # Add depth estimator
         param_groups.append(
-            {"params": self.depth_estimator.parameters(), "lr": self.config.learning_rate * 0.5, "name": "depth"}
+            {
+                "params": self.depth_estimator.parameters(),
+                "lr": self.config.learning_rate * 0.5,
+                "name": "depth",
+            }
         )
 
         self.optimizer = torch.optim.AdamW(param_groups, weight_decay=self.config.weight_decay)
@@ -744,7 +754,10 @@ class EnhancedHyperRealityTrainer:
         return enhanced, aux_outputs
 
     def _compute_loss(
-        self, enhanced: torch.Tensor, target: torch.Tensor, aux_outputs: Dict[str, torch.Tensor]
+        self,
+        enhanced: torch.Tensor,
+        target: torch.Tensor,
+        aux_outputs: Dict[str, torch.Tensor],
     ) -> Tuple[torch.Tensor, Dict[str, float]]:
         """Compute combined loss with all components"""
         losses = {}
@@ -867,7 +880,10 @@ class EnhancedHyperRealityTrainer:
             if self.config.multi_scale:
                 scale = np.random.choice(self.config.scales)
                 if scale != 1.0:
-                    new_size = (int(low_img.shape[2] * scale), int(low_img.shape[3] * scale))
+                    new_size = (
+                        int(low_img.shape[2] * scale),
+                        int(low_img.shape[3] * scale),
+                    )
                     low_img = F.interpolate(low_img, size=new_size, mode="bilinear", align_corners=False)
                     high_img = F.interpolate(high_img, size=new_size, mode="bilinear", align_corners=False)
 
@@ -965,13 +981,28 @@ class EnhancedHyperRealityTrainer:
 
 def main():
     parser = argparse.ArgumentParser(description="Enhanced Training for Hyper-Reality Models v2.0")
-    parser.add_argument("--data-dir", type=str, default="data/training", help="Directory for training data")
+    parser.add_argument(
+        "--data-dir",
+        type=str,
+        default="data/training",
+        help="Directory for training data",
+    )
     parser.add_argument("--generate-data", action="store_true", help="Generate synthetic training data")
-    parser.add_argument("--num-pairs", type=int, default=1000, help="Number of synthetic pairs to generate")
+    parser.add_argument(
+        "--num-pairs",
+        type=int,
+        default=1000,
+        help="Number of synthetic pairs to generate",
+    )
     parser.add_argument("--epochs", type=int, default=50, help="Number of training epochs")
     parser.add_argument("--batch-size", type=int, default=4, help="Training batch size")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
-    parser.add_argument("--checkpoint-dir", type=str, default="weights/hyper_reality", help="Directory for checkpoints")
+    parser.add_argument(
+        "--checkpoint-dir",
+        type=str,
+        default="weights/hyper_reality",
+        help="Directory for checkpoints",
+    )
     parser.add_argument("--progressive", action="store_true", help="Use progressive training")
     parser.add_argument("--multi-scale", action="store_true", help="Use multi-scale training")
 
@@ -1008,9 +1039,21 @@ def main():
     train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
 
     # Create dataloaders
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=4,
+        pin_memory=True,
+    )
 
-    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4, pin_memory=True)
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=4,
+        pin_memory=True,
+    )
 
     # Create training config
     config = EnhancedTrainingConfig(

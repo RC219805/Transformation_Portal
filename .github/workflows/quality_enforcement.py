@@ -88,7 +88,15 @@ def check_dataclass_errors():
     issues = []
 
     for py_file in Path(".").rglob("*.py"):
-        if any(excl in str(py_file) for excl in ["deprecated", "src/transformation_portal", ".venv", ".backup_local"]):
+        if any(
+            excl in str(py_file)
+            for excl in [
+                "deprecated",
+                "src/transformation_portal",
+                ".venv",
+                ".backup_local",
+            ]
+        ):
             continue
 
         try:
@@ -120,7 +128,15 @@ def check_trailing_whitespace():
     issues = 0
 
     for py_file in Path(".").rglob("*.py"):
-        if any(excl in str(py_file) for excl in ["deprecated", "src/transformation_portal", ".venv", ".backup_local"]):
+        if any(
+            excl in str(py_file)
+            for excl in [
+                "deprecated",
+                "src/transformation_portal",
+                ".venv",
+                ".backup_local",
+            ]
+        ):
             continue
 
         try:

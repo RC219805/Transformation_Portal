@@ -27,19 +27,31 @@ def sample_events():
             id=str(uuid.uuid4()),
             type="image.enhanced",
             timestamp=time.time(),
-            data={"function": "enhance_image", "args": ["image1.jpg"], "kwargs": {"preset": "golden_hour"}},
+            data={
+                "function": "enhance_image",
+                "args": ["image1.jpg"],
+                "kwargs": {"preset": "golden_hour"},
+            },
         ),
         Event(
             id=str(uuid.uuid4()),
             type="depth.estimated",
             timestamp=time.time(),
-            data={"function": "estimate_depth", "args": ["image2.jpg"], "kwargs": {"model": "midas"}},
+            data={
+                "function": "estimate_depth",
+                "args": ["image2.jpg"],
+                "kwargs": {"model": "midas"},
+            },
         ),
         Event(
             id=str(uuid.uuid4()),
             type="image.enhanced",
             timestamp=time.time(),
-            data={"function": "enhance_image", "args": ["image3.jpg"], "kwargs": {"preset": "sunset"}},
+            data={
+                "function": "enhance_image",
+                "args": ["image3.jpg"],
+                "kwargs": {"preset": "sunset"},
+            },
         ),
     ]
 
@@ -235,7 +247,12 @@ class TestEventReplayer:
 
         replayer.registry.register("test.event", failing_handler)
 
-        event = Event(id=str(uuid.uuid4()), type="test.event", timestamp=time.time(), data={"test": "data"})
+        event = Event(
+            id=str(uuid.uuid4()),
+            type="test.event",
+            timestamp=time.time(),
+            data={"test": "data"},
+        )
 
         results = replayer.replay([event], dry_run=False)
 

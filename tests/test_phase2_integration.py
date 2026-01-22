@@ -105,7 +105,10 @@ class TestParallelOrchestrator:
         mock_monitor.get_metrics.return_value = mock_metrics
 
         orchestrator = ParallelOrchestrator(
-            max_workers=4, enable_parallel=True, memory_budget_per_worker=25.0, resource_monitor=mock_monitor
+            max_workers=4,
+            enable_parallel=True,
+            memory_budget_per_worker=25.0,
+            resource_monitor=mock_monitor,
         )
 
         # Request 3 workers (75GB needed, 50GB available → recommend 2)

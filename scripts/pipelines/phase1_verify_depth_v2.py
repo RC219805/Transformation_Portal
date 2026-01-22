@@ -69,7 +69,11 @@ def test_depth_estimation(processor, model, test_image_path=None):
         # Find a test image
         if test_image_path is None:
             # Look for 750 Picacho images
-            test_dirs = ["input_images/750_picacho", "data/sample_images", "input_images"]
+            test_dirs = [
+                "input_images/750_picacho",
+                "data/sample_images",
+                "input_images",
+            ]
 
             for test_dir in test_dirs:
                 if Path(test_dir).exists():

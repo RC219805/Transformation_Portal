@@ -134,7 +134,10 @@ class ParallelProcessor:
             self.gpu_ids = []
 
     def process_batch(
-        self, items: List[Any], process_fn: Callable, progress_callback: Optional[Callable[[int, int], None]] = None
+        self,
+        items: List[Any],
+        process_fn: Callable,
+        progress_callback: Optional[Callable[[int, int], None]] = None,
     ) -> List[Tuple[Any, Optional[Exception]]]:
         """
         Process batch of items in parallel.
@@ -168,7 +171,10 @@ class ParallelProcessor:
         return results
 
     def _process_sequential(
-        self, items: List[Any], process_fn: Callable, progress_callback: Optional[Callable]
+        self,
+        items: List[Any],
+        process_fn: Callable,
+        progress_callback: Optional[Callable],
     ) -> List[Tuple[Any, Optional[Exception]]]:
         """Process items sequentially (fallback mode)"""
         results = []
@@ -187,7 +193,10 @@ class ParallelProcessor:
         return results
 
     def _process_cpu(
-        self, items: List[Any], process_fn: Callable, progress_callback: Optional[Callable]
+        self,
+        items: List[Any],
+        process_fn: Callable,
+        progress_callback: Optional[Callable],
     ) -> List[Tuple[Any, Optional[Exception]]]:
         """Process items using CPU multiprocessing"""
         results = [None] * len(items)
@@ -226,7 +235,10 @@ class ParallelProcessor:
         return results
 
     def _process_gpu(
-        self, items: List[Any], process_fn: Callable, progress_callback: Optional[Callable]
+        self,
+        items: List[Any],
+        process_fn: Callable,
+        progress_callback: Optional[Callable],
     ) -> List[Tuple[Any, Optional[Exception]]]:
         """Process items using GPU workers with load balancing"""
         if not TORCH_AVAILABLE:
@@ -243,7 +255,10 @@ class ParallelProcessor:
         workers = []
         for worker_id in range(self.num_workers):
             gpu_id = self.gpu_ids[worker_id % len(self.gpu_ids)] if self.gpu_ids else None
-            worker = threading.Thread(target=self._gpu_worker, args=(worker_id, gpu_id, task_queue, result_queue, process_fn))
+            worker = threading.Thread(
+                target=self._gpu_worker,
+                args=(worker_id, gpu_id, task_queue, result_queue, process_fn),
+            )
             worker.daemon = True
             worker.start()
             workers.append(worker)
@@ -282,7 +297,12 @@ class ParallelProcessor:
         return results
 
     def _gpu_worker(
-        self, worker_id: int, gpu_id: Optional[int], task_queue: queue.Queue, result_queue: queue.Queue, process_fn: Callable
+        self,
+        worker_id: int,
+        gpu_id: Optional[int],
+        task_queue: queue.Queue,
+        result_queue: queue.Queue,
+        process_fn: Callable,
     ):
         """Worker thread for GPU processing"""
         if gpu_id is not None and TORCH_AVAILABLE:
@@ -330,7 +350,11 @@ class ParallelProcessor:
 
 
 def process_images_parallel(
-    image_paths: List[Path], process_fn: Callable, num_workers: int = -1, use_gpu: bool = True, progress: bool = True
+    image_paths: List[Path],
+    process_fn: Callable,
+    num_workers: int = -1,
+    use_gpu: bool = True,
+    progress: bool = True,
 ) -> List[Tuple[Any, Optional[Exception]]]:
     """
     Convenience function for parallel image processing.
@@ -351,7 +375,10 @@ def process_images_parallel(
 
     def progress_callback(completed, total):
         if progress:
-            print(f"\rProcessed {completed}/{total} images ({completed / total * 100:.1f}%)", end="")
+            print(
+                f"\rProcessed {completed}/{total} images ({completed / total * 100:.1f}%)",
+                end="",
+            )
 
     results = processor.process_batch(image_paths, process_fn, progress_callback if progress else None)
 

@@ -36,13 +36,30 @@ def sample_ci_results():
     return {
         "run_id": "test_run_001",
         "timestamp": "2025-11-30T12:00:00Z",
-        "summary": {"total_tests": 100, "passed": 90, "skipped": 10, "failed": 0, "errors": 0, "duration_seconds": 5.5},
+        "summary": {
+            "total_tests": 100,
+            "passed": 90,
+            "skipped": 10,
+            "failed": 0,
+            "errors": 0,
+            "duration_seconds": 5.5,
+        },
         "codeql_results": {"alerts": 0, "queries_run": 20, "modules_extracted": 50},
         "test_categories": {
-            "unit_tests": {"test_module_a.py": {"passed": 30, "skipped": 5}, "test_module_b.py": {"passed": 25, "skipped": 0}},
+            "unit_tests": {
+                "test_module_a.py": {"passed": 30, "skipped": 5},
+                "test_module_b.py": {"passed": 25, "skipped": 0},
+            },
             "integration_tests": {"test_integration.py": {"passed": 35, "skipped": 5}},
         },
-        "phase2_files_validated": ["file1.py", "file2.py", "file3.py", "file4.py", "file5.py", "file6.py"],
+        "phase2_files_validated": [
+            "file1.py",
+            "file2.py",
+            "file3.py",
+            "file4.py",
+            "file5.py",
+            "file6.py",
+        ],
         "extraction_warnings": ["Warning 1", "Warning 2"],
     }
 
@@ -53,7 +70,10 @@ class TestTestResultEntry:
     def test_create_entry(self):
         """Test creating a test result entry."""
         entry = TestResultEntry(
-            test_id="test_module.py::test_func", test_file="test_module.py", test_name="test_func", status="passed"
+            test_id="test_module.py::test_func",
+            test_file="test_module.py",
+            test_name="test_func",
+            status="passed",
         )
         assert entry.test_id == "test_module.py::test_func"
         assert entry.status == "passed"
@@ -78,7 +98,11 @@ class TestQualityMetricEntry:
     def test_create_metric(self):
         """Test creating a quality metric entry."""
         metric = QualityMetricEntry(
-            metric_id="test_pass_rate", metric_type="test_health", value=90.0, unit="percent", source="CI Run #1"
+            metric_id="test_pass_rate",
+            metric_type="test_health",
+            value=90.0,
+            unit="percent",
+            source="CI Run #1",
         )
         assert metric.metric_id == "test_pass_rate"
         assert metric.value == 90.0

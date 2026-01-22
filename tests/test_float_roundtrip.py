@@ -38,7 +38,14 @@ def test_save_image_retains_float_tonal_range(tmp_path):
 
     float_data = float_to_dtype_array(rgb, np.float32, None)
     output_path = tmp_path / "float_image.tif"
-    save_image(output_path, float_data, np.dtype(np.float32), metadata=None, icc_profile=None, compression="deflate")
+    save_image(
+        output_path,
+        float_data,
+        np.dtype(np.float32),
+        metadata=None,
+        icc_profile=None,
+        compression="deflate",
+    )
 
     if tifffile is not None:
         saved_array = tifffile.imread(output_path)

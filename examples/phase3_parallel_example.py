@@ -11,7 +11,12 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from utils.parallel_processor import ParallelProcessor, WorkerConfig, ProcessingMode, process_images_parallel
+from utils.parallel_processor import (
+    ParallelProcessor,
+    WorkerConfig,
+    ProcessingMode,
+    process_images_parallel,
+)
 
 
 def example_1_basic_parallel():
@@ -44,7 +49,11 @@ def example_2_custom_config():
 
     # Configure for specific hardware
     config = WorkerConfig(
-        mode=ProcessingMode.MULTI_CPU, num_workers=4, memory_limit_gb=8.0, batch_size=2, timeout_seconds=300.0
+        mode=ProcessingMode.MULTI_CPU,
+        num_workers=4,
+        memory_limit_gb=8.0,
+        batch_size=2,
+        timeout_seconds=300.0,
     )
 
     processor = ParallelProcessor(config)
@@ -194,7 +203,12 @@ def example_6_progress_tracking():
     processor = ParallelProcessor()
     items = list(range(50))
 
-    progress_data = {"completed": 0, "total": len(items), "start_time": time.time(), "last_update": time.time()}
+    progress_data = {
+        "completed": 0,
+        "total": len(items),
+        "start_time": time.time(),
+        "last_update": time.time(),
+    }
 
     def progress_callback(completed, total):
         """Custom progress callback"""
@@ -208,7 +222,10 @@ def example_6_progress_tracking():
             percent = completed / total * 100
             rate = completed / max(elapsed_since_start, min_elapsed)
 
-            print(f"\rProgress: {completed}/{total} ({percent:.1f}%) - {rate:.1f} items/s", end="")
+            print(
+                f"\rProgress: {completed}/{total} ({percent:.1f}%) - {rate:.1f} items/s",
+                end="",
+            )
             progress_data["last_update"] = now
 
     def slow_task(x):

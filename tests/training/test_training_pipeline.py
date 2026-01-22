@@ -31,7 +31,10 @@ except ImportError:
     TORCH_AVAILABLE = False
 
 # Skip all tests if PyTorch is not available
-pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="PyTorch not installed - training tests require ML dependencies")
+pytestmark = pytest.mark.skipif(
+    not TORCH_AVAILABLE,
+    reason="PyTorch not installed - training tests require ML dependencies",
+)
 
 
 class TestTrainingConfig:
@@ -202,7 +205,10 @@ class TestDataLoading:
 
     def test_dataset_loading(self, sample_data_dir):
         """Test ArchitecturalDepthDataset loads correctly."""
-        from src.training.depth_dataset import ArchitecturalDepthDataset, DepthDataConfig
+        from src.training.depth_dataset import (
+            ArchitecturalDepthDataset,
+            DepthDataConfig,
+        )
 
         config = DepthDataConfig(
             train_dir=str(Path(sample_data_dir) / "train"),
@@ -224,7 +230,10 @@ class TestDataLoading:
 
     def test_dataset_stats(self, sample_data_dir):
         """Test dataset statistics computation."""
-        from src.training.depth_dataset import ArchitecturalDepthDataset, DepthDataConfig
+        from src.training.depth_dataset import (
+            ArchitecturalDepthDataset,
+            DepthDataConfig,
+        )
 
         config = DepthDataConfig(
             train_dir=str(Path(sample_data_dir) / "train"),

@@ -14,7 +14,10 @@ from lux_depth_v3.model_cache import ModelCacheManager
 def main():
     parser = argparse.ArgumentParser(description="Pre-cache DA3 models for offline use")
     parser.add_argument(
-        "--set", default="production", choices=["essential", "production", "benchmark", "all"], help="Model set to download"
+        "--set",
+        default="production",
+        choices=["essential", "production", "benchmark", "all"],
+        help="Model set to download",
     )
     parser.add_argument("--cache-dir", type=Path, help="Custom cache directory")
     parser.add_argument("--force", action="store_true", help="Force re-download")

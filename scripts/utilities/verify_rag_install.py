@@ -211,7 +211,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo", default=REPO_DEFAULT, help="Repository root path")
     parser.add_argument(
-        "--fix-imports", action="store_true", help="Create 'github'->'.github' symlink and missing __init__.py files if needed"
+        "--fix-imports",
+        action="store_true",
+        help="Create 'github'->'.github' symlink and missing __init__.py files if needed",
     )
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()

@@ -210,7 +210,10 @@ def test_guided_filter_only(rgb: np.ndarray) -> np.ndarray:
 
 def test_edge_snap_only(rgb: np.ndarray) -> np.ndarray:
     """Test 5: Baseline + edge snapping only (AND-gated)."""
-    from lux_depth_v2.depth_refinement import ProductionDepthRefiner, DepthRefinementConfig
+    from lux_depth_v2.depth_refinement import (
+        ProductionDepthRefiner,
+        DepthRefinementConfig,
+    )
 
     logger.info("\n" + "=" * 60)
     logger.info("TEST 5: Edge snapping only (AND-gated, on baseline)")
@@ -231,7 +234,10 @@ def test_edge_snap_only(rgb: np.ndarray) -> np.ndarray:
 
 def test_clahe_only(rgb: np.ndarray) -> np.ndarray:
     """Test 6: Baseline + CLAHE only (conservative params)."""
-    from lux_depth_v2.depth_refinement import ProductionDepthRefiner, DepthRefinementConfig
+    from lux_depth_v2.depth_refinement import (
+        ProductionDepthRefiner,
+        DepthRefinementConfig,
+    )
 
     logger.info("\n" + "=" * 60)
     logger.info("TEST 6: CLAHE only (conservative, on baseline)")

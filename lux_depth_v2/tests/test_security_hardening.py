@@ -72,7 +72,11 @@ class TestServiceModeSecurity:
         service_src = (Path(__file__).parent.parent / "service.py").read_text()
 
         # Extract the validate_filepath function body
-        match = re.search(r"def validate_filepath\(.*?\):.*?\n((?:[ \t]+.+\n)*)", service_src, re.MULTILINE | re.DOTALL)
+        match = re.search(
+            r"def validate_filepath\(.*?\):.*?\n((?:[ \t]+.+\n)*)",
+            service_src,
+            re.MULTILINE | re.DOTALL,
+        )
         assert match, "validate_filepath function not found in service.py"
         func_body = match.group(0)
 

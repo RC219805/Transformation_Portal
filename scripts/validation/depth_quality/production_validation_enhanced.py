@@ -46,8 +46,14 @@ import psutil
 from PIL import Image
 
 try:
-    from high_fidelity_depth.depth_estimator import HighFidelityDepthEstimator, DepthConfig
-    from high_fidelity_depth.quality_metrics import validate_depth_quality, save_metrics_atomic
+    from high_fidelity_depth.depth_estimator import (
+        HighFidelityDepthEstimator,
+        DepthConfig,
+    )
+    from high_fidelity_depth.quality_metrics import (
+        validate_depth_quality,
+        save_metrics_atomic,
+    )
     from high_fidelity_depth.comprehensive_validation import validate_seams
 
     HFD_AVAILABLE = True
@@ -57,7 +63,10 @@ except ImportError:
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("production_validation_enhanced.log"), logging.StreamHandler(sys.stdout)],
+    handlers=[
+        logging.FileHandler("production_validation_enhanced.log"),
+        logging.StreamHandler(sys.stdout),
+    ],
 )
 logger = logging.getLogger(__name__)
 
@@ -111,7 +120,11 @@ def get_memory_usage() -> Dict[str, float]:
     """Get current memory usage in MB."""
     process = psutil.Process()
     mem_info = process.memory_info()
-    return {"rss_mb": mem_info.rss / 1024**2, "vms_mb": mem_info.vms / 1024**2, "percent": process.memory_percent()}
+    return {
+        "rss_mb": mem_info.rss / 1024**2,
+        "vms_mb": mem_info.vms / 1024**2,
+        "percent": process.memory_percent(),
+    }
 
 
 def detect_edges_float(image: np.ndarray, low_threshold: float = 0.1, high_threshold: float = 0.2) -> np.ndarray:
@@ -541,7 +554,12 @@ def main():
     logger.info(f"Found {len(image_paths)} images to process")
 
     # Create config
-    config = DepthConfig(tile_size=args.tile_size, overlap=args.overlap, reconcile_scales=True, validate_seams=True)
+    config = DepthConfig(
+        tile_size=args.tile_size,
+        overlap=args.overlap,
+        reconcile_scales=True,
+        validate_seams=True,
+    )
 
     # Process all images
     results = []

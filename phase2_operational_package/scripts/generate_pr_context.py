@@ -29,7 +29,10 @@ def get_changed_files_from_git() -> List[str]:
     """Get changed files from git diff against main branch."""
     try:
         result = subprocess.run(
-            ["git", "diff", "--name-only", "origin/main...HEAD"], capture_output=True, text=True, check=True
+            ["git", "diff", "--name-only", "origin/main...HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
         )
         files = [f.strip() for f in result.stdout.strip().split("\n") if f.strip()]
         return [f for f in files if f.endswith(".py")]
@@ -60,7 +63,12 @@ def load_knowledge_base(cache_dir: Path) -> Dict:
 
 def analyze_changed_files(changed_files: List[str], knowledge: Dict) -> Dict:
     """Analyze changed files against knowledge base."""
-    analysis = {"affected_tests": set(), "failure_history": {}, "quality_trend": None, "recommendations": []}
+    analysis = {
+        "affected_tests": set(),
+        "failure_history": {},
+        "quality_trend": None,
+        "recommendations": [],
+    }
 
     test_results = knowledge.get("test_results", [])
     quality_metrics = knowledge.get("quality_metrics", [])
@@ -79,7 +87,10 @@ def analyze_changed_files(changed_files: List[str], knowledge: Dict) -> Dict:
                     if test_id not in analysis["failure_history"]:
                         analysis["failure_history"][test_id] = []
                     analysis["failure_history"][test_id].append(
-                        {"timestamp": result.get("timestamp", ""), "message": result.get("error_message", "")}
+                        {
+                            "timestamp": result.get("timestamp", ""),
+                            "message": result.get("error_message", ""),
+                        }
                     )
 
     # Analyze quality trends
@@ -94,7 +105,7 @@ def analyze_changed_files(changed_files: List[str], knowledge: Dict) -> Dict:
             "first": first_rate,
             "last": last_rate,
             "change": trend,
-            "direction": "improving" if trend > 0 else "declining" if trend < 0 else "stable",
+            "direction": ("improving" if trend > 0 else "declining" if trend < 0 else "stable"),
         }
 
     # Generate recommendations
@@ -187,7 +198,11 @@ def main():
     parser.add_argument("--auto", action="store_true", help="Auto-detect changed files from git")
     parser.add_argument("--cache-dir", type=Path, default=Path(".rag_cache"), help="RAG cache directory")
     parser.add_argument("--output", type=Path, help="Output file for markdown (default: stdout)")
-    parser.add_argument("--json", action="store_true", help="Output analysis as JSON instead of markdown")
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output analysis as JSON instead of markdown",
+    )
 
     args = parser.parse_args()
 

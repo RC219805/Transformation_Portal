@@ -24,7 +24,9 @@ def stub_pipeline(monkeypatch):
     return stub
 
 
-def test_render_coastal_estate_uses_material_response_defaults(stub_pipeline: StubPipeline):
+def test_render_coastal_estate_uses_material_response_defaults(
+    stub_pipeline: StubPipeline,
+):
     cer.render_coastal_estate("coastal_estate.jpg")
 
     assert stub_pipeline.calls == [
@@ -79,7 +81,9 @@ def test_render_coastal_estate_allows_overrides(stub_pipeline: StubPipeline):
     ]
 
 
-def test_render_coastal_estate_rejects_conflicting_extra_options(stub_pipeline: StubPipeline):
+def test_render_coastal_estate_rejects_conflicting_extra_options(
+    stub_pipeline: StubPipeline,
+):
     with pytest.raises(ValueError) as excinfo:
         cer.render_coastal_estate("estate.tif", extra_options={"input": "other"})
 

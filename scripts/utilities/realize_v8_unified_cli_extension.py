@@ -40,7 +40,15 @@ import numpy as np
 from PIL import Image
 
 # Your existing infrastructure
-from scripts.utilities.realize_v8_unified import PRESETS, _error, _info, _open_any, _save_with_meta, _warn, enhance
+from scripts.utilities.realize_v8_unified import (
+    PRESETS,
+    _error,
+    _info,
+    _open_any,
+    _save_with_meta,
+    _warn,
+    enhance,
+)
 
 # Your depth pipeline (optimized for M4 Max)
 try:
@@ -53,7 +61,9 @@ except ImportError:
 
 # Optional: Your Material Response
 try:
-    from material_response import MaterialResponse  # noqa: F401 - used for availability check
+    from material_response import (
+        MaterialResponse,
+    )  # noqa: F401 - used for availability check
 
     _HAVE_MR = True
 except ImportError:
@@ -227,7 +237,10 @@ def apply_depth_fog(
 
 
 def apply_depth_of_field(
-    img: np.ndarray, depth: np.ndarray, focus_depth: float = 0.35, blur_strength: float = 6.0
+    img: np.ndarray,
+    depth: np.ndarray,
+    focus_depth: float = 0.35,
+    blur_strength: float = 6.0,
 ) -> np.ndarray:
     """Simple depth of field effect."""
     from scipy.ndimage import gaussian_filter
@@ -338,7 +351,10 @@ def apply_lut_with_depth(img: np.ndarray, lut_path: Path, depth: Optional[np.nda
 
 
 def apply_color_grade_zones(
-    img: np.ndarray, depth: np.ndarray, near_color: tuple = (1.0, 1.0, 1.0), far_color: tuple = (1.0, 1.0, 1.0)
+    img: np.ndarray,
+    depth: np.ndarray,
+    near_color: tuple = (1.0, 1.0, 1.0),
+    far_color: tuple = (1.0, 1.0, 1.0),
 ) -> np.ndarray:
     """Apply color grading based on depth zones."""
     near_array = np.array(near_color, dtype=np.float32)
@@ -442,18 +458,29 @@ def enhance_with_vfx(
 
     # Bloom
     if vfx_cfg.get("bloom_intensity", 0) > 0:
-        result = apply_depth_bloom(result, depth, intensity=vfx_cfg["bloom_intensity"], radius=vfx_cfg.get("bloom_radius", 15))
+        result = apply_depth_bloom(
+            result,
+            depth,
+            intensity=vfx_cfg["bloom_intensity"],
+            radius=vfx_cfg.get("bloom_radius", 15),
+        )
 
     # Fog
     if vfx_cfg.get("fog_density", 0) > 0:
         result = apply_depth_fog(
-            result, depth, fog_color=vfx_cfg.get("fog_color", (0.8, 0.85, 0.9)), density=vfx_cfg["fog_density"]
+            result,
+            depth,
+            fog_color=vfx_cfg.get("fog_color", (0.8, 0.85, 0.9)),
+            density=vfx_cfg["fog_density"],
         )
 
     # Depth of Field
     if vfx_cfg.get("dof_enabled", False):
         result = apply_depth_of_field(
-            result, depth, focus_depth=vfx_cfg.get("dof_focus", 0.35), blur_strength=vfx_cfg.get("dof_blur", 6.0)
+            result,
+            depth,
+            focus_depth=vfx_cfg.get("dof_focus", 0.35),
+            blur_strength=vfx_cfg.get("dof_blur", 6.0),
         )
 
     # Color grading zones
@@ -477,7 +504,12 @@ def enhance_with_vfx(
     # Create final image
     final_img = Image.fromarray((np.clip(result, 0, 1) * 255).astype(np.uint8))
 
-    output = {"image": final_img, "array": result, "depth": depth if save_depth else None, "metrics": base_metrics}
+    output = {
+        "image": final_img,
+        "array": result,
+        "depth": depth if save_depth else None,
+        "metrics": base_metrics,
+    }
 
     return output
 
@@ -486,7 +518,12 @@ def enhance_with_vfx(
 
 
 def _process_single_image_vfx(
-    img_path: Path, output_dir: Path, base_preset: str, vfx_preset: str, material_response: bool, out_bitdepth: int
+    img_path: Path,
+    output_dir: Path,
+    base_preset: str,
+    vfx_preset: str,
+    material_response: bool,
+    out_bitdepth: int,
 ) -> Tuple[Path, bool, Optional[int], Optional[str]]:
     """
     Process a single image with VFX (helper for parallel processing).
@@ -511,12 +548,22 @@ def _process_single_image_vfx(
 
         # Process with VFX
         result = enhance_with_vfx(
-            img, base_preset=base_preset, vfx_preset=vfx_preset, material_response=material_response, save_depth=False
+            img,
+            base_preset=base_preset,
+            vfx_preset=vfx_preset,
+            material_response=material_response,
+            save_depth=False,
         )
 
         # Save
         output_path = output_dir / f"{img_path.stem}_{vfx_preset}{img_path.suffix}"
-        _save_with_meta(result["image"], result["array"], output_path, meta, out_bitdepth=out_bitdepth)
+        _save_with_meta(
+            result["image"],
+            result["array"],
+            output_path,
+            meta,
+            out_bitdepth=out_bitdepth,
+        )
 
         return (img_path, True, result["metrics"]["total_ms"], None)
 
@@ -579,7 +626,14 @@ def batch_process_vfx(
         for i, img_path in enumerate(image_files, 1):
             _info(f"[{i}/{total_images}] Processing {img_path.name}")
 
-            result = _process_single_image_vfx(img_path, output_dir, base_preset, vfx_preset, material_response, out_bitdepth)
+            result = _process_single_image_vfx(
+                img_path,
+                output_dir,
+                base_preset,
+                vfx_preset,
+                material_response,
+                out_bitdepth,
+            )
             results.append(result)
 
             path, success, proc_time, error = result
@@ -636,7 +690,12 @@ def batch_process_vfx(
             for img_path in image_files:
                 if img_path not in [r[0] for r in results]:
                     result = _process_single_image_vfx(
-                        img_path, output_dir, base_preset, vfx_preset, material_response, out_bitdepth
+                        img_path,
+                        output_dir,
+                        base_preset,
+                        vfx_preset,
+                        material_response,
+                        out_bitdepth,
                     )
                     results.append(result)
 
@@ -697,7 +756,13 @@ def handle_enhance_vfx(args):
     )
 
     # Save
-    _save_with_meta(result["image"], result["array"], args.output, meta, out_bitdepth=args.out_bitdepth)
+    _save_with_meta(
+        result["image"],
+        result["array"],
+        args.output,
+        meta,
+        out_bitdepth=args.out_bitdepth,
+    )
 
     # Save depth if requested
     if result["depth"] is not None:

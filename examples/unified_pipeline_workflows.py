@@ -18,7 +18,11 @@ logger = logging.getLogger(__name__)
 
 def example_1_single_photo_realistic():
     """Example 1: Single image with maximum quality (photo-realistic)."""
-    from unified_luxury_pipeline import UnifiedLuxuryPipeline, UnifiedPipelineConfig, PipelinePreset
+    from unified_luxury_pipeline import (
+        UnifiedLuxuryPipeline,
+        UnifiedPipelineConfig,
+        PipelinePreset,
+    )
 
     print("\n" + "=" * 70)
     print("Example 1: Photo-Realistic Single Image Processing")
@@ -43,7 +47,11 @@ def example_1_single_photo_realistic():
 
 def example_2_architectural_batch():
     """Example 2: Batch process architectural renders."""
-    from unified_luxury_pipeline import UnifiedLuxuryPipeline, UnifiedPipelineConfig, PipelinePreset
+    from unified_luxury_pipeline import (
+        UnifiedLuxuryPipeline,
+        UnifiedPipelineConfig,
+        PipelinePreset,
+    )
 
     print("\n" + "=" * 70)
     print("Example 2: Architectural Batch Processing")
@@ -82,7 +90,12 @@ def example_2_architectural_batch():
 
 def example_3_signature_estate_showcase():
     """Example 3: Luxury estate showcase with full enhancement suite."""
-    from unified_luxury_pipeline import UnifiedLuxuryPipeline, UnifiedPipelineConfig, PipelinePreset, UpscalingModel
+    from unified_luxury_pipeline import (
+        UnifiedLuxuryPipeline,
+        UnifiedPipelineConfig,
+        PipelinePreset,
+        UpscalingModel,
+    )
 
     print("\n" + "=" * 70)
     print("Example 3: Signature Estate Showcase")
@@ -128,7 +141,11 @@ def example_3_signature_estate_showcase():
 
 def example_4_fast_batch_preview():
     """Example 4: Fast batch processing for previews (speed-optimized)."""
-    from unified_luxury_pipeline import UnifiedLuxuryPipeline, UnifiedPipelineConfig, PipelinePreset
+    from unified_luxury_pipeline import (
+        UnifiedLuxuryPipeline,
+        UnifiedPipelineConfig,
+        PipelinePreset,
+    )
 
     print("\n" + "=" * 70)
     print("Example 4: Fast Batch Preview Generation")
@@ -179,7 +196,12 @@ def example_4_fast_batch_preview():
 
 def example_5_custom_configuration():
     """Example 5: Custom configuration with selective stage control."""
-    from unified_luxury_pipeline import UnifiedLuxuryPipeline, UnifiedPipelineConfig, UpscalingModel, PipelinePreset
+    from unified_luxury_pipeline import (
+        UnifiedLuxuryPipeline,
+        UnifiedPipelineConfig,
+        UpscalingModel,
+        PipelinePreset,
+    )
 
     print("\n" + "=" * 70)
     print("Example 5: Custom Pipeline Configuration")
@@ -227,7 +249,11 @@ def example_5_custom_configuration():
 
 def example_6_archival_quality():
     """Example 6: Museum-grade archival processing."""
-    from unified_luxury_pipeline import UnifiedLuxuryPipeline, UnifiedPipelineConfig, PipelinePreset
+    from unified_luxury_pipeline import (
+        UnifiedLuxuryPipeline,
+        UnifiedPipelineConfig,
+        PipelinePreset,
+    )
 
     print("\n" + "=" * 70)
     print("Example 6: Archival Quality Processing")
@@ -295,7 +321,11 @@ def example_6_archival_quality():
 
 def example_7_interior_exterior_comparison():
     """Example 7: Compare interior vs exterior presets."""
-    from unified_luxury_pipeline import UnifiedLuxuryPipeline, UnifiedPipelineConfig, PipelinePreset
+    from unified_luxury_pipeline import (
+        UnifiedLuxuryPipeline,
+        UnifiedPipelineConfig,
+        PipelinePreset,
+    )
 
     print("\n" + "=" * 70)
     print("Example 7: Interior vs Exterior Preset Comparison")
@@ -319,7 +349,9 @@ def example_7_interior_exterior_comparison():
         print(f"{'-' * 70}")
 
         config = UnifiedPipelineConfig(
-            input_path=input_path, output_dir=Path(f"output_examples/{preset.value}/"), preset=preset
+            input_path=input_path,
+            output_dir=Path(f"output_examples/{preset.value}/"),
+            preset=preset,
         )
 
         pipeline = UnifiedLuxuryPipeline(config)

@@ -25,7 +25,12 @@ class CodebaseHealthMonitor:
             with open(self.health_file, "r") as f:
                 self.data = json.load(f)
         else:
-            self.data = {"checks": [], "recurring_issues": {}, "improvements": [], "quality_score": 100}
+            self.data = {
+                "checks": [],
+                "recurring_issues": {},
+                "improvements": [],
+                "quality_score": 100,
+            }
 
     def save_health_data(self):
         """Save health data"""
@@ -35,7 +40,12 @@ class CodebaseHealthMonitor:
     def check_undefined_names(self) -> Tuple[bool, List[str]]:
         """Check for undefined names (F821)"""
         result = subprocess.run(
-            ["flake8", ".", "--select=F821", "--exclude=deprecated,src/transformation_portal,scripts,.venv"],
+            [
+                "flake8",
+                ".",
+                "--select=F821",
+                "--exclude=deprecated,src/transformation_portal,scripts,.venv",
+            ],
             capture_output=True,
             text=True,
         )
@@ -51,7 +61,12 @@ class CodebaseHealthMonitor:
     def check_import_issues(self) -> Tuple[bool, List[str]]:
         """Check for import problems (E402, F401, W0404)"""
         result = subprocess.run(
-            ["flake8", ".", "--select=E402,F401", "--exclude=deprecated,src/transformation_portal,scripts,.venv"],
+            [
+                "flake8",
+                ".",
+                "--select=E402,F401",
+                "--exclude=deprecated,src/transformation_portal,scripts,.venv",
+            ],
             capture_output=True,
             text=True,
         )
@@ -67,7 +82,12 @@ class CodebaseHealthMonitor:
     def check_trailing_whitespace(self) -> Tuple[bool, Dict[str, int]]:
         """Check for excessive trailing whitespace"""
         result = subprocess.run(
-            ["flake8", ".", "--select=W291,W293", "--exclude=deprecated,src/transformation_portal,scripts,.venv"],
+            [
+                "flake8",
+                ".",
+                "--select=W291,W293",
+                "--exclude=deprecated,src/transformation_portal,scripts,.venv",
+            ],
             capture_output=True,
             text=True,
         )
@@ -103,7 +123,15 @@ class CodebaseHealthMonitor:
         py_files = [
             f
             for f in py_files
-            if not any(exclude in str(f) for exclude in ["deprecated", "src/transformation_portal", "scripts", ".venv"])
+            if not any(
+                exclude in str(f)
+                for exclude in [
+                    "deprecated",
+                    "src/transformation_portal",
+                    "scripts",
+                    ".venv",
+                ]
+            )
         ]
 
         estimated_total = len(py_files) * 10  # Rough estimate
@@ -115,7 +143,10 @@ class CodebaseHealthMonitor:
         """Check test coverage"""
         try:
             result = subprocess.run(
-                ["pytest", "--cov=.", "--cov-report=term", "--tb=no", "-q"], capture_output=True, text=True, timeout=60
+                ["pytest", "--cov=.", "--cov-report=term", "--tb=no", "-q"],
+                capture_output=True,
+                text=True,
+                timeout=60,
             )
 
             # Parse coverage percentage
@@ -150,18 +181,29 @@ class CodebaseHealthMonitor:
 
         # Check imports
         passed, issues = self.check_import_issues()
-        results["checks"]["imports"] = {"passed": passed, "count": len(issues), "issues": issues[:10]}
+        results["checks"]["imports"] = {
+            "passed": passed,
+            "count": len(issues),
+            "issues": issues[:10],
+        }
         print(f"{'✅' if passed else '❌'} Import issues: {len(issues)} issues")
 
         # Check trailing whitespace
         passed, file_counts = self.check_trailing_whitespace()
         total_ws = sum(file_counts.values())
-        results["checks"]["trailing_whitespace"] = {"passed": passed, "count": total_ws, "affected_files": len(file_counts)}
+        results["checks"]["trailing_whitespace"] = {
+            "passed": passed,
+            "count": total_ws,
+            "affected_files": len(file_counts),
+        }
         print(f"{'✅' if passed else '⚠️'} Trailing whitespace: {total_ws} lines in {len(file_counts)} files")
 
         # Check docstring coverage
         passed, coverage = self.check_docstring_coverage()
-        results["checks"]["docstring_coverage"] = {"passed": passed, "coverage": coverage}
+        results["checks"]["docstring_coverage"] = {
+            "passed": passed,
+            "coverage": coverage,
+        }
         print(f"{'✅' if passed else '⚠️'} Docstring coverage: {coverage:.1f}%")
 
         # Calculate overall quality score

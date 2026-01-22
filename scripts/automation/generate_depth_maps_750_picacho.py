@@ -24,9 +24,21 @@ from transformers import pipeline
 
 # Color maps for visualization
 DEPTH_COLORMAP = {
-    "viridis": [(68, 1, 84), (59, 82, 139), (33, 145, 140), (94, 201, 98), (253, 231, 37)],
+    "viridis": [
+        (68, 1, 84),
+        (59, 82, 139),
+        (33, 145, 140),
+        (94, 201, 98),
+        (253, 231, 37),
+    ],
     "magma": [(0, 0, 4), (40, 11, 84), (119, 31, 109), (186, 54, 85), (252, 253, 191)],
-    "turbo": [(48, 18, 59), (62, 73, 137), (68, 134, 194), (134, 190, 169), (253, 231, 37)],
+    "turbo": [
+        (48, 18, 59),
+        (62, 73, 137),
+        (68, 134, 194),
+        (134, 190, 169),
+        (253, 231, 37),
+    ],
 }
 
 
@@ -253,7 +265,11 @@ def main():
     # Load model
     print("\n🔄 Loading Depth Anything V2 Large model...")
     try:
-        depth_estimator = pipeline(task="depth-estimation", model="depth-anything/Depth-Anything-V2-Large-hf", device=device)
+        depth_estimator = pipeline(
+            task="depth-estimation",
+            model="depth-anything/Depth-Anything-V2-Large-hf",
+            device=device,
+        )
         print("✅ Model loaded successfully")
     except Exception as e:
         print(f"❌ Error loading model: {e}")

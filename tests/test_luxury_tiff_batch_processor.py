@@ -21,11 +21,18 @@ except ImportError:  # pragma: no cover - fallback for direct execution
 np = pytest.importorskip("numpy")
 pytest.importorskip("PIL.Image")
 pytest.importorskip("PIL.TiffImagePlugin")
-from PIL import Image, TiffImagePlugin  # noqa: E402  # pylint: disable=wrong-import-position
+from PIL import (
+    Image,
+    TiffImagePlugin,
+)  # noqa: E402  # pylint: disable=wrong-import-position
 
 import luxury_tiff_batch_processor as ltiff  # noqa: E402  # pylint: disable=wrong-import-position,consider-using-from-import
-from luxury_tiff_batch_processor import io_utils  # noqa: E402  # pylint: disable=wrong-import-position
-from luxury_tiff_batch_processor import pipeline  # noqa: E402  # pylint: disable=wrong-import-position
+from luxury_tiff_batch_processor import (
+    io_utils,
+)  # noqa: E402  # pylint: disable=wrong-import-position
+from luxury_tiff_batch_processor import (
+    pipeline,
+)  # noqa: E402  # pylint: disable=wrong-import-position
 
 
 def test_run_pipeline_exposed_in_dunder_all():
@@ -247,7 +254,14 @@ def test_save_image_round_trip_la_mode_pillow(tmp_path: Path, monkeypatch: pytes
     arr = np.stack([luminance, alpha], axis=2)
 
     destination = tmp_path / "la.tif"
-    ltiff.save_image(destination, arr, arr.dtype, metadata=None, icc_profile=None, compression="tiff_lzw")
+    ltiff.save_image(
+        destination,
+        arr,
+        arr.dtype,
+        metadata=None,
+        icc_profile=None,
+        compression="tiff_lzw",
+    )
 
     with Image.open(destination) as image:
         assert image.mode == "LA"
@@ -517,7 +531,9 @@ def test_adjustment_settings_validation_accepts_reasonable_ranges():
         {"white_balance_temp": 40000},
     ],
 )
-def test_adjustment_settings_validation_rejects_invalid_ranges(kwargs: Dict[str, float] | Dict[str, int]):
+def test_adjustment_settings_validation_rejects_invalid_ranges(
+    kwargs: Dict[str, float] | Dict[str, int],
+):
     with pytest.raises(ValueError):
         ltiff.AdjustmentSettings(**kwargs)
 

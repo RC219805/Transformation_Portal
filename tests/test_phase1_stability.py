@@ -131,7 +131,10 @@ class TestCheckpointManager:
 
         # Save checkpoint
         manager.save_checkpoint(
-            task_id="test_001", stage=ProcessingStage.DEPTH_LOAD, status="success", metadata={"test": "data"}
+            task_id="test_001",
+            stage=ProcessingStage.DEPTH_LOAD,
+            status="success",
+            metadata={"test": "data"},
         )
 
         # Load checkpoint
@@ -158,7 +161,11 @@ class TestCheckpointManager:
 
         # Create some checkpoints
         for i in range(3):
-            manager.save_checkpoint(task_id=f"test_{i:03d}", stage=ProcessingStage.COMPLETE, status="success")
+            manager.save_checkpoint(
+                task_id=f"test_{i:03d}",
+                stage=ProcessingStage.COMPLETE,
+                status="success",
+            )
 
         # Cleanup (with 0 days to clean all)
         manager.cleanup(older_than_days=0, completed_only=True)

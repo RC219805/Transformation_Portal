@@ -49,7 +49,10 @@ class TestDepthContractGuardrails:
         mock_estimator.estimate_depth.return_value = np.random.rand(64, 64).astype(np.float32)
         mock_estimator.compute_edge_alignment.return_value = 0.85
 
-        with patch("lux_depth_v2.depth_inference.create_tiled_estimator", return_value=mock_estimator):
+        with patch(
+            "lux_depth_v2.depth_inference.create_tiled_estimator",
+            return_value=mock_estimator,
+        ):
             pipeline = LuxPipelineV2(config)
             result = pipeline.process_one(sample_image_file, depth_path=None)
 
@@ -116,7 +119,10 @@ class TestDepthContractGuardrails:
             mock_estimator.compute_edge_alignment.return_value = 0.80
             return mock_estimator
 
-        with patch("lux_depth_v2.depth_inference.create_tiled_estimator", side_effect=spy_factory):
+        with patch(
+            "lux_depth_v2.depth_inference.create_tiled_estimator",
+            side_effect=spy_factory,
+        ):
             pipeline = LuxPipelineV2(config)
             result = pipeline.process_one(sample_image_file, depth_path=None)
 
@@ -140,7 +146,10 @@ class TestDepthContractGuardrails:
         def mock_factory_failure(**kwargs):
             raise ImportError("transformers not installed")
 
-        with patch("lux_depth_v2.depth_inference.create_tiled_estimator", side_effect=mock_factory_failure):
+        with patch(
+            "lux_depth_v2.depth_inference.create_tiled_estimator",
+            side_effect=mock_factory_failure,
+        ):
             pipeline = LuxPipelineV2(config)
             result = pipeline.process_one(sample_image_file, depth_path=None)
 

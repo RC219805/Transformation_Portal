@@ -30,7 +30,11 @@ Usage:
 
 from .depth_estimator import DepthEstimator, DepthConfig, DepthMap
 from .spatial_processor import SpatialProcessor, SpatialFeatures
-from .atmospheric_modeler import AtmosphericModeler, AtmosphericConfig, MontecitoCoastalModel
+from .atmospheric_modeler import (
+    AtmosphericModeler,
+    AtmosphericConfig,
+    MontecitoCoastalModel,
+)
 from .depth_pipeline import DepthPipeline, DepthPipelineConfig
 from .depth_filters import DepthGuidedFilter, DepthAwareBlur, DepthAwareSharpen
 

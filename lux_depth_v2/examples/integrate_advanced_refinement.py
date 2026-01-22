@@ -22,7 +22,11 @@ from lux_depth_v2.pipeline import DepthPipeline
 from lux_depth_v2.config import PipelineConfig, Preset
 
 # Import advanced refinement
-from lux_depth_v2.advanced_refinement import DepthRefiner, AdvancedRefinementConfig, compute_edge_metrics
+from lux_depth_v2.advanced_refinement import (
+    DepthRefiner,
+    AdvancedRefinementConfig,
+    compute_edge_metrics,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -162,7 +166,11 @@ def example_single_image():
     print("=" * 60 + "\n")
 
     # Initialize enhanced pipeline
-    pipeline = EnhancedDepthPipeline(preset="interior_luxury", use_advanced_refinement=True, refinement_technique="hybrid")
+    pipeline = EnhancedDepthPipeline(
+        preset="interior_luxury",
+        use_advanced_refinement=True,
+        refinement_technique="hybrid",
+    )
 
     # Process image
     rgb_path = Path("input_images/interior_001.jpg")
@@ -266,7 +274,10 @@ def example_custom_refinement_config():
     )
 
     pipeline = EnhancedDepthPipeline(
-        preset="architectural", use_advanced_refinement=True, refinement_technique="hybrid", refinement_config=custom_config
+        preset="architectural",
+        use_advanced_refinement=True,
+        refinement_technique="hybrid",
+        refinement_config=custom_config,
     )
 
     print("Custom pipeline initialized with architectural-optimized config")
@@ -280,7 +291,13 @@ def example_compare_techniques():
     print("EXAMPLE 4: Compare Refinement Techniques")
     print("=" * 60 + "\n")
 
-    techniques = ["bilateral", "guided", "edge_guided", "gradient_consistency", "hybrid"]
+    techniques = [
+        "bilateral",
+        "guided",
+        "edge_guided",
+        "gradient_consistency",
+        "hybrid",
+    ]
 
     rgb_path = Path("input_images/structure_test.jpg")
 
@@ -293,7 +310,9 @@ def example_compare_techniques():
 
     for technique in techniques:
         pipeline = EnhancedDepthPipeline(
-            preset="interior_luxury", use_advanced_refinement=True, refinement_technique=technique
+            preset="interior_luxury",
+            use_advanced_refinement=True,
+            refinement_technique=technique,
         )
 
         output_dir = Path(f"output/compare/{technique}/")

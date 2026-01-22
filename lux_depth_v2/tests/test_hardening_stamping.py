@@ -12,7 +12,12 @@ def test_config_hash_is_stable():
 
 def test_stamp_report_adds_meta(tmp_path: Path):
     report = {"ai_color_diff": 0.1, "ai_luma_diff": 0.2}
-    stamped = stamp_report(report, config={"preset": "x"}, input_path=tmp_path / "in.tif", output_dir=tmp_path)
+    stamped = stamp_report(
+        report,
+        config={"preset": "x"},
+        input_path=tmp_path / "in.tif",
+        output_dir=tmp_path,
+    )
     assert "meta" in stamped
     assert "config_hash" in stamped["meta"]
     assert stamped["ai_color_diff"] == 0.1

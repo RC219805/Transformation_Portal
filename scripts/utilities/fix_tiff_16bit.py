@@ -66,7 +66,13 @@ def save_16bit_tiff_tifffile(image_array: np.ndarray, output_path: Path, compres
         raise ValueError(f"Unsupported dtype: {image_array.dtype}")
 
     # Map compression parameter
-    compress_map = {"lzw": "lzw", "tiff_deflate": "deflate", "deflate": "deflate", "zstd": "zstd", None: None}
+    compress_map = {
+        "lzw": "lzw",
+        "tiff_deflate": "deflate",
+        "deflate": "deflate",
+        "zstd": "zstd",
+        None: None,
+    }
     compress = compress_map.get(compression, compression)
 
     # Save with tifffile

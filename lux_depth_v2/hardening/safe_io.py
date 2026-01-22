@@ -75,7 +75,9 @@ def validate_image_file(path: Path, policy: HardeningPolicy, use_core: bool = Tr
         max_size_mb = policy.max_input_bytes / (1024 * 1024)
 
         core_validator = CoreInputValidator(
-            allowed_extensions=tuple(allowed_exts), max_size_mb=max_size_mb, enable_magic_bytes=True
+            allowed_extensions=tuple(allowed_exts),
+            max_size_mb=max_size_mb,
+            enable_magic_bytes=True,
         )
 
         try:

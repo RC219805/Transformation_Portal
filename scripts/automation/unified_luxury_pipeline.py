@@ -48,7 +48,12 @@ except ImportError:
 
 # Import pipeline components
 try:
-    from utils.upscaling_engine import UpscalingEngine, UpscalingConfig, UpscalingModel, UpscalingMetrics
+    from utils.upscaling_engine import (
+        UpscalingEngine,
+        UpscalingConfig,
+        UpscalingModel,
+        UpscalingMetrics,
+    )
 
     UPSCALING_AVAILABLE = True
 except ImportError:
@@ -340,10 +345,15 @@ class UnifiedLuxuryPipeline:
         if self.config.enable_material_response:
             logger.info(f"Initializing material response (strength: {self.config.material_strength})")
             try:
-                from utils.material_responder import MaterialResponder, MaterialResponseConfig
+                from utils.material_responder import (
+                    MaterialResponder,
+                    MaterialResponseConfig,
+                )
 
                 material_config = MaterialResponseConfig(
-                    strength=self.config.material_strength, surface_types=self.config.surface_types, depth_aware=True
+                    strength=self.config.material_strength,
+                    surface_types=self.config.surface_types,
+                    depth_aware=True,
                 )
                 self.material_responder = MaterialResponder(material_config)
                 logger.info("✓ Material response ready")
@@ -363,7 +373,10 @@ class UnifiedLuxuryPipeline:
                 lut_path = self._find_lut_file(self.config.lut_name)
                 if lut_path:
                     lut_config = LUTConfig(
-                        lut_path=lut_path, strength=self.config.lut_strength, preserve_highlights=True, preserve_blacks=True
+                        lut_path=lut_path,
+                        strength=self.config.lut_strength,
+                        preserve_highlights=True,
+                        preserve_blacks=True,
                     )
                     self.lut_processor = LUTProcessor(lut_config)
                     logger.info(f"✓ LUT ready: {lut_path.name}")
@@ -764,7 +777,11 @@ Examples:
     parser.add_argument("input", type=Path, help="Input image or directory")
     parser.add_argument("--output-dir", type=Path, help="Output directory")
     parser.add_argument(
-        "--preset", type=str, default="photo_realistic", choices=[p.value for p in PipelinePreset], help="Pipeline preset"
+        "--preset",
+        type=str,
+        default="photo_realistic",
+        choices=[p.value for p in PipelinePreset],
+        help="Pipeline preset",
     )
 
     # Stage toggles
@@ -774,7 +791,12 @@ Examples:
     parser.add_argument("--no-color-grading", action="store_true", help="Disable color grading")
 
     # Upscaling options
-    parser.add_argument("--upscale-model", type=str, choices=[m.value for m in UpscalingModel], help="Upscaling model")
+    parser.add_argument(
+        "--upscale-model",
+        type=str,
+        choices=[m.value for m in UpscalingModel],
+        help="Upscaling model",
+    )
     parser.add_argument("--tile-size", type=int, default=0, help="Tile size (0=auto)")
 
     # Quality options

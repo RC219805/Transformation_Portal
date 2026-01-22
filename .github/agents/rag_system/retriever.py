@@ -274,7 +274,10 @@ class HybridRetriever:
             raise RetrievalError("Retriever not indexed. Call index() first.")
 
         # Create cache key for filters (make hashable)
-        filter_key = (tuple(sorted(chunk_type_filter)) if chunk_type_filter else None, file_path_filter)
+        filter_key = (
+            tuple(sorted(chunk_type_filter)) if chunk_type_filter else None,
+            file_path_filter,
+        )
 
         # Call cached implementation
         return self._retrieve_cached(query, top_k, filter_key)
@@ -380,7 +383,11 @@ class HybridRetriever:
             return {}
 
     def _combine_results(
-        self, filtered_indices: List[int], bm25_scores: Dict[int, float], vector_scores: Optional[Dict[int, float]], top_k: int
+        self,
+        filtered_indices: List[int],
+        bm25_scores: Dict[int, float],
+        vector_scores: Optional[Dict[int, float]],
+        top_k: int,
     ) -> List[RetrievalResult]:
         """
         Combine BM25 and vector scores.

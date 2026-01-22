@@ -4,12 +4,21 @@ import pytest
 import tempfile
 import time
 from pathlib import Path
-from src.transformation_portal.core.batch.job import BatchJob, BatchProcessor, JobItem, JobStatus
+from src.transformation_portal.core.batch.job import (
+    BatchJob,
+    BatchProcessor,
+    JobItem,
+    JobStatus,
+)
 
 
 def test_job_item_timing_s_field():
     """Test that JobItem has timing_s field."""
-    item = JobItem(input_path="/test/input.jpg", output_path="/test/output.jpg", timing_s={"load": 0.1, "process": 0.5})
+    item = JobItem(
+        input_path="/test/input.jpg",
+        output_path="/test/output.jpg",
+        timing_s={"load": 0.1, "process": 0.5},
+    )
 
     assert item.timing_s is not None
     assert "load" in item.timing_s
@@ -19,7 +28,9 @@ def test_job_item_timing_s_field():
 def test_job_item_timing_s_serialization():
     """Test that timing_s survives serialization."""
     item = JobItem(
-        input_path="/test/input.jpg", output_path="/test/output.jpg", timing_s={"load": 0.1, "depth": 0.2, "export": 0.05}
+        input_path="/test/input.jpg",
+        output_path="/test/output.jpg",
+        timing_s={"load": 0.1, "depth": 0.2, "export": 0.05},
     )
 
     # Serialize
@@ -41,7 +52,12 @@ def test_batch_job_mark_completed_with_timing():
 
         item = JobItem(input_path="/test/input.jpg", output_path="/test/output.jpg")
 
-        job = BatchJob(job_id="test_job", items=[item], checkpoint_path=checkpoint_path, created_at="2025-01-01T00:00:00Z")
+        job = BatchJob(
+            job_id="test_job",
+            items=[item],
+            checkpoint_path=checkpoint_path,
+            created_at="2025-01-01T00:00:00Z",
+        )
 
         timing_s = {"load": 0.1, "depth": 0.3, "export": 0.05}
         job.mark_completed(item, duration_ms=450.0, timing_s=timing_s)
@@ -59,7 +75,12 @@ def test_batch_job_checkpoint_persistence_with_timing():
 
         item = JobItem(input_path="/test/input.jpg", output_path="/test/output.jpg")
 
-        job = BatchJob(job_id="test_job", items=[item], checkpoint_path=checkpoint_path, created_at="2025-01-01T00:00:00Z")
+        job = BatchJob(
+            job_id="test_job",
+            items=[item],
+            checkpoint_path=checkpoint_path,
+            created_at="2025-01-01T00:00:00Z",
+        )
 
         timing_s = {"load": 0.1, "depth": 0.3, "export": 0.05}
         job.mark_completed(item, duration_ms=450.0, timing_s=timing_s)
@@ -92,9 +113,16 @@ def test_batch_processor_extracts_timing_from_result():
         # Processor function that returns timing_s
         def processor_fn(input_path: Path) -> dict:
             time.sleep(0.01)
-            return {"status": "success", "timing_s": {"load": 0.005, "process": 0.004, "export": 0.001}}
+            return {
+                "status": "success",
+                "timing_s": {"load": 0.005, "process": 0.004, "export": 0.001},
+            }
 
-        processor = BatchProcessor(processor_fn=processor_fn, checkpoint_dir=checkpoint_dir, skip_existing=False)
+        processor = BatchProcessor(
+            processor_fn=processor_fn,
+            checkpoint_dir=checkpoint_dir,
+            skip_existing=False,
+        )
 
         job = processor.process_batch(input_paths=[input_file], output_dir=output_dir)
 
@@ -123,7 +151,11 @@ def test_batch_processor_backward_compat_stage_times_sec():
         def processor_fn(input_path: Path) -> dict:
             return {"status": "success", "stage_times_sec": {"load": 0.1, "depth": 0.2}}
 
-        processor = BatchProcessor(processor_fn=processor_fn, checkpoint_dir=checkpoint_dir, skip_existing=False)
+        processor = BatchProcessor(
+            processor_fn=processor_fn,
+            checkpoint_dir=checkpoint_dir,
+            skip_existing=False,
+        )
 
         job = processor.process_batch(input_paths=[input_file], output_dir=output_dir)
 
@@ -162,7 +194,11 @@ def test_batch_processor_handles_missing_timing():
         def processor_fn(input_path: Path) -> dict:
             return {"status": "success"}
 
-        processor = BatchProcessor(processor_fn=processor_fn, checkpoint_dir=checkpoint_dir, skip_existing=False)
+        processor = BatchProcessor(
+            processor_fn=processor_fn,
+            checkpoint_dir=checkpoint_dir,
+            skip_existing=False,
+        )
 
         job = processor.process_batch(input_paths=[input_file], output_dir=output_dir)
 

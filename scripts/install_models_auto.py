@@ -113,7 +113,12 @@ def verify_checksum(file_path: Path, expected_sha256: Optional[str]) -> bool:
     return True
 
 
-def download_file(url: str, output_path: Path, expected_sha256: Optional[str] = None, max_retries: int = MAX_RETRIES) -> bool:
+def download_file(
+    url: str,
+    output_path: Path,
+    expected_sha256: Optional[str] = None,
+    max_retries: int = MAX_RETRIES,
+) -> bool:
     """Download file with retry logic and checksum verification.
 
     Args:
@@ -151,7 +156,11 @@ def download_file(url: str, output_path: Path, expected_sha256: Optional[str] = 
                         percent = min(100, (downloaded / total_size) * 100)
                         mb_downloaded = downloaded / (1024 * 1024)
                         mb_total = total_size / (1024 * 1024)
-                        print(f"\r  Progress: {percent:.1f}% ({mb_downloaded:.1f}/{mb_total:.1f} MB)", end="", flush=True)
+                        print(
+                            f"\r  Progress: {percent:.1f}% ({mb_downloaded:.1f}/{mb_total:.1f} MB)",
+                            end="",
+                            flush=True,
+                        )
 
                 urllib.request.urlretrieve(url, output_path, reporthook=report_progress)
                 print()

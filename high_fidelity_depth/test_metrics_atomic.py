@@ -28,7 +28,12 @@ def test_atomic_write():
 
     # Create test metrics
     metrics = {
-        "test": {"edge_f1": np.float32(0.42), "edge_overlap": np.float64(0.75), "edge_count_ratio": 1.5, "passed": True}
+        "test": {
+            "edge_f1": np.float32(0.42),
+            "edge_overlap": np.float64(0.75),
+            "edge_count_ratio": 1.5,
+            "passed": True,
+        }
     }
 
     # Write to temp file

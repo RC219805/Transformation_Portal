@@ -70,7 +70,12 @@ class TestUpscalingEngine:
     @pytest.fixture
     def engine(self):
         """Create test engine with CPU device."""
-        config = UpscalingConfig(model=UpscalingModel.REALESRGAN_4X, device="cpu", cache_model=False, validate_colors=False)
+        config = UpscalingConfig(
+            model=UpscalingModel.REALESRGAN_4X,
+            device="cpu",
+            cache_model=False,
+            validate_colors=False,
+        )
         return UpscalingEngine(config)
 
     @pytest.fixture

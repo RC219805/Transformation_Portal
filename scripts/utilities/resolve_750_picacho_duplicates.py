@@ -34,7 +34,12 @@ class DuplicateResolver:
             "tif": self.base_dir / "TIFFs" / "_TIFFs",
             "lightroom": self.base_dir / "LightRoom_TiFFs",
         }
-        self.output_dirs = ["Maximum_Quality_Final", "Phase3_Refined", "Processed_Output", "Ultimate_Quality"]
+        self.output_dirs = [
+            "Maximum_Quality_Final",
+            "Phase3_Refined",
+            "Processed_Output",
+            "Ultimate_Quality",
+        ]
 
     def find_duplicates(self) -> Dict[str, List[Path]]:
         """Find all duplicate source files grouped by base name."""
@@ -175,7 +180,11 @@ class DuplicateResolver:
         Returns:
             Summary of cleanup actions
         """
-        cleanup_summary = {"files_to_archive": [], "files_to_keep": [], "actions_taken": []}
+        cleanup_summary = {
+            "files_to_archive": [],
+            "files_to_keep": [],
+            "actions_taken": [],
+        }
 
         duplicates = manifest.get("duplicates_found", {})
 
@@ -200,7 +209,11 @@ class DuplicateResolver:
                             archived_path = archive_dir / output_file.name
                             output_file.rename(archived_path)
                             cleanup_summary["actions_taken"].append(
-                                {"action": "archived", "from": str(output_file), "to": str(archived_path)}
+                                {
+                                    "action": "archived",
+                                    "from": str(output_file),
+                                    "to": str(archived_path),
+                                }
                             )
 
         return cleanup_summary
@@ -216,7 +229,11 @@ def main():
 
     parser = argparse.ArgumentParser(description="Resolve duplicate file issues in 750 Picacho project")
     parser.add_argument("base_dir", type=Path, help="Base directory containing 750 Picacho files")
-    parser.add_argument("--cleanup", action="store_true", help="Actually cleanup duplicates (default is dry-run)")
+    parser.add_argument(
+        "--cleanup",
+        action="store_true",
+        help="Actually cleanup duplicates (default is dry-run)",
+    )
     parser.add_argument("--output-manifest", type=Path, default=None, help="Path to save manifest JSON")
 
     args = parser.parse_args()

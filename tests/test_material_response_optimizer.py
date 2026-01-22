@@ -1,4 +1,5 @@
 """Tests for :mod:`material_response_optimizer`."""
+
 # pylint: disable=redefined-outer-name  # pytest fixtures
 
 from __future__ import annotations
@@ -11,7 +12,10 @@ import pytest
 pytestmark = pytest.mark.skip(reason="material_response_optimizer not yet migrated to src package")
 
 try:
-    from scripts.utilities.material_response_optimizer import MaterialAwareEnhancementPlanner, RenderEnhancementPlanner
+    from scripts.utilities.material_response_optimizer import (
+        MaterialAwareEnhancementPlanner,
+        RenderEnhancementPlanner,
+    )
 except ImportError:
     pass
 
@@ -178,7 +182,11 @@ def test_comfort_reduction_defined_for_primary_suite(blueprint: dict) -> None:
 def test_hero_surface_texture_targets_present(blueprint: dict) -> None:
     hero_targets = blueprint["texture_dimension_strategy"]["hero_targets"]
     surfaces = {entry["surface"] for entry in hero_targets}
-    assert {"island_waterfall_edge", "stone_feature_wall", "headboard_textile_panel"} <= surfaces
+    assert {
+        "island_waterfall_edge",
+        "stone_feature_wall",
+        "headboard_textile_panel",
+    } <= surfaces
     assert all(entry["target"] == 2.25 for entry in hero_targets)
 
 
@@ -196,7 +204,9 @@ def test_scene_specific_targets_raise_luxury_indices(blueprint: dict) -> None:
     assert any("coastline" in move for move in aerial_plan["moves"])
 
 
-def test_material_integration_targets_material_specifics(material_blueprint: dict) -> None:
+def test_material_integration_targets_material_specifics(
+    material_blueprint: dict,
+) -> None:
     wood_strategy = material_blueprint["material_integration"]["great_room"]
     assert wood_strategy["material"] == "herringbone_oak"
     assert wood_strategy["target_texture_dimension"] == pytest.approx(2.25)

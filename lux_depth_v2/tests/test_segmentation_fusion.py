@@ -4,7 +4,12 @@
 import numpy as np
 import pytest
 
-from lux_depth_v2.segmentation_fusion import FusionConfig, FusionMode, fuse_masks, mask_iou
+from lux_depth_v2.segmentation_fusion import (
+    FusionConfig,
+    FusionMode,
+    fuse_masks,
+    mask_iou,
+)
 
 
 def _square(h=32, w=32, x0=8, y0=8, x1=24, y1=24, v=1.0):

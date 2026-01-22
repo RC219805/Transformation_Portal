@@ -278,7 +278,9 @@ def example_4_full_optimization():
 
         # Get or compute depth with caching
         depth = cache.get_or_compute(
-            "depth_maps_coreml", lambda: estimate_depth_fast(image), inputs={"image": image_path, "model": "coreml"}
+            "depth_maps_coreml",
+            lambda: estimate_depth_fast(image),
+            inputs={"image": image_path, "model": "coreml"},
         )
 
         # Apply depth-aware enhancement

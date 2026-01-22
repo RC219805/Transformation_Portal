@@ -158,6 +158,7 @@ class UpscalingStage(Stage):
         if self._upscaler == "bicubic":
             # Simple bicubic interpolation
             from skimage.transform import resize
+
             return resize(
                 image,
                 (new_h, new_w),
@@ -173,6 +174,7 @@ class UpscalingStage(Stage):
         except Exception as e:
             self.logger.error(f"Upscaling failed: {e}, falling back to bicubic")
             from skimage.transform import resize
+
             return resize(
                 image,
                 (new_h, new_w),

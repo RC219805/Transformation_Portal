@@ -23,7 +23,11 @@ class ProcessingReport:
 
         self.results: List[Dict[str, Any]] = []
         self.start_time = datetime.now()
-        self.metadata = {"project_name": project_name, "start_time": self.start_time.isoformat(), "pipeline_version": "1.0.0"}
+        self.metadata = {
+            "project_name": project_name,
+            "start_time": self.start_time.isoformat(),
+            "pipeline_version": "1.0.0",
+        }
 
     def add_result(
         self,

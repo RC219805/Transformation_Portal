@@ -44,8 +44,20 @@ Usage:
     enhanced = inference.process("input.tiff", output_format="16bit_tiff")
 """
 
-from .property_specific import PicachoAnalyzer, DepthSynthesis, DatasetGenerator, PicachoTrainer, PicachoInference
+from .property_specific import (
+    PicachoAnalyzer,
+    DepthSynthesis,
+    DatasetGenerator,
+    PicachoTrainer,
+    PicachoInference,
+)
 
-__all__ = ["PicachoAnalyzer", "DepthSynthesis", "DatasetGenerator", "PicachoTrainer", "PicachoInference"]
+__all__ = [
+    "PicachoAnalyzer",
+    "DepthSynthesis",
+    "DatasetGenerator",
+    "PicachoTrainer",
+    "PicachoInference",
+]
 
 __version__ = "1.0.0"

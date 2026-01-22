@@ -16,8 +16,10 @@ Example:
         --width 1024 --height 768 --steps 30 --strength 0.45 --gs 7.5 \
         --brand_text "The Veridian | Penthouse 21B" --logo ./brand/logo.png
 """
+
 try:
     from realesrgan import RealESRGANer  # type: ignore
+
     _HAS_REALESRGAN_IMPORT = True
 except ImportError:  # pragma: no cover - package not installed
     _HAS_REALESRGAN_IMPORT = False
@@ -38,7 +40,10 @@ except ImportError:  # pragma: no cover - package not installed
                 "\n"
                 "Note: Pipeline will automatically fall back to Pillow's Lanczos resampling."
             )
-except Exception as e:  # pragma: no cover - other import errors (e.g., missing dependencies of realesrgan)
+
+except (
+    Exception
+) as e:  # pragma: no cover - other import errors (e.g., missing dependencies of realesrgan)
     # This catches cases where realesrgan is installed but its dependencies are missing
     _HAS_REALESRGAN_IMPORT = False
     # Capture the exception message for use in the class definition
@@ -52,6 +57,8 @@ except Exception as e:  # pragma: no cover - other import errors (e.g., missing 
                 "This usually means realesrgan dependencies are missing.\n"
                 "Try reinstalling: pip install --force-reinstall realesrgan"
             )
+
+
 import glob
 import math
 import random
@@ -75,7 +82,10 @@ from torch import Generator
 
 # SDXL (optional). Imported lazily only if used.
 try:
-    from diffusers import StableDiffusionXLControlNetPipeline, StableDiffusionXLImg2ImgPipeline
+    from diffusers import (
+        StableDiffusionXLControlNetPipeline,
+        StableDiffusionXLImg2ImgPipeline,
+    )
 except ImportError:
     StableDiffusionXLControlNetPipeline = None
     StableDiffusionXLImg2ImgPipeline = None
@@ -84,7 +94,12 @@ except ImportError:
 from controlnet_aux import CannyDetector, MidasDetector
 
 # Import common image utilities
-from transformation_portal.utils.image_utils import load_image, np_to_pil, pil_to_np, save_image
+from transformation_portal.utils.image_utils import (
+    load_image,
+    np_to_pil,
+    pil_to_np,
+    save_image,
+)
 
 # Optional Real-ESRGAN status (already set during import attempt above)
 # Keep backward compatibility with existing code that checks _HAS_REALESRGAN
@@ -137,7 +152,9 @@ def _load_texture_base(path: str) -> np.ndarray:
         raise ValueError(f"Unable to load texture '{path}': {exc}") from exc
 
 
-def _prepare_texture(path: str, target_shape: tuple[int, int], scale: float = 1.0) -> np.ndarray:
+def _prepare_texture(
+    path: str, target_shape: tuple[int, int], scale: float = 1.0
+) -> np.ndarray:
     """Load ``path`` and tile/resize so it fills ``target_shape``."""
 
     base = _load_texture_base(path)
@@ -150,7 +167,9 @@ def _prepare_texture(path: str, target_shape: tuple[int, int], scale: float = 1.
     if not math.isclose(scale, 1.0):
         new_h = max(1, int(round(texture.shape[0] * scale)))
         new_w = max(1, int(round(texture.shape[1] * scale)))
-        pil_tex = Image.fromarray((np.clip(texture, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8))
+        pil_tex = Image.fromarray(
+            (np.clip(texture, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)
+        )
         pil_tex = pil_tex.resize((new_w, new_h), Image.Resampling.LANCZOS)
         texture = np.asarray(pil_tex, dtype=np.float32) / 255.0
 
@@ -175,6 +194,7 @@ def resize_to_multiple(
     h = (h // mult) * mult
     return img.resize((w, h), Image.Resampling.LANCZOS)
 
+
 # --------------------------
 # Preprocessors (Canny + Depth)
 # --------------------------
@@ -183,7 +203,9 @@ def resize_to_multiple(
 class Preprocessor:
     """Generate ControlNet conditioning maps (Canny edges + optional depth)."""
 
-    def __init__(self, canny_low: int = 100, canny_high: int = 200, use_depth: bool = True):
+    def __init__(
+        self, canny_low: int = 100, canny_high: int = 200, use_depth: bool = True
+    ):
         """Create detectors for edge and depth guidance."""
 
         self.canny = CannyDetector(low_threshold=canny_low, high_threshold=canny_high)
@@ -194,9 +216,13 @@ class Preprocessor:
         """Load a MiDaS depth model if available, otherwise return ``None``."""
 
         try:
-            return MidasDetector.from_pretrained("lllyasviel/ControlNet", model_type=model_type)
+            return MidasDetector.from_pretrained(
+                "lllyasviel/ControlNet", model_type=model_type
+            )
         except Exception as exc:  # pragma: no cover - best effort optional dependency
-            print(f"[Warn] Depth estimator unavailable ({exc}). Continuing without depth guidance.")
+            print(
+                f"[Warn] Depth estimator unavailable ({exc}). Continuing without depth guidance."
+            )
             return None
 
     def make_canny(self, image: Image.Image) -> Image.Image:
@@ -214,6 +240,7 @@ class Preprocessor:
         arr = np.array(depth).astype(np.float32)
         arr = (arr - arr.min()) / max(1e-6, (arr.max() - arr.min()))
         return Image.fromarray((arr * 255).astype(np.uint8)).convert("L")
+
 
 # --------------------------
 # Post-processing (photo finish)
@@ -243,7 +270,9 @@ def add_bloom(
     """Add a soft bloom based on bright pixels exceeding ``threshold``."""
     lum = 0.2126 * rgb[..., 0] + 0.7152 * rgb[..., 1] + 0.0722 * rgb[..., 2]
     mask = (lum > threshold).astype(np.float32)
-    glow = np.stack([gaussian_filter(rgb[..., i] * mask, blur_radius) for i in range(3)], axis=-1)
+    glow = np.stack(
+        [gaussian_filter(rgb[..., i] * mask, blur_radius) for i in range(3)], axis=-1
+    )
     return np.clip(rgb + intensity * glow, 0.0, 1.0)
 
 
@@ -255,7 +284,7 @@ def add_vignette(rgb: np.ndarray, strength: float = 0.2) -> np.ndarray:
     cx, cy = w / 2.0, h / 2.0
     r = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
     r /= r.max() + 1e-6
-    mask = 1.0 - strength * (r ** 2)
+    mask = 1.0 - strength * (r**2)
     return np.clip(rgb * mask[..., None], 0.0, 1.0)
 
 
@@ -270,37 +299,37 @@ def add_film_grain(rgb: np.ndarray, amount: float = 0.02, seed: int = 0) -> np.n
 def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     # pylint: disable=too-many-locals,too-many-branches,too-many-statements
     # pylint: disable=unused-argument
-        rgb: np.ndarray,
-        texture_boost: float = 0.25,
-        ambient_occlusion: float = 0.12,
-        highlight_warmth: float = 0.08,
-        haze_strength: float = 0.06,
-        haze_tint: Tuple[float, float, float] = (0.82, 0.88, 0.96),
-        floor_plank_contrast: float = 0.12,
-        floor_specular: float = 0.18,
-        floor_contact_shadow: float = 0.05,
-        floor_texture_path: Optional[str] = None,
-        floor_texture_strength: float = 0.0,
-        floor_texture_scale: float = 1.0,
-        textile_contrast: float = 0.18,
-        leather_sheen: float = 0.16,
-        fireplace_glow: float = 0.18,
-        fireplace_glow_radius: float = 45.0,
-        window_reflection: float = 0.12,
-        bedding_relief: float = 0.16,
-        wall_texture_path: Optional[str] = None,
-        wall_texture_strength: float = 0.0,
-        wall_texture_scale: float = 1.0,
-        wall_texture: float = 0.1,
-        painting_integration: float = 0.1,
-        window_light_wrap: float = 0.14,
-        pool_texture_path: Optional[str] = None,
-        pool_texture_strength: float = 0.0,
-        pool_texture_scale: float = 1.0,
-        exterior_atmosphere: float = 0.12,
-        sky_environment_path: Optional[str] = None,
-        sky_environment_strength: float = 0.0,
-        sky_environment_scale: float = 1.0,
+    rgb: np.ndarray,
+    texture_boost: float = 0.25,
+    ambient_occlusion: float = 0.12,
+    highlight_warmth: float = 0.08,
+    haze_strength: float = 0.06,
+    haze_tint: Tuple[float, float, float] = (0.82, 0.88, 0.96),
+    floor_plank_contrast: float = 0.12,
+    floor_specular: float = 0.18,
+    floor_contact_shadow: float = 0.05,
+    floor_texture_path: Optional[str] = None,
+    floor_texture_strength: float = 0.0,
+    floor_texture_scale: float = 1.0,
+    textile_contrast: float = 0.18,
+    leather_sheen: float = 0.16,
+    fireplace_glow: float = 0.18,
+    fireplace_glow_radius: float = 45.0,
+    window_reflection: float = 0.12,
+    bedding_relief: float = 0.16,
+    wall_texture_path: Optional[str] = None,
+    wall_texture_strength: float = 0.0,
+    wall_texture_scale: float = 1.0,
+    wall_texture: float = 0.1,
+    painting_integration: float = 0.1,
+    window_light_wrap: float = 0.14,
+    pool_texture_path: Optional[str] = None,
+    pool_texture_strength: float = 0.0,
+    pool_texture_scale: float = 1.0,
+    exterior_atmosphere: float = 0.12,
+    sky_environment_path: Optional[str] = None,
+    sky_environment_strength: float = 0.0,
+    sky_environment_scale: float = 1.0,
 ) -> np.ndarray:
     """Empirical material response layer.
 
@@ -329,13 +358,14 @@ def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too
 
     floor_mask = np.clip((y_norm - 0.55) / 0.45, 0.0, 1.0)
 
-    needs_wall_mask = wall_texture > 0 or (wall_texture_path and wall_texture_strength > 0)
+    needs_wall_mask = wall_texture > 0 or (
+        wall_texture_path and wall_texture_strength > 0
+    )
     wall_mask: Optional[np.ndarray]
     wall_mask = None
     if needs_wall_mask:
-        wall_mask_raw = (
-            np.clip((lum - 0.32) / 0.45, 0.0, 1.0)
-            * np.clip((0.26 - sat) / 0.26, 0.0, 1.0)
+        wall_mask_raw = np.clip((lum - 0.32) / 0.45, 0.0, 1.0) * np.clip(
+            (0.26 - sat) / 0.26, 0.0, 1.0
         )
         wall_mask_raw *= np.clip(1.0 - floor_mask, 0.0, 1.0)
         wall_mask = gaussian_filter(wall_mask_raw, sigma=1.4)
@@ -348,16 +378,17 @@ def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too
     exterior_mask = None
     depth_falloff = None
     if needs_exterior_mask:
-        exterior_raw = (
-            np.clip((sat - 0.18) / 0.6, 0.0, 1.0)
-            * np.clip((lum - 0.28) / 0.72, 0.0, 1.0)
+        exterior_raw = np.clip((sat - 0.18) / 0.6, 0.0, 1.0) * np.clip(
+            (lum - 0.28) / 0.72, 0.0, 1.0
         )
         exterior_raw *= np.clip((x_norm - 0.38) / 0.62, 0.0, 1.0)
         exterior_mask = gaussian_filter(exterior_raw, sigma=3.5)
         depth_falloff = np.clip(1.0 - y_norm, 0.0, 1.0)
 
     if floor_texture_path and floor_texture_strength > 0:
-        floor_texture = _prepare_texture(floor_texture_path, (h, w), floor_texture_scale)
+        floor_texture = _prepare_texture(
+            floor_texture_path, (h, w), floor_texture_scale
+        )
         blend = floor_texture_strength * floor_mask[..., None]
         textured_floor = 0.7 * floor_texture + 0.3 * rgb
         rgb = np.clip(rgb * (1.0 - blend) + textured_floor * blend, 0.0, 1.0)
@@ -365,7 +396,9 @@ def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too
     has_pool_texture = bool(pool_texture_path) and pool_texture_strength > 0
     if has_pool_texture and exterior_mask is not None and depth_falloff is not None:
         pool_texture = _prepare_texture(pool_texture_path, (h, w), pool_texture_scale)
-        pool_mask = exterior_mask * np.clip((rgb[..., 2] - 0.8 * rgb[..., 1]) / 0.4, 0.0, 1.0)
+        pool_mask = exterior_mask * np.clip(
+            (rgb[..., 2] - 0.8 * rgb[..., 1]) / 0.4, 0.0, 1.0
+        )
         pool_mask = gaussian_filter(pool_mask, sigma=2.0)
         pool_blend = pool_texture_strength * pool_mask[..., None]
         pool_blend *= np.clip(depth_falloff[..., None], 0.25, 1.0)
@@ -402,7 +435,9 @@ def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too
             grain /= grain.max()
         grain = gaussian_filter(grain, sigma=(0.8, 1.6)) * floor_mask
         warm_wood = np.array([0.86, 0.74, 0.58], dtype=np.float32)
-        plank_warmth = 0.12 * floor_plank_contrast * grain[..., None] * (warm_wood - rgb)
+        plank_warmth = (
+            0.12 * floor_plank_contrast * grain[..., None] * (warm_wood - rgb)
+        )
         rgb = np.clip(rgb + plank_warmth, 0.0, 1.0)
 
     if floor_specular > 0:
@@ -414,15 +449,21 @@ def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too
         streaks = np.clip(streaks, 0.0, 1.0)
         spec_color = np.array([1.0, 0.93, 0.78], dtype=np.float32)
         streak_contrib = floor_specular * streaks[..., None] * floor_mask[..., None]
-        streak_contrib *= (spec_color - rgb)
+        streak_contrib *= spec_color - rgb
         rgb = np.clip(rgb + streak_contrib, 0.0, 1.0)
 
     if textile_contrast > 0:
         # Identify whites/neutrals with low saturation for linen separation
-        textile_mask = np.clip((lum - 0.45) / 0.35, 0.0, 1.0) * np.clip(0.28 - sat, 0.0, 1.0) / 0.28
+        textile_mask = (
+            np.clip((lum - 0.45) / 0.35, 0.0, 1.0)
+            * np.clip(0.28 - sat, 0.0, 1.0)
+            / 0.28
+        )
         textile_mask = gaussian_filter(textile_mask, sigma=1.1)
         textile_detail = rgb - gaussian_filter(rgb, sigma=(1.4, 1.4, 0))
-        rgb = np.clip(rgb + textile_contrast * textile_mask[..., None] * textile_detail, 0.0, 1.0)
+        rgb = np.clip(
+            rgb + textile_contrast * textile_mask[..., None] * textile_detail, 0.0, 1.0
+        )
 
     if leather_sheen > 0:
         # Neutral mid-tone mask for leather upholstery
@@ -457,7 +498,9 @@ def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too
         fireplace_bias = np.clip((x_norm - 0.48) / 0.52, 0.0, 1.0)
         glow *= fireplace_bias
         glow_color = np.array([1.0, 0.68, 0.42], dtype=np.float32)
-        rgb = np.clip(rgb + fireplace_glow * glow[..., None] * (glow_color - rgb), 0.0, 1.0)
+        rgb = np.clip(
+            rgb + fireplace_glow * glow[..., None] * (glow_color - rgb), 0.0, 1.0
+        )
 
     if window_reflection > 0:
         bright_columns = np.mean(np.clip(lum - 0.65, 0.0, 1.0), axis=0)
@@ -468,27 +511,41 @@ def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too
         reflection = gaussian_filter(reflection, sigma=(5.0, 3.0))
         reflection *= floor_mask
         reflection_color = np.array([1.0, 0.98, 0.9], dtype=np.float32)
-        reflection_mix = window_reflection * reflection[..., None] * (reflection_color - rgb)
+        reflection_mix = (
+            window_reflection * reflection[..., None] * (reflection_color - rgb)
+        )
         rgb = np.clip(rgb + reflection_mix, 0.0, 1.0)
 
     if window_light_wrap > 0:
         window_side = np.clip((x_norm - 0.45) / 0.55, 0.0, 1.0)
         wrap = gaussian_filter(lum * window_side, sigma=3.2)
         if wrap.max() > 0:
-            wrap = np.clip((wrap - wrap.min()) / (wrap.max() - wrap.min() + 1e-6), 0.0, 1.0)
+            wrap = np.clip(
+                (wrap - wrap.min()) / (wrap.max() - wrap.min() + 1e-6), 0.0, 1.0
+            )
         wrap_color = np.array([1.0, 0.95, 0.82], dtype=np.float32)
-        rgb = np.clip(rgb + window_light_wrap * wrap[..., None] * (wrap_color - rgb), 0.0, 1.0)
+        rgb = np.clip(
+            rgb + window_light_wrap * wrap[..., None] * (wrap_color - rgb), 0.0, 1.0
+        )
 
-    if exterior_atmosphere > 0 and exterior_mask is not None and depth_falloff is not None:
+    if (
+        exterior_atmosphere > 0
+        and exterior_mask is not None
+        and depth_falloff is not None
+    ):
         haze = exterior_atmosphere * exterior_mask * depth_falloff
         sky_tint = np.array([0.78, 0.86, 0.92], dtype=np.float32)
-        rgb = np.clip(rgb * (1.0 - haze[..., None]) + sky_tint * haze[..., None], 0.0, 1.0)
+        rgb = np.clip(
+            rgb * (1.0 - haze[..., None]) + sky_tint * haze[..., None], 0.0, 1.0
+        )
 
     has_sky_texture = bool(sky_environment_path) and sky_environment_strength > 0
     if has_sky_texture and exterior_mask is not None and depth_falloff is not None:
-        sky_texture = _prepare_texture(sky_environment_path, (h, w), sky_environment_scale)
+        sky_texture = _prepare_texture(
+            sky_environment_path, (h, w), sky_environment_scale
+        )
         sky_weight = sky_environment_strength * exterior_mask
-        sky_weight *= np.clip(depth_falloff ** 0.85, 0.0, 1.0)
+        sky_weight *= np.clip(depth_falloff**0.85, 0.0, 1.0)
         sky_mix = 0.6 * sky_texture + 0.4 * rgb
         blend = rgb * (1.0 - sky_weight[..., None]) + sky_mix * sky_weight[..., None]
         rgb = np.clip(blend, 0.0, 1.0)
@@ -512,27 +569,34 @@ def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too
         rgb = np.clip(rgb * (1.0 - haze[..., None]) + tint * haze[..., None], 0.0, 1.0)
 
     if bedding_relief > 0:
-        bedding_mask = np.clip((lum - 0.35) / 0.35, 0.0, 1.0) * np.clip((0.3 - sat) / 0.3, 0.0, 1.0)
+        bedding_mask = np.clip((lum - 0.35) / 0.35, 0.0, 1.0) * np.clip(
+            (0.3 - sat) / 0.3, 0.0, 1.0
+        )
         bedding_mask *= np.clip((0.75 - y_norm) / 0.75, 0.0, 1.0)
         bedding_mask = gaussian_filter(bedding_mask, sigma=1.0)
         bedding_detail = rgb - gaussian_filter(rgb, sigma=(1.0, 1.0, 0))
         shading = gaussian_filter(lum, sigma=1.6) - gaussian_filter(lum, sigma=4.2)
         shading = np.clip(shading, -0.25, 0.25)
-        rgb = np.clip(rgb + bedding_relief * bedding_mask[..., None] * bedding_detail, 0.0, 1.0)
-        shading_mix = bedding_relief * 0.35 * bedding_mask[..., None] * shading[..., None]
+        rgb = np.clip(
+            rgb + bedding_relief * bedding_mask[..., None] * bedding_detail, 0.0, 1.0
+        )
+        shading_mix = (
+            bedding_relief * 0.35 * bedding_mask[..., None] * shading[..., None]
+        )
         rgb = np.clip(rgb - shading_mix, 0.0, 1.0)
 
     if wall_texture_path and wall_texture_strength > 0 and wall_mask is not None:
-        wall_texture_img = _prepare_texture(wall_texture_path, (h, w), wall_texture_scale)
+        wall_texture_img = _prepare_texture(
+            wall_texture_path, (h, w), wall_texture_scale
+        )
         wall_blend = wall_texture_strength * wall_mask[..., None]
         wall_mix = 0.65 * wall_texture_img + 0.35 * rgb
         rgb = np.clip(rgb * (1.0 - wall_blend) + wall_mix * wall_blend, 0.0, 1.0)
 
     if wall_texture > 0:
         if wall_mask is None:
-            wall_mask_raw = (
-                np.clip((lum - 0.32) / 0.45, 0.0, 1.0)
-                * np.clip((0.26 - sat) / 0.26, 0.0, 1.0)
+            wall_mask_raw = np.clip((lum - 0.32) / 0.45, 0.0, 1.0) * np.clip(
+                (0.26 - sat) / 0.26, 0.0, 1.0
             )
             wall_mask_raw *= np.clip(1.0 - floor_mask, 0.0, 1.0)
             wall_mask = gaussian_filter(wall_mask_raw, sigma=1.4)
@@ -547,14 +611,20 @@ def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too
         rgb = np.clip(rgb + wall_texture * wall_mask[..., None] * wall_detail, 0.0, 1.0)
 
     if painting_integration > 0:
-        art_mask = np.clip((sat - 0.24) / 0.5, 0.0, 1.0) * np.clip((lum - 0.2) / 0.7, 0.0, 1.0)
+        art_mask = np.clip((sat - 0.24) / 0.5, 0.0, 1.0) * np.clip(
+            (lum - 0.2) / 0.7, 0.0, 1.0
+        )
         art_mask *= np.clip((0.6 - x_norm) / 0.6, 0.0, 1.0)
         art_mask *= np.clip(1.0 - floor_mask, 0.0, 1.0)
         art_mask = gaussian_filter(art_mask, sigma=1.3)
-        rim = gaussian_filter(art_mask, sigma=0.9) - gaussian_filter(art_mask, sigma=2.2)
+        rim = gaussian_filter(art_mask, sigma=0.9) - gaussian_filter(
+            art_mask, sigma=2.2
+        )
         rim = np.clip(rim, 0.0, 1.0)
         warm_fill = np.array([1.0, 0.84, 0.68], dtype=np.float32)
-        rgb = np.clip(rgb + painting_integration * rim[..., None] * (warm_fill - rgb), 0.0, 1.0)
+        rgb = np.clip(
+            rgb + painting_integration * rim[..., None] * (warm_fill - rgb), 0.0, 1.0
+        )
         canvas_shadow = gaussian_filter(art_mask, sigma=3.0)
         falloff = painting_integration * 0.12 * canvas_shadow[..., None]
         rgb = np.clip(rgb * (1.0 - falloff), 0.0, 1.0)
@@ -576,6 +646,7 @@ def adjust_contrast_saturation(
     mean = rgb.mean(axis=2, keepdims=True)
     rgb = (rgb - mean) * saturation + mean
     return np.clip(rgb, 0.0, 1.0)
+
 
 # --------------------------
 # Branding (logo + caption)
@@ -628,6 +699,7 @@ def overlay_logo_caption(  # pylint: disable=too-many-locals
             canvas.paste(logo, (lx, ly), logo)
 
     return canvas
+
 
 # --------------------------
 # Config
@@ -705,6 +777,7 @@ class FinishConfig:
     sky_environment_strength: float = 0.0
     sky_environment_scale: float = 1.0
 
+
 # --------------------------
 # Core pipeline
 # --------------------------
@@ -725,7 +798,9 @@ class LuxuryRenderPipeline:
 
         self.model_ids = model_ids
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        self.dtype = torch.float16 if (fp16 and torch.cuda.is_available()) else torch.float32
+        self.dtype = (
+            torch.float16 if (fp16 and torch.cuda.is_available()) else torch.float32
+        )
         self._use_depth = use_depth
 
         # Load ControlNets
@@ -735,7 +810,9 @@ class LuxuryRenderPipeline:
             torch_dtype=self.dtype,
         )
         self.cn_depth = (
-            ControlNetModel.from_pretrained(model_ids.controlnet_depth, torch_dtype=self.dtype)
+            ControlNetModel.from_pretrained(
+                model_ids.controlnet_depth, torch_dtype=self.dtype
+            )
             if self._use_depth
             else None
         )
@@ -779,7 +856,9 @@ class LuxuryRenderPipeline:
             )
             self.refiner = None
 
-        self.pipe.scheduler = UniPCMultistepScheduler.from_config(self.pipe.scheduler.config)
+        self.pipe.scheduler = UniPCMultistepScheduler.from_config(
+            self.pipe.scheduler.config
+        )
         self.pipe.to(self.device)
 
         # Upscaler (latent)
@@ -789,7 +868,9 @@ class LuxuryRenderPipeline:
                 model_ids.upscaler_id, torch_dtype=self.dtype
             ).to(self.device)
         except (OSError, RuntimeError, ValueError) as e:
-            print(f"[Warn] Latent upscaler not available ({e}). Will skip latent upscaling.")
+            print(
+                f"[Warn] Latent upscaler not available ({e}). Will skip latent upscaling."
+            )
             self.upscaler = None
 
         # Real-ESRGAN (optional)
@@ -804,16 +885,24 @@ class LuxuryRenderPipeline:
             # RealESRGANer expects model_path parameter
             # If weights don't exist locally, the package will download them
             from realesrgan.archs.srvgg_arch import SRVGGNetCompact
-            model = SRVGGNetCompact(num_in_ch=3, num_out_ch=3, num_feat=64, num_conv=32, upscale=4, act_type='prelu')
+
+            model = SRVGGNetCompact(
+                num_in_ch=3,
+                num_out_ch=3,
+                num_feat=64,
+                num_conv=32,
+                upscale=4,
+                act_type="prelu",
+            )
             self.realesrgan = RealESRGANer(
                 scale=4,
-                model_path='https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth',
+                model_path="https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth",
                 model=model,
                 tile=0,
                 tile_pad=10,
                 pre_pad=0,
                 half=(self.dtype == torch.float16),
-                device=self.device
+                device=self.device,
             )
 
         # Preprocessor
@@ -840,7 +929,9 @@ class LuxuryRenderPipeline:
         control_images = [canny]
         if depth is not None:
             control_images.append(depth)
-        control_image_arg = control_images[0] if len(control_images) == 1 else control_images
+        control_image_arg = (
+            control_images[0] if len(control_images) == 1 else control_images
+        )
 
         # 2) Diffusion pass (structure-preserving)
         g = seed_all(cfg.seed)
@@ -981,7 +1072,9 @@ def parse_float_triplet(value: str) -> Tuple[float, float, float]:
     return clamped_tuple
 
 
-def validate_sd_dimensions(width: int, height: int, auto_correct: bool = True) -> Tuple[int, int]:
+def validate_sd_dimensions(
+    width: int, height: int, auto_correct: bool = True
+) -> Tuple[int, int]:
     """Validate and optionally auto-correct dimensions for Stable Diffusion 1.5 compatibility.
 
     SD 1.5 requires dimensions that are multiples of 64 for proper feature map alignment.
@@ -1010,10 +1103,10 @@ def validate_sd_dimensions(width: int, height: int, auto_correct: bool = True) -
 
     # Check if dimensions are multiples of SD_DIMENSION_MULTIPLE or below minimum
     needs_correction = (
-        width % SD_DIMENSION_MULTIPLE != 0 or
-        height % SD_DIMENSION_MULTIPLE != 0 or
-        width < MIN_SD_DIMENSION or
-        height < MIN_SD_DIMENSION
+        width % SD_DIMENSION_MULTIPLE != 0
+        or height % SD_DIMENSION_MULTIPLE != 0
+        or width < MIN_SD_DIMENSION
+        or height < MIN_SD_DIMENSION
     )
 
     if needs_correction:
@@ -1029,13 +1122,16 @@ def validate_sd_dimensions(width: int, height: int, auto_correct: bool = True) -
             typer.echo(
                 f"⚠ Corrected dimensions from {original_width}×{original_height} "
                 f"to {corrected_width}×{corrected_height} (SD 1.5 compatible)",
-                err=True
+                err=True,
             )
             return corrected_width, corrected_height
         else:
             # Build appropriate error message based on what's wrong
             errors = []
-            if width % SD_DIMENSION_MULTIPLE != 0 or height % SD_DIMENSION_MULTIPLE != 0:
+            if (
+                width % SD_DIMENSION_MULTIPLE != 0
+                or height % SD_DIMENSION_MULTIPLE != 0
+            ):
                 errors.append(f"must be multiples of {SD_DIMENSION_MULTIPLE}")
             if width < MIN_SD_DIMENSION or height < MIN_SD_DIMENSION:
                 errors.append(f"must be at least {MIN_SD_DIMENSION}")
@@ -1052,7 +1148,7 @@ def validate_sd_dimensions(width: int, height: int, auto_correct: bool = True) -
         typer.echo(
             f"⚠ Large dimensions ({width}×{height}) may require significant VRAM (8GB+). "
             "Consider using smaller dimensions or ensure sufficient GPU memory.",
-            err=True
+            err=True,
         )
 
     return width, height
@@ -1060,9 +1156,13 @@ def validate_sd_dimensions(width: int, height: int, auto_correct: bool = True) -
 
 @app.command()
 def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
-    input_glob: str = typer.Option(..., help="Glob of input images, e.g. './drafts/*.png'"),
+    input_glob: str = typer.Option(
+        ..., help="Glob of input images, e.g. './drafts/*.png'"
+    ),
     out: str = typer.Option("./final", help="Output folder"),
-    prompt: str = typer.Option(..., help="Positive prompt (style, materials, time of day, lens)"),
+    prompt: str = typer.Option(
+        ..., help="Positive prompt (style, materials, time of day, lens)"
+    ),
     neg: str = typer.Option(
         "lowres, bad geometry, blurry, text, watermark, logo",
         help="Negative prompt",
@@ -1089,7 +1189,9 @@ def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments,to
     no_bloom: bool = typer.Option(False, help="Disable bloom"),
     no_vignette: bool = typer.Option(False, help="Disable vignette"),
     no_grain: bool = typer.Option(False, help="Disable grain"),
-    no_depth: bool = typer.Option(False, help="Disable depth guidance (ControlNet depth)"),
+    no_depth: bool = typer.Option(
+        False, help="Disable depth guidance (ControlNet depth)"
+    ),
     material_response: bool = typer.Option(
         False,
         help="Enable texture + atmosphere finishing enhancements",
@@ -1236,7 +1338,9 @@ def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments,to
         help="Caption, e.g. 'The Veridian | Penthouse 21B'",
     ),
     # Export/resolution
-    w4k: bool = typer.Option(False, help="Export ~4K. Uses latent + optional Real-ESRGAN."),
+    w4k: bool = typer.Option(
+        False, help="Export ~4K. Uses latent + optional Real-ESRGAN."
+    ),
     use_realesrgan: bool = typer.Option(
         False,
         help="Use Real-ESRGAN (requires weights, GPU recommended)",

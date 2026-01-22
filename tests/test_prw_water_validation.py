@@ -304,7 +304,12 @@ def test_validate_dataset():
             "root": str(temp_dir),
             "labels": ["pool"],
             "images": {
-                "pool/pool_001.jpg": {"label": "pool", "should_detect": True, "difficulty": "easy", "tags": []},
+                "pool/pool_001.jpg": {
+                    "label": "pool",
+                    "should_detect": True,
+                    "difficulty": "easy",
+                    "tags": [],
+                },
                 "pool/neg_blue_wall_001.jpg": {
                     "label": "pool",
                     "should_detect": False,
@@ -749,7 +754,10 @@ def test_suppressor_telemetry_export():
 
 def test_multiscale_flag_off_no_behavior_change():
     """Verify flag OFF preserves exact prior behavior (Phase C)."""
-    from lux_depth_v2.water_candidate import WaterCandidateDetector, WaterDetectionParams
+    from lux_depth_v2.water_candidate import (
+        WaterCandidateDetector,
+        WaterDetectionParams,
+    )
 
     # Create test image with pool-like region
     rgb01 = create_test_image(size=(256, 256), pool_region=True)
@@ -779,7 +787,10 @@ def test_multiscale_flag_off_no_behavior_change():
 
 def test_multiscale_flag_on_telemetry_present():
     """Verify flag ON adds telemetry keys and tile exemption logic runs (Phase C)."""
-    from lux_depth_v2.water_candidate import WaterCandidateDetector, WaterDetectionParams
+    from lux_depth_v2.water_candidate import (
+        WaterCandidateDetector,
+        WaterDetectionParams,
+    )
 
     # Create test image with grid-like pattern (simulates tiled pool)
     h, w = 256, 256
@@ -799,7 +810,9 @@ def test_multiscale_flag_on_telemetry_present():
 
     # Run with flag ON
     params_on = WaterDetectionParams(
-        glass_multiscale_enabled=True, glass_multiscale_downsample_factor=4, glass_tile_persistence_threshold=0.8
+        glass_multiscale_enabled=True,
+        glass_multiscale_downsample_factor=4,
+        glass_tile_persistence_threshold=0.8,
     )
     detector_on = WaterCandidateDetector(params=params_on)
     result_on = detector_on.detect(rgb01)
@@ -828,7 +841,10 @@ def test_multiscale_flag_on_telemetry_present():
 
 def test_multiscale_downsampling_robustness():
     """Verify multi-scale downsampling handles edge cases (Phase C)."""
-    from lux_depth_v2.water_candidate import WaterCandidateDetector, WaterDetectionParams
+    from lux_depth_v2.water_candidate import (
+        WaterCandidateDetector,
+        WaterDetectionParams,
+    )
 
     # Test with very small image (should handle gracefully)
     small_rgb = np.random.rand(64, 64, 3).astype(np.float32)

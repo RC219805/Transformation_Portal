@@ -1,6 +1,7 @@
 """
 Tests for PyPI workflow configurations.
 """
+
 # pylint: disable=redefined-outer-name  # pytest fixtures
 
 from pathlib import Path

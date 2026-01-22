@@ -4,7 +4,10 @@
 import numpy as np
 import cv2
 import pytest
-from high_fidelity_depth.quality_metrics import extract_structure_edges, classify_scene_type
+from high_fidelity_depth.quality_metrics import (
+    extract_structure_edges,
+    classify_scene_type,
+)
 
 
 def test_bilateral_suppresses_texture():

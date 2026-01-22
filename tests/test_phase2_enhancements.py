@@ -12,11 +12,20 @@ import time
 import json
 
 # Import Phase 2 modules
-from tools.material_detector import MaterialDetector, MaterialType, MaterialDetectionResult
-from tools.depth_aware_lut import DepthAwareLUT, DepthAwareLUTConfig, ZoneLUTConfig, DepthZone, LUTReader
+from tools.material_detector import (
+    MaterialDetector,
+    MaterialType,
+    MaterialDetectionResult,
+)
+from tools.depth_aware_lut import (
+    DepthAwareLUT,
+    DepthAwareLUTConfig,
+    ZoneLUTConfig,
+    DepthZone,
+    LUTReader,
+)
 from utils.performance_profiler import PerformanceProfiler
 from utils.exposure_fusion import ExposureFusion, ExposureTarget
-
 
 # ============================================================================
 # Material Detector Tests

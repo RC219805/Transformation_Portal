@@ -492,7 +492,10 @@ class HighFidelityDepthEstimator:
         return mag
 
     def _reconcile_tile_scale(
-        self, tile_depth: np.ndarray, reference_region: np.ndarray, overlap_mask: np.ndarray
+        self,
+        tile_depth: np.ndarray,
+        reference_region: np.ndarray,
+        overlap_mask: np.ndarray,
     ) -> Tuple[np.ndarray, float, float]:
         """
         Reconcile tile scale to match reference using robust affine fit.
@@ -780,7 +783,9 @@ class HighFidelityDepthEstimator:
         return self._create_blend_weight(tile_size, overlap)
 
     def _blend_tiles(
-        self, tile_depths: List[Tuple[np.ndarray, int, int, int, int]], output_shape: Tuple[int, int]
+        self,
+        tile_depths: List[Tuple[np.ndarray, int, int, int, int]],
+        output_shape: Tuple[int, int],
     ) -> np.ndarray:
         """
         Blend reconciled tiles using weighted overlap blending (STREAMING MODE - MEMORY SAFE).
@@ -914,7 +919,10 @@ class HighFidelityDepthEstimator:
         return global_depth
 
     def estimate_depth(
-        self, image: np.ndarray, use_global_anchor: bool = True, smooth_calibrations: bool = True
+        self,
+        image: np.ndarray,
+        use_global_anchor: bool = True,
+        smooth_calibrations: bool = True,
     ) -> np.ndarray:
         """
         Estimate high-fidelity depth using tiled inference with scale reconciliation.
@@ -1005,7 +1013,10 @@ class HighFidelityDepthEstimator:
             global_anchor_orig = self._compute_global_anchor(image)
             # Pad anchor to match padded image
             global_anchor, _ = self._pad_to_tile_geometry(
-                np.stack([global_anchor_orig, global_anchor_orig, global_anchor_orig], axis=-1)
+                np.stack(
+                    [global_anchor_orig, global_anchor_orig, global_anchor_orig],
+                    axis=-1,
+                )
             )
             global_anchor = global_anchor[:, :, 0]  # Extract single channel
             logger.info(f"Global anchor padded to {global_anchor.shape}")
@@ -1035,7 +1046,10 @@ class HighFidelityDepthEstimator:
         # Step 4: Blend with scale reconciliation (PRIORITY 2 FIX: spatial smoothing)
         logger.info("Blending tiles with scale reconciliation...")
         depth_padded = self._blend_tiles_with_reconciliation(
-            tile_depths, (h_pad, w_pad), global_anchor, smooth_calibrations=smooth_calibrations
+            tile_depths,
+            (h_pad, w_pad),
+            global_anchor,
+            smooth_calibrations=smooth_calibrations,
         )
 
         # Step 5: Crop back to original dimensions (BLOCKER A FIX)
@@ -1054,10 +1068,12 @@ class HighFidelityDepthEstimator:
                 "preprocessed_shape": (h_pad, w_pad),
                 "tile_size": self.config.tile_size,
                 "num_tiles": len(tiles),
-                "policy": "small_image_boost" if min(tile_h, tile_w) < self.config.small_image_threshold else "default",
-                "input_size": self.config.small_image_input_size
-                if min(tile_h, tile_w) < self.config.small_image_threshold
-                else self.config.default_input_size,
+                "policy": ("small_image_boost" if min(tile_h, tile_w) < self.config.small_image_threshold else "default"),
+                "input_size": (
+                    self.config.small_image_input_size
+                    if min(tile_h, tile_w) < self.config.small_image_threshold
+                    else self.config.default_input_size
+                ),
                 "aspect_ratio_preserved": True,
             }
 

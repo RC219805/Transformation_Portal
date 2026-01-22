@@ -39,7 +39,12 @@ def test_lux_depth_v2_submodules():
 
 def test_lux_depth_v2_cli_entry_point():
     """Test that lux-depth-v2 CLI entry point is registered."""
-    result = subprocess.run([sys.executable, "-m", "lux_depth_v2.cli", "--help"], capture_output=True, text=True, timeout=10)
+    result = subprocess.run(
+        [sys.executable, "-m", "lux_depth_v2.cli", "--help"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
     assert result.returncode == 0, (
         f"CLI entry point failed with exit code {result.returncode}\nstdout: {result.stdout}\nstderr: {result.stderr}"
     )

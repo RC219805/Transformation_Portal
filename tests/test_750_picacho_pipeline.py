@@ -44,7 +44,6 @@ from picacho_pool_remediation_pipeline import (  # noqa: E402
     StylingRectifier,
 )
 
-
 # ============================================================================
 # Fixtures
 # ============================================================================
@@ -185,7 +184,12 @@ class TestMaterialSystemReconstructor:
         """Test that MATERIALS dictionary has proper PBR properties."""
         reconstructor = MaterialSystemReconstructor()
 
-        for mat_type in [MaterialType.PLASTER, MaterialType.STONE, MaterialType.WOOD, MaterialType.WATER]:
+        for mat_type in [
+            MaterialType.PLASTER,
+            MaterialType.STONE,
+            MaterialType.WOOD,
+            MaterialType.WATER,
+        ]:
             assert mat_type in reconstructor.MATERIALS
             props = reconstructor.MATERIALS[mat_type]
             assert isinstance(props, PBRMaterialProperties)

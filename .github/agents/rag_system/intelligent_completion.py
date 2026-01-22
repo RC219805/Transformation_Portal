@@ -339,10 +339,34 @@ class IntelligentCompletion:
         """
         # Define common pipeline workflows
         workflows = {
-            "depth": ["load_image", "estimate_depth", "apply_depth_effects", "apply_tone_mapping", "save_result"],
-            "material": ["load_image", "detect_materials", "enhance_surfaces", "apply_color_grade", "save_result"],
-            "color": ["load_image", "apply_lut", "adjust_exposure", "adjust_saturation", "save_result"],
-            "video": ["load_video", "build_filter_graph", "apply_filters", "encode_output", "save_result"],
+            "depth": [
+                "load_image",
+                "estimate_depth",
+                "apply_depth_effects",
+                "apply_tone_mapping",
+                "save_result",
+            ],
+            "material": [
+                "load_image",
+                "detect_materials",
+                "enhance_surfaces",
+                "apply_color_grade",
+                "save_result",
+            ],
+            "color": [
+                "load_image",
+                "apply_lut",
+                "adjust_exposure",
+                "adjust_saturation",
+                "save_result",
+            ],
+            "video": [
+                "load_video",
+                "build_filter_graph",
+                "apply_filters",
+                "encode_output",
+                "save_result",
+            ],
         }
 
         suggestions = []
@@ -461,7 +485,10 @@ def main():
     parser = argparse.ArgumentParser(description="Intelligent Code Completion")
     parser.add_argument("--repo-root", default=".", help="Repository root")
     parser.add_argument(
-        "--mode", required=True, choices=["import", "function", "parameter", "snippet", "pipeline"], help="Completion mode"
+        "--mode",
+        required=True,
+        choices=["import", "function", "parameter", "snippet", "pipeline"],
+        help="Completion mode",
     )
     parser.add_argument("--context", help="Code context")
     parser.add_argument("--function", help="Function name (for parameter mode)")

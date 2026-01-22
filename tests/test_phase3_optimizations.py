@@ -26,7 +26,10 @@ pytestmark = pytest.mark.skipif(not TQDM_AVAILABLE, reason="tqdm is required for
 # Guard the import - only import if tqdm is available
 if TQDM_AVAILABLE:
     from transformation_portal.depth.pipeline import ArchitecturalDepthPipeline
-    from transformation_portal.depth.processors.numba_kernels import get_numba_info, NUMBA_AVAILABLE
+    from transformation_portal.depth.processors.numba_kernels import (
+        get_numba_info,
+        NUMBA_AVAILABLE,
+    )
 else:
     # Provide dummy values to prevent NameError during test collection
     ArchitecturalDepthPipeline = None  # type: ignore
@@ -113,7 +116,10 @@ def pipeline_config():
 @pytest.fixture
 def pipeline(pipeline_config, mock_depth_model):
     """Create a pipeline with mocked depth model."""
-    with patch("transformation_portal.depth.pipeline.DepthAnythingV2Model", return_value=mock_depth_model):
+    with patch(
+        "transformation_portal.depth.pipeline.DepthAnythingV2Model",
+        return_value=mock_depth_model,
+    ):
         pipeline = ArchitecturalDepthPipeline(pipeline_config)
         return pipeline
 
@@ -136,7 +142,9 @@ class TestNumbaIntegration:
 
     def test_atmospheric_effects_with_numba(self, pipeline_config):
         """Test atmospheric effects with Numba acceleration."""
-        from transformation_portal.depth.processors.atmospheric_effects import AtmosphericEffects
+        from transformation_portal.depth.processors.atmospheric_effects import (
+            AtmosphericEffects,
+        )
 
         # Create processor with Numba enabled
         processor = AtmosphericEffects(use_numba=True)
@@ -164,7 +172,9 @@ class TestNumbaIntegration:
 
     def test_numba_numpy_equivalence(self):
         """Test that Numba and NumPy versions produce similar results."""
-        from transformation_portal.depth.processors.atmospheric_effects import AtmosphericEffects
+        from transformation_portal.depth.processors.atmospheric_effects import (
+            AtmosphericEffects,
+        )
 
         # Skip if Numba not available
         if not NUMBA_AVAILABLE:

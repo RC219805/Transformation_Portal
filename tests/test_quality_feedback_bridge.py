@@ -30,7 +30,6 @@ from transformation_portal.pipelines.quality_feedback_bridge import (
     index_quality_metrics_to_rag,
 )
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================

@@ -47,7 +47,10 @@ class QualityEnforcer:
     def check_f_string_interpolation(self) -> bool:
         """Check for f-strings without interpolation."""
         result = subprocess.run(
-            ["grep", "-r", "-n", 'f"[^{]*"', "--include=*.py", "."], cwd=self.repo_root, capture_output=True, text=True
+            ["grep", "-r", "-n", 'f"[^{]*"', "--include=*.py", "."],
+            cwd=self.repo_root,
+            capture_output=True,
+            text=True,
         )
 
         # Filter out false positives
@@ -71,7 +74,10 @@ class QualityEnforcer:
 
         for pattern, desc in dangerous_patterns:
             result = subprocess.run(
-                ["grep", "-r", "-n", "-E", pattern, "--include=*.py", "."], cwd=self.repo_root, capture_output=True, text=True
+                ["grep", "-r", "-n", "-E", pattern, "--include=*.py", "."],
+                cwd=self.repo_root,
+                capture_output=True,
+                text=True,
             )
 
             if result.stdout and result.returncode == 0:

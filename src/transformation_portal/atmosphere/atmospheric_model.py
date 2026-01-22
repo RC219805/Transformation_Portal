@@ -19,7 +19,6 @@ from dataclasses import dataclass
 
 import numpy as np
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -36,6 +35,7 @@ class AtmosphericParameters:
         temperature: Air temperature in Celsius
         pressure: Atmospheric pressure in hPa
     """
+
     turbidity: float = 2.0
     humidity: float = 0.65  # 65% typical for coastal
     aerosol_density: float = 0.12  # Coastal scattering coefficient
@@ -55,6 +55,7 @@ class MarineLayerParameters:
         density: Marine layer density (0-1)
         thickness: Layer thickness in meters
     """
+
     present: bool = False
     height: float = 150.0  # meters (~500 feet typical)
     density: float = 0.5
@@ -82,9 +83,9 @@ class AtmosphericModel:
 
     # Wavelength-dependent Rayleigh scattering coefficients
     RAYLEIGH_COEFFICIENTS = {
-        'red': 0.058,      # 650nm
-        'green': 0.135,    # 510nm
-        'blue': 0.331      # 450nm
+        "red": 0.058,  # 650nm
+        "green": 0.135,  # 510nm
+        "blue": 0.331,  # 450nm
     }
 
     def __init__(self):
@@ -96,7 +97,7 @@ class AtmosphericModel:
         image: np.ndarray,
         depth_map: np.ndarray,
         params: AtmosphericParameters,
-        max_distance: float = 1000.0
+        max_distance: float = 1000.0,
     ) -> np.ndarray:
         """Apply aerial perspective (atmospheric depth cues).
 
@@ -128,13 +129,12 @@ class AtmosphericModel:
         atmospheric = image.astype(np.float32) / 255.0
 
         # Add atmospheric scattering
-        for i, color in enumerate(['red', 'green', 'blue']):
+        for i, color in enumerate(["red", "green", "blue"]):
             channel_transmission = transmission ** self.RAYLEIGH_COEFFICIENTS[color]
 
-            atmospheric[:, :, 2 - i] = (
-                atmospheric[:, :, 2 - i] * channel_transmission +
-                atmo_color[2 - i] * (1 - channel_transmission)
-            )
+            atmospheric[:, :, 2 - i] = atmospheric[
+                :, :, 2 - i
+            ] * channel_transmission + atmo_color[2 - i] * (1 - channel_transmission)
 
         # Desaturate with distance
         desaturation = 1.0 - (1.0 - transmission) * 0.3
@@ -148,9 +148,7 @@ class AtmosphericModel:
         return atmospheric
 
     def _calculate_transmission(
-        self,
-        distance: np.ndarray,
-        params: AtmosphericParameters
+        self, distance: np.ndarray, params: AtmosphericParameters
     ) -> np.ndarray:
         """Calculate atmospheric transmission using Beer-Lambert law.
 
@@ -172,10 +170,7 @@ class AtmosphericModel:
 
         return transmission
 
-    def _get_atmospheric_color(
-        self,
-        params: AtmosphericParameters
-    ) -> np.ndarray:
+    def _get_atmospheric_color(self, params: AtmosphericParameters) -> np.ndarray:
         """Get atmospheric scattering color.
 
         Args:
@@ -191,8 +186,8 @@ class AtmosphericModel:
         if params.marine_influence > 0:
             marine_tint = np.array([0.3, 0.65, 0.85])
             base_color = (
-                base_color * (1 - params.marine_influence * 0.3) +
-                marine_tint * params.marine_influence * 0.3
+                base_color * (1 - params.marine_influence * 0.3)
+                + marine_tint * params.marine_influence * 0.3
             )
 
         # Haze makes atmosphere whiter
@@ -208,7 +203,7 @@ class AtmosphericModel:
         image: np.ndarray,
         height_map: np.ndarray,
         marine_params: MarineLayerParameters,
-        camera_height: float = 2.0
+        camera_height: float = 2.0,
     ) -> np.ndarray:
         """Simulate marine layer fog effects.
 
@@ -250,8 +245,7 @@ class AtmosphericModel:
 
         for i in range(3):
             fogged[:, :, i] = (
-                fogged[:, :, i] * (1 - fog_density) +
-                fog_color[i] * fog_density
+                fogged[:, :, i] * (1 - fog_density) + fog_color[i] * fog_density
             )
 
         fogged = (fogged * 255).clip(0, 255).astype(np.uint8)
@@ -259,9 +253,7 @@ class AtmosphericModel:
         return fogged
 
     def calculate_sundowner_clarity(
-        self,
-        base_visibility: float,
-        sundowner_active: bool = False
+        self, base_visibility: float, sundowner_active: bool = False
     ) -> float:
         """Calculate visibility during Sundowner wind conditions.
 
@@ -281,9 +273,7 @@ class AtmosphericModel:
         return base_visibility
 
     def get_seasonal_atmospheric_profile(
-        self,
-        season: str,
-        location: str = "santa_barbara"
+        self, season: str, location: str = "santa_barbara"
     ) -> AtmosphericParameters:
         """Get seasonal atmospheric parameters.
 
@@ -301,29 +291,29 @@ class AtmosphericModel:
                 humidity=0.68,
                 aerosol_density=0.14,
                 marine_influence=0.7,
-                visibility=25.0
+                visibility=25.0,
             ),
             "summer": AtmosphericParameters(
                 turbidity=3.0,  # June gloom
                 humidity=0.75,
                 aerosol_density=0.15,
                 marine_influence=0.8,
-                visibility=20.0
+                visibility=20.0,
             ),
             "fall": AtmosphericParameters(
                 turbidity=1.5,  # Sundowner season - exceptional clarity
                 humidity=0.50,
                 aerosol_density=0.10,
                 marine_influence=0.5,
-                visibility=40.0
+                visibility=40.0,
             ),
             "winter": AtmosphericParameters(
                 turbidity=1.8,  # Rain-washed clarity
                 humidity=0.62,
                 aerosol_density=0.11,
                 marine_influence=0.6,
-                visibility=35.0
-            )
+                visibility=35.0,
+            ),
         }
 
         return profiles.get(season, profiles["spring"])
@@ -338,6 +328,7 @@ class AtmosphericModel:
             HSV image (H, W, 3)
         """
         import cv2
+
         # OpenCV uses BGR and range [0, 180] for H
         bgr = rgb[:, :, ::-1]
         hsv = cv2.cvtColor((bgr * 255).astype(np.uint8), cv2.COLOR_BGR2HSV)
@@ -353,6 +344,7 @@ class AtmosphericModel:
             RGB image (H, W, 3) in range [0, 1]
         """
         import cv2
+
         hsv_scaled = (hsv * np.array([180, 255, 255])).astype(np.uint8)
         bgr = cv2.cvtColor(hsv_scaled, cv2.COLOR_HSV2BGR)
         rgb = bgr[:, :, ::-1].astype(np.float32) / 255.0

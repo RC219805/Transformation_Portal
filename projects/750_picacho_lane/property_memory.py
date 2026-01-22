@@ -25,7 +25,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%H:%M:%S")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
 logger = logging.getLogger("property_memory")
 
 
@@ -137,7 +141,11 @@ class PropertyMemory:
     # Default configurations for 750 Picacho Lane rooms
     DEFAULT_ROOM_CONFIGS = {
         SceneType.POOL: {
-            "materials": [MaterialType.WATER, MaterialType.STONE, MaterialType.CONCRETE],
+            "materials": [
+                MaterialType.WATER,
+                MaterialType.STONE,
+                MaterialType.CONCRETE,
+            ],
             "optimal_parameters": {
                 "water_enhance": True,
                 "water_saturation": 1.25,
@@ -151,7 +159,12 @@ class PropertyMemory:
             "notes": "Pool & Aquatic Features - emphasize water clarity and reflections",
         },
         SceneType.GREAT_ROOM: {
-            "materials": [MaterialType.WOOD, MaterialType.FABRIC, MaterialType.GLASS, MaterialType.STONE],
+            "materials": [
+                MaterialType.WOOD,
+                MaterialType.FABRIC,
+                MaterialType.GLASS,
+                MaterialType.STONE,
+            ],
             "optimal_parameters": {
                 "wood_enhance": True,
                 "fabric_enhance": True,
@@ -163,7 +176,12 @@ class PropertyMemory:
             "notes": "Great Room - warm interior lighting, wood grain detail",
         },
         SceneType.KITCHEN: {
-            "materials": [MaterialType.METAL, MaterialType.STONE, MaterialType.GLASS, MaterialType.WOOD],
+            "materials": [
+                MaterialType.METAL,
+                MaterialType.STONE,
+                MaterialType.GLASS,
+                MaterialType.WOOD,
+            ],
             "optimal_parameters": {
                 "metal_enhance": True,
                 "stone_enhance": True,
@@ -188,7 +206,12 @@ class PropertyMemory:
             "notes": "Primary Bedroom - soft, luxurious feel",
         },
         SceneType.PRIMARY_BATHROOM: {
-            "materials": [MaterialType.STONE, MaterialType.GLASS, MaterialType.METAL, MaterialType.WATER],
+            "materials": [
+                MaterialType.STONE,
+                MaterialType.GLASS,
+                MaterialType.METAL,
+                MaterialType.WATER,
+            ],
             "optimal_parameters": {
                 "stone_enhance": True,
                 "glass_enhance": True,
@@ -199,7 +222,12 @@ class PropertyMemory:
             "notes": "Primary Bathroom - spa-like atmosphere",
         },
         SceneType.AERIAL: {
-            "materials": [MaterialType.WATER, MaterialType.STONE, MaterialType.VEGETATION, MaterialType.ROOF],
+            "materials": [
+                MaterialType.WATER,
+                MaterialType.STONE,
+                MaterialType.VEGETATION,
+                MaterialType.ROOF,
+            ],
             "optimal_parameters": {
                 "water_enhance": True,
                 "landscape_enhance": True,
@@ -214,7 +242,12 @@ class PropertyMemory:
             "notes": "Aerial View - estate overview with depth",
         },
         SceneType.AERIAL_2: {
-            "materials": [MaterialType.WATER, MaterialType.STONE, MaterialType.VEGETATION, MaterialType.ROOF],
+            "materials": [
+                MaterialType.WATER,
+                MaterialType.STONE,
+                MaterialType.VEGETATION,
+                MaterialType.ROOF,
+            ],
             "optimal_parameters": {
                 "water_enhance": True,
                 "landscape_enhance": True,
@@ -621,7 +654,7 @@ class PropertyMemory:
             property_name=self.global_learnings.get("property_name", "750 Picacho Lane"),
             location=self.global_learnings.get("location", "Santa Barbara, CA"),
             total_scenes=len(self.room_configs),
-            average_quality=sum(all_quality_scores) / len(all_quality_scores) if all_quality_scores else 0.0,
+            average_quality=(sum(all_quality_scores) / len(all_quality_scores) if all_quality_scores else 0.0),
             best_performing_scene=best_scene,
             common_materials=common_materials,
             optimal_global_parameters=self.global_learnings.copy(),
@@ -677,7 +710,12 @@ class PropertyMemory:
             SceneType.GREAT_ROOM: ["greatroom", "great_room", "living"],
             SceneType.KITCHEN: ["kitchen", "culinary"],
             SceneType.PRIMARY_BEDROOM: ["bedroom", "primarybed", "master_bed"],
-            SceneType.PRIMARY_BATHROOM: ["bathroom", "primarybath", "master_bath", "spa"],
+            SceneType.PRIMARY_BATHROOM: [
+                "bathroom",
+                "primarybath",
+                "master_bath",
+                "spa",
+            ],
             SceneType.AERIAL: ["aerial", "drone"],
             SceneType.AERIAL_2: ["aerial-2", "aerial_2", "drone2"],
             SceneType.EXTERIOR: ["exterior", "facade", "front"],

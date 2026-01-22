@@ -259,13 +259,28 @@ def print_summary(results: List[Dict]) -> None:
 def main():
     parser = argparse.ArgumentParser(description="Validate advanced depth refinement")
     parser.add_argument("--input-dir", type=Path, required=True, help="Input directory with RGB images")
-    parser.add_argument("--depth-dir", type=Path, help="Directory with pre-computed depth maps (optional)")
-    parser.add_argument("--output-dir", type=Path, required=True, help="Output directory for refined depth maps")
+    parser.add_argument(
+        "--depth-dir",
+        type=Path,
+        help="Directory with pre-computed depth maps (optional)",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        required=True,
+        help="Output directory for refined depth maps",
+    )
     parser.add_argument(
         "--technique",
         type=str,
         default="hybrid",
-        choices=["bilateral", "guided", "edge_guided", "gradient_consistency", "hybrid"],
+        choices=[
+            "bilateral",
+            "guided",
+            "edge_guided",
+            "gradient_consistency",
+            "hybrid",
+        ],
         help="Refinement technique to use",
     )
     parser.add_argument("--report", action="store_true", help="Generate JSON report")

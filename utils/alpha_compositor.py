@@ -12,8 +12,14 @@ from enum import Enum
 import numpy as np
 from PIL import Image
 
-
-AlphaMode = Literal["preserve", "flatten-white", "flatten-black", "flatten-gray", "composite-gradient", "composite-branded"]
+AlphaMode = Literal[
+    "preserve",
+    "flatten-white",
+    "flatten-black",
+    "flatten-gray",
+    "composite-gradient",
+    "composite-branded",
+]
 
 
 class AlphaCompositor:
@@ -220,7 +226,13 @@ class AlphaCompositor:
 
         return variants
 
-    def save_variants(self, image: np.ndarray, output_dir: Path, base_name: str, modes: Optional[list] = None) -> dict:
+    def save_variants(
+        self,
+        image: np.ndarray,
+        output_dir: Path,
+        base_name: str,
+        modes: Optional[list] = None,
+    ) -> dict:
         """
         Generate and save multiple alpha variants.
 
@@ -290,13 +302,30 @@ def main():
 
     parser = argparse.ArgumentParser(description="Alpha channel compositor")
     parser.add_argument("input", type=Path, help="Input image with alpha channel")
-    parser.add_argument("--output-dir", type=Path, default=Path("output_alpha_variants"), help="Output directory")
-    parser.add_argument("--modes", nargs="+", help="Modes to generate (default: all flatten modes + preserve)")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("output_alpha_variants"),
+        help="Output directory",
+    )
+    parser.add_argument(
+        "--modes",
+        nargs="+",
+        help="Modes to generate (default: all flatten modes + preserve)",
+    )
     parser.add_argument("--single-mode", help="Generate only one mode and save to specific path")
     parser.add_argument("--single-output", type=Path, help="Output path for single mode")
-    parser.add_argument("--bg-color", nargs=3, type=float, help="Background color for flatten (R G B in [0, 1])")
     parser.add_argument(
-        "--gradient", nargs=6, type=float, help="Gradient colors (top_R top_G top_B bottom_R bottom_G bottom_B)"
+        "--bg-color",
+        nargs=3,
+        type=float,
+        help="Background color for flatten (R G B in [0, 1])",
+    )
+    parser.add_argument(
+        "--gradient",
+        nargs=6,
+        type=float,
+        help="Gradient colors (top_R top_G top_B bottom_R bottom_G bottom_B)",
     )
 
     args = parser.parse_args()

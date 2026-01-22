@@ -131,7 +131,10 @@ def step2_prompt_templates():
         explanation="Atmospheric haze blends fog color proportional to depth distance",
         confidence=0.85,
         citations=[
-            {"file_path": "depth_pipeline/processors/clarity.py", "relevance": "Similar pattern for depth-based processing"}
+            {
+                "file_path": "depth_pipeline/processors/clarity.py",
+                "relevance": "Similar pattern for depth-based processing",
+            }
         ],
     )
 
@@ -170,7 +173,10 @@ def step3_artifact_classification():
         ("output/depth_map.png", None),
         ("output/graded_video.mp4", None),
         ("output/test_result.log", "ERROR: Processing failed\nException: ValueError"),
-        ("output/metrics.json", '{"processing_time": 2.5, "success": true, "memory_usage": 1024}'),
+        (
+            "output/metrics.json",
+            '{"processing_time": 2.5, "success": true, "memory_usage": 1024}',
+        ),
     ]
 
     for file_path, content in sample_files:
@@ -235,8 +241,20 @@ def step4_knowledge_engine():
     # Add sample feedback for depth_pipeline
     print("\n2. Adding sample feedback for depth_pipeline...")
     feedback_samples = [
-        ("depth_pipeline", "art_001", True, 0.045, {"model": "depth_anything_v2", "tone_mapping": "agx"}),
-        ("depth_pipeline", "art_002", True, 0.038, {"model": "depth_anything_v2", "tone_mapping": "agx"}),
+        (
+            "depth_pipeline",
+            "art_001",
+            True,
+            0.045,
+            {"model": "depth_anything_v2", "tone_mapping": "agx"},
+        ),
+        (
+            "depth_pipeline",
+            "art_002",
+            True,
+            0.038,
+            {"model": "depth_anything_v2", "tone_mapping": "agx"},
+        ),
         (
             "depth_pipeline",
             "art_003",
@@ -245,7 +263,13 @@ def step4_knowledge_engine():
             {"model": "depth_anything_v2", "tone_mapping": "custom"},
             "Custom tone mapping not found",
         ),
-        ("depth_pipeline", "art_004", True, 0.042, {"model": "depth_anything_v2", "tone_mapping": "agx"}),
+        (
+            "depth_pipeline",
+            "art_004",
+            True,
+            0.042,
+            {"model": "depth_anything_v2", "tone_mapping": "agx"},
+        ),
         ("lux_render", "art_005", True, 2.5, {"model": "sdxl", "controlnet": "canny"}),
     ]
 
@@ -394,7 +418,8 @@ def step5_example_workflows(chunks, retriever):
 
     print("\n2. Generating feature template with context...")
     feature_template = PromptTemplates.feature_implementation(
-        feature_description="Add fog density parameter to atmospheric effects", context=context_text
+        feature_description="Add fog density parameter to atmospheric effects",
+        context=context_text,
     )
 
     # Save feature plan

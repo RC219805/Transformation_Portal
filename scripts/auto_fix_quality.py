@@ -29,7 +29,6 @@ import subprocess
 from pathlib import Path
 from typing import List, Optional, Set
 
-
 logger = logging.getLogger("auto_fix_quality")
 
 
@@ -150,7 +149,10 @@ class QualityFixer:
             self.log(f"  ✗ Failed to write file (read-only?): {path} ({e})", "error")
             return False
 
-        self.log(f"  ✓ Fixed trailing whitespace: {path.relative_to(self.repo_root)}", "success")
+        self.log(
+            f"  ✓ Fixed trailing whitespace: {path.relative_to(self.repo_root)}",
+            "success",
+        )
         return True
 
     def _get_used_names(self, content: str) -> Set[str]:

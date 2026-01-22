@@ -174,7 +174,7 @@ class ValidationHarness:
                 "total_runs": total,
                 "successful": successful,
                 "failed": failed,
-                "success_rate": f"{(successful / total * 100):.1f}%" if total > 0 else "0%",
+                "success_rate": (f"{(successful / total * 100):.1f}%" if total > 0 else "0%"),
                 "avg_time_seconds": f"{avg_time:.2f}",
             },
             "by_preset": {},

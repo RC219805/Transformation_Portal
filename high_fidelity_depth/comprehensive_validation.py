@@ -27,7 +27,12 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from .quality_metrics import EdgeMetrics, validate_depth_quality, save_metrics_atomic, detect_edges
+from .quality_metrics import (
+    EdgeMetrics,
+    validate_depth_quality,
+    save_metrics_atomic,
+    detect_edges,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -158,7 +163,15 @@ def create_edge_overlay(rgb: np.ndarray, depth: np.ndarray, output_path: Path) -
     total_edges = rgb_e.sum() + depth_e.sum() - overlap.sum()
     if total_edges > 0:
         aligned_pct = 100.0 * overlap.sum() / total_edges
-        cv2.putText(legend, f"Alignment: {aligned_pct:.1f}%", (250, 45), font, font_scale, (0, 0, 0), thickness)
+        cv2.putText(
+            legend,
+            f"Alignment: {aligned_pct:.1f}%",
+            (250, 45),
+            font,
+            font_scale,
+            (0, 0, 0),
+            thickness,
+        )
 
     final = np.vstack([overlay, legend])
 
@@ -170,7 +183,11 @@ def create_edge_overlay(rgb: np.ndarray, depth: np.ndarray, output_path: Path) -
 
 
 def run_comprehensive_validation(
-    rgb_path: Path, depth_path: Path, output_dir: Path, tile_size: int = 1024, overlap: int = 128
+    rgb_path: Path,
+    depth_path: Path,
+    output_dir: Path,
+    tile_size: int = 1024,
+    overlap: int = 128,
 ) -> Dict:
     """
     Run comprehensive validation with all critical checks.
@@ -258,7 +275,10 @@ def run_comprehensive_validation(
         "depth_path": str(depth_path),
         "image_size": list(rgb.shape[:2]),
         "metrics": metrics.to_dict(),
-        "seam_validation": {"passed": bool(seams_ok), "boundary_energy_ratio": float(seam_ratio)},
+        "seam_validation": {
+            "passed": bool(seams_ok),
+            "boundary_energy_ratio": float(seam_ratio),
+        },
         "quality_score": float(quality_score),
         "passed_lenient": bool(passed_lenient),
         "passed_strict": bool(passed_strict),
@@ -290,7 +310,10 @@ def main():
     parser.add_argument("--rgb", type=Path, required=True, help="Path to RGB image")
     parser.add_argument("--depth", type=Path, required=True, help="Path to depth map")
     parser.add_argument(
-        "--output-dir", type=Path, default=Path("outputs/comprehensive_validation"), help="Output directory for reports"
+        "--output-dir",
+        type=Path,
+        default=Path("outputs/comprehensive_validation"),
+        help="Output directory for reports",
     )
     parser.add_argument("--tile-size", type=int, default=1024, help="Tile size for seam detection")
     parser.add_argument("--overlap", type=int, default=128, help="Tile overlap for seam detection")

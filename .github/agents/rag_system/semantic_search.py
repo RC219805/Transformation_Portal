@@ -144,7 +144,11 @@ class CodeParser:
         )
 
     def _parse_function(
-        self, node: ast.FunctionDef, file_path: str, imports: Set[str], parent_class: Optional[str] = None
+        self,
+        node: ast.FunctionDef,
+        file_path: str,
+        imports: Set[str],
+        parent_class: Optional[str] = None,
     ) -> CodeEntity:
         """Parse a function or method definition."""
         docstring = ast.get_docstring(node)
@@ -385,7 +389,13 @@ class SemanticCodeSearch:
         results = self.search(task_description, top_k=20)
 
         # Categorize by type and purpose
-        api_map = {"core_functions": [], "utilities": [], "processors": [], "models": [], "configuration": []}
+        api_map = {
+            "core_functions": [],
+            "utilities": [],
+            "processors": [],
+            "models": [],
+            "configuration": [],
+        }
 
         for result in results:
             entity = result.entity
@@ -485,7 +495,13 @@ class SemanticCodeSearch:
                             and entity.line_number <= retrieval_result.end_line
                         )
                         if in_range:
-                            results.append((entity, retrieval_result.score * 0.5, f"Semantic match in {file_path}"))
+                            results.append(
+                                (
+                                    entity,
+                                    retrieval_result.score * 0.5,
+                                    f"Semantic match in {file_path}",
+                                )
+                            )
 
         return results
 

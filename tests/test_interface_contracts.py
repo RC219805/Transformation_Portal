@@ -50,7 +50,10 @@ class MockSegmenter(Segmenter):
 
     def segment(self, image: np.ndarray, **kwargs) -> Dict[str, np.ndarray]:
         h, w = image.shape[:2]
-        return {"object1": np.ones((h, w), dtype=bool), "object2": np.zeros((h, w), dtype=bool)}
+        return {
+            "object1": np.ones((h, w), dtype=bool),
+            "object2": np.zeros((h, w), dtype=bool),
+        }
 
     def get_supported_categories(self) -> List[str]:
         return ["object1", "object2"]

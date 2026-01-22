@@ -42,7 +42,11 @@ def example_single_image():
 
     # Process with VFX
     result = enhance_with_vfx(
-        img, base_preset="signature_estate_agx", vfx_preset="montecito_golden", material_response=True, save_depth=True
+        img,
+        base_preset="signature_estate_agx",
+        vfx_preset="montecito_golden",
+        material_response=True,
+        save_depth=True,
     )
 
     # Save result

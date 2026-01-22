@@ -52,14 +52,42 @@ def create_comparison():
 
     # Title
     draw.text(
-        (grid_width // 2, 10), "Lux Depth V2: Depth-Aware Processing Comparison", fill=(0, 0, 0), anchor="mm", font=font_title
+        (grid_width // 2, 10),
+        "Lux Depth V2: Depth-Aware Processing Comparison",
+        fill=(0, 0, 0),
+        anchor="mm",
+        font=font_title,
     )
 
     # Image labels
-    draw.text((x1 + web_size[0] // 2, y1 - 10), "Original Source", fill=(0, 0, 0), anchor="mm", font=font_label)
-    draw.text((x2 + web_size[0] // 2, y1 - 10), "Depth Map (Depth Anything V2)", fill=(0, 0, 0), anchor="mm", font=font_label)
-    draw.text((x1 + web_size[0] // 2, y2 - 10), "Lux V2: Uniform Weights", fill=(100, 100, 100), anchor="mm", font=font_label)
-    draw.text((x2 + web_size[0] // 2, y2 - 10), "Lux V2: Depth-Aware Zones ✓", fill=(0, 120, 0), anchor="mm", font=font_label)
+    draw.text(
+        (x1 + web_size[0] // 2, y1 - 10),
+        "Original Source",
+        fill=(0, 0, 0),
+        anchor="mm",
+        font=font_label,
+    )
+    draw.text(
+        (x2 + web_size[0] // 2, y1 - 10),
+        "Depth Map (Depth Anything V2)",
+        fill=(0, 0, 0),
+        anchor="mm",
+        font=font_label,
+    )
+    draw.text(
+        (x1 + web_size[0] // 2, y2 - 10),
+        "Lux V2: Uniform Weights",
+        fill=(100, 100, 100),
+        anchor="mm",
+        font=font_label,
+    )
+    draw.text(
+        (x2 + web_size[0] // 2, y2 - 10),
+        "Lux V2: Depth-Aware Zones ✓",
+        fill=(0, 120, 0),
+        anchor="mm",
+        font=font_label,
+    )
 
     # Save comparison
     output_dir = Path("output_750_Picacho_Pool_LuxDepthV2_WithDepth")

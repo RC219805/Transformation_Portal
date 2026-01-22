@@ -23,7 +23,6 @@ from scipy import ndimage
 from .logging_utils import setup_logging
 from .materials_v3_taxonomy import normalize_material_name, get_material_metadata
 
-
 log = setup_logging(__name__)
 
 

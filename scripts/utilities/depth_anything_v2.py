@@ -277,7 +277,12 @@ class DepthAnythingV2Model:
     def _get_onnx_providers(self) -> list:
         """Get available ONNX execution providers in priority order."""
         available_providers = ort.get_available_providers()
-        preferred_order = ["CUDAExecutionProvider", "CoreMLExecutionProvider", "DmlExecutionProvider", "CPUExecutionProvider"]
+        preferred_order = [
+            "CUDAExecutionProvider",
+            "CoreMLExecutionProvider",
+            "DmlExecutionProvider",
+            "CPUExecutionProvider",
+        ]
         providers = []
         for provider in preferred_order:
             if provider in available_providers:
@@ -305,7 +310,9 @@ class DepthAnythingV2Model:
         # nosec B615 - revision pinning intentionally omitted for development flexibility
         # Production deployments should pin specific model revisions
         model_path = hf_hub_download(
-            repo_id=onnx_repo, filename=onnx_filename, cache_dir=Path.home() / ".cache" / "depth_anything_v2"
+            repo_id=onnx_repo,
+            filename=onnx_filename,
+            cache_dir=Path.home() / ".cache" / "depth_anything_v2",
         )
 
         return Path(model_path)
@@ -350,7 +357,9 @@ class DepthAnythingV2Model:
         # Download model package
         filename = f"DepthAnythingV2{self.variant.name.title()}F16.mlpackage"
         model_path = hf_hub_download(
-            repo_id=coreml_variant, filename=filename, cache_dir=Path.home() / ".cache" / "depth_anything_v2"
+            repo_id=coreml_variant,
+            filename=filename,
+            cache_dir=Path.home() / ".cache" / "depth_anything_v2",
         )
 
         return Path(model_path)
@@ -613,7 +622,13 @@ def safe_depth_estimation(
             if not SKIMAGE_AVAILABLE:
                 raise ImportError("scikit-image is required for resizing. Install with: pip install scikit-image") from None
 
-            result["depth"] = resize(result["depth"], original_size, order=1, preserve_range=True, anti_aliasing=True)
+            result["depth"] = resize(
+                result["depth"],
+                original_size,
+                order=1,
+                preserve_range=True,
+                anti_aliasing=True,
+            )
 
             result["metadata"]["fallback_resolution"] = fallback_size
             return result

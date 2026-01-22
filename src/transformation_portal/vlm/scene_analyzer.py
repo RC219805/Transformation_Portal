@@ -19,12 +19,12 @@ from PIL import Image
 
 from transformation_portal.vlm.llava import LLaVAProcessor
 
-
 logger = logging.getLogger(__name__)
 
 
 class SpaceType(Enum):
     """Architectural space types."""
+
     INTERIOR = "interior"
     EXTERIOR = "exterior"
     AERIAL = "aerial"
@@ -33,6 +33,7 @@ class SpaceType(Enum):
 
 class RoomType(Enum):
     """Interior room types."""
+
     LIVING = "living_room"
     KITCHEN = "kitchen"
     BEDROOM = "bedroom"
@@ -47,6 +48,7 @@ class RoomType(Enum):
 
 class ArchitecturalStyle(Enum):
     """Architectural styles."""
+
     MODERN = "modern"
     CONTEMPORARY = "contemporary"
     TRADITIONAL = "traditional"
@@ -73,6 +75,7 @@ class SceneAnalysis:
         confidence: Confidence score (0-1) if available
         raw_analysis: Full LLaVA response text
     """
+
     space_type: SpaceType
     room_type: Optional[RoomType]
     architectural_style: ArchitecturalStyle
@@ -117,9 +120,7 @@ class SceneAnalyzer:
 Provide your analysis in this exact format with clear sections."""
 
     def __init__(
-        self,
-        llava_processor: Optional[LLaVAProcessor] = None,
-        **llava_kwargs
+        self, llava_processor: Optional[LLaVAProcessor] = None, **llava_kwargs
     ):
         """Initialize scene analyzer.
 
@@ -135,9 +136,7 @@ Provide your analysis in this exact format with clear sections."""
         logger.info("SceneAnalyzer initialized")
 
     def analyze(
-        self,
-        image: Union[str, Path, Image.Image, np.ndarray],
-        detailed: bool = True
+        self, image: Union[str, Path, Image.Image, np.ndarray], detailed: bool = True
     ) -> SceneAnalysis:
         """Analyze architectural scene.
 
@@ -152,19 +151,25 @@ Provide your analysis in this exact format with clear sections."""
         raw_analysis = self.processor.analyze_image(
             image,
             prompt=self.STRUCTURED_ANALYSIS_PROMPT if detailed else None,
-            temperature=0.1  # Low temperature for consistent classification
+            temperature=0.1,  # Low temperature for consistent classification
         )
 
         # Parse structured response
         space_type = self._extract_space_type(raw_analysis)
-        room_type = self._extract_room_type(raw_analysis) if space_type == SpaceType.INTERIOR else None
+        room_type = (
+            self._extract_room_type(raw_analysis)
+            if space_type == SpaceType.INTERIOR
+            else None
+        )
         architectural_style = self._extract_style(raw_analysis)
         materials = self._extract_materials(raw_analysis)
         luxury_features = self._extract_luxury_features(raw_analysis)
         lighting = self._extract_lighting(raw_analysis)
 
         # Confidence estimation (could be enhanced with entropy-based scoring)
-        confidence = 0.85  # Placeholder - LLaVA doesn't provide native confidence scores
+        confidence = (
+            0.85  # Placeholder - LLaVA doesn't provide native confidence scores
+        )
 
         return SceneAnalysis(
             space_type=space_type,
@@ -174,7 +179,7 @@ Provide your analysis in this exact format with clear sections."""
             luxury_features=luxury_features,
             lighting_conditions=lighting,
             confidence=confidence,
-            raw_analysis=raw_analysis
+            raw_analysis=raw_analysis,
         )
 
     def _extract_space_type(self, text: str) -> SpaceType:
@@ -183,7 +188,11 @@ Provide your analysis in this exact format with clear sections."""
 
         if "aerial" in text_lower or "overhead" in text_lower or "drone" in text_lower:
             return SpaceType.AERIAL
-        elif "exterior" in text_lower or "outdoor" in text_lower or "facade" in text_lower:
+        elif (
+            "exterior" in text_lower
+            or "outdoor" in text_lower
+            or "facade" in text_lower
+        ):
             return SpaceType.EXTERIOR
         elif "interior" in text_lower or "indoor" in text_lower or "room" in text_lower:
             return SpaceType.INTERIOR
@@ -239,10 +248,30 @@ Provide your analysis in this exact format with clear sections."""
         """Extract materials from analysis text."""
         # Common luxury materials
         materials = [
-            "marble", "granite", "quartz", "wood", "hardwood", "oak", "walnut",
-            "glass", "metal", "stainless steel", "bronze", "brass", "copper",
-            "stone", "limestone", "travertine", "slate", "tile", "porcelain",
-            "fabric", "leather", "concrete", "plaster", "brick"
+            "marble",
+            "granite",
+            "quartz",
+            "wood",
+            "hardwood",
+            "oak",
+            "walnut",
+            "glass",
+            "metal",
+            "stainless steel",
+            "bronze",
+            "brass",
+            "copper",
+            "stone",
+            "limestone",
+            "travertine",
+            "slate",
+            "tile",
+            "porcelain",
+            "fabric",
+            "leather",
+            "concrete",
+            "plaster",
+            "brick",
         ]
 
         text_lower = text.lower()
@@ -258,11 +287,27 @@ Provide your analysis in this exact format with clear sections."""
         """Extract luxury features from analysis text."""
         # Luxury feature keywords
         features = [
-            "high ceiling", "vaulted ceiling", "custom", "designer",
-            "premium", "luxury", "high-end", "statement", "chandelier",
-            "water feature", "fountain", "fireplace", "built-in",
-            "wine cellar", "home theater", "spa", "infinity pool",
-            "smart home", "automation", "panoramic view", "ocean view"
+            "high ceiling",
+            "vaulted ceiling",
+            "custom",
+            "designer",
+            "premium",
+            "luxury",
+            "high-end",
+            "statement",
+            "chandelier",
+            "water feature",
+            "fountain",
+            "fireplace",
+            "built-in",
+            "wine cellar",
+            "home theater",
+            "spa",
+            "infinity pool",
+            "smart home",
+            "automation",
+            "panoramic view",
+            "ocean view",
         ]
 
         text_lower = text.lower()
@@ -286,9 +331,17 @@ Provide your analysis in this exact format with clear sections."""
 
         # Fallback: look for common lighting terms
         lighting_terms = [
-            "natural light", "golden hour", "blue hour", "soft light",
-            "dramatic light", "ambient", "artificial", "mixed lighting",
-            "bright", "dim", "moody"
+            "natural light",
+            "golden hour",
+            "blue hour",
+            "soft light",
+            "dramatic light",
+            "ambient",
+            "artificial",
+            "mixed lighting",
+            "bright",
+            "dim",
+            "moody",
         ]
 
         for term in lighting_terms:
@@ -297,10 +350,7 @@ Provide your analysis in this exact format with clear sections."""
 
         return "standard lighting"
 
-    def get_processing_recommendations(
-        self,
-        analysis: SceneAnalysis
-    ) -> Dict[str, Any]:
+    def get_processing_recommendations(self, analysis: SceneAnalysis) -> Dict[str, Any]:
         """Get processing recommendations based on scene analysis.
 
         Returns recommended settings for enhancement based on detected scene characteristics.

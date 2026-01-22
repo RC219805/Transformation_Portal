@@ -124,13 +124,19 @@ class QualityReport:
         return {
             "composite_score": round(self.composite_score, 2),
             "percentile_rank": round(self.percentile_rank, 1),
-            "lpips": {"score": round(self.lpips_score, 4), "percentile": round(self.lpips_percentile, 1)},
+            "lpips": {
+                "score": round(self.lpips_score, 4),
+                "percentile": round(self.lpips_percentile, 1),
+            },
             "naturalness": {
                 "niqe": round(self.niqe_score, 2),
                 "brisque": round(self.brisque_score, 2),
                 "normalized": round(self.naturalness_score, 1),
             },
-            "structural": {"ssim": round(self.ssim_score, 4), "ms_ssim": round(self.ms_ssim_score, 4)},
+            "structural": {
+                "ssim": round(self.ssim_score, 4),
+                "ms_ssim": round(self.ms_ssim_score, 4),
+            },
             "material_fidelity": {k: round(v, 3) for k, v in self.material_fidelity.items()},
             "overall_material_fidelity": round(self.overall_material_fidelity, 3),
             "targets_met": self.targets_met,
@@ -242,7 +248,16 @@ class MaterialSegmenter(nn.Module):
     Uses a simple encoder-decoder architecture optimized for inference speed.
     """
 
-    MATERIAL_CLASSES = ["quartzite", "oak", "metal", "glass", "stucco", "water", "vegetation", "sky"]
+    MATERIAL_CLASSES = [
+        "quartzite",
+        "oak",
+        "metal",
+        "glass",
+        "stucco",
+        "water",
+        "vegetation",
+        "sky",
+    ]
 
     def __init__(self):
         super().__init__()
@@ -422,7 +437,10 @@ class PerceptualQualityAssessor:
     """
 
     def __init__(
-        self, targets: Optional[QualityTargets] = None, benchmark_path: Optional[str] = None, use_lpips_package: bool = True
+        self,
+        targets: Optional[QualityTargets] = None,
+        benchmark_path: Optional[str] = None,
+        use_lpips_package: bool = True,
     ):
         """
         Initialize quality assessor

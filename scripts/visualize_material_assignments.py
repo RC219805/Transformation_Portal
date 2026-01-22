@@ -49,7 +49,10 @@ try:
         save_palette_assignments,
     )
 except ImportError as exc:
-    print(f"Error: board_material_aerial_enhancer module not found: {exc}", file=sys.stderr)
+    print(
+        f"Error: board_material_aerial_enhancer module not found: {exc}",
+        file=sys.stderr,
+    )
     print("This script requires the Transformation Portal repository", file=sys.stderr)
     sys.exit(1)
 
@@ -125,7 +128,12 @@ def perform_clustering(image: Image.Image, n_clusters: int = 8) -> np.ndarray:
     return labels
 
 
-def create_visualization(image: Image.Image, labels: np.ndarray, assignments: Dict, colors: List[tuple] = None) -> Image.Image:
+def create_visualization(
+    image: Image.Image,
+    labels: np.ndarray,
+    assignments: Dict,
+    colors: List[tuple] = None,
+) -> Image.Image:
     """
     Create color-coded visualization with legend.
 
@@ -191,7 +199,12 @@ def create_visualization(image: Image.Image, labels: np.ndarray, assignments: Di
     all_labels = set(range(labels.max() + 1))
     unassigned = all_labels - set(assignments.keys())
     if unassigned:
-        draw.text((x_offset, y_offset), "UNASSIGNED CLUSTERS:", fill=(128, 128, 128), font=font)
+        draw.text(
+            (x_offset, y_offset),
+            "UNASSIGNED CLUSTERS:",
+            fill=(128, 128, 128),
+            font=font,
+        )
         y_offset += 35
         for label in sorted(unassigned):
             draw.rectangle(
@@ -202,7 +215,12 @@ def create_visualization(image: Image.Image, labels: np.ndarray, assignments: Di
             cluster_pixels = (labels == label).sum()
             percentage = (cluster_pixels / labels.size) * 100
             text = f"Cluster {label} ({percentage:.1f}% - no material match)"
-            draw.text((x_offset + box_size + 15, y_offset + 5), text, fill=(128, 128, 128), font=font)
+            draw.text(
+                (x_offset + box_size + 15, y_offset + 5),
+                text,
+                fill=(128, 128, 128),
+                font=font,
+            )
             y_offset += 45
 
     return legend_img
@@ -218,11 +236,24 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument("input_image", type=Path, help="Input aerial image (TIFF, JPEG, PNG)")
     parser.add_argument(
-        "--output", "-o", type=Path, help="Output visualization path (default: input_name + _material_map.jpg)"
+        "--output",
+        "-o",
+        type=Path,
+        help="Output visualization path (default: input_name + _material_map.jpg)",
     )
     parser.add_argument("--palette", type=Path, help="Load existing material palette from JSON file")
-    parser.add_argument("--save-palette", type=Path, help="Save computed material palette to JSON file for reuse")
-    parser.add_argument("--clusters", "-k", type=int, default=8, help="Number of k-means clusters (default: 8)")
+    parser.add_argument(
+        "--save-palette",
+        type=Path,
+        help="Save computed material palette to JSON file for reuse",
+    )
+    parser.add_argument(
+        "--clusters",
+        "-k",
+        type=int,
+        default=8,
+        help="Number of k-means clusters (default: 8)",
+    )
 
     return parser.parse_args()
 

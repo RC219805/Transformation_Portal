@@ -13,7 +13,7 @@ from transformation_portal.vlm.scene_analyzer import SceneAnalyzer
 from transformation_portal.vlm.quality_validator import QualityValidator
 
 __all__ = [
-    'LLaVAProcessor',
-    'SceneAnalyzer',
-    'QualityValidator',
+    "LLaVAProcessor",
+    "SceneAnalyzer",
+    "QualityValidator",
 ]

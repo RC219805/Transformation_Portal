@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 try:
     import torch
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -28,6 +29,7 @@ except ImportError:
 @dataclass
 class GitInfo:
     """Git repository state for reproducibility."""
+
     commit: str
     branch: str
     is_dirty: bool
@@ -50,42 +52,57 @@ class GitInfo:
             if cwd:
                 base_cmd.extend(["-C", cwd])
 
-            inside = subprocess.check_output(
-                [*base_cmd, "rev-parse", "--is-inside-work-tree"],
-                stderr=subprocess.DEVNULL
-            ).decode().strip()
+            inside = (
+                subprocess.check_output(
+                    [*base_cmd, "rev-parse", "--is-inside-work-tree"],
+                    stderr=subprocess.DEVNULL,
+                )
+                .decode()
+                .strip()
+            )
             if inside.lower() != "true":
                 return None
 
-            commit = subprocess.check_output(
-                [*base_cmd, "rev-parse", "HEAD"],
-                stderr=subprocess.DEVNULL
-            ).decode().strip()
+            commit = (
+                subprocess.check_output(
+                    [*base_cmd, "rev-parse", "HEAD"], stderr=subprocess.DEVNULL
+                )
+                .decode()
+                .strip()
+            )
 
-            branch = subprocess.check_output(
-                [*base_cmd, "rev-parse", "--abbrev-ref", "HEAD"],
-                stderr=subprocess.DEVNULL
-            ).decode().strip()
+            branch = (
+                subprocess.check_output(
+                    [*base_cmd, "rev-parse", "--abbrev-ref", "HEAD"],
+                    stderr=subprocess.DEVNULL,
+                )
+                .decode()
+                .strip()
+            )
 
-            is_dirty = subprocess.run(
-                [*base_cmd, "diff-index", "--quiet", "HEAD"],
-                check=False,
-                stderr=subprocess.DEVNULL
-            ).returncode != 0
+            is_dirty = (
+                subprocess.run(
+                    [*base_cmd, "diff-index", "--quiet", "HEAD"],
+                    check=False,
+                    stderr=subprocess.DEVNULL,
+                ).returncode
+                != 0
+            )
 
             try:
-                remote_url = subprocess.check_output(
-                    [*base_cmd, "config", "--get", "remote.origin.url"],
-                    stderr=subprocess.DEVNULL
-                ).decode().strip()
+                remote_url = (
+                    subprocess.check_output(
+                        [*base_cmd, "config", "--get", "remote.origin.url"],
+                        stderr=subprocess.DEVNULL,
+                    )
+                    .decode()
+                    .strip()
+                )
             except subprocess.CalledProcessError:
                 remote_url = None
 
             return cls(
-                commit=commit,
-                branch=branch,
-                is_dirty=is_dirty,
-                remote_url=remote_url
+                commit=commit, branch=branch, is_dirty=is_dirty, remote_url=remote_url
             )
 
         except (subprocess.CalledProcessError, FileNotFoundError):
@@ -96,6 +113,7 @@ class GitInfo:
 @dataclass
 class DeviceInfo:
     """Hardware and software environment."""
+
     device_type: str
     device_name: Optional[str]
     torch_version: Optional[str]
@@ -139,20 +157,23 @@ class DeviceInfo:
             cuda_version=cuda_version,
             python_version=platform.python_version(),
             platform=platform.platform(),
-            cpu_count=os.cpu_count() or 1
+            cpu_count=os.cpu_count() or 1,
         )
 
 
 @dataclass
 class ModelInfo:
     """Model checksums and versions."""
+
     model_name: str
     checkpoint_sha256: Optional[str] = None
     model_version: Optional[str] = None
     config: Optional[Dict[str, Any]] = None
 
     @classmethod
-    def from_weights(cls, model_name: str, weights_path: Optional[Path] = None) -> ModelInfo:
+    def from_weights(
+        cls, model_name: str, weights_path: Optional[Path] = None
+    ) -> ModelInfo:
         """
         Compute model checksum from weights file.
 
@@ -176,10 +197,7 @@ class ModelInfo:
             except Exception as e:
                 logger.warning(f"Failed to compute checksum for {weights_path}: {e}")
 
-        return cls(
-            model_name=model_name,
-            checkpoint_sha256=checkpoint_sha256
-        )
+        return cls(model_name=model_name, checkpoint_sha256=checkpoint_sha256)
 
 
 @dataclass
@@ -189,6 +207,7 @@ class ProcessingReport:
 
     Captures all information needed to reproduce a processing run.
     """
+
     git_info: Optional[GitInfo]
     device_info: DeviceInfo
     model_info: Optional[ModelInfo]
@@ -268,7 +287,7 @@ class ProcessingReport:
         model_info: Optional[ModelInfo] = None,
         success: bool = True,
         error: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> ProcessingReport:
         """
         Create report from processing run.
@@ -307,5 +326,5 @@ class ProcessingReport:
             metrics=metrics,
             success=success,
             error=error,
-            metadata=metadata or {}
+            metadata=metadata or {},
         )

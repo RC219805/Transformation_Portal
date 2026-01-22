@@ -8,7 +8,11 @@ import pytest
 from pathlib import Path
 
 try:
-    from utils.depth_processor import DepthProcessor, DepthConfig, create_depth_processor
+    from utils.depth_processor import (
+        DepthProcessor,
+        DepthConfig,
+        create_depth_processor,
+    )
 
     DEPTH_PROCESSOR_AVAILABLE = True
 except ImportError:
@@ -30,7 +34,11 @@ class TestDepthConfig:
     def test_custom_config(self):
         """Test custom configuration."""
         config = DepthConfig(
-            model_name="custom_model", tile_size=1024, enable_zone_processing=False, foreground_boost=1.5, device="cpu"
+            model_name="custom_model",
+            tile_size=1024,
+            enable_zone_processing=False,
+            foreground_boost=1.5,
+            device="cpu",
         )
         assert config.model_name == "custom_model"
         assert config.tile_size == 1024

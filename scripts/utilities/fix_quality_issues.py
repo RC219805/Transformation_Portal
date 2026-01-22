@@ -33,7 +33,13 @@ def main():
         files_to_fix.extend(repo_root.glob(f"**/{pattern}"))
 
     # Filter out excluded paths
-    excluded = {".venv", "deprecated", "src/transformation_portal", ".backup_local", ".local_backup"}
+    excluded = {
+        ".venv",
+        "deprecated",
+        "src/transformation_portal",
+        ".backup_local",
+        ".local_backup",
+    }
     files_to_fix = [f for f in files_to_fix if not any(ex in str(f) for ex in excluded)]
 
     for file_path in files_to_fix:

@@ -28,12 +28,12 @@ import numpy as np
 from PIL import Image
 from sklearn.cluster import KMeans
 
-
 logger = logging.getLogger(__name__)
 
 
 class HarmonyType(Enum):
     """Color harmony types."""
+
     ANALOGOUS = "analogous"
     COMPLEMENTARY = "complementary"
     TRIADIC = "triadic"
@@ -56,6 +56,7 @@ class ColorPalette:
         saturations: Saturation values (0-100)
         lightnesses: Lightness values (0-100)
     """
+
     colors_rgb: np.ndarray
     colors_lab: np.ndarray
     proportions: np.ndarray
@@ -77,6 +78,7 @@ class HarmonyAnalysis:
         recommendations: Improvement suggestions
         disharmony_factors: Identified disharmony issues
     """
+
     harmony_score: float
     harmony_type: HarmonyType
     palette: ColorPalette
@@ -110,11 +112,7 @@ class ColorHarmonyAnalyzer:
     WARM_HUE_RANGES = [(0, 60), (300, 360)]  # Reds, oranges, yellows
     COOL_HUE_RANGES = [(180, 270)]  # Blues, cyans
 
-    def __init__(
-        self,
-        num_colors: int = 5,
-        min_proportion: float = 0.05
-    ):
+    def __init__(self, num_colors: int = 5, min_proportion: float = 0.05):
         """Initialize color harmony analyzer.
 
         Args:
@@ -127,9 +125,7 @@ class ColorHarmonyAnalyzer:
         logger.info(f"ColorHarmonyAnalyzer initialized (n_colors={num_colors})")
 
     def analyze(
-        self,
-        image: Union[str, np.ndarray, Image.Image],
-        sample_fraction: float = 0.1
+        self, image: Union[str, np.ndarray, Image.Image], sample_fraction: float = 0.1
     ) -> HarmonyAnalysis:
         """Analyze color harmony of image.
 
@@ -175,13 +171,11 @@ class ColorHarmonyAnalyzer:
             temperature=temperature,
             emotional_profile=emotional_profile,
             recommendations=recommendations,
-            disharmony_factors=disharmony_factors
+            disharmony_factors=disharmony_factors,
         )
 
     def _extract_palette(
-        self,
-        image: np.ndarray,
-        sample_fraction: float
+        self, image: np.ndarray, sample_fraction: float
     ) -> ColorPalette:
         """Extract dominant color palette using K-means.
 
@@ -230,7 +224,7 @@ class ColorHarmonyAnalyzer:
             proportions=proportions,
             hues=hues,
             saturations=saturations,
-            lightnesses=lightnesses
+            lightnesses=lightnesses,
         )
 
     def _rgb_to_lab(self, rgb: np.ndarray) -> np.ndarray:
@@ -259,10 +253,7 @@ class ColorHarmonyAnalyzer:
 
         return lab
 
-    def _lab_to_hsl(
-        self,
-        lab: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def _lab_to_hsl(self, lab: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Convert CIELAB to HSL components.
 
         Args:
@@ -329,12 +320,10 @@ class ColorHarmonyAnalyzer:
 
         # Check for warm/cool
         warm_count = sum(
-            any(start <= h <= end for start, end in self.WARM_HUE_RANGES)
-            for h in hues
+            any(start <= h <= end for start, end in self.WARM_HUE_RANGES) for h in hues
         )
         cool_count = sum(
-            any(start <= h <= end for start, end in self.COOL_HUE_RANGES)
-            for h in hues
+            any(start <= h <= end for start, end in self.COOL_HUE_RANGES) for h in hues
         )
 
         if warm_count > cool_count * 2:
@@ -345,9 +334,7 @@ class ColorHarmonyAnalyzer:
         return HarmonyType.NEUTRAL
 
     def _calculate_harmony_score(
-        self,
-        palette: ColorPalette,
-        harmony_type: HarmonyType
+        self, palette: ColorPalette, harmony_type: HarmonyType
     ) -> float:
         """Calculate overall harmony score.
 
@@ -401,16 +388,10 @@ class ColorHarmonyAnalyzer:
 
         for hue, proportion in zip(palette.hues, palette.proportions):
             # Check if warm
-            is_warm = any(
-                start <= hue <= end
-                for start, end in self.WARM_HUE_RANGES
-            )
+            is_warm = any(start <= hue <= end for start, end in self.WARM_HUE_RANGES)
 
             # Check if cool
-            is_cool = any(
-                start <= hue <= end
-                for start, end in self.COOL_HUE_RANGES
-            )
+            is_cool = any(start <= hue <= end for start, end in self.COOL_HUE_RANGES)
 
             if is_warm:
                 warm_weight += proportion
@@ -423,10 +404,7 @@ class ColorHarmonyAnalyzer:
         return temperature
 
     def _generate_emotional_profile(
-        self,
-        palette: ColorPalette,
-        harmony_type: HarmonyType,
-        temperature: float
+        self, palette: ColorPalette, harmony_type: HarmonyType, temperature: float
     ) -> Dict[str, float]:
         """Generate emotional association profile.
 
@@ -444,7 +422,7 @@ class ColorHarmonyAnalyzer:
             "luxury": 0.0,
             "comfort": 0.0,
             "energy": 0.0,
-            "serenity": 0.0
+            "serenity": 0.0,
         }
 
         # Nostalgia triggered by warm colors
@@ -529,7 +507,7 @@ class ColorHarmonyAnalyzer:
         harmony_score: float,
         harmony_type: HarmonyType,
         temperature: float,
-        disharmony_factors: List[str]
+        disharmony_factors: List[str],
     ) -> List[str]:
         """Generate color harmony recommendations.
 
@@ -549,9 +527,7 @@ class ColorHarmonyAnalyzer:
                 "Excellent color harmony! Palette activates positive neural responses."
             )
         elif harmony_score >= 0.6:
-            recommendations.append(
-                "Good color harmony with room for optimization."
-            )
+            recommendations.append("Good color harmony with room for optimization.")
         else:
             recommendations.append(
                 "Color palette could benefit from harmonization to improve emotional resonance."
@@ -577,10 +553,7 @@ class ColorHarmonyAnalyzer:
 
         return recommendations
 
-    def _load_image(
-        self,
-        image: Union[str, np.ndarray, Image.Image]
-    ) -> np.ndarray:
+    def _load_image(self, image: Union[str, np.ndarray, Image.Image]) -> np.ndarray:
         """Load image as RGB numpy array."""
         if isinstance(image, np.ndarray):
             return image

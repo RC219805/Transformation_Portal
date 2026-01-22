@@ -49,7 +49,7 @@ class GaussianBlurProcessor(ProcessorPlugin):
     def _create_metadata(self) -> PluginMetadata:
         """Create plugin metadata."""
         # Use decorator metadata if available
-        if hasattr(self, '_decorator_metadata'):
+        if hasattr(self, "_decorator_metadata"):
             return self._decorator_metadata
 
         return PluginMetadata(
@@ -83,9 +83,7 @@ class GaussianBlurProcessor(ProcessorPlugin):
 
     @measure_performance
     def process(
-        self,
-        input_data: Union[Image.Image, np.ndarray],
-        **kwargs
+        self, input_data: Union[Image.Image, np.ndarray], **kwargs
     ) -> Union[Image.Image, np.ndarray]:
         """Apply Gaussian blur to input image.
 
@@ -123,17 +121,17 @@ class GaussianBlurProcessor(ProcessorPlugin):
             Blurred image
         """
         # Handle alpha channel separately if needed
-        if self._preserve_alpha and image.mode == 'RGBA':
+        if self._preserve_alpha and image.mode == "RGBA":
             # Split channels
             r, g, b, a = image.split()
 
             # Blur RGB channels
-            rgb = Image.merge('RGB', (r, g, b))
+            rgb = Image.merge("RGB", (r, g, b))
             rgb_blurred = rgb.filter(ImageFilter.GaussianBlur(radius))
 
             # Recombine with original alpha
             r2, g2, b2 = rgb_blurred.split()
-            return Image.merge('RGBA', (r2, g2, b2, a))
+            return Image.merge("RGBA", (r2, g2, b2, a))
 
         return image.filter(ImageFilter.GaussianBlur(radius))
 
@@ -207,7 +205,7 @@ class ResizeProcessor(ProcessorPlugin):
 
     def _create_metadata(self) -> PluginMetadata:
         """Create plugin metadata."""
-        if hasattr(self, '_decorator_metadata'):
+        if hasattr(self, "_decorator_metadata"):
             return self._decorator_metadata
 
         return PluginMetadata(
@@ -244,9 +242,7 @@ class ResizeProcessor(ProcessorPlugin):
         self._initialized = True
 
     def process(
-        self,
-        input_data: Union[Image.Image, np.ndarray],
-        **kwargs
+        self, input_data: Union[Image.Image, np.ndarray], **kwargs
     ) -> Union[Image.Image, np.ndarray]:
         """Resize input image.
 
@@ -315,10 +311,7 @@ class ResizeProcessor(ProcessorPlugin):
 
     def validate(self) -> bool:
         """Validate configuration."""
-        return (
-            self._initialized and
-            self._method in self.RESAMPLING_METHODS
-        )
+        return self._initialized and self._method in self.RESAMPLING_METHODS
 
     def cleanup(self) -> None:
         """Clean up resources."""

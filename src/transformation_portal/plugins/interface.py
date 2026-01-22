@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 
 class PluginType(Enum):
     """Types of plugins supported by the system."""
+
     DEPTH_MODEL = "depth_model"
     PROCESSOR = "processor"
     ENHANCER = "enhancer"
@@ -21,6 +22,7 @@ class PluginType(Enum):
 @dataclass
 class PluginMetadata:
     """Metadata describing a plugin."""
+
     name: str
     version: str
     plugin_type: PluginType
@@ -38,6 +40,7 @@ class PluginMetadata:
     def is_compatible(self, portal_version: str) -> bool:
         """Check if plugin is compatible with current portal version."""
         from packaging import version
+
         portal_ver = version.parse(portal_version)
         min_ver = version.parse(self.min_portal_version)
 
@@ -134,21 +137,23 @@ class PluginInterface(ABC):
             Dictionary with plugin details
         """
         return {
-            'name': self.metadata.name,
-            'version': self.metadata.version,
-            'type': self.metadata.plugin_type.value,
-            'description': self.metadata.description,
-            'author': self.metadata.author,
-            'initialized': self._initialized,
-            'deprecated': self.metadata.deprecated,
-            'replacement': self.metadata.replacement,
+            "name": self.metadata.name,
+            "version": self.metadata.version,
+            "type": self.metadata.plugin_type.value,
+            "description": self.metadata.description,
+            "author": self.metadata.author,
+            "initialized": self._initialized,
+            "deprecated": self.metadata.deprecated,
+            "replacement": self.metadata.replacement,
         }
 
     def __repr__(self) -> str:
         """String representation of plugin."""
-        return (f"<{self.__class__.__name__} "
-                f"name='{self.metadata.name}' "
-                f"version='{self.metadata.version}'>")
+        return (
+            f"<{self.__class__.__name__} "
+            f"name='{self.metadata.name}' "
+            f"version='{self.metadata.version}'>"
+        )
 
 
 class DepthModelPlugin(PluginInterface):

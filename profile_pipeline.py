@@ -30,7 +30,11 @@ class StageTimer:
 
     def start(self, stage_name: str, metadata: Dict = None):
         """Start timing a stage."""
-        self.current_stage = {"name": stage_name, "metadata": metadata or {}, "start": time.perf_counter()}
+        self.current_stage = {
+            "name": stage_name,
+            "metadata": metadata or {},
+            "start": time.perf_counter(),
+        }
 
     def end(self):
         """End timing current stage."""
@@ -45,7 +49,11 @@ class StageTimer:
         """Get performance summary."""
         total_time = sum(s["elapsed_s"] for s in self.stages)
 
-        summary = {"total_time_s": total_time, "total_time_ms": total_time * 1000, "stages": []}
+        summary = {
+            "total_time_s": total_time,
+            "total_time_ms": total_time * 1000,
+            "stages": [],
+        }
 
         for stage in self.stages:
             pct = (stage["elapsed_s"] / total_time * 100) if total_time > 0 else 0
@@ -97,7 +105,13 @@ def profile_v3_only(input_dir: Path, output_dir: Path, num_samples: int = 5):
         timer.end()
 
         # Inference
-        timer.start(f"Depth Inference #{i}", {"file": img_input.path.name, "size": f"{loaded.shape[1]}x{loaded.shape[0]}"})
+        timer.start(
+            f"Depth Inference #{i}",
+            {
+                "file": img_input.path.name,
+                "size": f"{loaded.shape[1]}x{loaded.shape[0]}",
+            },
+        )
         result = engine.inference(img_input)
         timer.end()
 
@@ -120,7 +134,10 @@ def profile_v3_v2_integrated(input_dir: Path, output_dir: Path, num_samples: int
     # Stage: Orchestrator initialization
     timer.start("Orchestrator Init", {"preset": "interior_luxury"})
     orchestrator = EnhanceOrchestrator(
-        input_dir=str(input_dir), output_dir=str(output_dir), preset="interior_luxury", num_samples=num_samples
+        input_dir=str(input_dir),
+        output_dir=str(output_dir),
+        preset="interior_luxury",
+        num_samples=num_samples,
     )
     timer.end()
 
@@ -132,7 +149,10 @@ def profile_v3_v2_integrated(input_dir: Path, output_dir: Path, num_samples: int
     print(f"\nProcessing {len(images)} images from: {input_dir}")
 
     # Stage: Model loading
-    timer.start("Model Loading (V3)", {"model": orchestrator.config.model_variant.value.display_name})
+    timer.start(
+        "Model Loading (V3)",
+        {"model": orchestrator.config.model_variant.value.display_name},
+    )
     orchestrator.engine.load_model()
     timer.end()
 
@@ -145,7 +165,10 @@ def profile_v3_v2_integrated(input_dir: Path, output_dir: Path, num_samples: int
         loaded = img_input.load()
         timer.end()
 
-        timer.start(f"A: Depth Inference #{i}", {"file": img_name, "size": f"{loaded.shape[1]}x{loaded.shape[0]}"})
+        timer.start(
+            f"A: Depth Inference #{i}",
+            {"file": img_name, "size": f"{loaded.shape[1]}x{loaded.shape[0]}"},
+        )
         depth_result = orchestrator.engine.inference(img_input)
         timer.end()
 
@@ -154,7 +177,10 @@ def profile_v3_v2_integrated(input_dir: Path, output_dir: Path, num_samples: int
         timer.end()
 
         # Stage B: V2 enhancement
-        timer.start(f"B: V2 Enhancement #{i}", {"file": img_name, "upscale": orchestrator.v2_config.upscale_factor})
+        timer.start(
+            f"B: V2 Enhancement #{i}",
+            {"file": img_name, "upscale": orchestrator.v2_config.upscale_factor},
+        )
         # This is where V2 subprocess runs
         # We can't easily time internals, but we can time the whole subprocess
         timer.end()

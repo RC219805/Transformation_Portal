@@ -137,7 +137,12 @@ class PreFlightValidator:
         if optional_deps:
             details["missing_optional"] = optional_deps
 
-        return ValidationResult(passed=True, message="System requirements satisfied", severity="info", details=details)
+        return ValidationResult(
+            passed=True,
+            message="System requirements satisfied",
+            severity="info",
+            details=details,
+        )
 
     def validate_resources(self, image_size_mp: float = 0.0, upscale: int = 4, device: str = "auto") -> ValidationResult:
         """Validate available resources.
@@ -154,7 +159,9 @@ class PreFlightValidator:
             import psutil
         except ImportError:
             return ValidationResult(
-                passed=True, message="Resource validation skipped (psutil not available)", severity="warning"
+                passed=True,
+                message="Resource validation skipped (psutil not available)",
+                severity="warning",
             )
 
         # Check RAM
@@ -260,11 +267,19 @@ class PreFlightValidator:
         """
         # Check file exists
         if not input_path.exists():
-            return ValidationResult(passed=False, message=f"Input file not found: {input_path}", severity="error")
+            return ValidationResult(
+                passed=False,
+                message=f"Input file not found: {input_path}",
+                severity="error",
+            )
 
         # Check file is readable
         if not input_path.is_file():
-            return ValidationResult(passed=False, message=f"Input path is not a file: {input_path}", severity="error")
+            return ValidationResult(
+                passed=False,
+                message=f"Input path is not a file: {input_path}",
+                severity="error",
+            )
 
         # Check file extension
         valid_extensions = {".tif", ".tiff", ".png", ".jpg", ".jpeg", ".webp"}
@@ -325,11 +340,17 @@ class PreFlightValidator:
         """
         if not depth_dir:
             return ValidationResult(
-                passed=True, message="No depth directory specified (will process without depth)", severity="info"
+                passed=True,
+                message="No depth directory specified (will process without depth)",
+                severity="info",
             )
 
         if not depth_dir.exists():
-            return ValidationResult(passed=False, message=f"Depth directory not found: {depth_dir}", severity="warning")
+            return ValidationResult(
+                passed=False,
+                message=f"Depth directory not found: {depth_dir}",
+                severity="warning",
+            )
 
         # Look for corresponding depth map
         stem = input_path.stem
@@ -385,7 +406,11 @@ class PreFlightValidator:
             ValidationResult
         """
         if not config or not config.get("enabled"):
-            return ValidationResult(passed=True, message="Materials v2 disabled (skipping validation)", severity="info")
+            return ValidationResult(
+                passed=True,
+                message="Materials v2 disabled (skipping validation)",
+                severity="info",
+            )
 
         issues = []
 

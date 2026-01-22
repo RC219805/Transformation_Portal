@@ -200,7 +200,12 @@ class TestVFXExtension:
 
     def test_apply_color_grade_zones(self, sample_array, sample_depth):
         """Test depth-based color grading."""
-        result = apply_color_grade_zones(sample_array, sample_depth, near_color=(1.05, 1.0, 0.95), far_color=(0.8, 0.9, 1.0))
+        result = apply_color_grade_zones(
+            sample_array,
+            sample_depth,
+            near_color=(1.05, 1.0, 0.95),
+            far_color=(0.8, 0.9, 1.0),
+        )
 
         assert result.shape == sample_array.shape
         assert result.dtype == np.float32
@@ -217,7 +222,11 @@ class TestVFXExtension:
     def test_enhance_with_vfx_basic(self, sample_image):
         """Test complete VFX enhancement pipeline."""
         result = enhance_with_vfx(
-            sample_image, base_preset="signature_estate", vfx_preset="subtle_estate", material_response=False, save_depth=True
+            sample_image,
+            base_preset="signature_estate",
+            vfx_preset="subtle_estate",
+            material_response=False,
+            save_depth=True,
         )
 
         assert "image" in result
@@ -238,7 +247,11 @@ class TestVFXExtension:
         """Test VFX enhancement with all presets."""
         for vfx_preset in VFX_PRESETS:
             result = enhance_with_vfx(
-                sample_image, base_preset="natural", vfx_preset=vfx_preset, material_response=False, save_depth=False
+                sample_image,
+                base_preset="natural",
+                vfx_preset=vfx_preset,
+                material_response=False,
+                save_depth=False,
             )
 
             assert result["image"] is not None
@@ -248,7 +261,11 @@ class TestVFXExtension:
     def test_enhance_with_vfx_material_response(self, sample_image):
         """Test VFX with material response enabled."""
         result = enhance_with_vfx(
-            sample_image, base_preset="signature_estate", vfx_preset="subtle_estate", material_response=True, save_depth=False
+            sample_image,
+            base_preset="signature_estate",
+            vfx_preset="subtle_estate",
+            material_response=True,
+            save_depth=False,
         )
 
         assert result["image"] is not None
@@ -257,20 +274,35 @@ class TestVFXExtension:
 
     def test_enhance_with_vfx_no_depth_save(self, sample_image):
         """Test VFX without saving depth."""
-        result = enhance_with_vfx(sample_image, base_preset="signature_estate", vfx_preset="subtle_estate", save_depth=False)
+        result = enhance_with_vfx(
+            sample_image,
+            base_preset="signature_estate",
+            vfx_preset="subtle_estate",
+            save_depth=False,
+        )
 
         assert result["depth"] is None
 
     def test_enhance_with_vfx_from_array(self, sample_array):
         """Test VFX enhancement from numpy array."""
-        result = enhance_with_vfx(sample_array, base_preset="natural", vfx_preset="subtle_estate", save_depth=False)
+        result = enhance_with_vfx(
+            sample_array,
+            base_preset="natural",
+            vfx_preset="subtle_estate",
+            save_depth=False,
+        )
 
         assert result["image"] is not None
         assert result["array"].shape == sample_array.shape
 
     def test_enhance_with_vfx_from_path(self, temp_image_file):
         """Test VFX enhancement from file path."""
-        result = enhance_with_vfx(temp_image_file, base_preset="natural", vfx_preset="subtle_estate", save_depth=False)
+        result = enhance_with_vfx(
+            temp_image_file,
+            base_preset="natural",
+            vfx_preset="subtle_estate",
+            save_depth=False,
+        )
 
         assert result["image"] is not None
         assert result["array"].shape == (100, 100, 3)
@@ -292,7 +324,11 @@ class TestIntegration:
 
             # Process with VFX
             result = enhance_with_vfx(
-                img, base_preset="signature_estate_agx", vfx_preset="montecito_golden", material_response=True, save_depth=True
+                img,
+                base_preset="signature_estate_agx",
+                vfx_preset="montecito_golden",
+                material_response=True,
+                save_depth=True,
             )
 
             # Save
@@ -312,7 +348,11 @@ class TestIntegration:
         for base in base_presets:
             for vfx in vfx_presets:
                 result = enhance_with_vfx(
-                    sample_image, base_preset=base, vfx_preset=vfx, material_response=False, save_depth=False
+                    sample_image,
+                    base_preset=base,
+                    vfx_preset=vfx,
+                    material_response=False,
+                    save_depth=False,
                 )
 
                 assert result["image"] is not None
@@ -328,7 +368,11 @@ class TestPerformance:
     def test_timing_metrics_present(self, sample_image):
         """Test that all timing metrics are present."""
         result = enhance_with_vfx(
-            sample_image, base_preset="natural", vfx_preset="subtle_estate", material_response=True, save_depth=True
+            sample_image,
+            base_preset="natural",
+            vfx_preset="subtle_estate",
+            material_response=True,
+            save_depth=True,
         )
 
         metrics = result["metrics"]
@@ -343,7 +387,12 @@ class TestPerformance:
         import time
 
         start = time.perf_counter()
-        result = enhance_with_vfx(sample_array, base_preset="natural", vfx_preset="subtle_estate", save_depth=False)
+        result = enhance_with_vfx(
+            sample_array,
+            base_preset="natural",
+            vfx_preset="subtle_estate",
+            save_depth=False,
+        )
         elapsed = (time.perf_counter() - start) * 1000
 
         # Should complete in under 5 seconds for small test image

@@ -157,7 +157,13 @@ def test_da3_normalization_fix():
             print("   ⚠️ No improvement or regression")
 
         results.append(
-            {"image": img_path.stem, "old": metrics_old, "new": metrics_new, "da2": da2_metrics, "improvement": improvement}
+            {
+                "image": img_path.stem,
+                "old": metrics_old,
+                "new": metrics_new,
+                "da2": da2_metrics,
+                "improvement": improvement,
+            }
         )
 
     print(f"\n{'=' * 80}")

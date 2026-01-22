@@ -92,7 +92,9 @@ def test_feature_3_reference_view_selection():
 
     for strategy in strategies:
         result = select_reference_view(
-            num_views=num_views, strategy=strategy, class_tokens=class_tokens if "saddle" in strategy else None
+            num_views=num_views,
+            strategy=strategy,
+            class_tokens=class_tokens if "saddle" in strategy else None,
         )
         print(f"✓ Strategy '{strategy}': selected view {result.selected_index}")
         if result.metrics:

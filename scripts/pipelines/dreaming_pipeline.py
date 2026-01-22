@@ -199,7 +199,8 @@ class QuantumOptimizer:
     async def evolve_pipeline(
         self,
         performance_metrics: Callable[
-            [ArchitecturalHypothesis], float | Awaitable[float] | Dict[str, float] | Awaitable[Dict[str, float]]
+            [ArchitecturalHypothesis],
+            float | Awaitable[float] | Dict[str, float] | Awaitable[Dict[str, float]],
         ],
     ) -> None:
         """Continuously optimise the pipeline until convergence."""
@@ -239,7 +240,8 @@ class QuantumOptimizer:
         self,
         hypotheses: Sequence[ArchitecturalHypothesis],
         performance_metrics: Callable[
-            [ArchitecturalHypothesis], float | Awaitable[float] | Dict[str, float] | Awaitable[Dict[str, float]]
+            [ArchitecturalHypothesis],
+            float | Awaitable[float] | Dict[str, float] | Awaitable[Dict[str, float]],
         ],
     ) -> List[EvaluationResult]:
         """Evaluate hypotheses concurrently."""

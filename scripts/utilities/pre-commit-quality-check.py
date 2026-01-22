@@ -41,7 +41,12 @@ def check_undefined_names():
     """Check for common undefined name errors"""
     print("🔍 Checking for undefined names...")
     result = subprocess.run(
-        ["flake8", ".", "--select=F821", "--exclude=.venv,deprecated,src/transformation_portal,scripts"],
+        [
+            "flake8",
+            ".",
+            "--select=F821",
+            "--exclude=.venv,deprecated,src/transformation_portal,scripts",
+        ],
         capture_output=True,
         text=True,
         check=False,
@@ -78,7 +83,10 @@ def check_trailing_whitespace():
     print("🔍 Checking for trailing whitespace...")
 
     result = subprocess.run(
-        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"], capture_output=True, text=True, check=False
+        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
+        capture_output=True,
+        text=True,
+        check=False,
     )
 
     if result.returncode != 0:
@@ -116,7 +124,12 @@ def check_import_order():
     print("🔍 Checking imports...")
 
     result = subprocess.run(
-        ["flake8", ".", "--select=E402,F401", "--exclude=.venv,deprecated,src/transformation_portal,scripts"],
+        [
+            "flake8",
+            ".",
+            "--select=E402,F401",
+            "--exclude=.venv,deprecated,src/transformation_portal,scripts",
+        ],
         capture_output=True,
         text=True,
         check=False,

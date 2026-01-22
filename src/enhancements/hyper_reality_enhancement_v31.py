@@ -207,7 +207,11 @@ class AtmosphericSynthesizer(nn.Module):
         )
 
         self.latent = nn.Sequential(
-            nn.Conv2d(512, 1024, 1), nn.GELU(), nn.Conv2d(1024, 1024, 1), nn.GELU(), nn.Conv2d(1024, 512, 1)
+            nn.Conv2d(512, 1024, 1),
+            nn.GELU(),
+            nn.Conv2d(1024, 1024, 1),
+            nn.GELU(),
+            nn.Conv2d(1024, 512, 1),
         )
 
         self.decoder = nn.ModuleList(
@@ -231,9 +235,16 @@ class AtmosphericSynthesizer(nn.Module):
 
     def _make_decoder_block(self, in_c: int, out_c: int) -> nn.Module:
         if out_c == 3:
-            return nn.Sequential(nn.Conv2d(in_c, 32, 3, padding=1), nn.GELU(), nn.Conv2d(32, out_c, 1), nn.Sigmoid())
+            return nn.Sequential(
+                nn.Conv2d(in_c, 32, 3, padding=1),
+                nn.GELU(),
+                nn.Conv2d(32, out_c, 1),
+                nn.Sigmoid(),
+            )
         return nn.Sequential(
-            nn.ConvTranspose2d(in_c, out_c, 4, stride=2, padding=1), nn.GroupNorm(min(32, out_c // 2), out_c), nn.GELU()
+            nn.ConvTranspose2d(in_c, out_c, 4, stride=2, padding=1),
+            nn.GroupNorm(min(32, out_c // 2), out_c),
+            nn.GELU(),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -727,7 +738,10 @@ def enhance_image(
     processor = HyperRealityProcessor(config)
 
     return processor.process_image(
-        image_path=image_path, output_path=output_path, reference_path=reference_path, save_intermediate=save_intermediate
+        image_path=image_path,
+        output_path=output_path,
+        reference_path=reference_path,
+        save_intermediate=save_intermediate,
     )
 
 
@@ -749,7 +763,10 @@ if __name__ == "__main__":
     processor = HyperRealityProcessor(config)
 
     results = processor.process_image(
-        image_path=args.input, output_path=args.output, reference_path=args.reference, save_intermediate=args.intermediate
+        image_path=args.input,
+        output_path=args.output,
+        reference_path=args.reference,
+        save_intermediate=args.intermediate,
     )
 
     print("\nProcessing Results:")

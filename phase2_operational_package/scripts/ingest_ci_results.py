@@ -105,7 +105,10 @@ def parse_coverage_xml(coverage_path: Path) -> Optional[Dict[str, Any]]:
 
 
 def update_knowledge_base(
-    cache_dir: Path, test_results: List[Dict], metrics: List[Dict], run_id: str = "local"
+    cache_dir: Path,
+    test_results: List[Dict],
+    metrics: List[Dict],
+    run_id: str = "local",
 ) -> Dict[str, Any]:
     """Update knowledge base with new results."""
     knowledge_dir = cache_dir / "knowledge"
@@ -151,7 +154,12 @@ def update_knowledge_base(
             "unit": "percent",
             "source": f"CI Run #{run_id}",
             "timestamp": datetime.now().isoformat(),
-            "context": {"total": total_tests, "passed": total_passed, "failed": total_failed, "skipped": total_skipped},
+            "context": {
+                "total": total_tests,
+                "passed": total_passed,
+                "failed": total_failed,
+                "skipped": total_skipped,
+            },
         },
         {
             "metric_id": "test_execution_time",

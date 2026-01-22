@@ -261,7 +261,11 @@ class TestNvidiaSmiSecurityShellFalse:
 
         # Verify command structure
         cmd = run_calls[0]["cmd"]
-        assert cmd == ["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"]
+        assert cmd == [
+            "nvidia-smi",
+            "--query-gpu=driver_version",
+            "--format=csv,noheader",
+        ]
 
         # Verify timeout is set
         assert "timeout" in run_calls[0]["kwargs"]

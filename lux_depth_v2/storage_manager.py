@@ -161,7 +161,12 @@ class StorageManager:
             logger.error(f"Failed to get stats for {tier}: {e}")
             return StorageStats(path=path, available=False)
 
-    def get_optimal_write_path(self, file_type: str, estimated_size_gb: float, prefer_tier: Optional[str] = None) -> Path:
+    def get_optimal_write_path(
+        self,
+        file_type: str,
+        estimated_size_gb: float,
+        prefer_tier: Optional[str] = None,
+    ) -> Path:
         """
         Determine optimal storage tier for write.
 
@@ -435,7 +440,9 @@ class StorageManager:
 
 
 def create_storage_manager(
-    internal_path: str = ".", t9_path: Optional[str] = None, auto_migrate_gb: float = 2.0
+    internal_path: str = ".",
+    t9_path: Optional[str] = None,
+    auto_migrate_gb: float = 2.0,
 ) -> StorageManager:
     """
     Create storage manager with sensible defaults.

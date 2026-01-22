@@ -5,13 +5,14 @@
 This module provides utilities for graceful error handling, validation,
 and recovery in processing pipelines.
 """
+
 import logging
 from pathlib import Path
 from typing import Any, Callable, List, Optional, TypeVar, Union
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class ProcessingError(Exception):
@@ -33,7 +34,7 @@ class ConfigurationError(ProcessingError):
 def validate_file_path(
     path: Union[str, Path],
     must_exist: bool = True,
-    extensions: Optional[List[str]] = None
+    extensions: Optional[List[str]] = None,
 ) -> Path:
     """Validate and normalize a file path.
 
@@ -70,9 +71,7 @@ def validate_file_path(
 
 
 def validate_directory(
-    path: Union[str, Path],
-    create: bool = False,
-    writable: bool = False
+    path: Union[str, Path], create: bool = False, writable: bool = False
 ) -> Path:
     """Validate and optionally create a directory.
 
@@ -116,9 +115,7 @@ def validate_directory(
             test_file.touch()
             test_file.unlink()
         except OSError as e:
-            raise FileValidationError(
-                f"Directory is not writable: {path_obj}"
-            ) from e
+            raise FileValidationError(f"Directory is not writable: {path_obj}") from e
 
     return path_obj
 
@@ -126,7 +123,7 @@ def validate_directory(
 def check_dependency(
     module_name: str,
     package_name: Optional[str] = None,
-    min_version: Optional[str] = None
+    min_version: Optional[str] = None,
 ) -> bool:
     """Check if a dependency is available and optionally verify version.
 
@@ -162,7 +159,8 @@ def check_dependency(
     if min_version is not None:
         try:
             from packaging import version
-            module_version = getattr(module, '__version__', None)
+
+            module_version = getattr(module, "__version__", None)
             if module_version is None:
                 logger.warning(
                     f"Cannot verify version of {package_name} "
@@ -185,7 +183,7 @@ def safe_execute(
     default: Optional[T] = None,
     error_message: Optional[str] = None,
     log_errors: bool = True,
-    **kwargs
+    **kwargs,
 ) -> Optional[T]:
     """Execute a function with error handling and optional default value.
 
@@ -221,7 +219,7 @@ def validate_range(
     value: Union[int, float],
     min_value: Optional[Union[int, float]] = None,
     max_value: Optional[Union[int, float]] = None,
-    name: str = "value"
+    name: str = "value",
 ) -> Union[int, float]:
     """Validate that a numeric value is within specified range.
 
@@ -241,14 +239,10 @@ def validate_range(
         strength = validate_range(0.7, min_value=0.0, max_value=1.0, name="strength")
     """
     if min_value is not None and value < min_value:
-        raise ConfigurationError(
-            f"{name} must be >= {min_value}, got {value}"
-        )
+        raise ConfigurationError(f"{name} must be >= {min_value}, got {value}")
 
     if max_value is not None and value > max_value:
-        raise ConfigurationError(
-            f"{name} must be <= {max_value}, got {value}"
-        )
+        raise ConfigurationError(f"{name} must be <= {max_value}, got {value}")
 
     return value
 
@@ -257,7 +251,7 @@ def batch_with_error_handling(
     items: List[Any],
     process_func: Callable[[Any], T],
     skip_errors: bool = True,
-    error_limit: Optional[int] = None
+    error_limit: Optional[int] = None,
 ) -> List[T]:
     """Process items in batch with robust error handling.
 

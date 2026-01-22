@@ -117,7 +117,11 @@ class EdgeSnapper:
         try:
             # Try ximgproc joint bilateral (better quality)
             filtered = cv2.ximgproc.jointBilateralFilter(
-                rgb_uint8, depth_uint8, d=d, sigmaColor=sigma_color, sigmaSpace=sigma_space
+                rgb_uint8,
+                depth_uint8,
+                d=d,
+                sigmaColor=sigma_color,
+                sigmaSpace=sigma_space,
             )
         except AttributeError:
             # Fallback: standard bilateral filter (no joint guide)
@@ -210,7 +214,11 @@ class EdgeSnapper:
 
 
 def snap_depth_to_rgb(
-    depth: np.ndarray, rgb: np.ndarray, sigma_spatial: float = 5.0, sigma_color: float = 0.1, snap_strength: float = 1.0
+    depth: np.ndarray,
+    rgb: np.ndarray,
+    sigma_spatial: float = 5.0,
+    sigma_color: float = 0.1,
+    snap_strength: float = 1.0,
 ) -> np.ndarray:
     """
     Convenience function for edge snapping.
@@ -225,7 +233,11 @@ def snap_depth_to_rgb(
     Returns:
         Snapped depth map as float32 [0, 1]
     """
-    config = EdgeSnappingConfig(sigma_spatial=sigma_spatial, sigma_color=sigma_color, snap_strength=snap_strength)
+    config = EdgeSnappingConfig(
+        sigma_spatial=sigma_spatial,
+        sigma_color=sigma_color,
+        snap_strength=snap_strength,
+    )
 
     snapper = EdgeSnapper(config)
     return snapper.snap(depth, rgb)
@@ -235,15 +247,31 @@ def snap_depth_to_rgb(
 
 PRESETS = {
     "subtle": EdgeSnappingConfig(
-        sigma_spatial=3.0, sigma_color=0.15, snap_strength=0.5, edge_threshold_low=30, edge_threshold_high=100
+        sigma_spatial=3.0,
+        sigma_color=0.15,
+        snap_strength=0.5,
+        edge_threshold_low=30,
+        edge_threshold_high=100,
     ),
     "balanced": EdgeSnappingConfig(
-        sigma_spatial=5.0, sigma_color=0.1, snap_strength=0.8, edge_threshold_low=50, edge_threshold_high=150
+        sigma_spatial=5.0,
+        sigma_color=0.1,
+        snap_strength=0.8,
+        edge_threshold_low=50,
+        edge_threshold_high=150,
     ),
     "aggressive": EdgeSnappingConfig(
-        sigma_spatial=7.0, sigma_color=0.05, snap_strength=1.0, edge_threshold_low=70, edge_threshold_high=200
+        sigma_spatial=7.0,
+        sigma_color=0.05,
+        snap_strength=1.0,
+        edge_threshold_low=70,
+        edge_threshold_high=200,
     ),
     "multiscale": EdgeSnappingConfig(
-        sigma_spatial=5.0, sigma_color=0.1, snap_strength=0.8, use_multiscale=True, scales=[0.5, 1.0, 2.0]
+        sigma_spatial=5.0,
+        sigma_color=0.1,
+        snap_strength=0.8,
+        use_multiscale=True,
+        scales=[0.5, 1.0, 2.0],
     ),
 }

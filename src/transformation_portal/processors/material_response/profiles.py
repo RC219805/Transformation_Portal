@@ -58,6 +58,7 @@ class MaterialProfile:
         window_reflection: Window reflection on floors.
         wall_texture: Wall surface texture.
     """
+
     name: str
     display_name: str
     description: str
@@ -77,21 +78,21 @@ class MaterialProfile:
     def to_dict(self) -> Dict[str, Any]:
         """Convert profile to dictionary."""
         return {
-            'name': self.name,
-            'display_name': self.display_name,
-            'description': self.description,
-            'texture_boost': self.texture_boost,
-            'ambient_occlusion': self.ambient_occlusion,
-            'highlight_warmth': self.highlight_warmth,
-            'haze_strength': self.haze_strength,
-            'haze_tint': self.haze_tint,
-            'floor_plank_contrast': self.floor_plank_contrast,
-            'floor_specular': self.floor_specular,
-            'textile_contrast': self.textile_contrast,
-            'leather_sheen': self.leather_sheen,
-            'window_light_wrap': self.window_light_wrap,
-            'window_reflection': self.window_reflection,
-            'wall_texture': self.wall_texture,
+            "name": self.name,
+            "display_name": self.display_name,
+            "description": self.description,
+            "texture_boost": self.texture_boost,
+            "ambient_occlusion": self.ambient_occlusion,
+            "highlight_warmth": self.highlight_warmth,
+            "haze_strength": self.haze_strength,
+            "haze_tint": self.haze_tint,
+            "floor_plank_contrast": self.floor_plank_contrast,
+            "floor_specular": self.floor_specular,
+            "textile_contrast": self.textile_contrast,
+            "leather_sheen": self.leather_sheen,
+            "window_light_wrap": self.window_light_wrap,
+            "window_reflection": self.window_reflection,
+            "wall_texture": self.wall_texture,
         }
 
 
@@ -101,10 +102,10 @@ class MaterialProfile:
 
 PROFILES: Dict[str, MaterialProfile] = {
     # Default luxury interior profile
-    'luxury_interior': MaterialProfile(
-        name='luxury_interior',
-        display_name='Luxury Interior',
-        description='Default profile for luxury interior spaces with balanced enhancement',
+    "luxury_interior": MaterialProfile(
+        name="luxury_interior",
+        display_name="Luxury Interior",
+        description="Default profile for luxury interior spaces with balanced enhancement",
         texture_boost=0.25,
         ambient_occlusion=0.12,
         highlight_warmth=0.08,
@@ -118,12 +119,11 @@ PROFILES: Dict[str, MaterialProfile] = {
         window_reflection=0.12,
         wall_texture=0.1,
     ),
-
     # Oak hardwood floor optimization
-    'wood_floor_oak': MaterialProfile(
-        name='wood_floor_oak',
-        display_name='Wood Floor - Oak',
-        description='Optimized for oak and hardwood floor enhancement with warm grain definition',
+    "wood_floor_oak": MaterialProfile(
+        name="wood_floor_oak",
+        display_name="Wood Floor - Oak",
+        description="Optimized for oak and hardwood floor enhancement with warm grain definition",
         texture_boost=0.30,
         ambient_occlusion=0.15,
         highlight_warmth=0.12,
@@ -137,12 +137,11 @@ PROFILES: Dict[str, MaterialProfile] = {
         window_reflection=0.20,  # Strong floor reflections
         wall_texture=0.08,
     ),
-
     # Marble and stone surfaces
-    'marble_stone': MaterialProfile(
-        name='marble_stone',
-        display_name='Marble & Stone',
-        description='Settings for marble, granite, and natural stone surfaces',
+    "marble_stone": MaterialProfile(
+        name="marble_stone",
+        display_name="Marble & Stone",
+        description="Settings for marble, granite, and natural stone surfaces",
         texture_boost=0.18,  # Subtle texture for polished surfaces
         ambient_occlusion=0.08,  # Minimal shadowing
         highlight_warmth=0.04,  # Cool stone appearance
@@ -156,12 +155,11 @@ PROFILES: Dict[str, MaterialProfile] = {
         window_reflection=0.25,  # Strong reflection on polished stone
         wall_texture=0.06,
     ),
-
     # Textile and linen enhancement
-    'textile_linen': MaterialProfile(
-        name='textile_linen',
-        display_name='Textile & Linen',
-        description='Enhanced textile and fabric rendering for upholstery and bedding',
+    "textile_linen": MaterialProfile(
+        name="textile_linen",
+        display_name="Textile & Linen",
+        description="Enhanced textile and fabric rendering for upholstery and bedding",
         texture_boost=0.35,  # Strong texture for fabric weave
         ambient_occlusion=0.14,
         highlight_warmth=0.06,
@@ -175,12 +173,11 @@ PROFILES: Dict[str, MaterialProfile] = {
         window_reflection=0.08,
         wall_texture=0.12,
     ),
-
     # Brushed metal and stainless steel
-    'metal_brushed': MaterialProfile(
-        name='metal_brushed',
-        display_name='Metal - Brushed',
-        description='Brushed metal and stainless steel surface enhancement',
+    "metal_brushed": MaterialProfile(
+        name="metal_brushed",
+        display_name="Metal - Brushed",
+        description="Brushed metal and stainless steel surface enhancement",
         texture_boost=0.22,
         ambient_occlusion=0.10,
         highlight_warmth=0.02,  # Cool metallic
@@ -194,12 +191,11 @@ PROFILES: Dict[str, MaterialProfile] = {
         window_reflection=0.10,
         wall_texture=0.04,
     ),
-
     # Glass and window surfaces
-    'glass_window': MaterialProfile(
-        name='glass_window',
-        display_name='Glass & Windows',
-        description='Glass and window reflection optimization',
+    "glass_window": MaterialProfile(
+        name="glass_window",
+        display_name="Glass & Windows",
+        description="Glass and window reflection optimization",
         texture_boost=0.12,  # Minimal texture for glass
         ambient_occlusion=0.06,
         highlight_warmth=0.04,
@@ -213,12 +209,11 @@ PROFILES: Dict[str, MaterialProfile] = {
         window_reflection=0.18,
         wall_texture=0.08,
     ),
-
     # Exterior courtyard and patio
-    'exterior_courtyard': MaterialProfile(
-        name='exterior_courtyard',
-        display_name='Exterior Courtyard',
-        description='Outdoor courtyard and patio spaces with natural lighting',
+    "exterior_courtyard": MaterialProfile(
+        name="exterior_courtyard",
+        display_name="Exterior Courtyard",
+        description="Outdoor courtyard and patio spaces with natural lighting",
         texture_boost=0.28,
         ambient_occlusion=0.16,  # Strong shadows outdoors
         highlight_warmth=0.12,  # Warm sunlight
@@ -232,12 +227,11 @@ PROFILES: Dict[str, MaterialProfile] = {
         window_reflection=0.08,
         wall_texture=0.14,  # Outdoor texture
     ),
-
     # Aerial and drone photography
-    'aerial_estate': MaterialProfile(
-        name='aerial_estate',
-        display_name='Aerial Estate',
-        description='Aerial and drone photography optimization for estate views',
+    "aerial_estate": MaterialProfile(
+        name="aerial_estate",
+        display_name="Aerial Estate",
+        description="Aerial and drone photography optimization for estate views",
         texture_boost=0.20,
         ambient_occlusion=0.08,
         highlight_warmth=0.10,
@@ -267,7 +261,7 @@ def get_profile(name: str) -> Dict[str, Any]:
         KeyError: If profile name is not found.
     """
     if name not in PROFILES:
-        available = ', '.join(sorted(PROFILES.keys()))
+        available = ", ".join(sorted(PROFILES.keys()))
         raise KeyError(f"Unknown profile '{name}'. Available: {available}")
 
     return PROFILES[name].to_dict()
@@ -293,12 +287,12 @@ def get_profile_info(name: str) -> Dict[str, str]:
     """
     profile = PROFILES.get(name)
     if profile is None:
-        return {'display_name': name, 'description': 'Unknown profile'}
+        return {"display_name": name, "description": "Unknown profile"}
 
     return {
-        'name': profile.name,
-        'display_name': profile.display_name,
-        'description': profile.description,
+        "name": profile.name,
+        "display_name": profile.display_name,
+        "description": profile.description,
     }
 
 
@@ -312,10 +306,10 @@ def get_all_profiles() -> Dict[str, Dict[str, Any]]:
 
 
 __all__ = [
-    'MaterialProfile',
-    'PROFILES',
-    'get_profile',
-    'list_profiles',
-    'get_profile_info',
-    'get_all_profiles',
+    "MaterialProfile",
+    "PROFILES",
+    "get_profile",
+    "list_profiles",
+    "get_profile_info",
+    "get_all_profiles",
 ]

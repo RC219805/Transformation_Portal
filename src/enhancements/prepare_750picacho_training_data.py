@@ -159,8 +159,18 @@ class Picacho750DataPreparation:
             "Pool": {"contrast": 0.70, "noise": 8, "blur": 0.8, "saturation": 0.75},
             "Aerial": {"contrast": 0.65, "noise": 10, "blur": 1.0, "saturation": 0.7},
             "GreatRoom": {"contrast": 0.75, "noise": 5, "blur": 0.6, "saturation": 0.8},
-            "PrimaryBedroom": {"contrast": 0.70, "noise": 6, "blur": 0.7, "saturation": 0.75},
-            "PrimaryBathroom": {"contrast": 0.72, "noise": 6, "blur": 0.7, "saturation": 0.78},
+            "PrimaryBedroom": {
+                "contrast": 0.70,
+                "noise": 6,
+                "blur": 0.7,
+                "saturation": 0.75,
+            },
+            "PrimaryBathroom": {
+                "contrast": 0.72,
+                "noise": 6,
+                "blur": 0.7,
+                "saturation": 0.78,
+            },
         }
 
         # Get profile or use default
@@ -247,7 +257,10 @@ class Picacho750DataPreparation:
 
             # Create square canvas
             square_img = Image.new("RGB", (target_size, target_size), (240, 240, 240))
-            offset = ((target_size - new_size[0]) // 2, (target_size - new_size[1]) // 2)
+            offset = (
+                (target_size - new_size[0]) // 2,
+                (target_size - new_size[1]) // 2,
+            )
             square_img.paste(img_resized, offset)
 
             # This is already architectural line art, treat as high-quality
@@ -291,8 +304,8 @@ class Picacho750DataPreparation:
             },
             "context_available": self.context is not None,
             "context_types": list(self.context.keys()) if self.context else [],
-            "rooms": list(self.context.get("bim", {}).get("rooms", {}).keys()) if self.context else [],
-            "materials": self.context.get("mbar", {}).get("rooms", [])[:5] if self.context else [],
+            "rooms": (list(self.context.get("bim", {}).get("rooms", {}).keys()) if self.context else []),
+            "materials": (self.context.get("mbar", {}).get("rooms", [])[:5] if self.context else []),
             "degradation_types": [
                 "Room-specific contrast reduction",
                 "Gaussian noise addition",
@@ -321,13 +334,32 @@ class Picacho750DataPreparation:
 def main():
     parser = argparse.ArgumentParser(description="Prepare 750 Picacho BIM training data for Hyper-Reality Enhancement")
     parser.add_argument(
-        "--output-dir", type=str, default="data/training_750picacho", help="Output directory for training data"
+        "--output-dir",
+        type=str,
+        default="data/training_750picacho",
+        help="Output directory for training data",
     )
-    parser.add_argument("--ultraquality-only", action="store_true", help="Only use UltraQuality renders (skip BIM images)")
-    parser.add_argument("--bim-only", action="store_true", help="Only use BIM images (skip UltraQuality renders)")
-    parser.add_argument("--max-bim-images", type=int, default=500, help="Maximum number of BIM images to use (default: 500)")
     parser.add_argument(
-        "--crops-per-render", type=int, default=5, help="Number of crops to extract from each UltraQuality render (default: 5)"
+        "--ultraquality-only",
+        action="store_true",
+        help="Only use UltraQuality renders (skip BIM images)",
+    )
+    parser.add_argument(
+        "--bim-only",
+        action="store_true",
+        help="Only use BIM images (skip UltraQuality renders)",
+    )
+    parser.add_argument(
+        "--max-bim-images",
+        type=int,
+        default=500,
+        help="Maximum number of BIM images to use (default: 500)",
+    )
+    parser.add_argument(
+        "--crops-per-render",
+        type=int,
+        default=5,
+        help="Number of crops to extract from each UltraQuality render (default: 5)",
     )
 
     args = parser.parse_args()

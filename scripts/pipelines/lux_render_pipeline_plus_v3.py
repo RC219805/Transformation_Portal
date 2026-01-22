@@ -264,7 +264,13 @@ def apply_pbr_overlays(
         n_ts = n_np * 2.0 - 1.0
         n_ts = _normalize(n_ts)
     else:
-        n_ts = np.dstack([np.zeros_like(base[..., 0]), np.zeros_like(base[..., 0]), np.ones_like(base[..., 0])])
+        n_ts = np.dstack(
+            [
+                np.zeros_like(base[..., 0]),
+                np.zeros_like(base[..., 0]),
+                np.ones_like(base[..., 0]),
+            ]
+        )
 
     # Roughness
     if roughness is not None:
@@ -303,7 +309,13 @@ def apply_pbr_overlays(
 
     # Lighting: simple multi-light lambert + specular; fresnel approx
     if lights is None:
-        lights = [(np.array([0.3, 0.5, 0.8], np.float32), np.array([1, 1, 1], np.float32), 1.0)]
+        lights = [
+            (
+                np.array([0.3, 0.5, 0.8], np.float32),
+                np.array([1, 1, 1], np.float32),
+                1.0,
+            )
+        ]
     N = _normalize(n_ts)
     view = np.dstack([np.zeros_like(rough), np.zeros_like(rough), np.ones_like(rough)])  # view ~ +Z
     spec_acc = np.zeros_like(base)
@@ -351,12 +363,17 @@ def apply_pbr_overlays(
         up_img = Image.fromarray((shaded * 255).astype(np.uint8)).resize((W, H), Image.Resampling.BICUBIC)
         up = np.asarray(up_img, dtype=np.uint8).astype(np.float32) / 255.0
         base_hi_resized = Image.fromarray((base_hi * 255).astype(np.uint8)).resize((W, H), Image.Resampling.BICUBIC)
-        hf = np.clip(base_hi - np.asarray(base_hi_resized, dtype=np.uint8).astype(np.float32) / 255.0, -1, 1)
+        hf = np.clip(
+            base_hi - np.asarray(base_hi_resized, dtype=np.uint8).astype(np.float32) / 255.0,
+            -1,
+            1,
+        )
         shaded = np.clip(up + 0.12 * hf, 0.0, 1.0)
     else:
         shaded = (
             np.asarray(
-                Image.fromarray((shaded * 255).astype(np.uint8)).resize((W, H), Image.Resampling.BICUBIC), dtype=np.uint8
+                Image.fromarray((shaded * 255).astype(np.uint8)).resize((W, H), Image.Resampling.BICUBIC),
+                dtype=np.uint8,
             ).astype(np.float32)
             / 255.0
         )
@@ -401,7 +418,11 @@ def main():
         p.add_argument("--variant-map", type=Path)
         p.add_argument("--variant-mix", type=float, default=0.0)
         p.add_argument("--normal", type=Path)
-        p.add_argument("--roughness", type=Path, help="If a GLOSS map is provided, also pass --roughness-is-gloss")
+        p.add_argument(
+            "--roughness",
+            type=Path,
+            help="If a GLOSS map is provided, also pass --roughness-is-gloss",
+        )
         p.add_argument("--roughness-is-gloss", action="store_true")
         p.add_argument("--metallic-map", type=Path)
         p.add_argument("--metallic", type=float, default=0.0)
@@ -423,7 +444,12 @@ def main():
         p.add_argument("--clamp-low", type=float, default=0.0)
         p.add_argument("--clamp-high", type=float, default=1.0)
         p.add_argument("--out-mode", type=str, default="RGB", choices=["RGB", "RGBA"])
-        p.add_argument("--quality", type=str, default="preview", choices=["draft", "preview", "final"])
+        p.add_argument(
+            "--quality",
+            type=str,
+            default="preview",
+            choices=["draft", "preview", "final"],
+        )
 
     p_mat = sub.add_parser("materialize")
     add_common(p_mat)

@@ -50,7 +50,10 @@ class TestMaterialsV2V3Configuration:
         cfg = PipelineConfig(preset=Preset.PRODUCTION_ULTRA_MATERIALS)
 
         # Must use ML-based segmentation (not heuristic)
-        assert cfg.segmentation.backend in ["segformer", "auto"], "Must use ML segmentation for materials"
+        assert cfg.segmentation.backend in [
+            "segformer",
+            "auto",
+        ], "Must use ML segmentation for materials"
 
         # Verify quality settings
         assert cfg.segmentation.input_long_side >= 1024, "High-resolution segmentation required for materials"

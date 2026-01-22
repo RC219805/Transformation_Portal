@@ -384,7 +384,12 @@ class TestMemoryEdgeCases:
 
     def test_fp16_on_cpu(self, mock_config):
         """Test FP16 precision on CPU (should fall back to FP32)."""
-        config = PipelineConfig(preset=Preset.PHOTO_REALISTIC, device="cpu", precision="fp16", upscaler_backend="none")
+        config = PipelineConfig(
+            preset=Preset.PHOTO_REALISTIC,
+            device="cpu",
+            precision="fp16",
+            upscaler_backend="none",
+        )
 
         pipeline = LuxPipelineV2(config)
         # Autocast should be disabled on CPU

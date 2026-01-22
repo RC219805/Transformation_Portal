@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 class ImageType(Enum):
     """Types of architectural images."""
+
     POOL = "pool"
     BEDROOMS = "bedrooms"
     BATHROOM = "bathroom"
@@ -31,6 +32,7 @@ class ImageType(Enum):
 @dataclass
 class ImageMetadata:
     """Metadata for loaded image."""
+
     path: Path
     image_type: Optional[ImageType]
     width: int
@@ -63,7 +65,7 @@ class ImageLoader:
         substrate,
         target_size: Optional[tuple] = None,
         normalize: bool = True,
-        preserve_aspect: bool = True
+        preserve_aspect: bool = True,
     ):
         """
         Initialize image loader.
@@ -92,9 +94,7 @@ class ImageLoader:
         logger.info(f"Initialized ImageLoader with target_size={target_size}")
 
     def load(
-        self,
-        image_path: Union[str, Path],
-        image_type: Optional[ImageType] = None
+        self, image_path: Union[str, Path], image_type: Optional[ImageType] = None
     ) -> tuple[Tensor, ImageMetadata]:
         """
         Load image with metadata extraction.
@@ -149,7 +149,7 @@ class ImageLoader:
     def load_batch(
         self,
         image_paths: List[Union[str, Path]],
-        image_types: Optional[List[ImageType]] = None
+        image_types: Optional[List[ImageType]] = None,
     ) -> tuple[List[Tensor], List[ImageMetadata]]:
         """
         Load batch of images.
@@ -175,10 +175,7 @@ class ImageLoader:
         return tensors, metadatas
 
     def _extract_metadata(
-        self,
-        pil_image: Image.Image,
-        path: Path,
-        image_type: Optional[ImageType]
+        self, pil_image: Image.Image, path: Path, image_type: Optional[ImageType]
     ) -> ImageMetadata:
         """Extract metadata from PIL image."""
         # Convert to numpy for statistics
@@ -198,7 +195,7 @@ class ImageLoader:
 
         # Extract EXIF/metadata tags
         tags = {}
-        if hasattr(pil_image, 'info'):
+        if hasattr(pil_image, "info"):
             tags.update(pil_image.info)
 
         metadata = ImageMetadata(
@@ -231,20 +228,13 @@ class ImageLoader:
         logger.warning(f"Could not detect image type from filename: {filename}")
         return None
 
-    def _resize_image(
-        self,
-        pil_image: Image.Image,
-        target_size: tuple
-    ) -> Image.Image:
+    def _resize_image(self, pil_image: Image.Image, target_size: tuple) -> Image.Image:
         """Resize image with aspect ratio preservation."""
         target_h, target_w = target_size
 
         if self.preserve_aspect:
             # Calculate scale to fit within target size
-            scale = min(
-                target_w / pil_image.width,
-                target_h / pil_image.height
-            )
+            scale = min(target_w / pil_image.width, target_h / pil_image.height)
             new_w = int(pil_image.width * scale)
             new_h = int(pil_image.height * scale)
         else:
@@ -270,11 +260,7 @@ class ImageLoader:
 
         return tensor
 
-    def create_thumbnail(
-        self,
-        tensor: Tensor,
-        size: tuple = (256, 256)
-    ) -> Tensor:
+    def create_thumbnail(self, tensor: Tensor, size: tuple = (256, 256)) -> Tensor:
         """
         Create thumbnail from tensor.
 
@@ -289,7 +275,7 @@ class ImageLoader:
         thumbnail = self.substrate.tensor_processor.resize(
             tensor.unsqueeze(0) if tensor.ndim == 3 else tensor,
             size=size,
-            mode="bilinear"
+            mode="bilinear",
         )
 
         if thumbnail.shape[0] == 1:
@@ -298,10 +284,7 @@ class ImageLoader:
         return thumbnail
 
     def save_tensor(
-        self,
-        tensor: Tensor,
-        output_path: Union[str, Path],
-        denormalize: bool = True
+        self, tensor: Tensor, output_path: Union[str, Path], denormalize: bool = True
     ):
         """
         Save tensor as image.

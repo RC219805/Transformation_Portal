@@ -296,8 +296,16 @@ Categories:
         """,
     )
 
-    parser.add_argument("--all", action="store_true", help="Download all sample categories (minimal + demo + full)")
-    parser.add_argument("--demo", action="store_true", help="Download demo samples in addition to minimal")
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Download all sample categories (minimal + demo + full)",
+    )
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="Download demo samples in addition to minimal",
+    )
     parser.add_argument("--output-dir", type=Path, help="Output directory (default: repository root)")
     parser.add_argument("--force", action="store_true", help="Force re-download even if files exist")
     parser.add_argument("--list", action="store_true", help="List available samples without downloading")

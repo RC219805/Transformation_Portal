@@ -142,7 +142,12 @@ def analyze_marketing(reports: List[Dict[str, Any]]) -> None:
 
 def main():
     parser = argparse.ArgumentParser(description="Analyze marketing export performance from pipeline reports.")
-    parser.add_argument("output_dirs", nargs="+", type=Path, help="Output directories containing *_report.json files")
+    parser.add_argument(
+        "output_dirs",
+        nargs="+",
+        type=Path,
+        help="Output directories containing *_report.json files",
+    )
     args = parser.parse_args()
 
     reports = []

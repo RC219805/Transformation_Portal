@@ -8,7 +8,11 @@ and increase relevance to repository-specific patterns.
 from .citation import CitationGenerator
 from .classifier import ArtifactClassifier, ArtifactType, PipelineType
 from .indexer import RepositoryIndexer
-from .knowledge_engine import KnowledgeIntegrationEngine, PatternAnalysis, Recommendation
+from .knowledge_engine import (
+    KnowledgeIntegrationEngine,
+    PatternAnalysis,
+    Recommendation,
+)
 from .phase1_integration import RAGConfig, RAGSystem
 from .reranker import ResultReranker
 from .retriever import HybridRetriever

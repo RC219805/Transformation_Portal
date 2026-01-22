@@ -23,7 +23,11 @@ def download_file(url, output_path):
         percent = min(100, (downloaded / total_size) * 100)
         mb_downloaded = downloaded / (1024 * 1024)
         mb_total = total_size / (1024 * 1024)
-        print(f"\r  Progress: {percent:.1f}% ({mb_downloaded:.1f}/{mb_total:.1f} MB)", end="", flush=True)
+        print(
+            f"\r  Progress: {percent:.1f}% ({mb_downloaded:.1f}/{mb_total:.1f} MB)",
+            end="",
+            flush=True,
+        )
 
     try:
         urllib.request.urlretrieve(url, output_path, reporthook=report_progress)
@@ -63,7 +67,10 @@ print("\n[3/4] Checking ControlNet models...")
 try:
     from huggingface_hub import snapshot_download
 
-    for model_id in ["lllyasviel/sd-controlnet-canny", "lllyasviel/sd-controlnet-depth"]:
+    for model_id in [
+        "lllyasviel/sd-controlnet-canny",
+        "lllyasviel/sd-controlnet-depth",
+    ]:
         try:
             snapshot_download(repo_id=model_id, allow_patterns=["*.json"])
             print(f"✓ {model_id}")

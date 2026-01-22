@@ -36,7 +36,9 @@ def test_convert_renderings_to_jpeg_creates_jpg(tmp_path: Path) -> None:
     assert converted_file.suffix == ".jpg"
 
 
-def test_ensure_supported_renderings_returns_original_when_already_supported(tmp_path: Path) -> None:
+def test_ensure_supported_renderings_returns_original_when_already_supported(
+    tmp_path: Path,
+) -> None:
     source = tmp_path / "example.jpg"
     _write_dummy_image(source)
 

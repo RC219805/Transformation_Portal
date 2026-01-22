@@ -8,7 +8,10 @@ import numpy as np
 import pytest
 
 from transformation_portal.depth.models import coreml_exporter as coreml_module
-from transformation_portal.depth.models.coreml_exporter import CoreMLExporter, CoreMLDepthEstimator
+from transformation_portal.depth.models.coreml_exporter import (
+    CoreMLExporter,
+    CoreMLDepthEstimator,
+)
 
 
 class TestCoreMLExporter:
@@ -235,7 +238,11 @@ class TestModelMapping:
         with patch.dict(sys.modules, {"transformers": mock_transformers}):
             exporter = CoreMLExporter()
 
-            model_names = ["depth_anything_v2_small", "depth_anything_v2_base", "depth_anything_v2_large"]
+            model_names = [
+                "depth_anything_v2_small",
+                "depth_anything_v2_base",
+                "depth_anything_v2_large",
+            ]
 
             for name in model_names:
                 model = exporter._load_pytorch_model(name)

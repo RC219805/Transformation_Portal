@@ -188,7 +188,10 @@ class TestCoreSecurityIntegration:
 
     def test_validate_image_file_with_core(self, tmp_path):
         """Test validate_image_file uses core validator when available."""
-        from lux_depth_v2.hardening.safe_io import validate_image_file, CORE_VALIDATION_AVAILABLE
+        from lux_depth_v2.hardening.safe_io import (
+            validate_image_file,
+            CORE_VALIDATION_AVAILABLE,
+        )
         from lux_depth_v2.hardening.policy import HardeningPolicy
 
         if not CORE_VALIDATION_AVAILABLE:
@@ -218,7 +221,9 @@ class TestCoreSecurityIntegration:
         test_img.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
 
         policy = HardeningPolicy(
-            allowed_input_exts=(".png",), max_input_bytes=1024 * 1024, enforce_output_within=str(tmp_path)
+            allowed_input_exts=(".png",),
+            max_input_bytes=1024 * 1024,
+            enforce_output_within=str(tmp_path),
         )
 
         # Should pass validation with core disabled (legacy mode)
@@ -226,7 +231,10 @@ class TestCoreSecurityIntegration:
 
     def test_validate_image_file_rejects_invalid(self, tmp_path):
         """Test validate_image_file rejects invalid files."""
-        from lux_depth_v2.hardening.safe_io import validate_image_file, InputValidationError
+        from lux_depth_v2.hardening.safe_io import (
+            validate_image_file,
+            InputValidationError,
+        )
         from lux_depth_v2.hardening.policy import HardeningPolicy
 
         # Create a file with wrong extension
@@ -234,7 +242,9 @@ class TestCoreSecurityIntegration:
         test_img.write_bytes(b"\xff\xd8\xff" + b"\x00" * 100)  # JPEG magic bytes, but .png extension
 
         policy = HardeningPolicy(
-            allowed_input_exts=(".png",), max_input_bytes=1024 * 1024, enforce_output_within=str(tmp_path)
+            allowed_input_exts=(".png",),
+            max_input_bytes=1024 * 1024,
+            enforce_output_within=str(tmp_path),
         )
 
         # Should raise InputValidationError

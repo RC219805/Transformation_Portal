@@ -109,7 +109,12 @@ def test_blend_mask_creation():
 
     # First tile (top-left): no fading on top/left edges
     mask_tl = upscaler._create_positional_blend_mask(
-        shape, overlap, fade_top=False, fade_bottom=True, fade_left=False, fade_right=True
+        shape,
+        overlap,
+        fade_top=False,
+        fade_bottom=True,
+        fade_left=False,
+        fade_right=True,
     )
     assert mask_tl[0, 0, 0, 0].item() == 1.0  # Top-left corner should be 1.0
     assert mask_tl[0, 0, 0, :].mean().item() < 1.0  # Top row fades toward right

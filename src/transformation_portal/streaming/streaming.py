@@ -21,7 +21,7 @@ class StreamingProcessor:
         self,
         process_func: Callable[[Any], Any],
         batch_size: int = 1,
-        max_workers: Optional[int] = None
+        max_workers: Optional[int] = None,
     ):
         """Initialize streaming processor.
 
@@ -74,7 +74,7 @@ class StreamingProcessor:
 def stream_results(
     items: List[Any],
     process_func: Callable[[Any], Any],
-    callback: Optional[Callable[[Any], None]] = None
+    callback: Optional[Callable[[Any], None]] = None,
 ) -> Iterator[Any]:
     """Stream processing results with optional callback.
 
@@ -102,10 +102,7 @@ def stream_results(
         yield result
 
 
-def batch_stream(
-    items: Iterator[Any],
-    batch_size: int
-) -> Iterator[List[Any]]:
+def batch_stream(items: Iterator[Any], batch_size: int) -> Iterator[List[Any]]:
     """Stream items in batches.
 
     Args:
@@ -217,8 +214,8 @@ class RealTimeMonitor:
             Dictionary with monitoring statistics
         """
         return {
-            'throughput': self.throughput,
-            'avg_processing_time': self.avg_processing_time,
-            'total_elapsed': self.total_elapsed,
-            'items_processed': len(self.timestamps),
+            "throughput": self.throughput,
+            "avg_processing_time": self.avg_processing_time,
+            "total_elapsed": self.total_elapsed,
+            "items_processed": len(self.timestamps),
         }

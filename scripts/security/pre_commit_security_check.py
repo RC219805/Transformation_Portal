@@ -156,7 +156,12 @@ def check_bidi_unicode(filepath: Path) -> List[SecurityViolation]:
                 for char, name in BIDI_CHARS.items():
                     if char in line:
                         violations.append(
-                            SecurityViolation(str(filepath), "BIDI_UNICODE", f"Contains {name} character", line_num)
+                            SecurityViolation(
+                                str(filepath),
+                                "BIDI_UNICODE",
+                                f"Contains {name} character",
+                                line_num,
+                            )
                         )
     except (OSError, UnicodeDecodeError) as e:
         # Skip binary files or files we can't read
@@ -174,7 +179,13 @@ def check_sensitive_file(filepath: Path) -> List[SecurityViolation]:
 
     for pattern in SENSITIVE_PATTERNS:
         if re.search(pattern, filename) or re.search(pattern, path_str):
-            violations.append(SecurityViolation(str(filepath), "SENSITIVE_FILE", f"Matches sensitive file pattern: {pattern}"))
+            violations.append(
+                SecurityViolation(
+                    str(filepath),
+                    "SENSITIVE_FILE",
+                    f"Matches sensitive file pattern: {pattern}",
+                )
+            )
 
     return violations
 
@@ -192,7 +203,13 @@ def check_output_directory(filepath: Path) -> List[SecurityViolation]:
 
     for pattern in OUTPUT_DIR_PATTERNS:
         if re.search(pattern, path_str):
-            violations.append(SecurityViolation(str(filepath), "OUTPUT_ARTIFACT", f"File in output directory: {pattern}"))
+            violations.append(
+                SecurityViolation(
+                    str(filepath),
+                    "OUTPUT_ARTIFACT",
+                    f"File in output directory: {pattern}",
+                )
+            )
 
     return violations
 
@@ -250,7 +267,10 @@ def get_staged_files() -> List[Path]:
 
     try:
         result = subprocess.run(
-            ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"], capture_output=True, text=True, check=True
+            ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
+            capture_output=True,
+            text=True,
+            check=True,
         )
         files = [Path(f.strip()) for f in result.stdout.splitlines() if f.strip()]
         return files

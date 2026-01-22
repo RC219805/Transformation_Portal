@@ -122,7 +122,11 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
 
     @app.post("/v2/process")
     @limiter.limit("10/minute")
-    async def process(request: Request, image: UploadFile = File(...), depth: Optional[UploadFile] = File(None)):
+    async def process(
+        request: Request,
+        image: UploadFile = File(...),
+        depth: Optional[UploadFile] = File(None),
+    ):
         async with sem:
             # Validate filenames
             try:
@@ -171,7 +175,8 @@ def run_service(cfg: PipelineConfig, host: str = "0.0.0.0", port: int = 8088, lo
                 depth_data = await depth.read()
                 if len(depth_data) > MAX_UPLOAD_SIZE:
                     raise HTTPException(
-                        status_code=413, detail=f"Depth too large: {len(depth_data)} bytes (max {MAX_UPLOAD_SIZE})"
+                        status_code=413,
+                        detail=f"Depth too large: {len(depth_data)} bytes (max {MAX_UPLOAD_SIZE})",
                     )
                 safe_depth_name = Path(depth.filename or "depth.png").name
                 depth_path = incoming_dir / f"{req_id}_{safe_depth_name}"
@@ -210,11 +215,20 @@ def main() -> None:
         description="Lux Depth V2 Service Mode (FastAPI server)",
         epilog="For full configuration options, use: lux-depth-v2 --service --help",
     )
-    parser.add_argument("--output-dir", type=str, required=True, help="Output directory for processed images")
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        required=True,
+        help="Output directory for processed images",
+    )
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to bind to (default: 0.0.0.0)")
     parser.add_argument("--port", type=int, default=8088, help="Port to bind to (default: 8088)")
     parser.add_argument(
-        "--device", type=str, default="auto", choices=["auto", "cuda", "cpu"], help="Device to use (default: auto)"
+        "--device",
+        type=str,
+        default="auto",
+        choices=["auto", "cuda", "cpu"],
+        help="Device to use (default: auto)",
     )
 
     args = parser.parse_args()

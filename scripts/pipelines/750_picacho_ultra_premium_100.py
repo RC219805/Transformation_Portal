@@ -305,12 +305,21 @@ class UltraPremiumPipeline:
         """Apply advanced denoising using OpenCV."""
         img_uint8 = (np.clip(image, 0, 1) * 255).astype(np.uint8)
 
-        strength_map = {"low": (3, 3, 7, 21), "medium": (5, 5, 7, 21), "high": (10, 10, 7, 21)}
+        strength_map = {
+            "low": (3, 3, 7, 21),
+            "medium": (5, 5, 7, 21),
+            "high": (10, 10, 7, 21),
+        }
 
         h, hColor, templateWindowSize, searchWindowSize = strength_map.get(strength, strength_map["medium"])
 
         denoised = cv2.fastNlMeansDenoisingColored(
-            img_uint8, None, h=h, hColor=hColor, templateWindowSize=templateWindowSize, searchWindowSize=searchWindowSize
+            img_uint8,
+            None,
+            h=h,
+            hColor=hColor,
+            templateWindowSize=templateWindowSize,
+            searchWindowSize=searchWindowSize,
         )
 
         return denoised.astype(np.float32) / 255.0
@@ -362,10 +371,18 @@ class UltraPremiumPipeline:
     def apply_advanced_tone_curve(self, image: np.ndarray, curve_type: str) -> np.ndarray:
         """Apply advanced tone curve."""
         curves = {
-            "landscape": lambda x: np.where(x < 0.5, 0.5 * np.power(2 * x, 0.85), 1.0 - 0.5 * np.power(2 * (1 - x), 0.85)),
+            "landscape": lambda x: np.where(
+                x < 0.5,
+                0.5 * np.power(2 * x, 0.85),
+                1.0 - 0.5 * np.power(2 * (1 - x), 0.85),
+            ),
             "interior": lambda x: np.power(x, 0.92),
             "detail": lambda x: np.power(x, 0.88),
-            "vibrant": lambda x: np.where(x < 0.5, 0.5 * np.power(2 * x, 0.9), 1.0 - 0.5 * np.power(2 * (1 - x), 0.95)),
+            "vibrant": lambda x: np.where(
+                x < 0.5,
+                0.5 * np.power(2 * x, 0.9),
+                1.0 - 0.5 * np.power(2 * (1 - x), 0.95),
+            ),
         }
 
         curve_func = curves.get(curve_type, curves["interior"])

@@ -87,9 +87,7 @@ def setup_logging(verbosity: int) -> None:
     level = (
         logging.WARNING
         if verbosity == 0
-        else logging.INFO
-        if verbosity == 1
-        else logging.DEBUG
+        else logging.INFO if verbosity == 1 else logging.DEBUG
     )
     logging.basicConfig(
         level=level,
@@ -339,7 +337,9 @@ class PipelineConfig:
             consistency=data.get(
                 "consistency", {"target_median": 0.42, "wb_neutralize": True}
             ),
-            retouch=data.get("retouch", {"dust_remove": False, "hotspot_reduce": False}),
+            retouch=data.get(
+                "retouch", {"dust_remove": False, "hotspot_reduce": False}
+            ),
             export=data.get(
                 "export",
                 {
@@ -552,7 +552,9 @@ def raw_to_prophoto_tiff(raw_path: Path) -> np.ndarray:
     return np.clip(arr, 0.0, 1.0)
 
 
-def process_raw_file(args: Tuple[Path, Path, Optional[bytes]]) -> Tuple[Path, Optional[Path]]:
+def process_raw_file(
+    args: Tuple[Path, Path, Optional[bytes]],
+) -> Tuple[Path, Optional[Path]]:
     """Process single RAW file (for multiprocessing)."""
     raw_path, output_dir, icc_bytes = args
     try:
@@ -580,9 +582,7 @@ def decode_raws_parallel(
 
     # Filter out already-completed files
     if tracker:
-        pending = [
-            r for r in raws if not tracker.is_completed(f"raw_decode:{r.name}")
-        ]
+        pending = [r for r in raws if not tracker.is_completed(f"raw_decode:{r.name}")]
         if len(pending) < len(raws):
             LOG.info("Skipping %d already-processed RAWs", len(raws) - len(pending))
         raws = pending
@@ -595,7 +595,9 @@ def decode_raws_parallel(
     results = []
 
     with ProcessPoolExecutor(max_workers=workers) as executor:
-        futures = {executor.submit(process_raw_file, args): args[0] for args in args_list}
+        futures = {
+            executor.submit(process_raw_file, args): args[0] for args in args_list
+        }
 
         for future in tqdm(
             as_completed(futures), total=len(futures), desc="RAW→TIFF (parallel)"
@@ -784,9 +786,15 @@ def split_tone(
     # Work in sRGB
     img_srgb = linear_to_srgb(img)
     hsv = Image.fromarray((img_srgb * 255).astype(np.uint8), "RGB").convert("HSV")
-    hue, saturation, value = [np.array(c, dtype=np.float32) / 255.0 for c in hsv.split()]
+    hue, saturation, value = [
+        np.array(c, dtype=np.float32) / 255.0 for c in hsv.split()
+    ]
 
-    luma = 0.2126 * img_srgb[..., 0] + 0.7152 * img_srgb[..., 1] + 0.0722 * img_srgb[..., 2]
+    luma = (
+        0.2126 * img_srgb[..., 0]
+        + 0.7152 * img_srgb[..., 1]
+        + 0.0722 * img_srgb[..., 2]
+    )
     mask_sh = np.clip(1.0 - (luma * 2.0), 0.0, 1.0)
     mask_hi = np.clip((luma * 2.0) - 1.0, 0.0, 1.0)
 
@@ -798,16 +806,14 @@ def split_tone(
         hue = (hue * (1 - mask_hi)) + ((hi_h / 360.0) * mask_hi)
         saturation = np.clip(saturation + hi_s * mask_hi, 0, 1)
 
-    out = (
-        Image.merge(
-            "HSV",
-            [
-                Image.fromarray((hue * 255).astype(np.uint8)),
-                Image.fromarray((saturation * 255).astype(np.uint8)),
-                Image.fromarray((value * 255).astype(np.uint8)),
-            ],
-        ).convert("RGB")
-    )
+    out = Image.merge(
+        "HSV",
+        [
+            Image.fromarray((hue * 255).astype(np.uint8)),
+            Image.fromarray((saturation * 255).astype(np.uint8)),
+            Image.fromarray((value * 255).astype(np.uint8)),
+        ],
+    ).convert("RGB")
     result_srgb = np.array(out).astype(np.float32) / 255.0
 
     return srgb_to_linear(result_srgb)
@@ -868,7 +874,9 @@ def median_luma(img: np.ndarray) -> float:
     return float(np.median(luma))
 
 
-def normalize_exposure_inplace(imgs: List[np.ndarray], target_median: float = 0.42) -> None:
+def normalize_exposure_inplace(
+    imgs: List[np.ndarray], target_median: float = 0.42
+) -> None:
     """Normalize exposure in-place to save memory."""
     for i, im in enumerate(imgs):
         m = median_luma(im) + 1e-6
@@ -1014,12 +1022,16 @@ def export_assets(
 ) -> None:
     """Export print TIFF and web JPEG."""
     # Print TIFF
-    p_img = unsharp_mask(img, amount=float(sharpen_print_amt), radius=1.2, threshold=0.0)
+    p_img = unsharp_mask(
+        img, amount=float(sharpen_print_amt), radius=1.2, threshold=0.0
+    )
     save_tiff16_prophoto(p_img, print_path, icc_prophoto)
 
     # Web JPEG
     w_img = resize_long_edge(img, int(web_long_edge))
-    w_img = unsharp_mask(w_img, amount=float(sharpen_web_amt), radius=1.2, threshold=0.0)
+    w_img = unsharp_mask(
+        w_img, amount=float(sharpen_web_amt), radius=1.2, threshold=0.0
+    )
     save_jpeg_srgb(w_img, web_path, icc_srgb, quality=int(jpeg_quality))
 
     # Free memory
@@ -1103,7 +1115,9 @@ def run_pipeline(config_path: Path, verbosity: int = 1, resume: bool = False) ->
     )
 
     workers = int(cfg.processing.get("workers", 4))
-    base_outputs = decode_raws_parallel(raws, lay.work_base, icc_prophoto, workers, tracker)
+    base_outputs = decode_raws_parallel(
+        raws, lay.work_base, icc_prophoto, workers, tracker
+    )
 
     # Auto-upright (can be parallelized similarly)
     aligned_paths = []
@@ -1251,7 +1265,10 @@ def run_pipeline(config_path: Path, verbosity: int = 1, resume: bool = False) ->
             zip_path.unlink()
 
         shutil.make_archive(
-            str(zip_path.with_suffix("")), "zip", root_dir=cfg.project_root, base_dir="EXPORT"
+            str(zip_path.with_suffix("")),
+            "zip",
+            root_dir=cfg.project_root,
+            base_dir="EXPORT",
         )
         LOG.info("Deliverable zip: %s", zip_path)
 
@@ -1270,9 +1287,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument(
         "-v", "--verbose", action="count", default=1, help="Increase verbosity"
     )
-    ap.add_argument(
-        "--resume", action="store_true", help="Resume from previous run"
-    )
+    ap.add_argument("--resume", action="store_true", help="Resume from previous run")
 
     args = ap.parse_args(argv)
 

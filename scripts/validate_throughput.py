@@ -77,7 +77,10 @@ def validate_standard_quality(
 
 
 def validate_max_quality(
-    current: Dict[str, Any], baseline: Dict[str, Any], max_regression_pct: float, has_gpu: bool = False
+    current: Dict[str, Any],
+    baseline: Dict[str, Any],
+    max_regression_pct: float,
+    has_gpu: bool = False,
 ) -> Tuple[bool, List[str]]:
     """Validate max quality throughput.
 
@@ -165,12 +168,23 @@ def compare_against_production_targets(current: Dict[str, Any], baseline: Dict[s
 def main():
     parser = argparse.ArgumentParser(description="Validate throughput benchmarks against baseline")
     parser.add_argument("--baseline", type=Path, required=True, help="Path to baseline throughput JSON")
-    parser.add_argument("--current", type=Path, required=True, help="Path to current benchmark results JSON")
     parser.add_argument(
-        "--max-regression", type=float, default=20, help="Maximum allowed throughput regression percentage (default: 20)"
+        "--current",
+        type=Path,
+        required=True,
+        help="Path to current benchmark results JSON",
     )
     parser.add_argument(
-        "--quality", choices=["standard", "max"], default="standard", help="Quality level to validate (default: standard)"
+        "--max-regression",
+        type=float,
+        default=20,
+        help="Maximum allowed throughput regression percentage (default: 20)",
+    )
+    parser.add_argument(
+        "--quality",
+        choices=["standard", "max"],
+        default="standard",
+        help="Quality level to validate (default: standard)",
     )
     parser.add_argument("--gpu", action="store_true", help="Validate for GPU configuration")
 

@@ -217,7 +217,10 @@ class TestPipelineStatistics:
     def test_statistics_summary(self):
         """Test statistics summary generation."""
         stats = PipelineStatistics(
-            total_time=10.5, images_processed=5, images_failed=1, stage_times={"Load": 1.0, "Process": 8.0, "Output": 1.5}
+            total_time=10.5,
+            images_processed=5,
+            images_failed=1,
+            stage_times={"Load": 1.0, "Process": 8.0, "Output": 1.5},
         )
 
         summary = stats.summary()
@@ -236,7 +239,9 @@ class TestSceneDetection:
     def test_detect_aerial(self, sky_image, temp_dir):
         """Test aerial scene detection."""
         config = UnifiedPipelineConfig(
-            scene_type=SceneType.AUTO, output_dir=temp_dir, output_formats=[OutputFormat.MASTER_TIFF]
+            scene_type=SceneType.AUTO,
+            output_dir=temp_dir,
+            output_formats=[OutputFormat.MASTER_TIFF],
         )
         pipeline = UnifiedLuxuryPipeline(config)
 
@@ -247,7 +252,9 @@ class TestSceneDetection:
     def test_detect_interior(self, interior_image, temp_dir):
         """Test interior scene detection."""
         config = UnifiedPipelineConfig(
-            scene_type=SceneType.AUTO, output_dir=temp_dir, output_formats=[OutputFormat.MASTER_TIFF]
+            scene_type=SceneType.AUTO,
+            output_dir=temp_dir,
+            output_formats=[OutputFormat.MASTER_TIFF],
         )
         pipeline = UnifiedLuxuryPipeline(config)
 
@@ -269,7 +276,11 @@ class TestParameterOptimization:
 
     def test_premium_profile_params(self, temp_dir):
         """Test PREMIUM profile parameter optimization."""
-        config = UnifiedPipelineConfig(profile=ProcessingProfile.PREMIUM, scene_type=SceneType.INTERIOR, output_dir=temp_dir)
+        config = UnifiedPipelineConfig(
+            profile=ProcessingProfile.PREMIUM,
+            scene_type=SceneType.INTERIOR,
+            output_dir=temp_dir,
+        )
         pipeline = UnifiedLuxuryPipeline(config)
 
         params = pipeline._optimize_parameters(config)
@@ -282,7 +293,9 @@ class TestParameterOptimization:
     def test_performance_profile_params(self, temp_dir):
         """Test PERFORMANCE profile parameter optimization."""
         config = UnifiedPipelineConfig(
-            profile=ProcessingProfile.PERFORMANCE, scene_type=SceneType.INTERIOR, output_dir=temp_dir
+            profile=ProcessingProfile.PERFORMANCE,
+            scene_type=SceneType.INTERIOR,
+            output_dir=temp_dir,
         )
         pipeline = UnifiedLuxuryPipeline(config)
 
@@ -419,7 +432,11 @@ class TestMetadataPreservation:
         # Add fake ICC profile to sample
         icc_profile = b"fake_icc_profile_data"
 
-        config = UnifiedPipelineConfig(output_dir=temp_dir, output_formats=[OutputFormat.WEB_4K], preserve_metadata=True)
+        config = UnifiedPipelineConfig(
+            output_dir=temp_dir,
+            output_formats=[OutputFormat.WEB_4K],
+            preserve_metadata=True,
+        )
         pipeline = UnifiedLuxuryPipeline(config)
 
         # Should not raise exception with ICC profile
@@ -530,7 +547,10 @@ class TestStatisticsSaving:
     def test_statistics_tracking(self, sample_image_file, temp_dir):
         """Test that statistics are tracked during processing."""
         config = UnifiedPipelineConfig(
-            output_dir=temp_dir, output_formats=[OutputFormat.MASTER_TIFF], enable_depth=False, enable_material_response=False
+            output_dir=temp_dir,
+            output_formats=[OutputFormat.MASTER_TIFF],
+            enable_depth=False,
+            enable_material_response=False,
         )
         pipeline = UnifiedLuxuryPipeline(config)
 
@@ -543,7 +563,10 @@ class TestStatisticsSaving:
     def test_save_statistics_json(self, sample_image_file, temp_dir):
         """Test saving statistics to JSON."""
         config = UnifiedPipelineConfig(
-            output_dir=temp_dir, output_formats=[OutputFormat.MASTER_TIFF], enable_depth=False, enable_material_response=False
+            output_dir=temp_dir,
+            output_formats=[OutputFormat.MASTER_TIFF],
+            enable_depth=False,
+            enable_material_response=False,
         )
         pipeline = UnifiedLuxuryPipeline(config)
 
@@ -606,7 +629,12 @@ class TestColorGrading:
 
     def test_exposure_adjustment(self, sample_image, temp_dir):
         """Test exposure adjustment."""
-        config = UnifiedPipelineConfig(output_dir=temp_dir, exposure=0.5, enable_depth=False, enable_material_response=False)
+        config = UnifiedPipelineConfig(
+            output_dir=temp_dir,
+            exposure=0.5,
+            enable_depth=False,
+            enable_material_response=False,
+        )
         pipeline = UnifiedLuxuryPipeline(config)
 
         params = {"exposure": 0.5, "contrast": 1.0, "saturation": 1.0}
@@ -617,7 +645,12 @@ class TestColorGrading:
 
     def test_contrast_adjustment(self, sample_image, temp_dir):
         """Test contrast adjustment."""
-        config = UnifiedPipelineConfig(output_dir=temp_dir, contrast=1.2, enable_depth=False, enable_material_response=False)
+        config = UnifiedPipelineConfig(
+            output_dir=temp_dir,
+            contrast=1.2,
+            enable_depth=False,
+            enable_material_response=False,
+        )
         pipeline = UnifiedLuxuryPipeline(config)
 
         params = {"exposure": 0.0, "contrast": 1.2, "saturation": 1.0}
@@ -627,7 +660,12 @@ class TestColorGrading:
 
     def test_saturation_adjustment(self, sample_image, temp_dir):
         """Test saturation adjustment."""
-        config = UnifiedPipelineConfig(output_dir=temp_dir, saturation=1.3, enable_depth=False, enable_material_response=False)
+        config = UnifiedPipelineConfig(
+            output_dir=temp_dir,
+            saturation=1.3,
+            enable_depth=False,
+            enable_material_response=False,
+        )
         pipeline = UnifiedLuxuryPipeline(config)
 
         params = {"exposure": 0.0, "contrast": 1.0, "saturation": 1.3}
@@ -657,7 +695,10 @@ class TestEdgeCases:
     def test_empty_output_formats(self, sample_image_file, temp_dir):
         """Test with empty output formats list."""
         config = UnifiedPipelineConfig(
-            output_dir=temp_dir, output_formats=[], enable_depth=False, enable_material_response=False
+            output_dir=temp_dir,
+            output_formats=[],
+            enable_depth=False,
+            enable_material_response=False,
         )
         pipeline = UnifiedLuxuryPipeline(config)
 
@@ -675,7 +716,10 @@ class TestEdgeCases:
         gray_img.save(gray_path)
 
         config = UnifiedPipelineConfig(
-            output_dir=temp_dir, output_formats=[OutputFormat.MASTER_TIFF], enable_depth=False, enable_material_response=False
+            output_dir=temp_dir,
+            output_formats=[OutputFormat.MASTER_TIFF],
+            enable_depth=False,
+            enable_material_response=False,
         )
         pipeline = UnifiedLuxuryPipeline(config)
 

@@ -134,7 +134,11 @@ class MaterialSystemReconstructor:
         wood_mask = warm_mask.astype(float)
         wood_mask = ndimage.gaussian_filter(wood_mask, sigma=2)
 
-        masks = {MaterialType.WATER: water_mask, MaterialType.STONE: stone_mask, MaterialType.WOOD: wood_mask}
+        masks = {
+            MaterialType.WATER: water_mask,
+            MaterialType.STONE: stone_mask,
+            MaterialType.WOOD: wood_mask,
+        }
 
         # Print material coverage
         for mat_type, mask in masks.items():
@@ -351,7 +355,11 @@ class StylingRectifier:
         if high_sat_mask.any():
             for c in range(3):
                 mean_val = np.mean(enhanced[:, :, c])
-                enhanced[:, :, c] = np.where(high_sat_mask, enhanced[:, :, c] * 0.92 + mean_val * 0.08, enhanced[:, :, c])
+                enhanced[:, :, c] = np.where(
+                    high_sat_mask,
+                    enhanced[:, :, c] * 0.92 + mean_val * 0.08,
+                    enhanced[:, :, c],
+                )
             print(f"    ✓ Reduced saturation in {high_sat_mask.sum() / high_sat_mask.size * 100:.1f}% of frame")
 
         return enhanced
@@ -409,7 +417,11 @@ class DepthPostProcessor:
         luminance_reduction = 0.5  # 1 stop reduction: 2^(-1) = 0.5x luminance
 
         for c in range(3):
-            enhanced[:, :, c] = np.where(background_mask, enhanced[:, :, c] * luminance_reduction, enhanced[:, :, c])
+            enhanced[:, :, c] = np.where(
+                background_mask,
+                enhanced[:, :, c] * luminance_reduction,
+                enhanced[:, :, c],
+            )
 
         bg_coverage = background_mask.sum() / (h * w) * 100
         print(f"  ✓ Luminance reduced by 1-2 stops on background ({bg_coverage:.1f}%)")
@@ -595,7 +607,11 @@ class PicachoPoolRemediationPipeline:
                 img = iio.imread(path)
                 img = img.astype(np.float32)
                 # Convert linear to sRGB
-                img = np.where(img <= 0.0031308, img * 12.92, 1.055 * np.power(np.clip(img, 0, None), 1.0 / 2.4) - 0.055)
+                img = np.where(
+                    img <= 0.0031308,
+                    img * 12.92,
+                    1.055 * np.power(np.clip(img, 0, None), 1.0 / 2.4) - 0.055,
+                )
                 return np.clip(img, 0, 1)
             else:
                 # Load standard formats
@@ -706,7 +722,11 @@ def main() -> int:
         with open(args.config) as f:
             config = json.load(f)
         # Validate required keys in config
-        required_keys = ["lighting_zones", "darkness_preservation", "scattering_threshold_m"]
+        required_keys = [
+            "lighting_zones",
+            "darkness_preservation",
+            "scattering_threshold_m",
+        ]
         for key in required_keys:
             if key not in config:
                 print(f"⚠️  Warning: '{key}' not found in config, using default")

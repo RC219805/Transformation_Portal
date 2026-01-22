@@ -351,7 +351,12 @@ def main():
 
     parser = argparse.ArgumentParser(description="Surgical refinement for 98+ quality")
     parser.add_argument("image", type=str, help="Path to image file")
-    parser.add_argument("--output-dir", type=str, default="outputs/750_picacho/Surgical98", help="Output directory")
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="outputs/750_picacho/Surgical98",
+        help="Output directory",
+    )
 
     args = parser.parse_args()
 
@@ -369,7 +374,12 @@ def main():
     metadata_path = output_dir / "refinement_report.json"
     with open(metadata_path, "w") as f:
         json.dump(
-            {"pipeline": "Surgical98", "version": "1.0", "timestamp": datetime.now().isoformat(), "result": result},
+            {
+                "pipeline": "Surgical98",
+                "version": "1.0",
+                "timestamp": datetime.now().isoformat(),
+                "result": result,
+            },
             f,
             indent=2,
         )

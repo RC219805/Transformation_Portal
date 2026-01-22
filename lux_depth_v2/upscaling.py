@@ -86,7 +86,12 @@ class TorchUpscaler(Upscaler):
         _, _, h, w = rgb.shape
         target_h, target_w = h * self.scale, w * self.scale
 
-        upscaled = self.TF.resize(rgb, [target_h, target_w], interpolation=self.TF.InterpolationMode.BILINEAR, antialias=True)
+        upscaled = self.TF.resize(
+            rgb,
+            [target_h, target_w],
+            interpolation=self.TF.InterpolationMode.BILINEAR,
+            antialias=True,
+        )
         return upscaled.clamp(0.0, 1.0)
 
     def _upscale_tiled(self, rgb: "torch_ops.torch.Tensor") -> "torch_ops.torch.Tensor":
@@ -120,7 +125,10 @@ class TorchUpscaler(Upscaler):
                 # Upscale tile (BILINEAR for MPS compatibility)
                 tile_h, tile_w = y1 - y0, x1 - x0
                 tile_out = self.TF.resize(
-                    tile_in, [tile_h * scale, tile_w * scale], interpolation=self.TF.InterpolationMode.BILINEAR, antialias=True
+                    tile_in,
+                    [tile_h * scale, tile_w * scale],
+                    interpolation=self.TF.InterpolationMode.BILINEAR,
+                    antialias=True,
                 ).clamp(0.0, 1.0)
 
                 # Output tile bounds

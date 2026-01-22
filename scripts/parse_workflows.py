@@ -32,7 +32,14 @@ _MODEL_PATTERN2 = re.compile(r'\\"model\\":\s*\\"([^"\\]+)\\"')
 class WorkflowBug:
     """Represents a bug found in a workflow file."""
 
-    def __init__(self, file_path: str, line_number: Optional[int], severity: str, message: str, context: Optional[str] = None):
+    def __init__(
+        self,
+        file_path: str,
+        line_number: Optional[int],
+        severity: str,
+        message: str,
+        context: Optional[str] = None,
+    ):
         self.file_path = file_path
         self.line_number = line_number
         self.severity = severity  # 'error', 'warning', 'info'
@@ -77,7 +84,7 @@ class WorkflowParser:
                 self.bugs.append(
                     WorkflowBug(
                         str(workflow_file),
-                        getattr(e, "problem_mark", None).line + 1 if hasattr(e, "problem_mark") else None,
+                        (getattr(e, "problem_mark", None).line + 1 if hasattr(e, "problem_mark") else None),
                         "error",
                         f"YAML syntax error: {e}",
                     )
@@ -228,7 +235,10 @@ class WorkflowParser:
                 if needed_job not in job_names:
                     self.bugs.append(
                         WorkflowBug(
-                            str(workflow_file), None, "error", f"Job '{job_name}' depends on non-existent job '{needed_job}'"
+                            str(workflow_file),
+                            None,
+                            "error",
+                            f"Job '{job_name}' depends on non-existent job '{needed_job}'",
                         )
                     )
 
@@ -391,7 +401,12 @@ def main():
         default=default_workflow_dir,
         help=f"Path to workflows directory (default: {default_workflow_dir})",
     )
-    parser.add_argument("--format", choices=["text", "json"], default="text", help="Output format (default: text)")
+    parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        help="Output format (default: text)",
+    )
 
     args = parser.parse_args()
     workflow_dir = args.workflow_dir
@@ -414,7 +429,13 @@ def main():
 
     # Sort bugs by severity
     severity_order = {"error": 0, "warning": 1, "info": 2}
-    bugs.sort(key=lambda b: (severity_order.get(b.severity, 3), b.file_path, b.line_number or 0))
+    bugs.sort(
+        key=lambda b: (
+            severity_order.get(b.severity, 3),
+            b.file_path,
+            b.line_number or 0,
+        )
+    )
 
     # Print results
     print(f"\n{'=' * 80}")

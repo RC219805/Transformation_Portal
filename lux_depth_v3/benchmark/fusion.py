@@ -20,7 +20,12 @@ logger = logging.getLogger(__name__)
 class TSDFFusion:
     """TSDF volume fusion for multi-view depth integration."""
 
-    def __init__(self, voxel_length: float = 0.01, sdf_trunc: float = 0.04, volume_bounds: Optional[np.ndarray] = None):
+    def __init__(
+        self,
+        voxel_length: float = 0.01,
+        sdf_trunc: float = 0.04,
+        volume_bounds: Optional[np.ndarray] = None,
+    ):
         """
         Initialize TSDF volume.
 
@@ -38,12 +43,20 @@ class TSDFFusion:
 
         # Initialize TSDF volume
         self.volume = o3d.pipelines.integration.ScalableTSDFVolume(
-            voxel_length=voxel_length, sdf_trunc=sdf_trunc, color_type=o3d.pipelines.integration.TSDFVolumeColorType.RGB8
+            voxel_length=voxel_length,
+            sdf_trunc=sdf_trunc,
+            color_type=o3d.pipelines.integration.TSDFVolumeColorType.RGB8,
         )
 
         self.num_frames_integrated = 0
 
-    def integrate(self, depth: np.ndarray, rgb: np.ndarray, intrinsics: np.ndarray, extrinsics: np.ndarray) -> None:
+    def integrate(
+        self,
+        depth: np.ndarray,
+        rgb: np.ndarray,
+        intrinsics: np.ndarray,
+        extrinsics: np.ndarray,
+    ) -> None:
         """
         Integrate depth and RGB frame into TSDF volume.
 
@@ -73,7 +86,12 @@ class TSDFFusion:
         # Create camera intrinsics
         height, width = depth.shape
         intrinsic_o3d = o3d.camera.PinholeCameraIntrinsic(
-            width=width, height=height, fx=intrinsics[0, 0], fy=intrinsics[1, 1], cx=intrinsics[0, 2], cy=intrinsics[1, 2]
+            width=width,
+            height=height,
+            fx=intrinsics[0, 0],
+            fy=intrinsics[1, 1],
+            cx=intrinsics[0, 2],
+            cy=intrinsics[1, 2],
         )
 
         # Integrate into volume

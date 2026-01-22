@@ -974,7 +974,7 @@ class GitHookManager:
             "issues": issues,
             "current_commit": current_commit[:8] if current_commit else None,
             "current_branch": self.detector.get_current_branch(),
-            "last_indexed": self.indexer._last_indexed_commit[:8] if self.indexer._last_indexed_commit else None,
+            "last_indexed": (self.indexer._last_indexed_commit[:8] if self.indexer._last_indexed_commit else None),
         }
 
 

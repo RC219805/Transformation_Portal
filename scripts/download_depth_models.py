@@ -55,7 +55,13 @@ class DownloadProgressBar:
         if total_size > 0:
             if self.pbar is None:
                 if tqdm:
-                    self.pbar = tqdm(total=total_size, unit="B", unit_scale=True, unit_divisor=1024, desc=self.desc)
+                    self.pbar = tqdm(
+                        total=total_size,
+                        unit="B",
+                        unit_scale=True,
+                        unit_divisor=1024,
+                        desc=self.desc,
+                    )
                 else:
                     print(f"Downloading {self.desc}... 0%", end="", flush=True)
 
@@ -205,8 +211,17 @@ def main():
         default="all",
         help="Which model to download (default: all)",
     )
-    parser.add_argument("--output-dir", type=str, default="./weights", help="Output directory for models (default: ./weights)")
-    parser.add_argument("--verify-only", action="store_true", help="Only verify model status, don't download")
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="./weights",
+        help="Output directory for models (default: ./weights)",
+    )
+    parser.add_argument(
+        "--verify-only",
+        action="store_true",
+        help="Only verify model status, don't download",
+    )
 
     args = parser.parse_args()
     output_dir = Path(args.output_dir)

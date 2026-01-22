@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 class JobStatus(Enum):
     """Status of a job item."""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
@@ -34,6 +35,7 @@ class JobItem:
 
     Tracks processing status and results for one input.
     """
+
     input_path: str
     output_path: str
     status: JobStatus = JobStatus.PENDING
@@ -64,6 +66,7 @@ class BatchJob:
 
     Maintains state across processing runs, enabling recovery from failures.
     """
+
     job_id: str
     items: List[JobItem]
     checkpoint_path: Path
@@ -82,7 +85,7 @@ class BatchJob:
             "items": [item.to_dict() for item in self.items],
             "created_at": self.created_at,
             "updated_at": self.updated_at,
-            "completed_at": self.completed_at
+            "completed_at": self.completed_at,
         }
 
         # Ensure directory exists
@@ -125,29 +128,20 @@ class BatchJob:
             checkpoint_path=checkpoint_path,
             created_at=data["created_at"],
             updated_at=data.get("updated_at"),
-            completed_at=data.get("completed_at")
+            completed_at=data.get("completed_at"),
         )
 
     def get_pending_items(self) -> List[JobItem]:
         """Get items that still need processing."""
-        return [
-            item for item in self.items
-            if item.status == JobStatus.PENDING
-        ]
+        return [item for item in self.items if item.status == JobStatus.PENDING]
 
     def get_failed_items(self) -> List[JobItem]:
         """Get items that failed processing."""
-        return [
-            item for item in self.items
-            if item.status == JobStatus.FAILED
-        ]
+        return [item for item in self.items if item.status == JobStatus.FAILED]
 
     def get_completed_items(self) -> List[JobItem]:
         """Get items that completed successfully."""
-        return [
-            item for item in self.items
-            if item.status == JobStatus.COMPLETED
-        ]
+        return [item for item in self.items if item.status == JobStatus.COMPLETED]
 
     def mark_in_progress(self, item: JobItem):
         """Mark item as in progress."""
@@ -155,7 +149,12 @@ class BatchJob:
         item.attempt += 1
         self.save_checkpoint()
 
-    def mark_completed(self, item: JobItem, duration_ms: float, timing_s: Optional[dict[str, float]] = None):
+    def mark_completed(
+        self,
+        item: JobItem,
+        duration_ms: float,
+        timing_s: Optional[dict[str, float]] = None,
+    ):
         """Mark item as completed."""
         item.status = JobStatus.COMPLETED
         item.duration_ms = duration_ms
@@ -199,7 +198,7 @@ class BatchJob:
             "skipped": status_counts[JobStatus.SKIPPED],
             "in_progress": status_counts[JobStatus.IN_PROGRESS],
             "avg_duration_ms": avg_duration,
-            "total_duration_ms": total_duration
+            "total_duration_ms": total_duration,
         }
 
     def print_summary(self):
@@ -215,7 +214,7 @@ class BatchJob:
         logger.info(f"Pending:          {stats['pending']}")
         logger.info(f"Skipped:          {stats['skipped']}")
 
-        if stats['completed'] > 0:
+        if stats["completed"] > 0:
             logger.info(f"Average duration: {stats['avg_duration_ms']:.1f}ms")
             logger.info(f"Total time:       {stats['total_duration_ms']/1000:.1f}s")
 
@@ -234,7 +233,7 @@ class BatchProcessor:
         processor_fn: Callable[[Path], Any],
         checkpoint_dir: Path,
         max_retries: int = 3,
-        skip_existing: bool = True
+        skip_existing: bool = True,
     ):
         """
         Initialize batch processor.
@@ -257,7 +256,7 @@ class BatchProcessor:
         input_paths: List[Path],
         output_dir: Path,
         resume_from: Optional[Path] = None,
-        job_id: Optional[str] = None
+        job_id: Optional[str] = None,
     ) -> BatchJob:
         """
         Process batch with checkpoint/resume.
@@ -285,10 +284,7 @@ class BatchProcessor:
                 job_id = str(uuid.uuid4())[:8]
 
             items = [
-                JobItem(
-                    input_path=str(p),
-                    output_path=str(output_dir / p.name)
-                )
+                JobItem(input_path=str(p), output_path=str(output_dir / p.name))
                 for p in input_paths
             ]
 
@@ -298,7 +294,7 @@ class BatchProcessor:
                 job_id=job_id,
                 items=items,
                 checkpoint_path=checkpoint_path,
-                created_at=datetime.utcnow().isoformat() + "Z"
+                created_at=datetime.utcnow().isoformat() + "Z",
             )
 
             job.save_checkpoint()
@@ -350,16 +346,16 @@ class BatchProcessor:
                 duration_ms = (time.perf_counter() - start_time) * 1000
 
                 # Save result if needed
-                if hasattr(result, 'save'):
+                if hasattr(result, "save"):
                     result.save(Path(item.output_path))
 
                 # Extract timing_s if available
                 timing_s = None
-                if isinstance(result, dict) and 'timing_s' in result:
-                    timing_s = result['timing_s']
-                elif isinstance(result, dict) and 'stage_times_sec' in result:
+                if isinstance(result, dict) and "timing_s" in result:
+                    timing_s = result["timing_s"]
+                elif isinstance(result, dict) and "stage_times_sec" in result:
                     # Backward compatibility: convert stage_times_sec to timing_s
-                    timing_s = result['stage_times_sec']
+                    timing_s = result["stage_times_sec"]
 
                 # Mark success
                 job.mark_completed(item, duration_ms, timing_s=timing_s)

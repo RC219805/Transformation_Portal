@@ -25,7 +25,9 @@ _TEXTURE_PATTERN = re.compile(r"[a-z]+")
 def _is_sequence(value: object) -> bool:
     """Return ``True`` when ``value`` should be treated as a sequence."""
 
-    return isinstance(value, SequenceABC) and not isinstance(value, (str, bytes, bytearray))
+    return isinstance(value, SequenceABC) and not isinstance(
+        value, (str, bytes, bytearray)
+    )
 
 
 def _coerce_matrix(data: Sequence[Sequence[float]]) -> List[List[float]]:
@@ -126,7 +128,7 @@ def _energy_by_band(
             in_band = radius >= cutoff if band == "high" else radius <= cutoff
             if in_band:
                 coefficient = dft[u][v]
-                total += (coefficient.real ** 2) + (coefficient.imag ** 2)
+                total += (coefficient.real**2) + (coefficient.imag**2)
 
     return total
 
@@ -512,7 +514,9 @@ class GlobalLuxurySemantics:
             f"balancing awe ({awe:.2f}), comfort ({comfort:.2f}) and focus ({focus:.2f})."
         )
 
-        return ContextualResonance(scores={"awe": awe, "comfort": comfort, "focus": focus}, narrative=narrative)
+        return ContextualResonance(
+            scores={"awe": awe, "comfort": comfort, "focus": focus}, narrative=narrative
+        )
 
 
 class FutureStatePredictor:
@@ -560,11 +564,15 @@ class CognitiveMaterialResponse:
         return self.optimize_for_consciousness(material, emotional_resonance)
 
     def optimize_for_consciousness(
-        self, material: MaterialAestheticProfile, emotional_resonance: EmotionalResonance
+        self,
+        material: MaterialAestheticProfile,
+        emotional_resonance: EmotionalResonance,
     ) -> Dict[str, object]:
         """Blend cultural and temporal heuristics into actionable guidance."""
 
-        contextualized = self.cultural_context.recontextualize(material, emotional_resonance)
+        contextualized = self.cultural_context.recontextualize(
+            material, emotional_resonance
+        )
         future_alignment = self.temporal_relevance.project(material, contextualized)
         luxury_index = self._composite_index(material, contextualized, future_alignment)
 
@@ -588,10 +596,14 @@ class CognitiveMaterialResponse:
     ) -> float:
         craftsmanship_weight = 0.35 * material.craftsmanship
         rarity_weight = 0.25 * material.rarity
-        emotional_weight = 0.25 * (0.5 * resonance.scores["awe"] + 0.5 * resonance.scores["comfort"])
+        emotional_weight = 0.25 * (
+            0.5 * resonance.scores["awe"] + 0.5 * resonance.scores["comfort"]
+        )
         future_weight = 0.15 * future_alignment
 
-        return _clamp(craftsmanship_weight + rarity_weight + emotional_weight + future_weight)
+        return _clamp(
+            craftsmanship_weight + rarity_weight + emotional_weight + future_weight
+        )
 
     @staticmethod
     def _recommendations(
@@ -621,7 +633,9 @@ class CognitiveMaterialResponse:
             )
 
         if not recommendations:
-            recommendations.append("Maintain current treatment; responses align with luxury objectives.")
+            recommendations.append(
+                "Maintain current treatment; responses align with luxury objectives."
+            )
 
         return recommendations
 
@@ -783,7 +797,9 @@ class MaterialResponseValidator:
         before_matrix = _coerce_matrix(before)
         after_matrix = _coerce_matrix(after)
 
-        if len(before_matrix) != len(after_matrix) or len(before_matrix[0]) != len(after_matrix[0]):
+        if len(before_matrix) != len(after_matrix) or len(before_matrix[0]) != len(
+            after_matrix[0]
+        ):
             raise ValueError("before and after arrays must share the same shape")
 
         dft_before = _dft2(before_matrix)
@@ -828,7 +844,7 @@ class MaterialResponseValidator:
         if max_exponent <= 1:
             return 1.0
 
-        sizes = [2 ** exponent for exponent in range(1, max_exponent)]
+        sizes = [2**exponent for exponent in range(1, max_exponent)]
         counts = [MaterialResponseValidator._boxcount(binary, size) for size in sizes]
 
         eps = 1e-9
@@ -875,7 +891,9 @@ class MaterialResponseValidator:
 OperationLike = Any
 
 
-def compose_operations(*operations: OperationLike, size: int = 3, dtype: np.dtype | None = None) -> np.ndarray:
+def compose_operations(
+    *operations: OperationLike, size: int = 3, dtype: np.dtype | None = None
+) -> np.ndarray:
     """Return a composite linear transformation for channel-wise operations.
 
     Parameters
@@ -915,7 +933,9 @@ def compose_operations(*operations: OperationLike, size: int = 3, dtype: np.dtyp
 
     def _normalise(operation: OperationLike) -> Tuple[np.ndarray, str | None]:
         if operation is None:
-            raise ValueError("compose_operations received an empty operation placeholder")
+            raise ValueError(
+                "compose_operations received an empty operation placeholder"
+            )
 
         name: str | None = None
 
@@ -1095,7 +1115,9 @@ class QuantumMaterialResponse:
 
         coherence_map = self._apply_coherence(amplitude_normalised, context_wave)
         entanglement_matrix = self._entanglement_matrix(coherence_map, frequency_domain)
-        conflict_resolution = self.identify_and_resolve_conflicts(coherence_map, context_wave)
+        conflict_resolution = self.identify_and_resolve_conflicts(
+            coherence_map, context_wave
+        )
 
         collapse_guidance = self._collapse_guidance(conflict_resolution, context_wave)
 
@@ -1198,7 +1220,9 @@ class QuantumMaterialResponse:
         """Blend amplitude data with context weights to produce coherence."""
 
         contextual_intensity = sum(context_wave.values())
-        scaled = amplitude_normalised * (1.0 + self.coherence_gain * contextual_intensity)
+        scaled = amplitude_normalised * (
+            1.0 + self.coherence_gain * contextual_intensity
+        )
         maximum = np.max(scaled) if scaled.size else 0.0
         if math.isclose(float(maximum), 0.0):
             return np.zeros_like(amplitude_normalised)

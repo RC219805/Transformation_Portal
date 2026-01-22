@@ -227,9 +227,7 @@ class DepthTrainer:
         self.device = device or torch.device(
             "cuda"
             if torch.cuda.is_available()
-            else "mps"
-            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
-            else "cpu"
+            else ("mps" if hasattr(torch.backends, "mps") and torch.backends.mps.is_available() else "cpu")
         )
 
         # Move model to device
@@ -584,7 +582,7 @@ class DepthTrainer:
             "epoch": epoch,
             "model_state_dict": self.model.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
-            "scheduler_state_dict": self.scheduler.state_dict() if self.scheduler else None,
+            "scheduler_state_dict": (self.scheduler.state_dict() if self.scheduler else None),
             "best_metric": self.best_metric,
             "training_history": self.training_history,
             "config": self.config.__dict__,

@@ -164,7 +164,11 @@ class TestDepthRefiner:
 
     def test_hybrid_refinement_all_stages(self, noisy_depth, synthetic_rgb):
         """Test hybrid refinement pipeline with all stages."""
-        config = AdvancedRefinementConfig(use_bilateral_first=True, use_gradient_alignment=True, use_edge_preservation=True)
+        config = AdvancedRefinementConfig(
+            use_bilateral_first=True,
+            use_gradient_alignment=True,
+            use_edge_preservation=True,
+        )
         refiner = DepthRefiner(config)
         refined = refiner.hybrid_refinement(noisy_depth, synthetic_rgb)
 
@@ -174,7 +178,11 @@ class TestDepthRefiner:
 
     def test_hybrid_refinement_selective_stages(self, noisy_depth, synthetic_rgb):
         """Test hybrid refinement with selective stages."""
-        config = AdvancedRefinementConfig(use_bilateral_first=False, use_gradient_alignment=True, use_edge_preservation=False)
+        config = AdvancedRefinementConfig(
+            use_bilateral_first=False,
+            use_gradient_alignment=True,
+            use_edge_preservation=False,
+        )
         refiner = DepthRefiner(config)
         refined = refiner.hybrid_refinement(noisy_depth, synthetic_rgb)
 

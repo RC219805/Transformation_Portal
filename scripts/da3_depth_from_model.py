@@ -38,7 +38,9 @@ def _pad_to_multiple(x: torch.Tensor, patch_h: int, patch_w: int) -> tuple[torch
 # ----------------------------------------------
 
 # We intentionally avoid importing depth_anything_3.api (it pulls in pycolmap/open3d/etc at import time).
-from depth_anything_3.model import da3 as da3_mod  # provides DepthAnything3Net, NestedDepthAnything3Net
+from depth_anything_3.model import (
+    da3 as da3_mod,
+)  # provides DepthAnything3Net, NestedDepthAnything3Net
 
 try:
     from huggingface_hub import snapshot_download
@@ -162,7 +164,12 @@ def main() -> int:
     ap.add_argument("--model-id", default="depth-anything/DA3METRIC-LARGE")
     ap.add_argument("--device", default="mps")  # mps|cpu
     ap.add_argument("--dtype", default="float16")  # float16|float32
-    ap.add_argument("--max-side", type=int, default=1024, help="Max image side for DA3 inference (prevents attention OOM).")
+    ap.add_argument(
+        "--max-side",
+        type=int,
+        default=1024,
+        help="Max image side for DA3 inference (prevents attention OOM).",
+    )
     ap.add_argument("--min-side", type=int, default=0, help="Optional min side; 0 disables.")
     args = ap.parse_args()
 
@@ -195,7 +202,11 @@ def main() -> int:
 
     for p in images:
         x, (origH, origW), (inH, inW) = _load_image_as_tensor(
-            p, device=device, dtype=dtype, max_side=args.max_side, min_side=args.min_side
+            p,
+            device=device,
+            dtype=dtype,
+            max_side=args.max_side,
+            min_side=args.min_side,
         )
         patch_h, patch_w = _get_patch_hw(model)
         x, pad_h, pad_w = _pad_to_multiple(x, patch_h, patch_w)

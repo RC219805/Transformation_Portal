@@ -205,7 +205,13 @@ def run_production_refined(rgb: np.ndarray) -> Tuple[np.ndarray, float]:
 
     # Step 2: Apply production refinement
     start = time.time()
-    depth_refined = refine_depth_production(depth_baseline, rgb=rgb, use_clahe=True, use_edge_filter=True, use_edge_snap=True)
+    depth_refined = refine_depth_production(
+        depth_baseline,
+        rgb=rgb,
+        use_clahe=True,
+        use_edge_filter=True,
+        use_edge_snap=True,
+    )
     time_refinement = (time.time() - start) * 1000
 
     total_time = time_baseline + time_refinement
@@ -293,7 +299,11 @@ def compare_pipelines(rgb: np.ndarray, output_dir: Path) -> dict:
         Image.fromarray(comparison).save(output_dir / "comparison.png")
 
     # Save report
-    report = {"baseline": baseline_metrics.to_dict(), "production": production_metrics.to_dict(), "improvements": improvements}
+    report = {
+        "baseline": baseline_metrics.to_dict(),
+        "production": production_metrics.to_dict(),
+        "improvements": improvements,
+    }
 
     with open(output_dir / "comparison_report.json", "w") as f:
         json.dump(report, f, indent=2)
@@ -332,7 +342,12 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Corrected A/B comparison")
     parser.add_argument("--input", type=Path, required=True, help="Input RGB image")
-    parser.add_argument("--output", type=Path, default=Path("outputs/ab_corrected"), help="Output directory")
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("outputs/ab_corrected"),
+        help="Output directory",
+    )
 
     args = parser.parse_args()
 

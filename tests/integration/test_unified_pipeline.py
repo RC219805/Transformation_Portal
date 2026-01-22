@@ -13,7 +13,6 @@ import numpy as np
 import pytest
 from PIL import Image
 
-
 # Check if scipy.ndimage is available (required by pipeline)
 try:
     import scipy.ndimage  # noqa: F401

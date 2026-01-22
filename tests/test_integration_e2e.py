@@ -123,7 +123,9 @@ class TestFeatureIntegration:
         # Test all strategies
         for strategy in ["saddle_balanced", "saddle_sim_range", "middle", "first"]:
             result = select_reference_view(
-                num_views=num_views, strategy=strategy, class_tokens=class_tokens if "saddle" in strategy else None
+                num_views=num_views,
+                strategy=strategy,
+                class_tokens=class_tokens if "saddle" in strategy else None,
             )
             assert 0 <= result.selected_index < num_views
 
@@ -305,7 +307,10 @@ class TestEndToEndWorkflow:
         intrinsics_batch = test_intrinsics[np.newaxis, :, :]
 
         result = engine.infer(
-            images=[image_path], intrinsics=intrinsics_batch, export_dir=tmp_path / "output", convert_to_metric=True
+            images=[image_path],
+            intrinsics=intrinsics_batch,
+            export_dir=tmp_path / "output",
+            convert_to_metric=True,
         )
 
         assert hasattr(result, "metric_depth") or result.depth is not None

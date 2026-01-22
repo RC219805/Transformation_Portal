@@ -169,7 +169,10 @@ class DepthIntegratedPipeline:
             blur_radius = 5
             from scipy.ndimage import gaussian_filter
 
-            blurred = np.stack([gaussian_filter(zone_enhanced[:, :, i], blur_radius) for i in range(3)], axis=2)
+            blurred = np.stack(
+                [gaussian_filter(zone_enhanced[:, :, i], blur_radius) for i in range(3)],
+                axis=2,
+            )
             zone_enhanced = zone_enhanced + zone_config["clarity"] * (zone_enhanced - blurred)
 
             # Contrast adjustment

@@ -13,7 +13,7 @@ from transformation_portal.segmentation.clip_classifier import CLIPClassifier
 from transformation_portal.segmentation.material_segmenter import MaterialSegmenter
 
 __all__ = [
-    'SAMSegmenter',
-    'CLIPClassifier',
-    'MaterialSegmenter',
+    "SAMSegmenter",
+    "CLIPClassifier",
+    "MaterialSegmenter",
 ]

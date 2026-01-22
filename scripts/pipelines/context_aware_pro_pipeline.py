@@ -34,7 +34,11 @@ logger = logging.getLogger(__name__)
 class ContextAwareProPipeline:
     """Professional pipeline with architectural context awareness."""
 
-    def __init__(self, output_dir: Path = Path("output_context_aware_pro"), context_dir: Path = Path("extracted_context")):
+    def __init__(
+        self,
+        output_dir: Path = Path("output_context_aware_pro"),
+        context_dir: Path = Path("extracted_context"),
+    ):
         """
         Initialize context-aware pipeline.
 
@@ -193,8 +197,16 @@ class ContextAwareProPipeline:
             # Default surfaces for common space types
             if not surfaces:
                 space_defaults = {
-                    SpaceType.KITCHEN: [SurfaceType.STONE, SurfaceType.METAL, SurfaceType.GLASS],
-                    SpaceType.LIVING: [SurfaceType.WOOD, SurfaceType.FABRIC, SurfaceType.GLASS],
+                    SpaceType.KITCHEN: [
+                        SurfaceType.STONE,
+                        SurfaceType.METAL,
+                        SurfaceType.GLASS,
+                    ],
+                    SpaceType.LIVING: [
+                        SurfaceType.WOOD,
+                        SurfaceType.FABRIC,
+                        SurfaceType.GLASS,
+                    ],
                     SpaceType.POOL_AREA: [SurfaceType.STONE, SurfaceType.WATER],
                 }
                 surfaces = space_defaults.get(context.space_type, [SurfaceType.WOOD, SurfaceType.STONE])
@@ -232,7 +244,11 @@ class ContextAwareProPipeline:
             return image_path
 
     def _process_ai_stage(
-        self, image_path: Path, context: ArchitecturalContext, prompt: str, upscale_4x: bool = False
+        self,
+        image_path: Path,
+        context: ArchitecturalContext,
+        prompt: str,
+        upscale_4x: bool = False,
     ) -> Path:
         """Process with AI enhancement."""
         try:
@@ -259,7 +275,12 @@ class ContextAwareProPipeline:
             logger.info("  Continuing with material-processed image...")
             return image_path
 
-    def _save_processing_summary(self, context: ArchitecturalContext, outputs: Dict[str, Path], summary_path: Path):
+    def _save_processing_summary(
+        self,
+        context: ArchitecturalContext,
+        outputs: Dict[str, Path],
+        summary_path: Path,
+    ):
         """Save processing summary with context details."""
 
         with open(summary_path, "w") as f:
@@ -323,7 +344,10 @@ def main():
     parser.add_argument("image", type=Path, help="Input image path")
 
     parser.add_argument(
-        "--pd", type=Path, action="append", help="Architectural PDF document(s) for context extraction (can specify multiple)"
+        "--pd",
+        type=Path,
+        action="append",
+        help="Architectural PDF document(s) for context extraction (can specify multiple)",
     )
 
     parser.add_argument(
@@ -345,7 +369,11 @@ def main():
 
     parser.add_argument("--no-ai", action="store_true", help="Disable AI enhancement")
 
-    parser.add_argument("--upscale-4x", action="store_true", help="Enable 4x upscaling (slower, higher quality)")
+    parser.add_argument(
+        "--upscale-4x",
+        action="store_true",
+        help="Enable 4x upscaling (slower, higher quality)",
+    )
 
     args = parser.parse_args()
 

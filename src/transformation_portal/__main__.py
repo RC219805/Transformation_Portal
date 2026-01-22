@@ -47,32 +47,23 @@ app = typer.Typer(
 @app.command()
 def process(
     input_glob: str = typer.Option(
-        ..., "--input", "-i",
-        help="Input glob pattern (e.g., 'inputs/*.jpg')"
+        ..., "--input", "-i", help="Input glob pattern (e.g., 'inputs/*.jpg')"
     ),
-    recipe: Path = typer.Option(
-        ..., "--recipe", "-r",
-        help="Recipe YAML file path"
-    ),
+    recipe: Path = typer.Option(..., "--recipe", "-r", help="Recipe YAML file path"),
     output: Path = typer.Option(
-        Path("./final"), "--output", "-o",
-        help="Output directory"
+        Path("./final"), "--output", "-o", help="Output directory"
     ),
     mode: str = typer.Option(
-        "auto", "--mode", "-m",
-        help="Processing mode: auto|image|video"
+        "auto", "--mode", "-m", help="Processing mode: auto|image|video"
     ),
     dry_run: bool = typer.Option(
-        False, "--dry-run", "-n",
-        help="Preview processing plan without executing"
+        False, "--dry-run", "-n", help="Preview processing plan without executing"
     ),
     parallel: bool = typer.Option(
-        False, "--parallel", "-p",
-        help="Enable parallel processing"
+        False, "--parallel", "-p", help="Enable parallel processing"
     ),
     log_level: str = typer.Option(
-        "info", "--log-level", "-l",
-        help="Logging level: debug|info|warning|error"
+        "info", "--log-level", "-l", help="Logging level: debug|info|warning|error"
     ),
 ):
     """Run unified enhancement pipeline.
@@ -94,8 +85,8 @@ def process(
     }
     logging.basicConfig(
         level=log_levels.get(log_level.lower(), logging.INFO),
-        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-        datefmt='%H:%M:%S'
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
     )
 
     typer.echo("🚀 Transformation Portal - Unified Pipeline")
@@ -134,9 +125,7 @@ def process(
 @app.command("list-recipes")
 def list_recipes(
     recipes_dir: Path = typer.Option(
-        Path("config/recipes"),
-        "--dir", "-d",
-        help="Recipes directory path"
+        Path("config/recipes"), "--dir", "-d", help="Recipes directory path"
     ),
 ):
     """List all available recipe presets.
@@ -165,13 +154,13 @@ def list_recipes(
             raise typer.Exit(code=0)
 
         for recipe in recipes:
-            if 'error' in recipe:
+            if "error" in recipe:
                 typer.echo(f"  ❌ {recipe['path']}: {recipe['error']}")
             else:
-                name = recipe.get('name', 'Unknown')
-                description = recipe.get('description', 'No description')
-                stages = recipe.get('stages', [])
-                output_format = recipe.get('output_format', 'tiff')
+                name = recipe.get("name", "Unknown")
+                description = recipe.get("description", "No description")
+                stages = recipe.get("stages", [])
+                output_format = recipe.get("output_format", "tiff")
 
                 typer.echo(f"  📄 {name}")
                 typer.echo(f"     {description}")
@@ -190,7 +179,9 @@ def list_recipes(
 @app.command("validate-recipe")
 def validate_recipe(
     recipe: Path = typer.Argument(..., help="Recipe YAML file to validate"),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed validation results"),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Show detailed validation results"
+    ),
 ):
     """Validate recipe configuration.
 
@@ -208,7 +199,11 @@ def validate_recipe(
         raise typer.Exit(code=1)
 
     try:
-        from transformation_portal.config_loader import load_recipe, validate_recipe as validate, get_recipe_info
+        from transformation_portal.config_loader import (
+            load_recipe,
+            validate_recipe as validate,
+            get_recipe_info,
+        )
 
         # Load the recipe
         loaded = load_recipe(recipe, expand_env=False, resolve_paths=False)
@@ -223,9 +218,13 @@ def validate_recipe(
             typer.echo(f"  Description: {info.get('description', 'None')}")
             typer.echo(f"  Stages: {', '.join(info.get('stages', []))}")
             typer.echo(f"  Has Depth: {info.get('has_depth', False)}")
-            typer.echo(f"  Has Material Response: {info.get('has_material_response', False)}")
+            typer.echo(
+                f"  Has Material Response: {info.get('has_material_response', False)}"
+            )
             typer.echo(f"  Has Color Grading: {info.get('has_color_grading', False)}")
-            typer.echo(f"  Has Quality Feedback: {info.get('has_quality_feedback', False)}")
+            typer.echo(
+                f"  Has Quality Feedback: {info.get('has_quality_feedback', False)}"
+            )
             typer.echo(f"  Output Format: {info.get('output_format', 'unknown')}")
             typer.echo()
 
@@ -250,6 +249,7 @@ def version():
     """Show version information."""
     try:
         from transformation_portal import __version__
+
         typer.echo(f"Transformation Portal v{__version__}")
     except ImportError:
         typer.echo("Transformation Portal (version unknown)")
@@ -265,7 +265,11 @@ def info():
 
     # Check pipeline availability
     try:
-        from transformation_portal.pipeline_unified import HAS_QUALITY_BRIDGE, HAS_4K_PIPELINE
+        from transformation_portal.pipeline_unified import (
+            HAS_QUALITY_BRIDGE,
+            HAS_4K_PIPELINE,
+        )
+
         typer.echo("\nPipeline Features:")
         typer.echo(f"  {'✅' if HAS_QUALITY_BRIDGE else '⚠️ '} RAG Quality Feedback")
         typer.echo(f"  {'✅' if HAS_4K_PIPELINE else '⚠️ '} 4K Rendering Pipeline")

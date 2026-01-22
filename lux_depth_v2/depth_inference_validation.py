@@ -184,7 +184,9 @@ class TiledDepthEstimator:
         else:
             # Use HF pipeline (will resize to 518px)
             self.model = pipeline(
-                "depth-estimation", model=self.config.model_name, device=0 if self.device.type == "cuda" else -1
+                "depth-estimation",
+                model=self.config.model_name,
+                device=0 if self.device.type == "cuda" else -1,
             )
             logger.warning("⚠️  Using HF pipeline - will resize to 518px internally!")
 
@@ -292,7 +294,10 @@ class TiledDepthEstimator:
         return window
 
     def _reconcile_tile_scale(
-        self, tile_depth: np.ndarray, reference_overlap: Optional[np.ndarray], overlap_mask: Optional[np.ndarray]
+        self,
+        tile_depth: np.ndarray,
+        reference_overlap: Optional[np.ndarray],
+        overlap_mask: Optional[np.ndarray],
     ) -> np.ndarray:
         """
         Reconcile tile scale/shift to match reference overlap region.
@@ -322,7 +327,10 @@ class TiledDepthEstimator:
             except ImportError:
                 # Fallback: simple percentile matching
                 a = np.percentile(ref_overlap, 75) - np.percentile(ref_overlap, 25)
-                a /= max(np.percentile(tile_overlap, 75) - np.percentile(tile_overlap, 25), 1e-6)
+                a /= max(
+                    np.percentile(tile_overlap, 75) - np.percentile(tile_overlap, 25),
+                    1e-6,
+                )
                 b = np.median(ref_overlap) - a * np.median(tile_overlap)
 
         elif self.config.reconcile_method == "mean_variance":

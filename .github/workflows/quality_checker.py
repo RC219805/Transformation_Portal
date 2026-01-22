@@ -25,7 +25,13 @@ class QualityChecker:
         for py_file in self.repo_root.rglob("*.py"):
             # Skip excluded directories
             if any(
-                excluded in str(py_file) for excluded in ["deprecated/", "src/transformation_portal/", ".venv/", "__pycache__"]
+                excluded in str(py_file)
+                for excluded in [
+                    "deprecated/",
+                    "src/transformation_portal/",
+                    ".venv/",
+                    "__pycache__",
+                ]
             ):
                 continue
 
@@ -48,7 +54,13 @@ class QualityChecker:
 
         for py_file in self.repo_root.rglob("*.py"):
             if any(
-                excluded in str(py_file) for excluded in ["deprecated/", "src/transformation_portal/", ".venv/", "__pycache__"]
+                excluded in str(py_file)
+                for excluded in [
+                    "deprecated/",
+                    "src/transformation_portal/",
+                    ".venv/",
+                    "__pycache__",
+                ]
             ):
                 continue
 
@@ -131,7 +143,13 @@ class QualityChecker:
         fixed_count = 0
         for py_file in self.repo_root.rglob("*.py"):
             if any(
-                excluded in str(py_file) for excluded in ["deprecated/", "src/transformation_portal/", ".venv/", "__pycache__"]
+                excluded in str(py_file)
+                for excluded in [
+                    "deprecated/",
+                    "src/transformation_portal/",
+                    ".venv/",
+                    "__pycache__",
+                ]
             ):
                 continue
 

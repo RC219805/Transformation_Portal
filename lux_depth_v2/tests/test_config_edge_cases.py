@@ -65,13 +65,23 @@ class TestConfigBasics:
 
     def test_output_flags(self):
         """Test output configuration flags."""
-        config = PipelineConfig(save_master=True, save_upscaled=True, save_marketing_png=True, save_preview_jpg=True)
+        config = PipelineConfig(
+            save_master=True,
+            save_upscaled=True,
+            save_marketing_png=True,
+            save_preview_jpg=True,
+        )
         assert config.save_master
         assert config.save_upscaled
         assert config.save_marketing_png
         assert config.save_preview_jpg
 
-        config = PipelineConfig(save_master=False, save_upscaled=False, save_marketing_png=False, save_preview_jpg=False)
+        config = PipelineConfig(
+            save_master=False,
+            save_upscaled=False,
+            save_marketing_png=False,
+            save_preview_jpg=False,
+        )
         assert not config.save_master
 
     def test_material_configuration(self):

@@ -12,7 +12,10 @@ import numpy as np
 from PIL import Image
 
 try:
-    from transformation_portal.depth.models.coreml_exporter import CoreMLExporter, CoreMLDepthEstimator
+    from transformation_portal.depth.models.coreml_exporter import (
+        CoreMLExporter,
+        CoreMLDepthEstimator,
+    )
 
     MODULES_AVAILABLE = True
 except ImportError as e:

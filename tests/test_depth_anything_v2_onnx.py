@@ -7,6 +7,7 @@ Tests for Depth Anything V2 ONNX backend implementation.
 These tests validate the ONNX backend implementation without requiring
 actual ONNX runtime or models to be installed.
 """
+
 # pylint: disable=redefined-outer-name  # pytest fixtures
 
 from pathlib import Path

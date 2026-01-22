@@ -26,7 +26,15 @@ def compute_ssim(img1: np.ndarray, img2: np.ndarray, multichannel: bool = True) 
     try:
         from skimage.metrics import structural_similarity as ssim
 
-        return float(ssim(img1, img2, multichannel=multichannel, data_range=1.0, channel_axis=-1 if multichannel else None))
+        return float(
+            ssim(
+                img1,
+                img2,
+                multichannel=multichannel,
+                data_range=1.0,
+                channel_axis=-1 if multichannel else None,
+            )
+        )
     except ImportError:
         # Fallback: simplified SSIM implementation
         if img1.ndim == 3 and multichannel:

@@ -20,7 +20,6 @@ from typing import Dict, List, Optional, Set, Tuple
 
 from semantic_search import CodeEntity, SemanticCodeSearch
 
-
 # ============================================================================
 # 1. CODEBASE EVOLUTION TRACKER
 # ============================================================================
@@ -151,7 +150,7 @@ class CodebaseEvolutionTracker:
         total_debt_hours = sum(d.estimated_effort_hours for d in self.technical_debt)
 
         return EvolutionMetrics(
-            total_entities=len(self.snapshots[max(self.snapshots.keys())]) if self.snapshots else 0,
+            total_entities=(len(self.snapshots[max(self.snapshots.keys())]) if self.snapshots else 0),
             entities_added=added,
             entities_modified=modified,
             entities_deleted=deleted,
@@ -298,7 +297,14 @@ class PerformanceRegressionDetector:
         self.regressions: List[PerformanceRegression] = []
         self.history: List[Tuple[datetime, str, float]] = []  # (timestamp, entity, value)
 
-    def set_baseline(self, entity_name: str, metric_type: str, value: float, unit: str, environment: Optional[Dict] = None):
+    def set_baseline(
+        self,
+        entity_name: str,
+        metric_type: str,
+        value: float,
+        unit: str,
+        environment: Optional[Dict] = None,
+    ):
         """
         Set performance baseline.
 
@@ -321,7 +327,11 @@ class PerformanceRegressionDetector:
         )
 
     def check_regression(
-        self, entity_name: str, metric_type: str, current_value: float, threshold_percent: float = 10.0
+        self,
+        entity_name: str,
+        metric_type: str,
+        current_value: float,
+        threshold_percent: float = 10.0,
     ) -> Optional[PerformanceRegression]:
         """
         Check for performance regression.
@@ -620,7 +630,12 @@ class CrossPipelineDependencyAnalyzer:
 
         return False
 
-    def _recommend_tests(self, changed_entity: str, directly_impacted: List[str], indirectly_impacted: List[str]) -> List[str]:
+    def _recommend_tests(
+        self,
+        changed_entity: str,
+        directly_impacted: List[str],
+        indirectly_impacted: List[str],
+    ) -> List[str]:
         """Recommend tests to run."""
         tests = []
 
@@ -928,7 +943,10 @@ def main():
     parser = argparse.ArgumentParser(description="Advanced RAG Features")
     parser.add_argument("--repo-root", default=".", help="Repository root")
     parser.add_argument(
-        "--mode", required=True, choices=["evolution", "performance", "dependencies", "quality"], help="Analysis mode"
+        "--mode",
+        required=True,
+        choices=["evolution", "performance", "dependencies", "quality"],
+        help="Analysis mode",
     )
     parser.add_argument("--output", help="Output file for report")
 

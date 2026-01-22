@@ -199,7 +199,10 @@ def save_json_report(data: AggregatedData, output_path: Path):
     """Save aggregated data as JSON."""
     output_data = {
         "metadata": data.collection_metadata,
-        "histograms": {"pixel_ops_reasons": dict(data.pixel_ops_reasons), "refinement_reasons": dict(data.refinement_reasons)},
+        "histograms": {
+            "pixel_ops_reasons": dict(data.pixel_ops_reasons),
+            "refinement_reasons": dict(data.refinement_reasons),
+        },
         "materials": {
             name: {
                 "frequency": stats.frequency,

@@ -23,7 +23,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from lux_depth_v2.config import PipelineConfig, Preset
 from lux_depth_v2.pipeline import LuxPipelineV2
 
-
 BENCHMARK_SET = {
     "interior_kitchen_750": {
         "path": "assets/phase2_bench/750Picacho_Kitchen_Ultimate.tif",

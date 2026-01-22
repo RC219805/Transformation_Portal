@@ -253,7 +253,9 @@ def estimate_depth_v2_large(image: Image.Image, device: str) -> np.ndarray:
     print(f"  Loading Depth Anything V2 Large on {device}...")
 
     depth_estimator = pipeline(
-        "depth-estimation", model="depth-anything/Depth-Anything-V2-Large-hf", device=device if device != "cpu" else -1
+        "depth-estimation",
+        model="depth-anything/Depth-Anything-V2-Large-hf",
+        device=device if device != "cpu" else -1,
     )
 
     print("  Estimating depth...")
@@ -416,7 +418,11 @@ def apply_luxury_color_grade(image_array: np.ndarray, config: Dict[str, Any]) ->
 
 
 def process_scene_hdr(
-    input_path: Path, output_dir: Path, scene_name: str, config: Dict[str, Any], device: str
+    input_path: Path,
+    output_dir: Path,
+    scene_name: str,
+    config: Dict[str, Any],
+    device: str,
 ) -> Dict[str, Any]:
     """Process a single 32-bit HDR TIFF scene with Ultimate quality."""
 
@@ -587,7 +593,11 @@ def process_scene_hdr(
         },
         "tone_mapping": tone_map_stats,
         "outputs": {k: str(v.relative_to(output_dir)) for k, v in outputs.items()},
-        "file_sizes": {"master_mb": master_size, "web_mb": jpeg_size, "thumb_kb": thumb_size},
+        "file_sizes": {
+            "master_mb": master_size,
+            "web_mb": jpeg_size,
+            "thumb_kb": thumb_size,
+        },
         "processing_time_sec": elapsed,
         "config": config,
     }
@@ -767,7 +777,7 @@ def main():
         "total_time_sec": total_time,
         "total_time_min": total_time / 60,
         "avg_time_per_scene_min": (total_time / len(results) / 60) if results else 0,
-        "throughput_images_per_hour": len(results) / (total_time / 3600) if results else 0,
+        "throughput_images_per_hour": (len(results) / (total_time / 3600) if results else 0),
         "results": results,
     }
 

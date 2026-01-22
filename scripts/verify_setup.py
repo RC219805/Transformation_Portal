@@ -106,10 +106,20 @@ def verify_dimension_validation():
         return False
 
     test_cases = [
-        (MIN_SD_DIMENSION, MIN_SD_DIMENSION, True, f"Minimum {MIN_SD_DIMENSION}x{MIN_SD_DIMENSION}"),
+        (
+            MIN_SD_DIMENSION,
+            MIN_SD_DIMENSION,
+            True,
+            f"Minimum {MIN_SD_DIMENSION}x{MIN_SD_DIMENSION}",
+        ),
         (768, MIN_SD_DIMENSION, True, f"Standard 768x{MIN_SD_DIMENSION}"),
         (1024, 768, True, "Standard 1024x768"),
-        (1024, 770, False, f"Invalid 1024x770 (not multiple of {SD_DIMENSION_MULTIPLE})"),
+        (
+            1024,
+            770,
+            False,
+            f"Invalid 1024x770 (not multiple of {SD_DIMENSION_MULTIPLE})",
+        ),
         (800, 600, False, f"Invalid 800x600 (not multiple of {SD_DIMENSION_MULTIPLE})"),
     ]
 

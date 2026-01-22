@@ -28,14 +28,14 @@ from .store import (
 )
 
 __all__ = [
-    'Event',
-    'EventStore',
-    'get_global_store',
-    'event',
-    'tracked',
-    'replay_events',
-    'EventReplayer',
-    'OperationRegistry',
+    "Event",
+    "EventStore",
+    "get_global_store",
+    "event",
+    "tracked",
+    "replay_events",
+    "EventReplayer",
+    "OperationRegistry",
 ]
 
-__version__ = '1.0.0'
+__version__ = "1.0.0"

@@ -30,7 +30,6 @@ from lux_depth_v3.inference import DA3InferenceEngine
 from lux_depth_v3.postprocessing import Postprocessor
 from lux_depth_v3.export import Exporter
 
-
 # Security configuration
 MAX_FILE_SIZE_MB = 50
 # Canonical allowlist pattern for filenames (letters, digits, dot, underscore, dash)

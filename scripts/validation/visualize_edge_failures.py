@@ -189,7 +189,12 @@ def visualize_edge_comparison(rgb_path: Path, depth_path: Path, metrics_path: Pa
 def main():
     parser = argparse.ArgumentParser(description="Visualize edge detection failures")
     parser.add_argument("--validation-dir", type=Path, required=True, help="Validation output directory")
-    parser.add_argument("--output-dir", type=Path, required=True, help="Output directory for diagnostics")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        required=True,
+        help="Output directory for diagnostics",
+    )
 
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)

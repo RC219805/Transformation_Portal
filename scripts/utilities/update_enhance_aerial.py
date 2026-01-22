@@ -71,7 +71,8 @@ class MaterialRule:
 
 
 def load_palette_assignments(
-    path: Path | str, rules: Sequence[MaterialRule] | Mapping[str, MaterialRule] | None = None
+    path: Path | str,
+    rules: Sequence[MaterialRule] | Mapping[str, MaterialRule] | None = None,
 ) -> dict[int, MaterialRule]:
     p = Path(path)
     if not p.exists():
@@ -258,7 +259,10 @@ def apply_materials_tiled(
                         eviction_callback(old_path, dict(cache_stats.get(old_path, {})))
                     except (IOError, OSError):
                         if verbose:
-                            print(f"[cache] eviction callback failed for {old_path}", file=sys.stderr)
+                            print(
+                                f"[cache] eviction callback failed for {old_path}",
+                                file=sys.stderr,
+                            )
                 if verbose:
                     print(f"[cache] evicted {old_path}", file=sys.stderr)
 
@@ -340,7 +344,12 @@ def apply_materials_tiled(
     tiles_x = math.ceil(width / tile_size)
     tiles_y = math.ceil(height / tile_size)
     jobs = [
-        (ty * tile_size, min(height, (ty + 1) * tile_size), tx * tile_size, min(width, (tx + 1) * tile_size))
+        (
+            ty * tile_size,
+            min(height, (ty + 1) * tile_size),
+            tx * tile_size,
+            min(width, (tx + 1) * tile_size),
+        )
         for ty in range(tiles_y)
         for tx in range(tiles_x)
     ]
@@ -435,12 +444,21 @@ def main():
     stats = _cluster_stats(arr, labels)
 
     # example textures
-    textures = {"plaster": Path("textures/plaster.jpg"), "stone": Path("textures/stone.jpg")}
+    textures = {
+        "plaster": Path("textures/plaster.jpg"),
+        "stone": Path("textures/stone.jpg"),
+    }
     rules = build_material_rules(textures)
     assignments = assign_materials(stats, rules)
 
     out = apply_materials_tiled(
-        arr, labels, assignments, tile_size=args.tilesize, workers=args.workers, verbose=args.verbose, progress=args.progress
+        arr,
+        labels,
+        assignments,
+        tile_size=args.tilesize,
+        workers=args.workers,
+        verbose=args.verbose,
+        progress=args.progress,
     )
 
     Image.fromarray((out * 255).astype("uint8")).save(args.output)

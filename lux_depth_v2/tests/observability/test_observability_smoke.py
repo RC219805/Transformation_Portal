@@ -49,7 +49,11 @@ def test_metrics_endpoint():
     # hit any endpoint to ensure metrics have something to report
     c.get("/health")
     m = c.get("/metrics")
-    assert m.status_code in (200, 404, 503)  # 404 when disabled, 503 when prometheus lib missing
+    assert m.status_code in (
+        200,
+        404,
+        503,
+    )  # 404 when disabled, 503 when prometheus lib missing
     if m.status_code == 200:
         txt = m.text
         assert "lux_http_requests_total" in txt

@@ -53,7 +53,11 @@ class TestSecurityCheckResult:
 
     def test_result_creation(self):
         """Test that security check results can be created."""
-        from security.continuous_security import SecurityCheckResult, SecurityCheckType, SecurityStatus
+        from security.continuous_security import (
+            SecurityCheckResult,
+            SecurityCheckType,
+            SecurityStatus,
+        )
 
         result = SecurityCheckResult(
             check_type=SecurityCheckType.IMPORT_SCAN,
@@ -67,7 +71,11 @@ class TestSecurityCheckResult:
 
     def test_result_to_dict(self):
         """Test that results can be converted to dictionary."""
-        from security.continuous_security import SecurityCheckResult, SecurityCheckType, SecurityStatus
+        from security.continuous_security import (
+            SecurityCheckResult,
+            SecurityCheckType,
+            SecurityStatus,
+        )
 
         result = SecurityCheckResult(
             check_type=SecurityCheckType.IMPORT_SCAN,
@@ -275,7 +283,10 @@ class TestContinuousSecurityVerifier:
 
     def test_quick_check(self, tmp_path):
         """Test quick security check functionality."""
-        from security.continuous_security import ContinuousSecurityVerifier, SecurityStatus
+        from security.continuous_security import (
+            ContinuousSecurityVerifier,
+            SecurityStatus,
+        )
 
         # Create a minimal valid directory structure
         req_dir = tmp_path / "requirements"

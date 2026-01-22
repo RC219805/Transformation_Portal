@@ -325,7 +325,11 @@ class DatasetGenerator:
         # Generate samples with different crop sizes
         for i in range(num_samples):
             sample = self._generate_single_sample(
-                img_array=img_array, depth_map=depth_map, analysis=analysis, sample_idx=i, materials=materials
+                img_array=img_array,
+                depth_map=depth_map,
+                analysis=analysis,
+                sample_idx=i,
+                materials=materials,
             )
             if sample is not None:
                 samples.append(sample)
@@ -594,7 +598,9 @@ class DatasetGenerator:
 
         return image, params
 
-    def _split_dataset(self) -> Tuple[List[TrainingSample], List[TrainingSample], List[TrainingSample]]:
+    def _split_dataset(
+        self,
+    ) -> Tuple[List[TrainingSample], List[TrainingSample], List[TrainingSample]]:
         """Split dataset into train/val/test."""
         n_samples = len(self.samples)
         n_test = int(n_samples * self.config.test_split)

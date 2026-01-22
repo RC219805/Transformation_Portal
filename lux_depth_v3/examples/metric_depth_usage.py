@@ -11,7 +11,12 @@ from typing import Optional
 
 # Import metric depth utilities
 try:
-    from lux_depth_v3.metric_depth import convert_to_metric_depth, get_depth_statistics, MetricDepthConverter, depth_to_meters
+    from lux_depth_v3.metric_depth import (
+        convert_to_metric_depth,
+        get_depth_statistics,
+        MetricDepthConverter,
+        depth_to_meters,
+    )
 except ImportError:
     print("Error: lux_depth_v3 package not found")
     print("Install with: pip install -e .")

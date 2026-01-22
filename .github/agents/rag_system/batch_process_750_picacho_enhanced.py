@@ -242,7 +242,10 @@ def main():
 
         # pylint: disable=assignment-from-none
         result = process_scene(
-            scene_name=scene_name, source_path=source_file, output_dir=args.output_dir, dry_run=args.dry_run
+            scene_name=scene_name,
+            source_path=source_file,
+            output_dir=args.output_dir,
+            dry_run=args.dry_run,
         )
 
         results[scene_name] = result

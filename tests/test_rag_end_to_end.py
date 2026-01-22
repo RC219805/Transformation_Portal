@@ -585,7 +585,8 @@ class TestEndToEndPromptTemplates:
     def test_feature_implementation_template(self):
         """Test feature implementation template."""
         template = PromptTemplates.feature_implementation(
-            "Add HDR tone mapping support", context="Existing tone mapping in tone_mapper.py"
+            "Add HDR tone mapping support",
+            context="Existing tone mapping in tone_mapper.py",
         )
 
         assert "HDR" in template
@@ -1046,8 +1047,16 @@ class TestPhase2Vector1GitHooks:
     def test_change_detector_get_current_branch(self, temp_repository):
         """Test getting current branch."""
         subprocess.run(["git", "init"], cwd=temp_repository, capture_output=True)
-        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=temp_repository, capture_output=True)
-        subprocess.run(["git", "config", "user.name", "Test"], cwd=temp_repository, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=temp_repository,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"],
+            cwd=temp_repository,
+            capture_output=True,
+        )
         # Create initial commit
         (temp_repository / "test.txt").write_text("test")
         subprocess.run(["git", "add", "."], cwd=temp_repository, capture_output=True)

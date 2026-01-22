@@ -49,7 +49,11 @@ from typing import Dict, List, Optional, Tuple
 # Configuration & Logging
 # ----------------------------------------------------------
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
 log = logging.getLogger("pipeline")
 
 
@@ -97,7 +101,13 @@ class PipelineConfig:
             self.skip_stages = []
 
         # Create stage directories
-        for stage in ["stage1_enhance", "stage2_depth", "stage3_tonemap", "stage4_masks", "stage5_final"]:
+        for stage in [
+            "stage1_enhance",
+            "stage2_depth",
+            "stage3_tonemap",
+            "stage4_masks",
+            "stage5_final",
+        ]:
             path = getattr(self, stage)
             if not self.dry_run:
                 path.mkdir(parents=True, exist_ok=True)
@@ -113,7 +123,11 @@ class PipelineConfig:
 
     def save_manifest(self, filepath: Path) -> None:
         """Save pipeline manifest to JSON."""
-        manifest = {"pipeline_version": "1.0.0", "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"), "config": self.to_dict()}
+        manifest = {
+            "pipeline_version": "1.0.0",
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "config": self.to_dict(),
+        }
         with open(filepath, "w") as f:
             json.dump(manifest, f, indent=2)
         log.info(f"Saved pipeline manifest: {filepath}")
@@ -549,10 +563,30 @@ class Pipeline:
         ]
         # Optional dependencies, only required if corresponding stage is enabled
         optional = [
-            ("coremltools", "coremltools", "depth prediction (Stage 2)", bool(self.config.depth_model_path)),
-            ("torch", "torch", "depth prediction (Stage 2)", bool(self.config.depth_model_path)),
-            ("opencv-python", "cv2", "depth effects (Stage 5)", bool(self.config.depth_effects)),
-            ("detectron2", "detectron2", "panoptic segmentation (Stage 4)", bool(self.config.enable_panoptic)),
+            (
+                "coremltools",
+                "coremltools",
+                "depth prediction (Stage 2)",
+                bool(self.config.depth_model_path),
+            ),
+            (
+                "torch",
+                "torch",
+                "depth prediction (Stage 2)",
+                bool(self.config.depth_model_path),
+            ),
+            (
+                "opencv-python",
+                "cv2",
+                "depth effects (Stage 5)",
+                bool(self.config.depth_effects),
+            ),
+            (
+                "detectron2",
+                "detectron2",
+                "panoptic segmentation (Stage 4)",
+                bool(self.config.enable_panoptic),
+            ),
         ]
         missing = []
         # Check always-required dependencies
@@ -646,7 +680,12 @@ class Pipeline:
         # Cleanup intermediates if requested
         if not self.config.keep_intermediates:
             log.info("Cleaning up intermediate files...")
-            for stage in ["stage1_enhance", "stage2_depth", "stage3_tonemap", "stage4_masks"]:
+            for stage in [
+                "stage1_enhance",
+                "stage2_depth",
+                "stage3_tonemap",
+                "stage4_masks",
+            ]:
                 stage_path = getattr(self.config, stage)
                 if stage_path.exists() and stage_path != self.config.stage5_final:
                     shutil.rmtree(stage_path)
@@ -663,12 +702,23 @@ class Pipeline:
 def build_parser() -> argparse.ArgumentParser:
     """Build argument parser."""
     ap = argparse.ArgumentParser(
-        description="Comprehensive TIFF enhancement pipeline", formatter_class=argparse.RawDescriptionHelpFormatter
+        description="Comprehensive TIFF enhancement pipeline",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
     # Required
-    ap.add_argument("--input-dir", type=Path, required=True, help="Input directory containing 16/32-bit TIFFs")
-    ap.add_argument("--output-dir", type=Path, required=True, help="Output directory for final enhanced images")
+    ap.add_argument(
+        "--input-dir",
+        type=Path,
+        required=True,
+        help="Input directory containing 16/32-bit TIFFs",
+    )
+    ap.add_argument(
+        "--output-dir",
+        type=Path,
+        required=True,
+        help="Output directory for final enhanced images",
+    )
 
     # Enhancement options
     ap.add_argument(
@@ -683,7 +733,12 @@ def build_parser() -> argparse.ArgumentParser:
         default="agx",
         help="Tone mapping method",
     )
-    ap.add_argument("--ocio-config", type=str, default=None, help="Path to OpenColorIO config for AgX")
+    ap.add_argument(
+        "--ocio-config",
+        type=str,
+        default=None,
+        help="Path to OpenColorIO config for AgX",
+    )
 
     # Depth processing (optional)
     ap.add_argument(
@@ -704,16 +759,35 @@ def build_parser() -> argparse.ArgumentParser:
 
     # Performance
     ap.add_argument("--workers", type=int, default=4, help="Number of parallel workers")
-    ap.add_argument("--device", choices=["cpu", "cuda", "mps"], default="cpu", help="Device for neural networks")
+    ap.add_argument(
+        "--device",
+        choices=["cpu", "cuda", "mps"],
+        default="cpu",
+        help="Device for neural networks",
+    )
 
     # Quality
     ap.add_argument("--quality", type=int, default=95, help="JPEG quality (1-100)")
     ap.add_argument("--bitdepth", type=int, choices=[8, 16, 32], default=16, help="Output bit depth")
 
     # Pipeline control
-    ap.add_argument("--skip-stages", nargs="+", choices=["1", "2", "3", "4", "5"], default=[], help="Stages to skip")
-    ap.add_argument("--keep-intermediates", action="store_true", help="Keep intermediate files from each stage")
-    ap.add_argument("--dry-run", action="store_true", help="Show what would be executed without running")
+    ap.add_argument(
+        "--skip-stages",
+        nargs="+",
+        choices=["1", "2", "3", "4", "5"],
+        default=[],
+        help="Stages to skip",
+    )
+    ap.add_argument(
+        "--keep-intermediates",
+        action="store_true",
+        help="Keep intermediate files from each stage",
+    )
+    ap.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be executed without running",
+    )
 
     return ap
 

@@ -262,7 +262,7 @@ class TIFFQualityOptimizer:
             metadata=tiff_metadata,
             photometric=photometric,
             planarconfig="contig",  # Interleaved RGB
-            tile=(256, 256) if save_array.shape[0] > 256 and save_array.shape[1] > 256 else None,
+            tile=((256, 256) if save_array.shape[0] > 256 and save_array.shape[1] > 256 else None),
         )
 
         file_size = output_path.stat().st_size / 1024 / 1024
@@ -271,7 +271,10 @@ class TIFFQualityOptimizer:
         return output_path
 
     def save_tiff_method_3_imagecodecs(
-        self, array: np.ndarray, output_path: Union[str, Path], compression_level: int = 6
+        self,
+        array: np.ndarray,
+        output_path: Union[str, Path],
+        compression_level: int = 6,
     ) -> Path:
         """
         Method 3: Save using imagecodecs for advanced compression.
@@ -337,11 +340,17 @@ class TIFFQualityOptimizer:
             self._log("\n=== Saving with all methods for comparison ===")
 
             results["pil"] = self.save_tiff_method_1_pil(
-                array, output_dir / f"{base_name}_method1_pil.ti", metadata, compression="tiff_adobe_deflate"
+                array,
+                output_dir / f"{base_name}_method1_pil.ti",
+                metadata,
+                compression="tiff_adobe_deflate",
             )
 
             results["tifffile"] = self.save_tiff_method_2_tifffile(
-                array, output_dir / f"{base_name}_method2_tifffile.ti", metadata, compression=compression
+                array,
+                output_dir / f"{base_name}_method2_tifffile.ti",
+                metadata,
+                compression=compression,
             )
 
             results["imagecodecs"] = self.save_tiff_method_3_imagecodecs(

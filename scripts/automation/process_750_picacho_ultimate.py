@@ -123,7 +123,11 @@ def estimate_depth_v2_large(image: Image.Image, device: str) -> np.ndarray:
 
     print(f"  Loading Depth Anything V2 Large on {device}...")
 
-    depth_estimator = pipeline("depth-estimation", model="depth-anything/Depth-Anything-V2-Large-hf", device=device)
+    depth_estimator = pipeline(
+        "depth-estimation",
+        model="depth-anything/Depth-Anything-V2-Large-hf",
+        device=device,
+    )
 
     print("  Estimating depth...")
     start = time.time()
@@ -279,7 +283,13 @@ def apply_luxury_color_grade(image_array: np.ndarray, config: Dict[str, Any]) ->
 # ============================================================================
 
 
-def process_scene(input_path: Path, output_dir: Path, scene_name: str, config: Dict[str, Any], device: str) -> Dict[str, Any]:
+def process_scene(
+    input_path: Path,
+    output_dir: Path,
+    scene_name: str,
+    config: Dict[str, Any],
+    device: str,
+) -> Dict[str, Any]:
     """Process a single scene with Ultimate quality settings."""
 
     print(f"\n{'=' * 80}")

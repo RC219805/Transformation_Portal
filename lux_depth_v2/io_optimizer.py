@@ -70,7 +70,12 @@ class AsyncTIFFWriter:
         future.result()  # Wait for completion if needed
     """
 
-    def __init__(self, use_compression: bool = True, compression: str = "lzw", max_workers: int = 2):
+    def __init__(
+        self,
+        use_compression: bool = True,
+        compression: str = "lzw",
+        max_workers: int = 2,
+    ):
         """
         Initialize async TIFF writer.
 
@@ -218,7 +223,11 @@ class StreamingUpscaleWriter:
     """
 
     def __init__(
-        self, output_path: Path, final_dimensions: tuple, dtype: type = np.float32, compression: Optional[str] = None
+        self,
+        output_path: Path,
+        final_dimensions: tuple,
+        dtype: type = np.float32,
+        compression: Optional[str] = None,
     ):
         """
         Initialize streaming upscale writer.
@@ -330,7 +339,12 @@ class StreamingUpscaleWriter:
 # Convenience functions for backward compatibility
 
 
-def write_tiff_async(image: np.ndarray, path: Path, use_compression: bool = True, compression: str = "lzw") -> Future:
+def write_tiff_async(
+    image: np.ndarray,
+    path: Path,
+    use_compression: bool = True,
+    compression: str = "lzw",
+) -> Future:
     """
     Write TIFF asynchronously (convenience function).
 
@@ -347,4 +361,8 @@ def create_streaming_writer(
     """
     Create streaming upscale writer (convenience function).
     """
-    return StreamingUpscaleWriter(output_path=output_path, final_dimensions=final_dimensions, compression=compression)
+    return StreamingUpscaleWriter(
+        output_path=output_path,
+        final_dimensions=final_dimensions,
+        compression=compression,
+    )

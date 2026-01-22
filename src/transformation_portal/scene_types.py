@@ -11,72 +11,70 @@ SCENE_TYPES: Dict[str, Dict[str, any]] = {
     # Interior Spaces
     "interior_bedroom": {
         "aliases": ["bedroom", "bed", "master", "guest_room", "suite"],
-        "description": "Bedrooms, master suites, guest rooms"
+        "description": "Bedrooms, master suites, guest rooms",
     },
     "interior_great_room": {
         "aliases": ["great", "living", "family", "lounge", "great_room", "greatroom"],
-        "description": "Great rooms, living rooms, family rooms"
+        "description": "Great rooms, living rooms, family rooms",
     },
     "interior_kitchen": {
         "aliases": ["kitchen", "kit", "pantry", "butler"],
-        "description": "Kitchens, butler's pantry"
+        "description": "Kitchens, butler's pantry",
     },
     "interior_bathroom": {
         "aliases": ["bathroom", "bath", "powder", "powder_room"],
-        "description": "Bathrooms, powder rooms"
+        "description": "Bathrooms, powder rooms",
     },
     "interior_dining_room": {
         "aliases": ["dining", "breakfast", "dining_room"],
-        "description": "Dining rooms, breakfast nooks"
+        "description": "Dining rooms, breakfast nooks",
     },
     "interior_office": {
         "aliases": ["office", "study", "library", "den"],
-        "description": "Offices, studies, libraries, dens"
+        "description": "Offices, studies, libraries, dens",
     },
     "interior_closet": {
         "aliases": ["closet", "wardrobe", "dressing", "walk_in"],
-        "description": "Walk-in closets, dressing rooms"
+        "description": "Walk-in closets, dressing rooms",
     },
     "interior_hallway": {
         "aliases": ["hallway", "corridor", "foyer", "entry"],
-        "description": "Hallways, corridors, foyers"
+        "description": "Hallways, corridors, foyers",
     },
-
     # Exterior Spaces
     "exterior_pool": {
         "aliases": ["pool", "spa", "water", "jacuzzi", "hot_tub"],
-        "description": "Pools, spas, water features"
+        "description": "Pools, spas, water features",
     },
     "exterior_garden": {
         "aliases": ["garden", "yard", "landscape", "landscaping"],
-        "description": "Gardens, yards, landscaping"
+        "description": "Gardens, yards, landscaping",
     },
     "exterior_courtyard": {
         "aliases": ["courtyard", "patio", "terrace", "deck"],
-        "description": "Courtyards, patios, terraces, decks"
+        "description": "Courtyards, patios, terraces, decks",
     },
     "exterior_facade": {
         "aliases": ["facade", "front", "entry", "exterior", "elevation"],
-        "description": "Building facades, entries, elevations"
+        "description": "Building facades, entries, elevations",
     },
     "aerial_exterior": {
         "aliases": ["aerial", "drone", "overhead", "bird", "birds_eye"],
-        "description": "Aerial views, drone shots"
+        "description": "Aerial views, drone shots",
     },
-
     # Special Conditions
     "twilight_exterior": {
         "aliases": ["twilight", "dusk", "blue_hour", "golden_hour"],
-        "description": "Twilight exterior shots, dusk, golden hour"
+        "description": "Twilight exterior shots, dusk, golden hour",
     },
     "night_interior": {
         "aliases": ["night", "evening_interior", "evening"],
-        "description": "Night interior shots"
+        "description": "Night interior shots",
     },
     "night_exterior": {
         "aliases": ["night_exterior", "nighttime_exterior"],
-        "description": "Night exterior shots"
-    }
+        "description": "Night exterior shots",
+    },
 }
 
 
@@ -115,8 +113,7 @@ def normalize_scene_type(raw_input: str) -> str:
     # Not found
     valid_types = ", ".join(SCENE_TYPES.keys())
     raise ValueError(
-        f"Unknown scene type: '{raw_input}'. "
-        f"Valid types: {valid_types}"
+        f"Unknown scene type: '{raw_input}'. " f"Valid types: {valid_types}"
     )
 
 

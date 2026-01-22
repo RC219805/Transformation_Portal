@@ -156,9 +156,7 @@ class TestStoneResponse:
         mask = np.zeros((100, 100), dtype=np.float32)
         mask[45:55, 45:55] = 1.0  # Only 100 pixels
 
-        cfg = StoneResponseConfig(
-            min_coverage_px=50_000  # Much higher than 100
-        )
+        cfg = StoneResponseConfig(min_coverage_px=50_000)  # Much higher than 100
 
         result, stats = apply_stone_response(rgb, mask, cfg)
 
@@ -174,9 +172,7 @@ class TestStoneResponse:
         mask = np.zeros((100, 100), dtype=np.float32)
         mask[20:80, 20:80] = 1.0
 
-        cfg = StoneResponseConfig(
-            min_coverage_px=1000  # Well below mask size
-        )
+        cfg = StoneResponseConfig(min_coverage_px=1000)  # Well below mask size
 
         result, stats = apply_stone_response(rgb, mask, cfg)
 

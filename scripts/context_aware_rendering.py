@@ -76,7 +76,9 @@ def _check_depth_pipeline():
     global _depth_pipeline_available
     if _depth_pipeline_available is None:
         try:
-            from transformation_portal.depth.pipeline import ArchitecturalDepthPipeline  # noqa: F401
+            from transformation_portal.depth.pipeline import (
+                ArchitecturalDepthPipeline,
+            )  # noqa: F401
 
             _depth_pipeline_available = True
         except ImportError:
@@ -90,8 +92,12 @@ def _check_tiff_processor():
     global _tiff_processor_available
     if _tiff_processor_available is None:
         try:
-            from luxury_tiff_batch_processor.adjustments import AdjustmentSettings  # noqa: F401
-            from luxury_tiff_batch_processor.adjustments import apply_adjustments  # noqa: F401
+            from luxury_tiff_batch_processor.adjustments import (
+                AdjustmentSettings,
+            )  # noqa: F401
+            from luxury_tiff_batch_processor.adjustments import (
+                apply_adjustments,
+            )  # noqa: F401
 
             _tiff_processor_available = True
         except ImportError:
@@ -274,7 +280,7 @@ class ContextAwareRenderingPipeline:
         print("  Using balanced default strategy")
         return RenderingStrategy(
             room_type="unknown",
-            primary_materials=self.context.materials_palette[:4] if self.context.materials_palette else ["wood", "stone"],
+            primary_materials=(self.context.materials_palette[:4] if self.context.materials_palette else ["wood", "stone"]),
             lighting_style="ambient",
             depth_emphasis="balanced",
             color_temperature="neutral",
@@ -306,7 +312,10 @@ class ContextAwareRenderingPipeline:
 
         # Create a copy of the strategy to avoid mutating class-level defaults
         # Use replace() to copy the dataclass and list() to copy the materials list
-        strategy = replace(base_strategy_ref, primary_materials=list(base_strategy_ref.primary_materials))
+        strategy = replace(
+            base_strategy_ref,
+            primary_materials=list(base_strategy_ref.primary_materials),
+        )
 
         # Get room-specific context (reserved for future material/feature customization)
         room_context = self.get_room_context(room_type)  # noqa: F841
@@ -675,7 +684,7 @@ class ContextAwareRenderingPipeline:
                 exposure=0.08 if strategy.lighting_style == "bright" else 0.0,
                 white_balance_temp=self._get_temp_from_strategy(strategy),
                 white_balance_tint=float(tint),
-                shadow_lift=0.18 if strategy.lighting_style in ("soft", "ambient") else 0.12,
+                shadow_lift=(0.18 if strategy.lighting_style in ("soft", "ambient") else 0.12),
                 highlight_recovery=0.15,
                 midtone_contrast=0.08,
                 vibrance=0.18 * strategy.enhancement_strength,
@@ -717,8 +726,20 @@ def main():
 
     parser = argparse.ArgumentParser(description="Context-aware architectural rendering")
     parser.add_argument("image", type=Path, help="Rendering to process")
-    parser.add_argument("--context", "-c", type=Path, required=True, help="Path to extracted context JSON or PDF")
-    parser.add_argument("--output", "-o", type=Path, default=Path("output_context_aware"), help="Output directory")
+    parser.add_argument(
+        "--context",
+        "-c",
+        type=Path,
+        required=True,
+        help="Path to extracted context JSON or PDF",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        default=Path("output_context_aware"),
+        help="Output directory",
+    )
     parser.add_argument("--no-depth", action="store_true", help="Skip depth processing")
     parser.add_argument("--no-material", action="store_true", help="Skip material response")
     parser.add_argument("--no-color", action="store_true", help="Skip color grading")

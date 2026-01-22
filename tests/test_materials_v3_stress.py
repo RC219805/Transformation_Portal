@@ -73,7 +73,11 @@ def _process_image_worker(args):
     # Import here to avoid issues in workers
     from lux_depth_v2.pipeline import LuxPipelineV2
     from lux_depth_v2.config import PipelineConfig, Preset, DepthMode
-    from lux_depth_v2.materials_v3 import MaterialsV3Config, MaterialTaxonomy, RefinementStrategy
+    from lux_depth_v2.materials_v3 import (
+        MaterialsV3Config,
+        MaterialTaxonomy,
+        RefinementStrategy,
+    )
 
     # Create CI-safe config in worker process
     config = PipelineConfig(preset=Preset.PRODUCTION_STANDARD, output_dir=output_dir, write_outputs=False)
@@ -94,7 +98,11 @@ def _process_image_worker(args):
     try:
         result = pipeline.process_one(img_path)
         m3 = _materials_v3_meta(result)
-        return {"worker_id": worker_id, "success": True, "fallback": bool(m3.get("fallback", False))}
+        return {
+            "worker_id": worker_id,
+            "success": True,
+            "fallback": bool(m3.get("fallback", False)),
+        }
     except Exception as e:
         return {"worker_id": worker_id, "success": False, "error": str(e)}
 
@@ -130,14 +138,22 @@ class TestMaterialsV3Stress:
     @pytest.fixture
     def ci_safe_config(self, tmp_path):
         """Create CI-safe config with heuristic backend and AUTO depth mode."""
-        config = PipelineConfig(preset=Preset.PRODUCTION_STANDARD, output_dir=tmp_path / "ci_output", write_outputs=False)
+        config = PipelineConfig(
+            preset=Preset.PRODUCTION_STANDARD,
+            output_dir=tmp_path / "ci_output",
+            write_outputs=False,
+        )
         config.segmentation.backend = "heuristic"
         # Stress tests should not fail on missing depth - use AUTO mode
         config.depth.mode = DepthMode.AUTO
         config.strict_depth = False
         # CRITICAL: Explicitly enable MaterialsV3 (PRODUCTION_STANDARD doesn't set it)
         # Import MaterialsV3Config to enable
-        from lux_depth_v2.materials_v3 import MaterialsV3Config, MaterialTaxonomy, RefinementStrategy
+        from lux_depth_v2.materials_v3 import (
+            MaterialsV3Config,
+            MaterialTaxonomy,
+            RefinementStrategy,
+        )
 
         config.materials_v3 = MaterialsV3Config(
             enabled=True,
@@ -515,13 +531,21 @@ class TestMaterialsV3StressScenarios:
     @pytest.fixture
     def ci_safe_config(self, tmp_path):
         """Create CI-safe config with heuristic backend and AUTO depth mode."""
-        config = PipelineConfig(preset=Preset.PRODUCTION_STANDARD, output_dir=tmp_path / "ci_output", write_outputs=False)
+        config = PipelineConfig(
+            preset=Preset.PRODUCTION_STANDARD,
+            output_dir=tmp_path / "ci_output",
+            write_outputs=False,
+        )
         config.segmentation.backend = "heuristic"
         # Stress tests should not fail on missing depth - use AUTO mode
         config.depth.mode = DepthMode.AUTO
         config.strict_depth = False
         # CRITICAL: Explicitly enable MaterialsV3 (PRODUCTION_STANDARD doesn't set it)
-        from lux_depth_v2.materials_v3 import MaterialsV3Config, MaterialTaxonomy, RefinementStrategy
+        from lux_depth_v2.materials_v3 import (
+            MaterialsV3Config,
+            MaterialTaxonomy,
+            RefinementStrategy,
+        )
 
         config.materials_v3 = MaterialsV3Config(
             enabled=True,
@@ -544,12 +568,20 @@ class TestMaterialsV3StressScenarios:
 
         for i in range(50):
             # Create new config for each cycle to test resource cleanup
-            config = PipelineConfig(preset=Preset.PRODUCTION_STANDARD, output_dir=tmp_path / "output", write_outputs=False)
+            config = PipelineConfig(
+                preset=Preset.PRODUCTION_STANDARD,
+                output_dir=tmp_path / "output",
+                write_outputs=False,
+            )
             config.segmentation.backend = "heuristic"
             config.depth.mode = DepthMode.AUTO
             config.strict_depth = False
             # CRITICAL: Explicitly enable MaterialsV3 (PRODUCTION_STANDARD doesn't set it)
-            from lux_depth_v2.materials_v3 import MaterialsV3Config, MaterialTaxonomy, RefinementStrategy
+            from lux_depth_v2.materials_v3 import (
+                MaterialsV3Config,
+                MaterialTaxonomy,
+                RefinementStrategy,
+            )
 
             config.materials_v3 = MaterialsV3Config(
                 enabled=True,

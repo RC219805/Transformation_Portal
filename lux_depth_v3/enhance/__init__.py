@@ -23,7 +23,14 @@ __all__ = [
 
 def __getattr__(name):
     """Lazy import to avoid heavy dependencies on module import."""
-    if name in ["CombinedManifest", "DepthMetadata", "V2Metadata", "TimingMetadata", "ReproMetadata", "InputMetadata"]:
+    if name in [
+        "CombinedManifest",
+        "DepthMetadata",
+        "V2Metadata",
+        "TimingMetadata",
+        "ReproMetadata",
+        "InputMetadata",
+    ]:
         from lux_depth_v3.enhance.manifest import (  # noqa: F401
             CombinedManifest,
             DepthMetadata,
@@ -35,7 +42,10 @@ def __getattr__(name):
 
         return locals()[name]
     elif name in ["EnhanceOrchestrator", "EnhanceConfig"]:
-        from lux_depth_v3.enhance.orchestrator import EnhanceOrchestrator, EnhanceConfig  # noqa: F401
+        from lux_depth_v3.enhance.orchestrator import (
+            EnhanceOrchestrator,
+            EnhanceConfig,
+        )  # noqa: F401
 
         return locals()[name]
     elif name == "HashMode":

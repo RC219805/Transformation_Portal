@@ -82,7 +82,16 @@ class ModelInfo:
         if self._capabilities is not None:
             caps_hash = hash(frozenset(self._capabilities.items()))
 
-        return hash((self.name, self.params, self.license, self.huggingface_id, self.version, caps_hash))
+        return hash(
+            (
+                self.name,
+                self.params,
+                self.license,
+                self.huggingface_id,
+                self.version,
+                caps_hash,
+            )
+        )
 
     def __reduce_ex__(self, protocol):
         """Custom reduce for pickle/deepcopy with mappingproxy support."""
@@ -91,7 +100,14 @@ class ModelInfo:
         # Return a tuple: (callable, args) for reconstruction
         return (
             self.__class__,
-            (self.name, self.params, self.license, self.huggingface_id, self.version, caps),
+            (
+                self.name,
+                self.params,
+                self.license,
+                self.huggingface_id,
+                self.version,
+                caps,
+            ),
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -106,7 +122,7 @@ class ModelInfo:
             "license": self.license.value,  # Convert enum to string
             "huggingface_id": self.huggingface_id,
             "version": self.version,
-            "capabilities": dict(self._capabilities) if self._capabilities is not None else None,
+            "capabilities": (dict(self._capabilities) if self._capabilities is not None else None),
         }
 
 

@@ -11,12 +11,13 @@ from typing import Any, Dict, List, Optional
 
 class PipelineError(Exception):
     """Raised when pipeline execution fails."""
+
     pass
 
 
 class PipelineStage(ABC):
     """Base interface for pipeline stages."""
-    
+
     @abstractmethod
     def execute(self, data: Any, context: Dict[str, Any]) -> Any:
         """
@@ -33,7 +34,7 @@ class PipelineStage(ABC):
             PipelineError: If stage execution fails.
         """
         pass
-    
+
     @abstractmethod
     def get_name(self) -> str:
         """
@@ -47,7 +48,7 @@ class PipelineStage(ABC):
 
 class Pipeline(ABC):
     """Base interface for multi-stage processing pipelines."""
-    
+
     @abstractmethod
     def add_stage(self, stage: PipelineStage, name: Optional[str] = None) -> None:
         """
@@ -61,9 +62,11 @@ class Pipeline(ABC):
             PipelineError: If the stage cannot be added.
         """
         pass
-    
+
     @abstractmethod
-    def execute(self, input_path: Path, output_path: Optional[Path] = None, **kwargs) -> Dict[str, Any]:
+    def execute(
+        self, input_path: Path, output_path: Optional[Path] = None, **kwargs
+    ) -> Dict[str, Any]:
         """
         Execute complete pipeline on input file.
 
@@ -79,7 +82,7 @@ class Pipeline(ABC):
             PipelineError: If pipeline execution fails.
         """
         pass
-    
+
     @abstractmethod
     def get_stages(self) -> List[PipelineStage]:
         """
@@ -89,7 +92,7 @@ class Pipeline(ABC):
             List[PipelineStage]: Ordered list of all stages in the pipeline.
         """
         pass
-    
+
     @abstractmethod
     def get_config(self) -> Dict[str, Any]:
         """
@@ -104,7 +107,7 @@ class Pipeline(ABC):
 
 class BatchPipeline(Pipeline):
     """Extended pipeline interface for batch processing."""
-    
+
     @abstractmethod
     def execute_batch(
         self,
@@ -112,7 +115,7 @@ class BatchPipeline(Pipeline):
         output_dir: Path,
         parallel: bool = True,
         max_workers: Optional[int] = None,
-        **kwargs
+        **kwargs,
     ) -> List[Dict[str, Any]]:
         """
         Execute pipeline on multiple inputs in batch mode.

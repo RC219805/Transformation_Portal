@@ -119,7 +119,11 @@ class TestMitigation:
 
     def test_mitigation_creation(self):
         """Test that mitigation objects can be created."""
-        from security.security_manager import Mitigation, MitigationType, MitigationStatus
+        from security.security_manager import (
+            Mitigation,
+            MitigationType,
+            MitigationStatus,
+        )
 
         mitigation = Mitigation(
             cve_id="CVE-2024-27763",
@@ -133,7 +137,11 @@ class TestMitigation:
 
     def test_mitigation_to_dict(self):
         """Test that mitigations can be converted to dictionary."""
-        from security.security_manager import Mitigation, MitigationType, MitigationStatus
+        from security.security_manager import (
+            Mitigation,
+            MitigationType,
+            MitigationStatus,
+        )
 
         mitigation = Mitigation(
             cve_id="CVE-2024-27763",
@@ -238,7 +246,11 @@ class TestSecurityKnowledgeBase:
 
     def test_index_vulnerability(self, tmp_path):
         """Test indexing a vulnerability to knowledge base."""
-        from security.security_manager import SecurityKnowledgeBase, Vulnerability, SeverityLevel
+        from security.security_manager import (
+            SecurityKnowledgeBase,
+            Vulnerability,
+            SeverityLevel,
+        )
 
         kb = SecurityKnowledgeBase(tmp_path)
 

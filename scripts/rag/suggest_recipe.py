@@ -186,9 +186,16 @@ def format_suggestion(suggestion: Dict[str, Any], sources: List[str] = None) -> 
 def main():
     parser = argparse.ArgumentParser(description="RAG-powered recipe suggestion based on historical data")
     parser.add_argument(
-        "--scene-type", required=True, help="Scene type: interior_bedroom, aerial_exterior, pool_exterior, etc."
+        "--scene-type",
+        required=True,
+        help="Scene type: interior_bedroom, aerial_exterior, pool_exterior, etc.",
     )
-    parser.add_argument("--baseline-score", type=float, required=True, help="Baseline quality score (e.g., 60.4)")
+    parser.add_argument(
+        "--baseline-score",
+        type=float,
+        required=True,
+        help="Baseline quality score (e.g., 60.4)",
+    )
     parser.add_argument("--notes", default="", help="Additional scene notes or context")
     parser.add_argument("--repo-root", type=Path, default=Path.cwd(), help="Repository root path")
 

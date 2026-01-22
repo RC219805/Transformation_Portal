@@ -9,7 +9,7 @@ def deprecated(
     replacement: Optional[str] = None,
     removal_version: Optional[str] = None,
     message: Optional[str] = None,
-    category: type = DeprecationWarning
+    category: type = DeprecationWarning,
 ):
     """Mark a function, method, or class as deprecated.
 
@@ -27,6 +27,7 @@ def deprecated(
         ... def old_process_image(image):
         ...     return new_process_image(image)
     """
+
     def decorator(obj):
         # Handle classes
         if isinstance(obj, type):
@@ -34,7 +35,9 @@ def deprecated(
 
             @functools.wraps(original_init)
             def new_init(self, *args, **kwargs):
-                _show_deprecation_warning(obj.__name__, replacement, removal_version, message, category)
+                _show_deprecation_warning(
+                    obj.__name__, replacement, removal_version, message, category
+                )
                 original_init(self, *args, **kwargs)
 
             obj.__init__ = new_init
@@ -44,7 +47,9 @@ def deprecated(
         # Handle functions/methods
         @functools.wraps(obj)
         def wrapper(*args, **kwargs):
-            _show_deprecation_warning(obj.__name__, replacement, removal_version, message, category)
+            _show_deprecation_warning(
+                obj.__name__, replacement, removal_version, message, category
+            )
             return obj(*args, **kwargs)
 
         wrapper.__deprecated__ = True
@@ -53,7 +58,9 @@ def deprecated(
     return decorator
 
 
-def renamed_function(old_name: str, new_name: str, removal_version: Optional[str] = None):
+def renamed_function(
+    old_name: str, new_name: str, removal_version: Optional[str] = None
+):
     """Decorator for functions that have been renamed.
 
     Args:
@@ -70,7 +77,9 @@ def renamed_function(old_name: str, new_name: str, removal_version: Optional[str
         >>> process_image = enhance_image
     """
     message = f"Function '{old_name}' has been renamed to '{new_name}'"
-    return deprecated(replacement=new_name, removal_version=removal_version, message=message)
+    return deprecated(
+        replacement=new_name, removal_version=removal_version, message=message
+    )
 
 
 def renamed_class(old_name: str, new_name: str, removal_version: Optional[str] = None):
@@ -90,7 +99,9 @@ def renamed_class(old_name: str, new_name: str, removal_version: Optional[str] =
         >>> OldProcessor = NewProcessor
     """
     message = f"Class '{old_name}' has been renamed to '{new_name}'"
-    return deprecated(replacement=new_name, removal_version=removal_version, message=message)
+    return deprecated(
+        replacement=new_name, removal_version=removal_version, message=message
+    )
 
 
 def renamed_module(old_path: str, new_path: str, removal_version: Optional[str] = None):
@@ -130,7 +141,9 @@ def moved_to(new_location: str, removal_version: Optional[str] = None):
         ...     pass
     """
     message = f"This has been moved to '{new_location}'"
-    return deprecated(replacement=new_location, removal_version=removal_version, message=message)
+    return deprecated(
+        replacement=new_location, removal_version=removal_version, message=message
+    )
 
 
 def _show_deprecation_warning(
@@ -138,7 +151,7 @@ def _show_deprecation_warning(
     replacement: Optional[str],
     removal_version: Optional[str],
     custom_message: Optional[str],
-    category: type
+    category: type,
 ):
     """Show deprecation warning with formatted message."""
     if custom_message:
@@ -166,8 +179,11 @@ def experimental(message: Optional[str] = None):
         ... def new_feature():
         ...     pass
     """
+
     def decorator(obj):
-        warning_msg = message or f"'{obj.__name__}' is experimental and its API may change"
+        warning_msg = (
+            message or f"'{obj.__name__}' is experimental and its API may change"
+        )
 
         if isinstance(obj, type):
             original_init = obj.__init__

@@ -237,15 +237,51 @@ class PicachoAnalyzer:
 
     # Material color signatures (approximate HSV ranges)
     MATERIAL_SIGNATURES = {
-        MaterialType.STONE: {"h_range": (15, 45), "s_range": (10, 50), "v_range": (30, 80)},
-        MaterialType.GLASS: {"h_range": (180, 220), "s_range": (5, 30), "v_range": (60, 100)},
-        MaterialType.WATER: {"h_range": (180, 220), "s_range": (30, 80), "v_range": (40, 90)},
-        MaterialType.WOOD: {"h_range": (10, 40), "s_range": (30, 70), "v_range": (25, 70)},
-        MaterialType.METAL: {"h_range": (0, 360), "s_range": (0, 20), "v_range": (50, 95)},
-        MaterialType.FABRIC: {"h_range": (0, 360), "s_range": (10, 60), "v_range": (40, 90)},
-        MaterialType.STUCCO: {"h_range": (30, 60), "s_range": (5, 25), "v_range": (70, 100)},
-        MaterialType.VEGETATION: {"h_range": (60, 150), "s_range": (25, 80), "v_range": (20, 80)},
-        MaterialType.SKY: {"h_range": (180, 240), "s_range": (20, 80), "v_range": (60, 100)},
+        MaterialType.STONE: {
+            "h_range": (15, 45),
+            "s_range": (10, 50),
+            "v_range": (30, 80),
+        },
+        MaterialType.GLASS: {
+            "h_range": (180, 220),
+            "s_range": (5, 30),
+            "v_range": (60, 100),
+        },
+        MaterialType.WATER: {
+            "h_range": (180, 220),
+            "s_range": (30, 80),
+            "v_range": (40, 90),
+        },
+        MaterialType.WOOD: {
+            "h_range": (10, 40),
+            "s_range": (30, 70),
+            "v_range": (25, 70),
+        },
+        MaterialType.METAL: {
+            "h_range": (0, 360),
+            "s_range": (0, 20),
+            "v_range": (50, 95),
+        },
+        MaterialType.FABRIC: {
+            "h_range": (0, 360),
+            "s_range": (10, 60),
+            "v_range": (40, 90),
+        },
+        MaterialType.STUCCO: {
+            "h_range": (30, 60),
+            "s_range": (5, 25),
+            "v_range": (70, 100),
+        },
+        MaterialType.VEGETATION: {
+            "h_range": (60, 150),
+            "s_range": (25, 80),
+            "v_range": (20, 80),
+        },
+        MaterialType.SKY: {
+            "h_range": (180, 240),
+            "s_range": (20, 80),
+            "v_range": (60, 100),
+        },
     }
 
     def __init__(self, property_dir: Optional[Path] = None, project_root: Optional[Path] = None):
@@ -543,8 +579,14 @@ class PicachoAnalyzer:
         room_material_boost = {
             RoomType.POOL: {MaterialType.WATER: 1.5, MaterialType.STONE: 1.2},
             RoomType.KITCHEN: {MaterialType.METAL: 1.3, MaterialType.STONE: 1.2},
-            RoomType.PRIMARY_BATHROOM: {MaterialType.STONE: 1.3, MaterialType.GLASS: 1.2},
-            RoomType.PRIMARY_BEDROOM: {MaterialType.FABRIC: 1.3, MaterialType.WOOD: 1.2},
+            RoomType.PRIMARY_BATHROOM: {
+                MaterialType.STONE: 1.3,
+                MaterialType.GLASS: 1.2,
+            },
+            RoomType.PRIMARY_BEDROOM: {
+                MaterialType.FABRIC: 1.3,
+                MaterialType.WOOD: 1.2,
+            },
             RoomType.LIVING_ROOM: {MaterialType.FABRIC: 1.2, MaterialType.WOOD: 1.2},
             RoomType.EXTERIOR: {MaterialType.STUCCO: 1.3, MaterialType.VEGETATION: 1.2},
         }
@@ -575,26 +617,46 @@ class PicachoAnalyzer:
             features.has_floor_to_ceiling_windows = True
             features.has_open_floor_plan = True
             features.ceiling_type = "high_ceiling"
-            features.notable_features = ["open_concept", "natural_light", "luxury_finishes"]
+            features.notable_features = [
+                "open_concept",
+                "natural_light",
+                "luxury_finishes",
+            ]
 
         elif room_type == RoomType.KITCHEN:
             features.has_open_floor_plan = True
             features.lighting_type = "mixed"
-            features.notable_features = ["custom_cabinetry", "stone_counters", "high_end_appliances"]
+            features.notable_features = [
+                "custom_cabinetry",
+                "stone_counters",
+                "high_end_appliances",
+            ]
 
         elif room_type == RoomType.PRIMARY_BATHROOM:
             features.lighting_type = "natural"
-            features.notable_features = ["spa_bathroom", "stone_finishes", "soaking_tub"]
+            features.notable_features = [
+                "spa_bathroom",
+                "stone_finishes",
+                "soaking_tub",
+            ]
 
         elif room_type == RoomType.PRIMARY_BEDROOM:
             features.view_type = "scenic"
             features.ceiling_type = "high_ceiling"
-            features.notable_features = ["panoramic_views", "luxury_finishes", "natural_light"]
+            features.notable_features = [
+                "panoramic_views",
+                "luxury_finishes",
+                "natural_light",
+            ]
 
         elif room_type == RoomType.EXTERIOR:
             features.architectural_style = "contemporary_mediterranean"
             features.view_type = "hillside"
-            features.notable_features = ["montecito_coastal", "landscaped_gardens", "dramatic_entry"]
+            features.notable_features = [
+                "montecito_coastal",
+                "landscaped_gardens",
+                "dramatic_entry",
+            ]
 
         # Wide aspect ratio suggests panoramic or open space
         if aspect_ratio > 1.5:
@@ -649,7 +711,10 @@ class PicachoAnalyzer:
         # Sample center region for speed
         center_h, center_w = h // 2, w // 2
         region_size = min(256, min(h, w) // 2)
-        region = img[center_h - region_size : center_h + region_size, center_w - region_size : center_w + region_size]
+        region = img[
+            center_h - region_size : center_h + region_size,
+            center_w - region_size : center_w + region_size,
+        ]
 
         # Simple convolution approximation
         edges = np.zeros_like(region)

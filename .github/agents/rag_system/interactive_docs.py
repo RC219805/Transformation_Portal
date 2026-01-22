@@ -148,7 +148,13 @@ class InteractiveDocumentationSystem:
         """
         # Default workflow patterns
         if not workflow_patterns:
-            workflow_patterns = ["depth_pipeline", "material_response", "video_grading", "batch_processing", "custom_lut"]
+            workflow_patterns = [
+                "depth_pipeline",
+                "material_response",
+                "video_grading",
+                "batch_processing",
+                "custom_lut",
+            ]
 
         tutorials = []
 
@@ -364,7 +370,12 @@ class InteractiveDocumentationSystem:
         steps = []
 
         # Step 1: Setup
-        steps.append(("Setup and Imports", f"First, import the necessary modules for {workflow_pattern}."))
+        steps.append(
+            (
+                "Setup and Imports",
+                f"First, import the necessary modules for {workflow_pattern}.",
+            )
+        )
 
         # Step 2-N: Based on top results
         for i, result in enumerate(results[:3], 2):

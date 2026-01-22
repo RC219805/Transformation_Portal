@@ -33,7 +33,10 @@ class DA3BenchmarkEvaluator:
     """Main benchmark evaluator for DA3."""
 
     def __init__(
-        self, model_variant: Optional["ModelVariant"] = None, config: Optional[BenchmarkConfig] = None, use_cli: bool = False
+        self,
+        model_variant: Optional["ModelVariant"] = None,
+        config: Optional[BenchmarkConfig] = None,
+        use_cli: bool = False,
     ):
         """
         Initialize evaluator.
@@ -60,7 +63,9 @@ class DA3BenchmarkEvaluator:
             from ..inference import DA3InferenceEngine
 
             self.engine = DA3InferenceEngine(
-                model_variant=model_variant, batch_size=1, device="cuda" if self._has_cuda() else "cpu"
+                model_variant=model_variant,
+                batch_size=1,
+                device="cuda" if self._has_cuda() else "cpu",
             )
         else:
             self.engine = None
@@ -283,7 +288,12 @@ class DA3BenchmarkEvaluator:
 
         # Fuse depth maps
         mesh = fuse_depth_maps(
-            depth_maps, rgb_images, intrinsics, poses, voxel_length=self.config.voxel_length, sdf_trunc=self.config.sdf_trunc
+            depth_maps,
+            rgb_images,
+            intrinsics,
+            poses,
+            voxel_length=self.config.voxel_length,
+            sdf_trunc=self.config.sdf_trunc,
         )
 
         # Clean mesh

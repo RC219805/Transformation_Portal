@@ -72,7 +72,12 @@ print("\n" + "=" * 80)
 print("STEP 2: TESTING SEARCH CAPABILITIES")
 print("=" * 80)
 
-test_queries = ["depth processing pipeline", "Lux Depth V2 module", "material response technology", "video grading workflow"]
+test_queries = [
+    "depth processing pipeline",
+    "Lux Depth V2 module",
+    "material response technology",
+    "video grading workflow",
+]
 
 search_results = {}
 for query in test_queries:

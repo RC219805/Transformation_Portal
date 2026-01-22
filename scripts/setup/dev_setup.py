@@ -214,13 +214,37 @@ Examples:
         """,
     )
 
-    parser.add_argument("--minimal", action="store_true", help="Install only core dependencies (no extras)")
-    parser.add_argument("--with-ml", action="store_true", help="Include ML extras (PyTorch, transformers, etc.)")
-    parser.add_argument("--with-tiff", action="store_true", help="Include TIFF processing extras (tifffile, imagecodecs)")
-    parser.add_argument("--with-dev", action="store_true", help="Include development tools (pytest, flake8, etc.)")
-    parser.add_argument("--with-rag", action="store_true", help="Install RAG system git hooks for incremental indexing")
+    parser.add_argument(
+        "--minimal",
+        action="store_true",
+        help="Install only core dependencies (no extras)",
+    )
+    parser.add_argument(
+        "--with-ml",
+        action="store_true",
+        help="Include ML extras (PyTorch, transformers, etc.)",
+    )
+    parser.add_argument(
+        "--with-tiff",
+        action="store_true",
+        help="Include TIFF processing extras (tifffile, imagecodecs)",
+    )
+    parser.add_argument(
+        "--with-dev",
+        action="store_true",
+        help="Include development tools (pytest, flake8, etc.)",
+    )
+    parser.add_argument(
+        "--with-rag",
+        action="store_true",
+        help="Install RAG system git hooks for incremental indexing",
+    )
     parser.add_argument("--all", action="store_true", help="Install everything (all extras + RAG hooks)")
-    parser.add_argument("--skip-venv", action="store_true", help="Skip virtual environment creation (use current Python)")
+    parser.add_argument(
+        "--skip-venv",
+        action="store_true",
+        help="Skip virtual environment creation (use current Python)",
+    )
 
     options = parser.parse_args()
 

@@ -293,7 +293,10 @@ class PackageAuditor:
 
         try:
             result = subprocess.run(
-                [sys.executable, "-m", "pip", "list", "--format=json"], capture_output=True, text=True, check=True
+                [sys.executable, "-m", "pip", "list", "--format=json"],
+                capture_output=True,
+                text=True,
+                check=True,
             )
             packages = json.loads(result.stdout)
             installed = {pkg["name"].lower(): pkg["version"] for pkg in packages}
@@ -384,7 +387,17 @@ class CodePatternScanner:
 
         for py_file in self.repo_root.rglob("*.py"):
             # Skip certain directories
-            if any(skip in str(py_file) for skip in [".git", "__pycache__", ".venv", "venv", "test_", "_test.py"]):
+            if any(
+                skip in str(py_file)
+                for skip in [
+                    ".git",
+                    "__pycache__",
+                    ".venv",
+                    "venv",
+                    "test_",
+                    "_test.py",
+                ]
+            ):
                 continue
 
             file_findings = self._check_file(py_file)
@@ -610,7 +623,11 @@ def security_guard() -> bool:
     """
     try:
         # Quick check for vulnerable packages
-        result = subprocess.run([sys.executable, "-m", "pip", "show", "basicsr"], capture_output=True, check=False)
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "show", "basicsr"],
+            capture_output=True,
+            check=False,
+        )
         if result.returncode == 0:
             logger.critical("SECURITY VIOLATION: basicsr package is installed!")
             return False

@@ -323,7 +323,11 @@ class LightingConditionDetector:
         return (sky_coverage, color_temp, sky_brightness)
 
     def _classify_time_of_day(
-        self, sky_color_temp: float, sky_brightness: float, dominant_hue: float, warmth: float
+        self,
+        sky_color_temp: float,
+        sky_brightness: float,
+        dominant_hue: float,
+        warmth: float,
     ) -> Tuple[TimeOfDay, float]:
         """Classify time of day based on sky and scene characteristics.
 
@@ -495,7 +499,9 @@ class LightingConditionDetector:
         return warmth
 
     def _detect_shadows(
-        self, rgb: "torch_ops.torch.Tensor", depth_map: Optional["torch_ops.torch.Tensor"]
+        self,
+        rgb: "torch_ops.torch.Tensor",
+        depth_map: Optional["torch_ops.torch.Tensor"],
     ) -> Tuple[bool, Optional[str]]:
         """Detect strong shadows and estimate direction.
 

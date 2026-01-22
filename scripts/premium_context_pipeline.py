@@ -19,14 +19,22 @@ import subprocess
 from pathlib import Path
 from typing import Dict, Optional
 
-from architectural_context_extractor import ArchitecturalContextExtractor, ProjectContext
+from architectural_context_extractor import (
+    ArchitecturalContextExtractor,
+    ProjectContext,
+)
 from context_aware_rendering import ContextAwareRenderingPipeline
 
 
 class PremiumContextAwarePipeline:
     """Ultimate context-aware rendering pipeline."""
 
-    def __init__(self, project_context: ProjectContext, output_dir: Path = None, verbose: bool = True):
+    def __init__(
+        self,
+        project_context: ProjectContext,
+        output_dir: Path = None,
+        verbose: bool = True,
+    ):
         """Initialize premium pipeline."""
         self.context = project_context
         self.output_dir = output_dir or Path("output_premium")
@@ -299,9 +307,27 @@ def main():
 
     parser = argparse.ArgumentParser(description="Premium context-aware architectural rendering pipeline")
     parser.add_argument("image", type=Path, help="Rendering to process")
-    parser.add_argument("--context", "-c", type=Path, required=True, help="Path to extracted context JSON or PDF")
-    parser.add_argument("--output", "-o", type=Path, default=Path("output_premium"), help="Output directory")
-    parser.add_argument("--quality", "-q", choices=["standard", "premium", "ultimate"], default="premium", help="Quality tier")
+    parser.add_argument(
+        "--context",
+        "-c",
+        type=Path,
+        required=True,
+        help="Path to extracted context JSON or PDF",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        default=Path("output_premium"),
+        help="Output directory",
+    )
+    parser.add_argument(
+        "--quality",
+        "-q",
+        choices=["standard", "premium", "ultimate"],
+        default="premium",
+        help="Quality tier",
+    )
     parser.add_argument("--quiet", action="store_true", help="Minimal output")
 
     args = parser.parse_args()

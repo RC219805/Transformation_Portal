@@ -12,7 +12,13 @@ Components:
 - PicachoInference: Production 4K 16-bit TIFF processing
 """
 
-from .picacho_analyzer import PicachoAnalyzer, PropertyReport, MaterialDetection, ColorPalette, ArchitecturalFeatures
+from .picacho_analyzer import (
+    PicachoAnalyzer,
+    PropertyReport,
+    MaterialDetection,
+    ColorPalette,
+    ArchitecturalFeatures,
+)
 from .depth_synthesis import DepthSynthesis, DepthSynthesisConfig, SynthesizedDepth
 from .dataset_generator import DatasetGenerator, DatasetConfig, TrainingSample
 from .picacho_trainer import PicachoTrainer, TrainingConfig, TrainingStage

@@ -5,7 +5,12 @@ from pathlib import Path
 import json
 import time
 
-from src.transformation_portal.core.batch.job import BatchJob, JobItem, JobStatus, BatchProcessor
+from src.transformation_portal.core.batch.job import (
+    BatchJob,
+    JobItem,
+    JobStatus,
+    BatchProcessor,
+)
 
 
 def test_job_item_creation():
@@ -20,7 +25,12 @@ def test_job_item_creation():
 
 def test_job_item_to_dict():
     """Test converting job item to dict."""
-    item = JobItem(input_path="input.jpg", output_path="output.jpg", status=JobStatus.COMPLETED, duration_ms=123.4)
+    item = JobItem(
+        input_path="input.jpg",
+        output_path="output.jpg",
+        status=JobStatus.COMPLETED,
+        duration_ms=123.4,
+    )
 
     data = item.to_dict()
 
@@ -52,7 +62,12 @@ def test_batch_job_creation(tmp_path):
     """Test creating batch job."""
     items = [JobItem("input1.jpg", "output1.jpg"), JobItem("input2.jpg", "output2.jpg")]
 
-    job = BatchJob(job_id="test_job", items=items, checkpoint_path=tmp_path / "job.json", created_at="2025-01-01T00:00:00Z")
+    job = BatchJob(
+        job_id="test_job",
+        items=items,
+        checkpoint_path=tmp_path / "job.json",
+        created_at="2025-01-01T00:00:00Z",
+    )
 
     assert job.job_id == "test_job"
     assert len(job.items) == 2
@@ -60,11 +75,19 @@ def test_batch_job_creation(tmp_path):
 
 def test_batch_job_save_load_checkpoint(tmp_path):
     """Test saving and loading checkpoint."""
-    items = [JobItem("input1.jpg", "output1.jpg"), JobItem("input2.jpg", "output2.jpg", status=JobStatus.COMPLETED)]
+    items = [
+        JobItem("input1.jpg", "output1.jpg"),
+        JobItem("input2.jpg", "output2.jpg", status=JobStatus.COMPLETED),
+    ]
 
     checkpoint_path = tmp_path / "job.json"
 
-    job = BatchJob(job_id="test_job", items=items, checkpoint_path=checkpoint_path, created_at="2025-01-01T00:00:00Z")
+    job = BatchJob(
+        job_id="test_job",
+        items=items,
+        checkpoint_path=checkpoint_path,
+        created_at="2025-01-01T00:00:00Z",
+    )
 
     # Save checkpoint
     job.save_checkpoint()
@@ -86,7 +109,12 @@ def test_batch_job_get_pending_items():
         JobItem("input3.jpg", "output3.jpg", status=JobStatus.PENDING),
     ]
 
-    job = BatchJob(job_id="test", items=items, checkpoint_path=Path("test.json"), created_at="2025-01-01T00:00:00Z")
+    job = BatchJob(
+        job_id="test",
+        items=items,
+        checkpoint_path=Path("test.json"),
+        created_at="2025-01-01T00:00:00Z",
+    )
 
     pending = job.get_pending_items()
     assert len(pending) == 2
@@ -101,7 +129,12 @@ def test_batch_job_get_failed_items():
         JobItem("input3.jpg", "output3.jpg", status=JobStatus.FAILED),
     ]
 
-    job = BatchJob(job_id="test", items=items, checkpoint_path=Path("test.json"), created_at="2025-01-01T00:00:00Z")
+    job = BatchJob(
+        job_id="test",
+        items=items,
+        checkpoint_path=Path("test.json"),
+        created_at="2025-01-01T00:00:00Z",
+    )
 
     failed = job.get_failed_items()
     assert len(failed) == 2
@@ -111,7 +144,12 @@ def test_batch_job_mark_completed(tmp_path):
     """Test marking item as completed."""
     item = JobItem("input.jpg", "output.jpg")
 
-    job = BatchJob(job_id="test", items=[item], checkpoint_path=tmp_path / "job.json", created_at="2025-01-01T00:00:00Z")
+    job = BatchJob(
+        job_id="test",
+        items=[item],
+        checkpoint_path=tmp_path / "job.json",
+        created_at="2025-01-01T00:00:00Z",
+    )
 
     job.mark_completed(item, duration_ms=123.4)
 
@@ -124,7 +162,12 @@ def test_batch_job_mark_failed(tmp_path):
     """Test marking item as failed."""
     item = JobItem("input.jpg", "output.jpg")
 
-    job = BatchJob(job_id="test", items=[item], checkpoint_path=tmp_path / "job.json", created_at="2025-01-01T00:00:00Z")
+    job = BatchJob(
+        job_id="test",
+        items=[item],
+        checkpoint_path=tmp_path / "job.json",
+        created_at="2025-01-01T00:00:00Z",
+    )
 
     job.mark_failed(item, error="Processing failed")
 
@@ -140,7 +183,12 @@ def test_batch_job_is_complete():
         JobItem("input3.jpg", "output3.jpg", status=JobStatus.SKIPPED),
     ]
 
-    job = BatchJob(job_id="test", items=items, checkpoint_path=Path("test.json"), created_at="2025-01-01T00:00:00Z")
+    job = BatchJob(
+        job_id="test",
+        items=items,
+        checkpoint_path=Path("test.json"),
+        created_at="2025-01-01T00:00:00Z",
+    )
 
     assert job.is_complete()
 
@@ -158,7 +206,12 @@ def test_batch_job_get_stats():
         JobItem("input4.jpg", "output4.jpg", status=JobStatus.PENDING),
     ]
 
-    job = BatchJob(job_id="test", items=items, checkpoint_path=Path("test.json"), created_at="2025-01-01T00:00:00Z")
+    job = BatchJob(
+        job_id="test",
+        items=items,
+        checkpoint_path=Path("test.json"),
+        created_at="2025-01-01T00:00:00Z",
+    )
 
     stats = job.get_stats()
 
@@ -294,7 +347,11 @@ def test_batch_processor_skip_existing(tmp_path):
     def processor(path):
         raise RuntimeError("Should not be called")
 
-    batch_processor = BatchProcessor(processor_fn=processor, checkpoint_dir=tmp_path / "checkpoints", skip_existing=True)
+    batch_processor = BatchProcessor(
+        processor_fn=processor,
+        checkpoint_dir=tmp_path / "checkpoints",
+        skip_existing=True,
+    )
 
     job = batch_processor.process_batch([input_file], output_dir)
 
@@ -326,7 +383,12 @@ def test_batch_processor_retry_failed(tmp_path):
     checkpoint_path = tmp_path / "checkpoints" / "job.json"
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
 
-    job = BatchJob(job_id="test", items=items, checkpoint_path=checkpoint_path, created_at="2025-01-01T00:00:00Z")
+    job = BatchJob(
+        job_id="test",
+        items=items,
+        checkpoint_path=checkpoint_path,
+        created_at="2025-01-01T00:00:00Z",
+    )
     job.save_checkpoint()
 
     # Retry with working processor

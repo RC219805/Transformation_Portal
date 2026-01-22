@@ -257,7 +257,11 @@ class MaterialDetector:
         return specular
 
     def _detect_material(
-        self, hsv_img: np.ndarray, texture_map: np.ndarray, specular_map: np.ndarray, material_type: MaterialType
+        self,
+        hsv_img: np.ndarray,
+        texture_map: np.ndarray,
+        specular_map: np.ndarray,
+        material_type: MaterialType,
     ) -> np.ndarray:
         """
         Detect specific material type and return confidence map.
@@ -308,7 +312,12 @@ class MaterialDetector:
 
         return confidence
 
-    def generate_heatmap(self, result: MaterialDetectionResult, material_type: MaterialType, output_path: Path):
+    def generate_heatmap(
+        self,
+        result: MaterialDetectionResult,
+        material_type: MaterialType,
+        output_path: Path,
+    ):
         """
         Generate confidence heatmap overlay for a material type.
 
@@ -402,7 +411,11 @@ class MaterialDetector:
         print(f"✓ Saved report: {output_path}")
 
     def enhance_with_confidence(
-        self, image: np.ndarray, result: MaterialDetectionResult, enhancement_func: Callable, base_strength: float = 1.0
+        self,
+        image: np.ndarray,
+        result: MaterialDetectionResult,
+        enhancement_func: Callable,
+        base_strength: float = 1.0,
     ) -> np.ndarray:
         """
         Apply enhancement with strength modulated by material confidence.
@@ -442,12 +455,27 @@ def main():
     parser = argparse.ArgumentParser(description="Material Detection with Confidence Scores")
     parser.add_argument("input", type=Path, help="Input image path")
     parser.add_argument(
-        "--output-dir", type=Path, default=Path("output_material_detection"), help="Output directory for results"
+        "--output-dir",
+        type=Path,
+        default=Path("output_material_detection"),
+        help="Output directory for results",
     )
-    parser.add_argument("--min-confidence", type=float, default=0.3, help="Minimum confidence threshold (0-1)")
-    parser.add_argument("--generate-heatmaps", action="store_true", help="Generate heatmap overlays for all materials")
     parser.add_argument(
-        "--materials", nargs="+", choices=[m.value for m in MaterialType], help="Specific materials to detect (default: all)"
+        "--min-confidence",
+        type=float,
+        default=0.3,
+        help="Minimum confidence threshold (0-1)",
+    )
+    parser.add_argument(
+        "--generate-heatmaps",
+        action="store_true",
+        help="Generate heatmap overlays for all materials",
+    )
+    parser.add_argument(
+        "--materials",
+        nargs="+",
+        choices=[m.value for m in MaterialType],
+        help="Specific materials to detect (default: all)",
     )
 
     args = parser.parse_args()

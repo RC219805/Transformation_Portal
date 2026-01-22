@@ -319,7 +319,7 @@ class ResourceMonitor:
         if metrics.mps_available and metrics.mps_allocated_gb is not None:
             summary["mps"] = {
                 "allocated_gb": f"{metrics.mps_allocated_gb:.1f}",
-                "reserved_gb": f"{metrics.mps_reserved_gb:.1f}" if metrics.mps_reserved_gb else "N/A",
+                "reserved_gb": (f"{metrics.mps_reserved_gb:.1f}" if metrics.mps_reserved_gb else "N/A"),
             }
 
         if metrics.disk_metrics:

@@ -163,7 +163,10 @@ def rank_materials(material_stats: Dict[str, Dict]) -> List[tuple]:
 
 
 def generate_markdown_report(
-    histograms: Dict, material_stats: Dict[str, Dict], ranked: List[tuple], output_path: Path
+    histograms: Dict,
+    material_stats: Dict[str, Dict],
+    ranked: List[tuple],
+    output_path: Path,
 ) -> None:
     """Generate human-readable markdown report."""
     lines = []

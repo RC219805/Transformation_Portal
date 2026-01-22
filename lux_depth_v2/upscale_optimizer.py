@@ -70,7 +70,13 @@ class TileBasedUpscaler:
         )
     """
 
-    def __init__(self, backend: str = "torch", tile_size: int = 512, overlap: int = 64, device: str = "auto"):
+    def __init__(
+        self,
+        backend: str = "torch",
+        tile_size: int = 512,
+        overlap: int = 64,
+        device: str = "auto",
+    ):
         """
         Initialize tile-based upscaler.
 
@@ -132,13 +138,20 @@ class TileBasedUpscaler:
             # Write final
             from . import io_utils
 
-            io_utils.write_tiff(final, output_path, metadata={"compression": compression} if compression else None)
+            io_utils.write_tiff(
+                final,
+                output_path,
+                metadata={"compression": compression} if compression else None,
+            )
 
             return output_path
 
         # Tile-based upscaling with streaming
         return self._upscale_tiled_streaming(
-            image=image, scale_factor=scale_factor, output_path=output_path, compression=compression
+            image=image,
+            scale_factor=scale_factor,
+            output_path=output_path,
+            compression=compression,
         )
 
     def _upscale_stage(self, image: np.ndarray, scale_factor: int) -> np.ndarray:
@@ -164,7 +177,11 @@ class TileBasedUpscaler:
         return upscaled
 
     def _upscale_tiled_streaming(
-        self, image: np.ndarray, scale_factor: int, output_path: Path, compression: Optional[str] = None
+        self,
+        image: np.ndarray,
+        scale_factor: int,
+        output_path: Path,
+        compression: Optional[str] = None,
     ) -> Path:
         """
         Tile-based upscaling with streaming write.
@@ -183,7 +200,11 @@ class TileBasedUpscaler:
         final_w = w * scale_factor
 
         # Create streaming writer
-        writer = StreamingUpscaleWriter(output_path=output_path, final_dimensions=(final_w, final_h), compression=compression)
+        writer = StreamingUpscaleWriter(
+            output_path=output_path,
+            final_dimensions=(final_w, final_h),
+            compression=compression,
+        )
 
         # Calculate tiles
         tiles = self._calculate_tiles(w, h)
@@ -202,7 +223,11 @@ class TileBasedUpscaler:
             weight = self._create_weight_map(upscaled_tile.shape[:2], overlap=self.overlap * scale_factor)
 
             # Write to output
-            writer.write_tile(tile=upscaled_tile, position=(x * scale_factor, y * scale_factor), weight=weight)
+            writer.write_tile(
+                tile=upscaled_tile,
+                position=(x * scale_factor, y * scale_factor),
+                weight=weight,
+            )
 
             if (i + 1) % 10 == 0:
                 logger.info(f"Processed {i + 1}/{len(tiles)} tiles")

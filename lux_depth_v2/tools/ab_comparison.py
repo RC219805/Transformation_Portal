@@ -264,7 +264,12 @@ def run_enhanced_inference(rgb: np.ndarray) -> Tuple[np.ndarray, float]:
     return depth, elapsed_ms
 
 
-def save_comparison_visualization(rgb: np.ndarray, baseline_depth: np.ndarray, enhanced_depth: np.ndarray, output_path: Path):
+def save_comparison_visualization(
+    rgb: np.ndarray,
+    baseline_depth: np.ndarray,
+    enhanced_depth: np.ndarray,
+    output_path: Path,
+):
     """Save side-by-side comparison visualization."""
     if not CV2_AVAILABLE:
         logger.warning("OpenCV required for visualization")
@@ -290,8 +295,24 @@ def save_comparison_visualization(rgb: np.ndarray, baseline_depth: np.ndarray, e
     # Add labels
     font = cv2.FONT_HERSHEY_SIMPLEX
     cv2.putText(comparison, "RGB", (10, 30), font, 1, (255, 255, 255), 2)
-    cv2.putText(comparison, "Baseline (518px)", (display_width + 10, 30), font, 1, (255, 255, 255), 2)
-    cv2.putText(comparison, "Enhanced (Tiled)", (display_width * 2 + 10, 30), font, 1, (255, 255, 255), 2)
+    cv2.putText(
+        comparison,
+        "Baseline (518px)",
+        (display_width + 10, 30),
+        font,
+        1,
+        (255, 255, 255),
+        2,
+    )
+    cv2.putText(
+        comparison,
+        "Enhanced (Tiled)",
+        (display_width * 2 + 10, 30),
+        font,
+        1,
+        (255, 255, 255),
+        2,
+    )
 
     # Save
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -300,7 +321,8 @@ def save_comparison_visualization(rgb: np.ndarray, baseline_depth: np.ndarray, e
 
 
 def run_ab_comparison(
-    rgb: Optional[np.ndarray] = None, output_dir: Path = Path("lux_depth_v2/ab_comparison_results")
+    rgb: Optional[np.ndarray] = None,
+    output_dir: Path = Path("lux_depth_v2/ab_comparison_results"),
 ) -> ComparisonResult:
     """
     Run A/B comparison between baseline and enhanced pipelines.
@@ -370,8 +392,18 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="A/B comparison of depth pipelines")
-    parser.add_argument("--input", type=Path, default=None, help="Input RGB image (or None for synthetic pattern)")
-    parser.add_argument("--output-dir", type=Path, default=Path("lux_depth_v2/ab_comparison_results"), help="Output directory")
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=None,
+        help="Input RGB image (or None for synthetic pattern)",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("lux_depth_v2/ab_comparison_results"),
+        help="Output directory",
+    )
 
     args = parser.parse_args()
 

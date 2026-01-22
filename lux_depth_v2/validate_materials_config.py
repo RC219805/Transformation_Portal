@@ -58,7 +58,10 @@ def validate_materials_config():
 
     # Check segmentation config
     print("\n4. Validating Segmentation Configuration...")
-    assert cfg.segmentation.backend in ["segformer", "auto"], f"FAIL: Invalid segmentation backend: {cfg.segmentation.backend}"
+    assert cfg.segmentation.backend in [
+        "segformer",
+        "auto",
+    ], f"FAIL: Invalid segmentation backend: {cfg.segmentation.backend}"
     print(f"   ✓ Backend: {cfg.segmentation.backend}")
     print(f"   ✓ Input size: {cfg.segmentation.input_long_side}px")
     print(f"   ✓ Allow downloads: {cfg.segmentation.allow_downloads}")
@@ -100,8 +103,8 @@ def validate_materials_config():
     report_materials_v2 = {
         "enabled": bool(cfg.materials_v2 and cfg.materials_v2.enabled),
         "backend": cfg.materials_v2.backend if cfg.materials_v2 else None,
-        "confidence_threshold": cfg.materials_v2.confidence.confidence_threshold if cfg.materials_v2 else None,
-        "material_thresholds": cfg.materials_v2.confidence.material_thresholds if cfg.materials_v2 else None,
+        "confidence_threshold": (cfg.materials_v2.confidence.confidence_threshold if cfg.materials_v2 else None),
+        "material_thresholds": (cfg.materials_v2.confidence.material_thresholds if cfg.materials_v2 else None),
     }
 
     report_materials_v3 = {

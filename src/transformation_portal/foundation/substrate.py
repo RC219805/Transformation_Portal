@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SubstrateConfig:
     """Configuration for computational substrate."""
+
     # Device configuration
     prefer_ane: bool = True
     memory_fraction: float = 0.85
@@ -129,7 +130,7 @@ class ComputationalSubstrate:
         # Initialize device manager
         self.device_manager = DeviceManager(
             prefer_ane=self.config.prefer_ane,
-            memory_fraction=self.config.memory_fraction
+            memory_fraction=self.config.memory_fraction,
         )
         self.device_info = self.device_manager.detect_devices()
         self.device = self.device_info.primary_device
@@ -163,13 +164,12 @@ class ComputationalSubstrate:
         backend_type = self._device_to_backend(self.device)
         self.hardware_abstraction = HardwareAbstraction(
             primary_backend=backend_type,
-            enable_auto_fallback=self.config.enable_auto_fallback
+            enable_auto_fallback=self.config.enable_auto_fallback,
         )
 
         # Initialize performance monitor
         self.performance_monitor = PerformanceMonitor(
-            device=self.device,
-            enable_memory_tracking=self.config.enable_profiling
+            device=self.device, enable_memory_tracking=self.config.enable_profiling
         )
 
         if not self.config.enable_profiling:
@@ -223,7 +223,7 @@ class ComputationalSubstrate:
         shape: tuple,
         dtype: Optional[torch.dtype] = None,
         requires_grad: bool = False,
-        tag: Optional[str] = None
+        tag: Optional[str] = None,
     ) -> Tensor:
         """
         Allocate tensor with optimal memory patterns.
@@ -243,7 +243,7 @@ class ComputationalSubstrate:
                 shape=shape,
                 dtype=dtype or self.tensor_processor._get_dtype(),
                 tag=tag,
-                use_pool=True
+                use_pool=True,
             )
 
             # Configure gradients
@@ -253,10 +253,7 @@ class ComputationalSubstrate:
             return tensor
 
     def process_batch(
-        self,
-        tensors: list,
-        operation,
-        batch_size: Optional[int] = None
+        self, tensors: list, operation, batch_size: Optional[int] = None
     ) -> list:
         """
         Process batch of tensors with optimal batching.
@@ -273,7 +270,7 @@ class ComputationalSubstrate:
             return self.tensor_processor.batch_process(
                 tensors,
                 operation,
-                batch_size or self.device_info.capabilities.recommended_batch_size
+                batch_size or self.device_info.capabilities.recommended_batch_size,
             )
 
     def to_device(self, tensor_or_module):
@@ -301,9 +298,10 @@ class ComputationalSubstrate:
             Operation result
         """
         return self.hardware_abstraction.execute_with_fallback(
-            operation, *args,
+            operation,
+            *args,
             operation_name=getattr(operation, "__name__", "operation"),
-            **kwargs
+            **kwargs,
         )
 
     # ========================================================================
@@ -355,7 +353,7 @@ class ComputationalSubstrate:
                 "amp_enabled": self.config.enable_amp,
                 "allocation_strategy": self.config.allocation_strategy.value,
                 "profiling_enabled": self.config.enable_profiling,
-            }
+            },
         }
 
     # ========================================================================
@@ -403,9 +401,10 @@ class ComputationalSubstrate:
             Benchmark statistics
         """
         return self.performance_monitor.benchmark(
-            operation, *args,
+            operation,
+            *args,
             operation_name=getattr(operation, "__name__", "operation"),
-            **kwargs
+            **kwargs,
         )
 
     # ========================================================================
@@ -488,24 +487,28 @@ class ComputationalSubstrate:
 
         # Device info
         cap = self.device_info.capabilities
-        lines.extend([
-            f"Device: {cap.device_name}",
-            f"Type: {cap.device_type.value.upper()}",
-            f"Memory: {cap.available_memory_gb:.1f} GB available / {cap.total_memory_gb:.1f} GB total",
-            f"Cores: {cap.performance_cores}P + {cap.efficiency_cores}E (CPU), {cap.gpu_cores} GPU",
-            f"Neural Engine: {'Available' if cap.neural_engine_available else 'Not Available'}",
-        ])
+        lines.extend(
+            [
+                f"Device: {cap.device_name}",
+                f"Type: {cap.device_type.value.upper()}",
+                f"Memory: {cap.available_memory_gb:.1f} GB available / {cap.total_memory_gb:.1f} GB total",
+                f"Cores: {cap.performance_cores}P + {cap.efficiency_cores}E (CPU), {cap.gpu_cores} GPU",
+                f"Neural Engine: {'Available' if cap.neural_engine_available else 'Not Available'}",
+            ]
+        )
 
         # Configuration
-        lines.extend([
-            "",
-            "Configuration:",
-            f"  Precision: {self.config.precision.value}",
-            f"  Mixed Precision: {self.config.enable_amp}",
-            f"  Memory Strategy: {self.config.allocation_strategy.value}",
-            f"  Batch Size: {cap.recommended_batch_size}",
-            f"  Profiling: {self.config.enable_profiling}",
-        ])
+        lines.extend(
+            [
+                "",
+                "Configuration:",
+                f"  Precision: {self.config.precision.value}",
+                f"  Mixed Precision: {self.config.enable_amp}",
+                f"  Memory Strategy: {self.config.allocation_strategy.value}",
+                f"  Batch Size: {cap.recommended_batch_size}",
+                f"  Profiling: {self.config.enable_profiling}",
+            ]
+        )
 
         lines.append("=" * 70)
         return "\n".join(lines)

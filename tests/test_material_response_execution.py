@@ -79,7 +79,11 @@ class TestMaterialResponseStage:
         """Test that MaterialResponseStage can be initialized."""
         from transformation_portal.streaming.stages import MaterialResponseStage
 
-        stage = MaterialResponseStage(materials=["wood", "metal", "glass", "textile"], intensity=1.0, use_depth=True)
+        stage = MaterialResponseStage(
+            materials=["wood", "metal", "glass", "textile"],
+            intensity=1.0,
+            use_depth=True,
+        )
 
         assert stage._materials == ["wood", "metal", "glass", "textile"]
         assert stage._intensity == 1.0
@@ -98,7 +102,10 @@ class TestMaterialResponseStage:
 
     def test_enhance_preserves_image_shape(self, synthetic_rgb_image):
         """Test that enhancement preserves image dimensions."""
-        from transformation_portal.streaming.stages import MaterialResponseStage, ImageData
+        from transformation_portal.streaming.stages import (
+            MaterialResponseStage,
+            ImageData,
+        )
 
         stage = MaterialResponseStage(intensity=1.0)
         image_data = ImageData(array=synthetic_rgb_image, path=Path("test.jpg"), metadata={})
@@ -109,7 +116,10 @@ class TestMaterialResponseStage:
 
     def test_enhance_output_in_valid_range(self, synthetic_rgb_image):
         """Test that output values are clamped to [0, 1]."""
-        from transformation_portal.streaming.stages import MaterialResponseStage, ImageData
+        from transformation_portal.streaming.stages import (
+            MaterialResponseStage,
+            ImageData,
+        )
 
         stage = MaterialResponseStage(intensity=1.0)
         image_data = ImageData(array=synthetic_rgb_image, path=Path("test.jpg"), metadata={})
@@ -121,7 +131,10 @@ class TestMaterialResponseStage:
 
     def test_enhance_sets_metadata(self, synthetic_rgb_image):
         """Test that enhancement sets appropriate metadata."""
-        from transformation_portal.streaming.stages import MaterialResponseStage, ImageData
+        from transformation_portal.streaming.stages import (
+            MaterialResponseStage,
+            ImageData,
+        )
 
         stage = MaterialResponseStage(intensity=0.8)
         image_data = ImageData(array=synthetic_rgb_image, path=Path("test.jpg"), metadata={})
@@ -135,7 +148,10 @@ class TestMaterialResponseStage:
 
     def test_highlight_energy_conservation(self, synthetic_rgb_image):
         """Test that highlights are not over-enhanced (energy conservation)."""
-        from transformation_portal.streaming.stages import MaterialResponseStage, ImageData
+        from transformation_portal.streaming.stages import (
+            MaterialResponseStage,
+            ImageData,
+        )
 
         stage = MaterialResponseStage(intensity=1.0)
 
@@ -153,7 +169,10 @@ class TestMaterialResponseStage:
 
     def test_midtone_texture_preserved(self, synthetic_rgb_image):
         """Test that midtone texture detail is preserved."""
-        from transformation_portal.streaming.stages import MaterialResponseStage, ImageData
+        from transformation_portal.streaming.stages import (
+            MaterialResponseStage,
+            ImageData,
+        )
 
         stage = MaterialResponseStage(intensity=1.0)
 
@@ -175,7 +194,10 @@ class TestMaterialResponseStage:
 
     def test_intensity_scaling(self, synthetic_rgb_image):
         """Test that intensity parameter scales enhancement effect."""
-        from transformation_portal.streaming.stages import MaterialResponseStage, ImageData
+        from transformation_portal.streaming.stages import (
+            MaterialResponseStage,
+            ImageData,
+        )
 
         # Low intensity
         stage_low = MaterialResponseStage(intensity=0.2)
@@ -196,7 +218,10 @@ class TestMaterialResponseStage:
 
     def test_handles_unnormalized_input(self):
         """Test that input values > 1.0 are properly normalized."""
-        from transformation_portal.streaming.stages import MaterialResponseStage, ImageData
+        from transformation_portal.streaming.stages import (
+            MaterialResponseStage,
+            ImageData,
+        )
 
         stage = MaterialResponseStage(intensity=1.0)
 
@@ -213,7 +238,10 @@ class TestMaterialResponseStage:
 
     def test_depth_aware_processing(self, synthetic_rgb_image):
         """Test that depth map influences enhancement."""
-        from transformation_portal.streaming.stages import MaterialResponseStage, ImageData
+        from transformation_portal.streaming.stages import (
+            MaterialResponseStage,
+            ImageData,
+        )
 
         stage = MaterialResponseStage(intensity=1.0, use_depth=True)
 
@@ -224,7 +252,10 @@ class TestMaterialResponseStage:
 
         # Process with depth
         image_data_with_depth = ImageData(
-            array=synthetic_rgb_image.copy(), path=Path("test.jpg"), depth_map=depth_map, metadata={}
+            array=synthetic_rgb_image.copy(),
+            path=Path("test.jpg"),
+            depth_map=depth_map,
+            metadata={},
         )
         result_with_depth = stage._enhance_sync(image_data_with_depth)
 
@@ -249,7 +280,9 @@ class TestUnifiedLuxuryPipelineMaterialResponse:
         )
 
         config = UnifiedPipelineConfig(
-            scene_type=SceneType.AUTO, enable_material_response=True, output_dir=Path("/tmp/test_output")
+            scene_type=SceneType.AUTO,
+            enable_material_response=True,
+            output_dir=Path("/tmp/test_output"),
         )
         pipeline = UnifiedLuxuryPipeline(config)
 
@@ -272,7 +305,9 @@ class TestUnifiedLuxuryPipelineMaterialResponse:
         )
 
         config = UnifiedPipelineConfig(
-            scene_type=SceneType.AUTO, enable_material_response=True, output_dir=Path("/tmp/test_output")
+            scene_type=SceneType.AUTO,
+            enable_material_response=True,
+            output_dir=Path("/tmp/test_output"),
         )
         pipeline = UnifiedLuxuryPipeline(config)
 
@@ -293,7 +328,9 @@ class TestUnifiedLuxuryPipelineMaterialResponse:
         )
 
         config = UnifiedPipelineConfig(
-            scene_type=SceneType.AUTO, enable_material_response=True, output_dir=Path("/tmp/test_output")
+            scene_type=SceneType.AUTO,
+            enable_material_response=True,
+            output_dir=Path("/tmp/test_output"),
         )
         pipeline = UnifiedLuxuryPipeline(config)
 
@@ -322,7 +359,9 @@ class TestUnifiedLuxuryPipelineMaterialResponse:
         )
 
         config = UnifiedPipelineConfig(
-            scene_type=SceneType.AUTO, enable_material_response=True, output_dir=Path("/tmp/test_output")
+            scene_type=SceneType.AUTO,
+            enable_material_response=True,
+            output_dir=Path("/tmp/test_output"),
         )
         pipeline = UnifiedLuxuryPipeline(config)
 
@@ -347,7 +386,10 @@ class TestMaterialDetection:
 
     def test_wood_detection_warm_tones(self, synthetic_rgb_image):
         """Test that warm tones in floor region are detected as wood."""
-        from transformation_portal.streaming.stages import MaterialResponseStage, ImageData
+        from transformation_portal.streaming.stages import (
+            MaterialResponseStage,
+            ImageData,
+        )
 
         stage = MaterialResponseStage(materials=["wood"], intensity=1.0)
 
@@ -371,7 +413,10 @@ class TestMaterialDetection:
 
     def test_metal_detection_neutral_high_contrast(self, metal_like_region):
         """Test that neutral high-contrast regions are detected as metal."""
-        from transformation_portal.streaming.stages import MaterialResponseStage, ImageData
+        from transformation_portal.streaming.stages import (
+            MaterialResponseStage,
+            ImageData,
+        )
 
         stage = MaterialResponseStage(materials=["metal"], intensity=1.0)
 
@@ -392,7 +437,10 @@ class TestTenetCompliance:
         Tenet 1: Respect energy conservation in highlights.
         Verify that specular highlights maintain believable sheen without clipping.
         """
-        from transformation_portal.streaming.stages import MaterialResponseStage, ImageData
+        from transformation_portal.streaming.stages import (
+            MaterialResponseStage,
+            ImageData,
+        )
 
         stage = MaterialResponseStage(intensity=1.0)
 
@@ -415,7 +463,10 @@ class TestTenetCompliance:
         Tenet 2: Preserve midtone texture.
         Verify that organic materials retain tactile, dimensional texture.
         """
-        from transformation_portal.streaming.stages import MaterialResponseStage, ImageData
+        from transformation_portal.streaming.stages import (
+            MaterialResponseStage,
+            ImageData,
+        )
 
         stage = MaterialResponseStage(intensity=1.0)
 
@@ -440,7 +491,10 @@ class TestTenetCompliance:
         Tenet 3: Blend transitions between materials.
         Verify smooth, authored transitions between adjacent materials.
         """
-        from transformation_portal.streaming.stages import MaterialResponseStage, ImageData
+        from transformation_portal.streaming.stages import (
+            MaterialResponseStage,
+            ImageData,
+        )
 
         stage = MaterialResponseStage(intensity=1.0)
 

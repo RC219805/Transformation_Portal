@@ -19,7 +19,11 @@ def test_device_detector():
 
     assert device_info is not None
     assert device_info.capabilities is not None
-    assert device_info.capabilities.device_type in [DeviceType.CPU, DeviceType.CUDA, DeviceType.MPS]
+    assert device_info.capabilities.device_type in [
+        DeviceType.CPU,
+        DeviceType.CUDA,
+        DeviceType.MPS,
+    ]
 
 
 def test_device_detector_caching():
@@ -124,7 +128,10 @@ def test_calculate_safe_batch_size():
     """Test batch size calculation."""
     # 16GB available, 4K images
     batch_size = calculate_safe_batch_size(
-        image_width=3840, image_height=2160, available_memory_gb=16.0, memory_reserve_gb=2.0
+        image_width=3840,
+        image_height=2160,
+        available_memory_gb=16.0,
+        memory_reserve_gb=2.0,
     )
 
     assert batch_size >= 1
@@ -135,7 +142,12 @@ def test_calculate_safe_batch_size():
 def test_calculate_safe_batch_size_low_memory():
     """Test batch size with low memory."""
     # Only 2GB available
-    batch_size = calculate_safe_batch_size(image_width=7680, image_height=4320, available_memory_gb=2.0, memory_reserve_gb=0.5)
+    batch_size = calculate_safe_batch_size(
+        image_width=7680,
+        image_height=4320,
+        available_memory_gb=2.0,
+        memory_reserve_gb=0.5,
+    )
 
     # Should still return at least 1
     assert batch_size >= 1

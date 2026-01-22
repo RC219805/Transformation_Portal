@@ -34,7 +34,10 @@ import pytest
 from lux_depth_v2 import torch_ops
 
 if not torch_ops.TORCH_AVAILABLE:
-    pytest.skip("PyTorch not installed; skipping V2 throughput performance tests.", allow_module_level=True)
+    pytest.skip(
+        "PyTorch not installed; skipping V2 throughput performance tests.",
+        allow_module_level=True,
+    )
 
 # Skip module if Pillow not available
 PIL = pytest.importorskip("PIL", reason="Pillow not installed")
@@ -288,7 +291,11 @@ class TestThroughputPerformance:
         """
         # Run throughput measurement
         metrics = measure_batch_throughput(
-            images=synthetic_test_images, config=pipeline_config_max, tmp_path=tmp_path, batch_tag="max_quality", warmup=1
+            images=synthetic_test_images,
+            config=pipeline_config_max,
+            tmp_path=tmp_path,
+            batch_tag="max_quality",
+            warmup=1,
         )
 
         # Save results for baseline comparison

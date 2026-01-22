@@ -15,10 +15,13 @@ from scipy.ndimage import gaussian_filter, sobel
 
 try:
     import cv2
+
     CV2_AVAILABLE = True
 except ImportError:
     CV2_AVAILABLE = False
-    logging.warning("cv2 (opencv-python) not available. Some depth processing features will be limited.")
+    logging.warning(
+        "cv2 (opencv-python) not available. Some depth processing features will be limited."
+    )
 
 from .base import DepthProcessorMixin
 
@@ -130,6 +133,7 @@ class DepthAwareDenoise(DepthProcessorMixin):
         else:
             # Fallback: use scipy's binary_dilation
             from scipy.ndimage import binary_dilation
+
             edge_map = binary_dilation(edge_map > 0, iterations=1).astype(np.float32)
 
         return edge_map
@@ -160,7 +164,9 @@ class DepthAwareDenoise(DepthProcessorMixin):
         # Compute adaptive sigma based on depth
         # Closer objects (low depth) get less smoothing
         depth_normalized = (depth - depth.min()) / (depth.max() - depth.min() + 1e-8)
-        _adaptive_sigma = self.sigma_spatial * (0.5 + 0.5 * depth_normalized)  # noqa: F841
+        _adaptive_sigma = self.sigma_spatial * (
+            0.5 + 0.5 * depth_normalized
+        )  # noqa: F841
 
         # Apply bilateral filter
         if CV2_AVAILABLE:
@@ -178,8 +184,12 @@ class DepthAwareDenoise(DepthProcessorMixin):
             )
         else:
             # Fallback: use Gaussian filter (less sophisticated but works)
-            logger.warning("cv2 not available, using Gaussian filter instead of bilateral")
-            filtered = gaussian_filter(image_8bit.astype(np.float32), sigma=self.sigma_spatial).astype(np.uint8)
+            logger.warning(
+                "cv2 not available, using Gaussian filter instead of bilateral"
+            )
+            filtered = gaussian_filter(
+                image_8bit.astype(np.float32), sigma=self.sigma_spatial
+            ).astype(np.uint8)
 
         # Convert back to float
         if image.max() <= 1.0:
@@ -214,20 +224,17 @@ class DepthAwareDenoise(DepthProcessorMixin):
         if original.ndim == 3:
             blend_weight = blend_weight[..., None]
 
-        result = (
-            original * blend_weight +
-            filtered * (1 - blend_weight)
-        )
+        result = original * blend_weight + filtered * (1 - blend_weight)
 
         return result
 
     def _get_config_params(self) -> dict:
         """Get configuration parameters that can be overridden."""
         return {
-            'sigma_spatial': self.sigma_spatial,
-            'sigma_range': self.sigma_range,
-            'edge_threshold': self.edge_threshold,
-            'preserve_strength': self.preserve_strength,
+            "sigma_spatial": self.sigma_spatial,
+            "sigma_range": self.sigma_range,
+            "edge_threshold": self.edge_threshold,
+            "preserve_strength": self.preserve_strength,
         }
 
 
@@ -288,8 +295,12 @@ class FastDepthDenoise:
             )
         else:
             # Fallback: use Gaussian filter
-            logger.warning("cv2 not available, using Gaussian filter instead of non-local means")
-            denoised = gaussian_filter(image_8bit.astype(np.float32), sigma=3.0).astype(np.uint8)
+            logger.warning(
+                "cv2 not available, using Gaussian filter instead of non-local means"
+            )
+            denoised = gaussian_filter(image_8bit.astype(np.float32), sigma=3.0).astype(
+                np.uint8
+            )
 
         # Convert back
         if image.max() <= 1.0:

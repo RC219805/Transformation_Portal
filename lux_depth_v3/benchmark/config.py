@@ -21,11 +21,24 @@ class BenchmarkConfig:
     """Configuration for DA3 benchmark evaluation."""
 
     # Datasets to evaluate
-    datasets: List[str] = field(default_factory=lambda: ["eth3d", "7scenes", "scannetpp", "hiroom", "dtu", "dtu64"])
+    datasets: List[str] = field(
+        default_factory=lambda: [
+            "eth3d",
+            "7scenes",
+            "scannetpp",
+            "hiroom",
+            "dtu",
+            "dtu64",
+        ]
+    )
 
     # Evaluation modes
     modes: List[EvaluationMode] = field(
-        default_factory=lambda: [EvaluationMode.POSE, EvaluationMode.RECON_UNPOSED, EvaluationMode.RECON_POSED]
+        default_factory=lambda: [
+            EvaluationMode.POSE,
+            EvaluationMode.RECON_UNPOSED,
+            EvaluationMode.RECON_POSED,
+        ]
     )
 
     # Frame limit per scene (-1 for unlimited)

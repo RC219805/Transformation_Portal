@@ -344,9 +344,17 @@ class Phase2Validator:
 
 def main():
     parser = argparse.ArgumentParser(description="Validate Phase 2 performance optimizations")
-    parser.add_argument("--test-dir", type=str, default="input_images/test_set", help="Directory containing test images")
     parser.add_argument(
-        "--output-dir", type=str, default="outputs/phase2_validation", help="Output directory for test results"
+        "--test-dir",
+        type=str,
+        default="input_images/test_set",
+        help="Directory containing test images",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="outputs/phase2_validation",
+        help="Output directory for test results",
     )
     parser.add_argument(
         "--test",
@@ -356,7 +364,10 @@ def main():
         help="Which test to run",
     )
     parser.add_argument(
-        "--report", type=str, default="outputs/phase2_validation_report.json", help="Output file for validation report"
+        "--report",
+        type=str,
+        default="outputs/phase2_validation_report.json",
+        help="Output file for validation report",
     )
 
     args = parser.parse_args()

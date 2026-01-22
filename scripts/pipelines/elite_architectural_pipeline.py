@@ -469,17 +469,23 @@ class EliteArchitecturalPipeline:
             try:
                 # Try AgX via OCIO
                 tone_mapped = apply_agx_ocio(
-                    hdr_image, config_path=self.preset.tone_mapping.agx_config_path, in_colorspace="Utility - Linear - sRGB"
+                    hdr_image,
+                    config_path=self.preset.tone_mapping.agx_config_path,
+                    in_colorspace="Utility - Linear - sRGB",
                 )
                 logger.info("  Using AgX (OCIO)")
             except Exception as e:
                 logger.warning(f"  AgX OCIO failed: {e}, falling back to Filmic")
                 tone_mapped = apply_filmic_hable(
-                    hdr_image, exposure=self.preset.tone_mapping.exposure, white_point=self.preset.tone_mapping.white_point
+                    hdr_image,
+                    exposure=self.preset.tone_mapping.exposure,
+                    white_point=self.preset.tone_mapping.white_point,
                 )
         elif method == "filmic":
             tone_mapped = apply_filmic_hable(
-                hdr_image, exposure=self.preset.tone_mapping.exposure, white_point=self.preset.tone_mapping.white_point
+                hdr_image,
+                exposure=self.preset.tone_mapping.exposure,
+                white_point=self.preset.tone_mapping.white_point,
             )
             logger.info("  Using Filmic (Hable)")
         else:
@@ -530,7 +536,10 @@ class EliteArchitecturalPipeline:
         # Apply LUTs (simplified - real implementation would use actual .cube files)
         logger.info(f"  LUT stack: {len(self.preset.color_grading.lut_stack)} LUTs")
         for i, (lut_path, strength) in enumerate(
-            zip(self.preset.color_grading.lut_stack, self.preset.color_grading.lut_strengths)
+            zip(
+                self.preset.color_grading.lut_stack,
+                self.preset.color_grading.lut_strengths,
+            )
         ):
             logger.info(f"    [{i + 1}] {Path(lut_path).name} @ {strength * 100:.0f}%")
             # Real implementation would load and apply .cube LUT here
@@ -603,7 +612,13 @@ class EliteArchitecturalPipeline:
         depth_colormap = cv2.cvtColor(depth_colormap, cv2.COLOR_BGR2RGB)
         Image.fromarray(depth_colormap).save(path)
 
-    def _save_processing_report(self, input_path: Path, outputs: Dict[str, Path], total_time: float, report_path: Path):
+    def _save_processing_report(
+        self,
+        input_path: Path,
+        outputs: Dict[str, Path],
+        total_time: float,
+        report_path: Path,
+    ):
         """Save detailed processing report."""
         report = {
             "input": str(input_path),
@@ -701,13 +716,20 @@ Examples:
     parser.add_argument("-i", "--input", type=Path, help="Input image path")
     parser.add_argument("-d", "--directory", type=Path, help="Batch process directory")
     parser.add_argument(
-        "-o", "--output", type=Path, default=Path("output_elite"), help="Output directory (default: output_elite)"
+        "-o",
+        "--output",
+        type=Path,
+        default=Path("output_elite"),
+        help="Output directory (default: output_elite)",
     )
     parser.add_argument("--pattern", default="*.tif", help="Glob pattern for batch (default: *.tif)")
 
     # Preset selection
     parser.add_argument(
-        "--preset", choices=["interior", "aerial", "pool", "auto"], default="auto", help="Processing preset (default: auto)"
+        "--preset",
+        choices=["interior", "aerial", "pool", "auto"],
+        default="auto",
+        help="Processing preset (default: auto)",
     )
     parser.add_argument("--config", type=Path, help="Custom preset JSON config")
 

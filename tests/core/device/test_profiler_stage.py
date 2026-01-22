@@ -120,7 +120,15 @@ def test_stage_profiler_snake_case_keys():
     profiler = StageProfiler(enabled=True)
 
     # Test standard stage names from pipeline
-    stage_names = ["load", "depth", "material", "grade", "upscale_infer", "export_master", "export_upscaled"]
+    stage_names = [
+        "load",
+        "depth",
+        "material",
+        "grade",
+        "upscale_infer",
+        "export_master",
+        "export_upscaled",
+    ]
 
     for name in stage_names:
         with profiler.stage(name):

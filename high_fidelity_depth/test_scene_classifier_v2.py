@@ -52,7 +52,11 @@ def test_interior_low_ratio_high_density():
     assert scene_type == "texture_dominated"
     assert meta["ratio"] < 2.0
     assert meta["edge_density"] > 0.008
-    assert meta["decision"] in ["low_ratio_medium_density", "low_ratio_low_variance", "smooth_depth_gradients"]
+    assert meta["decision"] in [
+        "low_ratio_medium_density",
+        "low_ratio_low_variance",
+        "smooth_depth_gradients",
+    ]
 
 
 def test_glass_facade_medium_ratio():
@@ -119,7 +123,10 @@ def test_pool_with_medium_edge_density_smooth_depth():
     # Should classify as texture due to smooth depth gradients
     assert scene_type == "texture_dominated"
     assert meta["depth_gradient_var"] < 0.0004, f"Expected smooth depth, got {meta['depth_gradient_var']}"
-    assert meta["decision"] in ["smooth_depth_gradients", "medium_density_smooth_depth_water"]
+    assert meta["decision"] in [
+        "smooth_depth_gradients",
+        "medium_density_smooth_depth_water",
+    ]
 
 
 def test_interior_kitchen_geometric_depth():
@@ -145,7 +152,10 @@ def test_interior_kitchen_geometric_depth():
     assert scene_type == "structure_dominated"
     assert meta["edge_density"] > 0.05
     assert 2.0 <= meta["ratio"] <= 10.0
-    assert meta["decision"] in ["very_high_density_structure", "high_density_medium_ratio_geometric"]
+    assert meta["decision"] in [
+        "very_high_density_structure",
+        "high_density_medium_ratio_geometric",
+    ]
 
 
 def test_ocean_aerial_smooth_depth():

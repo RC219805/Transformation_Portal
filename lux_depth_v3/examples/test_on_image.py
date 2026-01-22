@@ -60,10 +60,16 @@ Examples:
         """,
     )
     parser.add_argument(
-        "image", type=str, nargs="?", help="Path to test image (optional - will create synthetic if not provided)"
+        "image",
+        type=str,
+        nargs="?",
+        help="Path to test image (optional - will create synthetic if not provided)",
     )
     parser.add_argument(
-        "--output-dir", type=str, default="./test_output", help="Output directory for results (default: ./test_output)"
+        "--output-dir",
+        type=str,
+        default="./test_output",
+        help="Output directory for results (default: ./test_output)",
     )
     parser.add_argument(
         "--model",
@@ -72,9 +78,17 @@ Examples:
         choices=["nested-giant-large-v1.1", "metric-large", "large-v1.1"],
         help="Model variant to use (default: nested-giant-large-v1.1)",
     )
-    parser.add_argument("--skip-inference", action="store_true", help="Skip actual inference (test features only)")
     parser.add_argument(
-        "--device", type=str, default="cpu", choices=["cpu", "cuda", "mps"], help="Device to use for inference (default: cpu)"
+        "--skip-inference",
+        action="store_true",
+        help="Skip actual inference (test features only)",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cpu",
+        choices=["cpu", "cuda", "mps"],
+        help="Device to use for inference (default: cpu)",
     )
 
     args = parser.parse_args()

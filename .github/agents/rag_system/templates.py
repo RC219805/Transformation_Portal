@@ -368,7 +368,10 @@ class FewShotExamples:
                                 "description": "Configure default haze for exteriors",
                             },
                         ],
-                        "tests": ["tests/test_atmospheric_processor.py", "tests/integration/test_depth_pipeline.py"],
+                        "tests": [
+                            "tests/test_atmospheric_processor.py",
+                            "tests/integration/test_depth_pipeline.py",
+                        ],
                         "explanation": (
                             "Atmospheric haze is implemented by blending a fog color "
                             "proportional to depth distance. Uses depth maps to determine "

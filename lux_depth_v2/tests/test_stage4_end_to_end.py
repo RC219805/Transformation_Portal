@@ -149,7 +149,10 @@ def test_stage4_real_backend_generates_different_mask(mock_onnx_env, tmp_path):
     """
     Test that EfficientSAM refinement actually produces a different mask than base.
     """
-    from lux_depth_v2.backends.efficientsam_backend import EfficientSAMBackend, BoxPrompt
+    from lux_depth_v2.backends.efficientsam_backend import (
+        EfficientSAMBackend,
+        BoxPrompt,
+    )
     from lux_depth_v2 import torch_ops
 
     torch_ops.require_torch()

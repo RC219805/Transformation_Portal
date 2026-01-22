@@ -41,16 +41,18 @@ def _get_default_device() -> torch.device:
 
 class PrecisionMode(Enum):
     """Supported precision modes for tensor operations."""
+
     FP32 = "fp32"  # Full precision (32-bit float)
     FP16 = "fp16"  # Half precision (16-bit float)
     BF16 = "bf16"  # Brain float 16
     TF32 = "tf32"  # TensorFloat-32 (NVIDIA)
-    FP8 = "fp8"    # 8-bit float (future)
+    FP8 = "fp8"  # 8-bit float (future)
 
 
 @dataclass
 class TensorConfig:
     """Configuration for tensor operations."""
+
     precision: PrecisionMode = PrecisionMode.FP16
     device: Optional[Union[str, torch.device]] = None  # None = auto-detect best device
     enable_amp: bool = True  # Automatic Mixed Precision
@@ -72,7 +74,7 @@ class TensorProcessor:
     def __init__(
         self,
         config: Optional[TensorConfig] = None,
-        device: Optional[torch.device] = None
+        device: Optional[torch.device] = None,
     ):
         """
         Initialize tensor processor.
@@ -94,7 +96,9 @@ class TensorProcessor:
         self._setup_precision()
         self._compile_cache = {}
 
-        logger.info(f"Initialized TensorProcessor on {self.device} with {self.config.precision.value}")
+        logger.info(
+            f"Initialized TensorProcessor on {self.device} with {self.config.precision.value}"
+        )
 
     def _setup_precision(self):
         """Setup precision and mixed precision training."""
@@ -111,7 +115,7 @@ class TensorProcessor:
         shape: Tuple[int, ...],
         dtype: Optional[torch.dtype] = None,
         requires_grad: bool = False,
-        fill_value: Optional[float] = None
+        fill_value: Optional[float] = None,
     ) -> Tensor:
         """
         Allocate tensor with optimal memory layout.
@@ -144,15 +148,21 @@ class TensorProcessor:
 
         return tensor
 
-    def zeros(self, shape: Tuple[int, ...], dtype: Optional[torch.dtype] = None) -> Tensor:
+    def zeros(
+        self, shape: Tuple[int, ...], dtype: Optional[torch.dtype] = None
+    ) -> Tensor:
         """Allocate zero-initialized tensor."""
         return self.allocate(shape, dtype, fill_value=0.0)
 
-    def ones(self, shape: Tuple[int, ...], dtype: Optional[torch.dtype] = None) -> Tensor:
+    def ones(
+        self, shape: Tuple[int, ...], dtype: Optional[torch.dtype] = None
+    ) -> Tensor:
         """Allocate one-initialized tensor."""
         return self.allocate(shape, dtype, fill_value=1.0)
 
-    def randn(self, shape: Tuple[int, ...], dtype: Optional[torch.dtype] = None) -> Tensor:
+    def randn(
+        self, shape: Tuple[int, ...], dtype: Optional[torch.dtype] = None
+    ) -> Tensor:
         """Allocate random normal tensor."""
         dtype = dtype or self._get_dtype()
         tensor = torch.randn(shape, dtype=dtype, device=self.device)
@@ -183,7 +193,9 @@ class TensorProcessor:
 
         return result
 
-    def to_precision(self, tensor: Tensor, precision: Optional[PrecisionMode] = None) -> Tensor:
+    def to_precision(
+        self, tensor: Tensor, precision: Optional[PrecisionMode] = None
+    ) -> Tensor:
         """
         Convert tensor to target precision.
 
@@ -206,7 +218,7 @@ class TensorProcessor:
         self,
         tensors: List[Tensor],
         operation: Callable[[Tensor], Tensor],
-        batch_size: Optional[int] = None
+        batch_size: Optional[int] = None,
     ) -> List[Tensor]:
         """
         Process tensors in batches for memory efficiency.
@@ -224,7 +236,7 @@ class TensorProcessor:
 
         with torch.inference_mode():
             for i in range(0, len(tensors), batch_size):
-                batch = tensors[i:i + batch_size]
+                batch = tensors[i : i + batch_size]
 
                 # Stack batch if all tensors have same shape
                 if all(t.shape == batch[0].shape for t in batch):
@@ -243,7 +255,7 @@ class TensorProcessor:
         tensor: Tensor,
         mean: Optional[Tuple[float, ...]] = None,
         std: Optional[Tuple[float, ...]] = None,
-        inplace: bool = False
+        inplace: bool = False,
     ) -> Tensor:
         """
         Normalize tensor with mean and standard deviation.
@@ -284,7 +296,7 @@ class TensorProcessor:
         self,
         tensor: Tensor,
         mean: Optional[Tuple[float, ...]] = None,
-        std: Optional[Tuple[float, ...]] = None
+        std: Optional[Tuple[float, ...]] = None,
     ) -> Tensor:
         """
         Denormalize tensor (inverse of normalize).
@@ -319,7 +331,7 @@ class TensorProcessor:
         tensor: Tensor,
         size: Tuple[int, int],
         mode: str = "bilinear",
-        align_corners: bool = False
+        align_corners: bool = False,
     ) -> Tensor:
         """
         Resize tensor to target size.
@@ -344,7 +356,7 @@ class TensorProcessor:
             tensor,
             size=size,
             mode=mode,
-            align_corners=align_corners if mode != "nearest" else None
+            align_corners=align_corners if mode != "nearest" else None,
         )
 
         # Remove batch dimension if added
@@ -358,7 +370,7 @@ class TensorProcessor:
         tensor: Tensor,
         padding: Union[int, Tuple[int, ...]],
         mode: str = "constant",
-        value: float = 0.0
+        value: float = 0.0,
     ) -> Tensor:
         """
         Pad tensor with specified padding.
@@ -378,10 +390,7 @@ class TensorProcessor:
         return F.pad(tensor, padding, mode=mode, value=value)
 
     def gradient_checkpoint(
-        self,
-        function: Callable,
-        *inputs: Tensor,
-        use_reentrant: bool = True
+        self, function: Callable, *inputs: Tensor, use_reentrant: bool = True
     ) -> Tensor:
         """
         Apply gradient checkpointing to save memory during backprop.
@@ -426,10 +435,7 @@ class TensorProcessor:
             return nullcontext()
 
     def compile_function(
-        self,
-        function: Callable,
-        mode: Optional[str] = None,
-        dynamic: bool = False
+        self, function: Callable, mode: Optional[str] = None, dynamic: bool = False
     ) -> Callable:
         """
         Compile function with torch.compile for optimization.
@@ -504,7 +510,9 @@ class TensorProcessor:
         if self.device.type == "cuda":
             stats["allocated"] = torch.cuda.memory_allocated(self.device) / (1024**3)
             stats["reserved"] = torch.cuda.memory_reserved(self.device) / (1024**3)
-            stats["max_allocated"] = torch.cuda.max_memory_allocated(self.device) / (1024**3)
+            stats["max_allocated"] = torch.cuda.max_memory_allocated(self.device) / (
+                1024**3
+            )
         elif self.device.type == "mps":
             # MPS memory stats (limited support)
             stats["device"] = "mps"
@@ -523,6 +531,7 @@ class TensorProcessor:
             # MPS uses unified memory, cache clearing is less relevant
             # but we can trigger garbage collection
             import gc
+
             gc.collect()
 
     def synchronize(self):

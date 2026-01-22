@@ -128,7 +128,10 @@ def test_global_anchor_opencv():
     print("=" * 60)
 
     try:
-        from high_fidelity_depth.depth_estimator import HighFidelityDepthEstimator, DepthConfig
+        from high_fidelity_depth.depth_estimator import (
+            HighFidelityDepthEstimator,
+            DepthConfig,
+        )
     except ImportError as e:
         print(f"⚠️  high_fidelity_depth not available: {e}")
         return True

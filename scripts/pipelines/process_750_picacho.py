@@ -145,7 +145,13 @@ def save_16bit_tiff(img_float: np.ndarray, output_path: Path, compression: str =
     try:
         import tifffile
 
-        tifffile.imwrite(output_path, img_16bit, compression=compression, photometric="rgb", planarconfig="contig")
+        tifffile.imwrite(
+            output_path,
+            img_16bit,
+            compression=compression,
+            photometric="rgb",
+            planarconfig="contig",
+        )
         print(f"    Saved 16-bit TIFF: {output_path.name} ({output_path.stat().st_size / (1024 * 1024):.1f} MB)")
     except ImportError:
         # Fallback to imageio if available
@@ -195,8 +201,18 @@ def apply_luxury_adjustments(img: np.ndarray, scene_type: str = "interior") -> n
             "saturation": 1.03,
             "warmth": 1.01,  # Slight warm bias
         },
-        "exterior": {"brightness": 1.0, "contrast": 1.08, "saturation": 1.08, "warmth": 1.02},
-        "aerial": {"brightness": 1.0, "contrast": 1.12, "saturation": 1.12, "warmth": 1.0},
+        "exterior": {
+            "brightness": 1.0,
+            "contrast": 1.08,
+            "saturation": 1.08,
+            "warmth": 1.02,
+        },
+        "aerial": {
+            "brightness": 1.0,
+            "contrast": 1.12,
+            "saturation": 1.12,
+            "warmth": 1.0,
+        },
         "pool": {
             "brightness": 1.03,
             "contrast": 1.06,

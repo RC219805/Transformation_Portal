@@ -66,7 +66,7 @@ def analyze_pass_rate_trend(metrics: List[Dict]) -> Optional[Dict]:
         "current": values[-1],
         "average": statistics.mean(values),
         "trend": round(trend, 2),
-        "direction": "improving" if trend > 0 else "declining" if trend < 0 else "stable",
+        "direction": ("improving" if trend > 0 else "declining" if trend < 0 else "stable"),
         "samples": len(values),
     }
 
@@ -92,7 +92,7 @@ def analyze_execution_time_trend(metrics: List[Dict]) -> Optional[Dict]:
         "current_seconds": round(last_val, 2),
         "average_seconds": round(avg, 2),
         "change_percent": round(change_pct, 1),
-        "direction": "slower" if change_pct > 5 else "faster" if change_pct < -5 else "stable",
+        "direction": ("slower" if change_pct > 5 else "faster" if change_pct < -5 else "stable"),
     }
 
 
@@ -148,7 +148,7 @@ def detect_regressions(pass_rate_trend: Optional[Dict], execution_time_trend: Op
         regressions.append(
             {
                 "type": "performance_regression",
-                "severity": "high" if execution_time_trend["change_percent"] > 50 else "medium",
+                "severity": ("high" if execution_time_trend["change_percent"] > 50 else "medium"),
                 "change_percent": execution_time_trend["change_percent"],
                 "message": f"Test execution time increased by {execution_time_trend['change_percent']:.1f}%",
             }
@@ -163,20 +163,35 @@ def generate_insights(pass_rate_trend: Optional[Dict], flaky_tests: List[Dict], 
 
     if pass_rate_trend and pass_rate_trend["direction"] == "improving":
         insights.append(
-            {"type": "positive", "message": "Test pass rate is trending upward - quality improvements are working"}
+            {
+                "type": "positive",
+                "message": "Test pass rate is trending upward - quality improvements are working",
+            }
         )
 
     if flaky_tests:
-        insights.append({"type": "warning", "message": f"Identified {len(flaky_tests)} flaky tests requiring attention"})
+        insights.append(
+            {
+                "type": "warning",
+                "message": f"Identified {len(flaky_tests)} flaky tests requiring attention",
+            }
+        )
 
     if test_results_count < 100:
-        insights.append({"type": "info", "message": "Limited historical data - trends will become more reliable over time"})
+        insights.append(
+            {
+                "type": "info",
+                "message": "Limited historical data - trends will become more reliable over time",
+            }
+        )
 
     return insights
 
 
 def generate_recommendations(
-    regressions: List[Dict], flaky_tests: List[Dict], execution_time_trend: Optional[Dict]
+    regressions: List[Dict],
+    flaky_tests: List[Dict],
+    execution_time_trend: Optional[Dict],
 ) -> List[str]:
     """Generate recommendations based on analysis."""
     recommendations = []
@@ -245,7 +260,14 @@ def generate_markdown_report(report: Dict) -> str:
 
     # Flaky tests
     if report.get("flaky_tests"):
-        lines.extend(["## 🎲 Flaky Tests", "", "| Test | Pass | Fail | Flakiness |", "|------|------|------|-----------|"])
+        lines.extend(
+            [
+                "## 🎲 Flaky Tests",
+                "",
+                "| Test | Pass | Fail | Flakiness |",
+                "|------|------|------|-----------|",
+            ]
+        )
         for ft in report["flaky_tests"][:5]:
             test_id = ft["test_id"][:MAX_TEST_ID_LENGTH]
             lines.append(f"| `{test_id}` | {ft['pass_count']} | {ft['fail_count']} | {ft['flakiness_score']:.0%} |")
@@ -343,7 +365,10 @@ def main():
 
     # Exit with error if regressions detected
     if report["regressions"]:
-        print(f"Warning: {len(report['regressions'])} regression(s) detected", file=sys.stderr)
+        print(
+            f"Warning: {len(report['regressions'])} regression(s) detected",
+            file=sys.stderr,
+        )
         return 1
 
     return 0

@@ -259,7 +259,11 @@ class AdaptiveToneMapper:
         tone_mapped = self._reinhard_local(hdr_image, **params)
 
         # Package metadata
-        metadata = {"analysis": analysis, "parameters_used": params, "override_applied": bool(override_params)}
+        metadata = {
+            "analysis": analysis,
+            "parameters_used": params,
+            "override_applied": bool(override_params),
+        }
 
         return tone_mapped, metadata
 

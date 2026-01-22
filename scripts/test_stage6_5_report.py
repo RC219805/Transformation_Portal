@@ -11,7 +11,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 def test_fusion_report_method():
     """Test that FusedMaterialSegmenter has get_segmentation_v3_report."""
-    from lux_depth_v2.material_segmentation import FusedMaterialSegmenter, EDGE_REFINEMENT_CLASSES
+    from lux_depth_v2.material_segmentation import (
+        FusedMaterialSegmenter,
+        EDGE_REFINEMENT_CLASSES,
+    )
     from lux_depth_v2.config import SegmentationConfig, SegmentationBackend, FusionMode
     from lux_depth_v2 import torch_ops
 

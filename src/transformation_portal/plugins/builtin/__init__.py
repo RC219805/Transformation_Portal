@@ -14,8 +14,8 @@ from .enhancers import ContrastEnhancer, SharpenEnhancer
 from .depth_models import EdgeDepthEstimator
 
 __all__ = [
-    'GaussianBlurProcessor',
-    'ContrastEnhancer',
-    'SharpenEnhancer',
-    'EdgeDepthEstimator',
+    "GaussianBlurProcessor",
+    "ContrastEnhancer",
+    "SharpenEnhancer",
+    "EdgeDepthEstimator",
 ]

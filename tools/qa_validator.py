@@ -61,17 +61,33 @@ class QAValidator:
     def validate_image(self, path: Path) -> ImageValidation:
         """Validate a single image file."""
         issues = []
-        metadata = {"filename": path.name, "path": str(path), "file_size_mb": path.stat().st_size / (1024 * 1024)}
+        metadata = {
+            "filename": path.name,
+            "path": str(path),
+            "file_size_mb": path.stat().st_size / (1024 * 1024),
+        }
 
         # Check 1: File exists and readable
         try:
             if not path.exists():
                 issues.append(
-                    ValidationIssue("error", "format", f"File not found: {path}", "Verify file path and permissions")
+                    ValidationIssue(
+                        "error",
+                        "format",
+                        f"File not found: {path}",
+                        "Verify file path and permissions",
+                    )
                 )
                 return ImageValidation(path.name, str(path), False, issues, metadata)
         except Exception as e:
-            issues.append(ValidationIssue("error", "format", f"Cannot access file: {e}", "Check file permissions"))
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    "format",
+                    f"Cannot access file: {e}",
+                    "Check file permissions",
+                )
+            )
             return ImageValidation(path.name, str(path), False, issues, metadata)
 
         # Check 2: Format
@@ -93,7 +109,10 @@ class QAValidator:
         except Exception as e:
             issues.append(
                 ValidationIssue(
-                    "error", "corruption", f"Cannot load image: {e}", "File may be corrupted or in unsupported format"
+                    "error",
+                    "corruption",
+                    f"Cannot load image: {e}",
+                    "File may be corrupted or in unsupported format",
                 )
             )
             return ImageValidation(path.name, str(path), False, issues, metadata)
@@ -128,11 +147,21 @@ class QAValidator:
         if bit_depth == 8:
             issues.append(
                 ValidationIssue(
-                    "warning", "bit_depth", "8-bit image detected", "16-bit or 32-bit recommended for professional processing"
+                    "warning",
+                    "bit_depth",
+                    "8-bit image detected",
+                    "16-bit or 32-bit recommended for professional processing",
                 )
             )
         elif bit_depth == 0:
-            issues.append(ValidationIssue("error", "bit_depth", "Cannot determine bit depth", "Verify file integrity"))
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    "bit_depth",
+                    "Cannot determine bit depth",
+                    "Verify file integrity",
+                )
+            )
         else:
             issues.append(ValidationIssue("info", "bit_depth", f"{bit_depth}-bit image (excellent)", None))
 
@@ -142,7 +171,10 @@ class QAValidator:
         if color_mode not in ["RGB", "RGBA"]:
             issues.append(
                 ValidationIssue(
-                    "warning", "color_space", f"Unusual color mode: {color_mode}", "RGB or RGBA expected for processing"
+                    "warning",
+                    "color_space",
+                    f"Unusual color mode: {color_mode}",
+                    "RGB or RGBA expected for processing",
                 )
             )
 
@@ -175,20 +207,31 @@ class QAValidator:
         if channels == 4:
             issues.append(
                 ValidationIssue(
-                    "info", "format", "Alpha channel detected", "Alpha will be preserved or flattened based on settings"
+                    "info",
+                    "format",
+                    "Alpha channel detected",
+                    "Alpha will be preserved or flattened based on settings",
                 )
             )
         elif channels not in [3, 4]:
             issues.append(
                 ValidationIssue(
-                    "warning", "format", f"Unusual channel count: {channels}", "3 (RGB) or 4 (RGBA) channels expected"
+                    "warning",
+                    "format",
+                    f"Unusual channel count: {channels}",
+                    "3 (RGB) or 4 (RGBA) channels expected",
                 )
             )
 
         # Check 8: Metadata presence
         if not metadata.get("has_exif", False):
             issues.append(
-                ValidationIssue("info", "metadata", "No EXIF metadata found", "Metadata preservation not applicable")
+                ValidationIssue(
+                    "info",
+                    "metadata",
+                    "No EXIF metadata found",
+                    "Metadata preservation not applicable",
+                )
             )
 
         # Check 9: File size sanity
@@ -438,7 +481,12 @@ def main():
 
     parser = argparse.ArgumentParser(description="Pre-flight validation for image processing")
     parser.add_argument("inputs", nargs="+", type=Path, help="Image files or directory")
-    parser.add_argument("--output", type=Path, default=Path("qa_validation_report.md"), help="Output report path")
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("qa_validation_report.md"),
+        help="Output report path",
+    )
     parser.add_argument("--strict", action="store_true", help="Strict mode (treat warnings as errors)")
     parser.add_argument("--json", type=Path, help="Save results as JSON")
 

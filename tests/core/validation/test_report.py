@@ -5,7 +5,12 @@ from pathlib import Path
 import json
 import tempfile
 
-from src.transformation_portal.core.validation.report import ProcessingReport, GitInfo, DeviceInfo, ModelInfo
+from src.transformation_portal.core.validation.report import (
+    ProcessingReport,
+    GitInfo,
+    DeviceInfo,
+    ModelInfo,
+)
 
 
 def test_git_info_capture():
@@ -86,7 +91,11 @@ def test_processing_report_save_load(tmp_path):
     config = {"preset": "test"}
 
     report = ProcessingReport.create(
-        config=config, input_path=Path("input.jpg"), output_path=Path("output.jpg"), duration_ms=100.0, metrics={"ssim": 0.95}
+        config=config,
+        input_path=Path("input.jpg"),
+        output_path=Path("output.jpg"),
+        duration_ms=100.0,
+        metrics={"ssim": 0.95},
     )
 
     # Save report
@@ -109,7 +118,11 @@ def test_processing_report_to_dict():
     config = {"preset": "test"}
 
     report = ProcessingReport.create(
-        config=config, input_path=Path("input.jpg"), output_path=Path("output.jpg"), duration_ms=100.0, metrics={"ssim": 0.95}
+        config=config,
+        input_path=Path("input.jpg"),
+        output_path=Path("output.jpg"),
+        duration_ms=100.0,
+        metrics={"ssim": 0.95},
     )
 
     data = report.to_dict()
@@ -141,7 +154,11 @@ def test_processing_report_with_error():
 def test_processing_report_with_metadata():
     """Test report with additional metadata."""
     config = {"preset": "test"}
-    metadata = {"batch_id": "batch_123", "user": "test_user", "tags": ["test", "validation"]}
+    metadata = {
+        "batch_id": "batch_123",
+        "user": "test_user",
+        "tags": ["test", "validation"],
+    }
 
     report = ProcessingReport.create(
         config=config,

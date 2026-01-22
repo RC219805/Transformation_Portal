@@ -84,7 +84,7 @@ def run_single_comparison(image_path: Path, output_dir: Path, max_dimension: int
                 "edge_sharpness_improvement_pct": float(result.edge_sharpness_improvement * 100),
                 "time_overhead_factor": float(result.time_overhead_factor),
             },
-            "verdict": "IMPROVEMENT" if result.edge_alignment_improvement > 0 else "NO_IMPROVEMENT",
+            "verdict": ("IMPROVEMENT" if result.edge_alignment_improvement > 0 else "NO_IMPROVEMENT"),
         }
 
         logger.info(f"✓ Comparison complete: {image_path.name}")

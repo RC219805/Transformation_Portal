@@ -70,7 +70,9 @@ def test_prompt_generation_config_defaults():
     NOTE: PromptGenerationConfig is now imported from backends.prompt_generation
     (PR-2 implementation), not duplicated here. Test against PR-2 contract.
     """
-    from lux_depth_v2.backends.prompt_generation import PromptGenerationConfig as PR2Config
+    from lux_depth_v2.backends.prompt_generation import (
+        PromptGenerationConfig as PR2Config,
+    )
 
     cfg = PR2Config()
 

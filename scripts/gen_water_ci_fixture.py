@@ -215,7 +215,7 @@ def generate_fixture_images(output_dir: Path, width: int = 512, height: int = 51
             "label": "pool",
             "should_detect": True,
             "difficulty": difficulty,
-            "tags": ["synthetic", scene_type] if scene_type != "standard" else ["synthetic"],
+            "tags": (["synthetic", scene_type] if scene_type != "standard" else ["synthetic"]),
         }
 
     # Ocean scenes (4 total from ci_subset.txt: 0001, 0003, 0004, 0005, 0007, 0009)
@@ -247,7 +247,7 @@ def generate_fixture_images(output_dir: Path, width: int = 512, height: int = 51
             "label": "ocean",
             "should_detect": True,
             "difficulty": difficulty,
-            "tags": ["synthetic", scene_type] if scene_type != "standard" else ["synthetic"],
+            "tags": (["synthetic", scene_type] if scene_type != "standard" else ["synthetic"]),
         }
 
     # Hard negatives (2 total from ci_subset.txt)
@@ -287,7 +287,12 @@ def save_ground_truth(ground_truth: Dict[str, dict], output_path: Path):
 
 def main():
     parser = argparse.ArgumentParser(description="Generate deterministic synthetic water images for CI testing")
-    parser.add_argument("--seed", type=int, default=42, help="Random seed for deterministic generation (default: 42)")
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for deterministic generation (default: 42)",
+    )
     parser.add_argument(
         "--output",
         type=Path,
@@ -297,7 +302,9 @@ def main():
     parser.add_argument("--width", type=int, default=512, help="Image width (default: 512)")
     parser.add_argument("--height", type=int, default=512, help="Image height (default: 512)")
     parser.add_argument(
-        "--ground-truth-output", type=Path, help="Path to save ground_truth.json (default: <output>/../ground_truth.json)"
+        "--ground-truth-output",
+        type=Path,
+        help="Path to save ground_truth.json (default: <output>/../ground_truth.json)",
     )
 
     args = parser.parse_args()

@@ -117,7 +117,10 @@ def test_validate_config():
 
 def test_validate_config_errors():
     """Test config validation with errors."""
-    config = {"device": {"memory_fraction": 1.5}, "performance": {"tile_size": 512, "tile_overlap": 600, "batch_size": 0}}
+    config = {
+        "device": {"memory_fraction": 1.5},
+        "performance": {"tile_size": 512, "tile_overlap": 600, "batch_size": 0},
+    }
 
     errors = validate_config(config)
     assert len(errors) > 0

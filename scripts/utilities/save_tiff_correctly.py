@@ -13,7 +13,10 @@ import tifffile
 
 
 def save_16bit_tiff_correctly(
-    image_array: np.ndarray, output_path: Union[str, Path], compression: str = "adobe_deflate", metadata: Optional[dict] = None
+    image_array: np.ndarray,
+    output_path: Union[str, Path],
+    compression: str = "adobe_deflate",
+    metadata: Optional[dict] = None,
 ) -> Path:
     """
     Save 16-bit TIFF correctly using tifffile.
@@ -75,7 +78,9 @@ def save_16bit_tiff_correctly(
 
 
 def load_pil_and_save_correctly(
-    input_path: Union[str, Path], output_path: Union[str, Path], compression: str = "adobe_deflate"
+    input_path: Union[str, Path],
+    output_path: Union[str, Path],
+    compression: str = "adobe_deflate",
 ) -> Path:
     """
     Load image with PIL, save with tifffile for perfect quality.

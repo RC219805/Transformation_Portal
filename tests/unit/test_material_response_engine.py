@@ -10,7 +10,6 @@ import numpy as np
 import pytest
 from PIL import Image
 
-
 # Check if scipy is available
 HAS_SCIPY = False
 try:
@@ -52,7 +51,9 @@ class TestMaterialResponseConfig:
 
     def test_default_config(self):
         """Test default configuration values."""
-        from transformation_portal.processors.material_response.engine import MaterialResponseConfig
+        from transformation_portal.processors.material_response.engine import (
+            MaterialResponseConfig,
+        )
 
         config = MaterialResponseConfig()
 
@@ -63,7 +64,9 @@ class TestMaterialResponseConfig:
 
     def test_value_clamping(self):
         """Test that values are clamped to valid ranges."""
-        from transformation_portal.processors.material_response.engine import MaterialResponseConfig
+        from transformation_portal.processors.material_response.engine import (
+            MaterialResponseConfig,
+        )
 
         config = MaterialResponseConfig(
             texture_boost=2.0,  # Should clamp to 1.0
@@ -79,7 +82,10 @@ class TestMaterialResponseEngine:
 
     def test_engine_initialization(self):
         """Test engine can be initialized."""
-        from transformation_portal.processors.material_response.engine import MaterialResponseEngine, MaterialResponseConfig
+        from transformation_portal.processors.material_response.engine import (
+            MaterialResponseEngine,
+            MaterialResponseConfig,
+        )
 
         config = MaterialResponseConfig()
         engine = MaterialResponseEngine(config)
@@ -88,7 +94,9 @@ class TestMaterialResponseEngine:
 
     def test_from_config_dict(self):
         """Test creating engine from config dictionary."""
-        from transformation_portal.processors.material_response.engine import MaterialResponseEngine
+        from transformation_portal.processors.material_response.engine import (
+            MaterialResponseEngine,
+        )
 
         engine = MaterialResponseEngine.from_config(
             {
@@ -103,7 +111,9 @@ class TestMaterialResponseEngine:
 
     def test_apply_returns_image(self, sample_image):
         """Test apply method returns PIL Image."""
-        from transformation_portal.processors.material_response.engine import MaterialResponseEngine
+        from transformation_portal.processors.material_response.engine import (
+            MaterialResponseEngine,
+        )
 
         engine = MaterialResponseEngine.from_config(
             {
@@ -120,7 +130,9 @@ class TestMaterialResponseEngine:
 
     def test_apply_with_strength(self, sample_image):
         """Test apply method with strength parameter."""
-        from transformation_portal.processors.material_response.engine import MaterialResponseEngine
+        from transformation_portal.processors.material_response.engine import (
+            MaterialResponseEngine,
+        )
 
         engine = MaterialResponseEngine.from_config({"profile": "luxury_interior"})
 
@@ -134,7 +146,9 @@ class TestMaterialResponseEngine:
 
     def test_enhance_floor(self, sample_image):
         """Test floor enhancement method."""
-        from transformation_portal.processors.material_response.engine import MaterialResponseEngine
+        from transformation_portal.processors.material_response.engine import (
+            MaterialResponseEngine,
+        )
 
         engine = MaterialResponseEngine.from_config(
             {
@@ -161,7 +175,9 @@ class TestMaterialResponseEngine:
 
     def test_enhance_textiles(self, sample_image):
         """Test textile enhancement method."""
-        from transformation_portal.processors.material_response.engine import MaterialResponseEngine
+        from transformation_portal.processors.material_response.engine import (
+            MaterialResponseEngine,
+        )
 
         engine = MaterialResponseEngine.from_config({"textile_contrast": 0.2})
 
@@ -174,7 +190,9 @@ class TestMaterialResponseEngine:
 
     def test_enhance_metals(self, sample_image):
         """Test metal enhancement method."""
-        from transformation_portal.processors.material_response.engine import MaterialResponseEngine
+        from transformation_portal.processors.material_response.engine import (
+            MaterialResponseEngine,
+        )
 
         engine = MaterialResponseEngine.from_config({})
 
@@ -187,7 +205,9 @@ class TestMaterialResponseEngine:
 
     def test_add_atmospheric_effects(self, sample_image):
         """Test atmospheric effects method."""
-        from transformation_portal.processors.material_response.engine import MaterialResponseEngine
+        from transformation_portal.processors.material_response.engine import (
+            MaterialResponseEngine,
+        )
 
         engine = MaterialResponseEngine.from_config({"haze_strength": 0.1})
 
@@ -200,7 +220,9 @@ class TestMaterialResponseEngine:
 
     def test_grayscale_conversion(self):
         """Test that grayscale images are converted to RGB."""
-        from transformation_portal.processors.material_response.engine import MaterialResponseEngine
+        from transformation_portal.processors.material_response.engine import (
+            MaterialResponseEngine,
+        )
 
         # Create grayscale image
         gray_arr = np.random.randint(0, 255, (100, 100), dtype=np.uint8)
@@ -217,7 +239,9 @@ class TestMaterialProfiles:
 
     def test_get_profile(self):
         """Test getting a profile by name."""
-        from transformation_portal.processors.material_response.profiles import get_profile
+        from transformation_portal.processors.material_response.profiles import (
+            get_profile,
+        )
 
         profile = get_profile("luxury_interior")
 
@@ -227,7 +251,9 @@ class TestMaterialProfiles:
 
     def test_list_profiles(self):
         """Test listing all profiles."""
-        from transformation_portal.processors.material_response.profiles import list_profiles
+        from transformation_portal.processors.material_response.profiles import (
+            list_profiles,
+        )
 
         profiles = list_profiles()
 
@@ -240,14 +266,18 @@ class TestMaterialProfiles:
 
     def test_invalid_profile(self):
         """Test error on invalid profile name."""
-        from transformation_portal.processors.material_response.profiles import get_profile
+        from transformation_portal.processors.material_response.profiles import (
+            get_profile,
+        )
 
         with pytest.raises(KeyError):
             get_profile("nonexistent_profile")
 
     def test_profile_info(self):
         """Test getting profile display info."""
-        from transformation_portal.processors.material_response.profiles import get_profile_info
+        from transformation_portal.processors.material_response.profiles import (
+            get_profile_info,
+        )
 
         info = get_profile_info("luxury_interior")
 
@@ -257,7 +287,9 @@ class TestMaterialProfiles:
 
     def test_all_profiles_valid(self):
         """Test that all profiles have required fields."""
-        from transformation_portal.processors.material_response.profiles import get_all_profiles
+        from transformation_portal.processors.material_response.profiles import (
+            get_all_profiles,
+        )
 
         profiles = get_all_profiles()
         required_fields = ["name", "texture_boost", "ambient_occlusion"]
@@ -272,7 +304,9 @@ class TestMaterialMask:
 
     def test_material_mask_creation(self, interior_image):
         """Test material mask computation."""
-        from transformation_portal.processors.material_response.engine import MaterialResponseEngine
+        from transformation_portal.processors.material_response.engine import (
+            MaterialResponseEngine,
+        )
 
         engine = MaterialResponseEngine.from_config({"profile": "luxury_interior"})
         rgb = np.array(interior_image).astype(np.float32) / 255.0

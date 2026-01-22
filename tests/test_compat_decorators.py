@@ -187,7 +187,11 @@ class TestRenamedModule:
         """Test that renamed_module shows warning."""
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            renamed_module("transformation_portal.old_module", "transformation_portal.new_module", "2.0.0")
+            renamed_module(
+                "transformation_portal.old_module",
+                "transformation_portal.new_module",
+                "2.0.0",
+            )
 
             assert len(w) == 1
             assert "old_module" in str(w[0].message)

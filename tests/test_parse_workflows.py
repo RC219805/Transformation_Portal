@@ -1,6 +1,7 @@
 """
 Tests for the workflow parser that detects bugs in GitHub Actions workflows.
 """
+
 # pylint: disable=redefined-outer-name  # pytest fixtures
 
 import shutil
@@ -317,7 +318,12 @@ class TestWorkflowBug:
 
     def test_bug_string_representation(self):
         """Test string representation of bugs."""
-        bug = WorkflowBug(file_path="/path/to/workflow.yml", line_number=42, severity="error", message="Test error message")
+        bug = WorkflowBug(
+            file_path="/path/to/workflow.yml",
+            line_number=42,
+            severity="error",
+            message="Test error message",
+        )
 
         bug_str = str(bug)
         assert "/path/to/workflow.yml:42" in bug_str
@@ -326,7 +332,12 @@ class TestWorkflowBug:
 
     def test_bug_without_line_number(self):
         """Test bug representation without line number."""
-        bug = WorkflowBug(file_path="/path/to/workflow.yml", line_number=None, severity="warning", message="Test warning")
+        bug = WorkflowBug(
+            file_path="/path/to/workflow.yml",
+            line_number=None,
+            severity="warning",
+            message="Test warning",
+        )
 
         bug_str = str(bug)
         assert "/path/to/workflow.yml" in bug_str
