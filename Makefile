@@ -321,3 +321,48 @@ test-all-modules: test-fast test-lux-depth-v2-fast
 workflow-health:
 	@echo "Checking GitHub Actions workflow health..."
 	@"$(PY)" scripts/workflow_health_check.py --limit 50 || true
+
+# ---- DA3 Option 2 (canonical): generate depth with DA3 model module, then run V2 ----
+
+DA3_MODEL_ID ?= depth-anything/DA3METRIC-LARGE
+DA3_DEVICE ?= mps
+DA3_DTYPE ?= float32
+DA3_MAX_SIDE ?= 896
+
+DA3_INPUT_DIR ?= renders_safe
+DA3_DEPTH_DIR ?= depth_da3_run4
+DA3_V2_OUT_DIR ?= output_v2_da3_run4
+DA3_V2_PRESET ?= production_ultra
+
+.PHONY: da3-depth
+da3-depth:
+	python scripts/da3_depth_from_model.py \
+	  --input-dir $(DA3_INPUT_DIR) \
+	  --output-depth-dir $(DA3_DEPTH_DIR) \
+	  --model-id $(DA3_MODEL_ID) \
+	  --device $(DA3_DEVICE) \
+	  --dtype $(DA3_DTYPE) \
+	  --max-side $(DA3_MAX_SIDE)
+
+.PHONY: da3-v2
+da3-v2:
+	lux-depth-v2 \
+	  --input-dir $(DA3_INPUT_DIR) \
+	  --depth-dir $(DA3_DEPTH_DIR) \
+	  --output-dir $(DA3_V2_OUT_DIR) \
+	  --preset $(DA3_V2_PRESET) \
+	  --device auto \
+	  --upscaler-backend torch
+
+.PHONY: da3-option2
+da3-option2: da3-depth da3-v2
+
+
+.PHONY: da3-v2-fresh
+da3-v2-fresh:
+	rm -rf $(DA3_V2_OUT_DIR)
+	$(MAKE) da3-v2
+
+.PHONY: da3-option2-fresh
+da3-option2-fresh: da3-depth da3-v2-fresh
+
