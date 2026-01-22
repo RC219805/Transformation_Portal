@@ -26,7 +26,7 @@ backports-datetime-fromisoformat==2.0.3
     # via marshmallow
 backports-tarfile==1.2.0
     # via jaraco-context
-bandit==1.9.2
+bandit==1.9.3
     # via -r requirements/ci.in
 black==25.12.0
     # via -r requirements/dev.in
