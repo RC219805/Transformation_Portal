@@ -1,19 +1,8 @@
-"""Pytest configuration for lux_depth_v3 tests.
-
-Adds the grandparent directory to sys.path to enable imports without installation.
-The package structure is:
-  Transformation_Portal-main/
-    lux_depth_v3/
-      __init__.py
-      enhance/
-      tests/
-"""
+from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-# Add grandparent directory (Transformation_Portal-main) to sys.path
-# This allows "from lux_depth_v3.enhance..." imports to work
-repo_parent = Path(__file__).parent.parent.parent
-if str(repo_parent) not in sys.path:
-    sys.path.insert(0, str(repo_parent))
+# Ensure repo root is importable so `import lux_depth_v3...` works in tests.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT))
