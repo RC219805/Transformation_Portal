@@ -423,3 +423,11 @@ external/
 .mask_cache/
 .depth_cache/
 lux_depth_v3/test_gradient.ppm
+
+# ---- DA3 Option 2 artifacts ----
+renders_safe/
+depth_da3_run*/
+output_v2_da3_run*/
+output_v2_da3_*/
+output_renders_v3_*/
+
