@@ -236,23 +236,22 @@ class DepthZoneGenerator:
 
         valid_mask &= ~low_sat_mask
 
-        # Exclude high saturation (sky) - CONSERVATIVE
-        # Only exclude if bright AND spatially contiguous AND top of frame
+        # Exclude high saturation (sky) - OPTIONAL
+        # DA3 depth quantization can saturate far-field to ~1.0; do not treat as invalid unless explicitly enabled.
         high_sat_mask = np.zeros_like(depth, dtype=bool)
-        high_sat_candidates = depth > 0.999
-
-        if high_sat_candidates.sum() > 0.05 * depth.size:
-            # Sky is typically in upper portion of frame
-            upper_half = high_sat_candidates[: depth.shape[0] // 2, :]
-            if upper_half.sum() > 0.1 * upper_half.size:  # >10% of upper half
-                high_sat_mask = high_sat_candidates
-
-        valid_mask &= ~high_sat_mask
+        if image is not None and self.config.apply_sky_heuristic:
+            # Only exclude if spatially contiguous and likely sky (upper half)
+            high_sat_candidates = depth > 0.999
+            if high_sat_candidates.sum() > 0.05 * depth.size:
+                upper_half = high_sat_candidates[: depth.shape[0] // 2, :]
+                if upper_half.sum() > 0.1 * upper_half.size:
+                    high_sat_mask = high_sat_candidates
+            valid_mask &= ~high_sat_mask
 
         # Optional: Exclude saturated sky (depth > threshold AND brightness > threshold)
         # This is additional to the spatial heuristics above
         sky_brightness_mask = np.zeros_like(depth, dtype=bool)
-        if image is not None and self.config.exclude_invalid_depth:
+        if image is not None and self.config.exclude_invalid_depth and self.config.apply_sky_heuristic:
             # Compute brightness (mean of RGB channels)
             brightness = image.mean(axis=2) if image.ndim == 3 else image
 
