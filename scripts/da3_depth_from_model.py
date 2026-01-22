@@ -10,6 +10,7 @@ import torch
 import torch.nn.functional as F
 from PIL import Image
 
+
 # ---- DA3 input shape helpers (module scope) ----
 def _get_patch_hw(model: torch.nn.Module) -> tuple[int, int]:
     """Return patch size (H,W) used by DinoV2 patch embedding."""
@@ -32,6 +33,8 @@ def _pad_to_multiple(x: torch.Tensor, patch_h: int, patch_w: int) -> tuple[torch
         return x, 0, 0
     x = F.pad(x, (0, pad_w, 0, pad_h), mode="constant", value=0.0)
     return x, pad_h, pad_w
+
+
 # ----------------------------------------------
 
 # We intentionally avoid importing depth_anything_3.api (it pulls in pycolmap/open3d/etc at import time).
@@ -103,7 +106,7 @@ def _load_state_dict(ckpt_path: Path) -> Dict[str, torch.Tensor]:
             nk = k
             for pref in ("module.", "model.", "net."):
                 if nk.startswith(pref):
-                    nk = nk[len(pref):]
+                    nk = nk[len(pref) :]
             out[nk] = v
         return out
     obj = torch.load(str(ckpt_path), map_location="cpu")
@@ -119,7 +122,7 @@ def _load_state_dict(ckpt_path: Path) -> Dict[str, torch.Tensor]:
         nk = k
         for pref in ("module.", "model.", "net."):
             if nk.startswith(pref):
-                nk = nk[len(pref):]
+                nk = nk[len(pref) :]
         out[nk] = v
     return out
 
@@ -139,9 +142,8 @@ def _build_model_from_hf_config(model_id: str, snapshot_dir: Path):
         raise RuntimeError(f"Unexpected config.json format. Top-level keys: {list(raw.keys())}")
 
     cfg = OmegaConf.create(raw["config"])  # contains __object__ blocks
-    model = da3_mod.create_object(cfg)     # returns a DepthAnything3Net instance
+    model = da3_mod.create_object(cfg)  # returns a DepthAnything3Net instance
     return model
-    return da3_mod.DepthAnything3Net()  # type: ignore[call-arg]
 
 
 def _quantize_p1p99(depth: np.ndarray) -> np.ndarray:
@@ -192,7 +194,9 @@ def main() -> int:
         raise SystemExit(f"No images found in {in_dir}")
 
     for p in images:
-        x, (origH, origW), (inH, inW) = _load_image_as_tensor(p, device=device, dtype=dtype, max_side=args.max_side, min_side=args.min_side)
+        x, (origH, origW), (inH, inW) = _load_image_as_tensor(
+            p, device=device, dtype=dtype, max_side=args.max_side, min_side=args.min_side
+        )
         patch_h, patch_w = _get_patch_hw(model)
         x, pad_h, pad_w = _pad_to_multiple(x, patch_h, patch_w)
 
@@ -219,7 +223,7 @@ def main() -> int:
         depth = depth[:orig_h, :orig_w]
         if (orig_h, orig_w) != (origH, origW):
             # depth currently at inference resolution; resize to original H/W
-            dimg = Image.fromarray(depth.astype(np.float32), mode='F')
+            dimg = Image.fromarray(depth.astype(np.float32), mode="F")
             dimg = dimg.resize((origW, origH), resample=Image.BILINEAR)
             depth = np.asarray(dimg).astype(np.float32)
         # Resize depth back to original image size
