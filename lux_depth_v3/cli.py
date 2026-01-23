@@ -1375,7 +1375,7 @@ def enhance(
             start_time=start_time,
             end_time=end_time,
             config={
-                "model_variant": model_variant.value.display_name,
+                "model_variant": (config.model_variant.value.display_name if config.model_variant is not None else None),
                 "preset": preset.value if preset else None,
                 "depth_quantization": depth_quantization,
                 "v2_preset": v2_preset,
