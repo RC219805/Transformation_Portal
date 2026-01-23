@@ -279,6 +279,7 @@ class TestEnhanceOrchestrator:
         assert (tmp_path / "v2").exists()
         assert (tmp_path / "manifests").exists()
         assert (tmp_path / "logs").exists()
+        assert (tmp_path / "zones").exists()
 
 
 if __name__ == "__main__":

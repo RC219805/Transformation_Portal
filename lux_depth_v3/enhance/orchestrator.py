@@ -677,7 +677,7 @@ class EnhanceOrchestrator:
                 )
                 gen = DepthZoneGenerator(zones_cfg)
 
-                zones, stats = gen.generate_zones(depth=depth01, image=rgb01 if rgb01 is not None else None)
+                zones, stats = gen.generate_zones(depth=depth01, image=rgb01)
 
                 # Write artifacts to output/zones/(subdir)/{stem}_*
                 zones_out_dir = self.zones_dir / output_key.parent
