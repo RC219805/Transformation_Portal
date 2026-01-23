@@ -116,6 +116,7 @@ class EnhanceConfig:
     # Depth config
     depth_device: str = "auto"
     depth_quantization: str = "p1p99"
+    depth_zones: str = "off"  # off|preview (diagnostics only; does not affect V2)
 
     # Execution control
     execution_mode: str = "sequential"  # "sequential" or "pipelined"
@@ -145,6 +146,10 @@ class EnhanceConfig:
         # Validate depth fallback policy
         validate_depth_fallback(self.depth_fallback)
 
+        # Validate depth zones mode
+        if self.depth_zones not in ("off", "preview"):
+            raise ValueError(f"Invalid depth_zones: {self.depth_zones} (expected off|preview)")
+
 
 class EnhanceOrchestrator:
     """Orchestrates V3 depth generation + V2 enhancement pipeline."""
@@ -172,12 +177,14 @@ class EnhanceOrchestrator:
         self.v2_dir = self.output_root / "v2"
         self.manifests_dir = self.output_root / "manifests"
         self.logs_dir = self.output_root / "logs"
+        self.zones_dir = self.output_root / "zones"
 
         for dir_path in [
             self.depth_dir,
             self.v2_dir,
             self.manifests_dir,
             self.logs_dir,
+            self.zones_dir,
         ]:
             dir_path.mkdir(parents=True, exist_ok=True)
 
@@ -641,6 +648,50 @@ class EnhanceOrchestrator:
                     depth_metadata = manifest.depth
                 except Exception:
                     logger.warning("Could not load existing depth metadata")
+
+        # Stage A.5: Depth zones (diagnostics-only preview)
+        if self.config.depth_zones == "preview" and depth_path and depth_path.exists():
+            try:
+                from PIL import Image
+                import numpy as np
+
+                from .depth_writer import read_depth_u16_png
+                from .depth_zones import DepthZoneConfig, DepthZoneGenerator
+
+                # Read uint16 depth and convert to float32 [0,1]
+                depth_u16 = read_depth_u16_png(depth_path)
+                depth01 = (depth_u16.astype(np.float32) / 65535.0).clip(0.0, 1.0)
+
+                # Optional: load normalized RGB for future sky heuristics (but keep it off by default)
+                rgb01 = None
+                try:
+                    with Image.open(normalized_path) as im:
+                        im = im.convert("RGB")
+                        rgb01 = np.asarray(im).astype(np.float32) / 255.0
+                except Exception:
+                    rgb01 = None  # purely optional
+
+                zones_cfg = DepthZoneConfig(
+                    mode="preview",
+                    apply_sky_heuristic=False,  # keep conservative
+                )
+                gen = DepthZoneGenerator(zones_cfg)
+
+                zones, stats = gen.generate_zones(depth=depth01, image=rgb01)
+
+                # Write artifacts to output/zones/(subdir)/{stem}_*
+                zones_out_dir = self.zones_dir / output_key.parent
+                zones_out_dir.mkdir(parents=True, exist_ok=True)
+
+                stem = output_key.name
+                gen.save_zone_masks(zones, zones_out_dir, stem)
+                gen.save_preview(zones, zones_out_dir / f"{stem}_zones_preview.png")
+                gen.save_stats_json(stats, zones_out_dir / f"{stem}_zone_stats.json")
+
+                logger.info(f"Stage A.5: Wrote depth zones diagnostics for {output_key}")
+
+            except Exception as e:
+                logger.warning(f"Stage A.5 depth zones preview failed for {output_key}: {e}")
 
         # Stage B: Run V2 enhancement
         logger.info(f"Stage B: Running V2 enhancement for {output_key}...")
