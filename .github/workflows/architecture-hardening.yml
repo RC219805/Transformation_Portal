@@ -50,4 +50,5 @@ jobs:
           # Audit only our managed dependencies from requirements-repo.txt
           # Excludes system packages (certifi, cryptography, etc.) that are
           # pre-installed in the GitHub Actions Ubuntu image.
-          pip-audit -r lux_depth_v2/requirements-repo.txt
+          # TEMP ALLOWLIST (expires 2026-02-15): protobuf CVE-2026-0994 has no fixed version published yet.
+          pip-audit -r lux_depth_v2/requirements-repo.txt --ignore-vuln CVE-2026-0994
