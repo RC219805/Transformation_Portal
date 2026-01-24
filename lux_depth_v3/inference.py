@@ -31,6 +31,7 @@ from lux_depth_v3.da3_wrapper import (
     DA3Prediction,
     check_da3_cli_available,
 )
+from lux_depth_v3.da3_model_backend import DA3ModelBackend
 
 logger = logging.getLogger(__name__)
 
@@ -132,9 +133,34 @@ class DA3InferenceEngine:
             logger.info("DA3 Python API mode initialized with %s", model_name)
             self.model = self.wrapper.model
         else:
-            logger.warning("DA3 API not available, using fallback mode")
+            # API wrapper missing (often due to optional deps like pycolmap/open3d).
+            # Try model-level backend (HF config + safetensors) before conceding fallback.
             self.wrapper = None
             self.model = None
+
+            self.model_backend = None
+            try:
+                # Configure backend from engine config
+                from lux_depth_v3.da3_model_backend import DA3ModelBackendConfig
+                import os
+
+                backend_cfg = DA3ModelBackendConfig(
+                    model_id=self.config.model_variant.value.huggingface_id,
+                    device=self.device,
+                    dtype="float32",  # DA3 requires float32 for quantile ops
+                    max_side=896,
+                    cache_dir=self.config.cache_dir / "models" if self.config.cache_dir else None,
+                    offline=os.environ.get("HF_HUB_OFFLINE", "0") == "1" or os.environ.get("TRANSFORMERS_OFFLINE", "0") == "1",
+                )
+                mb = DA3ModelBackend(backend_cfg)
+                if mb.is_available():
+                    self.model_backend = mb
+                    logger.info("DA3 model-level backend available (no depth_anything_3.api).")
+                else:
+                    logger.warning("DA3 API not available and model-level backend unavailable; using fallback mode")
+            except Exception as e:
+                logger.warning(f"DA3 model-level backend init failed; using fallback mode ({e})")
+                self.model_backend = None
 
         self.preprocessor = Preprocessor(self.config.preprocessing)
         self.backend = None
@@ -492,6 +518,9 @@ class DA3InferenceEngine:
                 and getattr(self.wrapper, "model", None) is not None
             ):
                 results = self._inference_api(inputs)
+            elif getattr(self, "model_backend", None) is not None:
+                # Use model-level backend (HF config + safetensors, no API wrapper)
+                results = self._inference_model_backend(inputs)
             else:
                 # Fallback to the legacy placeholder implementation.
                 # Ensure model is loaded for native mode
@@ -641,6 +670,46 @@ class DA3InferenceEngine:
                 metadata["extrinsics"] = extrinsics[i].tolist() if extrinsics.ndim == 3 else extrinsics.tolist()
             if intrinsics is not None:
                 metadata["intrinsics"] = intrinsics[i].tolist() if intrinsics.ndim == 3 else intrinsics.tolist()
+
+            results.append(DepthResult(depth_map=depth_map, original_image=image, metadata=metadata))
+
+        return results
+
+    def _inference_model_backend(self, inputs: List[ImageInput]) -> List[DepthResult]:
+        """Run inference via DA3ModelBackend (direct model access)."""
+        if getattr(self, "model_backend", None) is None:
+            raise RuntimeError("DA3 model backend not available")
+
+        results: List[DepthResult] = []
+        for img_input in inputs:
+            # Load image via ImageInput for consistent TIFF/dtype handling
+            image = img_input.load()
+
+            # Convert to float32 [0,1] - handle different input dtypes
+            orig_dtype = image.dtype
+            rgb01 = image.astype(np.float32)
+
+            if np.issubdtype(orig_dtype, np.uint8):
+                rgb01 /= 255.0
+            elif np.issubdtype(orig_dtype, np.uint16):
+                rgb01 /= 65535.0
+            elif np.issubdtype(orig_dtype, np.floating):
+                if rgb01.max() > 1.5:
+                    rgb01 /= 255.0
+
+            rgb01 = np.clip(rgb01, 0.0, 1.0)
+
+            # Predict depth
+            depth_map = self.model_backend.predict_depth01_from_rgb01(rgb01)
+
+            mv = self.config.model_variant.value  # ModelInfo
+            metadata = {
+                **(img_input.metadata or {}),
+                "model_variant": mv.display_name,
+                "model_hf_id": mv.huggingface_id,
+                "inference_mode": "model_backend",
+                "input_path": str(img_input.path) if img_input.path else None,
+            }
 
             results.append(DepthResult(depth_map=depth_map, original_image=image, metadata=metadata))
 
