@@ -14,9 +14,11 @@ import torch.nn.functional as F
 @dataclass(frozen=True)
 class DA3ModelBackendConfig:
     model_id: str = "depth-anything/DA3METRIC-LARGE"
-    device: str = "mps"  # mps|cpu
+    device: str = "cpu"  # cpu|cuda|mps - default to cpu for safety
     dtype: str = "float32"  # float32 recommended (DA3 uses quantile in some paths)
     max_side: int = 896  # safety cap to avoid giant attention buffers
+    cache_dir: Optional[Path] = None
+    offline: bool = False  # for HF_HUB_OFFLINE
 
 
 def _require(modname: str):
@@ -98,7 +100,14 @@ class DA3ModelBackend:
         snapshot_download = _require("huggingface_hub").snapshot_download
         load_file = _require("safetensors.torch").load_file
 
-        snap_dir = Path(snapshot_download(self.cfg.model_id))
+        # Respect cache dir and offline mode
+        cache_kwargs = {}
+        if self.cfg.cache_dir:
+            cache_kwargs["cache_dir"] = str(self.cfg.cache_dir)
+        if self.cfg.offline:
+            cache_kwargs["local_files_only"] = True
+
+        snap_dir = Path(snapshot_download(self.cfg.model_id, **cache_kwargs))
         raw = json.loads((snap_dir / "config.json").read_text())
         cfg = OmegaConf.create(raw["config"])
         model = da3_mod.create_object(cfg)

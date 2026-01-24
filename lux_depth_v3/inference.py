@@ -140,7 +140,19 @@ class DA3InferenceEngine:
 
             self.model_backend = None
             try:
-                mb = DA3ModelBackend()
+                # Configure backend from engine config
+                from lux_depth_v3.da3_model_backend import DA3ModelBackendConfig
+                import os
+
+                backend_cfg = DA3ModelBackendConfig(
+                    model_id=self.config.model_variant.value.huggingface_id,
+                    device=self.device,
+                    dtype="float32",  # DA3 requires float32 for quantile ops
+                    max_side=896,
+                    cache_dir=self.config.cache_dir / "models" if self.config.cache_dir else None,
+                    offline=os.environ.get("HF_HUB_OFFLINE", "0") == "1" or os.environ.get("TRANSFORMERS_OFFLINE", "0") == "1",
+                )
+                mb = DA3ModelBackend(backend_cfg)
                 if mb.is_available():
                     self.model_backend = mb
                     logger.info("DA3 model-level backend available (no depth_anything_3.api).")
@@ -670,22 +682,21 @@ class DA3InferenceEngine:
 
         results: List[DepthResult] = []
         for img_input in inputs:
-            # Load image
-            from PIL import Image
+            # Load image via ImageInput for consistent TIFF/dtype handling
+            image = img_input.load()
 
-            if img_input.array is not None:
-                image = img_input.array
-            elif img_input.path is not None:
-                with Image.open(img_input.path) as im:
-                    im = im.convert("RGB")
-                    image = np.asarray(im)
-            else:
-                raise ValueError("ImageInput must have either .array or .path")
-
-            # Convert to float32 [0,1]
+            # Convert to float32 [0,1] - handle different input dtypes
+            orig_dtype = image.dtype
             rgb01 = image.astype(np.float32)
-            if rgb01.dtype == np.uint8 or rgb01.max() > 1.5:
-                rgb01 = rgb01 / 255.0
+
+            if np.issubdtype(orig_dtype, np.uint8):
+                rgb01 /= 255.0
+            elif np.issubdtype(orig_dtype, np.uint16):
+                rgb01 /= 65535.0
+            elif np.issubdtype(orig_dtype, np.floating):
+                if rgb01.max() > 1.5:
+                    rgb01 /= 255.0
+
             rgb01 = np.clip(rgb01, 0.0, 1.0)
 
             # Predict depth
