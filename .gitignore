@@ -434,3 +434,6 @@ zones_da3_*/
 
 # Local analysis outputs
 out/
+
+# Local DA3 eval artifacts
+/docs/validation/da3/model_backend_eval/
