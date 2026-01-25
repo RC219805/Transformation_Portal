@@ -87,7 +87,7 @@ The system automatically selects the best available backend:
 ## Technical Details
 
 ### Model Loading
-- **HuggingFace Hub**: `depth-anything/Depth-Anything-V3-Metric-Hypersim-Large`
+- **HuggingFace Hub**: `depth-anything/DA3METRIC-LARGE`
 - **Format**: safetensors (safe, fast, memory-efficient)
 - **Config**: Auto-loaded from `config.json` in model repo
 - **Device**: MPS (macOS), CUDA (Linux/Windows), or CPU fallback
