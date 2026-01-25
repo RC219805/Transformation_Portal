@@ -1,3 +1,4 @@
+# NOTE: image stem values are URL-encoded once (e.g. %2520 -> %20 -> space) due to path-safety normalization
 stem,variant,valid_coverage_pct,p10,p90,clip_low_frac,clip_high_frac,invalid_frac,Z1_pct,Z2_pct,Z3_pct,Z4_pct,direction
 750Picacho_Aerial%2520copy,placeholder,100.0,0.16139467060565948,0.721522867679596,0.0,0.0,0.0,7.3148956298828125,20.54855728149414,24.798126220703125,47.33839416503906,near_to_far_increasing
 750Picacho_GreatRoom%2520copy,placeholder,100.0,0.24892042577266693,0.5974059700965881,0.0,0.0,0.0,4.569721698760986,26.779985427856445,23.939250946044922,44.710975646972656,near_to_far_increasing
