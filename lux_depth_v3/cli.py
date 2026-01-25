@@ -1386,6 +1386,7 @@ def enhance(
                 "include": include,
                 "exclude": exclude,
                 "max_images": max_images,
+                "depth_zones": depth_zones,
             },
             images=[
                 {
