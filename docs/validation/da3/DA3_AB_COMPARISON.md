@@ -1,7 +1,11 @@
 # DA3 A/B Comparison
 
-**A (placeholder)**: `output_v3_zones_eval`
-**B (model backend)**: `docs/validation/da3/model_backend_eval`
+**A (placeholder)**: `output_v3_zones_eval` (legacy local evaluation outputs)
+
+**B (model backend)**: local evaluation directory (`model_backend_eval/`, not committed)
+
+> Note: Raw evaluation artifacts (depth maps, zone images, manifests) are intentionally
+> excluded from version control. The CSV and this summary are the source of truth.
 
 ## Depth scaling (mean across images)
 | Metric | A | B |
