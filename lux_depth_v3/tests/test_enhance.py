@@ -282,5 +282,56 @@ class TestEnhanceOrchestrator:
         assert (tmp_path / "zones").exists()
 
 
+class TestCLI:
+    """Regression tests for CLI behavior."""
+
+    def test_batch_manifest_includes_depth_zones(self, tmp_path, monkeypatch):
+        """Test that --depth-zones is recorded in batch manifest."""
+        import json
+        from typer.testing import CliRunner
+        from lux_depth_v3.cli import app
+        from PIL import Image
+
+        # Create dummy input image
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        Image.new("RGB", (64, 64), color=(128, 128, 128)).save(input_dir / "test.jpg")
+
+        output_dir = tmp_path / "output"
+
+        # Mock EnhanceOrchestrator.enhance_image to avoid model downloads
+        def mock_enhance_image(self, image_input, input_root=None):
+            return {"status": "ok", "image": str(image_input.path), "runtime_s": 0.01}
+
+        monkeypatch.setattr(
+            "lux_depth_v3.enhance.orchestrator.EnhanceOrchestrator.enhance_image",
+            mock_enhance_image,
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(
+            app,
+            [
+                "enhance",
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(output_dir),
+                "--depth-zones",
+                "preview",
+                "--max-images",
+                "1",
+                "--non-commercial-ok",
+            ],
+        )
+        assert result.exit_code == 0, result.stdout
+
+        manifest_files = list((output_dir / "manifests").glob("batch_*.json"))
+        assert len(manifest_files) == 1
+
+        batch_manifest = json.loads(manifest_files[0].read_text())
+        assert batch_manifest["config"]["depth_zones"] == "preview"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
