@@ -175,9 +175,7 @@ class DA3InferenceEngine:
                         self.model_backend = mb
                         logger.info("DA3 model-level backend available (no depth_anything_3.api).")
                     else:
-                        logger.warning(
-                            "DA3 API not available and model-level backend unavailable; using fallback mode"
-                        )
+                        logger.warning("DA3 API not available and model-level backend unavailable; using fallback mode")
                 except Exception as e:
                     logger.warning(f"DA3 model-level backend init failed; using fallback mode ({e})")
                     self.model_backend = None
@@ -930,9 +928,7 @@ class DepthResult:
         import matplotlib.pyplot as plt
 
         # Normalize to [0, 1]
-        depth_norm = (self.depth_map - self.depth_map.min()) / (
-            self.depth_map.max() - self.depth_map.min() + 1e-8
-        )
+        depth_norm = (self.depth_map - self.depth_map.min()) / (self.depth_map.max() - self.depth_map.min() + 1e-8)
 
         # Apply colormap
         cmap = plt.get_cmap(colormap)
