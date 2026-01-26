@@ -67,7 +67,6 @@ fsspec==2024.10.0
     #   torch
 future==1.0.0
     # via basicsr
-gfpgan==1.3.8
     # via realesrgan
 grpcio==1.76.0
     # via tb-nightly
@@ -239,7 +238,6 @@ pyyaml==6.0.2
     #   huggingface-hub
     #   pyaml
     #   transformers
-realesrgan==0.3.0
     # via -r ml.in
 regex==2024.11.6
     # via

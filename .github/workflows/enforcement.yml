@@ -1,0 +1,112 @@
+name: Enforcement
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  action-pins:
+    name: Verify Action Pins
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check action pinning
+        run: python scripts/ci/verify_action_pins.py
+
+  banned-dependencies:
+    name: Verify No Banned Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install tomli for TOML parsing
+        run: pip install tomli
+
+      - name: Check for banned packages
+        run: python scripts/security/verify_banned_dependencies.py --strict
+
+  test-layer1:
+    name: Layer 1 Tests (Fast)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install core dependencies
+        run: |
+          pip install -e ".[dev]" -c requirements/constraints.txt
+
+      - name: Run unit and regression tests
+        run: pytest -m "unit or regression" --maxfail=3
+
+  test-layer2-ml:
+    name: Layer 2 Tests (ML Tier)
+    runs-on: ubuntu-latest
+    # Only run ML tests when ML code changes or on schedule
+    if: |
+      contains(github.event.head_commit.modified, 'src/transformation_portal/ml/') ||
+      contains(github.event.head_commit.modified, 'requirements/ml.') ||
+      github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo docker image prune --all --force
+
+      - name: Install ML dependencies with constraints
+        run: |
+          pip install -e ".[ml]" -c requirements/constraints.txt
+
+      - name: Run ML tests
+        run: pytest -m "ml" --maxfail=3
+
+  golden-regression:
+    name: Golden Regression Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]" -c requirements/constraints.txt
+
+      - name: Run golden tests
+        run: pytest -m "golden" --maxfail=1
+
+  artifact-boundary:
+    name: Verify Artifact Boundary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check no artifacts in git
+        run: |
+          if git ls-files | grep -E '^(outputs|artifacts|renders)/.*\.(exr|tif|tiff|mp4|mov)$'; then
+            echo "❌ Large artifacts found in git"
+            exit 1
+          fi
+          echo "✅ No large artifacts in git"
