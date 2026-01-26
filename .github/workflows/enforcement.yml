@@ -14,7 +14,7 @@ jobs:
     name: Verify Action Pins
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Check action pinning
         run: python scripts/ci/verify_action_pins.py
@@ -23,7 +23,7 @@ jobs:
     name: Verify No Banned Dependencies
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v6
         with:
@@ -39,7 +39,7 @@ jobs:
     name: Layer 1 Tests (Fast)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v6
         with:
@@ -62,7 +62,7 @@ jobs:
       contains(github.event.head_commit.modified, 'requirements/ml.') ||
       github.event_name == 'schedule'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v6
         with:
@@ -87,7 +87,7 @@ jobs:
     name: Golden Regression Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v6
         with:
@@ -104,7 +104,7 @@ jobs:
     name: Verify Artifact Boundary
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Check no artifacts in git
         run: |
