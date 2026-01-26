@@ -118,7 +118,7 @@ jobs:
             ${{ runner.os }}-pip-metadata-
 
       - name: Submit dependencies to GitHub
-        uses: advanced-security/component-detection-dependency-submission-action@v2
+        uses: advanced-security/component-detection-dependency-submission-action@8270e9ad5f931dfb49a27559ade74bc252af7b9c # v2
         env:
           # Critical: Disable pip caching to save disk space
           PIP_NO_CACHE_DIR: '1'
