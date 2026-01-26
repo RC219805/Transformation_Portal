@@ -46,6 +46,16 @@ ENV/
 env.bak/
 venv.bak/
 
+# Security - sensitive files
+.bash_history
+.zsh_history
+.sh_history
+*.pem
+*.key
+id_rsa
+id_dsa
+PKG-INFO
+
 # Depth Pipeline
 # Model cache
 .cache/
@@ -193,3 +203,6 @@ archive/legacy/
 !archive/README.md
 !archive/*/.gitkeep
 venv_py311/
+
+# Security - prevent sensitive local backups
+.local_backup/

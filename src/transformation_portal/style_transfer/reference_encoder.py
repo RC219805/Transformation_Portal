@@ -10,7 +10,7 @@ that can be used for IP-Adapter style transfer. Supports:
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Tuple, Union
 import pickle
 
 import numpy as np

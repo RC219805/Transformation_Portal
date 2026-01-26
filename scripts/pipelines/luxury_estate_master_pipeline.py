@@ -43,8 +43,8 @@ from tqdm import tqdm
 
 # Conditional imports with graceful degradation
 try:
-    from basicsr.archs.rrdbnet_arch import RRDBNet
     from realesrgan import RealESRGANer
+    from realesrgan.archs.rrdbnet_arch import RRDBNet
     ESRGAN_AVAILABLE = True
 except ImportError:
     ESRGAN_AVAILABLE = False

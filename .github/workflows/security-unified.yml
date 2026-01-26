@@ -1,0 +1,249 @@
+# =============================================================================
+# Unified Security Scanning Workflow
+# Phase 1 Optimization: Consolidates security-scan.yml, security-gates.yml, codeql.yml
+# =============================================================================
+
+name: Security Unified
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+    - cron: '27 22 * * 2'
+
+  push:
+    branches: [main]
+    paths:
+      - 'requirements/**'
+      - 'requirements*.txt'
+      - 'pyproject.toml'
+      - 'requirements/constraints.txt'
+      - 'scripts/security/**'
+      - 'lux_depth_v2/requirements-repo.txt'
+      - '**/*.py'
+      - '**/*.sh'
+      - '**/*.yaml'
+      - '**/*.yml'
+
+  pull_request:
+    branches: [main]
+    # Do NOT use paths filtering on PRs.
+    # Branch protection requires CodeQL results for every PR SHA (including docs-only changes).
+
+  workflow_dispatch:
+    inputs:
+      full_scan:
+        description: 'Run full security scan including all dependencies'
+        required: false
+        default: 'false'
+        type: boolean
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+  actions: read
+  packages: read
+
+concurrency:
+  group: security-unified-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ===========================================================================
+  # Job 1: CodeQL Analysis
+  # ===========================================================================
+  codeql:
+    # Emit canonical CodeQL check names so branch protection can match them reliably:
+    #   - Analyze (python)
+    #   - Analyze (actions)
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: actions
+            build-mode: none
+          - language: python
+            build-mode: none
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  # ===========================================================================
+  # Job 2: Dependency Security Scan
+  # ===========================================================================
+  dependency-scan:
+    name: Dependency Security
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements*.txt
+            requirements/constraints.txt
+
+      - name: Verify basicsr Not Installed (CVE-2024-27763)
+        id: basicsr-check
+        run: |
+          if pip show basicsr > /dev/null 2>&1; then
+            echo "❌ CRITICAL: basicsr is pre-installed!"
+            echo "has_basicsr=true" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          echo "✅ basicsr not present (expected)"
+          echo "has_basicsr=false" >> $GITHUB_OUTPUT
+
+      - name: Verify No Vulnerable Imports
+        run: python scripts/utilities/verify_no_basicsr_imports.py
+
+      - name: Check Constraints File
+        id: check
+        run: |
+          if [ ! -f "requirements/constraints.txt" ]; then
+            echo "❌ Missing requirements/constraints.txt"
+            echo "has_vulnerabilities=true" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          if grep -q "basicsr>=999.0.0" requirements/constraints.txt; then
+            echo "✅ basicsr is blocked in constraints.txt"
+            echo "has_vulnerabilities=false" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ basicsr may not be properly blocked"
+            echo "has_vulnerabilities=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install Dependencies with Constraints
+        run: |
+          pip install --upgrade pip
+          pip install -c requirements/constraints.txt -r requirements-ci.txt
+          pip install -c requirements/constraints.txt -e .
+
+      - name: Verify basicsr Not Installed After pip install
+        run: |
+          if pip show basicsr > /dev/null 2>&1; then
+            echo "❌ CRITICAL: basicsr was installed despite constraints!"
+            pip show basicsr
+            exit 1
+          fi
+          echo "✅ Constraints working: basicsr not installed"
+
+      - name: Run Security Manager Scan
+        run: python scripts/security/security_manager.py scan
+
+      - name: Auto-Resolve Known Vulnerabilities
+        id: auto-resolve
+        continue-on-error: true
+        run: python scripts/security/auto_resolver.py status || true
+
+      - name: Full Verification with Package Check
+        run: python scripts/utilities/verify_no_basicsr_imports.py --check-pkg
+
+      - name: Install Safety for Additional Scanning
+        run: python -m pip install -U safety==3.7.0
+
+      - name: Run Safety Scan
+        continue-on-error: true
+        run: |
+          safety scan --policy-file .safety-policy.yml --output json > safety-report.json || true
+          if [ -f lux_depth_v2/requirements-repo.txt ]; then
+            safety scan --target lux_depth_v2/requirements-repo.txt --output json > safety-lux-depth-v2.json || true
+          fi
+
+      - name: Upload Safety Reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: safety-reports
+          path: |
+            safety-report.json
+            safety-lux-depth-v2.json
+          if-no-files-found: ignore
+
+  # ===========================================================================
+  # Job 3: Security Gates
+  # ===========================================================================
+  security-gates:
+    name: Security Artifact Verification
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Check for sensitive files
+        run: |
+          echo "🔍 Checking for sensitive files in repository..."
+          if find . -name '.bash_history' -o -name '.zsh_history' -o -name '.sh_history' | grep -q .; then
+            echo "❌ ERROR: Shell history files found!"
+            exit 1
+          fi
+          if [ -f "PKG-INFO" ]; then
+            echo "❌ ERROR: PKG-INFO build artifact found!"
+            exit 1
+          fi
+          if [ -d ".local_backup" ]; then
+            echo "❌ ERROR: .local_backup directory found!"
+            exit 1
+          fi
+          if find . -name '*.pem' -o -name '*.key' -o -name 'id_rsa' -o -name 'id_dsa' | grep -v '.venv' | grep -q .; then
+            echo "❌ ERROR: Credential files found!"
+            exit 1
+          fi
+          echo "✓ No sensitive files found"
+
+      - name: Check for bidirectional Unicode
+        run: |
+          python scripts/security/pre_commit_security_check.py $(find . -name '*.py' -o -name '*.sh' -o -name '*.yaml' -o -name '*.yml' | grep -v '.venv' | grep -v 'deprecated' | head -100)
+
+      - name: Validate .gitignore coverage
+        run: |
+          REQUIRED_PATTERNS=(
+            ".bash_history"
+            ".local_backup/"
+            "PKG-INFO"
+            "*.pem"
+            "*.key"
+            "id_rsa"
+          )
+          for pattern in "${REQUIRED_PATTERNS[@]}"; do
+            if ! grep -q "$pattern" .gitignore; then
+              echo "❌ ERROR: Required pattern missing from .gitignore: $pattern"
+              exit 1
+            fi
+          done
+          echo "✓ .gitignore has proper security coverage"
