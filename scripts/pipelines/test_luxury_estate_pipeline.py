@@ -103,7 +103,7 @@ except ImportError:
 print("\n[8/8] Checking Real-ESRGAN upscaler...")
 try:
     from realesrgan import RealESRGANer
-    from basicsr.archs.rrdbnet_arch import RRDBNet
+    from realesrgan.archs.rrdbnet_arch import RRDBNet
 
     # Check for weights
     weights_path = Path("weights/RealESRGAN_x4plus.pth")

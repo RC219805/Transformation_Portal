@@ -14,10 +14,14 @@ def main():
     repo_root = Path(__file__).resolve().parent.parent.parent
     python_files = list(repo_root.glob("**/*.py"))
 
-    # Exclude virtual environments and deprecated code
+    # Exclude virtual environments, deprecated code, and this verification script itself
+    excluded_parts = ['.venv', 'venv', 'venv_py311', 'deprecated']
+    excluded_files = ['verify_no_basicsr_imports.py']
+
     python_files = [
         f for f in python_files
-        if not any(part in f.parts for part in ['.venv', 'venv', 'venv_py311', 'deprecated'])
+        if not any(part in f.parts for part in excluded_parts)
+        and f.name not in excluded_files
     ]
 
     violations = []
