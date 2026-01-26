@@ -585,7 +585,11 @@ class EnhanceOrchestrator:
                 # CRITICAL FIX: Apply post-processing (Refinement → Filtering → Scaling)
                 # This ensures `lux-depth-v3 enhance` produces the same high-quality depth
                 # maps as `lux-depth-v3 process`, respecting preset configuration.
-                depth_result = self.postprocessor.process(depth_result)
+                try:
+                    depth_result = self.postprocessor.process(depth_result)
+                except Exception as pp_error:
+                    logger.warning(f"Postprocessing failed, using raw depth: {pp_error}")
+                    # Continue with raw depth - postprocessing is non-critical
 
                 depth_runtime_s = time.time() - start_time
 
