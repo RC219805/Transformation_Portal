@@ -7,10 +7,11 @@ CLI integration.
 
 from __future__ import annotations
 
+import logging
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any, Union
-import logging
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -34,6 +35,13 @@ from lux_depth_v3.da3_wrapper import (
 from lux_depth_v3.da3_model_backend import DA3ModelBackend
 
 logger = logging.getLogger(__name__)
+
+ENV_DISABLE_MODEL_BACKEND = "LUX_DA3_DISABLE_MODEL_BACKEND"
+
+
+def _env_truthy(name: str) -> bool:
+    v = os.environ.get(name, "")
+    return v.strip().lower() in ("1", "true", "yes", "on")
 
 
 class DA3InferenceEngine:
@@ -62,6 +70,10 @@ class DA3InferenceEngine:
         self.validate_license_strict = validate_license_strict
         self.device = config.device.resolve_device()
         self.dtype = config.device.get_dtype()
+
+        # Env kill-switch: disable model-level backend routing/initialization.
+        # (Read once at init; CLI invocations are generally process-scoped anyway.)
+        self.disable_model_backend = _env_truthy(ENV_DISABLE_MODEL_BACKEND)
 
         # Validate license before initializing
         # (Import lazily so environments that vendor/modify this package get a clearer error.)
@@ -132,41 +144,50 @@ class DA3InferenceEngine:
         if getattr(self.wrapper, "available", False):
             logger.info("DA3 Python API mode initialized with %s", model_name)
             self.model = self.wrapper.model
+            self.model_backend = None
         else:
             # API wrapper missing (often due to optional deps like pycolmap/open3d).
             # Try model-level backend (HF config + safetensors) before conceding fallback.
             self.wrapper = None
             self.model = None
-
             self.model_backend = None
-            try:
-                # Configure backend from engine config
-                from lux_depth_v3.da3_model_backend import DA3ModelBackendConfig
-                import os
 
-                backend_cfg = DA3ModelBackendConfig(
-                    model_id=self.config.model_variant.value.huggingface_id,
-                    device=self.device,
-                    dtype="float32",  # DA3 requires float32 for quantile ops
-                    max_side=896,
-                    cache_dir=self.config.cache_dir / "models" if self.config.cache_dir else None,
-                    offline=os.environ.get("HF_HUB_OFFLINE", "0") == "1" or os.environ.get("TRANSFORMERS_OFFLINE", "0") == "1",
+            if self.disable_model_backend:
+                logger.warning(
+                    "DA3 model-level backend disabled via %s; using fallback mode",
+                    ENV_DISABLE_MODEL_BACKEND,
                 )
-                mb = DA3ModelBackend(backend_cfg)
-                if mb.is_available():
-                    self.model_backend = mb
-                    logger.info("DA3 model-level backend available (no depth_anything_3.api).")
-                else:
-                    logger.warning("DA3 API not available and model-level backend unavailable; using fallback mode")
-            except Exception as e:
-                logger.warning(f"DA3 model-level backend init failed; using fallback mode ({e})")
-                self.model_backend = None
+            else:
+                try:
+                    # Configure backend from engine config
+                    from lux_depth_v3.da3_model_backend import DA3ModelBackendConfig
+
+                    backend_cfg = DA3ModelBackendConfig(
+                        model_id=self.config.model_variant.value.huggingface_id,
+                        device=self.device,
+                        dtype="float32",  # DA3 requires float32 for quantile ops
+                        max_side=896,
+                        cache_dir=self.config.cache_dir / "models" if self.config.cache_dir else None,
+                        offline=_env_truthy("HF_HUB_OFFLINE") or _env_truthy("TRANSFORMERS_OFFLINE"),
+                    )
+                    mb = DA3ModelBackend(backend_cfg)
+                    if mb.is_available():
+                        self.model_backend = mb
+                        logger.info("DA3 model-level backend available (no depth_anything_3.api).")
+                    else:
+                        logger.warning(
+                            "DA3 API not available and model-level backend unavailable; using fallback mode"
+                        )
+                except Exception as e:
+                    logger.warning(f"DA3 model-level backend init failed; using fallback mode ({e})")
+                    self.model_backend = None
 
         self.preprocessor = Preprocessor(self.config.preprocessing)
         self.backend = None
         self.cli = None
 
         # Model cache
+        # NOTE: Keep existing behavior; config.cache_dir is expected to be set in production configs.
         self._model_cache_path = self.config.cache_dir / "models"
         self._model_cache_path.mkdir(parents=True, exist_ok=True)
 
@@ -228,17 +249,6 @@ class DA3InferenceEngine:
 
         Raises:
             RuntimeError: If using CLI mode or API not available
-
-        Example:
-            >>> engine = DA3InferenceEngine(config)
-            >>> prediction = engine.infer(
-            ...     images=[Path("img1.jpg"), Path("img2.jpg")],
-            ...     export_dir=Path("output"),
-            ...     export_format="mini_npz-glb",
-            ...     infer_gs=False,
-            ...     convert_to_metric=True,
-            ...     focal_length_px=500.0
-            ... )
         """
         if self.use_cli:
             return self._infer_cli(
@@ -483,7 +493,7 @@ class DA3InferenceEngine:
     def inference(
         self,
         inputs: Union[ImageInput, List[ImageInput]],
-    ) -> Union[DepthResult, List[DepthResult]]:
+    ) -> Union["DepthResult", List["DepthResult"]]:
         """Run depth inference on input images.
 
         Args:
@@ -518,7 +528,7 @@ class DA3InferenceEngine:
                 and getattr(self.wrapper, "model", None) is not None
             ):
                 results = self._inference_api(inputs)
-            elif getattr(self, "model_backend", None) is not None:
+            elif getattr(self, "model_backend", None) is not None and not self.disable_model_backend:
                 # Use model-level backend (HF config + safetensors, no API wrapper)
                 results = self._inference_model_backend(inputs)
             else:
@@ -538,29 +548,15 @@ class DA3InferenceEngine:
     def predict(
         self,
         inputs: Union[ImageInput, List[ImageInput]],
-    ) -> Union[DepthResult, List[DepthResult]]:
-        """Alias for inference() method for backward compatibility.
-
-        Args:
-            inputs: Single image or list of images
-
-        Returns:
-            Depth estimation result(s)
-        """
+    ) -> Union["DepthResult", List["DepthResult"]]:
+        """Alias for inference() method for backward compatibility."""
         return self.inference(inputs)
 
     def _inference_cli(
         self,
         inputs: List[ImageInput],
-    ) -> List[DepthResult]:
-        """Run inference via DA3 CLI.
-
-        Args:
-            inputs: List of input images
-
-        Returns:
-            List of depth results
-        """
+    ) -> List["DepthResult"]:
+        """Run inference via DA3 CLI."""
         # Start backend if configured and not running
         if self.backend is not None and not self.backend.is_running():
             print("Starting backend service...")
@@ -613,16 +609,8 @@ class DA3InferenceEngine:
         self,
         export_dir: Path,
         inputs: List[ImageInput],
-    ) -> List[DepthResult]:
-        """Parse CLI output into DepthResult objects.
-
-        Args:
-            export_dir: Directory with CLI output
-            inputs: Original inputs
-
-        Returns:
-            List of depth results
-        """
+    ) -> List["DepthResult"]:
+        """Parse CLI output into DepthResult objects."""
         results = []
 
         export_tokens = set(self.config.cli.export_format.split("-"))
@@ -675,7 +663,7 @@ class DA3InferenceEngine:
 
         return results
 
-    def _inference_model_backend(self, inputs: List[ImageInput]) -> List[DepthResult]:
+    def _inference_model_backend(self, inputs: List[ImageInput]) -> List["DepthResult"]:
         """Run inference via DA3ModelBackend (direct model access)."""
         if getattr(self, "model_backend", None) is None:
             raise RuntimeError("DA3 model backend not available")
@@ -715,7 +703,7 @@ class DA3InferenceEngine:
 
         return results
 
-    def _inference_api(self, inputs: List[ImageInput]) -> List[DepthResult]:
+    def _inference_api(self, inputs: List[ImageInput]) -> List["DepthResult"]:
         """Run inference via the official DA3 Python API wrapper."""
         if getattr(self, "wrapper", None) is None or not getattr(self.wrapper, "available", False):
             raise RuntimeError("DA3 Python API not available")
@@ -762,15 +750,8 @@ class DA3InferenceEngine:
     def _inference_monocular(
         self,
         inputs: List[ImageInput],
-    ) -> List[DepthResult]:
-        """Run monocular depth inference.
-
-        Args:
-            inputs: List of input images
-
-        Returns:
-            List of depth results
-        """
+    ) -> List["DepthResult"]:
+        """Run monocular depth inference."""
         results = []
 
         for img_input in inputs:
@@ -827,15 +808,8 @@ class DA3InferenceEngine:
     def _inference_multiview(
         self,
         inputs: List[ImageInput],
-    ) -> List[DepthResult]:
-        """Run multi-view depth inference.
-
-        Args:
-            inputs: List of input images with camera poses
-
-        Returns:
-            List of depth results with 3D reconstruction
-        """
+    ) -> List["DepthResult"]:
+        """Run multi-view depth inference."""
         # Validate poses
         for img_input in inputs:
             if img_input.pose is None:
@@ -915,15 +889,7 @@ class DA3InferenceEngine:
         depth_map: np.ndarray,
         target_size: Tuple[int, int],
     ) -> np.ndarray:
-        """Resize depth map to target size.
-
-        Args:
-            depth_map: Input depth map (H, W)
-            target_size: Target size (height, width)
-
-        Returns:
-            Resized depth map
-        """
+        """Resize depth map to target size."""
         from PIL import Image
 
         h_target, w_target = target_size
@@ -956,29 +922,17 @@ class DepthResult:
         return (float(self.depth_map.min()), float(self.depth_map.max()))
 
     def to_uint16(self, scale: float = 1000.0) -> np.ndarray:
-        """Convert depth to uint16 (e.g., for PNG export).
-
-        Args:
-            scale: Scale factor (e.g., 1000 for mm)
-
-        Returns:
-            Uint16 depth map
-        """
+        """Convert depth to uint16 (e.g., for PNG export)."""
         return (self.depth_map * scale).clip(0, 65535).astype(np.uint16)
 
     def to_colormap(self, colormap: str = "turbo") -> np.ndarray:
-        """Convert depth to colormap visualization.
-
-        Args:
-            colormap: Matplotlib colormap name
-
-        Returns:
-            RGB image (H, W, 3) in range [0, 255] uint8
-        """
+        """Convert depth to colormap visualization."""
         import matplotlib.pyplot as plt
 
         # Normalize to [0, 1]
-        depth_norm = (self.depth_map - self.depth_map.min()) / (self.depth_map.max() - self.depth_map.min() + 1e-8)
+        depth_norm = (self.depth_map - self.depth_map.min()) / (
+            self.depth_map.max() - self.depth_map.min() + 1e-8
+        )
 
         # Apply colormap
         cmap = plt.get_cmap(colormap)
