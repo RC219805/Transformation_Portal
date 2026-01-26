@@ -15,6 +15,7 @@ import logging
 
 from lux_depth_v3.config import DA3Config, ModelVariant, Preset
 from lux_depth_v3.inference import DA3InferenceEngine
+from lux_depth_v3.postprocessing import Postprocessor
 from lux_depth_v3.input_manager import ImageInput
 from .depth_writer import atomic_write_depth_u16_png_with_stats
 from .v2_runner import V2Runner, find_v2_report
@@ -225,6 +226,11 @@ class EnhanceOrchestrator:
             commercial_use=not config.non_commercial_ok,
             validate_license_strict=True,
         )
+
+        # CRITICAL FIX: Initialize Postprocessor with the config derived from Preset
+        # This ensures depth maps are refined (bilateral filtering, edge-aware refinement)
+        # before being written to disk, matching the quality of `lux-depth-v3 process`.
+        self.postprocessor = Postprocessor(da3_config.postprocessing)
 
         # Initialize V2 runner
         self.v2_runner = V2Runner()
@@ -575,6 +581,12 @@ class EnhanceOrchestrator:
             try:
                 # Use normalized input for depth estimation
                 depth_result = self.inference_engine.predict(normalized_input)
+
+                # CRITICAL FIX: Apply post-processing (Refinement → Filtering → Scaling)
+                # This ensures `lux-depth-v3 enhance` produces the same high-quality depth
+                # maps as `lux-depth-v3 process`, respecting preset configuration.
+                depth_result = self.postprocessor.process(depth_result)
+
                 depth_runtime_s = time.time() - start_time
 
                 # Write depth atomically with detailed statistics
