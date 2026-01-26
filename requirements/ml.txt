@@ -238,7 +238,7 @@ typing-extensions==4.12.2
     #   colour-science
     #   huggingface-hub
     #   torch
-urllib3==2.5.0
+urllib3==2.6.3
     # via requests
 zipp==3.23.0
     # via importlib-metadata
