@@ -27,7 +27,7 @@ colour-science==0.4.6
     # via -r requirements/ml.in
 controlnet-aux==0.0.9
     # via -r requirements/ml.in
-coremltools==8.3.0
+coremltools==9.0
     # via -r requirements/ml.in
 diffusers==0.31.0
     # via -r requirements/ml.in
