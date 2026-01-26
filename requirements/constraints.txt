@@ -1,0 +1,10 @@
+# Dependency Constraints
+# Blocks installation of banned/problematic packages
+# Use with: pip install -c requirements/constraints.txt
+
+# Security/quality bans - these packages are NOT allowed
+
+# realesrgan  # Unmaintained, use local implementation (HARD-BLOCKED)
+realesrgan>=9999.0.0
+# gfpgan  # Unstable dependencies, use alternative (HARD-BLOCKED)
+gfpgan>=9999.0.0

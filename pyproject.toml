@@ -30,11 +30,12 @@ classifiers = [
 
 [project.optional-dependencies]
 # ML and deep learning - see requirements/ml.in for pinned versions
+# ML dependencies. Note: `realesrgan` is BANNED (unmaintained).
+# Enforcement: requirements/constraints.txt hard-block pins + scripts/security/verify_banned_dependencies.py
 ml = [
     "torch>=2.0,<3",
     "diffusers>=0.20,<1",
     "controlnet-aux>=0.0.6,<1",
-    "realesrgan>=0.3.0,<1",
     "transformers>=4.35.0,<5",
     "huggingface-hub>=0.19.0,<1",
     "torchvision>=0.15.0,<1",

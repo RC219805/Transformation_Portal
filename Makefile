@@ -18,11 +18,13 @@ FAST_TESTS := \
 
 .PHONY: help test-fast test-novideo test-full test-structure test-utils venv setup clean \
         lint ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs \
-        lock lock-prod lock-ci lock-dev
+        lock lock-prod lock-ci lock-dev install-core install-ml
 
 help:
 	@echo "Targets:"
 	@echo "  setup              Install package in editable mode (pip install -e .)"
+	@echo "  install-core       Install core dependencies with constraints"
+	@echo "  install-ml         Install ML tier dependencies with constraints"
 	@echo "  test-fast          Run fast subset (no video/optional heavy paths)"
 	@echo "  test-novideo       Run all tests excluding video suite via -k filter"
 	@echo "  test-full          Run entire test suite (parallel if xdist present)"
@@ -58,6 +60,24 @@ venv:
 setup: venv
 	@echo "Installing package in editable mode..."
 	@"$(PY)" -m pip install -e .
+
+install-core: venv
+	@echo "Installing core dependencies with constraints..."
+	@if [ -f requirements/constraints.txt ]; then \
+		"$(PY)" -m pip install -e ".[dev]" -c requirements/constraints.txt; \
+	else \
+		echo "Warning: requirements/constraints.txt not found, installing without constraints"; \
+		"$(PY)" -m pip install -e ".[dev]"; \
+	fi
+
+install-ml: venv
+	@echo "Installing ML tier dependencies with constraints..."
+	@if [ -f requirements/constraints.txt ]; then \
+		"$(PY)" -m pip install -e ".[ml]" -c requirements/constraints.txt; \
+	else \
+		echo "Warning: requirements/constraints.txt not found, installing without constraints"; \
+		"$(PY)" -m pip install -e ".[ml]"; \
+	fi
 
 test-fast:
 	@"$(PY)" -m pytest -q $(FAST_TESTS)
