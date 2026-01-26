@@ -588,7 +588,11 @@ class EnhanceOrchestrator:
                 try:
                     depth_result = self.postprocessor.process(depth_result)
                 except Exception as pp_error:
-                    logger.warning(f"Postprocessing failed, using raw depth: {pp_error}")
+                    # Log with full context for debugging but continue with raw depth
+                    logger.warning(
+                        f"Postprocessing failed, using raw depth: {type(pp_error).__name__}: {pp_error}",
+                        exc_info=True,
+                    )
                     # Continue with raw depth - postprocessing is non-critical
 
                 depth_runtime_s = time.time() - start_time
