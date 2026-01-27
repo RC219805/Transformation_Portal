@@ -494,7 +494,7 @@ class TestDepthPostprocessing:
         np.testing.assert_array_equal(result, sample_depth)
 
     def test_preserve_scale_boolean_parsing(self):
-        """Test that preserve_scale config accepts bool and string values."""
+        """Test that preserve_scale config controls rescaling behavior at runtime."""
         test_cases = [
             (True, True),
             (False, False),
@@ -504,10 +504,16 @@ class TestDepthPostprocessing:
             ('no', False),
             ('1', True),
             ('0', False),
+            (1, True),     # Numeric integer
+            (0, False),    # Numeric integer
+            (1.0, True),   # Numeric float
+            (0.0, False),  # Numeric float
             ('invalid', True),  # Should default to True for bilateral
         ]
 
-        for input_value, expected in test_cases:
+        sample_depth = np.linspace(10.0, 100.0, 100, dtype=np.float32).reshape(10, 10)
+
+        for input_value, expected_preserve in test_cases:
             config = {
                 'depth_model': {'variant': 'small', 'backend': 'pytorch_cpu'},
                 'processing': {
@@ -516,15 +522,42 @@ class TestDepthPostprocessing:
                         'method': 'bilateral',
                         'preserve_scale': input_value,
                         'sigma': 5.0,
+                        'edge_preserve': 0.1,
                     },
                 },
             }
 
-            with patch('transformation_portal.depth.pipeline.DepthAnythingV2Model'):
-                pipeline = ArchitecturalDepthPipeline(config)
+            with patch('transformation_portal.depth.pipeline.DepthAnythingV2Model'), \
+                 patch('transformation_portal.depth.pipeline.smooth_depth') as mock_smooth:
+                # Reset mock for clean test isolation
+                mock_smooth.reset_mock()
 
-            # Verify the config was parsed
-            assert pipeline.config['processing']['depth_postprocessing']['preserve_scale'] == input_value
+                # Mock smooth_depth to return normalized [0,1] output (simulating bilateral behavior)
+                normalized_output = np.linspace(0.0, 1.0, 100, dtype=np.float32).reshape(10, 10)
+                mock_smooth.return_value = normalized_output
+
+                pipeline = ArchitecturalDepthPipeline(config)
+                result = pipeline._postprocess_depth(sample_depth)
+
+                # Verify behavior based on preserve_scale setting
+                if expected_preserve:
+                    # Should rescale from [0,1] back to [10, 100]
+                    assert result.min() >= 9.9, f"Failed for input={input_value}: min={result.min()}"
+                    assert result.max() <= 100.1, f"Failed for input={input_value}: max={result.max()}"
+                    # Check range is approximately preserved
+                    assert abs(result.max() - result.min() - 90.0) < 1.0, \
+                        f"Failed for input={input_value}: range={result.max() - result.min()}"
+                else:
+                    # When preserve_scale=False, smooth_depth is called without rescaling
+                    mock_smooth.assert_called()  # Verify it was called
+                    # Assert output stays in normalized [0,1] range (not rescaled)
+                    assert result.min() >= -1e-6, \
+                        f"Failed for input={input_value}: min={result.min()} < 0 (was rescaled unexpectedly)"
+                    assert result.max() <= 1.0 + 1e-6, \
+                        f"Failed for input={input_value}: max={result.max()} > 1.0 (was rescaled unexpectedly)"
+                    # Verify exact output match (no rescaling happened)
+                    assert np.allclose(result, normalized_output, atol=1e-6), \
+                        f"Failed for input={input_value}: output was modified when preserve_scale=False"
 
     @patch('transformation_portal.depth.pipeline.smooth_depth')
     def test_postprocess_calls_smooth_depth(self, mock_smooth, sample_depth):

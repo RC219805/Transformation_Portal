@@ -7,6 +7,14 @@ depth_model:
   cache_size: 100
 
 processing:
+  # Depth map postprocessing (NEW: PR #714)
+  # Smooths raw depth for better quality in large-scale scenes
+  depth_postprocessing:
+    enabled: true
+    method: gaussian        # Faster smoothing for large exteriors
+    sigma: 4.0             # Less aggressive for aerial views
+    preserve_scale: true   # Maintain depth range
+
   depth_aware_denoise:
     enabled: true
     sigma_spatial: 3.5  # More smoothing for large-scale scenes
