@@ -7,6 +7,15 @@ depth_model:
   cache_size: 100
 
 processing:
+  # Depth map postprocessing (NEW: PR #714)
+  # Smooths raw depth output before downstream processing
+  depth_postprocessing:
+    enabled: true
+    method: bilateral       # bilateral | gaussian | median
+    sigma: 5.0             # Smoothing strength
+    edge_preserve: 0.1     # Preserve building edges
+    preserve_scale: true   # Maintain depth range
+
   depth_aware_denoise:
     enabled: true
     sigma_spatial: 2.5

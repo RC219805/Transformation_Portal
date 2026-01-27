@@ -125,6 +125,16 @@ depth_model:
   cache_size: 100
 
 processing:
+  # NEW in v1.2: Depth Map Postprocessing (PR #714)
+  # Applies smoothing to depth maps before downstream processing
+  # Improves depth quality: reduces noise, preserves edges
+  depth_postprocessing:
+    enabled: true
+    method: bilateral       # bilateral | gaussian | median
+    sigma: 5.0             # Smoothing strength
+    edge_preserve: 0.1     # Edge preservation (bilateral only)
+    preserve_scale: true   # Maintain original depth range
+
   depth_aware_denoise:
     enabled: true
     sigma_spatial: 3.0
@@ -149,6 +159,34 @@ processing:
 ```
 
 ### Per-Processor Configuration
+
+#### Depth Map Postprocessing (NEW)
+
+Smooths depth maps immediately after inference to reduce noise and improve quality.
+
+```python
+# Enable in configuration
+processing:
+  depth_postprocessing:
+    enabled: true
+    method: bilateral       # bilateral | gaussian | median
+    sigma: 5.0             # Smoothing strength (higher = more smoothing)
+    edge_preserve: 0.1     # Edge preservation strength (bilateral only)
+    preserve_scale: true   # Rescale to original depth range after smoothing
+```
+
+**Methods:**
+- **`bilateral`** (recommended) - Edge-preserving smoothing, respects depth discontinuities
+- **`gaussian`** - Fast uniform smoothing, blurs edges
+- **`median`** - Removes salt-and-pepper noise, preserves edges
+
+**When to use:**
+- Enable for noisy depth maps (improves downstream processing quality)
+- Use `bilateral` for architectural renders (preserves building edges)
+- Use `gaussian` for organic scenes (smooth terrain/vegetation)
+- Set `preserve_scale: true` to maintain metric depth values
+
+**Performance:** ~15-30ms additional processing time per image
 
 #### Depth-Aware Denoising
 ```python
