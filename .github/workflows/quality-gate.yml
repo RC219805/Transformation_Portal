@@ -56,5 +56,5 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git diff --quiet || git commit -am "Auto-fix: Code formatting (trailing whitespace, line length)"
+          git diff --quiet || (git commit -am "Auto-fix: Code formatting (trailing whitespace, line length)" && git push)
         continue-on-error: true
