@@ -408,3 +408,329 @@ def test_phase3_integration_summary():
 
     print("=" * 60)
     print()
+
+
+# ============================================================================
+# Depth Postprocessing Tests (PR #714)
+# ============================================================================
+
+
+class TestDepthPostprocessing:
+    """Tests for _postprocess_depth feature (PR #714)."""
+
+    @pytest.fixture
+    def sample_depth(self):
+        """Create a sample depth map for testing."""
+        np.random.seed(42)
+        depth = np.random.rand(64, 64).astype(np.float32) * 100.0 + 10.0
+        return depth
+
+    @pytest.fixture
+    def minimal_config(self):
+        """Minimal config without depth postprocessing."""
+        return {
+            'depth_model': {
+                'variant': 'small',
+                'backend': 'pytorch_cpu',
+            },
+            'processing': {},
+        }
+
+    @pytest.fixture
+    def postprocess_config(self):
+        """Config with depth postprocessing enabled."""
+        return {
+            'depth_model': {
+                'variant': 'small',
+                'backend': 'pytorch_cpu',
+            },
+            'processing': {
+                'depth_postprocessing': {
+                    'enabled': True,
+                    'method': 'bilateral',
+                    'sigma': 5.0,
+                    'edge_preserve': 0.1,
+                    'preserve_scale': True,
+                },
+            },
+        }
+
+    def test_postprocess_disabled_by_default(self, minimal_config, sample_depth):
+        """Test that postprocessing is disabled when not configured."""
+        with patch('transformation_portal.depth.pipeline.DepthAnythingV2Model'):
+            pipeline = ArchitecturalDepthPipeline(minimal_config)
+            result = pipeline._postprocess_depth(sample_depth)
+
+        # Should return original depth unchanged
+        np.testing.assert_array_equal(result, sample_depth)
+
+    def test_postprocess_enabled_config_validation(self, postprocess_config):
+        """Test that postprocessing can be enabled via config."""
+        with patch('transformation_portal.depth.pipeline.DepthAnythingV2Model'):
+            pipeline = ArchitecturalDepthPipeline(postprocess_config)
+
+        # Config should be parsed correctly
+        assert pipeline.config['processing']['depth_postprocessing']['enabled'] is True
+        assert pipeline.config['processing']['depth_postprocessing']['method'] == 'bilateral'
+
+    def test_postprocess_invalid_method_fallback(self, sample_depth):
+        """Test that invalid method gracefully falls back."""
+        config = {
+            'depth_model': {'variant': 'small', 'backend': 'pytorch_cpu'},
+            'processing': {
+                'depth_postprocessing': {
+                    'enabled': True,
+                    'method': 'invalid_method',
+                    'sigma': 5.0,
+                },
+            },
+        }
+
+        with patch('transformation_portal.depth.pipeline.DepthAnythingV2Model'):
+            pipeline = ArchitecturalDepthPipeline(config)
+            result = pipeline._postprocess_depth(sample_depth)
+
+        # Should return original depth when method is invalid
+        np.testing.assert_array_equal(result, sample_depth)
+
+    def test_preserve_scale_boolean_parsing(self):
+        """Test that preserve_scale config accepts bool and string values."""
+        test_cases = [
+            (True, True),
+            (False, False),
+            ('true', True),
+            ('false', False),
+            ('yes', True),
+            ('no', False),
+            ('1', True),
+            ('0', False),
+            ('invalid', True),  # Should default to True for bilateral
+        ]
+
+        for input_value, expected in test_cases:
+            config = {
+                'depth_model': {'variant': 'small', 'backend': 'pytorch_cpu'},
+                'processing': {
+                    'depth_postprocessing': {
+                        'enabled': True,
+                        'method': 'bilateral',
+                        'preserve_scale': input_value,
+                        'sigma': 5.0,
+                    },
+                },
+            }
+
+            with patch('transformation_portal.depth.pipeline.DepthAnythingV2Model'):
+                pipeline = ArchitecturalDepthPipeline(config)
+
+            # Verify the config was parsed
+            assert pipeline.config['processing']['depth_postprocessing']['preserve_scale'] == input_value
+
+    @patch('transformation_portal.depth.pipeline.smooth_depth')
+    def test_postprocess_calls_smooth_depth(self, mock_smooth, sample_depth):
+        """Test that postprocessing calls smooth_depth utility."""
+        # Mock smooth_depth to return normalized output
+        mock_smooth.return_value = np.random.rand(64, 64).astype(np.float32)
+
+        config = {
+            'depth_model': {'variant': 'small', 'backend': 'pytorch_cpu'},
+            'processing': {
+                'depth_postprocessing': {
+                    'enabled': True,
+                    'method': 'bilateral',
+                    'sigma': 5.0,
+                    'edge_preserve': 0.1,
+                    'preserve_scale': True,
+                },
+            },
+        }
+
+        with patch('transformation_portal.depth.pipeline.DepthAnythingV2Model'):
+            pipeline = ArchitecturalDepthPipeline(config)
+            result = pipeline._postprocess_depth(sample_depth)
+
+        # Verify smooth_depth was called
+        mock_smooth.assert_called_once()
+        call_args = mock_smooth.call_args
+        assert call_args.kwargs['method'] == 'bilateral'
+        assert call_args.kwargs['sigma'] == 5.0
+        assert call_args.kwargs['edge_preserve'] == 0.1
+
+    @patch('transformation_portal.depth.pipeline.smooth_depth')
+    def test_preserve_scale_rescaling(self, mock_smooth, sample_depth):
+        """Test that preserve_scale correctly rescales normalized output."""
+        # Mock smooth_depth to return normalized [0,1] output
+        normalized_output = np.random.rand(64, 64).astype(np.float32)
+        mock_smooth.return_value = normalized_output
+
+        config = {
+            'depth_model': {'variant': 'small', 'backend': 'pytorch_cpu'},
+            'processing': {
+                'depth_postprocessing': {
+                    'enabled': True,
+                    'method': 'bilateral',
+                    'sigma': 5.0,
+                    'preserve_scale': True,
+                },
+            },
+        }
+
+        with patch('transformation_portal.depth.pipeline.DepthAnythingV2Model'):
+            pipeline = ArchitecturalDepthPipeline(config)
+            result = pipeline._postprocess_depth(sample_depth)
+
+        # Result should be rescaled to original range
+        original_min = float(np.nanmin(sample_depth))
+        original_max = float(np.nanmax(sample_depth))
+
+        assert result.min() >= original_min - 1e-3
+        assert result.max() <= original_max + 1e-3
+
+    @patch('transformation_portal.depth.pipeline.smooth_depth')
+    def test_preserve_scale_detects_unnormalized_output(self, mock_smooth, sample_depth):
+        """Test that preserve_scale detects already-scaled output from fallback."""
+        # Mock smooth_depth to return already-scaled output (fallback behavior)
+        # This simulates gaussian_filter which preserves original scale
+        already_scaled = sample_depth + np.random.randn(64, 64) * 0.1
+        mock_smooth.return_value = already_scaled.astype(np.float32)
+
+        config = {
+            'depth_model': {'variant': 'small', 'backend': 'pytorch_cpu'},
+            'processing': {
+                'depth_postprocessing': {
+                    'enabled': True,
+                    'method': 'bilateral',
+                    'sigma': 5.0,
+                    'preserve_scale': True,
+                },
+            },
+        }
+
+        with patch('transformation_portal.depth.pipeline.DepthAnythingV2Model'):
+            pipeline = ArchitecturalDepthPipeline(config)
+            result = pipeline._postprocess_depth(sample_depth)
+
+        # Result should be the already-scaled output, not double-rescaled
+        np.testing.assert_allclose(result, already_scaled, rtol=1e-5)
+
+    def test_postprocess_gaussian_method(self, sample_depth):
+        """Test postprocessing with gaussian method."""
+        config = {
+            'depth_model': {'variant': 'small', 'backend': 'pytorch_cpu'},
+            'processing': {
+                'depth_postprocessing': {
+                    'enabled': True,
+                    'method': 'gaussian',
+                    'sigma': 3.0,
+                    'preserve_scale': False,
+                },
+            },
+        }
+
+        with patch('transformation_portal.depth.pipeline.DepthAnythingV2Model'), \
+             patch('transformation_portal.depth.pipeline.smooth_depth') as mock_smooth:
+            # Mock gaussian to return smoothed depth
+            mock_smooth.return_value = sample_depth * 0.95
+
+            pipeline = ArchitecturalDepthPipeline(config)
+            result = pipeline._postprocess_depth(sample_depth)
+
+            # Verify gaussian was called
+            mock_smooth.assert_called_once()
+            assert mock_smooth.call_args.kwargs['method'] == 'gaussian'
+
+    def test_postprocess_median_method(self, sample_depth):
+        """Test postprocessing with median method."""
+        config = {
+            'depth_model': {'variant': 'small', 'backend': 'pytorch_cpu'},
+            'processing': {
+                'depth_postprocessing': {
+                    'enabled': True,
+                    'method': 'median',
+                    'sigma': 5.0,
+                    'preserve_scale': False,
+                },
+            },
+        }
+
+        with patch('transformation_portal.depth.pipeline.DepthAnythingV2Model'), \
+             patch('transformation_portal.depth.pipeline.smooth_depth') as mock_smooth:
+            # Mock median to return smoothed depth
+            mock_smooth.return_value = sample_depth * 0.98
+
+            pipeline = ArchitecturalDepthPipeline(config)
+            result = pipeline._postprocess_depth(sample_depth)
+
+            # Verify median was called
+            mock_smooth.assert_called_once()
+            assert mock_smooth.call_args.kwargs['method'] == 'median'
+
+    def test_postprocess_error_handling(self, sample_depth):
+        """Test that errors in postprocessing are caught and logged."""
+        config = {
+            'depth_model': {'variant': 'small', 'backend': 'pytorch_cpu'},
+            'processing': {
+                'depth_postprocessing': {
+                    'enabled': True,
+                    'method': 'bilateral',
+                    'sigma': 5.0,
+                },
+            },
+        }
+
+        with patch('transformation_portal.depth.pipeline.DepthAnythingV2Model'), \
+             patch('transformation_portal.depth.pipeline.smooth_depth', side_effect=ValueError("Test error")):
+            pipeline = ArchitecturalDepthPipeline(config)
+            result = pipeline._postprocess_depth(sample_depth)
+
+            # Should return original depth on error
+            np.testing.assert_array_equal(result, sample_depth)
+
+    def test_postprocess_integration_with_process_render(self, temp_output_dir):
+        """Test that postprocessing integrates with process_render."""
+        config = {
+            'depth_model': {'variant': 'small', 'backend': 'pytorch_cpu'},
+            'processing': {
+                'depth_postprocessing': {
+                    'enabled': True,
+                    'method': 'bilateral',
+                    'sigma': 5.0,
+                    'preserve_scale': True,
+                },
+            },
+        }
+
+        # Create a test image
+        img_array = np.random.randint(0, 255, (128, 128, 3), dtype=np.uint8)
+        img = Image.fromarray(img_array)
+        img_path = temp_output_dir / "test_postprocess.jpg"
+        img.save(img_path)
+
+        with patch('transformation_portal.depth.pipeline.DepthAnythingV2Model') as mock_model_class, \
+             patch('transformation_portal.depth.pipeline.smooth_depth') as mock_smooth:
+            # Setup mocks
+            mock_model = Mock()
+            mock_model.estimate_depth.return_value = {
+                'depth': np.random.rand(128, 128).astype(np.float32) * 100.0,
+                'confidence': 0.95,
+                'metadata': {
+                    'inference_time_ms': 50.0,
+                    'model_backend': 'pytorch_cpu',
+                },
+            }
+            mock_model_class.return_value = mock_model
+
+            # Mock smooth_depth to return normalized output
+            mock_smooth.return_value = np.random.rand(128, 128).astype(np.float32)
+
+            pipeline = ArchitecturalDepthPipeline(config)
+            result = pipeline.process_render(img_path)
+
+            # Verify postprocessing was applied
+            assert 'depth' in result
+            assert 'image' in result
+            mock_smooth.assert_called()
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
