@@ -52,7 +52,7 @@ jobs:
           fi
 
       - name: Commit formatting fixes
-        if: success()
+        if: success() && github.event_name == 'push'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
