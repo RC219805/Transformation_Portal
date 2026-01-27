@@ -11,7 +11,7 @@ import threading
 import time
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Dict, List, Optional, Union, Iterator
+from typing import Dict, Iterator, List, Optional, Union
 
 import numpy as np
 import yaml
@@ -31,6 +31,7 @@ from .utils import (
     save_image,
     visualize_depth,
 )
+from .utils.depth_utils import smooth_depth
 
 logger = logging.getLogger(__name__)
 
@@ -146,11 +147,11 @@ class ArchitecturalDepthPipeline:
 
     def _init_processors(self) -> Dict:
         """Initialize all processing modules."""
-        proc_config = self.config['processing']
-        processors = {}
+        proc_config = self.config.get('processing', {})
+        processors: Dict[str, object] = {}
 
         # Depth-aware denoising
-        if proc_config['depth_aware_denoise']['enabled']:
+        if proc_config.get('depth_aware_denoise', {}).get('enabled', False):
             params = proc_config['depth_aware_denoise']
             processors['denoise'] = DepthAwareDenoise(
                 sigma_spatial=params.get('sigma_spatial', 3.0),
@@ -160,7 +161,7 @@ class ArchitecturalDepthPipeline:
             )
 
         # Zone tone mapping
-        if proc_config['zone_tone_mapping']['enabled']:
+        if proc_config.get('zone_tone_mapping', {}).get('enabled', False):
             params = proc_config['zone_tone_mapping']
             processors['tone_mapping'] = ZoneToneMapping(
                 num_zones=params.get('num_zones', 3),
@@ -170,7 +171,7 @@ class ArchitecturalDepthPipeline:
             )
 
         # Atmospheric effects
-        if proc_config['atmospheric_effects']['enabled']:
+        if proc_config.get('atmospheric_effects', {}).get('enabled', False):
             params = proc_config['atmospheric_effects']
             processors['atmospheric'] = AtmosphericEffects(
                 haze_density=params.get('haze_density', 0.015),
@@ -181,7 +182,7 @@ class ArchitecturalDepthPipeline:
             )
 
         # Depth-guided filters
-        if proc_config['depth_guided_filters']['enabled']:
+        if proc_config.get('depth_guided_filters', {}).get('enabled', False):
             params = proc_config['depth_guided_filters']
             processors['filters'] = DepthGuidedFilters(
                 clarity_strength=params.get('clarity_strength', 0.5),
@@ -191,6 +192,117 @@ class ArchitecturalDepthPipeline:
             )
 
         return processors
+
+    def _postprocess_depth(self, depth: np.ndarray) -> np.ndarray:
+        """
+        Optional depth-map postprocessing applied after inference/cache.
+
+        This is intentionally *opt-in* and config-driven, so existing configs remain unchanged.
+
+        Config:
+          processing:
+            depth_postprocessing:
+              enabled: true
+              method: bilateral   # gaussian | bilateral | median
+              sigma: 5.0
+              edge_preserve: 0.1
+              preserve_scale: true  # (recommended for bilateral; keeps original min/max)
+
+        Notes:
+        - Postprocessing is applied to the depth used downstream and saved to disk.
+        - Cache semantics remain unchanged: the cache stores raw inference output.
+        """
+        proc_cfg = self.config.get('processing', {})
+        if not isinstance(proc_cfg, dict):
+            return depth
+
+        cfg = proc_cfg.get('depth_postprocessing', {})
+        if not isinstance(cfg, dict) or not cfg.get('enabled', False):
+            return depth
+
+        method = str(cfg.get('method', 'bilateral')).strip().lower()
+        allowed = {'gaussian', 'bilateral', 'median'}
+        if method not in allowed:
+            logger.warning(
+                "Depth postprocessing disabled: unknown method '%s' (expected: %s)",
+                method,
+                ', '.join(sorted(allowed)),
+            )
+            return depth
+
+        # Normalize/guard inputs
+        try:
+            sigma = float(cfg.get('sigma', 5.0))
+        except (TypeError, ValueError):
+            logger.warning("Depth postprocessing disabled: invalid sigma value")
+            return depth
+
+        if sigma <= 0.0:
+            return depth
+
+        try:
+            edge_preserve = float(cfg.get('edge_preserve', 0.1))
+        except (TypeError, ValueError):
+            edge_preserve = 0.1
+        edge_preserve = max(edge_preserve, 0.0)
+
+        preserve_scale = bool(cfg.get('preserve_scale', method == 'bilateral'))
+
+        # Nothing to do if depth isn't a usable ndarray
+        if not isinstance(depth, np.ndarray):
+            return depth
+        if depth.ndim == 3 and depth.shape[-1] == 1:
+            depth = np.squeeze(depth, axis=-1)
+
+        # Expected exceptions only; unexpected bugs should surface.
+        try:
+            if preserve_scale and method == 'bilateral':
+                d_min = float(np.nanmin(depth))
+                d_max = float(np.nanmax(depth))
+                if not np.isfinite(d_min) or not np.isfinite(d_max) or d_max <= d_min:
+                    return depth
+
+                smoothed = smooth_depth(
+                    depth,
+                    method=method,
+                    sigma=sigma,
+                    edge_preserve=edge_preserve,
+                )
+
+                # depth_utils.smooth_depth('bilateral') returns normalized [0,1]
+                smoothed = smoothed.astype(np.float32, copy=False)
+                return smoothed * (d_max - d_min) + d_min
+
+            return smooth_depth(
+                depth,
+                method=method,
+                sigma=sigma,
+                edge_preserve=edge_preserve,
+            )
+
+        except (ValueError, TypeError, AttributeError, RuntimeError) as e:
+            logger.warning(
+                "Depth postprocessing failed (%s): %s; using raw depth",
+                type(e).__name__,
+                e,
+                exc_info=True,
+            )
+            return depth
+        except Exception as e:
+            # Only swallow OpenCV-specific runtime errors if present; otherwise re-raise.
+            try:
+                import cv2  # type: ignore
+
+                if isinstance(e, cv2.error):  # type: ignore[attr-defined]
+                    logger.warning(
+                        "Depth postprocessing failed (cv2.error): %s; using raw depth",
+                        e,
+                        exc_info=True,
+                    )
+                    return depth
+            except Exception:
+                pass
+            raise
 
     def process_render(
         self,
@@ -221,7 +333,7 @@ class ArchitecturalDepthPipeline:
             image,
             lambda: self.depth_model.estimate_depth(image)
         )
-        depth = depth_result['depth']
+        depth = self._postprocess_depth(depth_result['depth'])
 
         # Apply processing pipeline
         result_image = image.copy()
@@ -286,7 +398,7 @@ class ArchitecturalDepthPipeline:
         Returns:
             Dictionary mapping path to loaded image array
         """
-        loaded_images = {}
+        loaded_images: Dict[str, np.ndarray] = {}
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_path = {
@@ -335,7 +447,7 @@ class ArchitecturalDepthPipeline:
             image,
             lambda: self.depth_model.estimate_depth(image)
         )
-        depth = depth_result['depth']
+        depth = self._postprocess_depth(depth_result['depth'])
 
         # Apply processing pipeline
         result_image = image.copy()
@@ -401,11 +513,11 @@ class ArchitecturalDepthPipeline:
         logger.info(f"Parallel processing: {parallel}, Preload: {preload_images}")
 
         # Async image loading (Phase 1 optimization)
-        preloaded_images = {}
+        preloaded_images: Dict[str, np.ndarray] = {}
         if preload_images:
             preloaded_images = self._async_load_images(image_paths, max_workers)
 
-        results = []
+        results: List[Dict] = []
 
         if parallel:
             # Parallel processing (Phase 1 optimization)
@@ -534,19 +646,6 @@ class ArchitecturalDepthPipeline:
 
         Yields results one at a time instead of accumulating in memory.
         Memory usage remains constant regardless of batch size.
-
-        Args:
-            image_paths: List of input image paths
-            output_dir: Output directory
-            save_depth: Save depth maps as numpy arrays
-            save_visualization: Save depth visualizations
-
-        Yields:
-            Result dictionary for each processed image
-
-        Example:
-            >>> for result in pipeline.batch_process_streaming(paths, 'output/'):
-            ...     print(f"Processed: {result['metadata']['input_path']}")
         """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -555,10 +654,8 @@ class ArchitecturalDepthPipeline:
 
         for image_path in tqdm(image_paths, desc="Processing renders (streaming)"):
             try:
-                # Process image
                 result = self.process_render(image_path)
 
-                # Save results immediately
                 self.save_result(
                     result,
                     output_dir,
@@ -566,7 +663,6 @@ class ArchitecturalDepthPipeline:
                     save_visualization=save_visualization,
                 )
 
-                # Yield result (can be garbage collected after this)
                 yield result
 
             except Exception as e:
@@ -583,55 +679,27 @@ class ArchitecturalDepthPipeline:
     ) -> Iterator[Dict]:
         """
         Process images with pipeline parallelism (Phase 3 optimization).
-
-        Uses producer-consumer pattern to overlap I/O, depth estimation,
-        and post-processing stages for maximum hardware utilization.
-
-        Pipeline stages:
-        1. Load images (I/O bound → ThreadPool)
-        2. Depth estimation (GPU bound → sequential or GPU batch)
-        3. Post-processing (CPU bound → ThreadPool)
-        4. Save results (I/O bound → ThreadPool)
-
-        Args:
-            image_paths: List of input image paths
-            output_dir: Output directory
-            save_depth: Save depth maps as numpy arrays
-            save_visualization: Save depth visualizations
-            pipeline_workers: Number of worker threads per stage
-
-        Yields:
-            Result dictionary for each processed image
-
-        Example:
-            >>> for result in pipeline.batch_process_pipelined(paths, 'output/'):
-            ...     print(f"Processed: {result['metadata']['input_path']}")
         """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
         logger.info(f"Pipeline processing {len(image_paths)} images")
 
-        # Create queues for each stage (bounded to prevent memory issues)
-        load_queue = queue.Queue(maxsize=10)
-        depth_queue = queue.Queue(maxsize=10)
-        process_queue = queue.Queue(maxsize=10)
-        save_queue = queue.Queue(maxsize=10)
+        load_queue: "queue.Queue" = queue.Queue(maxsize=10)
+        depth_queue: "queue.Queue" = queue.Queue(maxsize=10)
+        process_queue: "queue.Queue" = queue.Queue(maxsize=10)
+        save_queue: "queue.Queue" = queue.Queue(maxsize=10)
 
-        # Stage 1: Load images
         def loader_worker():
-            """Load images asynchronously."""
             for path in image_paths:
                 try:
                     image = load_image(path, normalize=True)
                     load_queue.put((path, image))
                 except Exception as e:
                     logger.error(f"Failed to load {path}: {e}")
-            load_queue.put(None)  # Sentinel to signal completion
+            load_queue.put(None)
 
-        # Stage 2: Depth estimation
         def depth_worker():
-            """Estimate depth for loaded images."""
             while True:
                 item = load_queue.get()
                 if item is None:
@@ -640,7 +708,6 @@ class ArchitecturalDepthPipeline:
 
                 path, image = item
                 try:
-                    # Use caching for depth estimation
                     depth_result = self.cache.get_or_compute(
                         image,
                         lambda: self.depth_model.estimate_depth(image)
@@ -649,9 +716,7 @@ class ArchitecturalDepthPipeline:
                 except Exception as e:
                     logger.error(f"Failed depth estimation for {path}: {e}")
 
-        # Stage 3: Post-processing
         def process_worker():
-            """Apply depth-aware processing."""
             while True:
                 item = depth_queue.get()
                 if item is None:
@@ -660,19 +725,15 @@ class ArchitecturalDepthPipeline:
 
                 path, image, depth_result = item
                 try:
-                    depth = depth_result['depth']
+                    depth = self._postprocess_depth(depth_result['depth'])
                     result_image = image.copy()
 
-                    # Apply all processors
                     if 'denoise' in self.processors:
                         result_image = self.processors['denoise'](result_image, depth)
-
                     if 'tone_mapping' in self.processors:
                         result_image = self.processors['tone_mapping'](result_image, depth)
-
                     if 'atmospheric' in self.processors:
                         result_image = self.processors['atmospheric'](result_image, depth)
-
                     if 'filters' in self.processors:
                         result_image = self.processors['filters'](result_image, depth)
 
@@ -692,9 +753,7 @@ class ArchitecturalDepthPipeline:
                 except Exception as e:
                     logger.error(f"Failed processing {path}: {e}")
 
-        # Stage 4: Save results
         def save_worker():
-            """Save processed results."""
             while True:
                 item = process_queue.get()
                 if item is None:
@@ -713,7 +772,6 @@ class ArchitecturalDepthPipeline:
                 except Exception as e:
                     logger.error(f"Failed to save {path}: {e}")
 
-        # Start all worker threads
         threads = [
             threading.Thread(target=loader_worker, name="Loader"),
             threading.Thread(target=depth_worker, name="DepthEstimator"),
@@ -725,7 +783,6 @@ class ArchitecturalDepthPipeline:
             t.daemon = True
             t.start()
 
-        # Yield results as they complete (streaming!)
         processed_count = 0
         with tqdm(total=len(image_paths), desc="Pipeline processing") as pbar:
             while True:
@@ -733,16 +790,13 @@ class ArchitecturalDepthPipeline:
                 if item is None:
                     break
 
-                path, result = item
+                _, result = item
                 processed_count += 1
                 pbar.update(1)
 
-                # Update stats
                 self.stats['images_processed'] += 1
-
                 yield result
 
-        # Wait for all threads to complete
         for t in threads:
             t.join()
 
@@ -757,42 +811,22 @@ class ArchitecturalDepthPipeline:
         """
         Process image progressively at multiple quality levels (Phase 3 optimization).
 
-        Provides fast preview at low resolution, then optionally high-res final.
-        Ideal for interactive workflows and parameter tuning.
-
-        Args:
-            image_path: Path to input image
-            quality_levels: Scaling factors for progressive processing (e.g., [0.25, 1.0])
-            return_all_levels: Return all quality levels (default: only highest)
-
-        Returns:
-            Result dictionary (or list of results if return_all_levels=True)
-
-        Example:
-            >>> # Fast preview
-            >>> result = pipeline.process_render_progressive('render.jpg', [0.25])
-            >>> # Progressive refinement
-            >>> results = pipeline.process_render_progressive(
-            ...     'render.jpg',
-            ...     [0.25, 0.5, 1.0],
-            ...     return_all_levels=True
-            ... )
+        Note:
+        - Depth postprocessing is applied once per level (after inference) to avoid double-smoothing.
         """
         from .utils.image_utils import resize_image
 
         logger.info(f"Progressive processing: {image_path} at levels {quality_levels}")
 
-        # Load full resolution image
         image_full = load_image(image_path, normalize=True)
         h_full, w_full = image_full.shape[:2]
 
-        results = []
+        results: List[Dict] = []
 
         for scale in quality_levels:
             start_time = time.time()
 
             if scale < 1.0:
-                # Downsample for speed
                 h_scaled = int(h_full * scale)
                 w_scaled = int(w_full * scale)
                 image_scaled = resize_image(
@@ -805,29 +839,23 @@ class ArchitecturalDepthPipeline:
                 image_scaled = image_full
                 logger.info(f"Processing at full resolution: {h_full}x{w_full}")
 
-            # Estimate depth at current scale
             depth_result = self.cache.get_or_compute(
                 image_scaled,
                 lambda: self.depth_model.estimate_depth(image_scaled)
             )
-            depth = depth_result['depth']
+            depth = self._postprocess_depth(depth_result['depth'])
 
-            # Apply processing pipeline
             result_image = image_scaled.copy()
 
             if 'denoise' in self.processors:
                 result_image = self.processors['denoise'](result_image, depth)
-
             if 'tone_mapping' in self.processors:
                 result_image = self.processors['tone_mapping'](result_image, depth)
-
             if 'atmospheric' in self.processors:
                 result_image = self.processors['atmospheric'](result_image, depth)
-
             if 'filters' in self.processors:
                 result_image = self.processors['filters'](result_image, depth)
 
-            # Upscale back to full resolution if needed
             if scale < 1.0:
                 result_image = resize_image(
                     result_image,
@@ -859,10 +887,7 @@ class ArchitecturalDepthPipeline:
             results.append(result)
             logger.info(f"Level {scale:.0%} complete in {processing_time:.2f}s")
 
-        if return_all_levels:
-            return results
-        else:
-            return results[-1]  # Return highest quality level
+        return results if return_all_levels else results[-1]
 
     def _print_batch_summary(self, results: List[Dict]):
         """Print batch processing summary."""
@@ -885,7 +910,6 @@ class ArchitecturalDepthPipeline:
         logger.info(f"Average depth inference: {avg_depth_time:.1f}ms")
         logger.info(f"Throughput: {len(results) / (total_time / 3600):.1f} images/hour")
 
-        # Cache stats
         cache_stats = self.cache.get_stats()
         logger.info("\nCache statistics:")
         logger.info(f"  Hit rate: {cache_stats['hit_rate']:.2%}")
