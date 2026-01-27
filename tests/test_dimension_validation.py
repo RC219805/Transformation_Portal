@@ -7,17 +7,19 @@ from pathlib import Path
 
 import pytest
 
-# Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
 try:
+    # Add src to path for imports - done inside try block to avoid torch.__spec__ issues
+    sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+    
     import typer
 
     from transformation_portal.pipelines.lux_render_pipeline import validate_sd_dimensions
     HAS_DEPENDENCIES = True
-except ImportError:
+except (ImportError, ValueError) as e:
+    # ValueError can occur with torch.__spec__ issues when torch is imported
+    # after sys.path modifications
     HAS_DEPENDENCIES = False
-    pytest.skip("Dependencies not available", allow_module_level=True)
+    pytest.skip(f"Dependencies not available: {e}", allow_module_level=True)
 
 
 class TestDimensionValidation:
