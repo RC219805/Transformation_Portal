@@ -529,6 +529,9 @@ class TestDepthPostprocessing:
 
             with patch('transformation_portal.depth.pipeline.DepthAnythingV2Model'), \
                  patch('transformation_portal.depth.pipeline.smooth_depth') as mock_smooth:
+                # Reset mock for clean test isolation
+                mock_smooth.reset_mock()
+
                 # Mock smooth_depth to return normalized [0,1] output (simulating bilateral behavior)
                 normalized_output = np.linspace(0.0, 1.0, 100, dtype=np.float32).reshape(10, 10)
                 mock_smooth.return_value = normalized_output
@@ -546,9 +549,15 @@ class TestDepthPostprocessing:
                         f"Failed for input={input_value}: range={result.max() - result.min()}"
                 else:
                     # When preserve_scale=False, smooth_depth is called without rescaling
-                    # In this test mock_smooth returns [0,1], so we should get that back
-                    # (the code path without preserve_scale calls smooth_depth directly)
                     mock_smooth.assert_called()  # Verify it was called
+                    # Assert output stays in normalized [0,1] range (not rescaled)
+                    assert result.min() >= -1e-6, \
+                        f"Failed for input={input_value}: min={result.min()} < 0 (was rescaled unexpectedly)"
+                    assert result.max() <= 1.0 + 1e-6, \
+                        f"Failed for input={input_value}: max={result.max()} > 1.0 (was rescaled unexpectedly)"
+                    # Verify exact output match (no rescaling happened)
+                    assert np.allclose(result, normalized_output, atol=1e-6), \
+                        f"Failed for input={input_value}: output was modified when preserve_scale=False"
 
     @patch('transformation_portal.depth.pipeline.smooth_depth')
     def test_postprocess_calls_smooth_depth(self, mock_smooth, sample_depth):

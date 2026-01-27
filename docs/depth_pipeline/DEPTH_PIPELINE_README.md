@@ -164,7 +164,7 @@ processing:
 
 Smooths depth maps immediately after inference to reduce noise and improve quality.
 
-```python
+```yaml
 # Enable in configuration
 processing:
   depth_postprocessing:
