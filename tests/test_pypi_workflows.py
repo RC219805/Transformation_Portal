@@ -134,7 +134,7 @@ class TestPyPIWorkflows:
             content = f.read()
         
         # Check for modern action versions
-        assert 'actions/checkout@v5' in content or 'actions/checkout@v4' in content, \
+        assert 'actions/checkout@v6' in content or 'actions/checkout@v5' in content or 'actions/checkout@v4' in content, \
             "Should use recent checkout action"
         assert 'actions/setup-python@v6' in content or 'actions/setup-python@v5' in content, \
             "Should use recent setup-python action"
