@@ -11,7 +11,7 @@ import threading
 import time
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Union
+from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
 import numpy as np
 import yaml
@@ -246,7 +246,26 @@ class ArchitecturalDepthPipeline:
             edge_preserve = 0.1
         edge_preserve = max(edge_preserve, 0.0)
 
-        preserve_scale = bool(cfg.get('preserve_scale', method == 'bilateral'))
+        # Parse preserve_scale with proper boolean handling
+        default_preserve_scale = method == 'bilateral'
+        raw_preserve = cfg.get('preserve_scale', default_preserve_scale)
+        if isinstance(raw_preserve, bool):
+            preserve_scale = raw_preserve
+        elif isinstance(raw_preserve, str):
+            normalized = raw_preserve.strip().lower()
+            if normalized in {'true', '1', 'yes', 'y', 'on'}:
+                preserve_scale = True
+            elif normalized in {'false', '0', 'no', 'n', 'off'}:
+                preserve_scale = False
+            else:
+                logger.warning(
+                    "Depth postprocessing: invalid preserve_scale value '%s', using default %s",
+                    raw_preserve,
+                    default_preserve_scale,
+                )
+                preserve_scale = default_preserve_scale
+        else:
+            preserve_scale = default_preserve_scale
 
         # Nothing to do if depth isn't a usable ndarray
         if not isinstance(depth, np.ndarray):
@@ -269,9 +288,31 @@ class ArchitecturalDepthPipeline:
                     edge_preserve=edge_preserve,
                 )
 
-                # depth_utils.smooth_depth('bilateral') returns normalized [0,1]
+                # depth_utils.smooth_depth('bilateral') is expected to return normalized [0,1]
+                # when using the OpenCV bilateral path. However, the fallback implementation
+                # (e.g., gaussian_filter) can operate on the original depth scale. To avoid
+                # rescaling twice in the fallback case, only apply the [0,1] -> [d_min,d_max]
+                # mapping if the smoothed output actually looks normalized.
                 smoothed = smoothed.astype(np.float32, copy=False)
-                return smoothed * (d_max - d_min) + d_min
+                if smoothed.size == 0:
+                    return depth
+
+                s_min = float(np.nanmin(smoothed))
+                s_max = float(np.nanmax(smoothed))
+
+                # Treat as normalized if it lies within [0, 1] up to a small numerical epsilon.
+                eps = 1e-3
+                if (
+                    np.isfinite(s_min)
+                    and np.isfinite(s_max)
+                    and s_min >= -eps
+                    and s_max <= 1.0 + eps
+                ):
+                    return smoothed * (d_max - d_min) + d_min
+
+                # Fallback path: assume smooth_depth returned data in the original scale.
+                # In this case, preserve_scale means we should not reapply the range scaling.
+                return smoothed
 
             return smooth_depth(
                 depth,
@@ -300,7 +341,12 @@ class ArchitecturalDepthPipeline:
                         exc_info=True,
                     )
                     return depth
-            except Exception:
+            except ImportError:
+                # OpenCV is optional; if unavailable, just re-raise the original exception.
+                logger.debug(
+                    "OpenCV not available while handling depth postprocessing error; re-raising.",
+                    exc_info=True,
+                )
                 pass
             raise
 
@@ -644,8 +690,37 @@ class ArchitecturalDepthPipeline:
         """
         Process images with streaming results (Phase 3 optimization).
 
-        Yields results one at a time instead of accumulating in memory.
-        Memory usage remains constant regardless of batch size.
+        This variant yields results one at a time instead of accumulating them
+        in memory, so memory usage remains essentially constant regardless of
+        batch size. Results are also written to disk as they are produced.
+
+        Args:
+            image_paths: List of image paths to process. Each path can be a string
+                or ``pathlib.Path`` and is passed directly to :meth:`process_render`.
+            output_dir: Directory where enhanced images, depth maps, and depth
+                visualizations will be saved. Created if it does not already exist.
+            save_depth: If True, save the raw depth map as a ``.npy`` file for each
+                input image.
+            save_visualization: If True, save a depth visualization PNG for each
+                input image using the configured colormap.
+
+        Yields:
+            Result dictionary for each processed image in the same format
+            as returned by :meth:`process_render`. Each result is yielded after it
+            has been successfully written to disk via :meth:`save_result`.
+
+        Example:
+            >>> from pathlib import Path
+            >>> pipeline = ArchitecturalDepthPipeline.from_config("config/interior_preset.yaml")
+            >>> image_paths = list(Path("input/").glob("*.jpg"))
+            >>> for result in pipeline.batch_process_streaming(
+            ...     image_paths,
+            ...     output_dir="output/",
+            ...     save_depth=True,
+            ...     save_visualization=True,
+            ... ):
+            ...     depth_stats = result["metadata"].get("depth_stats")
+            ...     print("Processed:", result["metadata"]["input_path"], depth_stats)
         """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -678,17 +753,69 @@ class ArchitecturalDepthPipeline:
         pipeline_workers: int = 3,
     ) -> Iterator[Dict]:
         """
-        Process images with pipeline parallelism (Phase 3 optimization).
+        Process images using a multi-stage, pipelined batch executor (Phase 3 optimization).
+
+        This is the highest-throughput batch API for the depth pipeline. Work is decomposed
+        into several stages connected by bounded in-memory queues so that disk I/O,
+        depth estimation, image processing, and saving can overlap:
+
+        1. **Load stage (I/O bound)** – ``loader_worker`` reads images from ``image_paths``,
+           normalizes them, and enqueues ``(path, image)`` into ``load_queue``.
+        2. **Depth stage (ML bound)** – ``depth_worker`` consumes items from ``load_queue``,
+           computes depth using :class:`DepthCache` and :attr:`depth_model`, and enqueues
+           ``(path, image, depth_result)`` into ``depth_queue``.
+        3. **Processing stage (CPU/GPU bound)** – ``process_worker`` consumes items from
+           ``depth_queue``, applies the depth-aware enhancement stack (tone mapping,
+           denoising, atmospheric effects, filters) and enqueues the processed result
+           into ``process_queue``.
+        4. **Save / emit stage (I/O bound)** – a saver worker consumes items from
+           ``process_queue``, writes outputs into ``output_dir`` (optionally including
+           depth maps and depth visualizations), and streams result dictionaries back
+           to the caller via this generator.
+
+        The queues are bounded so that memory usage remains approximately constant
+        regardless of the total batch size. Stages run in separate threads, enabling
+        overlap between disk I/O and depth / enhancement computation. This is especially
+        beneficial when processing large batches or when depth estimation is expensive.
+
+        Args:
+            image_paths: Iterable of image paths to process. Each entry can be a :class:`str` or
+                :class:`pathlib.Path`. The order of paths defines the logical batch.
+            output_dir: Directory where processed renders (and optional depth artifacts) are written.
+                The directory is created if it does not already exist.
+            save_depth: If ``True``, write the raw depth map for each image alongside the processed
+                render. If ``False``, depth is kept in memory only for processing.
+            save_visualization: If ``True``, write a depth visualization (e.g., colored or normalized depth)
+                for each image. Ignored if depth estimation fails for a given image.
+            pipeline_workers: Controls the level of concurrency within the pipeline. Depending on the
+                implementation of the worker threads, this may scale the number of
+                depth / processing workers used for the internal stages. The default
+                value is tuned for typical workstation workloads.
+
+        Yields:
+            A streaming iterator of per-image result dictionaries, one for each
+            successfully processed input. Results are yielded as soon as they are
+            saved, allowing the caller to consume outputs while the remaining
+            images are still being processed.
+
+        Notes:
+            - Individual image failures are logged and skipped; the pipeline continues
+              processing subsequent images.
+            - Memory consumption is bounded by the size of the internal queues rather
+              than the total number of images in the batch.
+            - This method is suitable for very large batches where ``batch_process`` or
+              ``batch_process_streaming`` might be limited by I/O or single-stage
+              execution.
         """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
         logger.info(f"Pipeline processing {len(image_paths)} images")
 
-        load_queue: "queue.Queue" = queue.Queue(maxsize=10)
-        depth_queue: "queue.Queue" = queue.Queue(maxsize=10)
-        process_queue: "queue.Queue" = queue.Queue(maxsize=10)
-        save_queue: "queue.Queue" = queue.Queue(maxsize=10)
+        load_queue: queue.Queue[Optional[Tuple[Any, Any]]] = queue.Queue(maxsize=10)
+        depth_queue: queue.Queue[Optional[Tuple[Any, Any, Any]]] = queue.Queue(maxsize=10)
+        process_queue: queue.Queue[Optional[Tuple[Any, Any]]] = queue.Queue(maxsize=10)
+        save_queue: queue.Queue[Optional[Tuple[Any, Any]]] = queue.Queue(maxsize=10)
 
         def loader_worker():
             for path in image_paths:
