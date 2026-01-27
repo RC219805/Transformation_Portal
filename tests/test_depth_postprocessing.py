@@ -101,9 +101,9 @@ def test_depth_postprocessing_enabled_applies_smoothing_with_scale_preserved(mon
         },
     }
 
-    def fake_smooth_depth(depth_in, method='bilateral', sigma=5.0, edge_preserve=0.1):
+    def fake_smooth_depth(depth, method='bilateral', sigma=5.0, edge_preserve=0.1):
         # Return a normalized [0,1] "smoothed" map to exercise preserve_scale logic.
-        return np.full_like(depth_in, 0.5, dtype=np.float32)
+        return np.full_like(depth, 0.5, dtype=np.float32)
 
     monkeypatch.setattr(pipeline_mod, 'smooth_depth', fake_smooth_depth)
 
