@@ -30,6 +30,7 @@ from .utils import (
     load_image,
     save_image,
     visualize_depth,
+    smooth_depth,
 )
 
 logger = logging.getLogger(__name__)
@@ -146,51 +147,75 @@ class ArchitecturalDepthPipeline:
 
     def _init_processors(self) -> Dict:
         """Initialize all processing modules."""
-        proc_config = self.config['processing']
+        proc_config = self.config.get("processing", {})
         processors = {}
 
         # Depth-aware denoising
-        if proc_config['depth_aware_denoise']['enabled']:
-            params = proc_config['depth_aware_denoise']
-            processors['denoise'] = DepthAwareDenoise(
-                sigma_spatial=params.get('sigma_spatial', 3.0),
-                sigma_range=params.get('sigma_range', 0.1),
-                edge_threshold=params.get('edge_threshold', 0.05),
-                preserve_strength=params.get('preserve_strength', 0.8),
+        if proc_config.get("depth_aware_denoise", {}).get("enabled", False):
+            params = proc_config["depth_aware_denoise"]
+            processors["denoise"] = DepthAwareDenoise(
+                sigma_spatial=params.get("sigma_spatial", 3.0),
+                sigma_range=params.get("sigma_range", 0.1),
+                edge_threshold=params.get("edge_threshold", 0.05),
+                preserve_strength=params.get("preserve_strength", 0.8),
             )
 
         # Zone tone mapping
-        if proc_config['zone_tone_mapping']['enabled']:
-            params = proc_config['zone_tone_mapping']
-            processors['tone_mapping'] = ZoneToneMapping(
-                num_zones=params.get('num_zones', 3),
-                zone_params=params.get('zone_params'),
-                transition_sigma=params.get('transition_sigma', 2.0),
-                method=params.get('method', 'agx'),
+        if proc_config.get("zone_tone_mapping", {}).get("enabled", False):
+            params = proc_config["zone_tone_mapping"]
+            processors["tone_mapping"] = ZoneToneMapping(
+                num_zones=params.get("num_zones", 3),
+                zone_params=params.get("zone_params"),
+                transition_sigma=params.get("transition_sigma", 2.0),
+                method=params.get("method", "agx"),
             )
 
         # Atmospheric effects
-        if proc_config['atmospheric_effects']['enabled']:
-            params = proc_config['atmospheric_effects']
-            processors['atmospheric'] = AtmosphericEffects(
-                haze_density=params.get('haze_density', 0.015),
-                haze_color=tuple(params.get('haze_color', [0.7, 0.8, 0.9])),
-                desaturation_strength=params.get('desaturation_strength', 0.3),
-                depth_scale=params.get('depth_scale', 100.0),
-                enable_color_shift=params.get('enable_color_shift', True),
+        if proc_config.get("atmospheric_effects", {}).get("enabled", False):
+            params = proc_config["atmospheric_effects"]
+            processors["atmospheric"] = AtmosphericEffects(
+                haze_density=params.get("haze_density", 0.015),
+                haze_color=tuple(params.get("haze_color", [0.7, 0.8, 0.9])),
+                desaturation_strength=params.get("desaturation_strength", 0.3),
+                depth_scale=params.get("depth_scale", 100.0),
+                enable_color_shift=params.get("enable_color_shift", True),
             )
 
         # Depth-guided filters
-        if proc_config['depth_guided_filters']['enabled']:
-            params = proc_config['depth_guided_filters']
-            processors['filters'] = DepthGuidedFilters(
-                clarity_strength=params.get('clarity_strength', 0.5),
-                edge_preserve_threshold=params.get('edge_preserve_threshold', 0.05),
-                scale_count=params.get('scale_count', 3),
-                adaptive_to_depth=params.get('adaptive_to_depth', True),
+        if proc_config.get("depth_guided_filters", {}).get("enabled", False):
+            params = proc_config["depth_guided_filters"]
+            processors["filters"] = DepthGuidedFilters(
+                clarity_strength=params.get("clarity_strength", 0.5),
+                edge_preserve_threshold=params.get("edge_preserve_threshold", 0.05),
+                scale_count=params.get("scale_count", 3),
+                adaptive_to_depth=params.get("adaptive_to_depth", True),
             )
 
         return processors
+
+    def _postprocess_depth(self, depth: np.ndarray) -> np.ndarray:
+        """
+        Optional depth-map postprocessing applied after inference/cache.
+
+        Config:
+          processing:
+            depth_postprocessing:
+              enabled: true
+              method: bilateral   # gaussian|bilateral|median
+              sigma: 5.0
+              edge_preserve: 0.1
+        """
+        proc_cfg = self.config.get("processing", {})
+        cfg = proc_cfg.get("depth_postprocessing", {}) if isinstance(proc_cfg, dict) else {}
+
+        if not cfg.get("enabled", False):
+            return depth
+
+        method = cfg.get("method", "bilateral")
+        sigma = float(cfg.get("sigma", 5.0))
+        edge_preserve = float(cfg.get("edge_preserve", 0.1))
+
+        return smooth_depth(depth, method=method, sigma=sigma, edge_preserve=edge_preserve)
 
     def process_render(
         self,
@@ -221,7 +246,11 @@ class ArchitecturalDepthPipeline:
             image,
             lambda: self.depth_model.estimate_depth(image)
         )
-        depth = depth_result['depth']
+        depth = depth_result["depth"]
+        try:
+            depth = self._postprocess_depth(depth)
+        except Exception:
+            logger.warning("Depth postprocessing failed; using raw depth", exc_info=True)
 
         # Apply processing pipeline
         result_image = image.copy()
@@ -335,7 +364,11 @@ class ArchitecturalDepthPipeline:
             image,
             lambda: self.depth_model.estimate_depth(image)
         )
-        depth = depth_result['depth']
+        depth = depth_result["depth"]
+        try:
+            depth = self._postprocess_depth(depth)
+        except Exception:
+            logger.warning("Depth postprocessing failed; using raw depth", exc_info=True)
 
         # Apply processing pipeline
         result_image = image.copy()
@@ -660,7 +693,12 @@ class ArchitecturalDepthPipeline:
 
                 path, image, depth_result = item
                 try:
-                    depth = depth_result['depth']
+                    depth = depth_result["depth"]
+                    try:
+                        depth = self._postprocess_depth(depth)
+                    except Exception:
+                        logger.warning("Depth postprocessing failed; using raw depth", exc_info=True)
+
                     result_image = image.copy()
 
                     # Apply all processors
@@ -810,7 +848,11 @@ class ArchitecturalDepthPipeline:
                 image_scaled,
                 lambda: self.depth_model.estimate_depth(image_scaled)
             )
-            depth = depth_result['depth']
+            depth = depth_result["depth"]
+            try:
+                depth = self._postprocess_depth(depth)
+            except Exception:
+                logger.warning("Depth postprocessing failed; using raw depth", exc_info=True)
 
             # Apply processing pipeline
             result_image = image_scaled.copy()
@@ -839,6 +881,10 @@ class ArchitecturalDepthPipeline:
                     size=(h_full, w_full),
                     interpolation='bilinear'
                 )
+                try:
+                    depth = self._postprocess_depth(depth)
+                except Exception:
+                    logger.warning("Depth postprocessing failed; using raw depth", exc_info=True)
 
             processing_time = time.time() - start_time
 
