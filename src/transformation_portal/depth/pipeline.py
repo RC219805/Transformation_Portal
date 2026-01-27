@@ -11,6 +11,7 @@ import threading
 import time
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from pathlib import Path
+from numbers import Integral, Real
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
 import numpy as np
@@ -246,7 +247,7 @@ class ArchitecturalDepthPipeline:
             edge_preserve = 0.1
         edge_preserve = max(edge_preserve, 0.0)
 
-        # Parse preserve_scale with proper boolean handling
+        # Parse preserve_scale with proper boolean handling (supports bool, str, int, float)
         default_preserve_scale = method == 'bilateral'
         raw_preserve = cfg.get('preserve_scale', default_preserve_scale)
         if isinstance(raw_preserve, bool):
@@ -260,6 +261,26 @@ class ArchitecturalDepthPipeline:
             else:
                 logger.warning(
                     "Depth postprocessing: invalid preserve_scale value '%s', using default %s",
+                    raw_preserve,
+                    default_preserve_scale,
+                )
+                preserve_scale = default_preserve_scale
+        elif isinstance(raw_preserve, Integral):
+            if raw_preserve in (0, 1):
+                preserve_scale = bool(raw_preserve)
+            else:
+                logger.warning(
+                    "Depth postprocessing: unexpected preserve_scale integer '%s', using default %s",
+                    raw_preserve,
+                    default_preserve_scale,
+                )
+                preserve_scale = default_preserve_scale
+        elif isinstance(raw_preserve, Real):
+            if raw_preserve in (0.0, 1.0):
+                preserve_scale = bool(int(raw_preserve))
+            else:
+                logger.warning(
+                    "Depth postprocessing: unexpected preserve_scale float '%s', using default %s",
                     raw_preserve,
                     default_preserve_scale,
                 )
