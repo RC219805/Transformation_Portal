@@ -248,8 +248,10 @@ class ArchitecturalDepthPipeline:
         edge_preserve = max(edge_preserve, 0.0)
 
         # Parse preserve_scale with proper boolean handling (supports bool, str, int, float)
+        # CRITICAL: Check bool BEFORE numeric types (bool is subclass of int)
         default_preserve_scale = method == 'bilateral'
         raw_preserve = cfg.get('preserve_scale', default_preserve_scale)
+
         if isinstance(raw_preserve, bool):
             preserve_scale = raw_preserve
         elif isinstance(raw_preserve, str):
@@ -260,7 +262,7 @@ class ArchitecturalDepthPipeline:
                 preserve_scale = False
             else:
                 logger.warning(
-                    "Depth postprocessing: invalid preserve_scale value '%s', using default %s",
+                    "Depth postprocessing: invalid preserve_scale string '%s', using default %s",
                     raw_preserve,
                     default_preserve_scale,
                 )
@@ -270,22 +272,28 @@ class ArchitecturalDepthPipeline:
                 preserve_scale = bool(raw_preserve)
             else:
                 logger.warning(
-                    "Depth postprocessing: unexpected preserve_scale integer '%s', using default %s",
+                    "Depth postprocessing: invalid preserve_scale integer %d (expected 0/1), using default %s",
                     raw_preserve,
                     default_preserve_scale,
                 )
                 preserve_scale = default_preserve_scale
         elif isinstance(raw_preserve, Real):
-            if raw_preserve in (0.0, 1.0):
+            if float(raw_preserve) in (0.0, 1.0):
                 preserve_scale = bool(int(raw_preserve))
             else:
                 logger.warning(
-                    "Depth postprocessing: unexpected preserve_scale float '%s', using default %s",
+                    "Depth postprocessing: invalid preserve_scale float %f (expected 0.0/1.0), using default %s",
                     raw_preserve,
                     default_preserve_scale,
                 )
                 preserve_scale = default_preserve_scale
         else:
+            logger.warning(
+                "Depth postprocessing: invalid preserve_scale type %s (%r), using default %s",
+                type(raw_preserve).__name__,
+                raw_preserve,
+                default_preserve_scale,
+            )
             preserve_scale = default_preserve_scale
 
         # Nothing to do if depth isn't a usable ndarray
@@ -564,7 +572,7 @@ class ArchitecturalDepthPipeline:
         Args:
             image_paths: List of input image paths
             output_dir: Output directory
-            save_depth: Save depth maps as numpy arrays
+            save_depth: Save processed/refined depth maps as numpy arrays
             save_visualization: Save depth visualizations
             parallel: Enable parallel processing (default: True)
             max_workers: Max parallel workers (default: None = CPU count)
@@ -670,7 +678,7 @@ class ArchitecturalDepthPipeline:
         Args:
             result: Result dictionary from process_render
             output_dir: Output directory
-            save_depth: Save depth map (.npy)
+            save_depth: Save processed depth map (.npy, after any configured postprocessing)
             save_visualization: Save depth visualization
         """
         output_dir = Path(output_dir)
@@ -720,8 +728,8 @@ class ArchitecturalDepthPipeline:
                 or ``pathlib.Path`` and is passed directly to :meth:`process_render`.
             output_dir: Directory where enhanced images, depth maps, and depth
                 visualizations will be saved. Created if it does not already exist.
-            save_depth: If True, save the raw depth map as a ``.npy`` file for each
-                input image.
+            save_depth: If True, save the processed/refined depth map as a ``.npy`` file for each
+                input image (after any configured depth postprocessing).
             save_visualization: If True, save a depth visualization PNG for each
                 input image using the configured colormap.
 
@@ -804,8 +812,8 @@ class ArchitecturalDepthPipeline:
                 :class:`pathlib.Path`. The order of paths defines the logical batch.
             output_dir: Directory where processed renders (and optional depth artifacts) are written.
                 The directory is created if it does not already exist.
-            save_depth: If ``True``, write the raw depth map for each image alongside the processed
-                render. If ``False``, depth is kept in memory only for processing.
+            save_depth: If ``True``, write the processed/refined depth map for each image alongside the processed
+                render (after any configured depth postprocessing). If ``False``, depth is kept in memory only for processing.
             save_visualization: If ``True``, write a depth visualization (e.g., colored or normalized depth)
                 for each image. Ignored if depth estimation fails for a given image.
             pipeline_workers: Controls the level of concurrency within the pipeline. Depending on the
