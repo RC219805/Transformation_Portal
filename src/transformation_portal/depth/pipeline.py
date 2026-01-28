@@ -147,11 +147,11 @@ class ArchitecturalDepthPipeline:
 
     def _init_processors(self) -> Dict:
         """Initialize all processing modules."""
-        proc_config = self.config["processing"]
+        proc_config = self.config.get("processing", {})
         processors = {}
 
         # Depth-aware denoising
-        if proc_config["depth_aware_denoise"]["enabled"]:
+        if proc_config.get("depth_aware_denoise", {}).get("enabled", False):
             params = proc_config["depth_aware_denoise"]
             processors["denoise"] = DepthAwareDenoise(
                 sigma_spatial=params.get("sigma_spatial", 3.0),
@@ -161,7 +161,7 @@ class ArchitecturalDepthPipeline:
             )
 
         # Zone tone mapping
-        if proc_config["zone_tone_mapping"]["enabled"]:
+        if proc_config.get("zone_tone_mapping", {}).get("enabled", False):
             params = proc_config["zone_tone_mapping"]
             processors["tone_mapping"] = ZoneToneMapping(
                 num_zones=params.get("num_zones", 3),
@@ -171,7 +171,7 @@ class ArchitecturalDepthPipeline:
             )
 
         # Atmospheric effects
-        if proc_config["atmospheric_effects"]["enabled"]:
+        if proc_config.get("atmospheric_effects", {}).get("enabled", False):
             params = proc_config["atmospheric_effects"]
             processors["atmospheric"] = AtmosphericEffects(
                 haze_density=params.get("haze_density", 0.015),
@@ -182,7 +182,7 @@ class ArchitecturalDepthPipeline:
             )
 
         # Depth-guided filters
-        if proc_config["depth_guided_filters"]["enabled"]:
+        if proc_config.get("depth_guided_filters", {}).get("enabled", False):
             params = proc_config["depth_guided_filters"]
             processors["filters"] = DepthGuidedFilters(
                 clarity_strength=params.get("clarity_strength", 0.5),
@@ -216,7 +216,13 @@ class ArchitecturalDepthPipeline:
             return depth
 
         # Store original scale if preserve_scale is enabled
-        preserve_scale = postproc_config.get("preserve_scale", False)
+        preserve_scale_raw = postproc_config.get("preserve_scale", False)
+        # Parse boolean from various formats (string, int, bool)
+        if isinstance(preserve_scale_raw, str):
+            preserve_scale = preserve_scale_raw.lower() not in ('false', '0', 'no', 'off', '')
+        else:
+            preserve_scale = bool(preserve_scale_raw)
+
         if preserve_scale:
             original_min = float(depth.min())
             original_max = float(depth.max())
@@ -225,18 +231,31 @@ class ArchitecturalDepthPipeline:
         sigma = postproc_config.get("sigma", 5.0)
         edge_preserve = postproc_config.get("edge_preserve", 0.1)
 
-        smoothed = smooth_depth(
-            depth,
-            method=method,
-            sigma=sigma,
-            edge_preserve=edge_preserve
-        )
+        try:
+            smoothed = smooth_depth(
+                depth,
+                method=method,
+                sigma=sigma,
+                edge_preserve=edge_preserve
+            )
+        except Exception as e:
+            logger.error(f"Error during depth smoothing: {e}. Returning original depth.")
+            return depth
 
         # Restore original scale if requested
         if preserve_scale and (original_max - original_min) > 1e-8:
             smoothed_min = float(smoothed.min())
             smoothed_max = float(smoothed.max())
-            if smoothed_max - smoothed_min > 1e-8:
+
+            # Check if smoothed output is already in original scale
+            # (e.g., gaussian filter preserves scale)
+            scale_ratio = (smoothed_max - smoothed_min) / (original_max - original_min)
+            is_already_scaled = abs(scale_ratio - 1.0) < 0.5  # Within 50% of original range
+
+            if is_already_scaled:
+                # Output is already in original scale, don't rescale
+                pass
+            elif smoothed_max - smoothed_min > 1e-8:
                 # Rescale smoothed depth to original range
                 smoothed = (smoothed - smoothed_min) / (smoothed_max - smoothed_min)
                 smoothed = smoothed * (original_max - original_min) + original_min
@@ -246,6 +265,18 @@ class ArchitecturalDepthPipeline:
                 smoothed = np.full_like(smoothed, midpoint)
 
         return smoothed
+
+    def _postprocess_depth(self, depth: np.ndarray) -> np.ndarray:
+        """
+        Alias for _apply_depth_postprocessing for backward compatibility.
+
+        Args:
+            depth: Raw depth map
+
+        Returns:
+            Postprocessed depth map
+        """
+        return self._apply_depth_postprocessing(depth)
 
     def process_render(
         self,

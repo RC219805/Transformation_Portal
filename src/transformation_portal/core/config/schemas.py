@@ -6,7 +6,7 @@ Defines Pydantic models for type-safe configuration validation.
 
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Union, Literal
+from typing import Any, Dict, List, Optional, Union, Literal
 
 from pydantic import BaseModel, Field, validator
 
@@ -29,7 +29,7 @@ class DeviceConfig(BaseModel):
     precision: PrecisionType = Field(default=PrecisionType.FP16, description="Calculation precision")
     gpu_id: int = Field(default=0, ge=0, description="CUDA device index")
     enable_cudnn_benchmark: bool = True
-    
+
     @validator("device")
     def validate_device_availability(cls, v):
         # In a real app, we might check torch.cuda.is_available() here
@@ -43,7 +43,7 @@ class PathsConfig(BaseModel):
     output_dir: Path = Field(..., description="Destination directory")
     models_dir: Path = Field(default=Path("models"), description="Model weights cache")
     temp_dir: Path = Field(default=Path("tmp"), description="Temporary processing artifacts")
-    
+
     # Optional specific file overrides
     log_file: Optional[Path] = None
 
@@ -82,15 +82,15 @@ class ConfigSchema(BaseModel):
     """Root configuration object."""
     version: str = "1.0.0"
     mode: Literal["render", "process", "analyze"] = "render"
-    
+
     device: DeviceConfig = Field(default_factory=DeviceConfig)
     paths: PathsConfig
     performance: PerformanceConfig = Field(default_factory=PerformanceConfig)
     output: OutputConfig = Field(default_factory=OutputConfig)
     validation: ValidationConfig = Field(default_factory=ValidationConfig)
-    
+
     # Allow arbitrary extra fields for pipeline-specific params (e.g. 'skygan')
     pipeline_params: Dict[str, Any] = Field(default_factory=dict)
-    
+
     class Config:
         extra = "ignore" # Ignore unknown fields to allow forward compatibility
