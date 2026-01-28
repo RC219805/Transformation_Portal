@@ -29,6 +29,7 @@ from .utils import (
     depth_statistics,
     load_image,
     save_image,
+    smooth_depth,
     visualize_depth,
 )
 
@@ -192,6 +193,60 @@ class ArchitecturalDepthPipeline:
 
         return processors
 
+    def _apply_depth_postprocessing(self, depth: np.ndarray) -> np.ndarray:
+        """
+        Apply postprocessing to depth map (smoothing with optional scale preservation).
+
+        Args:
+            depth: Raw depth map
+
+        Returns:
+            Postprocessed depth map
+        """
+        postproc_config = self.config.get("processing", {}).get("depth_postprocessing", {})
+
+        if not postproc_config.get("enabled", False):
+            return depth
+
+        # Check if method is valid
+        method = postproc_config.get("method", "bilateral")
+        valid_methods = ["gaussian", "bilateral", "median"]
+        if method not in valid_methods:
+            logger.warning(f"Unknown smoothing method '{method}', skipping postprocessing")
+            return depth
+
+        # Store original scale if preserve_scale is enabled
+        preserve_scale = postproc_config.get("preserve_scale", False)
+        if preserve_scale:
+            original_min = float(depth.min())
+            original_max = float(depth.max())
+
+        # Apply smoothing
+        sigma = postproc_config.get("sigma", 5.0)
+        edge_preserve = postproc_config.get("edge_preserve", 0.1)
+
+        smoothed = smooth_depth(
+            depth,
+            method=method,
+            sigma=sigma,
+            edge_preserve=edge_preserve
+        )
+
+        # Restore original scale if requested
+        if preserve_scale and (original_max - original_min) > 1e-8:
+            smoothed_min = float(smoothed.min())
+            smoothed_max = float(smoothed.max())
+            if smoothed_max - smoothed_min > 1e-8:
+                # Rescale smoothed depth to original range
+                smoothed = (smoothed - smoothed_min) / (smoothed_max - smoothed_min)
+                smoothed = smoothed * (original_max - original_min) + original_min
+            else:
+                # Smoothed is uniform - map to midpoint of original range
+                midpoint = (original_min + original_max) / 2.0
+                smoothed = np.full_like(smoothed, midpoint)
+
+        return smoothed
+
     def process_render(
         self,
         image_path: Union[str, Path],
@@ -221,6 +276,9 @@ class ArchitecturalDepthPipeline:
             image, lambda: self.depth_model.estimate_depth(image)
         )
         depth = depth_result["depth"]
+
+        # Apply depth postprocessing if configured
+        depth = self._apply_depth_postprocessing(depth)
 
         # Apply processing pipeline
         result_image = image.copy()
