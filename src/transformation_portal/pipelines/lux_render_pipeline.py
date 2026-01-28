@@ -93,6 +93,14 @@ except ImportError:
 # Annotators
 from controlnet_aux import CannyDetector, MidasDetector
 
+# Import dimension validation (lightweight, no ML deps)
+from transformation_portal.pipelines.dimension_validation import (
+    validate_sd_dimensions as _validate_sd_dimensions,
+    SD_DIMENSION_MULTIPLE,
+    MIN_SD_DIMENSION,
+    MAX_RECOMMENDED_PIXELS,
+)
+
 # Import common image utilities
 from transformation_portal.utils.image_utils import (
     load_image,
@@ -110,12 +118,8 @@ _HAS_REALESRGAN = _HAS_REALESRGAN_IMPORT
 # Constants
 # --------------------------
 
-# Stable Diffusion 1.5 requires dimensions to be multiples of 64 for U-Net compatibility
-SD_DIMENSION_MULTIPLE = 64
-# Minimum dimension for reasonable quality and model compatibility
-MIN_SD_DIMENSION = 512
-# Maximum recommended pixels before warning about VRAM requirements (1MP = 1024x1024)
-MAX_RECOMMENDED_PIXELS = 1024 * 1024
+# SD dimension constants now imported from dimension_validation module
+# (see imports above: SD_DIMENSION_MULTIPLE, MIN_SD_DIMENSION, MAX_RECOMMENDED_PIXELS)
 
 # --------------------------
 
@@ -1077,6 +1081,9 @@ def validate_sd_dimensions(
 ) -> Tuple[int, int]:
     """Validate and optionally auto-correct dimensions for Stable Diffusion 1.5 compatibility.
 
+    Thin wrapper around dimension_validation.validate_sd_dimensions that provides
+    typer.echo warnings for CLI usage.
+
     SD 1.5 requires dimensions that are multiples of 64 for proper feature map alignment.
     This prevents cryptic tensor dimension mismatch errors during processing.
 
@@ -1099,59 +1106,21 @@ def validate_sd_dimensions(
         ⚠ Corrected dimensions from 1024×770 to 1024×768 (SD 1.5 compatible)
         (1024, 768)
     """
-    original_width, original_height = width, height
+    # Use typer.echo for warnings in CLI context
+    def warn(message: str) -> None:
+        typer.echo(message, err=True)
 
-    # Check if dimensions are multiples of SD_DIMENSION_MULTIPLE or below minimum
-    needs_correction = (
-        width % SD_DIMENSION_MULTIPLE != 0
-        or height % SD_DIMENSION_MULTIPLE != 0
-        or width < MIN_SD_DIMENSION
-        or height < MIN_SD_DIMENSION
-    )
-
-    if needs_correction:
-        if auto_correct:
-            # Round down to nearest multiple of SD_DIMENSION_MULTIPLE
-            corrected_width = (width // SD_DIMENSION_MULTIPLE) * SD_DIMENSION_MULTIPLE
-            corrected_height = (height // SD_DIMENSION_MULTIPLE) * SD_DIMENSION_MULTIPLE
-
-            # Ensure minimum dimensions
-            corrected_width = max(MIN_SD_DIMENSION, corrected_width)
-            corrected_height = max(MIN_SD_DIMENSION, corrected_height)
-
-            typer.echo(
-                f"⚠ Corrected dimensions from {original_width}×{original_height} "
-                f"to {corrected_width}×{corrected_height} (SD 1.5 compatible)",
-                err=True,
-            )
-            return corrected_width, corrected_height
-        else:
-            # Build appropriate error message based on what's wrong
-            errors = []
-            if (
-                width % SD_DIMENSION_MULTIPLE != 0
-                or height % SD_DIMENSION_MULTIPLE != 0
-            ):
-                errors.append(f"must be multiples of {SD_DIMENSION_MULTIPLE}")
-            if width < MIN_SD_DIMENSION or height < MIN_SD_DIMENSION:
-                errors.append(f"must be at least {MIN_SD_DIMENSION}")
-
-            raise typer.BadParameter(
-                f"Dimensions {width}×{height} are invalid for Stable Diffusion 1.5: "
-                f"{' and '.join(errors)}. "
-                f"Recommended: {MIN_SD_DIMENSION}×{MIN_SD_DIMENSION}, 768×512, 512×768, 768×768, 1024×768, or 1024×1024. "
-                "Use --width and --height to specify valid dimensions."
-            )
-
-    # Warn about extremely large dimensions that may cause OOM
-    if width * height > MAX_RECOMMENDED_PIXELS:
-        typer.echo(
-            f"⚠ Large dimensions ({width}×{height}) may require significant VRAM (8GB+). "
-            "Consider using smaller dimensions or ensure sufficient GPU memory.",
-            err=True,
+    try:
+        return _validate_sd_dimensions(
+            width, height, auto_correct=auto_correct, warn_callback=warn
         )
-
-    return width, height
+    except ValueError as e:
+        # Convert ValueError to typer.BadParameter for CLI consistency
+        raise typer.BadParameter(
+            f"{str(e)}\nRecommended: {MIN_SD_DIMENSION}×{MIN_SD_DIMENSION}, "
+            f"768×512, 512×768, 768×768, 1024×768, or 1024×1024. "
+            "Use --width and --height to specify valid dimensions."
+        ) from e
 
 
 @app.command()

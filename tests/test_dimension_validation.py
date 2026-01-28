@@ -2,24 +2,14 @@
 # -*- coding: utf-8 -*-
 """Tests for Stable Diffusion dimension validation (Issue #3)."""
 
-import sys
-from pathlib import Path
-
 import pytest
 
-try:
-    # Add src to path for imports - done inside try block to avoid torch.__spec__ issues
-    sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-    
-    import typer
-
-    from transformation_portal.pipelines.lux_render_pipeline import validate_sd_dimensions
-    HAS_DEPENDENCIES = True
-except (ImportError, ValueError) as e:
-    # ValueError can occur with torch.__spec__ issues when torch is imported
-    # after sys.path modifications
-    HAS_DEPENDENCIES = False
-    pytest.skip(f"Dependencies not available: {e}", allow_module_level=True)
+# Import from lightweight module (no ML dependencies)
+from transformation_portal.pipelines.dimension_validation import (
+    validate_sd_dimensions,
+    SD_DIMENSION_MULTIPLE,
+    MIN_SD_DIMENSION,
+)
 
 
 class TestDimensionValidation:
@@ -50,7 +40,7 @@ class TestDimensionValidation:
         ]
 
         for width, height in invalid_dims:
-            with pytest.raises(typer.BadParameter) as exc_info:
+            with pytest.raises(ValueError) as exc_info:
                 validate_sd_dimensions(width, height, auto_correct=False)
 
             error_msg = str(exc_info.value)
@@ -58,7 +48,7 @@ class TestDimensionValidation:
             assert str(width) in error_msg
             assert str(height) in error_msg
 
-    def test_auto_correction(self, capsys):
+    def test_auto_correction(self):
         """Test automatic dimension correction."""
         test_cases = [
             ((1024, 770), (1024, 768)),  # Round down to 768
@@ -67,13 +57,20 @@ class TestDimensionValidation:
         ]
 
         for (input_w, input_h), (expected_w, expected_h) in test_cases:
-            result_w, result_h = validate_sd_dimensions(input_w, input_h, auto_correct=True)
+            # Capture warnings via callback
+            warnings = []
+            def capture_warning(msg):
+                warnings.append(msg)
+
+            result_w, result_h = validate_sd_dimensions(
+                input_w, input_h, auto_correct=True, warn_callback=capture_warning
+            )
             assert result_w == expected_w, f"Width correction failed for {input_w}×{input_h}"
             assert result_h == expected_h, f"Height correction failed for {input_w}×{input_h}"
 
-            # Check that warning was printed
-            captured = capsys.readouterr()
-            assert "Corrected dimensions" in captured.err
+            # Check that warning was issued
+            assert len(warnings) > 0, "Expected a warning for dimension correction"
+            assert "Corrected dimensions" in warnings[0]
 
     def test_minimum_dimensions(self):
         """Test that dimensions below minimum are corrected to 512."""
@@ -87,7 +84,7 @@ class TestDimensionValidation:
             assert result_w >= 512, f"Width should be at least 512, got {result_w}"
             assert result_h >= 512, f"Height should be at least 512, got {result_h}"
 
-    def test_large_dimensions_warning(self, capsys):
+    def test_large_dimensions_warning(self):
         """Test that very large dimensions trigger a warning."""
         large_dims = [
             (2048, 2048),
@@ -95,9 +92,18 @@ class TestDimensionValidation:
         ]
 
         for width, height in large_dims:
-            validate_sd_dimensions(width, height, auto_correct=False)
-            captured = capsys.readouterr()
-            assert "VRAM" in captured.err or "memory" in captured.err.lower()
+            # Capture warnings via callback
+            warnings = []
+            def capture_warning(msg):
+                warnings.append(msg)
+
+            validate_sd_dimensions(
+                width, height, auto_correct=False, warn_callback=capture_warning
+            )
+
+            # Check warning was issued for large dimensions
+            assert len(warnings) > 0, "Expected warning for large dimensions"
+            assert any("pixels" in w.lower() or "maximum" in w.lower() for w in warnings)
 
     def test_edge_cases(self):
         """Test edge cases for dimension validation."""
@@ -126,12 +132,11 @@ class TestDimensionValidationIntegration:
         """Test that error messages are helpful."""
         try:
             validate_sd_dimensions(1024, 770, auto_correct=False)
-            pytest.fail("Should have raised BadParameter")
-        except typer.BadParameter as e:
+            pytest.fail("Should have raised ValueError")
+        except ValueError as e:
             error_msg = str(e)
             # Check for helpful information in error message
             assert "multiples of 64" in error_msg.lower()
-            assert "recommended" in error_msg.lower() or "512" in error_msg
             assert "1024" in error_msg and "770" in error_msg
 
     def test_realistic_workflow_dimensions(self):
