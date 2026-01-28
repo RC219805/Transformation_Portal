@@ -55,8 +55,8 @@ class DepthProcessor:
             config = self._create_default_config(device)
         else:
             # Load from file
-            from .pipeline import ArchitecturalDepthPipeline
-            config = ArchitecturalDepthPipeline.from_config(config_path).config
+            pipeline = ArchitecturalDepthPipeline.from_config(config_path)
+            config = pipeline.config
 
         # Initialize the pipeline
         self._pipeline = ArchitecturalDepthPipeline(config)
@@ -83,7 +83,7 @@ class DepthProcessor:
                 "enabled": True,
                 "max_cache_size_gb": 2.0,
             },
-            "processors": {
+            "processing": {
                 "depth_aware_denoise": {"enabled": False},
                 "zone_tone_mapping": {"enabled": False},
                 "atmospheric_effects": {"enabled": False},
