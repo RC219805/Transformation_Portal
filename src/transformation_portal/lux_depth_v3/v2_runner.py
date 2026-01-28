@@ -21,10 +21,13 @@ class V2Runner:
     def run(
         self,
         input_path: Path,
-        depth_path: Path,
-        output_dir: Path,
+        depth_dir: Optional[Path] = None,
+        output_dir: Optional[Path] = None,
         preset: str = "default",
         device: str = "cpu",
+        upscaler_backend: str = "default",
+        log_file: Optional[Path] = None,
+        timeout: Optional[float] = None,
         **kwargs
     ) -> Dict[str, Any]:
         """Run V2 enhancement pipeline.
@@ -33,14 +36,17 @@ class V2Runner:
 
         Args:
             input_path: Path to input image
-            depth_path: Path to depth map
+            depth_dir: Directory containing depth map (not depth_path)
             output_dir: Output directory
             preset: Enhancement preset
             device: Device to use (cpu/cuda/mps)
+            upscaler_backend: Upscaler backend to use
+            log_file: Path to log file
+            timeout: Timeout in seconds
             **kwargs: Additional arguments
 
         Returns:
-            Dictionary with results and metadata
+            Dictionary with results and metadata (must include 'runtime_s')
 
         Raises:
             NotImplementedError: This is a stub implementation

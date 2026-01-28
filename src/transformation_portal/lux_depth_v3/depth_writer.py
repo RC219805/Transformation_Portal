@@ -10,21 +10,25 @@ import numpy as np
 
 
 def atomic_write_depth_u16_png_with_stats(
-    depth_map: np.ndarray,
     output_path: Path,
-    metadata: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
+    depth_map: np.ndarray,
+    method: str = "u16",
+    debug_verify: bool = False,
+    **kwargs
+) -> tuple[Path, Path, Dict[str, Any]]:
     """Atomically write depth map as 16-bit PNG with statistics.
 
     STUB: Not implemented.
 
     Args:
-        depth_map: Depth map as numpy array
         output_path: Output file path
-        metadata: Optional metadata to embed
+        depth_map: Depth map as numpy array
+        method: Quantization method ("u16", "none", etc.)
+        debug_verify: Whether to verify write integrity
+        **kwargs: Additional arguments
 
     Returns:
-        Dictionary with statistics (min, max, mean, etc.)
+        Tuple of (output_path, verification_path, statistics_dict)
 
     Raises:
         NotImplementedError: This is a stub implementation

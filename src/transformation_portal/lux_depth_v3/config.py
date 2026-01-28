@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Optional, Dict, Any
+from .security import HashMode
 
 
 class ModelVariant(Enum):
@@ -51,6 +52,12 @@ class PostprocessingConfig:
     scale_factor: float = 1.0
     apply_median_filter: bool = False
     median_kernel_size: int = 3
+    apply_bilateral_filter: bool = False
+    bilateral_sigma_color: float = 0.0
+    bilateral_sigma_space: float = 0.0
+    preserve_edges: bool = True
+    edge_threshold: float = 0.1
+    fusion_mode: str = "weighted"
     refinement: Optional[Any] = None
 
 
@@ -89,4 +96,4 @@ class EnhanceConfig:
     non_commercial_ok: bool = False
 
     # Hash mode
-    hash_mode: str = "if_manifest_exists"
+    hash_mode: HashMode = HashMode.IF_MANIFEST_EXISTS

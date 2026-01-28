@@ -19,6 +19,11 @@ class DepthResult:
     original_image: np.ndarray
     metadata: Dict[str, Any]
 
+    @property
+    def depth(self) -> np.ndarray:
+        """Alias for depth_map to support both naming conventions."""
+        return self.depth_map
+
 
 class DA3InferenceEngine:
     """Inference engine for Depth Anything V3 models.
@@ -42,6 +47,25 @@ class DA3InferenceEngine:
         self.config = config
         self.commercial_use = commercial_use
         self.validate_license_strict = validate_license_strict
+
+    def predict(self, image: np.ndarray) -> DepthResult:
+        """Run depth inference on an image (alias for infer).
+
+        STUB: Not implemented.
+
+        Args:
+            image: Input image as numpy array
+
+        Returns:
+            DepthResult with depth map and metadata
+
+        Raises:
+            NotImplementedError: This is a stub implementation
+        """
+        raise NotImplementedError(
+            "DA3InferenceEngine.predict() is a stub - full implementation pending. "
+            "This module was created to enable package imports."
+        )
 
     def infer(self, image: np.ndarray) -> DepthResult:
         """Run depth inference on an image.
