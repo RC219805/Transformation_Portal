@@ -11,6 +11,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
+# pylint: disable=redefined-outer-name
+
 pytestmark = pytest.mark.skip(reason="realize_v8 modules not yet migrated to src package")
 
 # Import modules under test
