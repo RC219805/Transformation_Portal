@@ -1,15 +1,14 @@
+# tests/test_temporal_evolution.py
 from __future__ import annotations
 
 import pytest
 
 pytestmark = pytest.mark.skip(reason="temporal_evolution module in scripts, not yet migrated")
 
-import pytest
-
 try:
     from scripts.temporal_evolution import TemporalEvolutionRoadmap
-except ImportError:
-    pass
+except ImportError as e:
+    pytest.skip(f"temporal_evolution unavailable: {e}", allow_module_level=True)
 
 
 def _sample_payload() -> dict[str, object]:
