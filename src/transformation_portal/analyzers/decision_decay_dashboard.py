@@ -5,10 +5,11 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import os
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence
+from typing import Dict, Iterable, List, Optional, Sequence, Union
 
 from transformation_portal.analyzers.codebase_philosophy_auditor import (
     CodebasePhilosophyAuditor,
@@ -269,6 +270,11 @@ def render_dashboard(
     for record in valid_until_records:
         days_remaining = record.days_remaining
         style = "yellow" if days_remaining <= 30 else None
+        
+        # Highlight expired records in red
+        if days_remaining < 0:
+            style = "bold red"
+            
         table.add_row(
             record.target,
             record.deadline.isoformat(),
@@ -333,6 +339,10 @@ def _render_plain_dashboard(
     if valid_until_records:
         for record in valid_until_records:
             marker = "!" if record.days_remaining <= 30 else "-"
+            # Double bang for expired
+            if record.days_remaining < 0:
+                marker = "!!" 
+            
             print(
                 f"{marker} {record.target} – {record.deadline.isoformat()} "
                 f"({record.days_remaining} days) : {record.reason} "
@@ -362,6 +372,31 @@ def _render_plain_dashboard(
             )
     else:
         print("No brand colors found in token file.")
+
+
+def render_github_annotations(
+    valid_until_records: Sequence[ValidUntilRecord],
+) -> None:
+    """Print GitHub Actions workflow commands to annotate the PR."""
+    
+    # We only annotate expired technical debt for now
+    for record in valid_until_records:
+        if record.days_remaining < 0:
+            # ::error file={name},line={line},title={title}::{message}
+            print(
+                f"::error file={record.path},line={record.line},"
+                f"title=Expired Tech Debt::"
+                f"Contract expired on {record.deadline.isoformat()}. "
+                f"Reason: {record.reason}"
+            )
+        elif record.days_remaining <= 7:
+             # Warn for impending expiry
+            print(
+                f"::warning file={record.path},line={record.line},"
+                f"title=Tech Debt Expiring Soon::"
+                f"Contract expires in {record.days_remaining} days. "
+                f"Reason: {record.reason}"
+            )
 
 
 def export_json(
@@ -430,6 +465,11 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         default=None,
         help="Optional path to export the dashboard data as JSON",
     )
+    parser.add_argument(
+        "--github-actions",
+        action="store_true",
+        help="Emit GitHub Actions workflow commands for expired debt.",
+    )
     return parser.parse_args(argv)
 
 
@@ -451,6 +491,10 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     if args.json:
         export_json(args.json, valid_until_records, principle_summaries, color_report)
 
+    if args.github_actions:
+        render_github_annotations(valid_until_records)
+    
+    # Always render the text dashboard for console logs
     render_dashboard(valid_until_records, principle_summaries, color_report)
 
 
