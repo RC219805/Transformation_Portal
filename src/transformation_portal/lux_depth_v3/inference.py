@@ -256,16 +256,42 @@ class DA3InferenceEngine:
         self.device = "mps"
         self._load_pytorch_model()
 
-    def predict(self, image: np.ndarray) -> DepthResult:
+    def predict(self, image: Union[np.ndarray, Path, str, "ImageInput"]) -> DepthResult:
         """Run depth inference on an image (main API).
 
+        Accepts multiple input types for flexibility:
+        - np.ndarray: Direct numpy array
+        - Path/str: File path (delegates to infer_from_path)
+        - ImageInput: Path wrapper from input_manager
+
         Args:
-            image: Input image as numpy array (HxWx3)
+            image: Input image (numpy array, path, or ImageInput)
 
         Returns:
             DepthResult with depth map and metadata
+
+        Raises:
+            TypeError: If image type is not supported
         """
-        return self.infer(image)
+        # Handle ImageInput (path wrapper)
+        try:
+            from .input_manager import ImageInput
+            if isinstance(image, ImageInput):
+                return self.infer_from_path(image.path)
+        except (ImportError, AttributeError):
+            pass  # ImageInput not available or image is not ImageInput
+
+        # Handle Path/str
+        if isinstance(image, (Path, str)):
+            return self.infer_from_path(Path(image))
+
+        # Handle numpy array (main path)
+        if isinstance(image, np.ndarray):
+            return self.infer(image)
+
+        raise TypeError(
+            f"Expected np.ndarray, Path, str, or ImageInput, got {type(image)}"
+        )
 
     def infer(self, image: np.ndarray) -> DepthResult:
         """Run depth inference on an image.
