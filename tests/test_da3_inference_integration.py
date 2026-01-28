@@ -1,12 +1,16 @@
 """Integration tests for DA3InferenceEngine.
 
 Tests the real implementation with various inputs and configurations.
+Requires torch/transformers (ML tier dependencies).
 """
 import pytest
 import numpy as np
 from pathlib import Path
 from transformation_portal.lux_depth_v3 import DA3Config, DA3InferenceEngine
 from transformation_portal.lux_depth_v3.config import DeviceConfig, ModelVariant
+
+# Mark all tests in this file as requiring ML dependencies
+pytestmark = pytest.mark.ml
 
 
 def test_da3_predict_basic():
