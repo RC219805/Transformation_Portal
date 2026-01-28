@@ -754,8 +754,8 @@ def raw_to_prophoto_tiff(raw_path: Path) -> np.ndarray:
             no_auto_bright=True,
             output_bps=16,
             gamma=(1, 1),
-            output_color=rawpy.ColorSpace.ProPhoto,
-            demosaic_algorithm=rawpy.DemosaicAlgorithm.AHD,
+            output_color=rawpy.ColorSpace.ProPhoto,  # pylint: disable=no-member
+            demosaic_algorithm=rawpy.DemosaicAlgorithm.AHD,  # pylint: disable=no-member
             half_size=False,
             four_color_rgb=False,
             bright=1.0,
