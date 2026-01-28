@@ -11,7 +11,7 @@
 #   cd requirements/
 #   make compile
 #
-accelerate==1.2.1
+accelerate==1.12.0
     # via -r requirements/ml.in
 attrs==25.4.0
     # via
