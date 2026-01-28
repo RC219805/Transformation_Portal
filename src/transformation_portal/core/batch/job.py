@@ -1,408 +1,267 @@
 """
-Batch job management with checkpoint/resume.
+Batch Processing Engine with Checkpoint/Resume capabilities.
 
-Enables resilient batch processing with automatic recovery from failures.
+This module provides a robust framework for executing long-running
+batch operations. It handles state persistence, error trapping,
+and parallel execution.
+
+Key Capabilities:
+- Automatic crash recovery (resume from last checkpoint)
+- Thread-safe state management
+- Atomic checkpoint writing
+- Detailed failure reporting
 """
 
-from __future__ import annotations
-
-from dataclasses import dataclass, asdict
+import json
+import logging
+import time
+import shutil
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field, asdict
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional, Callable, Any
-import json
-import uuid
-import time
-import logging
+from typing import Any, Callable, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
 
-class JobStatus(Enum):
-    """Status of a job item."""
-
-    PENDING = "pending"
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    SKIPPED = "skipped"
+class JobStatus(str, Enum):
+    """Execution status for a batch item."""
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    SKIPPED = "SKIPPED"
 
 
 @dataclass
 class JobItem:
-    """
-    Single item in a batch job.
-
-    Tracks processing status and results for one input.
-    """
-
+    """A single unit of work within a batch job."""
+    
+    id: str  # Unique identifier (e.g., filename)
     input_path: str
     output_path: str
     status: JobStatus = JobStatus.PENDING
     error: Optional[str] = None
-    duration_ms: Optional[float] = None
-    attempt: int = 0
-    metadata: Optional[dict] = None
-    timing_s: Optional[dict[str, float]] = None
-
-    def to_dict(self) -> dict:
-        """Convert to dictionary for serialization."""
-        data = asdict(self)
-        data["status"] = self.status.value
-        return data
+    execution_time: float = 0.0
+    retries: int = 0
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_dict(cls, data: dict) -> JobItem:
-        """Create from dictionary."""
-        data = data.copy()
+    def from_dict(cls, data: Dict[str, Any]) -> "JobItem":
+        """Reconstruct from dictionary (JSON deserialization)."""
         data["status"] = JobStatus(data["status"])
         return cls(**data)
 
 
 @dataclass
 class BatchJob:
-    """
-    Resumable batch processing job.
+    """A collection of items representing a full batch workload."""
+    
+    name: str
+    output_dir: str
+    items: List[JobItem] = field(default_factory=list)
+    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
+    last_updated: str = field(default_factory=lambda: datetime.now().isoformat())
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    
+    # Internal map for O(1) lookups
+    _item_map: Dict[str, JobItem] = field(default=None, init=False, repr=False)
 
-    Maintains state across processing runs, enabling recovery from failures.
-    """
+    def __post_init__(self):
+        self._rebuild_map()
 
-    job_id: str
-    items: List[JobItem]
-    checkpoint_path: Path
-    created_at: str
-    updated_at: Optional[str] = None
-    completed_at: Optional[str] = None
+    def _rebuild_map(self):
+        """Rebuild internal lookup map."""
+        self._item_map = {item.id: item for item in self.items}
 
-    def save_checkpoint(self):
-        """Save job state to disk."""
-        from datetime import datetime
+    def add_item(self, item: JobItem):
+        """Add a new item to the batch."""
+        if self._item_map is None: self._rebuild_map()
+        
+        if item.id in self._item_map:
+            logger.warning(f"Duplicate item ID {item.id} in batch {self.name}")
+            return
+            
+        self.items.append(item)
+        self._item_map[item.id] = item
 
-        self.updated_at = datetime.utcnow().isoformat() + "Z"
+    def get_item(self, item_id: str) -> Optional[JobItem]:
+        if self._item_map is None: self._rebuild_map()
+        return self._item_map.get(item_id)
 
-        data = {
-            "job_id": self.job_id,
-            "items": [item.to_dict() for item in self.items],
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
-            "completed_at": self.completed_at,
-        }
+    @property
+    def progress(self) -> float:
+        """Calculate percentage completion (0.0 - 1.0)."""
+        if not self.items: return 0.0
+        completed = sum(1 for i in self.items if i.status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.SKIPPED))
+        return completed / len(self.items)
 
-        # Ensure directory exists
-        self.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    @property
+    def stats(self) -> Dict[str, int]:
+        """Get count of items by status."""
+        stats = {s.value: 0 for s in JobStatus}
+        for item in self.items:
+            stats[item.status.value] += 1
+        return stats
 
-        # Write atomically (write to unique temp file, then rename)
-        temp_path = self.checkpoint_path.with_suffix(f".{uuid.uuid4().hex}.tmp")
-
+    def save(self, path: Union[str, Path]) -> None:
+        """Atomically save job state to JSON."""
+        path = Path(path)
+        temp_path = path.with_suffix(".tmp")
+        
+        data = asdict(self)
+        # Remove internal fields
+        del data["_item_map"]
+        
         try:
             with open(temp_path, "w") as f:
                 json.dump(data, f, indent=2)
-
-            temp_path.replace(self.checkpoint_path)
-            logger.debug(f"Saved checkpoint for job {self.job_id}")
-
+            
+            # Atomic move
+            shutil.move(str(temp_path), str(path))
+            self.last_updated = datetime.now().isoformat()
+            
         except Exception as e:
             logger.error(f"Failed to save checkpoint: {e}")
             if temp_path.exists():
                 temp_path.unlink()
 
     @classmethod
-    def load_checkpoint(cls, checkpoint_path: Path) -> BatchJob:
-        """
-        Load job from checkpoint.
-
-        Args:
-            checkpoint_path: Path to checkpoint file
-
-        Returns:
-            BatchJob restored from checkpoint
-        """
-        with open(checkpoint_path) as f:
+    def load(cls, path: Union[str, Path]) -> "BatchJob":
+        """Load job state from JSON."""
+        path = Path(path)
+        if not path.exists():
+            raise FileNotFoundError(f"Checkpoint not found: {path}")
+            
+        with open(path, "r") as f:
             data = json.load(f)
-
-        items = [JobItem.from_dict(item) for item in data["items"]]
-
-        return cls(
-            job_id=data["job_id"],
-            items=items,
-            checkpoint_path=checkpoint_path,
-            created_at=data["created_at"],
-            updated_at=data.get("updated_at"),
-            completed_at=data.get("completed_at"),
-        )
-
-    def get_pending_items(self) -> List[JobItem]:
-        """Get items that still need processing."""
-        return [item for item in self.items if item.status == JobStatus.PENDING]
-
-    def get_failed_items(self) -> List[JobItem]:
-        """Get items that failed processing."""
-        return [item for item in self.items if item.status == JobStatus.FAILED]
-
-    def get_completed_items(self) -> List[JobItem]:
-        """Get items that completed successfully."""
-        return [item for item in self.items if item.status == JobStatus.COMPLETED]
-
-    def mark_in_progress(self, item: JobItem):
-        """Mark item as in progress."""
-        item.status = JobStatus.IN_PROGRESS
-        item.attempt += 1
-        self.save_checkpoint()
-
-    def mark_completed(
-        self,
-        item: JobItem,
-        duration_ms: float,
-        timing_s: Optional[dict[str, float]] = None,
-    ):
-        """Mark item as completed."""
-        item.status = JobStatus.COMPLETED
-        item.duration_ms = duration_ms
-        item.timing_s = timing_s
-        self.save_checkpoint()
-
-    def mark_failed(self, item: JobItem, error: str):
-        """Mark item as failed."""
-        item.status = JobStatus.FAILED
-        item.error = error
-        self.save_checkpoint()
-
-    def mark_skipped(self, item: JobItem, reason: str):
-        """Mark item as skipped."""
-        item.status = JobStatus.SKIPPED
-        item.error = reason
-        self.save_checkpoint()
-
-    def is_complete(self) -> bool:
-        """Check if all items are processed."""
-        return all(
-            item.status in (JobStatus.COMPLETED, JobStatus.SKIPPED, JobStatus.FAILED)
-            for item in self.items
-        )
-
-    def get_stats(self) -> dict:
-        """Get job statistics."""
-        from collections import Counter
-
-        status_counts = Counter(item.status for item in self.items)
-
-        completed_items = self.get_completed_items()
-        total_duration = sum(item.duration_ms or 0 for item in completed_items)
-        avg_duration = total_duration / len(completed_items) if completed_items else 0
-
-        return {
-            "total": len(self.items),
-            "completed": status_counts[JobStatus.COMPLETED],
-            "failed": status_counts[JobStatus.FAILED],
-            "pending": status_counts[JobStatus.PENDING],
-            "skipped": status_counts[JobStatus.SKIPPED],
-            "in_progress": status_counts[JobStatus.IN_PROGRESS],
-            "avg_duration_ms": avg_duration,
-            "total_duration_ms": total_duration,
-        }
-
-    def print_summary(self):
-        """Print job summary."""
-        stats = self.get_stats()
-
-        logger.info("=" * 60)
-        logger.info(f"BATCH JOB SUMMARY: {self.job_id}")
-        logger.info("=" * 60)
-        logger.info(f"Total items:      {stats['total']}")
-        logger.info(f"Completed:        {stats['completed']}")
-        logger.info(f"Failed:           {stats['failed']}")
-        logger.info(f"Pending:          {stats['pending']}")
-        logger.info(f"Skipped:          {stats['skipped']}")
-
-        if stats["completed"] > 0:
-            logger.info(f"Average duration: {stats['avg_duration_ms']:.1f}ms")
-            logger.info(f"Total time:       {stats['total_duration_ms']/1000:.1f}s")
-
-        logger.info("=" * 60)
+            
+        items_data = data.pop("items", [])
+        job = cls(**data)
+        
+        # Reconstruct items
+        job.items = [JobItem.from_dict(item) for item in items_data]
+        job._rebuild_map()
+        
+        return job
 
 
 class BatchProcessor:
-    """
-    Batch processor with checkpoint/resume capability.
-
-    Processes multiple inputs with automatic state tracking and recovery.
-    """
+    """Engine for executing BatchJobs."""
 
     def __init__(
         self,
-        processor_fn: Callable[[Path], Any],
-        checkpoint_dir: Path,
-        max_retries: int = 3,
-        skip_existing: bool = True,
+        max_workers: int = 4,
+        checkpoint_interval: int = 10,
+        stop_on_errors: bool = False
     ):
         """
-        Initialize batch processor.
-
         Args:
-            processor_fn: Function to process each item (input_path) -> result
-            checkpoint_dir: Directory for checkpoint files
-            max_retries: Maximum retry attempts for failed items
-            skip_existing: Skip items if output already exists
+            max_workers: Number of parallel threads.
+            checkpoint_interval: Save state every N completions.
+            stop_on_errors: If True, aborts batch on first failure.
         """
-        self.processor_fn = processor_fn
-        self.checkpoint_dir = Path(checkpoint_dir)
-        self.max_retries = max_retries
-        self.skip_existing = skip_existing
+        self.max_workers = max_workers
+        self.checkpoint_interval = checkpoint_interval
+        self.stop_on_errors = stop_on_errors
 
-        self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-
-    def process_batch(
-        self,
-        input_paths: List[Path],
-        output_dir: Path,
-        resume_from: Optional[Path] = None,
-        job_id: Optional[str] = None,
+    def process(
+        self, 
+        job: BatchJob, 
+        processor_func: Callable[[JobItem], Dict[str, Any]],
+        checkpoint_path: Union[str, Path]
     ) -> BatchJob:
         """
-        Process batch with checkpoint/resume.
+        Execute the batch job.
 
         Args:
-            input_paths: List of input file paths
-            output_dir: Output directory
-            resume_from: Path to checkpoint file to resume from
-            job_id: Job ID (generated if not provided)
-
-        Returns:
-            BatchJob with results
+            job: The BatchJob object.
+            processor_func: Function taking a JobItem and returning results (or raising Exception).
+            checkpoint_path: Where to save the `job.json`.
         """
-        from datetime import datetime
-
-        output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        # Load or create job
-        if resume_from:
-            job = BatchJob.load_checkpoint(resume_from)
-            logger.info(f"Resuming job {job.job_id} from checkpoint")
-        else:
-            if job_id is None:
-                job_id = str(uuid.uuid4())[:8]
-
-            items = [
-                JobItem(input_path=str(p), output_path=str(output_dir / p.name))
-                for p in input_paths
-            ]
-
-            checkpoint_path = self.checkpoint_dir / f"{job_id}.json"
-
-            job = BatchJob(
-                job_id=job_id,
-                items=items,
-                checkpoint_path=checkpoint_path,
-                created_at=datetime.utcnow().isoformat() + "Z",
-            )
-
-            job.save_checkpoint()
-            logger.info(f"Created new job {job_id} with {len(items)} items")
-
-        # Process items
-        pending = job.get_pending_items()
-        logger.info(f"Processing {len(pending)} pending items")
-
-        for i, item in enumerate(pending, 1):
-            logger.info(f"Processing {i}/{len(pending)}: {Path(item.input_path).name}")
-
-            # Check if output exists and skip_existing is enabled
-            if self.skip_existing and Path(item.output_path).exists():
-                logger.info("  Output exists, skipping")
-                job.mark_skipped(item, "Output file already exists")
-                continue
-
-            # Process with retries
-            self._process_item(job, item)
-
-        # Mark job as complete
-        if job.is_complete():
-            job.completed_at = datetime.utcnow().isoformat() + "Z"
-            job.save_checkpoint()
-            logger.info(f"Job {job.job_id} completed")
-
-        # Print summary
-        job.print_summary()
-
-        return job
-
-    def _process_item(self, job: BatchJob, item: JobItem):
-        """Process a single item with retry logic."""
-        max_attempts = self.max_retries + 1
-
-        for attempt in range(max_attempts):
-            if attempt > 0:
-                logger.info(f"  Retry attempt {attempt}/{self.max_retries}")
-
-            try:
-                job.mark_in_progress(item)
-
-                start_time = time.perf_counter()
-
-                # Process item
-                result = self.processor_fn(Path(item.input_path))
-
-                duration_ms = (time.perf_counter() - start_time) * 1000
-
-                # Save result if needed
-                if hasattr(result, "save"):
-                    result.save(Path(item.output_path))
-
-                # Extract timing_s if available
-                timing_s = None
-                if isinstance(result, dict) and "timing_s" in result:
-                    timing_s = result["timing_s"]
-                elif isinstance(result, dict) and "stage_times_sec" in result:
-                    # Backward compatibility: convert stage_times_sec to timing_s
-                    timing_s = result["stage_times_sec"]
-
-                # Mark success
-                job.mark_completed(item, duration_ms, timing_s=timing_s)
-                logger.info(f"  Completed in {duration_ms:.0f}ms")
-                return
-
-            except Exception as e:
-                error_msg = f"{type(e).__name__}: {str(e)}"
-                logger.warning(f"  Failed: {error_msg}")
-
-                if attempt >= self.max_retries:
-                    job.mark_failed(item, error_msg)
-                    logger.error("  Max retries exceeded, marking as failed")
-                else:
-                    # Brief pause before retry
-                    time.sleep(0.5)
-
-    def retry_failed(self, job: BatchJob) -> BatchJob:
-        """
-        Retry all failed items in a job.
-
-        Args:
-            job: Job with failed items
-
-        Returns:
-            Updated job
-        """
-        failed = job.get_failed_items()
-
-        if not failed:
-            logger.info("No failed items to retry")
+        logger.info(f"Starting batch '{job.name}' ({len(job.items)} items)")
+        
+        # Identify work
+        pending_items = [
+            item for item in job.items 
+            if item.status in (JobStatus.PENDING, JobStatus.FAILED)
+        ]
+        
+        if not pending_items:
+            logger.info("No pending items found. Job complete.")
             return job
 
-        logger.info(f"Retrying {len(failed)} failed items")
+        logger.info(f"Resuming with {len(pending_items)} pending items...")
+        
+        completed_since_save = 0
+        checkpoint_path = Path(checkpoint_path)
 
-        # Reset failed items to pending
-        for item in failed:
-            item.status = JobStatus.PENDING
-            item.error = None
-            item.attempt = 0
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            # Map futures to items
+            future_to_item = {
+                executor.submit(self._safe_execute, processor_func, item): item 
+                for item in pending_items
+            }
+            
+            try:
+                for future in as_completed(future_to_item):
+                    item = future_to_item[future]
+                    result_item = future.result()
+                    
+                    # Update job state in memory
+                    # (JobItem is mutable, so the list in BatchJob is updated)
+                    completed_since_save += 1
+                    
+                    # Logging
+                    if result_item.status == JobStatus.COMPLETED:
+                        logger.info(f"[{job.progress:.1%}] Completed: {item.id}")
+                    else:
+                        logger.error(f"[{job.progress:.1%}] Failed: {item.id} - {item.error}")
+                        if self.stop_on_errors:
+                            logger.critical("Aborting batch due to error (stop_on_errors=True)")
+                            executor.shutdown(wait=False, cancel_futures=True)
+                            break
 
-        job.save_checkpoint()
+                    # Checkpoint
+                    if completed_since_save >= self.checkpoint_interval:
+                        logger.debug("Saving checkpoint...")
+                        job.save(checkpoint_path)
+                        completed_since_save = 0
+                        
+            except KeyboardInterrupt:
+                logger.warning("Batch interrupted by user. Saving state...")
+                executor.shutdown(wait=False)
+                job.save(checkpoint_path)
+                raise
+            finally:
+                # Final save
+                job.save(checkpoint_path)
 
-        # Process pending items
-        for item in failed:
-            self._process_item(job, item)
-
-        job.print_summary()
-
+        logger.info(f"Batch execution finished. Stats: {job.stats}")
         return job
+
+    def _safe_execute(
+        self, func: Callable[[JobItem], Any], item: JobItem
+    ) -> JobItem:
+        """Wrapper to trap errors for a single item."""
+        item.status = JobStatus.RUNNING
+        start = time.time()
+        
+        try:
+            # Execute the user function
+            # User function can modify item.metadata if desired
+            func(item)
+            item.status = JobStatus.COMPLETED
+            item.error = None
+            
+        except Exception as e:
+            item.status = JobStatus.FAILED
+            item.error = str(e)
+            logger.exception(f"Error processing item {item.id}")
+            
+        finally:
+            item.execution_time = time.time() - start
+            
+        return item
