@@ -9,13 +9,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Dict, Any, Union
+from typing import Optional, Dict, Any, Union, TYPE_CHECKING
 import logging
 import time
 import numpy as np
 from PIL import Image
 
 from .config import DA3Config, ModelVariant
+
+if TYPE_CHECKING:
+    from .input_manager import ImageInput
 
 try:
     import torch

@@ -51,7 +51,7 @@ jobs:
           pip install -e ".[dev]" -c requirements/constraints.txt
 
       - name: Run unit and regression tests
-        run: pytest tests/ --maxfail=3
+        run: pytest tests/ -m "not ml" --maxfail=3
 
   test-layer2-ml:
     name: Layer 2 Tests (ML Tier)
@@ -81,7 +81,7 @@ jobs:
           pip install -e ".[ml]" -c requirements/constraints.txt
 
       - name: Run ML tests
-        run: pytest tests/ --maxfail=3
+        run: pytest tests/ -m "ml" --maxfail=3
 
   golden-regression:
     name: Golden Regression Tests
@@ -98,7 +98,7 @@ jobs:
         run: pip install -e ".[dev]" -c requirements/constraints.txt
 
       - name: Run golden tests
-        run: pytest tests/ --maxfail=1
+        run: pytest tests/ -m "not ml" --maxfail=1
 
   artifact-boundary:
     name: Verify Artifact Boundary
