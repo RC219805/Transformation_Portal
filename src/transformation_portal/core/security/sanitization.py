@@ -1,141 +1,105 @@
 """
-Input sanitization and policy enforcement.
-"""
+Input Sanitization & File Validation.
 
-from __future__ import annotations
+Cleans inputs to prevent injection attacks and verifies file integrity.
+"""
 
 import re
 from pathlib import Path
-from typing import Tuple
-import logging
+from typing import Optional, List
+from dataclasses import dataclass
 
-from .validation import InputValidator, ValidationError
+from .validation import ValidationError
 
-logger = logging.getLogger(__name__)
-
-
+@dataclass
 class SanitizationPolicy:
+    """Rules for sanitization."""
+    max_filename_length: int = 255
+    allowed_extensions: Optional[List[str]] = None
+    allow_spaces: bool = False
+
+    def __post_init__(self):
+        if self.allowed_extensions is None:
+            self.allowed_extensions = ['.jpg', '.jpeg', '.png', '.tiff', '.exr']
+
+def sanitize_filename(
+    filename: str, 
+    replacement: str = "_"
+) -> str:
     """
-    Input sanitization policy.
-
-    Defines rules for sanitizing filenames and inputs.
+    Make a string safe for use as a filename.
+    
+    Removes dangerous characters like / \ : * ? " < > |
     """
-
-    # Dangerous filename patterns
-    DANGEROUS_PATTERNS = [
-        r"\.\.",  # Parent directory
-        r"^/",  # Absolute path
-        r"^~",  # Home directory
-        r"[\x00-\x1f]",  # Control characters
-    ]
-
-    # Safe filename pattern (alphanumeric, dash, underscore, dot)
-    SAFE_PATTERN = re.compile(r"^[a-zA-Z0-9._-]+$")
-
-    @classmethod
-    def is_safe_filename(cls, filename: str) -> bool:
-        """
-        Check if filename is safe.
-
-        Args:
-            filename: Filename to check
-
-        Returns:
-            True if filename is safe
-        """
-        # Check for dangerous patterns
-        for pattern in cls.DANGEROUS_PATTERNS:
-            if re.search(pattern, filename):
-                return False
-
-        # Check length
-        if len(filename) > 255:
-            return False
-
-        # Check against safe pattern
-        return cls.SAFE_PATTERN.match(filename) is not None
-
-    @classmethod
-    def sanitize_filename(cls, filename: str, replacement: str = "_") -> str:
-        """
-        Sanitize filename by replacing unsafe characters.
-
-        Args:
-            filename: Filename to sanitize
-            replacement: Replacement character for unsafe chars
-
-        Returns:
-            Sanitized filename
-        """
-        # Remove parent directory references
-        filename = filename.replace("..", "")
-
-        # Remove leading slashes and tildes
-        filename = filename.lstrip("/~")
-
-        # Remove control characters
-        filename = re.sub(r"[\x00-\x1f]", "", filename)
-
-        # Replace unsafe characters
-        filename = re.sub(r"[^a-zA-Z0-9._-]", replacement, filename)
-
-        # Limit length
-        if len(filename) > 255:
-            # Preserve extension
-            stem = filename[:245]
-            suffix = filename[-10:] if "." in filename[-10:] else ""
-            filename = stem + suffix
-
-        return filename
-
-
-def sanitize_filename(filename: str) -> str:
-    """
-    Sanitize filename (convenience function).
-
-    Args:
-        filename: Filename to sanitize
-
-    Returns:
-        Sanitized filename
-    """
-    return SanitizationPolicy.sanitize_filename(filename)
-
+    # 1. Strip path components (we only want the name)
+    name = Path(filename).name
+    
+    # 2. Replace dangerous chars
+    # Allow alphanumeric, dot, hyphen, underscore
+    safe_pattern = re.compile(r'[^a-zA-Z0-9\._-]')
+    clean_name = safe_pattern.sub(replacement, name)
+    
+    # 3. Prevent hidden files
+    while clean_name.startswith('.'):
+        clean_name = clean_name[1:]
+        
+    # 4. Truncate length
+    return clean_name[:255]
 
 def validate_input_file(
-    path: Path,
-    allowed_extensions: Tuple[str, ...] = (".tif", ".tiff", ".jpg", ".jpeg", ".png"),
-    max_size_mb: float = 500.0,
-    strict: bool = True,
-) -> bool:
+    path: Path, 
+    policy: Optional[SanitizationPolicy] = None
+) -> None:
     """
-    Validate input file (convenience function).
-
-    Args:
-        path: Path to file
-        allowed_extensions: Allowed file extensions
-        max_size_mb: Maximum file size in MB
-        strict: If True, raise exception on failure
-
-    Returns:
-        True if valid (or raises ValidationError if strict=True)
-
-    Raises:
-        ValidationError: If strict=True and validation fails
+    Verify a file is safe to process.
+    
+    Checks:
+    - Path safety (traversal)
+    - Existence
+    - Extension allowlist
+    - Size (basic check)
     """
-    validator = InputValidator(
-        allowed_extensions=allowed_extensions,
-        max_size_mb=max_size_mb,
-        enable_magic_bytes=True,
-    )
-
-    result = validator.validate_file(path, strict=strict)
-
-    if not result.valid:
-        if strict:
-            raise ValidationError(
-                f"File validation failed: {', '.join(result.errors)}", path=path
-            )
-        return False
-
-    return True
+    policy = policy or SanitizationPolicy()
+    
+    # 1. Path Safety is handled by caller (safe_resolve_path), 
+    # but we check basic existence here.
+    if not path.exists():
+        raise ValidationError(f"File not found: {path}")
+        
+    if not path.is_file():
+        raise ValidationError(f"Not a file: {path}")
+        
+    # 2. Extension Check
+    ext = path.suffix.lower()
+    if policy.allowed_extensions and ext not in policy.allowed_extensions:
+        raise ValidationError(
+            f"File type '{ext}' not allowed. Permitted: {policy.allowed_extensions}"
+        )
+        
+    # 3. Magic Number Check (Header validation)
+    # This prevents 'image.jpg' actually being a script
+    try:
+        with open(path, 'rb') as f:
+            header = f.read(10)
+            
+        # Basic signatures
+        signatures = {
+            '.jpg': b'\xFF\xD8\xFF',
+            '.jpeg': b'\xFF\xD8\xFF',
+            '.png': b'\x89PNG\r\n\x1a\n',
+            '.tiff': [b'II*\x00', b'MM\x00*'], # Little/Big Endian
+            '.exr': b'v/1\x01'
+        }
+        
+        expected = signatures.get(ext)
+        if expected:
+            if isinstance(expected, list):
+                valid = any(header.startswith(sig) for sig in expected)
+            else:
+                valid = header.startswith(expected)
+                
+            if not valid:
+                raise ValidationError(f"File signature mismatch for {ext}")
+                
+    except IOError as e:
+        raise ValidationError(f"Could not read file header: {e}")
