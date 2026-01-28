@@ -1,219 +1,100 @@
 """
-Memory management utilities.
+Memory Management Utilities.
 
-Provides memory tracking and estimation for pipeline operations.
+Handles VRAM garbage collection, cache clearing, and batch size estimation
+to prevent CUDA Out-Of-Memory (OOM) errors.
 """
 
-from __future__ import annotations
-
+import gc
+import logging
+import torch
 from dataclasses import dataclass
 from typing import Optional
-import logging
 
 logger = logging.getLogger(__name__)
 
-
 @dataclass
 class MemoryStats:
-    """Memory usage statistics."""
-
-    total_mb: float
-    available_mb: float
-    used_mb: float
-    percent: float
-
-    def __str__(self) -> str:
-        """Format as string."""
-        return (
-            f"Memory: {self.used_mb:.1f}MB used / "
-            f"{self.total_mb:.1f}MB total ({self.percent:.1f}%)"
-        )
+    allocated_gb: float
+    reserved_gb: float
+    free_gb: float
 
 
 class MemoryManager:
-    """
-    Memory usage tracker and manager.
+    """Static utility for memory hygiene."""
 
-    Provides utilities for tracking memory usage and estimating
-    memory requirements for pipeline operations.
-    """
+    @staticmethod
+    def purge():
+        """Aggressive memory cleanup."""
+        # 1. Python Garbage Collector
+        gc.collect()
+        
+        # 2. PyTorch CUDA Cache
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+            
+        # 3. MPS Cache
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
 
-    def __init__(self):
-        """Initialize memory manager."""
-        self._process = None
-
-        try:
-            import psutil
-
-            self._process = psutil.Process()
-            self._psutil = psutil
-        except ImportError:
-            logger.warning("psutil not available, memory tracking disabled")
-
-    def get_stats(self) -> Optional[MemoryStats]:
-        """
-        Get current memory statistics.
-
-        Returns:
-            MemoryStats or None if psutil not available
-        """
-        if self._process is None:
+    @staticmethod
+    def get_stats(device_index: int = 0) -> Optional[MemoryStats]:
+        """Get current VRAM usage (CUDA only)."""
+        if not torch.cuda.is_available():
             return None
 
-        try:
-            vm = self._psutil.virtual_memory()
-
-            return MemoryStats(
-                total_mb=vm.total / (1024 * 1024),
-                available_mb=vm.available / (1024 * 1024),
-                used_mb=vm.used / (1024 * 1024),
-                percent=vm.percent,
-            )
-        except Exception as e:
-            logger.debug(f"Failed to get memory stats: {e}")
-            return None
-
-    def get_process_memory_mb(self) -> Optional[float]:
-        """
-        Get current process memory usage in MB.
-
-        Returns:
-            Memory usage in MB or None if not available
-        """
-        if self._process is None:
-            return None
-
-        try:
-            mem_info = self._process.memory_info()
-            return mem_info.rss / (1024 * 1024)
-        except Exception as e:
-            logger.debug(f"Failed to get process memory: {e}")
-            return None
-
-    def check_available(self, required_mb: float) -> bool:
-        """
-        Check if sufficient memory is available.
-
-        Args:
-            required_mb: Required memory in MB
-
-        Returns:
-            True if sufficient memory available, False otherwise
-        """
-        stats = self.get_stats()
-        if stats is None:
-            # Cannot determine, assume available
-            return True
-
-        return stats.available_mb >= required_mb
-
-    def log_stats(self):
-        """Log current memory statistics."""
-        stats = self.get_stats()
-        if stats:
-            logger.info(str(stats))
-
-        process_mem = self.get_process_memory_mb()
-        if process_mem:
-            logger.info(f"Process Memory: {process_mem:.1f}MB")
+        t = 1024**3
+        allocated = torch.cuda.memory_allocated(device_index) / t
+        reserved = torch.cuda.memory_reserved(device_index) / t
+        
+        props = torch.cuda.get_device_properties(device_index)
+        total = props.total_memory / t
+        
+        return MemoryStats(
+            allocated_gb=allocated,
+            reserved_gb=reserved,
+            free_gb=total - reserved
+        )
 
 
 def estimate_memory_usage(
-    image_width: int,
-    image_height: int,
-    channels: int = 3,
-    dtype_bytes: int = 4,
-    processing_overhead: float = 3.0,
+    resolution: tuple[int, int], 
+    channels: int = 3, 
+    precision_bytes: int = 2 # FP16
 ) -> float:
     """
-    Estimate memory usage for image processing.
-
-    Args:
-        image_width: Image width in pixels
-        image_height: Image height in pixels
-        channels: Number of color channels (default: 3 for RGB)
-        dtype_bytes: Bytes per value (4 for float32, 2 for float16)
-        processing_overhead: Overhead multiplier for intermediate buffers (default: 3x)
-
-    Returns:
-        Estimated memory usage in MB
+    Estimate VRAM usage for a single image tensor in MB.
+    Does NOT account for model weights or activation overhead.
     """
-    # Base image size
-    pixels = image_width * image_height
-    base_mb = (pixels * channels * dtype_bytes) / (1024 * 1024)
-
-    # Apply overhead for intermediate buffers
-    estimated_mb = base_mb * processing_overhead
-
-    return estimated_mb
-
-
-def estimate_batch_memory(
-    image_width: int,
-    image_height: int,
-    batch_size: int,
-    channels: int = 3,
-    dtype_bytes: int = 4,
-    processing_overhead: float = 3.0,
-) -> float:
-    """
-    Estimate memory usage for batch processing.
-
-    Args:
-        image_width: Image width in pixels
-        image_height: Image height in pixels
-        batch_size: Number of images in batch
-        channels: Number of color channels (default: 3 for RGB)
-        dtype_bytes: Bytes per value (4 for float32, 2 for float16)
-        processing_overhead: Overhead multiplier (default: 3x)
-
-    Returns:
-        Estimated memory usage in MB
-    """
-    single_image_mb = estimate_memory_usage(
-        image_width, image_height, channels, dtype_bytes, processing_overhead
-    )
-
-    return single_image_mb * batch_size
+    h, w = resolution
+    pixels = h * w
+    
+    # Base tensor size
+    tensor_mb = (pixels * channels * precision_bytes) / (1024**2)
+    
+    # Heuristic for ML processing overhead (activations, gradients, etc.)
+    # Usually 4x - 10x the raw tensor size depending on architecture
+    overhead_factor = 6.0 
+    
+    return tensor_mb * overhead_factor
 
 
 def calculate_safe_batch_size(
-    image_width: int,
-    image_height: int,
-    available_memory_gb: float,
-    memory_reserve_gb: float = 2.0,
-    channels: int = 3,
-    dtype_bytes: int = 4,
-    processing_overhead: float = 3.0,
+    available_vram_gb: float,
+    model_weights_gb: float,
+    image_resolution: tuple[int, int]
 ) -> int:
-    """
-    Calculate safe batch size given available memory.
-
-    Args:
-        image_width: Image width in pixels
-        image_height: Image height in pixels
-        available_memory_gb: Available memory in GB
-        memory_reserve_gb: Memory to reserve (default: 2GB)
-        channels: Number of color channels
-        dtype_bytes: Bytes per value
-        processing_overhead: Processing overhead multiplier
-
-    Returns:
-        Safe batch size (minimum 1)
-    """
-    # Convert to MB
-    usable_memory_mb = (available_memory_gb - memory_reserve_gb) * 1024
-
-    if usable_memory_mb <= 0:
+    """Calculate maximum batch size that fits in VRAM."""
+    # Reserve buffer (system overhead, fragmentation)
+    usable_vram = available_vram_gb * 0.85 
+    
+    remaining_for_data = usable_vram - model_weights_gb
+    if remaining_for_data <= 0:
+        logger.warning("Model weights exceed estimated safe VRAM limit!")
         return 1
-
-    # Estimate per-image memory
-    per_image_mb = estimate_memory_usage(
-        image_width, image_height, channels, dtype_bytes, processing_overhead
-    )
-
-    # Calculate batch size
-    batch_size = int(usable_memory_mb / per_image_mb)
-
-    # Ensure at least 1
+        
+    per_image_gb = estimate_memory_usage(image_resolution) / 1024 # Convert MB to GB
+    
+    batch_size = int(remaining_for_data / per_image_gb)
     return max(1, batch_size)
