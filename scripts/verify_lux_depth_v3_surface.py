@@ -19,19 +19,27 @@ def verify_imports():
     """Verify all core modules can be imported."""
     print("🔍 Verifying imports...")
 
+    # Test 1: Public API imports (validates __init__.py exports)
     try:
-        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
-        from transformation_portal.lux_depth_v3.postprocessing import Postprocessor
-        from transformation_portal.lux_depth_v3.config import (
-            DA3Config, ModelVariant, Preset, EnhanceConfig, PostprocessingConfig
+        from transformation_portal.lux_depth_v3 import (
+            EnhanceOrchestrator,
+            DA3Config, ModelVariant, Preset, EnhanceConfig, PostprocessingConfig, DeviceConfig,
+            Postprocessor,
+            DA3InferenceEngine, DepthResult,
         )
-        from transformation_portal.lux_depth_v3.inference import DA3InferenceEngine, DepthResult
+        print("✅ Public API imports successful")
+    except ImportError as e:
+        print(f"❌ Public API import failed: {e}")
+        return False
+
+    # Test 2: Internal module imports (validates module structure)
+    try:
         from transformation_portal.lux_depth_v3.depth_writer import atomic_write_depth_u16_png_with_stats
         from transformation_portal.lux_depth_v3.v2_runner import V2Runner, find_v2_report
-        print("✅ All imports successful")
+        print("✅ Internal module imports successful")
         return True
     except ImportError as e:
-        print(f"❌ Import failed: {e}")
+        print(f"❌ Internal import failed: {e}")
         return False
 
 
@@ -42,7 +50,7 @@ def verify_intentional_failures():
     from transformation_portal.lux_depth_v3.inference import DA3InferenceEngine
     from transformation_portal.lux_depth_v3.config import DA3Config
     from transformation_portal.lux_depth_v3.depth_writer import atomic_write_depth_u16_png_with_stats
-    from transformation_portal.lux_depth_v3.v2_runner import V2Runner
+    from transformation_portal.lux_depth_v3.v2_runner import V2Runner, find_v2_report
 
     checks_passed = 0
     checks_total = 0
@@ -93,6 +101,17 @@ def verify_intentional_failures():
         checks_passed += 1
     except Exception as e:
         print(f"❌ V2Runner.run() raised wrong exception: {type(e).__name__}")
+
+    # Test 4: find_v2_report()
+    checks_total += 1
+    try:
+        find_v2_report(Path("/tmp/output"), "test_image")
+        print("❌ find_v2_report() should raise NotImplementedError")
+    except NotImplementedError:
+        print("✅ find_v2_report() raises NotImplementedError")
+        checks_passed += 1
+    except Exception as e:
+        print(f"❌ find_v2_report() raised wrong exception: {type(e).__name__}")
 
     return checks_passed == checks_total
 

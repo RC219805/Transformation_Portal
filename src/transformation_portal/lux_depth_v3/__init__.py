@@ -4,9 +4,10 @@ This module defines the stable public surface for the lux_depth_v3 package.
 Import from this module rather than internal submodules to ensure API stability.
 
 Example:
-    >>> from transformation_portal.lux_depth_v3 import EnhanceOrchestrator, DA3Config
-    >>> config = DA3Config()
-    >>> orchestrator = EnhanceOrchestrator(config)
+    >>> from pathlib import Path
+    >>> from transformation_portal.lux_depth_v3 import EnhanceOrchestrator, EnhanceConfig
+    >>> config = EnhanceConfig()
+    >>> orchestrator = EnhanceOrchestrator(config, output_root=Path("./output"))
 """
 
 # Orchestration
