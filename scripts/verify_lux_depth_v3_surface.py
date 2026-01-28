@@ -44,8 +44,8 @@ def verify_imports():
 
 
 def verify_intentional_failures():
-    """Verify stub methods fail via NotImplementedError, not TypeError."""
-    print("\n🔍 Verifying intentional failure contract...")
+    """Verify DA3InferenceEngine works (no longer a stub)."""
+    print("\n🔍 Verifying DA3InferenceEngine implementation...")
 
     from transformation_portal.lux_depth_v3.inference import DA3InferenceEngine
     from transformation_portal.lux_depth_v3.config import DA3Config
@@ -55,20 +55,25 @@ def verify_intentional_failures():
     checks_passed = 0
     checks_total = 0
 
-    # Test 1: DA3InferenceEngine.predict()
+    # Test 1: DA3InferenceEngine.predict() works (real implementation)
     checks_total += 1
     try:
         config = DA3Config()
         engine = DA3InferenceEngine(config=config)
-        engine.predict(np.zeros((64, 64, 3), dtype=np.float32))
-        print("❌ DA3InferenceEngine.predict() should raise NotImplementedError")
-    except NotImplementedError:
-        print("✅ DA3InferenceEngine.predict() raises NotImplementedError")
+        result = engine.predict(np.zeros((64, 64, 3), dtype=np.float32))
+        # Verify result structure
+        assert hasattr(result, 'depth_map')
+        assert hasattr(result, 'depth')
+        assert hasattr(result, 'metadata')
+        assert result.depth_map.shape == (64, 64)
+        print("✅ DA3InferenceEngine.predict() works (real implementation)")
         checks_passed += 1
+    except NotImplementedError:
+        print("❌ DA3InferenceEngine.predict() still raises NotImplementedError (should be implemented)")
     except Exception as e:
-        print(f"❌ DA3InferenceEngine.predict() raised wrong exception: {type(e).__name__}")
+        print(f"❌ DA3InferenceEngine.predict() failed: {type(e).__name__}: {e}")
 
-    # Test 2: atomic_write_depth_u16_png_with_stats()
+    # Test 2: atomic_write_depth_u16_png_with_stats() (still a stub)
     checks_total += 1
     try:
         atomic_write_depth_u16_png_with_stats(
@@ -84,7 +89,7 @@ def verify_intentional_failures():
     except Exception as e:
         print(f"❌ atomic_write_depth_u16_png_with_stats() raised wrong exception: {type(e).__name__}")
 
-    # Test 3: V2Runner.run()
+    # Test 3: V2Runner.run() (still a stub)
     checks_total += 1
     try:
         runner = V2Runner()

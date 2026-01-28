@@ -245,19 +245,8 @@ def test_all_imports_together():
 
 def test_stub_not_implemented_errors():
     """Test that stub implementations raise NotImplementedError with clear messages."""
-    from transformation_portal.lux_depth_v3.inference import DA3InferenceEngine
-    from transformation_portal.lux_depth_v3.config import DA3Config
     from transformation_portal.lux_depth_v3.depth_writer import atomic_write_depth_u16_png_with_stats
     import numpy as np
-
-    # Test inference engine raises NotImplementedError
-    engine = DA3InferenceEngine(config=DA3Config())
-
-    with pytest.raises(NotImplementedError) as exc_info:
-        engine.infer(np.zeros((100, 100, 3)))
-
-    assert "stub" in str(exc_info.value).lower()
-    assert "full implementation pending" in str(exc_info.value).lower()
 
     # Test depth writer raises NotImplementedError
     with pytest.raises(NotImplementedError) as exc_info:
@@ -274,9 +263,9 @@ if __name__ == "__main__":
     pytest.main([__file__, "-v"])
 
 
-# Intentional failure tests - verify stubs fail gracefully
-def test_da3_predict_fails_intentionally():
-    """Test that DA3InferenceEngine.predict() raises NotImplementedError, not TypeError."""
+# DA3InferenceEngine implementation tests
+def test_da3_inference_engine_basic():
+    """Test that DA3InferenceEngine can be instantiated and has expected attributes."""
     import numpy as np
     from transformation_portal.lux_depth_v3.inference import DA3InferenceEngine
     from transformation_portal.lux_depth_v3.config import DA3Config
@@ -284,9 +273,16 @@ def test_da3_predict_fails_intentionally():
     config = DA3Config()
     engine = DA3InferenceEngine(config=config)
 
-    # Should raise NotImplementedError (intentional stub), not TypeError/AttributeError
-    with pytest.raises(NotImplementedError, match="stub"):
-        engine.predict(np.zeros((64, 64, 3), dtype=np.float32))
+    # Should have expected attributes
+    assert hasattr(engine, 'config')
+    assert hasattr(engine, 'backend')
+    assert hasattr(engine, 'device')
+    assert hasattr(engine, 'predict')
+    assert hasattr(engine, 'infer')
+    assert hasattr(engine, 'infer_from_path')
+
+    # Config should be stored
+    assert engine.config is config
 
 
 def test_depth_writer_fails_intentionally():
