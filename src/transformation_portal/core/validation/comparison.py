@@ -1,227 +1,64 @@
 """
-Baseline comparison for validation.
+Baseline Comparison Logic.
 
-Compares processing results against baseline metrics.
+Compares current execution results against established baselines
+to detect regression or drift.
 """
 
-from __future__ import annotations
-
-from dataclasses import dataclass
-from enum import Enum
-from typing import Dict, Optional
-from pathlib import Path
-import json
 import logging
+from dataclasses import dataclass
+from typing import Optional
+
+from .metrics import MetricsComputer, QualityMetrics
 
 logger = logging.getLogger(__name__)
 
 
-class ComparisonStatus(Enum):
-    """Status of baseline comparison."""
-
-    NO_BASELINE = "no_baseline"
-    REGRESSION = "regression"
-    STABLE = "stable"
-    IMPROVEMENT = "improvement"
-
-
 @dataclass
 class ComparisonResult:
-    """Result of baseline comparison."""
-
-    status: ComparisonStatus
-    delta: Dict[str, float]
-    baseline: Dict[str, float]
-    current: Dict[str, float]
-    threshold: float = 0.05
-
-    def to_dict(self) -> Dict:
-        """Convert to dictionary."""
-        return {
-            "status": self.status.value,
-            "delta": self.delta,
-            "baseline": self.baseline,
-            "current": self.current,
-            "threshold": self.threshold,
-        }
-
-    def __str__(self) -> str:
-        """Format comparison result as string."""
-        lines = [f"Status: {self.status.value}"]
-
-        if self.status == ComparisonStatus.NO_BASELINE:
-            lines.append("No baseline available for comparison")
-        else:
-            lines.append(f"Threshold: ±{self.threshold*100:.1f}%")
-            lines.append("\nMetric Changes:")
-
-            for metric, delta_val in self.delta.items():
-                baseline_val = self.baseline.get(metric, 0)
-                current_val = self.current.get(metric, 0)
-
-                if delta_val > self.threshold:
-                    symbol = "↑"
-                    status = "improved"
-                elif delta_val < -self.threshold:
-                    symbol = "↓"
-                    status = "regressed"
-                else:
-                    symbol = "="
-                    status = "stable"
-
-                lines.append(f"  {metric:.<15} {symbol} {delta_val:+.4f} ({status})")
-                lines.append(
-                    f"    Baseline: {baseline_val:.4f}, Current: {current_val:.4f}"
-                )
-
-        return "\n".join(lines)
+    passed: bool
+    drift_score: float  # How much it deviates
+    metrics: QualityMetrics
+    message: str
 
 
 class BaselineComparator:
     """
-    Compare processing results against validation baseline.
-
-    Tracks baseline metrics per preset and detects regressions.
+    Validates results against a 'Golden Master' baseline.
     """
+    
+    def __init__(
+        self, 
+        min_psnr: float = 30.0, 
+        min_ssim: float = 0.90
+    ):
+        self.min_psnr = min_psnr
+        self.min_ssim = min_ssim
 
-    def __init__(self, baseline_dir: Path, threshold: float = 0.05):
+    def compare(
+        self, 
+        current_image, 
+        baseline_image
+    ) -> ComparisonResult:
         """
-        Initialize baseline comparator.
-
-        Args:
-            baseline_dir: Directory containing baseline metrics
-            threshold: Threshold for detecting changes (default 5%)
+        Check if current image matches baseline standards.
         """
-        self.baseline_dir = Path(baseline_dir)
-        self.threshold = threshold
-        self.baseline_metrics = self._load_baseline()
-
-    def _load_baseline(self) -> Dict[str, Dict[str, float]]:
-        """Load baseline metrics from file."""
-        baseline_path = self.baseline_dir / "baseline_metrics.json"
-
-        if not baseline_path.exists():
-            logger.warning(f"No baseline file found at {baseline_path}")
-            return {}
-
-        try:
-            with open(baseline_path) as f:
-                data = json.load(f)
-
-            logger.info(f"Loaded baseline metrics for {len(data)} presets")
-            return data
-
-        except Exception as e:
-            logger.error(f"Failed to load baseline metrics: {e}")
-            return {}
-
-    def compare(self, preset: str, metrics: Dict[str, float]) -> ComparisonResult:
-        """
-        Compare metrics against baseline.
-
-        Args:
-            preset: Preset name
-            metrics: Current metrics
-
-        Returns:
-            ComparisonResult
-        """
-        if preset not in self.baseline_metrics:
-            logger.info(f"No baseline for preset '{preset}'")
-            return ComparisonResult(
-                status=ComparisonStatus.NO_BASELINE,
-                delta={},
-                baseline={},
-                current=metrics,
-                threshold=self.threshold,
-            )
-
-        baseline = self.baseline_metrics[preset]
-
-        # Calculate deltas
-        delta = {}
-        for key in metrics:
-            if key in baseline:
-                delta[key] = metrics[key] - baseline[key]
-
-        # Determine status
-        status = self._determine_status(delta)
-
-        return ComparisonResult(
-            status=status,
-            delta=delta,
-            baseline=baseline,
-            current=metrics,
-            threshold=self.threshold,
-        )
-
-    def _determine_status(self, delta: Dict[str, float]) -> ComparisonStatus:
-        """
-        Determine comparison status from deltas.
-
-        Args:
-            delta: Metric deltas
-
-        Returns:
-            ComparisonStatus
-        """
-        if not delta:
-            return ComparisonStatus.NO_BASELINE
-
-        # Check for significant changes
-        has_regression = any(d < -self.threshold for d in delta.values())
-        has_improvement = any(d > self.threshold for d in delta.values())
-
-        if has_regression:
-            return ComparisonStatus.REGRESSION
-        elif has_improvement:
-            return ComparisonStatus.IMPROVEMENT
-        else:
-            return ComparisonStatus.STABLE
-
-    def update_baseline(self, preset: str, metrics: Dict[str, float]):
-        """
-        Update baseline metrics for a preset.
-
-        Args:
-            preset: Preset name
-            metrics: New baseline metrics
-        """
-        self.baseline_metrics[preset] = metrics
-        self._save_baseline()
-
-        logger.info(f"Updated baseline for preset '{preset}'")
-
-    def _save_baseline(self):
-        """Save baseline metrics to file."""
-        self.baseline_dir.mkdir(parents=True, exist_ok=True)
-        baseline_path = self.baseline_dir / "baseline_metrics.json"
-
-        try:
-            with open(baseline_path, "w") as f:
-                json.dump(self.baseline_metrics, f, indent=2)
-
-            logger.debug(f"Saved baseline metrics to {baseline_path}")
-
-        except Exception as e:
-            logger.error(f"Failed to save baseline metrics: {e}")
-
-    def list_presets(self) -> list[str]:
-        """Get list of presets with baselines."""
-        return list(self.baseline_metrics.keys())
-
-    def get_baseline(self, preset: str) -> Optional[Dict[str, float]]:
-        """
-        Get baseline metrics for a preset.
-
-        Args:
-            preset: Preset name
-
-        Returns:
-            Baseline metrics or None
-        """
-        return self.baseline_metrics.get(preset)
-
-    def has_baseline(self, preset: str) -> bool:
-        """Check if baseline exists for preset."""
-        return preset in self.baseline_metrics
+        metrics = MetricsComputer.compute(current_image, baseline_image)
+        
+        passed = True
+        failures = []
+        
+        if metrics.psnr < self.min_psnr:
+            passed = False
+            failures.append(f"PSNR {metrics.psnr:.2f} < {self.min_psnr}")
+            
+        if metrics.ssim > 0 and metrics.ssim < self.min_ssim:
+            passed = False
+            failures.append(f"SSIM {metrics.ssim:.3f} < {self.min_ssim}")
+            
+        msg = "Regression detected: " + ", ".join(failures) if not passed else "Within tolerance."
+        
+        # Drift score (inverse of SSIM, 0 is perfect match)
+        drift = 1.0 - metrics.ssim
+        
+        return ComparisonResult(passed, drift, metrics, msg)
