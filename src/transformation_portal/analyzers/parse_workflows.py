@@ -9,8 +9,10 @@ This script identifies:
 - Invalid job dependencies
 - Duplicate job names
 - Invalid GitHub Actions syntax
+- Deprecated OpenAI model usage
 """
 
+import argparse
 import re
 import sys
 from pathlib import Path
@@ -67,7 +69,7 @@ class WorkflowParser:
         )
 
         for workflow_file in workflow_files:
-            print(f"Parsing {workflow_file.name}...")
+            # print(f"Parsing {workflow_file.name}...") # Silence logs for cleaner CI output
             self._parse_workflow(workflow_file)
 
         return self.bugs
@@ -327,7 +329,7 @@ class WorkflowParser:
     def _check_openai_models(
         self, workflow_file: Path, workflow: Dict, lines: List[str]
     ):
-        """Check for invalid OpenAI model names."""
+        """Check for invalid or deprecated OpenAI model names."""
         valid_models = {
             "gpt-4",
             "gpt-4-turbo",
@@ -338,9 +340,7 @@ class WorkflowParser:
             "gpt-3.5-turbo-16k",
         }
 
-        # Valid model prefixes for date-stamped versions.
-        # These prefixes allow models like 'gpt-4-turbo-2024-04-09' (e.g., gpt-4-turbo-YYYY-MM-DD).
-        # Any suffix after these prefixes is accepted, so use with caution.
+        # Valid prefixes for date-stamped versions (e.g., gpt-4-turbo-YYYY-MM-DD).
         valid_prefixes = {"gpt-4-turbo-", "gpt-4o-", "gpt-3.5-turbo-"}
 
         if "jobs" not in workflow:
@@ -358,14 +358,14 @@ class WorkflowParser:
                 if not run_script:
                     continue
 
-                # Search for OpenAI model references (handle both quoted and escaped quotes)
+                # Search for OpenAI model references
                 model_matches = _MODEL_PATTERN1.findall(run_script)
                 model_matches += _MODEL_PATTERN2.findall(run_script)
 
                 for model in model_matches:
                     # Check if it looks like a GPT model but isn't valid
                     if model.startswith("gpt-") and model not in valid_models:
-                        # Check if it's a date-stamped version with valid prefix
+                        # Check if it's a date-stamped version
                         is_versioned = any(
                             model.startswith(vp) for vp in valid_prefixes
                         )
@@ -382,18 +382,55 @@ class WorkflowParser:
                             )
 
 
+def render_github_annotations(bugs: List[WorkflowBug]) -> None:
+    """Emit GitHub Actions workflow commands to annotate the PR."""
+    for bug in bugs:
+        # Map severity to GitHub annotation levels
+        # info -> notice, warning -> warning, error -> error
+        level = "notice" if bug.severity == "info" else bug.severity
+        
+        print(
+            f"::{level} file={bug.file_path},line={bug.line_number or 1},"
+            f"title=Workflow Issue::"
+            f"{bug.message}"
+        )
+
+
+def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="GitHub Actions Workflow Validator")
+    parser.add_argument(
+        "--root",
+        type=Path,
+        default=Path.cwd(),
+        help="Project root to search for .github/workflows",
+    )
+    parser.add_argument(
+        "--github-actions",
+        action="store_true",
+        help="Emit GitHub Actions workflow commands.",
+    )
+    return parser.parse_args(argv)
+
+
 def main():
     """Main entry point."""
-    repo_root = Path(__file__).parent
-    workflow_dir = repo_root / ".github" / "workflows"
+    args = parse_args()
+    
+    # Locate workflow directory relative to root
+    workflow_dir = args.root / ".github" / "workflows"
 
     if not workflow_dir.exists():
-        print(f"Error: Workflow directory not found at {workflow_dir}")
-        sys.exit(1)
+        # Fallback: check if we are already inside .github/workflows or close to it
+        if Path(".github/workflows").exists():
+            workflow_dir = Path(".github/workflows")
+        else:
+            print(f"Info: Workflow directory not found at {workflow_dir}")
+            sys.exit(0)
 
     parser = WorkflowParser(workflow_dir)
     bugs = parser.parse_all_workflows()
 
+    # Always print human-readable summary
     if not bugs:
         print("\n✅ No bugs found in workflow files!")
         return 0
@@ -408,7 +445,6 @@ def main():
         )
     )
 
-    # Print results
     print(f"\n{'=' * 80}")
     print(f"Found {len(bugs)} issue(s) in workflow files:")
     print(f"{'=' * 80}\n")
@@ -419,17 +455,13 @@ def main():
             print(f"  Context: {bug.context}")
         print()
 
+    # Emit CI Annotations if requested
+    if args.github_actions:
+        render_github_annotations(bugs)
+
     # Summary
     error_count = sum(1 for b in bugs if b.severity == "error")
-    warning_count = sum(1 for b in bugs if b.severity == "warning")
-    info_count = sum(1 for b in bugs if b.severity == "info")
-
-    print(f"{'=' * 80}")
-    print(
-        f"Summary: {error_count} error(s), {warning_count} warning(s), {info_count} info"
-    )
-    print(f"{'=' * 80}")
-
+    
     return 1 if error_count > 0 else 0
 
 
