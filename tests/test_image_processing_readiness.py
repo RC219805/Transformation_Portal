@@ -22,12 +22,13 @@ READINESS_AVAILABLE = readiness_spec is not None
 PROCESSOR_AVAILABLE = processor_spec is not None
 
 # Import modules if available (conditional imports for optional dependencies)
-# pylint: disable=possibly-used-before-assignment
+readiness = None
+processor = None
+
 if READINESS_AVAILABLE:
     import check_image_processing_readiness as readiness
 if PROCESSOR_AVAILABLE:
     import simple_image_processor as processor
-# pylint: enable=possibly-used-before-assignment
 
 
 @pytest.mark.skipif(not READINESS_AVAILABLE, reason="readiness check module not available")

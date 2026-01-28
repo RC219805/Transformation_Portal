@@ -177,6 +177,7 @@ realesr-*.pth
 
 # Local backup directory (client-specific work)
 .local_backup/
+.backup_local/
 
 # Additional PNG exclusions
 input_images/**/*.png
