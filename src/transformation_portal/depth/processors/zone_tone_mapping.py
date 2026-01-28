@@ -68,41 +68,43 @@ class ZoneToneMapping:
         if num_zones == 2:
             return [
                 # Foreground
-                {'contrast': 1.2, 'saturation': 1.1, 'exposure': 0.0, 'gamma': 1.0},
+                {"contrast": 1.2, "saturation": 1.1, "exposure": 0.0, "gamma": 1.0},
                 # Background
-                {'contrast': 0.9, 'saturation': 0.85, 'exposure': 0.0, 'gamma': 1.0},
+                {"contrast": 0.9, "saturation": 0.85, "exposure": 0.0, "gamma": 1.0},
             ]
         elif num_zones == 3:
             return [
                 # Foreground
-                {'contrast': 1.2, 'saturation': 1.1, 'exposure': 0.0, 'gamma': 1.0},
+                {"contrast": 1.2, "saturation": 1.1, "exposure": 0.0, "gamma": 1.0},
                 # Midground (reference)
-                {'contrast': 1.0, 'saturation': 1.0, 'exposure': 0.0, 'gamma': 1.0},
+                {"contrast": 1.0, "saturation": 1.0, "exposure": 0.0, "gamma": 1.0},
                 # Background
-                {'contrast': 0.9, 'saturation': 0.85, 'exposure': -0.1, 'gamma': 1.0},
+                {"contrast": 0.9, "saturation": 0.85, "exposure": -0.1, "gamma": 1.0},
             ]
         elif num_zones == 4:
             return [
                 # Close foreground
-                {'contrast': 1.3, 'saturation': 1.15, 'exposure': 0.0, 'gamma': 1.0},
+                {"contrast": 1.3, "saturation": 1.15, "exposure": 0.0, "gamma": 1.0},
                 # Foreground
-                {'contrast': 1.1, 'saturation': 1.05, 'exposure': 0.0, 'gamma': 1.0},
+                {"contrast": 1.1, "saturation": 1.05, "exposure": 0.0, "gamma": 1.0},
                 # Midground
-                {'contrast': 1.0, 'saturation': 1.0, 'exposure': 0.0, 'gamma': 1.0},
+                {"contrast": 1.0, "saturation": 1.0, "exposure": 0.0, "gamma": 1.0},
                 # Background
-                {'contrast': 0.85, 'saturation': 0.8, 'exposure': -0.15, 'gamma': 1.0},
+                {"contrast": 0.85, "saturation": 0.8, "exposure": -0.15, "gamma": 1.0},
             ]
         else:
             # Generic: linear interpolation from foreground to background
             params = []
             for i in range(num_zones):
                 t = i / (num_zones - 1)  # 0 to 1
-                params.append({
-                    'contrast': 1.2 - 0.3 * t,
-                    'saturation': 1.1 - 0.25 * t,
-                    'exposure': -0.15 * t,
-                    'gamma': 1.0,
-                })
+                params.append(
+                    {
+                        "contrast": 1.2 - 0.3 * t,
+                        "saturation": 1.1 - 0.25 * t,
+                        "exposure": -0.15 * t,
+                        "gamma": 1.0,
+                    }
+                )
             return params
 
     def process(
@@ -134,7 +136,9 @@ class ZoneToneMapping:
         # Apply tone mapping to each zone
         result = np.zeros_like(image)
 
-        for zone_id, (zone_mask, params) in enumerate(zip(zone_masks, self.zone_params)):
+        for zone_id, (zone_mask, params) in enumerate(
+            zip(zone_masks, self.zone_params)
+        ):
             # Apply tone curve to this zone
             zone_mapped = self._apply_tone_curve(image, params)
 
@@ -159,10 +163,7 @@ class ZoneToneMapping:
         """
         # Quantize depth into zones
         # Use percentile-based quantization for robust binning
-        zone_boundaries = np.percentile(
-            depth,
-            np.linspace(0, 100, self.num_zones + 1)
-        )
+        zone_boundaries = np.percentile(depth, np.linspace(0, 100, self.num_zones + 1))
 
         # Create hard zone masks
         zone_masks_hard = []
@@ -208,26 +209,26 @@ class ZoneToneMapping:
         result = image.copy()
 
         # Apply exposure adjustment
-        if params.get('exposure', 0) != 0:
-            result = result * np.power(2.0, params['exposure'])
+        if params.get("exposure", 0) != 0:
+            result = result * np.power(2.0, params["exposure"])
 
         # Apply tone mapping based on method
-        if self.method == 'agx':
+        if self.method == "agx":
             result = self._agx_tone_map(result, params)
-        elif self.method == 'reinhard':
+        elif self.method == "reinhard":
             result = self._reinhard_tone_map(result, params)
-        elif self.method == 'filmic':
+        elif self.method == "filmic":
             result = self._filmic_tone_map(result, params)
         else:
             raise ValueError(f"Unknown tone mapping method: {self.method}")
 
         # Apply saturation adjustment
-        if params.get('saturation', 1.0) != 1.0:
-            result = self._adjust_saturation(result, params['saturation'])
+        if params.get("saturation", 1.0) != 1.0:
+            result = self._adjust_saturation(result, params["saturation"])
 
         # Apply gamma correction
-        if params.get('gamma', 1.0) != 1.0:
-            result = np.power(np.clip(result, 0, 1), 1.0 / params['gamma'])
+        if params.get("gamma", 1.0) != 1.0:
+            result = np.power(np.clip(result, 0, 1), 1.0 / params["gamma"])
 
         return np.clip(result, 0, 1)
 
@@ -238,7 +239,7 @@ class ZoneToneMapping:
         AgX is a modern filmic tone mapper with excellent color preservation
         and pleasing highlight rolloff.
         """
-        contrast = params.get('contrast', 1.0)
+        contrast = params.get("contrast", 1.0)
 
         # AgX base curve (simplified version)
         # Full AgX uses complex LUT, this is an approximation
@@ -261,7 +262,7 @@ class ZoneToneMapping:
 
         Classic global tone mapper: I_out = I_in / (1 + I_in)
         """
-        contrast = params.get('contrast', 1.0)
+        contrast = params.get("contrast", 1.0)
 
         # Scale by contrast
         scaled = image * contrast
@@ -277,7 +278,7 @@ class ZoneToneMapping:
 
         Provides film-like highlight rolloff and shadow compression.
         """
-        contrast = params.get('contrast', 1.0)
+        contrast = params.get("contrast", 1.0)
 
         # ACES filmic approximation
         a = 2.51
@@ -307,16 +308,11 @@ class ZoneToneMapping:
         """
         # Compute luminance (Rec. 709)
         luminance = (
-            0.2126 * image[..., 0] +
-            0.7152 * image[..., 1] +
-            0.0722 * image[..., 2]
+            0.2126 * image[..., 0] + 0.7152 * image[..., 1] + 0.0722 * image[..., 2]
         )
 
         # Blend between grayscale and color
-        result = (
-            luminance[..., None] * (1 - saturation) +
-            image * saturation
-        )
+        result = luminance[..., None] * (1 - saturation) + image * saturation
 
         return result
 
@@ -359,8 +355,8 @@ class ZoneToneMapping:
         if config:
             # Override parameters temporarily
             old_zone_params = self.zone_params
-            if 'zone_params' in config:
-                self.zone_params = config['zone_params']
+            if "zone_params" in config:
+                self.zone_params = config["zone_params"]
 
             result = self.process(image, depth)
 
@@ -401,8 +397,8 @@ class SimpleZoneToneMap:
 
         # Compute per-pixel exposure
         exposure_map = (
-            self.foreground_exposure * (1 - depth_norm) +
-            self.background_exposure * depth_norm
+            self.foreground_exposure * (1 - depth_norm)
+            + self.background_exposure * depth_norm
         )
 
         # Apply exposure

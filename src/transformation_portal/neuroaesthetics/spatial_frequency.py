@@ -25,7 +25,6 @@ import numpy as np
 from PIL import Image
 from scipy import fftpack
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -42,6 +41,7 @@ class SpatialFrequencyAnalysis:
         visual_comfort_score: Predicted visual comfort (0-1)
         recommendations: Optimization suggestions
     """
+
     lsf_energy: float
     msf_energy: float
     hsf_energy: float
@@ -84,7 +84,7 @@ class SpatialFrequencyAnalyzer:
     def analyze(
         self,
         image: Union[str, np.ndarray, Image.Image],
-        viewing_distance_factor: float = 1.0
+        viewing_distance_factor: float = 1.0,
     ) -> SpatialFrequencyAnalysis:
         """Analyze spatial frequency distribution.
 
@@ -103,8 +103,7 @@ class SpatialFrequencyAnalyzer:
 
         # Calculate frequency band energies
         lsf_energy, msf_energy, hsf_energy = self._calculate_band_energies(
-            spectrum,
-            viewing_distance_factor
+            spectrum, viewing_distance_factor
         )
 
         # Normalize energies
@@ -114,9 +113,7 @@ class SpatialFrequencyAnalyzer:
         hsf_norm = hsf_energy / total_energy if total_energy > 0 else 0
 
         # Calculate balance score
-        balance_score = self._calculate_balance_score(
-            lsf_norm, msf_norm, hsf_norm
-        )
+        balance_score = self._calculate_balance_score(lsf_norm, msf_norm, hsf_norm)
 
         # Identify dominant frequencies
         dominant_frequencies = self._identify_dominant_frequencies(
@@ -140,7 +137,7 @@ class SpatialFrequencyAnalyzer:
             balance_score=balance_score,
             dominant_frequencies=dominant_frequencies,
             visual_comfort_score=visual_comfort_score,
-            recommendations=recommendations
+            recommendations=recommendations,
         )
 
     def _compute_spectrum(self, image: np.ndarray) -> np.ndarray:
@@ -162,9 +159,7 @@ class SpatialFrequencyAnalyzer:
         return spectrum
 
     def _calculate_band_energies(
-        self,
-        spectrum: np.ndarray,
-        viewing_distance_factor: float
+        self, spectrum: np.ndarray, viewing_distance_factor: float
     ) -> Tuple[float, float, float]:
         """Calculate energy in each frequency band.
 
@@ -180,7 +175,7 @@ class SpatialFrequencyAnalyzer:
 
         # Create frequency coordinate grids
         y, x = np.ogrid[:h, :w]
-        radius = np.sqrt((x - center_x)**2 + (y - center_y)**2)
+        radius = np.sqrt((x - center_x) ** 2 + (y - center_y) ** 2)
 
         # Normalize radius to [0, 1]
         max_radius = np.sqrt(center_x**2 + center_y**2)
@@ -202,12 +197,7 @@ class SpatialFrequencyAnalyzer:
 
         return lsf_energy, msf_energy, hsf_energy
 
-    def _calculate_balance_score(
-        self,
-        lsf: float,
-        msf: float,
-        hsf: float
-    ) -> float:
+    def _calculate_balance_score(self, lsf: float, msf: float, hsf: float) -> float:
         """Calculate balance score based on optimal distribution.
 
         Args:
@@ -232,10 +222,7 @@ class SpatialFrequencyAnalyzer:
         return max(0.0, min(1.0, balance_score))
 
     def _identify_dominant_frequencies(
-        self,
-        lsf: float,
-        msf: float,
-        hsf: float
+        self, lsf: float, msf: float, hsf: float
     ) -> List[str]:
         """Identify dominant frequency bands.
 
@@ -250,7 +237,7 @@ class SpatialFrequencyAnalyzer:
         bands = [
             ("Low (structure)", lsf),
             ("Mid (detail)", msf),
-            ("High (texture)", hsf)
+            ("High (texture)", hsf),
         ]
 
         # Sort by energy
@@ -262,11 +249,7 @@ class SpatialFrequencyAnalyzer:
         return dominant if dominant else [bands[0][0]]
 
     def _calculate_comfort_score(
-        self,
-        lsf: float,
-        msf: float,
-        hsf: float,
-        balance_score: float
+        self, lsf: float, msf: float, hsf: float, balance_score: float
     ) -> float:
         """Calculate visual comfort score.
 
@@ -295,11 +278,7 @@ class SpatialFrequencyAnalyzer:
         return max(0.0, min(1.0, comfort))
 
     def _generate_recommendations(
-        self,
-        lsf: float,
-        msf: float,
-        hsf: float,
-        comfort_score: float
+        self, lsf: float, msf: float, hsf: float, comfort_score: float
     ) -> List[str]:
         """Generate optimization recommendations.
 
@@ -353,7 +332,7 @@ class SpatialFrequencyAnalyzer:
     def create_frequency_visualization(
         self,
         image: Union[str, np.ndarray, Image.Image],
-        analysis: Optional[SpatialFrequencyAnalysis] = None
+        analysis: Optional[SpatialFrequencyAnalysis] = None,
     ) -> np.ndarray:
         """Create visualization of frequency content.
 
@@ -378,8 +357,11 @@ class SpatialFrequencyAnalyzer:
         spectrum_log = np.log1p(spectrum)
 
         # Normalize to [0, 255]
-        spectrum_vis = ((spectrum_log - spectrum_log.min()) /
-                        (spectrum_log.max() - spectrum_log.min()) * 255)
+        spectrum_vis = (
+            (spectrum_log - spectrum_log.min())
+            / (spectrum_log.max() - spectrum_log.min())
+            * 255
+        )
         spectrum_vis = spectrum_vis.astype(np.uint8)
 
         # Convert to RGB for colormap
@@ -389,7 +371,7 @@ class SpatialFrequencyAnalyzer:
         text_lines = [
             f"LSF: {analysis.lsf_energy:.2f} | MSF: {analysis.msf_energy:.2f} | HSF: {analysis.hsf_energy:.2f}",
             f"Balance: {analysis.balance_score:.2f} | Comfort: {analysis.visual_comfort_score:.2f}",
-            f"Dominant: {', '.join(analysis.dominant_frequencies)}"
+            f"Dominant: {', '.join(analysis.dominant_frequencies)}",
         ]
 
         y_offset = 30
@@ -402,7 +384,7 @@ class SpatialFrequencyAnalyzer:
                 0.5,
                 (255, 255, 255),
                 2,
-                cv2.LINE_AA
+                cv2.LINE_AA,
             )
             cv2.putText(
                 spectrum_colored,
@@ -412,15 +394,14 @@ class SpatialFrequencyAnalyzer:
                 0.5,
                 (0, 0, 0),
                 1,
-                cv2.LINE_AA
+                cv2.LINE_AA,
             )
             y_offset += 25
 
         return spectrum_colored
 
     def _load_image_gray(
-        self,
-        image: Union[str, np.ndarray, Image.Image]
+        self, image: Union[str, np.ndarray, Image.Image]
     ) -> np.ndarray:
         """Load image as grayscale numpy array."""
         if isinstance(image, np.ndarray):

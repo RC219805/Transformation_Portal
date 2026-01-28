@@ -29,12 +29,14 @@ Based on research:
 
 from transformation_portal.neuroaesthetics.golden_ratio import GoldenRatioAnalyzer
 from transformation_portal.neuroaesthetics.color_harmony import ColorHarmonyAnalyzer
-from transformation_portal.neuroaesthetics.spatial_frequency import SpatialFrequencyAnalyzer
+from transformation_portal.neuroaesthetics.spatial_frequency import (
+    SpatialFrequencyAnalyzer,
+)
 from transformation_portal.neuroaesthetics.emotional_optimizer import EmotionalOptimizer
 
 __all__ = [
-    'GoldenRatioAnalyzer',
-    'ColorHarmonyAnalyzer',
-    'SpatialFrequencyAnalyzer',
-    'EmotionalOptimizer',
+    "GoldenRatioAnalyzer",
+    "ColorHarmonyAnalyzer",
+    "SpatialFrequencyAnalyzer",
+    "EmotionalOptimizer",
 ]

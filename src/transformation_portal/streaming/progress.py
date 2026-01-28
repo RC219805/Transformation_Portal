@@ -2,13 +2,14 @@
 
 import time
 from dataclasses import dataclass, field
-from threading import Lock
-from typing import Any, Callable, Optional
+from threading import RLock
+from typing import Callable, Optional
 
 
 @dataclass
 class ProgressState:
     """Current state of a progress tracker."""
+
     current: int = 0
     total: Optional[int] = None
     message: str = ""
@@ -58,7 +59,7 @@ class ProgressTracker:
         self,
         total: Optional[int] = None,
         description: str = "",
-        update_interval: float = 0.1
+        update_interval: float = 0.1,
     ):
         """Initialize progress tracker.
 
@@ -70,7 +71,7 @@ class ProgressTracker:
         self.state = ProgressState(total=total, message=description)
         self._update_interval = update_interval
         self._callbacks: list[Callable[[ProgressState], None]] = []
-        self._lock = Lock()
+        self._lock = RLock()
 
     def update(self, n: int = 1, message: Optional[str] = None) -> None:
         """Update progress.
@@ -152,10 +153,7 @@ class ProgressBar:
     """
 
     def __init__(
-        self,
-        total: Optional[int] = None,
-        description: str = "",
-        width: int = 50
+        self, total: Optional[int] = None, description: str = "", width: int = 50
     ):
         """Initialize progress bar.
 
@@ -197,7 +195,7 @@ class ProgressBar:
 
         # Only update if changed
         if line != self._last_render:
-            print(line, end='', flush=True)
+            print(line, end="", flush=True)
             self._last_render = line
 
         if state.completed:
@@ -229,13 +227,13 @@ class MultiProgress:
     def __init__(self):
         """Initialize multi-progress tracker."""
         self.tasks: dict[str, ProgressTracker] = {}
-        self._lock = Lock()
+        self._lock = RLock()
 
     def add_task(
         self,
         description: str,
         total: Optional[int] = None,
-        task_id: Optional[str] = None
+        task_id: Optional[str] = None,
     ) -> str:
         """Add a new task to track.
 
@@ -274,15 +272,12 @@ class MultiProgress:
         """
         with self._lock:
             return {
-                task_id: tracker.get_state()
-                for task_id, tracker in self.tasks.items()
+                task_id: tracker.get_state() for task_id, tracker in self.tasks.items()
             }
 
 
 def create_progress(
-    total: Optional[int] = None,
-    description: str = "",
-    use_rich: bool = True
+    total: Optional[int] = None, description: str = "", use_rich: bool = True
 ) -> ProgressTracker:
     """Create a progress tracker (with optional rich formatting).
 
@@ -297,10 +292,9 @@ def create_progress(
     if use_rich:
         try:
             # Try to use rich library if available
-            from rich.progress import Progress
+            pass
 
             # Could wrap rich.Progress here
-            pass
         except ImportError:
             pass
 

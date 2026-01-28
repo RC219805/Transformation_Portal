@@ -16,7 +16,6 @@ import numpy as np
 from PIL import Image
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -36,7 +35,7 @@ class TraditionalMetrics:
         self,
         image1: Union[str, np.ndarray, Image.Image],
         image2: Union[str, np.ndarray, Image.Image],
-        data_range: Optional[int] = None
+        data_range: Optional[int] = None,
     ) -> float:
         """Calculate PSNR between two images.
 
@@ -66,7 +65,7 @@ class TraditionalMetrics:
         image1: Union[str, np.ndarray, Image.Image],
         image2: Union[str, np.ndarray, Image.Image],
         multichannel: bool = True,
-        data_range: Optional[int] = None
+        data_range: Optional[int] = None,
     ) -> float:
         """Calculate SSIM between two images.
 
@@ -89,9 +88,10 @@ class TraditionalMetrics:
 
         # Calculate SSIM
         ssim = structural_similarity(
-            img1, img2,
+            img1,
+            img2,
             channel_axis=2 if multichannel and img1.ndim == 3 else None,
-            data_range=data_range
+            data_range=data_range,
         )
 
         return ssim
@@ -99,7 +99,7 @@ class TraditionalMetrics:
     def calculate_all(
         self,
         image1: Union[str, np.ndarray, Image.Image],
-        image2: Union[str, np.ndarray, Image.Image]
+        image2: Union[str, np.ndarray, Image.Image],
     ) -> Dict[str, float]:
         """Calculate all traditional metrics.
 
@@ -113,15 +113,9 @@ class TraditionalMetrics:
         psnr = self.calculate_psnr(image1, image2)
         ssim = self.calculate_ssim(image1, image2)
 
-        return {
-            "psnr": psnr,
-            "ssim": ssim
-        }
+        return {"psnr": psnr, "ssim": ssim}
 
-    def _load_image(
-        self,
-        image: Union[str, np.ndarray, Image.Image]
-    ) -> np.ndarray:
+    def _load_image(self, image: Union[str, np.ndarray, Image.Image]) -> np.ndarray:
         """Load image as numpy array."""
         if isinstance(image, np.ndarray):
             return image

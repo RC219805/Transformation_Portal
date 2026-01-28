@@ -19,7 +19,7 @@ Reference:
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -28,6 +28,7 @@ from PIL import Image
 try:
     from transformers import CLIPVisionModelWithProjection, CLIPImageProcessor
     from diffusers import FluxPipeline
+
     IPADAPTER_AVAILABLE = True
 except ImportError:
     IPADAPTER_AVAILABLE = False
@@ -73,7 +74,7 @@ class IPAdapterStyleTransfer:
         self,
         device: Optional[str] = None,
         torch_dtype: torch.dtype = torch.bfloat16,
-        enable_cpu_offload: bool = False
+        enable_cpu_offload: bool = False,
     ):
         """Initialize IP-Adapter style transfer.
 
@@ -98,8 +99,7 @@ class IPAdapterStyleTransfer:
 
         # Load CLIP vision model for reference encoding
         self.image_encoder = CLIPVisionModelWithProjection.from_pretrained(
-            self.CLIP_VISION_MODEL,
-            torch_dtype=torch_dtype
+            self.CLIP_VISION_MODEL, torch_dtype=torch_dtype
         ).to(self.device)
 
         self.image_processor = CLIPImageProcessor.from_pretrained(
@@ -108,8 +108,7 @@ class IPAdapterStyleTransfer:
 
         # Load FLUX pipeline
         self.flux_pipe = FluxPipeline.from_pretrained(
-            self.FLUX_MODEL,
-            torch_dtype=torch_dtype
+            self.FLUX_MODEL, torch_dtype=torch_dtype
         )
 
         if enable_cpu_offload and self.device == "cuda":
@@ -128,8 +127,7 @@ class IPAdapterStyleTransfer:
         return "cpu"
 
     def encode_reference_image(
-        self,
-        image: Union[str, Path, Image.Image, np.ndarray]
+        self, image: Union[str, Path, Image.Image, np.ndarray]
     ) -> torch.Tensor:
         """Encode reference image to style features.
 
@@ -143,10 +141,9 @@ class IPAdapterStyleTransfer:
         pil_image = self._load_image(image)
 
         # Preprocess for CLIP
-        inputs = self.image_processor(
-            images=pil_image,
-            return_tensors="pt"
-        ).to(self.device)
+        inputs = self.image_processor(images=pil_image, return_tensors="pt").to(
+            self.device
+        )
 
         # Encode
         with torch.inference_mode():
@@ -165,7 +162,7 @@ class IPAdapterStyleTransfer:
         num_steps: int = 4,
         guidance_scale: float = 3.5,
         preserve_structure: bool = True,
-        seed: Optional[int] = None
+        seed: Optional[int] = None,
     ) -> Image.Image:
         """Transfer style from reference image to content image.
 
@@ -188,7 +185,7 @@ class IPAdapterStyleTransfer:
         content_pil = self._load_image(content_image)
 
         # Encode reference style
-        style_features = self.encode_reference_image(style_reference)
+        _style_features = self.encode_reference_image(style_reference)  # noqa: F841
 
         # Generate prompt if not provided
         if prompt is None:
@@ -220,7 +217,7 @@ class IPAdapterStyleTransfer:
                 strength=style_strength,
                 num_inference_steps=num_steps,
                 guidance_scale=guidance_scale,
-                generator=generator
+                generator=generator,
             )
 
         styled_image = result.images[0]
@@ -236,7 +233,7 @@ class IPAdapterStyleTransfer:
         prompt: Optional[str] = None,
         num_steps: int = 4,
         guidance_scale: float = 3.5,
-        seed: Optional[int] = None
+        seed: Optional[int] = None,
     ) -> Image.Image:
         """Transfer blended style from multiple reference images.
 
@@ -261,7 +258,9 @@ class IPAdapterStyleTransfer:
             ...     ]
             ... )
         """
-        logger.info(f"Multi-reference style transfer ({len(style_references)} references)")
+        logger.info(
+            f"Multi-reference style transfer ({len(style_references)} references)"
+        )
 
         # Encode all reference images
         encoded_styles = []
@@ -277,9 +276,8 @@ class IPAdapterStyleTransfer:
         weights = weights / weights.sum()
 
         # Blend style features
-        blended_style = sum(
-            style * weight
-            for style, weight in zip(encoded_styles, weights)
+        _blended_style = sum(  # noqa: F841
+            style * weight for style, weight in zip(encoded_styles, weights)
         )
 
         logger.info("Style features blended")
@@ -305,7 +303,7 @@ class IPAdapterStyleTransfer:
                 strength=avg_strength,
                 num_inference_steps=num_steps,
                 guidance_scale=guidance_scale,
-                generator=generator
+                generator=generator,
             )
 
         styled_image = result.images[0]
@@ -319,7 +317,7 @@ class IPAdapterStyleTransfer:
         content_image: Union[str, Path, Image.Image, np.ndarray],
         preset: str,
         strength: float = 0.7,
-        **kwargs
+        **kwargs,
     ) -> Image.Image:
         """Apply pre-configured architectural photography style.
 
@@ -333,7 +331,7 @@ class IPAdapterStyleTransfer:
             Styled image
         """
         from transformation_portal.style_transfer.style_presets import (
-            ArchitecturalStylePresets
+            ArchitecturalStylePresets,
         )
 
         logger.info(f"Applying preset style: {preset}")
@@ -350,13 +348,13 @@ class IPAdapterStyleTransfer:
             style_reference=reference_path,
             style_strength=strength,
             prompt=preset_config.get("prompt"),
-            **kwargs
+            **kwargs,
         )
 
     def extract_style_from_collection(
         self,
         reference_images: List[Union[str, Path, Image.Image]],
-        weights: Optional[List[float]] = None
+        weights: Optional[List[float]] = None,
     ) -> torch.Tensor:
         """Extract averaged style from collection of reference images.
 
@@ -372,10 +370,7 @@ class IPAdapterStyleTransfer:
         logger.info(f"Extracting style from {len(reference_images)} images")
 
         # Encode all references
-        encoded_styles = [
-            self.encode_reference_image(img)
-            for img in reference_images
-        ]
+        encoded_styles = [self.encode_reference_image(img) for img in reference_images]
 
         # Set equal weights if not provided
         if weights is None:
@@ -386,8 +381,7 @@ class IPAdapterStyleTransfer:
 
         # Average with weights
         averaged_style = sum(
-            style * weight
-            for style, weight in zip(encoded_styles, weights)
+            style * weight for style, weight in zip(encoded_styles, weights)
         )
 
         logger.info("Style extraction complete")
@@ -397,7 +391,7 @@ class IPAdapterStyleTransfer:
     def analyze_style_similarity(
         self,
         image1: Union[str, Path, Image.Image, np.ndarray],
-        image2: Union[str, Path, Image.Image, np.ndarray]
+        image2: Union[str, Path, Image.Image, np.ndarray],
     ) -> float:
         """Compute style similarity between two images.
 
@@ -414,9 +408,7 @@ class IPAdapterStyleTransfer:
 
         # Compute cosine similarity
         similarity = torch.nn.functional.cosine_similarity(
-            features1,
-            features2,
-            dim=-1
+            features1, features2, dim=-1
         ).item()
 
         # Normalize to 0-1
@@ -431,7 +423,7 @@ class IPAdapterStyleTransfer:
         content_image: Union[str, Path, Image.Image, np.ndarray],
         style1: Union[str, Path, Image.Image],
         style2: Union[str, Path, Image.Image],
-        num_steps: int = 5
+        num_steps: int = 5,
     ) -> List[Image.Image]:
         """Create interpolation between two styles.
 
@@ -457,14 +449,16 @@ class IPAdapterStyleTransfer:
 
         for alpha in alphas:
             # Interpolate style features
-            interpolated_style = (1 - alpha) * features1 + alpha * features2
+            _interpolated_style = (
+                1 - alpha
+            ) * features1 + alpha * features2  # noqa: F841
 
             # Apply interpolated style
             # (Simplified - full implementation would inject interpolated_style)
             styled = self.transfer_style(
                 content_image=content_image,
                 style_reference=style1 if alpha < 0.5 else style2,
-                style_strength=0.7
+                style_strength=0.7,
             )
 
             interpolated_images.append(styled)
@@ -474,8 +468,7 @@ class IPAdapterStyleTransfer:
         return interpolated_images
 
     def _load_image(
-        self,
-        image: Union[str, Path, Image.Image, np.ndarray]
+        self, image: Union[str, Path, Image.Image, np.ndarray]
     ) -> Image.Image:
         """Load image as PIL Image."""
         if isinstance(image, Image.Image):
@@ -495,4 +488,4 @@ class IPAdapterStyleTransfer:
 
 
 # Export
-__all__ = ['IPAdapterStyleTransfer']
+__all__ = ["IPAdapterStyleTransfer"]

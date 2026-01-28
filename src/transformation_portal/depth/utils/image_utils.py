@@ -12,10 +12,13 @@ from PIL import Image
 
 try:
     import cv2
+
     CV2_AVAILABLE = True
 except ImportError:
     CV2_AVAILABLE = False
-    logging.warning("cv2 (opencv-python) not available. Some image processing features will be limited.")
+    logging.warning(
+        "cv2 (opencv-python) not available. Some image processing features will be limited."
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +119,7 @@ def save_image(
         if color_space == "RGB":
             img = Image.fromarray(image)
         elif color_space == "GRAY":
-            img = Image.fromarray(image, mode='L')
+            img = Image.fromarray(image, mode="L")
         else:
             img = Image.fromarray(image)
         img.save(path, quality=quality)
@@ -132,19 +135,11 @@ def save_image(
     # Determine format
     ext = path.suffix.lower()
 
-    if ext in ['.jpg', '.jpeg']:
-        cv2.imwrite(
-            str(path),
-            image_bgr,
-            [cv2.IMWRITE_JPEG_QUALITY, quality]
-        )
-    elif ext == '.png':
-        cv2.imwrite(
-            str(path),
-            image_bgr,
-            [cv2.IMWRITE_PNG_COMPRESSION, 9]
-        )
-    elif ext in ['.ti', '.tiff']:
+    if ext in [".jpg", ".jpeg"]:
+        cv2.imwrite(str(path), image_bgr, [cv2.IMWRITE_JPEG_QUALITY, quality])
+    elif ext == ".png":
+        cv2.imwrite(str(path), image_bgr, [cv2.IMWRITE_PNG_COMPRESSION, 9])
+    elif ext in [".ti", ".tiff"]:
         cv2.imwrite(str(path), image_bgr)
     else:
         # Fallback to PIL
@@ -202,24 +197,20 @@ def resize_image(
     if CV2_AVAILABLE:
         # Interpolation method for cv2
         interp_map = {
-            'nearest': cv2.INTER_NEAREST,
-            'bilinear': cv2.INTER_LINEAR,
-            'bicubic': cv2.INTER_CUBIC,
-            'lanczos': cv2.INTER_LANCZOS4,
+            "nearest": cv2.INTER_NEAREST,
+            "bilinear": cv2.INTER_LINEAR,
+            "bicubic": cv2.INTER_CUBIC,
+            "lanczos": cv2.INTER_LANCZOS4,
         }
         interp_flag = interp_map.get(interpolation, cv2.INTER_LINEAR)
-        
+
         # Resize
-        resized = cv2.resize(
-            image,
-            (target_w, target_h),
-            interpolation=interp_flag
-        )
+        resized = cv2.resize(image, (target_w, target_h), interpolation=interp_flag)
         return resized
     else:
         # Fallback to PIL
         from PIL import Image as PILImage
-        
+
         # Convert to uint8 if needed for PIL compatibility
         is_float = image.dtype in (np.float32, np.float64)
         if is_float:
@@ -228,27 +219,30 @@ def resize_image(
                 logger.warning(
                     "Float image values outside [0, 1] detected during resize (min=%.4f, max=%.4f, shape=%s, dtype=%s). "
                     "Clipping will occur. This may indicate an upstream normalization issue.",
-                    float(np.min(image)), float(np.max(image)), image.shape, image.dtype
+                    float(np.min(image)),
+                    float(np.max(image)),
+                    image.shape,
+                    image.dtype,
                 )
             img_uint8 = (np.clip(image, 0, 1) * 255).astype(np.uint8)
             img = PILImage.fromarray(img_uint8)
         else:
             img = PILImage.fromarray(image)
-            
+
         pil_interp_map = {
-            'nearest': PILImage.Resampling.NEAREST,
-            'bilinear': PILImage.Resampling.BILINEAR,
-            'bicubic': PILImage.Resampling.BICUBIC,
-            'lanczos': PILImage.Resampling.LANCZOS,
+            "nearest": PILImage.Resampling.NEAREST,
+            "bilinear": PILImage.Resampling.BILINEAR,
+            "bicubic": PILImage.Resampling.BICUBIC,
+            "lanczos": PILImage.Resampling.LANCZOS,
         }
         pil_interp = pil_interp_map.get(interpolation, PILImage.Resampling.BILINEAR)
         resized_img = img.resize((target_w, target_h), pil_interp)
         resized_array = np.array(resized_img)
-        
+
         # Convert back to float if input was float
         if is_float:
             resized_array = resized_array.astype(np.float32) / 255.0
-            
+
         return resized_array
 
 
@@ -272,9 +266,9 @@ def compute_image_hash(image: np.ndarray, method: str = "md5") -> str:
     else:
         image_bytes = image.tobytes()
 
-    # Compute hash
+    # Compute hash (MD5 is used for cache keying, not security)
     if method == "md5":
-        hash_obj = hashlib.md5(image_bytes)
+        hash_obj = hashlib.md5(image_bytes, usedforsecurity=False)
     elif method == "sha256":
         hash_obj = hashlib.sha256(image_bytes)
     else:
@@ -313,15 +307,11 @@ def pad_to_multiple(
     # Pad
     if image.ndim == 2:
         padded = np.pad(
-            image,
-            ((pad_top, pad_bottom), (pad_left, pad_right)),
-            mode=mode
+            image, ((pad_top, pad_bottom), (pad_left, pad_right)), mode=mode
         )
     else:
         padded = np.pad(
-            image,
-            ((pad_top, pad_bottom), (pad_left, pad_right), (0, 0)),
-            mode=mode
+            image, ((pad_top, pad_bottom), (pad_left, pad_right), (0, 0)), mode=mode
         )
 
     return padded, (pad_top, pad_bottom, pad_left, pad_right)
@@ -389,9 +379,7 @@ def linear_to_srgb(image: np.ndarray) -> np.ndarray:
     # sRGB transfer function
     linear_mask = image <= 0.0031308
     srgb = np.where(
-        linear_mask,
-        image * 12.92,
-        1.055 * np.power(image, 1.0 / 2.4) - 0.055
+        linear_mask, image * 12.92, 1.055 * np.power(image, 1.0 / 2.4) - 0.055
     )
 
     return srgb
@@ -409,10 +397,6 @@ def srgb_to_linear(image: np.ndarray) -> np.ndarray:
     """
     # Inverse sRGB transfer function
     srgb_mask = image <= 0.04045
-    linear = np.where(
-        srgb_mask,
-        image / 12.92,
-        np.power((image + 0.055) / 1.055, 2.4)
-    )
+    linear = np.where(srgb_mask, image / 12.92, np.power((image + 0.055) / 1.055, 2.4))
 
     return linear

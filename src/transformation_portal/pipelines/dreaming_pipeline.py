@@ -54,13 +54,19 @@ class StandardPipeline:
     def detect_conflicts(self, technique: Technique) -> List[Technique]:
         """Return techniques that would conflict with ``technique``."""
 
-        return [existing for existing in self._integrated if existing.name == technique.name]
+        return [
+            existing for existing in self._integrated if existing.name == technique.name
+        ]
 
     def resolve_conflicts(self, technique: Technique) -> None:
         """Remove conflicting techniques that are superseded by ``technique``."""
 
-        self._integrated = [existing for existing in self._integrated if existing.name != technique.name]
-        self._pending = [existing for existing in self._pending if existing.name != technique.name]
+        self._integrated = [
+            existing for existing in self._integrated if existing.name != technique.name
+        ]
+        self._pending = [
+            existing for existing in self._pending if existing.name != technique.name
+        ]
 
     def active_jobs(self) -> bool:
         """Whether the pipeline has techniques waiting to be processed."""
@@ -108,7 +114,9 @@ class InnovationEngine:
         if coherence < 0.6:
             failure_modes = [f"insufficient_clarity_{self._iteration}"]
         self._iteration += 1
-        return DreamSequence(idea=idea, coherence=coherence, failure_modes=failure_modes)
+        return DreamSequence(
+            idea=idea, coherence=coherence, failure_modes=failure_modes
+        )
 
 
 class BoundaryKnowledge:
@@ -195,23 +203,30 @@ class QuantumOptimizer:
     def convergence_achieved(self) -> bool:
         """Return ``True`` when optimisation can safely conclude."""
 
-        if self.target_score is not None and self._best_result and self._best_result.score >= self.target_score:
+        if (
+            self.target_score is not None
+            and self._best_result
+            and self._best_result.score >= self.target_score
+        ):
             return True
         return self._iteration >= self.max_iterations
 
-    async def evolve_pipeline(self,
-                              performance_metrics: Callable[[ArchitecturalHypothesis],
-                                                            float | Awaitable[float] | Dict[str,
-                                                                                            float] | Awaitable[Dict[str,
-                                                                                                                    float]]],
-                              ) -> None:
+    async def evolve_pipeline(
+        self,
+        performance_metrics: Callable[
+            [ArchitecturalHypothesis],
+            float | Awaitable[float] | Dict[str, float] | Awaitable[Dict[str, float]],
+        ],
+    ) -> None:
         """Continuously optimise the pipeline until convergence."""
 
         while not self.convergence_achieved():
             hypotheses = await self.generate_architectural_mutations()
             if not hypotheses:
                 break
-            results = await self.test_parallel_realities(hypotheses, performance_metrics)
+            results = await self.test_parallel_realities(
+                hypotheses, performance_metrics
+            )
             self.adopt_superior_architecture(results)
             self.crystallize_learning()
             self._iteration += 1
@@ -231,7 +246,9 @@ class QuantumOptimizer:
                 self.pipeline.boundary_knowledge.expand(dream.failure_modes)
                 continue
             technique = self.pipeline.unconscious_processor.crystallize(dream)
-            mutation_notes = f"mutation_{self._iteration}_{counter}: derived from {dream.idea}"
+            mutation_notes = (
+                f"mutation_{self._iteration}_{counter}: derived from {dream.idea}"
+            )
             hypotheses.append(
                 ArchitecturalHypothesis(
                     technique=technique,
@@ -244,8 +261,10 @@ class QuantumOptimizer:
     async def test_parallel_realities(
         self,
         hypotheses: Sequence[ArchitecturalHypothesis],
-        performance_metrics: Callable[[ArchitecturalHypothesis],
-                                      float | Awaitable[float] | Dict[str, float] | Awaitable[Dict[str, float]]],
+        performance_metrics: Callable[
+            [ArchitecturalHypothesis],
+            float | Awaitable[float] | Dict[str, float] | Awaitable[Dict[str, float]],
+        ],
     ) -> List[EvaluationResult]:
         """Evaluate hypotheses concurrently."""
 
@@ -261,9 +280,13 @@ class QuantumOptimizer:
                 score = float(raw_metrics)
                 diagnostics = {"score": score}
 
-            return EvaluationResult(hypothesis=hypothesis, score=score, diagnostics=diagnostics)
+            return EvaluationResult(
+                hypothesis=hypothesis, score=score, diagnostics=diagnostics
+            )
 
-        evaluations = await asyncio.gather(*(_evaluate(hypothesis) for hypothesis in hypotheses))
+        evaluations = await asyncio.gather(
+            *(_evaluate(hypothesis) for hypothesis in hypotheses)
+        )
         self._history.extend(evaluations)
         return evaluations
 
@@ -280,9 +303,13 @@ class QuantumOptimizer:
         if prior_score is not None and prior_score >= best_result.score:
             return
 
-        conflicts = self.pipeline.conscious_processor.detect_conflicts(best_result.hypothesis.technique)
+        conflicts = self.pipeline.conscious_processor.detect_conflicts(
+            best_result.hypothesis.technique
+        )
         if conflicts:
-            self.pipeline.conscious_processor.resolve_conflicts(best_result.hypothesis.technique)
+            self.pipeline.conscious_processor.resolve_conflicts(
+                best_result.hypothesis.technique
+            )
 
         self.pipeline.conscious_processor.integrate(best_result.hypothesis.technique)
         self._technique_scores[technique_name] = best_result.score

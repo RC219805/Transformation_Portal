@@ -30,11 +30,13 @@ Note: By default, this tool uses strict error handling. Any file processing erro
 exit code 1, regardless of how many files were successfully processed. Fatal errors that prevent batch processing
 from starting or completing result in exit code 2. All errors are logged with detailed context for troubleshooting.
 
-If the --allow-partial-success option is specified, the tool will exit with code 0 as long as at least one file was processed
-successfully, even if some files failed. In this mode, exit code 1 is only used if all files fail, and exit code 2 still indicates
-a fatal error that prevents batch processing from starting or completing.
+If the --allow-partial-success option is specified, the tool will exit with code 0 as
+long as at least one file was processed successfully, even if some files failed.
+In this mode, exit code 1 is only used if all files fail, and exit code 2 still
+indicates a fatal error that prevents batch processing from starting or completing.
 Designed to be robust for large photography / architectural pipelines.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -54,12 +56,15 @@ import numpy as np
 from PIL import Image, ImageFilter, ImageOps
 
 # Import common image utilities
-from transformation_portal.utils.image_utils import load_image_rgb as load_image_rgb_base
+from transformation_portal.utils.image_utils import (
+    load_image_rgb as load_image_rgb_base,
+)
 
 # ----- Optional accelerated libraries -----
 
 try:
     from scipy.ndimage import gaussian_filter  # type: ignore
+
     _SCIPY_AVAILABLE = True
 except Exception:
     gaussian_filter = None
@@ -67,6 +72,7 @@ except Exception:
 
 try:
     import cv2  # type: ignore
+
     _CV2_AVAILABLE = True
 except Exception:
     cv2 = None
@@ -74,6 +80,7 @@ except Exception:
 
 try:
     import tifffile as tiff  # type: ignore
+
     _TIFFFILE_AVAILABLE = True
 except Exception:
     tiff = None
@@ -91,10 +98,30 @@ DEFAULT_CACHE_SIZE = 128
 DEFAULT_IO_RETRIES = 3
 DEFAULT_IO_RETRY_DELAY = 0.5
 
-PRIORITY_TAGS = ("_enh", "_punchy", "_golden", "_agx", "_view", "_ok", "enh", "punchy", "golden")
+PRIORITY_TAGS = (
+    "_enh",
+    "_punchy",
+    "_golden",
+    "_agx",
+    "_view",
+    "_ok",
+    "enh",
+    "punchy",
+    "golden",
+)
 SUPPORTED_EXTENSIONS = (
-    ".ti", ".tif", ".jpg", ".jpeg", ".png", ".webp",
-    ".TIF", ".TIFF", ".JPG", ".JPEG", ".PNG", ".WEBP"
+    ".ti",
+    ".tif",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".webp",
+    ".TIF",
+    ".TIFF",
+    ".JPG",
+    ".JPEG",
+    ".PNG",
+    ".WEBP",
 )
 
 # ----- Logging -----
@@ -144,7 +171,12 @@ class BoundedCache:
     def stats(self) -> Dict[str, Any]:
         total = self.hits + self.misses
         hit_rate = float(self.hits) / total if total > 0 else 0.0
-        return {"hits": self.hits, "misses": self.misses, "size": len(self._cache), "hit_rate": hit_rate}
+        return {
+            "hits": self.hits,
+            "misses": self.misses,
+            "size": len(self._cache),
+            "hit_rate": hit_rate,
+        }
 
 
 # per-process caches (can be pickled if needed; small by default)
@@ -160,7 +192,7 @@ def _format_cache_stats(cache_name: str, stats: Dict[str, Any]) -> None:
         stats["hits"],
         stats["misses"],
         stats["size"],
-        stats["hit_rate"] * 100
+        stats["hit_rate"] * 100,
     )
 
 
@@ -171,6 +203,7 @@ def clear_all_caches() -> None:
     _depth_cache.clear()
     _mask_cache.clear()
 
+
 # ----- retry decorator -----
 
 
@@ -180,6 +213,7 @@ def retry_on_io_error(
     backoff_factor: float = 2.0,
 ):
     """Decorator for retrying IO operations with exponential backoff on OSError/IOError."""
+
     def decorator(func: Callable):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -191,33 +225,53 @@ def retry_on_io_error(
                 except (IOError, OSError) as exc:
                     last_exc = exc
                     if attempt < max_attempts:
-                        _log.debug("I/O error in %s (attempt %d/%d): %s - retrying in %.2fs",
-                                   func.__name__, attempt, max_attempts, exc, delay)
+                        _log.debug(
+                            "I/O error in %s (attempt %d/%d): %s - retrying in %.2fs",
+                            func.__name__,
+                            attempt,
+                            max_attempts,
+                            exc,
+                            delay,
+                        )
                         time.sleep(delay)
                         delay *= backoff_factor
                     else:
-                        _log.warning("I/O error in %s after %d attempts: %s", func.__name__, max_attempts, exc)
+                        _log.warning(
+                            "I/O error in %s after %d attempts: %s",
+                            func.__name__,
+                            max_attempts,
+                            exc,
+                        )
             # re-raise last
             if last_exc:
                 raise last_exc
             raise RuntimeError("Retry wrapper failed without exception")
+
         return wrapper
+
     return decorator
+
 
 # ----- validators -----
 
 
-def validate_color(color: Tuple[float, float, float], name: str = "color") -> Tuple[float, float, float]:
+def validate_color(
+    color: Tuple[float, float, float], name: str = "color"
+) -> Tuple[float, float, float]:
     if len(color) != 3:
         raise ValueError(f"{name} must have 3 components, got {len(color)}")
     # allow 0..255 or 0..1
     if any(c > 1.0 for c in color):
         if not all(0.0 <= c <= 255.0 for c in color):
-            raise ValueError(f"{name} values must be in 0..1 or 0..255 range, got {color}")
+            raise ValueError(
+                f"{name} values must be in 0..1 or 0..255 range, got {color}"
+            )
         normalized = tuple(float(c) / 255.0 for c in color)
         color = normalized  # type: ignore
     if not all(0.0 <= c <= 1.0 for c in color):
-        raise ValueError(f"{name} must be in 0..1 range after normalization, got {color}")
+        raise ValueError(
+            f"{name} must be in 0..1 range after normalization, got {color}"
+        )
     return color
 
 
@@ -229,10 +283,13 @@ def validate_file_exists(path: str, description: str = "File") -> None:
     if not os.access(path, os.R_OK):
         raise PermissionError(f"{description} is not readable: {path}")
 
+
 # ----- blur/backends -----
 
 
-def gaussian_blur_float(img: np.ndarray, sigma: float, backend: Optional[str] = None) -> np.ndarray:
+def gaussian_blur_float(
+    img: np.ndarray, sigma: float, backend: Optional[str] = None
+) -> np.ndarray:
     """
     Blur an image represented as float32 in [0,1]. Supports grayscale 2D or color 3D arrays.
     backend: 'scipy', 'cv2', 'pil' or None (auto)
@@ -262,7 +319,13 @@ def gaussian_blur_float(img: np.ndarray, sigma: float, backend: Optional[str] = 
             ksize += 1
         # OpenCV expects uint8 or float32; use float32
         src = (np.clip(img, 0.0, 1.0) * 255.0).astype(np.float32)
-        blurred = cv2.GaussianBlur(src, (ksize, ksize), sigmaX=sigma, sigmaY=sigma, borderType=cv2.BORDER_REFLECT)
+        blurred = cv2.GaussianBlur(
+            src,
+            (ksize, ksize),
+            sigmaX=sigma,
+            sigmaY=sigma,
+            borderType=cv2.BORDER_REFLECT,
+        )
         return blurred.astype(np.float32) / 255.0
 
     # PIL fallback
@@ -277,7 +340,13 @@ def gaussian_blur_float(img: np.ndarray, sigma: float, backend: Optional[str] = 
     return np.asarray(blurred).astype(np.float32) / 255.0
 
 
-def bilateral_blur_float(img: np.ndarray, depth: np.ndarray, sigma_spatial: float, sigma_depth: float = 0.08, diameter: Optional[int] = None) -> np.ndarray:
+def bilateral_blur_float(
+    img: np.ndarray,
+    depth: np.ndarray,
+    sigma_spatial: float,
+    sigma_depth: float = 0.08,
+    diameter: Optional[int] = None,
+) -> np.ndarray:
     """
     Edge-preserving bilateral-style blur guided by depth.
     If OpenCV not present, falls back to gaussian blur.
@@ -286,7 +355,11 @@ def bilateral_blur_float(img: np.ndarray, depth: np.ndarray, sigma_spatial: floa
     if (not _CV2_AVAILABLE) or sigma_spatial <= 0.5:
         return gaussian_blur_float(img, sigma_spatial)
 
-    d = diameter if diameter is not None else max(1, int(2 * math.ceil(3 * sigma_spatial) + 1))
+    d = (
+        diameter
+        if diameter is not None
+        else max(1, int(2 * math.ceil(3 * sigma_spatial) + 1))
+    )
     sigma_color = float(max(1.0, sigma_depth * 255.0))
     sigma_space = float(sigma_spatial)
 
@@ -302,10 +375,17 @@ def bilateral_blur_float(img: np.ndarray, depth: np.ndarray, sigma_spatial: floa
         out[..., c] = res.astype(np.float32) / 255.0
     return out
 
+
 # ----- file discovery -----
 
 
-def find_file_for_base(root: str, base: str, pattern_suffix: str = "*", priority_tags: Optional[Tuple[str, ...]] = None, extensions: Optional[Tuple[str, ...]] = None) -> Optional[str]:
+def find_file_for_base(
+    root: str,
+    base: str,
+    pattern_suffix: str = "*",
+    priority_tags: Optional[Tuple[str, ...]] = None,
+    extensions: Optional[Tuple[str, ...]] = None,
+) -> Optional[str]:
     """
     Search recursively under root for files starting with 'base' and matching priority tags.
     Returns best matching path or None.
@@ -351,6 +431,7 @@ def find_mask_for_base(mask_root: Optional[str], base: str, kind: str) -> Option
     generic = glob.glob(os.path.join(mask_root, f"{base}_mask_{kind}.*"))
     return generic[0] if generic else None
 
+
 # ----- I/O helpers -----
 
 
@@ -362,7 +443,9 @@ def load_image_rgb(path: str) -> np.ndarray:
 
 
 @retry_on_io_error()
-def save_image_rgb(path: str, rgb01: np.ndarray, fmt: str = "tif", quality: int = 95) -> str:
+def save_image_rgb(
+    path: str, rgb01: np.ndarray, fmt: str = "tif", quality: int = 95
+) -> str:
     path = str(path)
     rgb8 = (np.clip(rgb01, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)
     stem = str(Path(path).with_suffix(""))
@@ -386,7 +469,12 @@ def save_image_rgb(path: str, rgb01: np.ndarray, fmt: str = "tif", quality: int 
 
 
 @retry_on_io_error()
-def load_depth_normalized(depth_path: str, target_size: Optional[Tuple[int, int]] = None, method: str = "percentile", use_cache: bool = True) -> np.ndarray:
+def load_depth_normalized(
+    depth_path: str,
+    target_size: Optional[Tuple[int, int]] = None,
+    method: str = "percentile",
+    use_cache: bool = True,
+) -> np.ndarray:
     """
     Load a depth file and normalize to [0,1]. Supports percentile clipping, histogram equalization or linear scaling.
     target_size: (H, W)
@@ -414,7 +502,12 @@ def load_depth_normalized(depth_path: str, target_size: Optional[Tuple[int, int]
     if target_size is not None:
         H, W = target_size
         u8 = (np.clip(norm, 0.0, 1.0) * 255.0).astype(np.uint8)
-        norm = np.asarray(Image.fromarray(u8).resize((W, H), Image.BILINEAR)).astype(np.float32) / 255.0
+        norm = (
+            np.asarray(Image.fromarray(u8).resize((W, H), Image.BILINEAR)).astype(
+                np.float32
+            )
+            / 255.0
+        )
 
     if use_cache:
         _depth_cache.put(cache_key, norm)
@@ -423,7 +516,12 @@ def load_depth_normalized(depth_path: str, target_size: Optional[Tuple[int, int]
 
 
 @retry_on_io_error()
-def load_mask(mask_path: Optional[str], kind: str, target_size: Tuple[int, int], use_cache: bool = True) -> np.ndarray:
+def load_mask(
+    mask_path: Optional[str],
+    kind: str,
+    target_size: Tuple[int, int],
+    use_cache: bool = True,
+) -> np.ndarray:
     """
     Load a mask file (grayscale or alpha) and return normalized float mask HxW in [0,1].
     If mask_path is None or missing, returns zeros of target_size.
@@ -451,8 +549,14 @@ def load_mask(mask_path: Optional[str], kind: str, target_size: Tuple[int, int],
         elif img.mode == "RGB":
             # convert to L but warn if channels differ
             arr = np.asarray(img)
-            if not (np.allclose(arr[..., 0], arr[..., 1]) and np.allclose(arr[..., 1], arr[..., 2])):
-                _log.debug("RGB mask %s has differing channels, converting to grayscale", mask_path)
+            if not (
+                np.allclose(arr[..., 0], arr[..., 1])
+                and np.allclose(arr[..., 1], arr[..., 2])
+            ):
+                _log.debug(
+                    "RGB mask %s has differing channels, converting to grayscale",
+                    mask_path,
+                )
             img = img.convert("L")
         else:
             img = img.convert("L")
@@ -469,6 +573,7 @@ def load_mask(mask_path: Optional[str], kind: str, target_size: Tuple[int, int],
     except Exception as exc:
         _log.warning("Failed loading mask %s (%s): %s", mask_path, kind, exc)
         return np.zeros((H, W), dtype=np.float32)
+
 
 # ----- effects -----
 
@@ -494,22 +599,42 @@ def apply_depth_haze(
     w = np.clip((depth - near) / depth_range, 0.0, 1.0)[..., None]  # HxWx1
 
     H, W = depth.shape[:2]
-    sky = np.zeros((H, W), dtype=np.float32) if (sky_mask is None or sky_mask.size == 0) else sky_mask.astype(np.float32)
-    building = np.zeros((H, W), dtype=np.float32) if (
-        building_mask is None or building_mask.size == 0) else building_mask.astype(np.float32)
+    sky = (
+        np.zeros((H, W), dtype=np.float32)
+        if (sky_mask is None or sky_mask.size == 0)
+        else sky_mask.astype(np.float32)
+    )
+    building = (
+        np.zeros((H, W), dtype=np.float32)
+        if (building_mask is None or building_mask.size == 0)
+        else building_mask.astype(np.float32)
+    )
     sky = sky[..., None]
     building = building[..., None]
 
-    weight_modulated = w * (1.0 - building * BUILDING_HAZE_SUPPRESSION) + sky * (SKY_HAZE_BOOST * (1.0 - w))
+    weight_modulated = w * (1.0 - building * BUILDING_HAZE_SUPPRESSION) + sky * (
+        SKY_HAZE_BOOST * (1.0 - w)
+    )
     weight_modulated = np.clip(weight_modulated, 0.0, 1.0)
 
     haze_rgb = np.array(haze_color, dtype=np.float32)[None, None, :]
-    blended = img * (1 - strength * weight_modulated) + haze_rgb * (strength * weight_modulated)
+    blended = img * (1 - strength * weight_modulated) + haze_rgb * (
+        strength * weight_modulated
+    )
     enhanced = np.clip(0.5 + (blended - 0.5) * mids_gain, 0.0, 1.0)
     return enhanced
 
 
-def apply_depth_clarity(img: np.ndarray, depth: np.ndarray, amount: float = 0.14, radius_px: int = 3, near_pct: float = 18.0, far_pct: float = 82.0, sky_mask: Optional[np.ndarray] = None, building_mask: Optional[np.ndarray] = None) -> np.ndarray:
+def apply_depth_clarity(
+    img: np.ndarray,
+    depth: np.ndarray,
+    amount: float = 0.14,
+    radius_px: int = 3,
+    near_pct: float = 18.0,
+    far_pct: float = 82.0,
+    sky_mask: Optional[np.ndarray] = None,
+    building_mask: Optional[np.ndarray] = None,
+) -> np.ndarray:
     """
     Depth-aware microcontrast enhancement. Avoids sky and favors building.
     """
@@ -518,9 +643,16 @@ def apply_depth_clarity(img: np.ndarray, depth: np.ndarray, amount: float = 0.14
     w = np.clip((depth - near) / depth_range, 0.0, 1.0)[..., None]
 
     H, W = depth.shape[:2]
-    sky = np.zeros((H, W), dtype=np.float32) if (sky_mask is None or sky_mask.size == 0) else sky_mask.astype(np.float32)
-    building = np.zeros((H, W), dtype=np.float32) if (
-        building_mask is None or building_mask.size == 0) else building_mask.astype(np.float32)
+    sky = (
+        np.zeros((H, W), dtype=np.float32)
+        if (sky_mask is None or sky_mask.size == 0)
+        else sky_mask.astype(np.float32)
+    )
+    building = (
+        np.zeros((H, W), dtype=np.float32)
+        if (building_mask is None or building_mask.size == 0)
+        else building_mask.astype(np.float32)
+    )
     sky = sky[..., None]
     building = building[..., None]
 
@@ -549,7 +681,21 @@ def _estimate_image_complexity(img: np.ndarray, depth: np.ndarray) -> float:
     return min(1.0, complexity * 10.0)  # Scale to 0-1 range
 
 
-def apply_depth_dof(img: np.ndarray, depth: np.ndarray, focus_pct: float = 35.0, aperture: float = 0.20, clarity: float = 0.15, falloff: float = 1.5, edge_preserving: bool = True, bilateral_sigma_depth: float = 0.08, bilateral_diameter: Optional[int] = None, sky_mask: Optional[np.ndarray] = None, building_mask: Optional[np.ndarray] = None, quality: str = "balanced", adaptive: bool = True) -> np.ndarray:
+def apply_depth_dof(
+    img: np.ndarray,
+    depth: np.ndarray,
+    focus_pct: float = 35.0,
+    aperture: float = 0.20,
+    clarity: float = 0.15,
+    falloff: float = 1.5,
+    edge_preserving: bool = True,
+    bilateral_sigma_depth: float = 0.08,
+    bilateral_diameter: Optional[int] = None,
+    sky_mask: Optional[np.ndarray] = None,
+    building_mask: Optional[np.ndarray] = None,
+    quality: str = "balanced",
+    adaptive: bool = True,
+) -> np.ndarray:
     """
     DOF with optional bilateral edge preservation. Masks protect building from blur and can slightly reduce sky extremes.
 
@@ -561,8 +707,9 @@ def apply_depth_dof(img: np.ndarray, depth: np.ndarray, focus_pct: float = 35.0,
     adaptive: Auto-adjust bilateral sigma based on image complexity (20-30% faster)
     """
     if clarity > 1e-6:
-        usm = Image.fromarray((img * 255.0).astype(np.uint8)).filter(ImageFilter.UnsharpMask(radius=2,
-                              percent=int(clarity * 100), threshold=0))
+        usm = Image.fromarray((img * 255.0).astype(np.uint8)).filter(
+            ImageFilter.UnsharpMask(radius=2, percent=int(clarity * 100), threshold=0)
+        )
         img = np.asarray(usm).astype(np.float32) / 255.0
 
     focus_depth = float(np.percentile(depth, focus_pct))
@@ -573,9 +720,16 @@ def apply_depth_dof(img: np.ndarray, depth: np.ndarray, focus_pct: float = 35.0,
     weight = np.clip(dist ** max(1e-3, falloff), 0.0, 1.0)[..., None]
 
     H, W = depth.shape[:2]
-    building = np.zeros((H, W), dtype=np.float32) if (
-        building_mask is None or building_mask.size == 0) else building_mask.astype(np.float32)
-    sky = np.zeros((H, W), dtype=np.float32) if (sky_mask is None or sky_mask.size == 0) else sky_mask.astype(np.float32)
+    building = (
+        np.zeros((H, W), dtype=np.float32)
+        if (building_mask is None or building_mask.size == 0)
+        else building_mask.astype(np.float32)
+    )
+    sky = (
+        np.zeros((H, W), dtype=np.float32)
+        if (sky_mask is None or sky_mask.size == 0)
+        else sky_mask.astype(np.float32)
+    )
     building = building[..., None]
     sky = sky[..., None]
 
@@ -583,10 +737,10 @@ def apply_depth_dof(img: np.ndarray, depth: np.ndarray, focus_pct: float = 35.0,
     r_far = max(2.0, 6.0 + 28.0 * aperture)
 
     # Quality-based blur strategy
-    use_bilateral = edge_preserving and _CV2_AVAILABLE and quality != 'fast'
+    use_bilateral = edge_preserving and _CV2_AVAILABLE and quality != "fast"
 
     # Adaptive bilateral: adjust sigma based on image complexity
-    if use_bilateral and adaptive and quality == 'balanced':
+    if use_bilateral and adaptive and quality == "balanced":
         complexity = _estimate_image_complexity(img, depth)
         # Simple images: use Gaussian (faster)
         # Complex images: use bilateral (better quality)
@@ -598,27 +752,42 @@ def apply_depth_dof(img: np.ndarray, depth: np.ndarray, focus_pct: float = 35.0,
             bilateral_sigma_depth = bilateral_sigma_depth * (0.5 + complexity * 0.5)
 
     if use_bilateral:
-        blur_near = bilateral_blur_float(img, depth, sigma_spatial=r_near,
-                                         sigma_depth=bilateral_sigma_depth, diameter=bilateral_diameter)
-        blur_far = bilateral_blur_float(img, depth, sigma_spatial=r_far,
-                                        sigma_depth=bilateral_sigma_depth * 0.75, diameter=bilateral_diameter)
+        blur_near = bilateral_blur_float(
+            img,
+            depth,
+            sigma_spatial=r_near,
+            sigma_depth=bilateral_sigma_depth,
+            diameter=bilateral_diameter,
+        )
+        blur_far = bilateral_blur_float(
+            img,
+            depth,
+            sigma_spatial=r_far,
+            sigma_depth=bilateral_sigma_depth * 0.75,
+            diameter=bilateral_diameter,
+        )
     else:
         # Fast mode or low-complexity adaptive: use Gaussian blur (15x faster)
         blur_near = gaussian_blur_float(img, sigma=r_near)
         blur_far = gaussian_blur_float(img, sigma=r_far)
 
     w_soft = weight
-    w_hard = weight ** 2.0
-    blended = (1 - w_soft) * blur_near + w_soft * ((1 - w_hard) * blur_near + w_hard * blur_far)
+    w_hard = weight**2.0
+    blended = (1 - w_soft) * blur_near + w_soft * (
+        (1 - w_hard) * blur_near + w_hard * blur_far
+    )
 
     # protector reduces blur on buildings and slightly reduces extreme sky blur
-    reduce_on_building = 1.0 - BUILDING_BLUR_REDUCTION * building  # building=1 -> factor ~0.12
-    slight_sky_protect = 1.0 - SKY_BLUR_REDUCTION * sky            # sky=1 -> factor ~0.7
+    reduce_on_building = (
+        1.0 - BUILDING_BLUR_REDUCTION * building
+    )  # building=1 -> factor ~0.12
+    slight_sky_protect = 1.0 - SKY_BLUR_REDUCTION * sky  # sky=1 -> factor ~0.7
     protector = (reduce_on_building * slight_sky_protect)[..., None]
 
     w_protected = w_soft * protector
     out = img * (1 - w_protected) + blended * w_protected
     return np.clip(out, 0.0, 1.0)
+
 
 # ----- batch driver -----
 
@@ -651,12 +820,19 @@ class BatchOptions:
     falloff: float = 1.4
 
 
-def _process_single(dp: str, opts: BatchOptions) -> Tuple[str, Optional[str], Optional[str]]:
+def _process_single(
+    dp: str, opts: BatchOptions
+) -> Tuple[str, Optional[str], Optional[str]]:
     """
     Process a single depth map path (dp). Returns tuple (base, out_path or None, error or None).
     This helper is suitable for running in a child process as long as dependencies are available.
     """
-    base = os.path.basename(dp).replace("_depth16.png", "").replace("_depth16.tif", "").replace("_depth16.ti", "")
+    base = (
+        os.path.basename(dp)
+        .replace("_depth16.png", "")
+        .replace("_depth16.tif", "")
+        .replace("_depth16.ti", "")
+    )
     try:
         # find source image
         src = find_file_for_base(opts.images_root, base, pattern_suffix="*")
@@ -669,33 +845,68 @@ def _process_single(dp: str, opts: BatchOptions) -> Tuple[str, Optional[str], Op
 
         img = load_image_rgb(src)
         H, W = img.shape[:2]
-        depth = load_depth_normalized(dp, target_size=(H, W), method="percentile", use_cache=True)
+        depth = load_depth_normalized(
+            dp, target_size=(H, W), method="percentile", use_cache=True
+        )
 
-        sky_path = find_mask_for_base(opts.mask_root, base, "sky") if opts.mask_root else None
-        building_path = find_mask_for_base(opts.mask_root, base, "building") if opts.mask_root else None
-        sky_mask = load_mask(sky_path, "sky", (H, W), use_cache=True) if sky_path else np.zeros((H, W), dtype=np.float32)
-        building_mask = load_mask(building_path, "building", (H, W),
-                                  use_cache=True) if building_path else np.zeros((H, W), dtype=np.float32)
+        sky_path = (
+            find_mask_for_base(opts.mask_root, base, "sky") if opts.mask_root else None
+        )
+        building_path = (
+            find_mask_for_base(opts.mask_root, base, "building")
+            if opts.mask_root
+            else None
+        )
+        sky_mask = (
+            load_mask(sky_path, "sky", (H, W), use_cache=True)
+            if sky_path
+            else np.zeros((H, W), dtype=np.float32)
+        )
+        building_mask = (
+            load_mask(building_path, "building", (H, W), use_cache=True)
+            if building_path
+            else np.zeros((H, W), dtype=np.float32)
+        )
 
         if opts.mode == "haze":
-            out = apply_depth_haze(img, depth,
-                                   haze_color=opts.haze_color, strength=opts.strength,
-                                   near_pct=opts.near, far_pct=opts.far, mids_gain=opts.mids_gain,
-                                   sky_mask=sky_mask, building_mask=building_mask)
+            out = apply_depth_haze(
+                img,
+                depth,
+                haze_color=opts.haze_color,
+                strength=opts.strength,
+                near_pct=opts.near,
+                far_pct=opts.far,
+                mids_gain=opts.mids_gain,
+                sky_mask=sky_mask,
+                building_mask=building_mask,
+            )
             suffix = "_depthhaze"
         elif opts.mode == "clarity":
-            out = apply_depth_clarity(img, depth,
-                                      amount=opts.amount, radius_px=opts.radius,
-                                      near_pct=opts.near, far_pct=opts.far,
-                                      sky_mask=sky_mask, building_mask=building_mask)
+            out = apply_depth_clarity(
+                img,
+                depth,
+                amount=opts.amount,
+                radius_px=opts.radius,
+                near_pct=opts.near,
+                far_pct=opts.far,
+                sky_mask=sky_mask,
+                building_mask=building_mask,
+            )
             suffix = "_depthclarity"
         elif opts.mode == "do":
-            out = apply_depth_dof(img, depth,
-                                  focus_pct=opts.focus, aperture=opts.aperture,
-                                  clarity=opts.clarity, falloff=opts.falloff,
-                                  edge_preserving=_CV2_AVAILABLE, bilateral_sigma_depth=0.08,
-                                  sky_mask=sky_mask, building_mask=building_mask,
-                                  quality=opts.quality)
+            out = apply_depth_dof(
+                img,
+                depth,
+                focus_pct=opts.focus,
+                aperture=opts.aperture,
+                clarity=opts.clarity,
+                falloff=opts.falloff,
+                edge_preserving=_CV2_AVAILABLE,
+                bilateral_sigma_depth=0.08,
+                sky_mask=sky_mask,
+                building_mask=building_mask,
+                quality=opts.quality,
+            )
             suffix = "_depthdo"
         else:
             raise ValueError(f"Unknown mode: {opts.mode}")
@@ -709,7 +920,9 @@ def _process_single(dp: str, opts: BatchOptions) -> Tuple[str, Optional[str], Op
         return base, None, str(exc)
 
 
-def process_batch(opts: BatchOptions, progress: Optional[Callable[[int, int, str], None]] = None) -> int:
+def process_batch(
+    opts: BatchOptions, progress: Optional[Callable[[int, int, str], None]] = None
+) -> int:
     """
     Process a directory of depth maps. If workers > 1, uses ProcessPoolExecutor.
     progress callback signature: (done:int, total:int, message:str)
@@ -724,7 +937,12 @@ def process_batch(opts: BatchOptions, progress: Optional[Callable[[int, int, str
     done = 0
     errors = []
 
-    _log.info("Starting batch: %d depth maps, mode=%s, workers=%d", total, opts.mode, opts.workers)
+    _log.info(
+        "Starting batch: %d depth maps, mode=%s, workers=%d",
+        total,
+        opts.mode,
+        opts.workers,
+    )
 
     if opts.workers > 1:
         # Use multiprocessing
@@ -752,12 +970,16 @@ def process_batch(opts: BatchOptions, progress: Optional[Callable[[int, int, str
             if progress:
                 progress(done, total, base)
 
-    _log.info("Batch complete: %d processed, %d errors", total - len(errors), len(errors))
+    _log.info(
+        "Batch complete: %d processed, %d errors", total - len(errors), len(errors)
+    )
 
     # Log comprehensive error summary for debugging
     if errors:
         error_lines = ["\n" + "=" * 80]
-        error_lines.append(f"ERROR SUMMARY: {len(errors)} file(s) failed during batch processing")
+        error_lines.append(
+            f"ERROR SUMMARY: {len(errors)} file(s) failed during batch processing"
+        )
         error_lines.append("=" * 80)
         for idx, (base, err) in enumerate(errors, 1):
             error_lines.append(f"{idx}. {base}:")
@@ -766,6 +988,7 @@ def process_batch(opts: BatchOptions, progress: Optional[Callable[[int, int, str
         _log.error("\n".join(error_lines))
 
     return len(errors)
+
 
 # ----- CLI -----
 
@@ -780,28 +1003,65 @@ def build_cli() -> argparse.ArgumentParser:
             "2 = fatal error. "
             "By default, uses strict error handling (any processing error results in exit code 1). "
             "Use --allow-partial-success to exit 0 if at least one file succeeds."
-        )
+        ),
     )
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     def common(p):
-        p.add_argument("images_root", help="Root of enhanced images (searched recursively)")
-        p.add_argument("depths_root", help="Root folder containing *_depth16.* depth maps")
+        p.add_argument(
+            "images_root", help="Root of enhanced images (searched recursively)"
+        )
+        p.add_argument(
+            "depths_root", help="Root folder containing *_depth16.* depth maps"
+        )
         p.add_argument("out_root", help="Output folder")
-        p.add_argument("--mask-root", type=str, default=None, help="Folder containing generated masks (<base>_mask_sky.png)")
-        p.add_argument("--restrict-tag", type=str, default=None,
-                       help="Restrict matches to a filename tag (not strictly required)")
-        p.add_argument("--fmt", type=str, default="tiff", help="Output format (tiff/png/jpg, default: tiff for 6x faster I/O)")
-        p.add_argument("--workers", type=int, default=0, help="Parallel worker count (0=auto-detect, default), uses ProcessPoolExecutor")
-        p.add_argument("--quality", type=str, choices=['fast', 'balanced', 'high'], default='balanced',
-                       help="Quality mode: fast (15x faster, Gaussian blur), balanced (default), high (bilateral filter)")
-        p.add_argument("--allow-partial-success", action="store_true",
-                       help="Allow partial success: exit 0 if at least one file succeeds, even if some fail")
+        p.add_argument(
+            "--mask-root",
+            type=str,
+            default=None,
+            help="Folder containing generated masks (<base>_mask_sky.png)",
+        )
+        p.add_argument(
+            "--restrict-tag",
+            type=str,
+            default=None,
+            help="Restrict matches to a filename tag (not strictly required)",
+        )
+        p.add_argument(
+            "--fmt",
+            type=str,
+            default="tiff",
+            help="Output format (tiff/png/jpg, default: tiff for 6x faster I/O)",
+        )
+        p.add_argument(
+            "--workers",
+            type=int,
+            default=0,
+            help="Parallel worker count (0=auto-detect, default), uses ProcessPoolExecutor",
+        )
+        p.add_argument(
+            "--quality",
+            type=str,
+            choices=["fast", "balanced", "high"],
+            default="balanced",
+            help="Quality mode: fast (15x faster, Gaussian blur), balanced (default), high (bilateral filter)",
+        )
+        p.add_argument(
+            "--allow-partial-success",
+            action="store_true",
+            help="Allow partial success: exit 0 if at least one file succeeds, even if some fail",
+        )
         p.add_argument("--verbose", action="store_true", help="Verbose logging")
 
     ph = sub.add_parser("haze", help="Apply depth-weighted atmospheric haze")
     common(ph)
-    ph.add_argument("--haze-color", type=float, nargs=3, default=DEFAULT_HAZE_COLOR, metavar=("R", "G", "B"))
+    ph.add_argument(
+        "--haze-color",
+        type=float,
+        nargs=3,
+        default=DEFAULT_HAZE_COLOR,
+        metavar=("R", "G", "B"),
+    )
     ph.add_argument("--strength", type=float, default=0.18)
     ph.add_argument("--near", type=float, default=15.0)
     ph.add_argument("--far", type=float, default=85.0)
@@ -844,8 +1104,13 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     if workers_arg == 0:
         # Auto-detect: use CPU count - 1, capped at 8
         import os
+
         optimal_workers = min(max(1, os.cpu_count() - 1), 8)
-        _log.info("Auto-detected %d workers (CPU count: %d)", optimal_workers, os.cpu_count() or 1)
+        _log.info(
+            "Auto-detected %d workers (CPU count: %d)",
+            optimal_workers,
+            os.cpu_count() or 1,
+        )
     else:
         optimal_workers = max(1, workers_arg)
 
@@ -860,7 +1125,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         workers=optimal_workers,
         verbose=getattr(args, "verbose", False),
         allow_partial_success=getattr(args, "allow_partial_success", False),
-        quality=getattr(args, "quality", "balanced")
+        quality=getattr(args, "quality", "balanced"),
     )
 
     # effect-specific mappings
@@ -893,7 +1158,9 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             # If all files failed, still return non-zero
             # Note: process_batch raises SystemExit if no depth maps found, so we have at least 1 depth map
             # error_count < total means at least one file succeeded
-            depth_maps = sorted(glob.glob(os.path.join(opts.depths_root, "*_depth16.*")))
+            depth_maps = sorted(
+                glob.glob(os.path.join(opts.depths_root, "*_depth16.*"))
+            )
             total = len(depth_maps)
             if error_count >= total:
                 # All files failed
@@ -901,7 +1168,11 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 return 1
             else:
                 # At least one file succeeded - partial success is allowed
-                _log.info("Partial success: %d/%d files processed successfully", total - error_count, total)
+                _log.info(
+                    "Partial success: %d/%d files processed successfully",
+                    total - error_count,
+                    total,
+                )
                 return 0
         else:
             # Errors occurred and strict mode (default) - return non-zero

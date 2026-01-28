@@ -13,7 +13,18 @@ Key Components:
 - Utils: Shared utilities and helpers
 """
 
-__version__ = "0.1.0"
+from __future__ import annotations
+
+from importlib.metadata import PackageNotFoundError, version as _pkg_version
+
+# Runtime version - synchronized with pyproject.toml
+# Contract surfaces (schemas) are versioned at 2.0.0; package follows contract major
+try:
+    __version__ = _pkg_version("transformation-portal")
+except PackageNotFoundError:
+    # Source-tree execution without installed metadata
+    __version__ = "2.0.0"
+
 __author__ = "RC219805"
 
 # Lazy imports for commonly used components
@@ -22,10 +33,13 @@ __author__ = "RC219805"
 
 def _lazy_import(module_path, attr_name):
     """Lazy import helper to defer loading until needed."""
+
     def _loader():
         import importlib
+
         module = importlib.import_module(module_path)
         return getattr(module, attr_name)
+
     return _loader
 
 
@@ -56,8 +70,8 @@ def get_material_response():
 
 # Convenience exports for backward compatibility
 __all__ = [
-    '__version__',
-    '__author__',
-    'get_lux_render_pipeline',
-    'get_material_response',
+    "__version__",
+    "__author__",
+    "get_lux_render_pipeline",
+    "get_material_response",
 ]

@@ -15,12 +15,10 @@ For luxury real estate:
 """
 
 import logging
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple
 
 import cv2
 import numpy as np
-from PIL import Image
-
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +55,7 @@ class SkyBlender:
         mask: Optional[np.ndarray] = None,
         blend_width: int = 50,
         update_reflections: bool = False,
-        reflection_strength: float = 0.5
+        reflection_strength: float = 0.5,
     ) -> np.ndarray:
         """Blend new sky into image.
 
@@ -98,17 +96,13 @@ class SkyBlender:
 
         for c in range(3):
             result[:, :, c] = (
-                image[:, :, c] * (1 - blend_mask) +
-                sky[:, :, c] * blend_mask
+                image[:, :, c] * (1 - blend_mask) + sky[:, :, c] * blend_mask
             )
 
         # Update reflections if requested
         if update_reflections:
             result = self._update_reflections(
-                result,
-                sky,
-                blend_mask,
-                reflection_strength
+                result, sky, blend_mask, reflection_strength
             )
 
         logger.info("Sky blending complete")
@@ -116,9 +110,7 @@ class SkyBlender:
         return result.astype(image.dtype)
 
     def _detect_sky_mask(
-        self,
-        image: np.ndarray,
-        threshold_method: str = "adaptive"
+        self, image: np.ndarray, threshold_method: str = "adaptive"
     ) -> np.ndarray:
         """Detect sky region in image.
 
@@ -132,7 +124,9 @@ class SkyBlender:
             Binary mask (H, W) where 1=sky
         """
         # Convert to float
-        img_float = image.astype(np.float32) / 255.0 if image.dtype == np.uint8 else image
+        img_float = (
+            image.astype(np.float32) / 255.0 if image.dtype == np.uint8 else image
+        )
 
         # Sky is typically:
         # 1. In upper portion of image
@@ -155,10 +149,7 @@ class SkyBlender:
             # Use Otsu's method
             sky_prob_uint8 = (sky_probability * 255).astype(np.uint8)
             threshold, mask = cv2.threshold(
-                sky_prob_uint8,
-                0,
-                255,
-                cv2.THRESH_BINARY + cv2.THRESH_OTSU
+                sky_prob_uint8, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
             )
             mask = mask.astype(np.float32) / 255.0
         else:
@@ -173,8 +164,7 @@ class SkyBlender:
 
         # Keep only largest connected component (main sky region)
         num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
-            mask_uint8,
-            connectivity=8
+            mask_uint8, connectivity=8
         )
 
         if num_labels > 1:
@@ -186,11 +176,7 @@ class SkyBlender:
 
         return mask
 
-    def _create_blend_mask(
-        self,
-        mask: np.ndarray,
-        blend_width: int
-    ) -> np.ndarray:
+    def _create_blend_mask(self, mask: np.ndarray, blend_width: int) -> np.ndarray:
         """Create smooth transition mask for blending.
 
         Args:
@@ -218,11 +204,7 @@ class SkyBlender:
         return blend_mask
 
     def _update_reflections(
-        self,
-        image: np.ndarray,
-        sky: np.ndarray,
-        sky_mask: np.ndarray,
-        strength: float
+        self, image: np.ndarray, sky: np.ndarray, sky_mask: np.ndarray, strength: float
     ) -> np.ndarray:
         """Update reflections to match new sky.
 
@@ -246,7 +228,7 @@ class SkyBlender:
 
         # Simple heuristic: lower third of image with similar hue to sky
         height = image.shape[0]
-        lower_region = image[int(height * 0.6):, :]
+        lower_region = image[int(height * 0.6) :, :]
 
         # Calculate reflection of sky (vertically flipped and darkened)
         reflected_sky = np.flipud(sky) * 0.6  # Darken reflection
@@ -260,10 +242,9 @@ class SkyBlender:
             reflection_region = reflected_sky[:lower_height]
 
             # Blend reflection with original
-            result[int(height * 0.6):, :] = (
-                lower_region * (1 - strength * 0.3) +
-                reflection_region * (strength * 0.3)
-            )
+            result[int(height * 0.6) :, :] = lower_region * (
+                1 - strength * 0.3
+            ) + reflection_region * (strength * 0.3)
 
         return result
 
@@ -272,7 +253,7 @@ class SkyBlender:
         panorama: np.ndarray,
         sky_params: dict,
         sky_generator: any,
-        blend_width: int = 100
+        blend_width: int = 100,
     ) -> np.ndarray:
         """Replace sky in panoramic image.
 
@@ -287,8 +268,7 @@ class SkyBlender:
         """
         # Generate sky matching panorama resolution
         sky = sky_generator.generate_sky(
-            sky_params,
-            resolution=(panorama.shape[1], panorama.shape[0])
+            sky_params, resolution=(panorama.shape[1], panorama.shape[0])
         )
 
         # Detect sky mask
@@ -296,11 +276,7 @@ class SkyBlender:
 
         # Blend
         result = self.blend_sky(
-            panorama,
-            sky,
-            mask,
-            blend_width=blend_width,
-            update_reflections=True
+            panorama, sky, mask, blend_width=blend_width, update_reflections=True
         )
 
         return result
@@ -309,7 +285,7 @@ class SkyBlender:
         self,
         image_shape: Tuple[int, int],
         horizon_y: int,
-        building_mask: Optional[np.ndarray] = None
+        building_mask: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """Create sky mask manually with specified horizon.
 
@@ -334,10 +310,7 @@ class SkyBlender:
         return mask
 
     def match_sky_color_temperature(
-        self,
-        image: np.ndarray,
-        sky: np.ndarray,
-        image_sky_region: np.ndarray
+        self, image: np.ndarray, sky: np.ndarray, image_sky_region: np.ndarray
     ) -> np.ndarray:
         """Match new sky color temperature to original.
 

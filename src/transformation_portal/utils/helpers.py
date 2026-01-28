@@ -14,13 +14,16 @@ from typing import Any, Callable, Sequence, Type, Union
 
 def documents(note: str) -> Callable[[Callable], Callable]:
     """Attach a docstring note to a function, preserving existing doc."""
+
     def decorator(func: Callable) -> Callable:
         if func.__doc__:
             func.__doc__ = f"{note}\n{func.__doc__}"
         else:
             func.__doc__ = note
         return func
+
     return decorator
+
 
 # -------------------------
 # demonstrates decorator
@@ -30,7 +33,9 @@ def documents(note: str) -> Callable[[Callable], Callable]:
 ConceptType = Union[str, int, Type]
 
 
-def demonstrates(concepts: Union[ConceptType, Sequence[ConceptType]]) -> Callable[[Callable], Callable]:
+def demonstrates(
+    concepts: Union[ConceptType, Sequence[ConceptType]],
+) -> Callable[[Callable], Callable]:
     """Annotate a function as demonstrating one or more concepts."""
     if not isinstance(concepts, (list, tuple)):
         concepts_seq = (concepts,)
@@ -52,14 +57,18 @@ def demonstrates(concepts: Union[ConceptType, Sequence[ConceptType]]) -> Callabl
         else:
             func.__doc__ = prefix
         return func
+
     return decorator
+
 
 # -------------------------
 # valid_until decorator
 # -------------------------
 
 
-def valid_until(expiration: str, reason: str = "expired") -> Callable[[Callable], Callable]:
+def valid_until(
+    expiration: str, reason: str = "expired"
+) -> Callable[[Callable], Callable]:
     """Ensure the decorated function can only be executed until a given ISO date."""
     expiration_date = date.fromisoformat(expiration)
 
@@ -68,7 +77,9 @@ def valid_until(expiration: str, reason: str = "expired") -> Callable[[Callable]
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             today = date.today()
             if today > expiration_date:
-                raise AssertionError(f"Function {func.__name__} is no longer valid: {reason}")
+                raise AssertionError(
+                    f"Function {func.__name__} is no longer valid: {reason}"
+                )
             return func(*args, **kwargs)
 
         wrapper.__doc__ = f"Valid until {expiration} — {reason}"

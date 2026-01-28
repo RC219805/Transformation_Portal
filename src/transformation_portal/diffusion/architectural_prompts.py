@@ -17,13 +17,14 @@ Prompt engineering principles:
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class RoomType(Enum):
     """Room types for architectural prompting."""
+
     KITCHEN = "kitchen"
     BATHROOM = "bathroom"
     BEDROOM = "bedroom"
@@ -38,6 +39,7 @@ class RoomType(Enum):
 
 class ArchitecturalStyle(Enum):
     """Architectural styles."""
+
     MODERN = "modern"
     CONTEMPORARY = "contemporary"
     TRADITIONAL = "traditional"
@@ -49,6 +51,7 @@ class ArchitecturalStyle(Enum):
 
 class EmotionalTarget(Enum):
     """Target emotional responses."""
+
     NOSTALGIA = "nostalgia"
     ASPIRATION = "aspiration"
     LUXURY = "luxury"
@@ -69,6 +72,7 @@ class PromptComponents:
         atmosphere: Atmospheric and emotional descriptors
         negative_elements: Things to avoid
     """
+
     subject: str
     style_modifiers: List[str]
     material_details: List[str]
@@ -104,7 +108,7 @@ class ArchitecturalPromptBuilder:
         "8k resolution",
         "highly detailed",
         "sharp focus",
-        "photorealistic"
+        "photorealistic",
     ]
 
     # Lighting descriptors
@@ -113,84 +117,149 @@ class ArchitecturalPromptBuilder:
         "golden_hour": ["golden hour light", "warm sunset glow", "soft golden light"],
         "bright": ["bright lighting", "well-lit", "luminous"],
         "dramatic": ["dramatic lighting", "moody atmosphere", "sculptural lighting"],
-        "soft": ["soft diffused light", "gentle illumination", "ambient lighting"]
+        "soft": ["soft diffused light", "gentle illumination", "ambient lighting"],
     }
 
     # Material descriptors
     MATERIAL_DESCRIPTORS = {
-        "marble": ["marble countertops", "marble surfaces", "polished marble", "natural stone veining"],
+        "marble": [
+            "marble countertops",
+            "marble surfaces",
+            "polished marble",
+            "natural stone veining",
+        ],
         "granite": ["granite", "natural stone", "textured stone"],
-        "wood": ["hardwood floors", "wood cabinetry", "natural wood grain", "warm wood tones"],
-        "glass": ["glass", "transparent surfaces", "reflective glass", "modern glazing"],
+        "wood": [
+            "hardwood floors",
+            "wood cabinetry",
+            "natural wood grain",
+            "warm wood tones",
+        ],
+        "glass": [
+            "glass",
+            "transparent surfaces",
+            "reflective glass",
+            "modern glazing",
+        ],
         "metal": ["metal fixtures", "metallic accents"],
-        "stainless steel": ["stainless steel appliances", "brushed metal", "contemporary fixtures"],
+        "stainless steel": [
+            "stainless steel appliances",
+            "brushed metal",
+            "contemporary fixtures",
+        ],
         "water": ["water feature", "reflective water", "pool", "fountain"],
         "tile": ["tile work", "ceramic tile", "designer tile"],
-        "stone": ["natural stone", "stone features", "textured stonework"]
+        "stone": ["natural stone", "stone features", "textured stonework"],
     }
 
     # Emotional atmosphere descriptors
     EMOTIONAL_DESCRIPTORS = {
         EmotionalTarget.NOSTALGIA: [
-            "warm atmosphere", "inviting", "heritage details",
-            "classic elegance", "timeless design"
+            "warm atmosphere",
+            "inviting",
+            "heritage details",
+            "classic elegance",
+            "timeless design",
         ],
         EmotionalTarget.ASPIRATION: [
-            "aspirational", "sophisticated", "high-end",
-            "elegant", "refined luxury"
+            "aspirational",
+            "sophisticated",
+            "high-end",
+            "elegant",
+            "refined luxury",
         ],
         EmotionalTarget.LUXURY: [
-            "luxury", "premium finishes", "bespoke details",
-            "custom craftsmanship", "exclusive design"
+            "luxury",
+            "premium finishes",
+            "bespoke details",
+            "custom craftsmanship",
+            "exclusive design",
         ],
         EmotionalTarget.COMFORT: [
-            "comfortable", "welcoming", "cozy elegance",
-            "livable luxury", "relaxed sophistication"
+            "comfortable",
+            "welcoming",
+            "cozy elegance",
+            "livable luxury",
+            "relaxed sophistication",
         ],
         EmotionalTarget.SERENITY: [
-            "serene", "peaceful", "tranquil atmosphere",
-            "calm elegance", "zen-like quality"
-        ]
+            "serene",
+            "peaceful",
+            "tranquil atmosphere",
+            "calm elegance",
+            "zen-like quality",
+        ],
     }
 
     # Style-specific descriptors
     STYLE_DESCRIPTORS = {
         ArchitecturalStyle.MODERN: [
-            "modern", "minimalist", "clean lines",
-            "contemporary design", "sleek"
+            "modern",
+            "minimalist",
+            "clean lines",
+            "contemporary design",
+            "sleek",
         ],
         ArchitecturalStyle.CONTEMPORARY: [
-            "contemporary", "current design",
-            "sophisticated", "urban chic"
+            "contemporary",
+            "current design",
+            "sophisticated",
+            "urban chic",
         ],
         ArchitecturalStyle.TRADITIONAL: [
-            "traditional", "classic", "timeless",
-            "elegant details", "refined craftsmanship"
+            "traditional",
+            "classic",
+            "timeless",
+            "elegant details",
+            "refined craftsmanship",
         ],
         ArchitecturalStyle.MEDITERRANEAN: [
-            "Mediterranean", "warm tones", "natural materials",
-            "arched details", "textured walls"
+            "Mediterranean",
+            "warm tones",
+            "natural materials",
+            "arched details",
+            "textured walls",
         ],
         ArchitecturalStyle.COASTAL: [
-            "coastal", "beach house", "ocean-inspired",
-            "breezy", "light and airy"
+            "coastal",
+            "beach house",
+            "ocean-inspired",
+            "breezy",
+            "light and airy",
         ],
         ArchitecturalStyle.LUXURY_ESTATE: [
-            "luxury estate", "grand", "palatial",
-            "impressive scale", "resort-style"
+            "luxury estate",
+            "grand",
+            "palatial",
+            "impressive scale",
+            "resort-style",
         ],
         ArchitecturalStyle.TRANSITIONAL: [
-            "transitional", "blend of styles",
-            "balanced design", "modern traditional"
-        ]
+            "transitional",
+            "blend of styles",
+            "balanced design",
+            "modern traditional",
+        ],
     }
 
     # Default negative prompt elements
     DEFAULT_NEGATIVE = [
-        "oversaturated", "artificial", "fake", "CGI", "unrealistic",
-        "distorted", "low quality", "blurry", "noise", "artifacts",
-        "overexposed", "underexposed", "cluttered", "messy",
-        "poor composition", "amateur"
+        "oversaturated",
+        "artificial",
+        "fake",
+        "CGI",
+        "unrealistic",
+        "distorted",
+        "low quality",
+        "blurry",
+        "noise",
+        "artifacts",
+        "overexposed",
+        "underexposed",
+        "cluttered",
+        "messy",
+        "poor composition",
+        "amateur",
     ]
 
     def __init__(self):
@@ -205,7 +274,7 @@ class ArchitecturalPromptBuilder:
         emotional_target: Optional[EmotionalTarget] = None,
         lighting: str = "natural",
         custom_elements: Optional[List[str]] = None,
-        include_quality_tags: bool = True
+        include_quality_tags: bool = True,
     ) -> str:
         """Build complete architectural prompt.
 
@@ -270,8 +339,7 @@ class ArchitecturalPromptBuilder:
         return prompt
 
     def build_negative_prompt(
-        self,
-        custom_negatives: Optional[List[str]] = None
+        self, custom_negatives: Optional[List[str]] = None
     ) -> str:
         """Build negative prompt.
 
@@ -291,7 +359,7 @@ class ArchitecturalPromptBuilder:
     def build_from_scene_analysis(
         self,
         scene_analysis: Dict[str, any],
-        emotional_target: Optional[EmotionalTarget] = None
+        emotional_target: Optional[EmotionalTarget] = None,
     ) -> Dict[str, str]:
         """Build prompts from scene analysis results.
 
@@ -338,20 +406,15 @@ class ArchitecturalPromptBuilder:
             style=style,
             materials=materials,
             emotional_target=emotional_target,
-            lighting=lighting
+            lighting=lighting,
         )
 
         negative_prompt = self.build_negative_prompt()
 
-        return {
-            "prompt": prompt,
-            "negative_prompt": negative_prompt
-        }
+        return {"prompt": prompt, "negative_prompt": negative_prompt}
 
     def build_progressive_prompts(
-        self,
-        base_prompt: str,
-        num_variations: int = 3
+        self, base_prompt: str, num_variations: int = 3
     ) -> List[str]:
         """Generate progressive prompt variations.
 
@@ -371,7 +434,7 @@ class ArchitecturalPromptBuilder:
         detail_levels = [
             ["refined details", "enhanced clarity"],
             ["intricate details", "premium finishes", "exceptional quality"],
-            ["ultra-detailed", "masterful craftsmanship", "museum quality"]
+            ["ultra-detailed", "masterful craftsmanship", "museum quality"],
         ]
 
         for i in range(min(num_variations - 1, len(detail_levels))):
@@ -380,10 +443,7 @@ class ArchitecturalPromptBuilder:
 
         return variations
 
-    def _get_material_descriptions(
-        self,
-        materials: List[str]
-    ) -> List[str]:
+    def _get_material_descriptions(self, materials: List[str]) -> List[str]:
         """Get descriptive phrases for materials.
 
         Args:
@@ -420,7 +480,7 @@ class ArchitecturalPromptBuilder:
             "exterior": RoomType.EXTERIOR,
             "courtyard": RoomType.COURTYARD,
             "entry": RoomType.ENTRY,
-            "foyer": RoomType.ENTRY
+            "foyer": RoomType.ENTRY,
         }
 
         for key, value in mapping.items():
@@ -440,7 +500,7 @@ class ArchitecturalPromptBuilder:
             "mediterranean": ArchitecturalStyle.MEDITERRANEAN,
             "coastal": ArchitecturalStyle.COASTAL,
             "luxury": ArchitecturalStyle.LUXURY_ESTATE,
-            "transitional": ArchitecturalStyle.TRANSITIONAL
+            "transitional": ArchitecturalStyle.TRANSITIONAL,
         }
 
         for key, value in mapping.items():

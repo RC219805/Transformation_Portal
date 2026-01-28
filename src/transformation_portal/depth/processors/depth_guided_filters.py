@@ -18,10 +18,13 @@ from scipy.ndimage import gaussian_filter
 
 try:
     import cv2
+
     CV2_AVAILABLE = True
 except ImportError:
     CV2_AVAILABLE = False
-    logging.warning("cv2 (opencv-python) not available. Some depth filtering features will be limited.")
+    logging.warning(
+        "cv2 (opencv-python) not available. Some depth filtering features will be limited."
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +113,7 @@ class DepthGuidedFilters:
         else:
             # Fallback to scipy
             from scipy.ndimage import sobel
+
             grad_x = sobel(depth, axis=1).astype(np.float32)
             grad_y = sobel(depth, axis=0).astype(np.float32)
 
@@ -130,6 +134,7 @@ class DepthGuidedFilters:
         else:
             # Fallback to scipy
             from scipy.ndimage import binary_dilation
+
             edge_map = binary_dilation(edge_map > 0, iterations=1).astype(np.float32)
 
         return edge_map
@@ -155,7 +160,9 @@ class DepthGuidedFilters:
         """
         if not CV2_AVAILABLE:
             # Fallback: simple unsharp masking
-            logger.warning("cv2 not available, using simple unsharp mask instead of multiscale clarity")
+            logger.warning(
+                "cv2 not available, using simple unsharp mask instead of multiscale clarity"
+            )
             blurred = gaussian_filter(image, sigma=2.0)
             return image + self.strength * (image - blurred)
 
@@ -177,7 +184,9 @@ class DepthGuidedFilters:
 
             # Match size if needed
             if upsampled.shape[:2] != pyramid[i].shape[:2]:
-                upsampled = cv2.resize(upsampled, (pyramid[i].shape[1], pyramid[i].shape[0]))
+                upsampled = cv2.resize(
+                    upsampled, (pyramid[i].shape[1], pyramid[i].shape[0])
+                )
 
             # Laplacian = current - upsampled
             laplacian = pyramid[i] - upsampled
@@ -194,7 +203,7 @@ class DepthGuidedFilters:
             scale_strength_resized = cv2.resize(
                 scale_strength,
                 (laplacian.shape[1], laplacian.shape[0]),
-                interpolation=cv2.INTER_LINEAR
+                interpolation=cv2.INTER_LINEAR,
             )
 
             # Enhance details
@@ -211,8 +220,7 @@ class DepthGuidedFilters:
             # Match size
             if result.shape[:2] != enhanced_pyramid[i].shape[:2]:
                 result = cv2.resize(
-                    result,
-                    (enhanced_pyramid[i].shape[1], enhanced_pyramid[i].shape[0])
+                    result, (enhanced_pyramid[i].shape[1], enhanced_pyramid[i].shape[0])
                 )
 
             # Add enhanced details
@@ -238,7 +246,7 @@ class DepthGuidedFilters:
             Enhancement strength map (HxW)
         """
         # Base strength decreases with pyramid level
-        base_strength = self.clarity_strength * (0.8 ** level)
+        base_strength = self.clarity_strength * (0.8**level)
 
         if not self.adaptive_to_depth:
             return np.full_like(depth, base_strength)
@@ -264,16 +272,16 @@ class DepthGuidedFilters:
         """Callable interface for pipeline integration."""
         if config:
             old_params = {
-                'clarity_strength': self.clarity_strength,
+                "clarity_strength": self.clarity_strength,
             }
 
-            if 'clarity_strength' in config:
-                self.clarity_strength = config['clarity_strength']
+            if "clarity_strength" in config:
+                self.clarity_strength = config["clarity_strength"]
 
             result = self.process(image, depth)
 
             # Restore
-            self.clarity_strength = old_params['clarity_strength']
+            self.clarity_strength = old_params["clarity_strength"]
 
             return result
         else:
@@ -318,8 +326,7 @@ class DepthGuidedSharpening:
         """Apply depth-guided sharpening."""
         # Compute spatially-varying sharpening amount
         amount_map = (
-            self.foreground_amount * (1 - depth) +
-            self.background_amount * depth
+            self.foreground_amount * (1 - depth) + self.background_amount * depth
         )
 
         # Blur image
@@ -382,9 +389,7 @@ class LocalContrastEnhancement:
         # Convert to luminance
         if image.ndim == 3:
             luminance = (
-                0.2126 * image[..., 0] +
-                0.7152 * image[..., 1] +
-                0.0722 * image[..., 2]
+                0.2126 * image[..., 0] + 0.7152 * image[..., 1] + 0.0722 * image[..., 2]
             )
         else:
             luminance = image
@@ -399,6 +404,7 @@ class LocalContrastEnhancement:
             grad_y = cv2.Sobel(depth, cv2.CV_32F, 0, 1, ksize=3)
         else:
             from scipy.ndimage import sobel
+
             grad_x = sobel(depth, axis=1).astype(np.float32)
             grad_y = sobel(depth, axis=0).astype(np.float32)
         grad_magnitude = np.sqrt(grad_x**2 + grad_y**2)

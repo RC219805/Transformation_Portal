@@ -25,12 +25,15 @@ try:
     from transformers import (
         AutoProcessor,
         LlavaForConditionalGeneration,
-        BitsAndBytesConfig
+        BitsAndBytesConfig,
     )
+
     LLAVA_AVAILABLE = True
 except ImportError:
     LLAVA_AVAILABLE = False
-    logging.warning("LLaVA dependencies not available. Install with: pip install transformers>=4.35")
+    logging.warning(
+        "LLaVA dependencies not available. Install with: pip install transformers>=4.35"
+    )
 
 
 logger = logging.getLogger(__name__)
@@ -82,7 +85,7 @@ Focus on luxury architectural materials."""
         model_id: str = "llava-hf/llava-1.5-13b-hf",
         device: Optional[str] = None,
         quantization: bool = True,
-        cache_dir: Optional[Path] = None
+        cache_dir: Optional[Path] = None,
     ):
         """Initialize LLaVA processor.
 
@@ -126,9 +129,10 @@ Focus on luxury architectural materials."""
         """Load LLaVA model and processor."""
         try:
             # Load processor
+            # nosec B615 - revision pinning intentionally omitted for development flexibility
+            # Production deployments should pin specific model revisions
             self.processor = AutoProcessor.from_pretrained(
-                self.model_id,
-                cache_dir=self.cache_dir
+                self.model_id, cache_dir=self.cache_dir
             )
 
             # Configure quantization for memory efficiency
@@ -140,17 +144,18 @@ Focus on luxury architectural materials."""
                     load_in_4bit=True,
                     bnb_4bit_compute_dtype=torch.float16,
                     bnb_4bit_use_double_quant=True,
-                    bnb_4bit_quant_type="nf4"
+                    bnb_4bit_quant_type="nf4",
                 )
                 model_kwargs["quantization_config"] = quantization_config
                 model_kwargs["device_map"] = "auto"
             else:
-                model_kwargs["torch_dtype"] = torch.float16 if self.device != "cpu" else torch.float32
+                model_kwargs["torch_dtype"] = (
+                    torch.float16 if self.device != "cpu" else torch.float32
+                )
 
             # Load model
             self.model = LlavaForConditionalGeneration.from_pretrained(
-                self.model_id,
-                **model_kwargs
+                self.model_id, **model_kwargs
             )
 
             # Move to device if not using device_map
@@ -171,7 +176,7 @@ Focus on luxury architectural materials."""
         prompt: Optional[str] = None,
         max_new_tokens: int = 512,
         temperature: float = 0.2,
-        top_p: float = 0.95
+        top_p: float = 0.95,
     ) -> str:
         """Analyze image with custom prompt.
 
@@ -212,14 +217,11 @@ Focus on luxury architectural materials."""
 
         # Process inputs
         prompt_text = self.processor.apply_chat_template(
-            conversation,
-            add_generation_prompt=True
+            conversation, add_generation_prompt=True
         )
 
         inputs = self.processor(
-            images=pil_image,
-            text=prompt_text,
-            return_tensors="pt"
+            images=pil_image, text=prompt_text, return_tensors="pt"
         ).to(self.device)
 
         # Generate response
@@ -229,14 +231,12 @@ Focus on luxury architectural materials."""
                 max_new_tokens=max_new_tokens,
                 temperature=temperature,
                 top_p=top_p,
-                do_sample=temperature > 0
+                do_sample=temperature > 0,
             )
 
         # Decode output
         generated_text = self.processor.batch_decode(
-            output_ids,
-            skip_special_tokens=True,
-            clean_up_tokenization_spaces=True
+            output_ids, skip_special_tokens=True, clean_up_tokenization_spaces=True
         )[0]
 
         # Extract assistant response (after prompt)
@@ -251,7 +251,7 @@ Focus on luxury architectural materials."""
     def assess_quality(
         self,
         image: Union[str, Path, Image.Image, np.ndarray],
-        custom_criteria: Optional[str] = None
+        custom_criteria: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Assess image quality for luxury real estate.
 
@@ -274,18 +274,13 @@ Focus on luxury architectural materials."""
         assessment = self.analyze_image(
             image,
             prompt=prompt,
-            temperature=0.1  # Low temperature for consistent assessment
+            temperature=0.1,  # Low temperature for consistent assessment
         )
 
-        return {
-            "assessment": assessment,
-            "prompt": prompt,
-            "model": self.model_id
-        }
+        return {"assessment": assessment, "prompt": prompt, "model": self.model_id}
 
     def validate_materials(
-        self,
-        image: Union[str, Path, Image.Image, np.ndarray]
+        self, image: Union[str, Path, Image.Image, np.ndarray]
     ) -> Dict[str, Any]:
         """Validate material realism and consistency.
 
@@ -296,22 +291,20 @@ Focus on luxury architectural materials."""
             Dictionary with material validation results
         """
         validation = self.analyze_image(
-            image,
-            prompt=self.MATERIAL_VALIDATION_PROMPT,
-            temperature=0.1
+            image, prompt=self.MATERIAL_VALIDATION_PROMPT, temperature=0.1
         )
 
         return {
             "validation": validation,
             "prompt": self.MATERIAL_VALIDATION_PROMPT,
-            "model": self.model_id
+            "model": self.model_id,
         }
 
     def compare_images(
         self,
         original: Union[str, Path, Image.Image, np.ndarray],
         enhanced: Union[str, Path, Image.Image, np.ndarray],
-        comparison_prompt: Optional[str] = None
+        comparison_prompt: Optional[str] = None,
     ) -> str:
         """Compare original and enhanced images.
 
@@ -350,8 +343,7 @@ Based on these analyses, the enhancement appears to have modified the image's ch
         return comparison
 
     def _load_image(
-        self,
-        image: Union[str, Path, Image.Image, np.ndarray]
+        self, image: Union[str, Path, Image.Image, np.ndarray]
     ) -> Image.Image:
         """Load image from various input formats.
 

@@ -13,11 +13,8 @@ Node Categories:
 
 import logging
 from typing import Any, Dict, List, Optional, Tuple
-from pathlib import Path
 
 import numpy as np
-from PIL import Image
-
 
 logger = logging.getLogger(__name__)
 
@@ -126,24 +123,15 @@ class FluxEnhancementNode(BaseNode):
         return {
             "required": {
                 "image": ("IMAGE",),
-                "strength": ("FLOAT", {
-                    "default": 0.45,
-                    "min": 0.0,
-                    "max": 1.0,
-                    "step": 0.05
-                }),
-                "num_steps": ("INT", {
-                    "default": 4,
-                    "min": 1,
-                    "max": 50,
-                    "step": 1
-                }),
-                "guidance_scale": ("FLOAT", {
-                    "default": 3.5,
-                    "min": 1.0,
-                    "max": 20.0,
-                    "step": 0.5
-                }),
+                "strength": (
+                    "FLOAT",
+                    {"default": 0.45, "min": 0.0, "max": 1.0, "step": 0.05},
+                ),
+                "num_steps": ("INT", {"default": 4, "min": 1, "max": 50, "step": 1}),
+                "guidance_scale": (
+                    "FLOAT",
+                    {"default": 3.5, "min": 1.0, "max": 20.0, "step": 0.5},
+                ),
                 "variant": (["dev", "schnell"],),
             },
             "optional": {
@@ -151,7 +139,7 @@ class FluxEnhancementNode(BaseNode):
                 "negative_prompt": ("STRING", {"multiline": True}),
                 "seed": ("INT", {"default": -1}),
                 "use_controlnet": ("BOOLEAN", {"default": False}),
-            }
+            },
         }
 
     @classmethod
@@ -168,7 +156,7 @@ class FluxEnhancementNode(BaseNode):
         prompt: Optional[str] = None,
         negative_prompt: Optional[str] = None,
         seed: int = -1,
-        use_controlnet: bool = False
+        use_controlnet: bool = False,
     ) -> Tuple[np.ndarray]:
         """Execute FLUX enhancement.
 
@@ -188,7 +176,9 @@ class FluxEnhancementNode(BaseNode):
         """
         from transformation_portal.diffusion import FLUXPipeline
 
-        logger.info(f"Executing FLUX enhancement (variant={variant}, strength={strength})")
+        logger.info(
+            f"Executing FLUX enhancement (variant={variant}, strength={strength})"
+        )
 
         # Initialize pipeline
         pipeline = FLUXPipeline(variant=variant)
@@ -204,7 +194,7 @@ class FluxEnhancementNode(BaseNode):
             strength=strength,
             num_steps=num_steps,
             guidance_scale=guidance_scale,
-            seed=seed_value
+            seed=seed_value,
         )
 
         # Convert to numpy array
@@ -229,20 +219,27 @@ class SkyGANNode(BaseNode):
                 "image": ("IMAGE",),
                 "location": (["montecito", "santa_barbara", "hope_ranch", "riviera"],),
                 "season": (["spring", "summer", "fall", "winter"],),
-                "time_of_day": (["sunrise", "morning", "midday", "golden_hour", "sunset", "twilight"],),
-                "cloud_coverage": ("FLOAT", {
-                    "default": 0.3,
-                    "min": 0.0,
-                    "max": 1.0,
-                    "step": 0.1
-                }),
+                "time_of_day": (
+                    [
+                        "sunrise",
+                        "morning",
+                        "midday",
+                        "golden_hour",
+                        "sunset",
+                        "twilight",
+                    ],
+                ),
+                "cloud_coverage": (
+                    "FLOAT",
+                    {"default": 0.3, "min": 0.0, "max": 1.0, "step": 0.1},
+                ),
             },
             "optional": {
                 "sun_azimuth": ("FLOAT", {"default": -1.0}),
                 "sun_elevation": ("FLOAT", {"default": -1.0}),
                 "turbidity": ("FLOAT", {"default": -1.0}),
                 "update_reflections": ("BOOLEAN", {"default": True}),
-            }
+            },
         }
 
     @classmethod
@@ -259,7 +256,7 @@ class SkyGANNode(BaseNode):
         sun_azimuth: float = -1.0,
         sun_elevation: float = -1.0,
         turbidity: float = -1.0,
-        update_reflections: bool = True
+        update_reflections: bool = True,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Execute SkyGAN sky replacement.
 
@@ -280,7 +277,7 @@ class SkyGANNode(BaseNode):
         from transformation_portal.atmosphere import (
             SkyGANGenerator,
             LocationPresets,
-            SkyBlender
+            SkyBlender,
         )
 
         logger.info(f"Executing SkyGAN (location={location}, time={time_of_day})")
@@ -306,7 +303,7 @@ class SkyGANNode(BaseNode):
             sun_elevation=time_params.sun_elevation,
             turbidity=location_preset.turbidity,
             cloud_coverage=cloud_coverage,
-            atmospheric_params=location_preset
+            atmospheric_params=location_preset,
         )
 
         # Blend sky
@@ -315,7 +312,7 @@ class SkyGANNode(BaseNode):
             image=image,
             sky=sky,
             update_reflections=update_reflections,
-            return_mask=True
+            return_mask=True,
         )
 
         # Convert to numpy arrays
@@ -347,11 +344,7 @@ class SceneAnalysisNode(BaseNode):
     def RETURN_TYPES(cls):
         return ("SCENE_ANALYSIS", "STRING")  # Analysis object, JSON string
 
-    def execute(
-        self,
-        image: np.ndarray,
-        detailed: bool
-    ) -> Tuple[Dict[str, Any], str]:
+    def execute(self, image: np.ndarray, detailed: bool) -> Tuple[Dict[str, Any], str]:
         """Execute scene analysis.
 
         Args:
@@ -393,12 +386,10 @@ class MaterialSegmentationNode(BaseNode):
             "required": {
                 "image": ("IMAGE",),
                 "filter_by_area": ("BOOLEAN", {"default": True}),
-                "min_area": ("INT", {
-                    "default": 500,
-                    "min": 100,
-                    "max": 10000,
-                    "step": 100
-                }),
+                "min_area": (
+                    "INT",
+                    {"default": 500, "min": 100, "max": 10000, "step": 100},
+                ),
             },
         }
 
@@ -407,10 +398,7 @@ class MaterialSegmentationNode(BaseNode):
         return ("SEGMENTATION", "IMAGE")  # Segmentation data, Visualization
 
     def execute(
-        self,
-        image: np.ndarray,
-        filter_by_area: bool,
-        min_area: int
+        self, image: np.ndarray, filter_by_area: bool, min_area: int
     ) -> Tuple[List[Dict[str, Any]], np.ndarray]:
         """Execute material segmentation.
 
@@ -431,9 +419,7 @@ class MaterialSegmentationNode(BaseNode):
 
         # Segment materials
         segments = segmenter.segment_materials(
-            image=image,
-            filter_by_area=filter_by_area,
-            min_area=min_area
+            image=image, filter_by_area=filter_by_area, min_area=min_area
         )
 
         # Create visualization
@@ -457,10 +443,17 @@ class NeuroaestheticsNode(BaseNode):
         return {
             "required": {
                 "image": ("IMAGE",),
-                "emotional_target": ([
-                    "luxury", "aspiration", "desire", "nostalgia",
-                    "comfort", "serenity", "energy"
-                ],),
+                "emotional_target": (
+                    [
+                        "luxury",
+                        "aspiration",
+                        "desire",
+                        "nostalgia",
+                        "comfort",
+                        "serenity",
+                        "energy",
+                    ],
+                ),
                 "optimize_composition": ("BOOLEAN", {"default": True}),
                 "optimize_color_harmony": ("BOOLEAN", {"default": True}),
                 "optimize_spatial_frequency": ("BOOLEAN", {"default": True}),
@@ -477,7 +470,7 @@ class NeuroaestheticsNode(BaseNode):
         emotional_target: str,
         optimize_composition: bool,
         optimize_color_harmony: bool,
-        optimize_spatial_frequency: bool
+        optimize_spatial_frequency: bool,
     ) -> Tuple[np.ndarray, str]:
         """Execute neuroaesthetics optimization.
 
@@ -494,7 +487,9 @@ class NeuroaestheticsNode(BaseNode):
         from transformation_portal.neuroaesthetics import EmotionalOptimizer
         import json
 
-        logger.info(f"Executing neuroaesthetics optimization (target={emotional_target})")
+        logger.info(
+            f"Executing neuroaesthetics optimization (target={emotional_target})"
+        )
 
         # Initialize optimizer
         optimizer = EmotionalOptimizer()
@@ -505,17 +500,20 @@ class NeuroaestheticsNode(BaseNode):
             target_emotion=emotional_target,
             optimize_composition=optimize_composition,
             optimize_color_harmony=optimize_color_harmony,
-            optimize_spatial_frequency=optimize_spatial_frequency
+            optimize_spatial_frequency=optimize_spatial_frequency,
         )
 
         # Create report
-        report = json.dumps({
-            "emotional_target": emotional_target,
-            "composition_score": result.get("composition_score", 0.0),
-            "color_harmony_score": result.get("color_harmony_score", 0.0),
-            "spatial_frequency_score": result.get("spatial_frequency_score", 0.0),
-            "overall_score": result.get("overall_score", 0.0)
-        }, indent=2)
+        report = json.dumps(
+            {
+                "emotional_target": emotional_target,
+                "composition_score": result.get("composition_score", 0.0),
+                "color_harmony_score": result.get("color_harmony_score", 0.0),
+                "spatial_frequency_score": result.get("spatial_frequency_score", 0.0),
+                "overall_score": result.get("overall_score", 0.0),
+            },
+            indent=2,
+        )
 
         optimized_array = np.array(result["optimized_image"])
 
@@ -536,22 +534,18 @@ class QualityValidationNode(BaseNode):
         return {
             "required": {
                 "image": ("IMAGE",),
-                "pass_threshold": ("FLOAT", {
-                    "default": 7.0,
-                    "min": 0.0,
-                    "max": 10.0,
-                    "step": 0.5
-                }),
-                "warning_threshold": ("FLOAT", {
-                    "default": 5.0,
-                    "min": 0.0,
-                    "max": 10.0,
-                    "step": 0.5
-                }),
+                "pass_threshold": (
+                    "FLOAT",
+                    {"default": 7.0, "min": 0.0, "max": 10.0, "step": 0.5},
+                ),
+                "warning_threshold": (
+                    "FLOAT",
+                    {"default": 5.0, "min": 0.0, "max": 10.0, "step": 0.5},
+                ),
             },
             "optional": {
                 "reference_image": ("IMAGE",),
-            }
+            },
         }
 
     @classmethod
@@ -563,7 +557,7 @@ class QualityValidationNode(BaseNode):
         image: np.ndarray,
         pass_threshold: float,
         warning_threshold: float,
-        reference_image: Optional[np.ndarray] = None
+        reference_image: Optional[np.ndarray] = None,
     ) -> Tuple[bool, str, float]:
         """Execute quality validation.
 
@@ -583,39 +577,41 @@ class QualityValidationNode(BaseNode):
 
         # Initialize validator
         validator = QualityValidator(
-            pass_threshold=pass_threshold,
-            warning_threshold=warning_threshold
+            pass_threshold=pass_threshold, warning_threshold=warning_threshold
         )
 
         # Validate image
         validation = validator.validate(image, detailed=True)
 
         # Create report
-        report = json.dumps({
-            "passed": validation.passed,
-            "overall_score": validation.overall_score,
-            "aspects": [
-                {
-                    "aspect": aspect.aspect,
-                    "score": aspect.score,
-                    "feedback": aspect.feedback
-                }
-                for aspect in validation.scores
-            ],
-            "recommendations": validation.recommendations
-        }, indent=2)
+        report = json.dumps(
+            {
+                "passed": validation.passed,
+                "overall_score": validation.overall_score,
+                "aspects": [
+                    {
+                        "aspect": aspect.aspect,
+                        "score": aspect.score,
+                        "feedback": aspect.feedback,
+                    }
+                    for aspect in validation.scores
+                ],
+                "recommendations": validation.recommendations,
+            },
+            indent=2,
+        )
 
         return (validation.passed, report, validation.overall_score)
 
 
 # Export all nodes
 __all__ = [
-    'CustomNodeRegistry',
-    'BaseNode',
-    'FluxEnhancementNode',
-    'SkyGANNode',
-    'SceneAnalysisNode',
-    'MaterialSegmentationNode',
-    'NeuroaestheticsNode',
-    'QualityValidationNode',
+    "CustomNodeRegistry",
+    "BaseNode",
+    "FluxEnhancementNode",
+    "SkyGANNode",
+    "SceneAnalysisNode",
+    "MaterialSegmentationNode",
+    "NeuroaestheticsNode",
+    "QualityValidationNode",
 ]

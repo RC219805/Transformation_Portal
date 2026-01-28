@@ -11,7 +11,7 @@ from sklearn.cluster import KMeans
 DEFAULT_TEXTURES = {
     "plaster": "textures/plaster.png",
     "stone": "textures/stone.png",
-    "concrete": "textures/concrete.png"
+    "concrete": "textures/concrete.png",
 }
 
 # ==========================
@@ -28,7 +28,7 @@ class MaterialRule:
         score_fn: Callable[[np.ndarray], float],
         min_score: float = 0.0,
         tint: Optional[tuple[int, int, int]] = None,
-        tint_strength: float = 0.0
+        tint_strength: float = 0.0,
     ):
         self.name = name
         self.texture = texture
@@ -37,6 +37,7 @@ class MaterialRule:
         self.min_score = min_score
         self.tint = tint
         self.tint_strength = tint_strength
+
 
 # ==========================
 # Cluster Stats
@@ -48,6 +49,7 @@ class ClusterStats:
         self.centroid = np.array(centroid)
         self.points = points if points is not None else []
 
+
 # ==========================
 # K-means
 # ==========================
@@ -57,6 +59,7 @@ def _kmeans(x: np.ndarray, k: int, seed: int = None, max_iter: int = 100):
     kmeans = KMeans(n_clusters=k, random_state=seed, max_iter=max_iter)
     kmeans.fit(x)
     return kmeans.labels_
+
 
 # ==========================
 # Compute cluster stats
@@ -71,6 +74,7 @@ def compute_cluster_stats(labels: np.ndarray, data: np.ndarray) -> List[ClusterS
         stats.append(ClusterStats(centroid, pts))
     return stats
 
+
 # ==========================
 # Relabel clusters consecutively
 # ==========================
@@ -81,7 +85,13 @@ def relabel(assignments: dict[int, MaterialRule], labels: np.ndarray) -> np.ndar
     return np.vectorize(lambda x: label_map.get(x, x))(labels)
 
 
-def relabel_safe(assignments: dict[int, MaterialRule], labels: np.ndarray, mode="warn", strict=True, verbose=False):
+def relabel_safe(
+    assignments: dict[int, MaterialRule],
+    labels: np.ndarray,
+    mode="warn",
+    strict=True,
+    verbose=False,
+):
     # Ensure all label indices in assignments
     all_labels = np.unique(labels)
     missing = [lbl for lbl in all_labels if lbl not in assignments]
@@ -91,8 +101,11 @@ def relabel_safe(assignments: dict[int, MaterialRule], labels: np.ndarray, mode=
         elif verbose and mode != "none":
             print(f"Warning: missing assignments for {missing}")
         for lbl in missing:
-            assignments[lbl] = MaterialRule(name="unknown", texture="", blend=0.5, score_fn=lambda x: 0.5)
+            assignments[lbl] = MaterialRule(
+                name="unknown", texture="", blend=0.5, score_fn=lambda x: 0.5
+            )
     return relabel(assignments, labels)
+
 
 # ==========================
 # Build material rules from textures
@@ -105,13 +118,11 @@ def build_material_rules(textures: dict[str, str]) -> List[MaterialRule]:
         blend = 0.5 + 0.1 * (hash(name) % 5) / 5.0  # dummy blend
         rules.append(
             MaterialRule(
-                name=name,
-                texture=str(path),
-                blend=blend,
-                score_fn=lambda x, b=blend: b
+                name=name, texture=str(path), blend=blend, score_fn=lambda x, b=blend: b
             )
         )
     return rules
+
 
 # ==========================
 # Save/load palette assignments
@@ -128,7 +139,7 @@ def save_palette_assignments(assignments: dict[int, MaterialRule], out_path: Pat
             "blend": v.blend,
             "min_score": v.min_score,
             "tint": v.tint,
-            "tint_strength": v.tint_strength
+            "tint_strength": v.tint_strength,
         }
         data[k] = rule_dict
     with open(out_path, "w") as f:
@@ -147,16 +158,19 @@ def load_palette_assignments(in_path: Path) -> dict[int, MaterialRule]:
             score_fn=lambda x: v.get("blend", 0.5),
             min_score=v.get("min_score", 0.0),
             tint=tuple(v["tint"]) if v.get("tint") else None,
-            tint_strength=v.get("tint_strength", 0.0)
+            tint_strength=v.get("tint_strength", 0.0),
         )
     return assignments
+
 
 # ==========================
 # Auto-assign by cluster stats
 # ==========================
 
 
-def auto_assign_materials_by_stats(labels: np.ndarray, img: np.ndarray, tex_map: dict) -> dict[int, MaterialRule]:
+def auto_assign_materials_by_stats(
+    labels: np.ndarray, img: np.ndarray, tex_map: dict
+) -> dict[int, MaterialRule]:
     stats = compute_cluster_stats(labels, img.reshape(-1, img.shape[-1]))
     rules = build_material_rules(tex_map)
     assignments = {}
@@ -164,17 +178,25 @@ def auto_assign_materials_by_stats(labels: np.ndarray, img: np.ndarray, tex_map:
         assignments[i] = rules[i % len(rules)]
     return assignments
 
+
 # ==========================
 # Enhance aerial image
 # ==========================
 
 
-def enhance_aerial(image: np.ndarray, out_path: Optional[str] = None, k: int = 3, textures: Optional[dict] = None):
+def enhance_aerial(
+    image: np.ndarray,
+    out_path: Optional[str] = None,
+    k: int = 3,
+    textures: Optional[dict] = None,
+):
     h, w, c = image.shape
     pixels = image.reshape(-1, c).astype(np.float32)
 
     labels = _kmeans(pixels, k=k, seed=42)
-    assignments = auto_assign_materials_by_stats(labels, image, textures or DEFAULT_TEXTURES)
+    assignments = auto_assign_materials_by_stats(
+        labels, image, textures or DEFAULT_TEXTURES
+    )
     labels = relabel(assignments, labels)
 
     output = np.zeros_like(pixels)
@@ -185,6 +207,7 @@ def enhance_aerial(image: np.ndarray, out_path: Optional[str] = None, k: int = 3
 
     if out_path:
         from PIL import Image
+
         im = (np.clip(output, 0, 1) * 255).astype(np.uint8)
         Image.fromarray(im).save(out_path)
 

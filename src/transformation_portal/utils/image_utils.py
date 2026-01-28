@@ -5,6 +5,7 @@ This module consolidates image loading and conversion functions that were
 previously duplicated across multiple files (lux_render_pipeline.py,
 depth_tools.py, depth_pipeline/utils/image_utils.py).
 """
+
 from pathlib import Path
 from typing import Union
 

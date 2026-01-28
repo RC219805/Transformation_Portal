@@ -20,9 +20,7 @@ Each preset includes:
 
 import logging
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Dict, List, Optional
-
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +40,7 @@ class StylePreset:
         contrast: Contrast level (low/medium/high)
         tags: Searchable tags
     """
+
     name: str
     description: str
     reference_image: str
@@ -90,9 +89,8 @@ class ArchitecturalStylePresets:
             category="editorial",
             color_temp="warm",
             contrast="medium",
-            tags=["luxury", "editorial", "warm", "sophisticated", "magazine"]
+            tags=["luxury", "editorial", "warm", "sophisticated", "magazine"],
         ),
-
         "dwell_modern": StylePreset(
             name="Dwell Modern",
             description=(
@@ -110,9 +108,8 @@ class ArchitecturalStylePresets:
             category="editorial",
             color_temp="cool",
             contrast="low",
-            tags=["modern", "minimalist", "scandinavian", "natural light", "clean"]
+            tags=["modern", "minimalist", "scandinavian", "natural light", "clean"],
         ),
-
         "elle_decor_glamorous": StylePreset(
             name="Elle Decor Glamorous",
             description=(
@@ -130,9 +127,8 @@ class ArchitecturalStylePresets:
             category="editorial",
             color_temp="warm",
             contrast="high",
-            tags=["glamorous", "dramatic", "bold", "luxury", "high-style"]
+            tags=["glamorous", "dramatic", "bold", "luxury", "high-style"],
         ),
-
         "luxury_real_estate": StylePreset(
             name="Luxury Real Estate",
             description=(
@@ -150,9 +146,8 @@ class ArchitecturalStylePresets:
             category="luxury",
             color_temp="warm",
             contrast="medium",
-            tags=["real estate", "luxury", "bright", "aspirational", "marketing"]
+            tags=["real estate", "luxury", "bright", "aspirational", "marketing"],
         ),
-
         "coastal_luxury": StylePreset(
             name="Coastal Luxury",
             description=(
@@ -170,9 +165,8 @@ class ArchitecturalStylePresets:
             category="luxury",
             color_temp="cool",
             contrast="low",
-            tags=["coastal", "airy", "bright", "ocean", "serene", "luxury"]
+            tags=["coastal", "airy", "bright", "ocean", "serene", "luxury"],
         ),
-
         "minimalist_zen": StylePreset(
             name="Minimalist Zen",
             description=(
@@ -190,9 +184,8 @@ class ArchitecturalStylePresets:
             category="minimalist",
             color_temp="neutral",
             contrast="low",
-            tags=["minimalist", "zen", "japanese", "tranquil", "natural"]
+            tags=["minimalist", "zen", "japanese", "tranquil", "natural"],
         ),
-
         "scandinavian_hygge": StylePreset(
             name="Scandinavian Hygge",
             description=(
@@ -210,9 +203,8 @@ class ArchitecturalStylePresets:
             category="minimalist",
             color_temp="warm",
             contrast="low",
-            tags=["scandinavian", "hygge", "cozy", "warm", "natural", "comfortable"]
+            tags=["scandinavian", "hygge", "cozy", "warm", "natural", "comfortable"],
         ),
-
         "industrial_loft": StylePreset(
             name="Industrial Loft",
             description=(
@@ -230,9 +222,8 @@ class ArchitecturalStylePresets:
             category="modern",
             color_temp="cool",
             contrast="high",
-            tags=["industrial", "loft", "urban", "dramatic", "raw", "modern"]
+            tags=["industrial", "loft", "urban", "dramatic", "raw", "modern"],
         ),
-
         "mid_century_modern": StylePreset(
             name="Mid-Century Modern",
             description=(
@@ -250,9 +241,8 @@ class ArchitecturalStylePresets:
             category="modern",
             color_temp="warm",
             contrast="medium",
-            tags=["mid-century", "modern", "retro", "vintage", "classic"]
+            tags=["mid-century", "modern", "retro", "vintage", "classic"],
         ),
-
         "contemporary_sleek": StylePreset(
             name="Contemporary Sleek",
             description=(
@@ -270,9 +260,8 @@ class ArchitecturalStylePresets:
             category="modern",
             color_temp="cool",
             contrast="medium",
-            tags=["contemporary", "sleek", "modern", "high-tech", "geometric"]
+            tags=["contemporary", "sleek", "modern", "high-tech", "geometric"],
         ),
-
         "dramatic_moody": StylePreset(
             name="Dramatic Moody",
             description=(
@@ -290,9 +279,8 @@ class ArchitecturalStylePresets:
             category="dramatic",
             color_temp="warm",
             contrast="high",
-            tags=["dramatic", "moody", "high-contrast", "cinematic", "atmospheric"]
+            tags=["dramatic", "moody", "high-contrast", "cinematic", "atmospheric"],
         ),
-
         "golden_hour_glow": StylePreset(
             name="Golden Hour Glow",
             description=(
@@ -310,9 +298,8 @@ class ArchitecturalStylePresets:
             category="dramatic",
             color_temp="warm",
             contrast="medium",
-            tags=["golden hour", "warm", "romantic", "ethereal", "sun-washed"]
+            tags=["golden hour", "warm", "romantic", "ethereal", "sun-washed"],
         ),
-
         "twilight_blue_hour": StylePreset(
             name="Twilight Blue Hour",
             description=(
@@ -330,9 +317,8 @@ class ArchitecturalStylePresets:
             category="dramatic",
             color_temp="cool",
             contrast="medium",
-            tags=["twilight", "blue hour", "evening", "sophisticated", "balanced"]
+            tags=["twilight", "blue hour", "evening", "sophisticated", "balanced"],
         ),
-
         "natural_organic": StylePreset(
             name="Natural Organic",
             description=(
@@ -350,9 +336,8 @@ class ArchitecturalStylePresets:
             category="natural",
             color_temp="warm",
             contrast="low",
-            tags=["natural", "organic", "earthy", "biophilic", "sustainable"]
+            tags=["natural", "organic", "earthy", "biophilic", "sustainable"],
         ),
-
         "bright_airy_residential": StylePreset(
             name="Bright Airy Residential",
             description=(
@@ -370,7 +355,7 @@ class ArchitecturalStylePresets:
             category="residential",
             color_temp="warm",
             contrast="low",
-            tags=["bright", "airy", "residential", "family", "welcoming", "livable"]
+            tags=["bright", "airy", "residential", "family", "welcoming", "livable"],
         ),
     }
 
@@ -404,14 +389,12 @@ class ArchitecturalStylePresets:
             "category": preset.category,
             "color_temp": preset.color_temp,
             "contrast": preset.contrast,
-            "tags": preset.tags
+            "tags": preset.tags,
         }
 
     @classmethod
     def list_presets(
-        cls,
-        category: Optional[str] = None,
-        tags: Optional[List[str]] = None
+        cls, category: Optional[str] = None, tags: Optional[List[str]] = None
     ) -> List[str]:
         """List available presets, optionally filtered.
 
@@ -428,10 +411,7 @@ class ArchitecturalStylePresets:
             presets = [p for p in presets if p.category == category]
 
         if tags:
-            presets = [
-                p for p in presets
-                if any(tag in p.tags for tag in tags)
-            ]
+            presets = [p for p in presets if any(tag in p.tags for tag in tags)]
 
         return [p.name for p in presets]
 
@@ -460,9 +440,9 @@ class ArchitecturalStylePresets:
 
         for name, preset in cls.PRESETS.items():
             if (
-                query in preset.name.lower() or
-                query in preset.description.lower() or
-                any(query in tag.lower() for tag in preset.tags)
+                query in preset.name.lower()
+                or query in preset.description.lower()
+                or any(query in tag.lower() for tag in preset.tags)
             ):
                 matches.append(name)
 
@@ -475,11 +455,8 @@ class ArchitecturalStylePresets:
         Returns:
             Dictionary mapping preset names to configurations
         """
-        return {
-            name: cls.get_preset(name)
-            for name in cls.PRESETS.keys()
-        }
+        return {name: cls.get_preset(name) for name in cls.PRESETS.keys()}
 
 
 # Export
-__all__ = ['StylePreset', 'ArchitecturalStylePresets']
+__all__ = ["StylePreset", "ArchitecturalStylePresets"]

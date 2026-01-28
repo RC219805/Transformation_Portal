@@ -24,8 +24,8 @@ from transformation_portal.atmosphere.location_presets import LocationPresets
 from transformation_portal.atmosphere.sky_blending import SkyBlender
 
 __all__ = [
-    'SkyGANGenerator',
-    'AtmosphericModel',
-    'LocationPresets',
-    'SkyBlender',
+    "SkyGANGenerator",
+    "AtmosphericModel",
+    "LocationPresets",
+    "SkyBlender",
 ]

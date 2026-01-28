@@ -28,7 +28,6 @@ from PIL import Image
 
 from transformation_portal.comfyui.workflow_builder import Workflow, Node, NodeType
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -39,6 +38,7 @@ class ExecutionContext:
     Maintains state during workflow execution including intermediate
     results and node outputs.
     """
+
     node_outputs: Dict[str, Any]
     execution_times: Dict[str, float]
     errors: List[str]
@@ -87,11 +87,7 @@ class WorkflowExecutor:
         >>> results = executor.execute(workflow)
     """
 
-    def __init__(
-        self,
-        cache_models: bool = True,
-        verbose: bool = False
-    ):
+    def __init__(self, cache_models: bool = True, verbose: bool = False):
         """Initialize workflow executor.
 
         Args:
@@ -111,9 +107,7 @@ class WorkflowExecutor:
         logger.info("WorkflowExecutor initialized")
 
     def execute(
-        self,
-        workflow: Workflow,
-        output_dir: Optional[Union[str, Path]] = None
+        self, workflow: Workflow, output_dir: Optional[Union[str, Path]] = None
     ) -> Dict[str, Any]:
         """Execute a workflow.
 
@@ -127,14 +121,12 @@ class WorkflowExecutor:
         start_time = time.time()
 
         logger.info(f"Executing workflow: {workflow.metadata.get('name', 'Unnamed')}")
-        logger.info(f"Nodes: {len(workflow.nodes)}, Connections: {len(workflow.connections)}")
+        logger.info(
+            f"Nodes: {len(workflow.nodes)}, Connections: {len(workflow.connections)}"
+        )
 
         # Initialize execution context
-        context = ExecutionContext(
-            node_outputs={},
-            execution_times={},
-            errors=[]
-        )
+        context = ExecutionContext(node_outputs={}, execution_times={}, errors=[])
 
         # Build execution order (topological sort)
         execution_order = self._build_execution_order(workflow)
@@ -166,7 +158,7 @@ class WorkflowExecutor:
             "node_outputs": context.node_outputs,
             "execution_times": context.execution_times,
             "errors": context.errors,
-            "workflow_name": workflow.metadata.get("name", "Unnamed")
+            "workflow_name": workflow.metadata.get("name", "Unnamed"),
         }
 
         logger.info(f"Workflow execution completed in {execution_time:.2f}s")
@@ -216,10 +208,7 @@ class WorkflowExecutor:
         return order
 
     def _execute_node(
-        self,
-        node: Node,
-        workflow: Workflow,
-        context: ExecutionContext
+        self, node: Node, workflow: Workflow, context: ExecutionContext
     ) -> None:
         """Execute a single node.
 
@@ -269,10 +258,7 @@ class WorkflowExecutor:
             logger.info(f"Node {node.node_id} completed in {node_time:.2f}s")
 
     def _get_node_inputs(
-        self,
-        node: Node,
-        workflow: Workflow,
-        context: ExecutionContext
+        self, node: Node, workflow: Workflow, context: ExecutionContext
     ) -> Dict[str, Any]:
         """Get inputs for a node from connections.
 
@@ -290,8 +276,7 @@ class WorkflowExecutor:
         for conn in workflow.connections:
             if conn.target_node_id == node.node_id:
                 source_output = context.get_output(
-                    conn.source_node_id,
-                    conn.source_output
+                    conn.source_node_id, conn.source_output
                 )
                 inputs[conn.target_input] = source_output
 
@@ -300,11 +285,7 @@ class WorkflowExecutor:
 
         return inputs
 
-    def _execute_input_node(
-        self,
-        node: Node,
-        inputs: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _execute_input_node(self, node: Node, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Execute input image loading node.
 
         Args:
@@ -327,9 +308,7 @@ class WorkflowExecutor:
         return {"IMAGE": image_array}
 
     def _execute_output_node(
-        self,
-        node: Node,
-        inputs: Dict[str, Any]
+        self, node: Node, inputs: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Execute output image saving node.
 
@@ -357,11 +336,7 @@ class WorkflowExecutor:
 
         return {"output_path": str(output_path)}
 
-    def _execute_flux_node(
-        self,
-        node: Node,
-        inputs: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _execute_flux_node(self, node: Node, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Execute FLUX enhancement node.
 
         Args:
@@ -392,18 +367,12 @@ class WorkflowExecutor:
                 self._model_cache[cache_key] = pipeline
 
         # Enhance
-        enhanced = pipeline.enhance(
-            image=image,
-            strength=strength,
-            num_steps=num_steps
-        )
+        enhanced = pipeline.enhance(image=image, strength=strength, num_steps=num_steps)
 
         return {"IMAGE": np.array(enhanced)}
 
     def _execute_skygan_node(
-        self,
-        node: Node,
-        inputs: Dict[str, Any]
+        self, node: Node, inputs: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Execute SkyGAN node.
 
@@ -417,7 +386,7 @@ class WorkflowExecutor:
         from transformation_portal.atmosphere import (
             SkyGANGenerator,
             LocationPresets,
-            SkyBlender
+            SkyBlender,
         )
 
         image = inputs.get("image")
@@ -439,7 +408,7 @@ class WorkflowExecutor:
             sun_azimuth=time_params.sun_azimuth,
             sun_elevation=time_params.sun_elevation,
             turbidity=preset.turbidity,
-            atmospheric_params=preset
+            atmospheric_params=preset,
         )
 
         blender = SkyBlender()
@@ -448,9 +417,7 @@ class WorkflowExecutor:
         return {"IMAGE": np.array(enhanced)}
 
     def _execute_scene_analysis_node(
-        self,
-        node: Node,
-        inputs: Dict[str, Any]
+        self, node: Node, inputs: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Execute scene analysis node.
 
@@ -473,9 +440,7 @@ class WorkflowExecutor:
         return {"SCENE_ANALYSIS": analysis, "IMAGE": image}
 
     def _execute_material_segmentation_node(
-        self,
-        node: Node,
-        inputs: Dict[str, Any]
+        self, node: Node, inputs: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Execute material segmentation node.
 
@@ -498,9 +463,7 @@ class WorkflowExecutor:
         return {"SEGMENTATION": segments, "IMAGE": image}
 
     def _execute_neuroaesthetics_node(
-        self,
-        node: Node,
-        inputs: Dict[str, Any]
+        self, node: Node, inputs: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Execute neuroaesthetics optimization node.
 
@@ -525,9 +488,7 @@ class WorkflowExecutor:
         return {"IMAGE": np.array(result["optimized_image"])}
 
     def _execute_quality_validation_node(
-        self,
-        node: Node,
-        inputs: Dict[str, Any]
+        self, node: Node, inputs: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Execute quality validation node.
 
@@ -552,13 +513,11 @@ class WorkflowExecutor:
         return {
             "VALIDATION_REPORT": validation,
             "IMAGE": image,
-            "passed": validation.passed
+            "passed": validation.passed,
         }
 
     def _execute_atmospheric_model_node(
-        self,
-        node: Node,
-        inputs: Dict[str, Any]
+        self, node: Node, inputs: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Execute atmospheric model node.
 
@@ -569,7 +528,6 @@ class WorkflowExecutor:
         Returns:
             Dictionary with processed image
         """
-        from transformation_portal.atmosphere import AtmosphericModel
 
         image = inputs.get("image")
         if image is None:
@@ -588,7 +546,7 @@ class WorkflowExecutor:
             "total_executions": self._total_executions,
             "total_time": self._total_time,
             "average_time": self._total_time / max(1, self._total_executions),
-            "cached_models": list(self._model_cache.keys())
+            "cached_models": list(self._model_cache.keys()),
         }
 
     def clear_cache(self) -> None:
@@ -604,4 +562,4 @@ class WorkflowExecutor:
 
 
 # Export
-__all__ = ['WorkflowExecutor', 'ExecutionContext']
+__all__ = ["WorkflowExecutor", "ExecutionContext"]

@@ -1,15 +1,14 @@
 """Plugin interface definitions for extensible architecture."""
 
-import inspect
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 class PluginType(Enum):
     """Types of plugins supported by the system."""
+
     DEPTH_MODEL = "depth_model"
     PROCESSOR = "processor"
     ENHANCER = "enhancer"
@@ -23,6 +22,7 @@ class PluginType(Enum):
 @dataclass
 class PluginMetadata:
     """Metadata describing a plugin."""
+
     name: str
     version: str
     plugin_type: PluginType
@@ -40,6 +40,7 @@ class PluginMetadata:
     def is_compatible(self, portal_version: str) -> bool:
         """Check if plugin is compatible with current portal version."""
         from packaging import version
+
         portal_ver = version.parse(portal_version)
         min_ver = version.parse(self.min_portal_version)
 
@@ -89,7 +90,6 @@ class PluginInterface(ABC):
     @abstractmethod
     def _create_metadata(self) -> PluginMetadata:
         """Create plugin metadata. Must be implemented by subclasses."""
-        pass
 
     @abstractmethod
     def initialize(self, config: Optional[Dict[str, Any]] = None) -> None:
@@ -101,7 +101,6 @@ class PluginInterface(ABC):
         Raises:
             PluginInitializationError: If initialization fails
         """
-        pass
 
     @abstractmethod
     def execute(self, *args, **kwargs) -> Any:
@@ -117,7 +116,6 @@ class PluginInterface(ABC):
         Raises:
             PluginExecutionError: If execution fails
         """
-        pass
 
     def validate(self) -> bool:
         """Validate plugin configuration and state.
@@ -139,21 +137,23 @@ class PluginInterface(ABC):
             Dictionary with plugin details
         """
         return {
-            'name': self.metadata.name,
-            'version': self.metadata.version,
-            'type': self.metadata.plugin_type.value,
-            'description': self.metadata.description,
-            'author': self.metadata.author,
-            'initialized': self._initialized,
-            'deprecated': self.metadata.deprecated,
-            'replacement': self.metadata.replacement,
+            "name": self.metadata.name,
+            "version": self.metadata.version,
+            "type": self.metadata.plugin_type.value,
+            "description": self.metadata.description,
+            "author": self.metadata.author,
+            "initialized": self._initialized,
+            "deprecated": self.metadata.deprecated,
+            "replacement": self.metadata.replacement,
         }
 
     def __repr__(self) -> str:
         """String representation of plugin."""
-        return (f"<{self.__class__.__name__} "
-                f"name='{self.metadata.name}' "
-                f"version='{self.metadata.version}'>")
+        return (
+            f"<{self.__class__.__name__} "
+            f"name='{self.metadata.name}' "
+            f"version='{self.metadata.version}'>"
+        )
 
 
 class DepthModelPlugin(PluginInterface):
@@ -170,7 +170,6 @@ class DepthModelPlugin(PluginInterface):
         Returns:
             Depth map (format depends on implementation)
         """
-        pass
 
     def execute(self, image: Any, **kwargs) -> Any:
         """Execute depth estimation (delegates to estimate_depth)."""
@@ -191,7 +190,6 @@ class ProcessorPlugin(PluginInterface):
         Returns:
             Processed output
         """
-        pass
 
     def execute(self, input_data: Any, **kwargs) -> Any:
         """Execute processing (delegates to process)."""
@@ -213,7 +211,6 @@ class EnhancerPlugin(PluginInterface):
         Returns:
             Enhanced image
         """
-        pass
 
     def execute(self, image: Any, **kwargs) -> Any:
         """Execute enhancement (delegates to enhance)."""
@@ -222,14 +219,11 @@ class EnhancerPlugin(PluginInterface):
 
 class PluginInitializationError(Exception):
     """Raised when plugin initialization fails."""
-    pass
 
 
 class PluginExecutionError(Exception):
     """Raised when plugin execution fails."""
-    pass
 
 
 class PluginValidationError(Exception):
     """Raised when plugin validation fails."""
-    pass

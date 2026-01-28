@@ -22,12 +22,11 @@ from PIL import Image
 
 try:
     import lpips
+
     LPIPS_AVAILABLE = True
 except ImportError:
     LPIPS_AVAILABLE = False
-    logging.warning(
-        "LPIPS not available. Install with: pip install lpips"
-    )
+    logging.warning("LPIPS not available. Install with: pip install lpips")
 
 
 logger = logging.getLogger(__name__)
@@ -59,9 +58,9 @@ class LPIPSMetric:
 
     def __init__(
         self,
-        network: str = 'alex',  # 'alex', 'vgg', 'squeeze'
+        network: str = "alex",  # 'alex', 'vgg', 'squeeze'
         device: Optional[str] = None,
-        spatial: bool = False
+        spatial: bool = False,
     ):
         """Initialize LPIPS metric.
 
@@ -74,9 +73,7 @@ class LPIPSMetric:
             ImportError: If lpips not installed
         """
         if not LPIPS_AVAILABLE:
-            raise ImportError(
-                "LPIPS required. Install with: pip install lpips"
-            )
+            raise ImportError("LPIPS required. Install with: pip install lpips")
 
         self.network = network
         self.device = device or self._detect_device()
@@ -85,10 +82,7 @@ class LPIPSMetric:
         logger.info(f"Initializing LPIPS ({network}) on {self.device}")
 
         # Load LPIPS model
-        self.model = lpips.LPIPS(
-            net=network,
-            spatial=spatial
-        ).to(self.device)
+        self.model = lpips.LPIPS(net=network, spatial=spatial).to(self.device)
 
         self.model.eval()
 
@@ -106,7 +100,7 @@ class LPIPSMetric:
         self,
         image1: Union[str, Path, Image.Image, np.ndarray, torch.Tensor],
         image2: Union[str, Path, Image.Image, np.ndarray, torch.Tensor],
-        normalize: bool = True
+        normalize: bool = True,
     ) -> float:
         """Calculate LPIPS distance between two images.
 
@@ -136,7 +130,7 @@ class LPIPSMetric:
         self,
         images1: List[Union[str, Path, Image.Image, np.ndarray]],
         images2: List[Union[str, Path, Image.Image, np.ndarray]],
-        normalize: bool = True
+        normalize: bool = True,
     ) -> np.ndarray:
         """Calculate LPIPS for batch of image pairs.
 
@@ -185,13 +179,13 @@ class LPIPSMetric:
             "similarity": similarity,
             "quality": quality,
             "preserve_details": distance < self.SIMILAR_THRESHOLD,
-            "acceptable_for_enhancement": distance < self.DIFFERENT_THRESHOLD
+            "acceptable_for_enhancement": distance < self.DIFFERENT_THRESHOLD,
         }
 
     def _prepare_image(
         self,
         image: Union[str, Path, Image.Image, np.ndarray, torch.Tensor],
-        normalize: bool
+        normalize: bool,
     ) -> torch.Tensor:
         """Prepare image as tensor for LPIPS.
 

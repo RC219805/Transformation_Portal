@@ -95,7 +95,9 @@ def _check_module_docstring(tree: ast.AST, context: _AuditContext) -> List[Viola
     ]
 
 
-def _check_public_api_docstrings(tree: ast.Module, context: _AuditContext) -> List[Violation]:
+def _check_public_api_docstrings(
+    tree: ast.Module, context: _AuditContext
+) -> List[Violation]:
     violations: List[Violation] = []
     for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
@@ -116,13 +118,17 @@ def _check_public_api_docstrings(tree: ast.Module, context: _AuditContext) -> Li
     return violations
 
 
-def _check_wildcard_imports(tree: ast.Module, context: _AuditContext) -> List[Violation]:
+def _check_wildcard_imports(
+    tree: ast.Module, context: _AuditContext
+) -> List[Violation]:
     violations: List[Violation] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
             for alias in node.names:
                 if alias.name == "*":
-                    decision = context.decision_for_line("allow_wildcard_import", node.lineno)
+                    decision = context.decision_for_line(
+                        "allow_wildcard_import", node.lineno
+                    )
                     if decision:
                         continue
                     violations.append(
@@ -142,11 +148,15 @@ class CodebasePhilosophyAuditor:
     """Audit Python modules for high-level codebase philosophy violations."""
 
     def __init__(self, rules: Optional[Iterable[Rule]] = None) -> None:
-        self._rules: List[Rule] = list(rules) if rules is not None else [
-            _check_module_docstring,
-            _check_public_api_docstrings,
-            _check_wildcard_imports,
-        ]
+        self._rules: List[Rule] = (
+            list(rules)
+            if rules is not None
+            else [
+                _check_module_docstring,
+                _check_public_api_docstrings,
+                _check_wildcard_imports,
+            ]
+        )
 
     def audit_module(self, module_path: Path) -> List[Violation]:
         """Inspect *module_path* and return any principle violations discovered."""
