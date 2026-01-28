@@ -1,3 +1,4 @@
+# tests/test_realize_v8_vfx_extension.py
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -35,8 +36,10 @@ try:
         enhance_with_vfx,
         estimate_depth_fast,
     )
-except ImportError:
-    pass
+except ImportError as e:
+    # The whole module is already marked skipped, but make missing deps explicit if that ever changes.
+    pytest.skip(f"realize_v8 modules unavailable: {e}", allow_module_level=True)
+
 
 # ==================== Fixtures ====================
 
@@ -67,7 +70,7 @@ def sample_depth():
 @pytest.fixture
 def temp_image_file(sample_image):
     """Create a temporary image file."""
-    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
         sample_image.save(f.name)
         yield Path(f.name)
         Path(f.name).unlink(missing_ok=True)
@@ -88,9 +91,9 @@ class TestRealizeV8Unified:
         """Test preset dataclass structure."""
         preset = PRESETS["signature_estate"]
         assert isinstance(preset, Preset)
-        assert hasattr(preset, 'name')
-        assert hasattr(preset, 'exposure')
-        assert hasattr(preset, 'contrast')
+        assert hasattr(preset, "name")
+        assert hasattr(preset, "exposure")
+        assert hasattr(preset, "contrast")
 
     def test_image_to_float_array(self, sample_image):
         """Test image conversion to float array."""
@@ -106,13 +109,13 @@ class TestRealizeV8Unified:
             sample_array,
             exposure=0.1,
             contrast=1.1,
-            saturation=1.05
+            saturation=1.05,
         )
 
         assert isinstance(preview, Image.Image)
         assert working.shape == sample_array.shape
-        assert 'total_time_ms' in metrics
-        assert metrics['exposure'] == 0.1
+        assert "total_time_ms" in metrics
+        assert metrics["exposure"] == 0.1
 
     def test_enhance_with_preset(self, sample_image):
         """Test enhancement with preset."""
@@ -121,22 +124,22 @@ class TestRealizeV8Unified:
 
         assert isinstance(preview, Image.Image)
         assert working.shape == (100, 100, 3)
-        assert metrics['contrast'] == preset_params['contrast']
+        assert metrics["contrast"] == preset_params["contrast"]
 
     def test_open_any(self, temp_image_file):
         """Test opening image file."""
         img, meta = _open_any(temp_image_file)
 
         assert isinstance(img, Image.Image)
-        assert img.mode == 'RGB'
-        assert 'format' in meta
-        assert 'size' in meta
+        assert img.mode == "RGB"
+        assert "format" in meta
+        assert "size" in meta
 
     def test_save_with_meta(self, sample_image, sample_array):
         """Test saving with metadata."""
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "output.jpg"
-            meta = {'format': 'JPEG', 'mode': 'RGB', 'size': (100, 100), 'info': {}}
+            meta = {"format": "JPEG", "mode": "RGB", "size": (100, 100), "info": {}}
 
             _save_with_meta(sample_image, sample_array, output_path, meta, out_bitdepth=8)
 
@@ -187,7 +190,7 @@ class TestVFXExtension:
             sample_array,
             sample_depth,
             fog_color=(0.8, 0.85, 0.9),
-            density=0.3
+            density=0.3,
         )
 
         assert result.shape == sample_array.shape
@@ -201,7 +204,7 @@ class TestVFXExtension:
             sample_array,
             sample_depth,
             focus_depth=0.35,
-            blur_strength=5.0
+            blur_strength=5.0,
         )
 
         assert result.shape == sample_array.shape
@@ -215,7 +218,7 @@ class TestVFXExtension:
             sample_array,
             sample_depth,
             near_color=(1.05, 1.0, 0.95),
-            far_color=(0.8, 0.9, 1.0)
+            far_color=(0.8, 0.9, 1.0),
         )
 
         assert result.shape == sample_array.shape
@@ -228,7 +231,7 @@ class TestVFXExtension:
         result = apply_lut_with_depth(
             sample_array,
             Path("nonexistent.cube"),
-            sample_depth
+            sample_depth,
         )
 
         # Should return original image when LUT missing
@@ -241,7 +244,7 @@ class TestVFXExtension:
             base_preset="signature_estate",
             vfx_preset="subtle_estate",
             material_response=False,
-            save_depth=True
+            save_depth=True,
         )
 
         assert "image" in result
@@ -266,7 +269,7 @@ class TestVFXExtension:
                 base_preset="natural",
                 vfx_preset=vfx_preset,
                 material_response=False,
-                save_depth=False
+                save_depth=False,
             )
 
             assert result["image"] is not None
@@ -280,7 +283,7 @@ class TestVFXExtension:
             base_preset="signature_estate",
             vfx_preset="subtle_estate",
             material_response=True,
-            save_depth=False
+            save_depth=False,
         )
 
         assert result["image"] is not None
@@ -293,7 +296,7 @@ class TestVFXExtension:
             sample_image,
             base_preset="signature_estate",
             vfx_preset="subtle_estate",
-            save_depth=False
+            save_depth=False,
         )
 
         assert result["depth"] is None
@@ -304,7 +307,7 @@ class TestVFXExtension:
             sample_array,
             base_preset="natural",
             vfx_preset="subtle_estate",
-            save_depth=False
+            save_depth=False,
         )
 
         assert result["image"] is not None
@@ -316,7 +319,7 @@ class TestVFXExtension:
             temp_image_file,
             base_preset="natural",
             vfx_preset="subtle_estate",
-            save_depth=False
+            save_depth=False,
         )
 
         assert result["image"] is not None
@@ -342,7 +345,7 @@ class TestIntegration:
                 base_preset="signature_estate_agx",
                 vfx_preset="montecito_golden",
                 material_response=True,
-                save_depth=True
+                save_depth=True,
             )
 
             # Save
@@ -351,7 +354,7 @@ class TestIntegration:
                 result["array"],
                 output_path,
                 meta,
-                out_bitdepth=8
+                out_bitdepth=8,
             )
 
             assert output_path.exists()
@@ -372,7 +375,7 @@ class TestIntegration:
                     base_preset=base,
                     vfx_preset=vfx,
                     material_response=False,
-                    save_depth=False
+                    save_depth=False,
                 )
 
                 assert result["image"] is not None
@@ -391,7 +394,7 @@ class TestPerformance:
             base_preset="natural",
             vfx_preset="subtle_estate",
             material_response=True,
-            save_depth=True
+            save_depth=True,
         )
 
         metrics = result["metrics"]
@@ -410,7 +413,7 @@ class TestPerformance:
             sample_array,
             base_preset="natural",
             vfx_preset="subtle_estate",
-            save_depth=False
+            save_depth=False,
         )
         elapsed = (time.perf_counter() - start) * 1000
 
