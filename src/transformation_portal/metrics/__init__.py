@@ -27,7 +27,7 @@ from transformation_portal.metrics.fid_metric import FIDMetric
 from transformation_portal.metrics.traditional_metrics import TraditionalMetrics
 
 __all__ = [
-    'LPIPSMetric',
-    'FIDMetric',
-    'TraditionalMetrics',
+    "LPIPSMetric",
+    "FIDMetric",
+    "TraditionalMetrics",
 ]

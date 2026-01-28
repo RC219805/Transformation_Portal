@@ -20,7 +20,6 @@ import cv2
 from transformation_portal.segmentation.sam_segmenter import SAMSegmenter
 from transformation_portal.segmentation.clip_classifier import CLIPClassifier
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -37,6 +36,7 @@ class MaterialSegment:
         centroid: Segment center point [x, y]
         properties: Additional segment properties
     """
+
     mask: np.ndarray
     material: str
     confidence: float
@@ -73,57 +73,57 @@ class MaterialSegmenter:
             "saturation": 0.9,
             "sharpness": 0.7,
             "preserve_veining": True,
-            "enhance_reflection": True
+            "enhance_reflection": True,
         },
         "granite": {
             "clarity": 0.75,
             "saturation": 1.0,
             "sharpness": 0.8,
-            "preserve_texture": True
+            "preserve_texture": True,
         },
         "wood": {
             "clarity": 0.7,
             "saturation": 1.05,
             "warmth": 1.1,
-            "preserve_grain": True
+            "preserve_grain": True,
         },
         "glass": {
             "clarity": 1.0,
             "preserve_transparency": True,
             "enhance_reflection": True,
-            "edge_softness": 0.3
+            "edge_softness": 0.3,
         },
         "metal": {
             "clarity": 0.85,
             "saturation": 0.95,
             "enhance_specular": True,
-            "preserve_reflection": True
+            "preserve_reflection": True,
         },
         "stainless steel": {
             "clarity": 0.9,
             "saturation": 0.85,
             "enhance_specular": True,
-            "preserve_reflection": True
+            "preserve_reflection": True,
         },
         "water": {
             "clarity": 0.8,
             "saturation": 1.15,
             "enhance_reflection": True,
-            "color_enhance": "blue_shift"
+            "color_enhance": "blue_shift",
         },
         "natural stone": {
             "clarity": 0.75,
             "saturation": 1.0,
             "preserve_texture": True,
-            "warmth": 1.05
-        }
+            "warmth": 1.05,
+        },
     }
 
     def __init__(
         self,
         sam_segmenter: Optional[SAMSegmenter] = None,
         clip_classifier: Optional[CLIPClassifier] = None,
-        **kwargs
+        **kwargs,
     ):
         """Initialize material segmenter.
 
@@ -154,7 +154,7 @@ class MaterialSegmenter:
         materials: Optional[List[str]] = None,
         min_segment_area: int = 500,
         max_segments: int = 50,
-        confidence_threshold: float = 0.3
+        confidence_threshold: float = 0.3,
     ) -> List[MaterialSegment]:
         """Segment image by materials.
 
@@ -177,32 +177,26 @@ class MaterialSegmenter:
         # Step 1: Generate segments with SAM
         logger.info("Generating segments with SAM...")
         sam_masks = self.sam.segment_automatic(
-            image,
-            min_area=min_segment_area,
-            max_masks=max_segments
+            image, min_area=min_segment_area, max_masks=max_segments
         )
         logger.info(f"Generated {len(sam_masks)} segments")
 
         # Step 2: Classify segments with CLIP
         logger.info("Classifying segments with CLIP...")
-        mask_arrays = [m['segmentation'] for m in sam_masks]
+        mask_arrays = [m["segmentation"] for m in sam_masks]
 
-        classifications = self.clip.classify_segments(
-            image,
-            mask_arrays,
-            materials
-        )
+        classifications = self.clip.classify_segments(image, mask_arrays, materials)
 
         # Step 3: Combine into MaterialSegments
         material_segments = []
 
         for sam_mask, classification in zip(sam_masks, classifications):
             # Only include if confidence exceeds threshold
-            if classification['confidence'] < confidence_threshold:
+            if classification["confidence"] < confidence_threshold:
                 continue
 
             # Calculate centroid
-            mask = sam_mask['segmentation']
+            mask = sam_mask["segmentation"]
             y_coords, x_coords = np.where(mask)
             if len(y_coords) > 0:
                 centroid = (int(np.mean(x_coords)), int(np.mean(y_coords)))
@@ -211,16 +205,16 @@ class MaterialSegmenter:
 
             segment = MaterialSegment(
                 mask=mask,
-                material=classification['top_category'],
-                confidence=classification['confidence'],
-                area=sam_mask['area'],
-                bbox=tuple(sam_mask['bbox']),
+                material=classification["top_category"],
+                confidence=classification["confidence"],
+                area=sam_mask["area"],
+                bbox=tuple(sam_mask["bbox"]),
                 centroid=centroid,
                 properties={
-                    'predicted_iou': sam_mask['predicted_iou'],
-                    'stability_score': sam_mask['stability_score'],
-                    'all_material_probs': classification['all_categories']
-                }
+                    "predicted_iou": sam_mask["predicted_iou"],
+                    "stability_score": sam_mask["stability_score"],
+                    "all_material_probs": classification["all_categories"],
+                },
             )
 
             material_segments.append(segment)
@@ -233,9 +227,7 @@ class MaterialSegmenter:
         return material_segments
 
     def get_material_masks(
-        self,
-        segments: List[MaterialSegment],
-        material: str
+        self, segments: List[MaterialSegment], material: str
     ) -> List[np.ndarray]:
         """Get all masks for a specific material.
 
@@ -247,15 +239,11 @@ class MaterialSegmenter:
             List of boolean masks for specified material
         """
         return [
-            seg.mask
-            for seg in segments
-            if seg.material.lower() == material.lower()
+            seg.mask for seg in segments if seg.material.lower() == material.lower()
         ]
 
     def create_material_map(
-        self,
-        image_shape: Tuple[int, int],
-        segments: List[MaterialSegment]
+        self, image_shape: Tuple[int, int], segments: List[MaterialSegment]
     ) -> Tuple[np.ndarray, Dict[int, str]]:
         """Create material segmentation map.
 
@@ -286,8 +274,7 @@ class MaterialSegmenter:
         return material_map, id_to_material
 
     def get_enhancement_recommendations(
-        self,
-        segments: List[MaterialSegment]
+        self, segments: List[MaterialSegment]
     ) -> Dict[str, Any]:
         """Get region-specific enhancement recommendations.
 
@@ -300,7 +287,7 @@ class MaterialSegmenter:
         recommendations = {
             "materials_detected": [],
             "region_enhancements": {},
-            "overall_strategy": {}
+            "overall_strategy": {},
         }
 
         # Analyze detected materials
@@ -313,16 +300,14 @@ class MaterialSegmenter:
 
         # Sort by area coverage
         sorted_materials = sorted(
-            material_areas.items(),
-            key=lambda x: x[1],
-            reverse=True
+            material_areas.items(), key=lambda x: x[1], reverse=True
         )
 
         recommendations["materials_detected"] = [
             {
                 "material": mat,
                 "total_area": area,
-                "num_regions": len([s for s in segments if s.material == mat])
+                "num_regions": len([s for s in segments if s.material == mat]),
             }
             for mat, area in sorted_materials
         ]
@@ -330,8 +315,9 @@ class MaterialSegmenter:
         # Get enhancement strategies for each material
         for material, _ in sorted_materials:
             if material in self.MATERIAL_ENHANCEMENT:
-                recommendations["region_enhancements"][material] = \
+                recommendations["region_enhancements"][material] = (
                     self.MATERIAL_ENHANCEMENT[material]
+                )
 
         # Determine overall strategy based on dominant materials
         if sorted_materials:
@@ -339,10 +325,9 @@ class MaterialSegmenter:
             recommendations["overall_strategy"] = {
                 "dominant_material": dominant_material,
                 "suggested_processing": self.MATERIAL_ENHANCEMENT.get(
-                    dominant_material,
-                    {}
+                    dominant_material, {}
                 ),
-                "preserve_material_boundaries": True
+                "preserve_material_boundaries": True,
             }
 
         return recommendations
@@ -351,7 +336,7 @@ class MaterialSegmenter:
         self,
         image: Union[str, Path, Image.Image, np.ndarray],
         segments: List[MaterialSegment],
-        alpha: float = 0.5
+        alpha: float = 0.5,
     ) -> np.ndarray:
         """Create visualization with colored material regions.
 
@@ -376,8 +361,7 @@ class MaterialSegmenter:
         unique_materials = sorted(set(seg.material for seg in segments))
         np.random.seed(42)  # Consistent colors
         material_colors = {
-            mat: np.random.randint(0, 255, size=3)
-            for mat in unique_materials
+            mat: np.random.randint(0, 255, size=3) for mat in unique_materials
         }
 
         # Apply colored masks
@@ -395,7 +379,7 @@ class MaterialSegmenter:
         image: Union[str, Path, Image.Image, np.ndarray],
         segments: List[MaterialSegment],
         font_scale: float = 0.5,
-        thickness: int = 1
+        thickness: int = 1,
     ) -> np.ndarray:
         """Create visualization with material labels.
 
@@ -429,7 +413,7 @@ class MaterialSegmenter:
                 font_scale,
                 (255, 255, 255),
                 thickness + 1,
-                cv2.LINE_AA
+                cv2.LINE_AA,
             )
             cv2.putText(
                 image_np,
@@ -439,15 +423,12 @@ class MaterialSegmenter:
                 font_scale,
                 (0, 0, 0),
                 thickness,
-                cv2.LINE_AA
+                cv2.LINE_AA,
             )
 
         return image_np
 
-    def get_statistics(
-        self,
-        segments: List[MaterialSegment]
-    ) -> Dict:
+    def get_statistics(self, segments: List[MaterialSegment]) -> Dict:
         """Calculate material segmentation statistics.
 
         Args:
@@ -457,11 +438,7 @@ class MaterialSegmenter:
             Statistics dictionary
         """
         if not segments:
-            return {
-                "num_segments": 0,
-                "num_materials": 0,
-                "materials": []
-            }
+            return {"num_segments": 0, "num_materials": 0, "materials": []}
 
         # Count by material
         material_counts = {}
@@ -483,17 +460,19 @@ class MaterialSegmenter:
         # Build statistics
         materials = []
         for mat in material_counts:
-            materials.append({
-                "material": mat,
-                "num_segments": material_counts[mat],
-                "total_area": material_areas[mat],
-                "avg_confidence": np.mean(material_confidences[mat]),
-                "min_confidence": np.min(material_confidences[mat]),
-                "max_confidence": np.max(material_confidences[mat])
-            })
+            materials.append(
+                {
+                    "material": mat,
+                    "num_segments": material_counts[mat],
+                    "total_area": material_areas[mat],
+                    "avg_confidence": np.mean(material_confidences[mat]),
+                    "min_confidence": np.min(material_confidences[mat]),
+                    "max_confidence": np.max(material_confidences[mat]),
+                }
+            )
 
         # Sort by total area
-        materials.sort(key=lambda x: x['total_area'], reverse=True)
+        materials.sort(key=lambda x: x["total_area"], reverse=True)
 
         return {
             "num_segments": len(segments),
@@ -501,13 +480,10 @@ class MaterialSegmenter:
             "materials": materials,
             "total_area": sum(seg.area for seg in segments),
             "avg_confidence": np.mean([seg.confidence for seg in segments]),
-            "avg_segment_area": np.mean([seg.area for seg in segments])
+            "avg_segment_area": np.mean([seg.area for seg in segments]),
         }
 
     def __repr__(self) -> str:
         return (
-            f"MaterialSegmenter(\n"
-            f"  SAM: {self.sam}\n"
-            f"  CLIP: {self.clip}\n"
-            f")"
+            f"MaterialSegmenter(\n" f"  SAM: {self.sam}\n" f"  CLIP: {self.clip}\n" f")"
         )

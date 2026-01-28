@@ -5,6 +5,7 @@
 This module provides decorators and utilities for performance profiling,
 caching, and optimization of image/video processing pipelines.
 """
+
 import functools
 import logging
 import time
@@ -12,7 +13,7 @@ from typing import Any, Callable, Optional, TypeVar, cast
 
 logger = logging.getLogger(__name__)
 
-F = TypeVar('F', bound=Callable[..., Any])
+F = TypeVar("F", bound=Callable[..., Any])
 
 
 def timing_decorator(func: F) -> F:
@@ -30,6 +31,7 @@ def timing_decorator(func: F) -> F:
             # ... processing ...
             return result
     """
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         start = time.perf_counter()
@@ -42,6 +44,7 @@ def timing_decorator(func: F) -> F:
             elapsed = time.perf_counter() - start
             logger.error(f"{func.__name__} failed after {elapsed:.3f}s: {e}")
             raise
+
     return cast(F, wrapper)
 
 
@@ -62,6 +65,7 @@ def profile_memory(func: F) -> F:
     """
     try:
         from memory_profiler import memory_usage
+
         has_profiler = True
     except ImportError:
         has_profiler = False
@@ -77,10 +81,10 @@ def profile_memory(func: F) -> F:
         mem_delta = mem_after - mem_before
 
         logger.info(
-            f"{func.__name__} memory: {mem_delta:+.1f}MB "
-            f"(peak: {mem_after:.1f}MB)"
+            f"{func.__name__} memory: {mem_delta:+.1f}MB " f"(peak: {mem_after:.1f}MB)"
         )
         return result
+
     return cast(F, wrapper)
 
 
@@ -103,6 +107,7 @@ def cache_result(maxsize: int = 128, typed: bool = False) -> Callable[[F], F]:
             # ... expensive computation ...
             return depth_map
     """
+
     def decorator(func: F) -> F:
         cached_func = functools.lru_cache(maxsize=maxsize, typed=typed)(func)
 
@@ -127,6 +132,7 @@ def cache_result(maxsize: int = 128, typed: bool = False) -> Callable[[F], F]:
         wrapper.cache_clear = cached_func.cache_clear  # type: ignore
 
         return cast(F, wrapper)
+
     return decorator
 
 
@@ -134,7 +140,7 @@ def retry_on_failure(
     max_attempts: int = 3,
     delay: float = 1.0,
     backoff: float = 2.0,
-    exceptions: tuple = (Exception,)
+    exceptions: tuple = (Exception,),
 ) -> Callable[[F], F]:
     """Decorator to retry failed operations with exponential backoff.
 
@@ -153,6 +159,7 @@ def retry_on_failure(
             # ... network operation ...
             return model
     """
+
     def decorator(func: F) -> F:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -178,6 +185,7 @@ def retry_on_failure(
                     attempt += 1
 
         return cast(F, wrapper)
+
     return decorator
 
 
@@ -208,6 +216,7 @@ def make_batch_processor(
         This function generator is preferred over a decorator, as it does not
         violate the decorator pattern or change the original function's signature.
     """
+
     @functools.wraps(func)
     def batch_func(items, *args, **kwargs):
         if not items:
@@ -216,14 +225,14 @@ def make_batch_processor(
             return [func(item, *args, **kwargs) for item in items]
         results = []
         for i in range(0, len(items), batch_size):
-            batch = items[i:i + batch_size]
+            batch = items[i : i + batch_size]
             logger.debug(
-                f"Processing batch {i//batch_size + 1} "
-                f"({len(batch)} items)"
+                f"Processing batch {i//batch_size + 1} " f"({len(batch)} items)"
             )
             batch_results = [func(item, *args, **kwargs) for item in batch]
             results.extend(batch_results)
         return results
+
     return batch_func
 
 

@@ -17,19 +17,26 @@ from scipy.ndimage import gaussian_filter, sobel
 
 try:
     import matplotlib
-    matplotlib.use('Agg')  # Non-interactive backend
+
+    matplotlib.use("Agg")  # Non-interactive backend
     import matplotlib.pyplot as plt
+
     MATPLOTLIB_AVAILABLE = True
 except ImportError:
     MATPLOTLIB_AVAILABLE = False
-    logging.warning("matplotlib not available. Visualization features will be disabled.")
+    logging.warning(
+        "matplotlib not available. Visualization features will be disabled."
+    )
 
 try:
     import cv2
+
     CV2_AVAILABLE = True
 except ImportError:
     CV2_AVAILABLE = False
-    logging.warning("cv2 (opencv-python) not available. Some depth processing features will be limited.")
+    logging.warning(
+        "cv2 (opencv-python) not available. Some depth processing features will be limited."
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +128,9 @@ def compute_depth_edges(
 
     elif method == "canny":
         if not CV2_AVAILABLE:
-            logger.warning("cv2 not available, falling back to sobel for edge detection")
+            logger.warning(
+                "cv2 not available, falling back to sobel for edge detection"
+            )
             grad_x = sobel(depth, axis=1)
             grad_y = sobel(depth, axis=0)
             edges = np.sqrt(grad_x**2 + grad_y**2)
@@ -137,7 +146,9 @@ def compute_depth_edges(
 
     elif method == "laplacian":
         if not CV2_AVAILABLE:
-            logger.warning("cv2 not available, falling back to sobel for edge detection")
+            logger.warning(
+                "cv2 not available, falling back to sobel for edge detection"
+            )
             grad_x = sobel(depth, axis=1)
             grad_y = sobel(depth, axis=0)
             edges = np.sqrt(grad_x**2 + grad_y**2)
@@ -180,10 +191,7 @@ def create_depth_zones(
     """
     if method == "percentile":
         # Percentile-based quantization (robust to outliers)
-        boundaries = np.percentile(
-            depth,
-            np.linspace(0, 100, num_zones + 1)
-        )
+        boundaries = np.percentile(depth, np.linspace(0, 100, num_zones + 1))
 
     elif method == "linear":
         # Linear quantization
@@ -213,10 +221,7 @@ def create_depth_zones(
 
     # Smooth boundaries
     if smooth_sigma > 0:
-        zone_masks = [
-            gaussian_filter(mask, sigma=smooth_sigma)
-            for mask in zone_masks
-        ]
+        zone_masks = [gaussian_filter(mask, sigma=smooth_sigma) for mask in zone_masks]
 
     # Normalize so masks sum to 1
     mask_sum = np.sum(zone_masks, axis=0) + 1e-8
@@ -260,10 +265,7 @@ def smooth_depth(
         sigma_space = sigma
 
         smoothed = cv2.bilateralFilter(
-            depth_uint8,
-            d=d,
-            sigmaColor=sigma_color,
-            sigmaSpace=sigma_space
+            depth_uint8, d=d, sigmaColor=sigma_color, sigmaSpace=sigma_space
         )
 
         return smoothed.astype(np.float32) / 255.0
@@ -310,6 +312,7 @@ def visualize_depth(
         rgb = np.stack([gray, gray, gray], axis=-1)
         if save_path:
             from PIL import Image
+
             img = Image.fromarray(rgb)
             img.save(save_path)
         return rgb
@@ -331,6 +334,7 @@ def visualize_depth(
     # Save if requested
     if save_path:
         from PIL import Image
+
         img = Image.fromarray(rgb)
         img.save(save_path)
         logger.info(f"Saved depth visualization: {save_path}")
@@ -349,13 +353,13 @@ def depth_statistics(depth: np.ndarray) -> dict:
         Dictionary of statistics
     """
     stats = {
-        'min': float(depth.min()),
-        'max': float(depth.max()),
-        'mean': float(depth.mean()),
-        'median': float(np.median(depth)),
-        'std': float(depth.std()),
-        'percentile_10': float(np.percentile(depth, 10)),
-        'percentile_90': float(np.percentile(depth, 90)),
+        "min": float(depth.min()),
+        "max": float(depth.max()),
+        "mean": float(depth.mean()),
+        "median": float(np.median(depth)),
+        "std": float(depth.std()),
+        "percentile_10": float(np.percentile(depth, 10)),
+        "percentile_90": float(np.percentile(depth, 90)),
     }
 
     # Compute gradient statistics
@@ -363,11 +367,15 @@ def depth_statistics(depth: np.ndarray) -> dict:
     grad_y = np.abs(sobel(depth, axis=0))
     grad_magnitude = np.sqrt(grad_x**2 + grad_y**2)
 
-    stats.update({
-        'gradient_mean': float(grad_magnitude.mean()),
-        'gradient_max': float(grad_magnitude.max()),
-        'edge_density': float((grad_magnitude > grad_magnitude.mean()).sum() / grad_magnitude.size),
-    })
+    stats.update(
+        {
+            "gradient_mean": float(grad_magnitude.mean()),
+            "gradient_max": float(grad_magnitude.max()),
+            "edge_density": float(
+                (grad_magnitude > grad_magnitude.mean()).sum() / grad_magnitude.size
+            ),
+        }
+    )
 
     return stats
 
@@ -394,14 +402,20 @@ def align_depth_to_image(
     if not CV2_AVAILABLE:
         # Fallback to scipy zoom
         from scipy.ndimage import zoom
-        zoom_factors = (target_shape[0] / depth.shape[0], target_shape[1] / depth.shape[1])
-        order = 1 if interpolation == 'bilinear' else 3 if interpolation == 'bicubic' else 0
+
+        zoom_factors = (
+            target_shape[0] / depth.shape[0],
+            target_shape[1] / depth.shape[1],
+        )
+        order = (
+            1 if interpolation == "bilinear" else 3 if interpolation == "bicubic" else 0
+        )
         return zoom(depth, zoom_factors, order=order)
 
     interp_map = {
-        'bilinear': cv2.INTER_LINEAR,
-        'bicubic': cv2.INTER_CUBIC,
-        'nearest': cv2.INTER_NEAREST,
+        "bilinear": cv2.INTER_LINEAR,
+        "bicubic": cv2.INTER_CUBIC,
+        "nearest": cv2.INTER_NEAREST,
     }
 
     interp_flag = interp_map.get(interpolation, cv2.INTER_LINEAR)
@@ -409,7 +423,7 @@ def align_depth_to_image(
     resized = cv2.resize(
         depth,
         (target_shape[1], target_shape[0]),  # width, height
-        interpolation=interp_flag
+        interpolation=interp_flag,
     )
 
     return resized
@@ -432,10 +446,12 @@ def inpaint_depth_holes(
         Inpainted depth map
     """
     if not CV2_AVAILABLE:
-        logger.warning("cv2 not available, returning depth with holes filled with mean value")
+        logger.warning(
+            "cv2 not available, returning depth with holes filled with mean value"
+        )
         # Simple fallback: fill holes with mean of valid values
         if mask is None:
-            mask = ((depth == 0) | np.isnan(depth))
+            mask = (depth == 0) | np.isnan(depth)
         else:
             mask = mask.astype(bool)
         result = depth.copy()
@@ -455,17 +471,11 @@ def inpaint_depth_holes(
     # Inpaint
     if method == "telea":
         inpainted = cv2.inpaint(
-            depth_uint8,
-            mask,
-            inpaintRadius=3,
-            flags=cv2.INPAINT_TELEA
+            depth_uint8, mask, inpaintRadius=3, flags=cv2.INPAINT_TELEA
         )
     elif method == "ns":
         inpainted = cv2.inpaint(
-            depth_uint8,
-            mask,
-            inpaintRadius=3,
-            flags=cv2.INPAINT_NS
+            depth_uint8, mask, inpaintRadius=3, flags=cv2.INPAINT_NS
         )
     else:
         raise ValueError(f"Unknown inpainting method: {method}")

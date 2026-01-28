@@ -23,15 +23,14 @@ Outputs:
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional, Tuple, Union
+from typing import Optional, Tuple, Union
 
 import cv2
 import numpy as np
-from PIL import Image
 
 try:
     import torch
-    import torch.nn as nn
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -56,6 +55,7 @@ class SkyParameters:
         latitude: Location latitude for sun path calculation
         longitude: Location longitude
     """
+
     sun_azimuth: float = 180.0  # South
     sun_elevation: float = 45.0  # Mid-height
     cloud_coverage: float = 0.3
@@ -97,7 +97,7 @@ class SkyGANGenerator:
         self,
         model_path: Optional[Path] = None,
         device: Optional[str] = None,
-        use_stylegan: bool = False
+        use_stylegan: bool = False,
     ):
         """Initialize SkyGAN generator.
 
@@ -143,7 +143,9 @@ class SkyGANGenerator:
         """
         # Placeholder for actual StyleGAN3 loading
         # In production, this would load the actual SkyGAN model
-        logger.warning("StyleGAN3 model loading not implemented - using procedural generation")
+        logger.warning(
+            "StyleGAN3 model loading not implemented - using procedural generation"
+        )
         self.stylegan_model = None
 
     def generate_sky(
@@ -151,7 +153,7 @@ class SkyGANGenerator:
         params: SkyParameters,
         resolution: Tuple[int, int] = (2048, 1024),
         output_format: str = "hdr",  # "hdr" or "ldr"
-        random_seed: Optional[int] = None
+        random_seed: Optional[int] = None,
     ) -> np.ndarray:
         """Generate sky environment map.
 
@@ -167,8 +169,10 @@ class SkyGANGenerator:
         if random_seed is not None:
             np.random.seed(random_seed)
 
-        logger.info(f"Generating sky: azimuth={params.sun_azimuth}°, "
-                   f"elevation={params.sun_elevation}°")
+        logger.info(
+            f"Generating sky: azimuth={params.sun_azimuth}°, "
+            f"elevation={params.sun_elevation}°"
+        )
 
         # Generate clear sky base (physics-based)
         clear_sky = self._generate_clear_sky(params, resolution)
@@ -189,9 +193,7 @@ class SkyGANGenerator:
         return sky
 
     def _generate_clear_sky(
-        self,
-        params: SkyParameters,
-        resolution: Tuple[int, int]
+        self, params: SkyParameters, resolution: Tuple[int, int]
     ) -> np.ndarray:
         """Generate physics-based clear sky using Prague model.
 
@@ -213,23 +215,22 @@ class SkyGANGenerator:
 
         # Convert to viewing angles (theta, phi)
         theta = v_grid  # Zenith angle (0 at top, pi at bottom)
-        phi = u_grid    # Azimuth angle
+        phi = u_grid  # Azimuth angle
 
         # Sun position in radians
         sun_elevation_rad = np.deg2rad(params.sun_elevation)
         sun_azimuth_rad = np.deg2rad(params.sun_azimuth)
 
         # Calculate angle between viewing direction and sun
-        cos_chi = (
-            np.sin(theta) * np.cos(sun_elevation_rad) * np.cos(phi - sun_azimuth_rad) +
-            np.cos(theta) * np.sin(sun_elevation_rad)
-        )
+        cos_chi = np.sin(theta) * np.cos(sun_elevation_rad) * np.cos(
+            phi - sun_azimuth_rad
+        ) + np.cos(theta) * np.sin(sun_elevation_rad)
         cos_chi = np.clip(cos_chi, -1, 1)
         chi = np.arccos(cos_chi)
 
         # Calculate zenith luminance (simplified Preetham model)
         turbidity = params.turbidity
-        zenith_angle = np.pi/2 - sun_elevation_rad
+        _zenith_angle = np.pi / 2 - sun_elevation_rad  # noqa: F841
 
         # Rayleigh scattering (blue sky)
         rayleigh = self._rayleigh_phase(chi)
@@ -294,7 +295,7 @@ class SkyGANGenerator:
 
         # Henyey-Greenstein phase function
         numerator = 1 - g**2
-        denominator = (1 + g**2 - 2*g*cos_angle) ** 1.5
+        denominator = (1 + g**2 - 2 * g * cos_angle) ** 1.5
 
         phase = numerator / (4 * np.pi * denominator)
 
@@ -302,10 +303,7 @@ class SkyGANGenerator:
         return phase * (turbidity / 2.0)
 
     def _add_procedural_atmosphere(
-        self,
-        clear_sky: np.ndarray,
-        params: SkyParameters,
-        resolution: Tuple[int, int]
+        self, clear_sky: np.ndarray, params: SkyParameters, resolution: Tuple[int, int]
     ) -> np.ndarray:
         """Add procedural clouds and haze.
 
@@ -321,28 +319,27 @@ class SkyGANGenerator:
 
         # Generate procedural clouds using Perlin-like noise
         if params.cloud_coverage > 0.05:
-            clouds = self._generate_procedural_clouds(
-                resolution,
-                params.cloud_coverage
-            )
+            clouds = self._generate_procedural_clouds(resolution, params.cloud_coverage)
 
             # Blend clouds with sky
             cloud_color = np.array([1.0, 1.0, 1.0]) * 15.0  # Bright white clouds
-            clear_sky = clear_sky * (1 - clouds[:, :, np.newaxis]) + \
-                       cloud_color * clouds[:, :, np.newaxis]
+            clear_sky = (
+                clear_sky * (1 - clouds[:, :, np.newaxis])
+                + cloud_color * clouds[:, :, np.newaxis]
+            )
 
         # Add haze (reduces contrast, adds whiteness)
         if params.haze_density > 0.05:
             haze_color = np.array([1.0, 0.98, 0.95]) * 8.0  # Slightly warm haze
-            clear_sky = clear_sky * (1 - params.haze_density * 0.5) + \
-                       haze_color * params.haze_density * 0.3
+            clear_sky = (
+                clear_sky * (1 - params.haze_density * 0.5)
+                + haze_color * params.haze_density * 0.3
+            )
 
         return clear_sky
 
     def _generate_procedural_clouds(
-        self,
-        resolution: Tuple[int, int],
-        coverage: float
+        self, resolution: Tuple[int, int], coverage: float
     ) -> np.ndarray:
         """Generate procedural cloud coverage using multi-octave noise.
 
@@ -368,15 +365,20 @@ class SkyGANGenerator:
 
             # Resize to full resolution
             noise_full = cv2.resize(
-                noise,
-                (width, height),
-                interpolation=cv2.INTER_LINEAR
+                noise, (width, height), interpolation=cv2.INTER_LINEAR
             )
 
             cloud_map += noise_full * amplitude
 
-        # Normalize
-        cloud_map = (cloud_map - cloud_map.min()) / (cloud_map.max() - cloud_map.min())
+        # Normalize cloud map
+        cloud_min = cloud_map.min()
+        cloud_max = cloud_map.max()
+        cloud_range = cloud_max - cloud_min
+        # Handle uniform cloud case to prevent division by zero
+        if cloud_range > 0:
+            cloud_map = (cloud_map - cloud_min) / cloud_range
+        else:
+            cloud_map = np.full_like(cloud_map, 0.5)
 
         # Apply coverage threshold
         threshold = 1.0 - coverage
@@ -388,9 +390,7 @@ class SkyGANGenerator:
         return cloud_map
 
     def _generate_stylegan_features(
-        self,
-        params: SkyParameters,
-        resolution: Tuple[int, int]
+        self, params: SkyParameters, resolution: Tuple[int, int]
     ) -> np.ndarray:
         """Generate atmospheric features using StyleGAN3.
 
@@ -409,10 +409,7 @@ class SkyGANGenerator:
         return self._generate_procedural_clouds(resolution, params.cloud_coverage)
 
     def _blend_sky_layers(
-        self,
-        clear_sky: np.ndarray,
-        features: np.ndarray,
-        params: SkyParameters
+        self, clear_sky: np.ndarray, features: np.ndarray, params: SkyParameters
     ) -> np.ndarray:
         """Blend clear sky with atmospheric features.
 
@@ -427,8 +424,10 @@ class SkyGANGenerator:
         # Simple alpha blending for now
         alpha = features if features.ndim == 2 else features[:, :, 0]
 
-        blended = clear_sky * (1 - alpha[:, :, np.newaxis]) + \
-                 np.ones_like(clear_sky) * alpha[:, :, np.newaxis] * 12.0
+        blended = (
+            clear_sky * (1 - alpha[:, :, np.newaxis])
+            + np.ones_like(clear_sky) * alpha[:, :, np.newaxis] * 12.0
+        )
 
         return blended
 
@@ -456,10 +455,7 @@ class SkyGANGenerator:
         return ldr
 
     def save_sky(
-        self,
-        sky: np.ndarray,
-        output_path: Union[str, Path],
-        format: str = "exr"
+        self, sky: np.ndarray, output_path: Union[str, Path], format: str = "exr"
     ):
         """Save sky to file.
 
@@ -474,13 +470,16 @@ class SkyGANGenerator:
             # Save as OpenEXR (requires imageio or OpenEXR)
             try:
                 import imageio
+
                 imageio.imwrite(output_path, sky.astype(np.float32))
                 logger.info(f"Saved HDR sky to {output_path}")
             except ImportError:
-                logger.error("imageio required for EXR export. Saving as HDR PNG instead.")
+                logger.error(
+                    "imageio required for EXR export. Saving as HDR PNG instead."
+                )
                 # Save as 16-bit PNG
                 sky_16bit = (sky / sky.max() * 65535).clip(0, 65535).astype(np.uint16)
-                cv2.imwrite(str(output_path.with_suffix('.png')), sky_16bit)
+                cv2.imwrite(str(output_path.with_suffix(".png")), sky_16bit)
         else:
             # Save as 8-bit image
             if sky.dtype == np.float32:

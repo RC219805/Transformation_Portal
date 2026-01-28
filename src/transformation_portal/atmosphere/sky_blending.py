@@ -1,382 +1,361 @@
-"""Sky blending and replacement utilities.
+"""
+SkyBlender: Physically-Constrained Volumetric Compositing Engine.
 
-Integrates generated skies into architectural images:
-- Sky detection and masking
-- Seamless blending at horizon
-- Reflection updates (water, glass)
-- Lighting consistency
-- HDR preservation for IBL
-
-For luxury real estate:
-- Natural sky replacement
-- Enhanced golden hour skies
-- Location-specific atmospheres
-- Maintains architectural realism
+CORE PHILOSOPHY:
+1. Deep Volumetric Unification: Merges sky and foreground using depth-aware
+   atmospheric physics, not just 2D masking.
+2. Physics Guardrails: Analyzes scene geometry (shadows) to prevent
+   optically impossible renders (e.g., West Sun on East Shadows).
+3. Intelligent Correction: Auto-derives optimal sky parameters to match
+   source photography.
 """
 
+import copy
 import logging
+import math
+from dataclasses import dataclass
 from typing import Optional, Tuple, Union
 
 import cv2
 import numpy as np
-from PIL import Image
 
+from transformation_portal.atmosphere.atmospheric_model import (
+    AtmosphericModel,
+    AtmosphericParameters,
+    MarineLayerParameters,
+)
+from transformation_portal.atmosphere.skygan_generator import (
+    SkyGANGenerator,
+    SkyParameters,
+)
 
 logger = logging.getLogger(__name__)
 
 
-class SkyBlender:
-    """Blend generated skies into architectural images.
+class PhysicsViolationError(ValueError):
+    """Raised when a transformation would break optical consistency."""
+    pass
 
-    Provides intelligent sky replacement with:
-    - Automatic sky detection
-    - Seamless horizon blending
-    - Reflection updates
-    - Lighting consistency
 
-    Example:
-        >>> blender = SkyBlender()
-        >>> image = load_image("property.jpg")
-        >>> new_sky = sky_generator.generate_sky(params)
-        >>> result = blender.blend_sky(
-        ...     image,
-        ...     new_sky,
-        ...     blend_width=50,
-        ...     update_reflections=True
-        ... )
+@dataclass
+class LightingProfile:
+    """Estimated lighting conditions from the source image."""
+    azimuth: float  # 0-360 degrees
+    elevation: float  # 0-90 degrees
+    confidence: float  # 0.0-1.0
+
+
+@dataclass
+class CorrectionSuggestion:
+    """The AI's counter-offer to a physically impossible request."""
+    original_request_azimuth: float
+    measured_source_azimuth: float
+    confidence: float
+    suggested_params: SkyParameters
+    message: str
+
+
+class MuLawToneMapper:
+    """High-Dynamic Range compression using μ-law algorithm.
+
+    Mimics the logarithmic response of human vision and high-end cinema cameras
+    (e.g., ARRI LogC) for superior highlight retention.
     """
 
-    def __init__(self):
-        """Initialize sky blender."""
-        logger.info("SkyBlender initialized")
+    def __init__(self, mu: float = 5000.0):
+        self.mu = mu
 
-    def blend_sky(
+    def process(self, hdr_image: np.ndarray) -> np.ndarray:
+        """Apply μ-law compression to HDR data."""
+        # Log2 base compression for exposure leveling
+        exposure_norm = np.log2(1.0 + hdr_image)
+
+        # μ-law encoding formula: F(x) = ln(1 + μx) / ln(1 + μ)
+        numerator = np.log(1.0 + self.mu * exposure_norm)
+        denominator = np.log(1.0 + self.mu)
+
+        compressed = numerator / denominator
+
+        # Gamma correction for Rec.709 display
+        return np.power(compressed, 1.0 / 2.2).clip(0, 1)
+
+
+class SunConsistencyGuard:
+    """The Gatekeeper: Reverse-engineers scene lighting to prevent shadow conflicts."""
+
+    def analyze_and_suggest(
         self,
-        image: np.ndarray,
-        sky: np.ndarray,
-        mask: Optional[np.ndarray] = None,
-        blend_width: int = 50,
-        update_reflections: bool = False,
-        reflection_strength: float = 0.5
-    ) -> np.ndarray:
-        """Blend new sky into image.
+        source_image: np.ndarray,
+        depth_map: np.ndarray,
+        requested_params: SkyParameters,
+        tolerance_degrees: float = 45.0,
+    ) -> CorrectionSuggestion:
+        """Analyze the scene and formulate a correction plan if physics are violated."""
+        # 1. Reverse-Engineer the Source Lighting
+        existing_light = self._estimate_dominant_light_source(source_image, depth_map)
 
-        Args:
-            image: Original image (H, W, 3)
-            sky: Generated sky (H, W, 3)
-            mask: Sky mask (H, W) where 1=sky, 0=not sky (auto-detected if None)
-            blend_width: Feathering width in pixels at horizon
-            update_reflections: Update water/glass reflections
-            reflection_strength: Reflection update strength (0-1)
+        # 2. Check for Compatibility
+        diff = abs(existing_light.azimuth - requested_params.sun_azimuth)
+        diff = min(diff, 360 - diff)  # Handle wrap-around
 
-        Returns:
-            Image with blended sky
-        """
-        # Detect sky region if mask not provided
-        if mask is None:
-            logger.info("Auto-detecting sky region...")
-            mask = self._detect_sky_mask(image)
+        is_valid = diff <= tolerance_degrees or existing_light.confidence < 0.4
 
-        # Resize sky to match image
-        if sky.shape[:2] != image.shape[:2]:
-            sky = cv2.resize(sky, (image.shape[1], image.shape[0]))
+        # 3. Formulate the "Perfect Match" parameters
+        suggested = copy.deepcopy(requested_params)
 
-        # Create smooth transition mask
-        blend_mask = self._create_blend_mask(mask, blend_width)
+        time_context = "Diffuse/Overcast"
+        if existing_light.confidence >= 0.4:
+            # If we are confident in the shadow source, align the sky to it
+            suggested.sun_azimuth = existing_light.azimuth
 
-        # Ensure sky is same dtype as image
-        if sky.dtype != image.dtype:
-            if image.dtype == np.uint8:
-                if sky.dtype == np.float32:
-                    sky = (sky * 255).clip(0, 255).astype(np.uint8)
-            elif image.dtype == np.float32:
-                if sky.dtype == np.uint8:
-                    sky = sky.astype(np.float32) / 255.0
+            # Determine context string
+            if 45 < existing_light.azimuth < 135:
+                time_context = "Morning (East Sun)"
+            elif 225 < existing_light.azimuth < 315:
+                time_context = "Afternoon (West Sun)"
+            else:
+                time_context = "Mid-Day/High Sun"
 
-        # Blend sky
-        result = image.copy()
-
-        for c in range(3):
-            result[:, :, c] = (
-                image[:, :, c] * (1 - blend_mask) +
-                sky[:, :, c] * blend_mask
-            )
-
-        # Update reflections if requested
-        if update_reflections:
-            result = self._update_reflections(
-                result,
-                sky,
-                blend_mask,
-                reflection_strength
-            )
-
-        logger.info("Sky blending complete")
-
-        return result.astype(image.dtype)
-
-    def _detect_sky_mask(
-        self,
-        image: np.ndarray,
-        threshold_method: str = "adaptive"
-    ) -> np.ndarray:
-        """Detect sky region in image.
-
-        Uses color and brightness cues to identify sky.
-
-        Args:
-            image: Input image
-            threshold_method: "adaptive" or "simple"
-
-        Returns:
-            Binary mask (H, W) where 1=sky
-        """
-        # Convert to float
-        img_float = image.astype(np.float32) / 255.0 if image.dtype == np.uint8 else image
-
-        # Sky is typically:
-        # 1. In upper portion of image
-        # 2. Brighter than foreground
-        # 3. Blue-ish (usually)
-
-        # Create initial mask based on brightness and position
-        brightness = np.mean(img_float, axis=2)
-
-        # Upper portion bias
-        height = image.shape[0]
-        y_coords = np.arange(height)[:, np.newaxis]
-        position_bias = 1.0 - (y_coords / height)  # 1 at top, 0 at bottom
-
-        # Combine brightness and position
-        sky_probability = brightness * 0.7 + position_bias * 0.3
-
-        # Threshold
-        if threshold_method == "adaptive":
-            # Use Otsu's method
-            sky_prob_uint8 = (sky_probability * 255).astype(np.uint8)
-            threshold, mask = cv2.threshold(
-                sky_prob_uint8,
-                0,
-                255,
-                cv2.THRESH_BINARY + cv2.THRESH_OTSU
-            )
-            mask = mask.astype(np.float32) / 255.0
+        # 4. Draft the report
+        if is_valid:
+            msg = f"Physics OK. Requested sky aligns with source shadows ({existing_light.azimuth:.0f}°)."
         else:
-            # Simple threshold
-            mask = (sky_probability > 0.6).astype(np.float32)
+            msg = (
+                f"PHYSICS CONFLICT: You requested {requested_params.sun_azimuth:.0f}°, "
+                f"but source shadows dictate {existing_light.azimuth:.0f}° ({time_context}). "
+                f"Applying source azimuth will fix shadows."
+            )
 
-        # Morphological operations to clean up
+        return CorrectionSuggestion(
+            original_request_azimuth=requested_params.sun_azimuth,
+            measured_source_azimuth=existing_light.azimuth,
+            confidence=existing_light.confidence,
+            suggested_params=suggested,
+            message=msg,
+        )
+
+    def _estimate_dominant_light_source(
+        self, img: np.ndarray, depth: np.ndarray
+    ) -> LightingProfile:
+        """Uses 'Spherical Harmonic Gradient' analysis to find the sun."""
+        # 1. Compute Surface Normals from Depth
+        # gradients: dz/dx, dz/dy (Negated as depth 'uphill' points to camera)
+        zy, zx = np.gradient(depth)
+        normal_x = -zx
+        normal_y = -zy
+        normal_z = np.ones_like(depth)
+
+        # Normalize vectors
+        magnitude = np.sqrt(normal_x**2 + normal_y**2 + normal_z**2)
+        magnitude[magnitude == 0] = 1.0  # Avoid div by zero
+
+        nx = normal_x / magnitude
+        ny = normal_y / magnitude
+
+        # 2. Get Luminance (L)
+        gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY).astype(np.float32) / 255.0
+
+        # 3. Solve via weighted correlation
+        # We want the normal direction that correlates highest with brightness
+        weights = gray**2
+        avg_nx = np.average(nx, weights=weights)
+        avg_ny = np.average(ny, weights=weights)
+
+        # Convert vector back to Azimuth
+        # Image coords: X+ is East, Y+ is South (usually), Y- is North
+        azimuth_rad = np.arctan2(avg_nx, -avg_ny)
+        azimuth_deg = np.degrees(azimuth_rad)
+        if azimuth_deg < 0:
+            azimuth_deg += 360
+
+        # Confidence metric: Variance of brightness
+        confidence = min(np.std(gray) * 4.0, 1.0)
+
+        return LightingProfile(
+            azimuth=azimuth_deg, elevation=45.0, confidence=confidence
+        )
+
+
+class SkyBlender:
+    """The Engine: Orchestrates SkyGAN, Physics Checks, and Volumetric Unification."""
+
+    def __init__(
+        self,
+        skygan: Optional[SkyGANGenerator] = None,
+        atmosphere: Optional[AtmosphericModel] = None,
+        device: str = "cuda",
+    ):
+        self.skygan = skygan or SkyGANGenerator(device=device)
+        self.atmosphere = atmosphere or AtmosphericModel()
+        self.guardrail = SunConsistencyGuard()
+        self.tone_mapper = MuLawToneMapper()
+        self.device = device
+
+    def smart_render(
+        self,
+        source_image: np.ndarray,
+        sky_params: SkyParameters,
+        atmo_params: AtmosphericParameters,
+        marine_params: Optional[MarineLayerParameters] = None,
+        auto_correct: bool = True,
+        strict_physics: bool = False,
+        random_seed: int = 42,
+    ) -> Tuple[np.ndarray, CorrectionSuggestion]:
+        """
+        The Intelligent Pipeline Entry Point.
+
+        Args:
+            auto_correct: If True, automatically replaces invalid params
+                          with the suggested 'perfect match' params.
+            strict_physics: If True and auto_correct is False, raises Error
+                            on shadow mismatch.
+
+        Returns:
+            Tuple[Rendered Image, The Analysis Report]
+        """
+        # 1. ANALYSIS PASS
+        depth_map = self._estimate_depth(source_image)
+        suggestion = self.guardrail.analyze_and_suggest(
+            source_image, depth_map, sky_params
+        )
+
+        # 2. DECISION LOGIC
+        active_params = sky_params
+
+        if auto_correct and suggestion.measured_source_azimuth != sky_params.sun_azimuth:
+            if suggestion.confidence > 0.4:
+                logger.info(f"Auto-Correcting: {suggestion.message}")
+                active_params = suggestion.suggested_params
+            else:
+                logger.info("Lighting ambiguous, proceeding with requested params.")
+
+        elif strict_physics and not auto_correct:
+            # Check deviation for strict mode
+            diff = abs(suggestion.measured_source_azimuth - sky_params.sun_azimuth)
+            diff = min(diff, 360 - diff)
+            if diff > 45 and suggestion.confidence > 0.4:
+                raise PhysicsViolationError(suggestion.message)
+
+        # 3. EXECUTION PASS
+        final_image = self._execute_render(
+            source_image,
+            depth_map,
+            active_params,
+            atmo_params,
+            marine_params,
+            random_seed,
+        )
+
+        return final_image, suggestion
+
+    def _execute_render(
+        self,
+        source_image: np.ndarray,
+        depth_map: np.ndarray,
+        sky_params: SkyParameters,
+        atmo_params: AtmosphericParameters,
+        marine_params: Optional[MarineLayerParameters],
+        random_seed: int,
+    ) -> np.ndarray:
+        """Core rendering pipeline (Private)."""
+        h, w = source_image.shape[:2]
+
+        # A. Generate Sky (Latent Space -> HDR Image)
+        logger.info(f"Generating sky (Azimuth: {sky_params.sun_azimuth:.1f}°)...")
+        hdr_sky = self.skygan.generate_sky(
+            params=sky_params,
+            resolution=(w, h),
+            output_format="hdr",
+            random_seed=random_seed,
+        )
+
+        # B. Segment Sky
+        sky_mask = self._segment_sky(source_image)
+
+        # C. Composite (Linear Space)
+        linear_source = (source_image.astype(np.float32) / 255.0) ** 2.2
+        if hdr_sky.shape[:2] != (h, w):
+            hdr_sky = cv2.resize(hdr_sky, (w, h))
+
+        # Blend: Sky replaces masked area
+        scene_linear = linear_source * (1.0 - sky_mask) + hdr_sky * sky_mask
+
+        # D. Volumetric Unification
+        # Unified depth: Foreground = Estimated Depth, Sky = Infinity (1.0)
+        unified_depth = depth_map * (1.0 - sky_mask[:, :, 0]) + 1.0 * sky_mask[:, :, 0]
+
+        # Apply Aerial Perspective (Rayleigh Scattering)
+        unified_scene = self.atmosphere.apply_aerial_perspective(
+            scene_linear, unified_depth, atmo_params
+        )
+
+        # Apply Marine Layer (Volumetric Fog)
+        if marine_params and marine_params.present:
+            # Approximation: Darker/Lower pixels in depth map = Lower elevation
+            # Scale to 0-500 meters
+            pseudo_height_map = (1.0 - unified_depth) * 500.0
+            unified_scene = self.atmosphere.simulate_marine_layer(
+                unified_scene, pseudo_height_map, marine_params
+            )
+        else:
+            # Clip if no extra processing needed
+            unified_scene = unified_scene.clip(0, 10.0)  # Soft clip for HDR
+
+        # E. Tone Map (HDR -> LDR)
+        unified_scene = (self.tone_mapper.process(unified_scene) * 255).astype(np.uint8)
+
+        return unified_scene
+
+    def _estimate_depth(self, image: np.ndarray) -> np.ndarray:
+        """Monocular Depth Estimation Wrapper."""
+        try:
+            import torch
+
+            model_type = "MiDaS_small"
+            midas = torch.hub.load("intel-isl/MiDaS", model_type, trust_repo=True)
+            midas.to(self.device).eval()
+
+            input_batch = (
+                torch.from_numpy(image).permute(2, 0, 1).unsqueeze(0).float().to(self.device)
+            )
+
+            with torch.no_grad():
+                prediction = midas(input_batch)
+                prediction = torch.nn.functional.interpolate(
+                    prediction.unsqueeze(1),
+                    size=image.shape[:2],
+                    mode="bicubic",
+                    align_corners=False,
+                ).squeeze()
+
+            depth = prediction.cpu().numpy()
+            return (depth - depth.min()) / (depth.max() - depth.min())
+
+        except (ImportError, Exception) as e:
+            logger.warning(f"Depth model unavailable ({e}). Using Luma heuristic.")
+            gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+            return 1.0 - (gray.astype(np.float32) / 255.0)
+
+    def _segment_sky(self, image: np.ndarray) -> np.ndarray:
+        """Sky Segmentation Wrapper (Fallback to Color Heuristic)."""
+        hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+
+        # Blue sky mask
+        lower_blue = np.array([90, 50, 50])
+        upper_blue = np.array([130, 255, 255])
+        mask_blue = cv2.inRange(hsv, lower_blue, upper_blue)
+
+        # White sky mask (clouds/overcast)
+        lower_white = np.array([0, 0, 200])
+        upper_white = np.array([180, 30, 255])
+        mask_white = cv2.inRange(hsv, lower_white, upper_white)
+
+        combined_mask = cv2.bitwise_or(mask_blue, mask_white)
+
+        # Refine mask
         kernel = np.ones((5, 5), np.uint8)
-        mask_uint8 = (mask * 255).astype(np.uint8)
-        mask_uint8 = cv2.morphologyEx(mask_uint8, cv2.MORPH_CLOSE, kernel)
-        mask_uint8 = cv2.morphologyEx(mask_uint8, cv2.MORPH_OPEN, kernel)
+        combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_CLOSE, kernel)
+        combined_mask = cv2.GaussianBlur(combined_mask, (15, 15), 0)
 
-        # Keep only largest connected component (main sky region)
-        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
-            mask_uint8,
-            connectivity=8
-        )
-
-        if num_labels > 1:
-            # Find largest component (excluding background)
-            largest_label = 1 + np.argmax(stats[1:, cv2.CC_STAT_AREA])
-            mask_uint8 = (labels == largest_label).astype(np.uint8) * 255
-
-        mask = mask_uint8.astype(np.float32) / 255.0
-
-        return mask
-
-    def _create_blend_mask(
-        self,
-        mask: np.ndarray,
-        blend_width: int
-    ) -> np.ndarray:
-        """Create smooth transition mask for blending.
-
-        Args:
-            mask: Binary sky mask
-            blend_width: Feathering width in pixels
-
-        Returns:
-            Smooth blend mask (0-1)
-        """
-        # Convert to uint8 for distance transform
-        mask_uint8 = (mask * 255).astype(np.uint8)
-
-        # Find boundary
-        _, binary = cv2.threshold(mask_uint8, 127, 255, cv2.THRESH_BINARY)
-
-        # Distance transform from boundary
-        dist_transform = cv2.distanceTransform(binary, cv2.DIST_L2, 5)
-
-        # Create gradient in blend region
-        blend_mask = np.clip(dist_transform / blend_width, 0, 1)
-
-        # Apply Gaussian blur for smooth transition
-        blend_mask = cv2.GaussianBlur(blend_mask, (21, 21), 10)
-
-        return blend_mask
-
-    def _update_reflections(
-        self,
-        image: np.ndarray,
-        sky: np.ndarray,
-        sky_mask: np.ndarray,
-        strength: float
-    ) -> np.ndarray:
-        """Update reflections to match new sky.
-
-        Detects reflective surfaces (water, glass) and updates
-        their reflection to match the new sky.
-
-        Args:
-            image: Image with blended sky
-            sky: New sky
-            sky_mask: Sky region mask
-            strength: Update strength (0-1)
-
-        Returns:
-            Image with updated reflections
-        """
-        # Detect potential reflection regions
-        # Reflections are typically:
-        # 1. In lower portion of image
-        # 2. Similar color to sky
-        # 3. Darker than sky (Fresnel effect)
-
-        # Simple heuristic: lower third of image with similar hue to sky
-        height = image.shape[0]
-        lower_region = image[int(height * 0.6):, :]
-
-        # Calculate reflection of sky (vertically flipped and darkened)
-        reflected_sky = np.flipud(sky) * 0.6  # Darken reflection
-
-        # Very simple reflection update in lower region
-        # Production version would use more sophisticated detection
-        result = image.copy()
-
-        lower_height = lower_region.shape[0]
-        if reflected_sky.shape[0] >= lower_height:
-            reflection_region = reflected_sky[:lower_height]
-
-            # Blend reflection with original
-            result[int(height * 0.6):, :] = (
-                lower_region * (1 - strength * 0.3) +
-                reflection_region * (strength * 0.3)
-            )
-
-        return result
-
-    def replace_sky_in_panorama(
-        self,
-        panorama: np.ndarray,
-        sky_params: dict,
-        sky_generator: any,
-        blend_width: int = 100
-    ) -> np.ndarray:
-        """Replace sky in panoramic image.
-
-        Args:
-            panorama: Panoramic image (equirectangular)
-            sky_params: SkyParameters dictionary
-            sky_generator: SkyGANGenerator instance
-            blend_width: Blend width
-
-        Returns:
-            Panorama with replaced sky
-        """
-        # Generate sky matching panorama resolution
-        sky = sky_generator.generate_sky(
-            sky_params,
-            resolution=(panorama.shape[1], panorama.shape[0])
-        )
-
-        # Detect sky mask
-        mask = self._detect_sky_mask(panorama)
-
-        # Blend
-        result = self.blend_sky(
-            panorama,
-            sky,
-            mask,
-            blend_width=blend_width,
-            update_reflections=True
-        )
-
-        return result
-
-    def create_sky_mask_manual(
-        self,
-        image_shape: Tuple[int, int],
-        horizon_y: int,
-        building_mask: Optional[np.ndarray] = None
-    ) -> np.ndarray:
-        """Create sky mask manually with specified horizon.
-
-        Args:
-            image_shape: Image shape (height, width)
-            horizon_y: Horizon line y-coordinate
-            building_mask: Optional building silhouette mask to exclude
-
-        Returns:
-            Sky mask
-        """
-        height, width = image_shape
-        mask = np.zeros((height, width), dtype=np.float32)
-
-        # Everything above horizon is sky
-        mask[:horizon_y, :] = 1.0
-
-        # Exclude buildings if provided
-        if building_mask is not None:
-            mask = mask * (1 - building_mask)
-
-        return mask
-
-    def match_sky_color_temperature(
-        self,
-        image: np.ndarray,
-        sky: np.ndarray,
-        image_sky_region: np.ndarray
-    ) -> np.ndarray:
-        """Match new sky color temperature to original.
-
-        Adjusts new sky to match the color temperature/tone of
-        the original sky for consistency.
-
-        Args:
-            image: Original image
-            sky: New sky to adjust
-            image_sky_region: Region of original image containing sky
-
-        Returns:
-            Color-matched sky
-        """
-        # Calculate average color of original sky
-        if image.dtype == np.uint8:
-            original_sky_color = np.mean(image_sky_region, axis=(0, 1)) / 255.0
-        else:
-            original_sky_color = np.mean(image_sky_region, axis=(0, 1))
-
-        # Calculate average color of new sky
-        if sky.dtype == np.uint8:
-            new_sky_color = np.mean(sky, axis=(0, 1)) / 255.0
-            sky_float = sky.astype(np.float32) / 255.0
-        else:
-            new_sky_color = np.mean(sky, axis=(0, 1))
-            sky_float = sky.copy()
-
-        # Calculate color shift
-        color_shift = original_sky_color / (new_sky_color + 1e-6)
-
-        # Apply shift
-        matched_sky = sky_float * color_shift
-
-        # Convert back to original dtype
-        if sky.dtype == np.uint8:
-            matched_sky = (matched_sky * 255).clip(0, 255).astype(np.uint8)
-
-        return matched_sky
-
-    def __repr__(self) -> str:
-        return "SkyBlender()"
+        mask_3c = np.repeat(combined_mask[:, :, np.newaxis], 3, axis=2)
+        return mask_3c.astype(np.float32) / 255.0

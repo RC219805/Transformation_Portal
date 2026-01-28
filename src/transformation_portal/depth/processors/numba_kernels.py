@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 
 # Try to import Numba
 try:
-    import numba
     from numba import jit, prange
+
     NUMBA_AVAILABLE = True
     logger.info("Numba JIT compilation available - hot loops will be accelerated")
 except ImportError:
@@ -25,6 +25,7 @@ except ImportError:
     def jit(*args, **kwargs):
         def decorator(func):
             return func
+
         return decorator
 
     # prange is just range without Numba
@@ -34,6 +35,7 @@ except ImportError:
 # ============================================================================
 # Atmospheric Effects Kernels
 # ============================================================================
+
 
 @jit(nopython=True, parallel=True, fastmath=True, cache=True)
 def apply_atmospheric_haze_jit(
@@ -77,9 +79,15 @@ def apply_atmospheric_haze_jit(
             # Apply atmospheric scattering: I = I₀ * T + A * (1 - T)
             haze_contrib = 1.0 - transmission
 
-            result[i, j, 0] = image[i, j, 0] * transmission + haze_color_r * haze_contrib
-            result[i, j, 1] = image[i, j, 1] * transmission + haze_color_g * haze_contrib
-            result[i, j, 2] = image[i, j, 2] * transmission + haze_color_b * haze_contrib
+            result[i, j, 0] = (
+                image[i, j, 0] * transmission + haze_color_r * haze_contrib
+            )
+            result[i, j, 1] = (
+                image[i, j, 1] * transmission + haze_color_g * haze_contrib
+            )
+            result[i, j, 2] = (
+                image[i, j, 2] * transmission + haze_color_b * haze_contrib
+            )
 
             # Clip result
             for k in range(c):
@@ -119,11 +127,7 @@ def apply_aerial_desaturation_jit(
     for i in prange(h):
         for j in range(w):
             # Compute luminance
-            luminance = (
-                lr * image[i, j, 0] +
-                lg * image[i, j, 1] +
-                lb * image[i, j, 2]
-            )
+            luminance = lr * image[i, j, 0] + lg * image[i, j, 1] + lb * image[i, j, 2]
 
             # Compute desaturation factor
             d = depth[i, j]
@@ -138,8 +142,7 @@ def apply_aerial_desaturation_jit(
             # Blend between grayscale and color
             for k in range(c):
                 result[i, j, k] = (
-                    luminance * (1.0 - desat_factor) +
-                    image[i, j, k] * desat_factor
+                    luminance * (1.0 - desat_factor) + image[i, j, k] * desat_factor
                 )
 
     return result
@@ -178,9 +181,15 @@ def apply_color_shift_jit(
             shift_amt = d * shift_strength
 
             # Apply color shift
-            result[i, j, 0] = image[i, j, 0] * (1.0 - shift_amt) + shift_color_r * shift_amt
-            result[i, j, 1] = image[i, j, 1] * (1.0 - shift_amt) + shift_color_g * shift_amt
-            result[i, j, 2] = image[i, j, 2] * (1.0 - shift_amt) + shift_color_b * shift_amt
+            result[i, j, 0] = (
+                image[i, j, 0] * (1.0 - shift_amt) + shift_color_r * shift_amt
+            )
+            result[i, j, 1] = (
+                image[i, j, 1] * (1.0 - shift_amt) + shift_color_g * shift_amt
+            )
+            result[i, j, 2] = (
+                image[i, j, 2] * (1.0 - shift_amt) + shift_color_b * shift_amt
+            )
 
             # Clip result
             for k in range(c):
@@ -195,6 +204,7 @@ def apply_color_shift_jit(
 # ============================================================================
 # Tone Mapping Kernels
 # ============================================================================
+
 
 @jit(nopython=True, parallel=True, fastmath=True, cache=True)
 def apply_tone_curve_jit(
@@ -240,8 +250,7 @@ def apply_tone_curve_jit(
 
                 # Interpolate
                 result[i, j, k] = (
-                    curve_lut[idx_low] * (1.0 - weight) +
-                    curve_lut[idx_high] * weight
+                    curve_lut[idx_low] * (1.0 - weight) + curve_lut[idx_high] * weight
                 )
 
     return result
@@ -294,6 +303,7 @@ def apply_zone_blend_jit(
 # ============================================================================
 # Depth-aware Filtering Kernels
 # ============================================================================
+
 
 @jit(nopython=True, fastmath=True, cache=True)
 def bilateral_filter_pixel_jit(
@@ -362,7 +372,9 @@ def bilateral_filter_pixel_jit(
             range_dist_sq = range_dist * range_dist
 
             # Compute bilateral weight
-            weight = np.exp(spatial_coeff * spatial_dist_sq + range_coeff * range_dist_sq)
+            weight = np.exp(
+                spatial_coeff * spatial_dist_sq + range_coeff * range_dist_sq
+            )
 
             weighted_sum += neighbor_val * weight
             weight_sum += weight
@@ -405,8 +417,15 @@ def apply_bilateral_filter_jit(
         for j in range(w):
             for k in range(c):
                 result[i, j, k] = bilateral_filter_pixel_jit(
-                    image, depth, i, j, k,
-                    kernel_size, sigma_spatial, sigma_range, edge_threshold
+                    image,
+                    depth,
+                    i,
+                    j,
+                    k,
+                    kernel_size,
+                    sigma_spatial,
+                    sigma_range,
+                    edge_threshold,
                 )
 
     return result
@@ -416,29 +435,32 @@ def apply_bilateral_filter_jit(
 # Utility Functions
 # ============================================================================
 
+
 def get_numba_info() -> dict:
     """Get Numba availability and version information."""
     info = {
-        'available': NUMBA_AVAILABLE,
-        'version': None,
-        'threading_layer': None,
-        'parallel_enabled': False,
+        "available": NUMBA_AVAILABLE,
+        "version": None,
+        "threading_layer": None,
+        "parallel_enabled": False,
     }
 
     if NUMBA_AVAILABLE:
         import numba
-        info['version'] = numba.__version__
+
+        info["version"] = numba.__version__
 
         try:
             from numba import threading_layer
-            info['threading_layer'] = threading_layer()
+
+            info["threading_layer"] = threading_layer()
         except (ImportError, AttributeError, ValueError):
             # Threading layer may not be initialized yet
-            info['threading_layer'] = 'not initialized'
+            info["threading_layer"] = "not initialized"
 
         # Check if parallel compilation worked
         try:
-            info['parallel_enabled'] = numba.config.NUMBA_NUM_THREADS > 0
+            info["parallel_enabled"] = numba.config.NUMBA_NUM_THREADS > 0
         except AttributeError:
             pass
 

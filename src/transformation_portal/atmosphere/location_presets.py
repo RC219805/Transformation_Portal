@@ -22,9 +22,8 @@ import numpy as np
 from transformation_portal.atmosphere.skygan_generator import SkyParameters
 from transformation_portal.atmosphere.atmospheric_model import (
     AtmosphericParameters,
-    MarineLayerParameters
+    MarineLayerParameters,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +40,7 @@ class LocationProfile:
         timezone: IANA timezone identifier
         description: Location description
     """
+
     name: str
     latitude: float
     longitude: float
@@ -74,7 +74,7 @@ class LocationPresets:
             longitude=-119.7,
             elevation=50.0,  # Average elevation
             timezone="America/Los_Angeles",
-            description="Coastal luxury enclave with Mediterranean climate"
+            description="Coastal luxury enclave with Mediterranean climate",
         ),
         "santa_barbara": LocationProfile(
             name="Santa Barbara",
@@ -82,7 +82,7 @@ class LocationPresets:
             longitude=-119.70,
             elevation=10.0,
             timezone="America/Los_Angeles",
-            description="Coastal city with marine influence"
+            description="Coastal city with marine influence",
         ),
         "hope_ranch": LocationProfile(
             name="Hope Ranch",
@@ -90,7 +90,7 @@ class LocationPresets:
             longitude=-119.76,
             elevation=30.0,
             timezone="America/Los_Angeles",
-            description="Coastal community west of Santa Barbara"
+            description="Coastal community west of Santa Barbara",
         ),
         "riviera": LocationProfile(
             name="Santa Barbara Riviera",
@@ -98,8 +98,8 @@ class LocationPresets:
             longitude=-119.68,
             elevation=150.0,  # Hillside
             timezone="America/Los_Angeles",
-            description="Hillside community with ocean views"
-        )
+            description="Hillside community with ocean views",
+        ),
     }
 
     def __init__(self):
@@ -112,7 +112,7 @@ class LocationPresets:
         time_of_day: Optional[float] = None,
         date: Optional[str] = None,
         season: Optional[str] = None,
-        condition: str = "clear"
+        condition: str = "clear",
     ) -> SkyParameters:
         """Get sky generation parameters for location.
 
@@ -131,11 +131,7 @@ class LocationPresets:
         # Calculate sun position
         if time_of_day is not None:
             sun_azimuth, sun_elevation = self._calculate_sun_position(
-                profile.latitude,
-                profile.longitude,
-                time_of_day,
-                date,
-                season
+                profile.latitude, profile.longitude, time_of_day, date, season
             )
         else:
             # Default: mid-afternoon
@@ -144,8 +140,7 @@ class LocationPresets:
 
         # Get atmospheric conditions
         cloud_coverage, haze_density, turbidity = self._get_condition_parameters(
-            condition,
-            season or "fall"
+            condition, season or "fall"
         )
 
         return SkyParameters(
@@ -157,14 +152,14 @@ class LocationPresets:
             time_of_day=time_of_day,
             date=date,
             latitude=profile.latitude,
-            longitude=profile.longitude
+            longitude=profile.longitude,
         )
 
     def get_atmospheric_parameters(
         self,
         location: str = "montecito",
         season: str = "fall",
-        condition: str = "clear"
+        condition: str = "clear",
     ) -> AtmosphericParameters:
         """Get atmospheric parameters for location.
 
@@ -176,7 +171,9 @@ class LocationPresets:
         Returns:
             AtmosphericParameters
         """
-        profile = self.LOCATIONS.get(location, self.LOCATIONS["montecito"])
+        _profile = self.LOCATIONS.get(
+            location, self.LOCATIONS["montecito"]
+        )  # noqa: F841
 
         # Base parameters for coastal location
         base_params = AtmosphericParameters(
@@ -186,7 +183,7 @@ class LocationPresets:
             marine_influence=0.6,
             visibility=30.0,
             temperature=20.0,
-            pressure=1013.25
+            pressure=1013.25,
         )
 
         # Seasonal adjustments
@@ -194,7 +191,7 @@ class LocationPresets:
             "spring": {"humidity": 0.68, "visibility": 25.0, "turbidity": 2.5},
             "summer": {"humidity": 0.75, "visibility": 20.0, "turbidity": 3.0},
             "fall": {"humidity": 0.50, "visibility": 40.0, "turbidity": 1.5},
-            "winter": {"humidity": 0.62, "visibility": 35.0, "turbidity": 1.8}
+            "winter": {"humidity": 0.62, "visibility": 35.0, "turbidity": 1.8},
         }
 
         if season in seasonal_adjustments:
@@ -223,9 +220,7 @@ class LocationPresets:
         return base_params
 
     def get_marine_layer_parameters(
-        self,
-        season: str = "summer",
-        time_of_day: float = 8.0
+        self, season: str = "summer", time_of_day: float = 8.0
     ) -> MarineLayerParameters:
         """Get marine layer parameters.
 
@@ -244,7 +239,7 @@ class LocationPresets:
             "spring": 0.6,
             "summer": 0.7,  # Peak June gloom
             "fall": 0.3,
-            "winter": 0.4
+            "winter": 0.4,
         }
 
         prob = season_probability.get(season, 0.4)
@@ -267,7 +262,7 @@ class LocationPresets:
             present=present,
             height=150.0,  # ~500 feet typical
             density=density if present else 0.0,
-            thickness=100.0
+            thickness=100.0,
         )
 
     def _calculate_sun_position(
@@ -276,7 +271,7 @@ class LocationPresets:
         longitude: float,
         time_of_day: float,
         date: Optional[str] = None,
-        season: Optional[str] = None
+        season: Optional[str] = None,
     ) -> Tuple[float, float]:
         """Calculate sun azimuth and elevation.
 
@@ -307,7 +302,7 @@ class LocationPresets:
             day_of_year = 266  # Fall equinox
 
         # Solar declination (simplified)
-        declination = 23.45 * np.sin(np.deg2rad((360/365) * (day_of_year - 81)))
+        declination = 23.45 * np.sin(np.deg2rad((360 / 365) * (day_of_year - 81)))
 
         # Hour angle
         hour_angle = (time_of_day - 12) * 15  # 15 degrees per hour
@@ -317,10 +312,9 @@ class LocationPresets:
         decl_rad = np.deg2rad(declination)
         hour_rad = np.deg2rad(hour_angle)
 
-        sin_elevation = (
-            np.sin(lat_rad) * np.sin(decl_rad) +
-            np.cos(lat_rad) * np.cos(decl_rad) * np.cos(hour_rad)
-        )
+        sin_elevation = np.sin(lat_rad) * np.sin(decl_rad) + np.cos(lat_rad) * np.cos(
+            decl_rad
+        ) * np.cos(hour_rad)
         elevation = np.rad2deg(np.arcsin(np.clip(sin_elevation, -1, 1)))
 
         # Solar azimuth (simplified)
@@ -340,9 +334,7 @@ class LocationPresets:
         return float(azimuth), float(max(0, elevation))
 
     def _get_condition_parameters(
-        self,
-        condition: str,
-        season: str
+        self, condition: str, season: str
     ) -> Tuple[float, float, float]:
         """Get cloud coverage, haze density, turbidity for condition.
 
@@ -359,7 +351,7 @@ class LocationPresets:
             "marine_layer": (0.8, 0.4, 3.5),
             "partly_cloudy": (0.4, 0.15, 2.2),
             "hazy": (0.2, 0.5, 4.0),
-            "overcast": (0.95, 0.3, 3.0)
+            "overcast": (0.95, 0.3, 3.0),
         }
 
         # Summer typically hazier (June gloom)
@@ -377,7 +369,7 @@ class LocationPresets:
         self,
         location: str = "montecito",
         season: str = "fall",
-        time: str = "sunset"  # "sunrise" or "sunset"
+        time: str = "sunset",  # "sunrise" or "sunset"
     ) -> SkyParameters:
         """Get parameters for golden hour photography.
 
@@ -396,7 +388,7 @@ class LocationPresets:
             "spring": {"sunrise": 6.5, "sunset": 18.5},
             "summer": {"sunrise": 6.0, "sunset": 19.5},
             "fall": {"sunrise": 7.0, "sunset": 17.5},
-            "winter": {"sunrise": 7.5, "sunset": 16.5}
+            "winter": {"sunrise": 7.5, "sunset": 16.5},
         }
 
         time_of_day = golden_hour_times[season][time]
@@ -413,7 +405,7 @@ class LocationPresets:
             turbidity=2.0,
             time_of_day=time_of_day,
             latitude=profile.latitude,
-            longitude=profile.longitude
+            longitude=profile.longitude,
         )
 
     def list_locations(self) -> Dict[str, LocationProfile]:

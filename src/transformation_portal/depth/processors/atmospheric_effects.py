@@ -191,9 +191,7 @@ class AtmosphericEffects(DepthProcessorMixin):
         # NumPy fallback
         # Compute luminance (Rec. 709)
         luminance = (
-            0.2126 * image[..., 0] +
-            0.7152 * image[..., 1] +
-            0.0722 * image[..., 2]
+            0.2126 * image[..., 0] + 0.7152 * image[..., 1] + 0.0722 * image[..., 2]
         )
 
         # Compute desaturation factor based on depth
@@ -204,8 +202,8 @@ class AtmosphericEffects(DepthProcessorMixin):
 
         # Blend between grayscale and color
         result = (
-            luminance[..., None] * (1 - desaturation_factor[..., None]) +
-            image * desaturation_factor[..., None]
+            luminance[..., None] * (1 - desaturation_factor[..., None])
+            + image * desaturation_factor[..., None]
         )
 
         return result
@@ -244,8 +242,8 @@ class AtmosphericEffects(DepthProcessorMixin):
 
         # Shift towards atmospheric color (blue)
         result = (
-            image * (1 - shift_amount[..., None]) +
-            self.haze_color * shift_amount[..., None]
+            image * (1 - shift_amount[..., None])
+            + self.haze_color * shift_amount[..., None]
         )
 
         return np.clip(result, 0, 1)
@@ -253,15 +251,15 @@ class AtmosphericEffects(DepthProcessorMixin):
     def _get_config_params(self) -> dict:
         """Get configuration parameters that can be overridden."""
         return {
-            'haze_density': self.haze_density,
-            'haze_color': self.haze_color.copy(),
-            'desaturation_strength': self.desaturation_strength,
-            'enable_color_shift': self.enable_color_shift,
+            "haze_density": self.haze_density,
+            "haze_color": self.haze_color.copy(),
+            "desaturation_strength": self.desaturation_strength,
+            "enable_color_shift": self.enable_color_shift,
         }
 
     def _apply_config_override(self, key: str, value):
         """Apply configuration override with special handling for haze_color."""
-        if key == 'haze_color':
+        if key == "haze_color":
             self.haze_color = np.array(value, dtype=np.float32)
         elif hasattr(self, key):
             setattr(self, key, value)
@@ -311,8 +309,7 @@ class DepthFog:
 
         # Blend with fog color
         result = (
-            image * (1 - fog_factor[..., None]) +
-            self.fog_color * fog_factor[..., None]
+            image * (1 - fog_factor[..., None]) + self.fog_color * fog_factor[..., None]
         )
 
         return np.clip(result, 0, 1)

@@ -18,14 +18,16 @@ For Montecito/Santa Barbara (34.4°N):
 - Seasonal sun path variations
 """
 
-from transformation_portal.atmosphere.skygan_generator import SkyGANGenerator
-from transformation_portal.atmosphere.atmospheric_model import AtmosphericModel
+from transformation_portal.atmosphere.skygan_generator import SkyGANGenerator, SkyParameters
+from transformation_portal.atmosphere.atmospheric_model import AtmosphericModel, AtmosphericParameters
 from transformation_portal.atmosphere.location_presets import LocationPresets
 from transformation_portal.atmosphere.sky_blending import SkyBlender
 
 __all__ = [
-    'SkyGANGenerator',
-    'AtmosphericModel',
-    'LocationPresets',
-    'SkyBlender',
+    "SkyGANGenerator",
+    "SkyParameters",
+    "AtmosphericModel",
+    "AtmosphericParameters",
+    "LocationPresets",
+    "SkyBlender",
 ]

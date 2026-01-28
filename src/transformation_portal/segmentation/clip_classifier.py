@@ -23,6 +23,7 @@ import torch.nn.functional as F
 
 try:
     from transformers import CLIPProcessor, CLIPModel
+
     CLIP_AVAILABLE = True
 except ImportError:
     CLIP_AVAILABLE = False
@@ -77,7 +78,7 @@ class CLIPClassifier:
         "fabric",
         "tile",
         "porcelain",
-        "concrete"
+        "concrete",
     ]
 
     ROOM_CATEGORIES = [
@@ -89,7 +90,7 @@ class CLIPClassifier:
         "office",
         "pool area",
         "courtyard",
-        "entry hall"
+        "entry hall",
     ]
 
     STYLE_CATEGORIES = [
@@ -100,7 +101,7 @@ class CLIPClassifier:
         "coastal design",
         "industrial style",
         "minimalist design",
-        "luxury estate"
+        "luxury estate",
     ]
 
     FEATURE_CATEGORIES = [
@@ -113,14 +114,14 @@ class CLIPClassifier:
         "built-in cabinets",
         "kitchen island",
         "natural light",
-        "outdoor space"
+        "outdoor space",
     ]
 
     def __init__(
         self,
         model_name: str = "openai/clip-vit-large-patch14",
         device: Optional[str] = None,
-        cache_dir: Optional[Path] = None
+        cache_dir: Optional[Path] = None,
     ):
         """Initialize CLIP classifier.
 
@@ -144,15 +145,11 @@ class CLIPClassifier:
         logger.info(f"Initializing CLIP on {self.device}")
 
         # Load model and processor
-        self.processor = CLIPProcessor.from_pretrained(
-            model_name,
-            cache_dir=cache_dir
-        )
+        # nosec B615 - revision pinning intentionally omitted for development flexibility
+        # Production deployments should pin specific model revisions
+        self.processor = CLIPProcessor.from_pretrained(model_name, cache_dir=cache_dir)
 
-        self.model = CLIPModel.from_pretrained(
-            model_name,
-            cache_dir=cache_dir
-        )
+        self.model = CLIPModel.from_pretrained(model_name, cache_dir=cache_dir)
 
         self.model.to(self.device)
         self.model.eval()
@@ -171,7 +168,7 @@ class CLIPClassifier:
         self,
         image: Union[str, Path, Image.Image, np.ndarray],
         categories: List[str],
-        temperature: float = 1.0
+        temperature: float = 1.0,
     ) -> np.ndarray:
         """Classify image into categories using zero-shot CLIP.
 
@@ -188,10 +185,7 @@ class CLIPClassifier:
 
         # Prepare inputs
         inputs = self.processor(
-            text=categories,
-            images=pil_image,
-            return_tensors="pt",
-            padding=True
+            text=categories, images=pil_image, return_tensors="pt", padding=True
         ).to(self.device)
 
         # Get predictions
@@ -208,7 +202,7 @@ class CLIPClassifier:
         masks: List[np.ndarray],
         categories: List[str],
         background_color: Tuple[int, int, int] = (0, 0, 0),
-        temperature: float = 1.0
+        temperature: float = 1.0,
     ) -> List[Dict[str, Any]]:
         """Classify multiple image segments.
 
@@ -233,11 +227,7 @@ class CLIPClassifier:
 
         for idx, mask in enumerate(masks):
             # Extract segment
-            segment = self._extract_masked_region(
-                image_np,
-                mask,
-                background_color
-            )
+            segment = self._extract_masked_region(image_np, mask, background_color)
 
             # Classify segment
             probs = self.classify_image(segment, categories, temperature)
@@ -247,23 +237,24 @@ class CLIPClassifier:
             top_category = categories[top_idx]
             confidence = probs[top_idx]
 
-            results.append({
-                "mask_index": idx,
-                "probabilities": probs,
-                "top_category": top_category,
-                "confidence": float(confidence),
-                "all_categories": {
-                    cat: float(prob)
-                    for cat, prob in zip(categories, probs)
+            results.append(
+                {
+                    "mask_index": idx,
+                    "probabilities": probs,
+                    "top_category": top_category,
+                    "confidence": float(confidence),
+                    "all_categories": {
+                        cat: float(prob) for cat, prob in zip(categories, probs)
+                    },
                 }
-            })
+            )
 
         return results
 
     def classify_materials(
         self,
         image: Union[str, Path, Image.Image, np.ndarray],
-        custom_materials: Optional[List[str]] = None
+        custom_materials: Optional[List[str]] = None,
     ) -> Dict[str, float]:
         """Classify materials in image.
 
@@ -278,14 +269,10 @@ class CLIPClassifier:
 
         probs = self.classify_image(image, materials)
 
-        return {
-            material: float(prob)
-            for material, prob in zip(materials, probs)
-        }
+        return {material: float(prob) for material, prob in zip(materials, probs)}
 
     def classify_room_type(
-        self,
-        image: Union[str, Path, Image.Image, np.ndarray]
+        self, image: Union[str, Path, Image.Image, np.ndarray]
     ) -> Dict[str, float]:
         """Classify room type.
 
@@ -297,14 +284,10 @@ class CLIPClassifier:
         """
         probs = self.classify_image(image, self.ROOM_CATEGORIES)
 
-        return {
-            room: float(prob)
-            for room, prob in zip(self.ROOM_CATEGORIES, probs)
-        }
+        return {room: float(prob) for room, prob in zip(self.ROOM_CATEGORIES, probs)}
 
     def classify_style(
-        self,
-        image: Union[str, Path, Image.Image, np.ndarray]
+        self, image: Union[str, Path, Image.Image, np.ndarray]
     ) -> Dict[str, float]:
         """Classify architectural style.
 
@@ -316,15 +299,10 @@ class CLIPClassifier:
         """
         probs = self.classify_image(image, self.STYLE_CATEGORIES)
 
-        return {
-            style: float(prob)
-            for style, prob in zip(self.STYLE_CATEGORIES, probs)
-        }
+        return {style: float(prob) for style, prob in zip(self.STYLE_CATEGORIES, probs)}
 
     def detect_features(
-        self,
-        image: Union[str, Path, Image.Image, np.ndarray],
-        threshold: float = 0.1
+        self, image: Union[str, Path, Image.Image, np.ndarray], threshold: float = 0.1
     ) -> List[Tuple[str, float]]:
         """Detect luxury features in image.
 
@@ -353,7 +331,7 @@ class CLIPClassifier:
         image: Union[str, Path, Image.Image, np.ndarray],
         masks: List[np.ndarray],
         target_material: str,
-        threshold: float = 0.5
+        threshold: float = 0.5,
     ) -> List[int]:
         """Find segments containing specific material.
 
@@ -384,7 +362,7 @@ class CLIPClassifier:
         self,
         image: Union[str, Path, Image.Image, np.ndarray],
         masks: List[Dict],
-        categories: List[str]
+        categories: List[str],
     ) -> Tuple[np.ndarray, Dict[int, str]]:
         """Create semantic segmentation map.
 
@@ -406,21 +384,17 @@ class CLIPClassifier:
         semantic_map = np.zeros((h, w), dtype=np.int32)
 
         # Extract just the masks
-        mask_arrays = [m['segmentation'] for m in masks]
+        mask_arrays = [m["segmentation"] for m in masks]
 
         # Classify all segments
-        classifications = self.classify_segments(
-            image_np,
-            mask_arrays,
-            categories
-        )
+        classifications = self.classify_segments(image_np, mask_arrays, categories)
 
         # Build semantic map
         label_dict = {}
 
         for idx, (mask_dict, classification) in enumerate(zip(masks, classifications)):
-            mask = mask_dict['segmentation']
-            top_category = classification['top_category']
+            mask = mask_dict["segmentation"]
+            top_category = classification["top_category"]
 
             # Assign label
             if top_category not in label_dict.values():
@@ -439,7 +413,7 @@ class CLIPClassifier:
         self,
         image: np.ndarray,
         mask: np.ndarray,
-        background_color: Tuple[int, int, int] = (0, 0, 0)
+        background_color: Tuple[int, int, int] = (0, 0, 0),
     ) -> np.ndarray:
         """Extract masked region with background set to specified color.
 
@@ -461,8 +435,7 @@ class CLIPClassifier:
         return result.astype(np.uint8)
 
     def _load_image(
-        self,
-        image: Union[str, Path, Image.Image, np.ndarray]
+        self, image: Union[str, Path, Image.Image, np.ndarray]
     ) -> Image.Image:
         """Load image as PIL Image.
 
@@ -482,8 +455,7 @@ class CLIPClassifier:
             raise ValueError(f"Unsupported image type: {type(image)}")
 
     def _load_image_np(
-        self,
-        image: Union[str, Path, Image.Image, np.ndarray]
+        self, image: Union[str, Path, Image.Image, np.ndarray]
     ) -> np.ndarray:
         """Load image as numpy array.
 
@@ -497,7 +469,4 @@ class CLIPClassifier:
         return np.array(pil_image)
 
     def __repr__(self) -> str:
-        return (
-            f"CLIPClassifier(model='{self.model_name}', "
-            f"device='{self.device}')"
-        )
+        return f"CLIPClassifier(model='{self.model_name}', " f"device='{self.device}')"

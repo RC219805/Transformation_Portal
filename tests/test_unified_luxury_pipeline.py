@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# pylint: disable=redefined-outer-name
 """
 Tests for Unified Luxury Pipeline
 =================================

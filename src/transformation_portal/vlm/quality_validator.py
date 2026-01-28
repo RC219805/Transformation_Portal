@@ -21,12 +21,12 @@ from PIL import Image
 
 from transformation_portal.vlm.llava import LLaVAProcessor
 
-
 logger = logging.getLogger(__name__)
 
 
 class QualityAspect(Enum):
     """Aspects of image quality to validate."""
+
     REALISM = "realism"
     STRUCTURAL_ACCURACY = "structural_accuracy"
     MATERIAL_CONSISTENCY = "material_consistency"
@@ -36,6 +36,7 @@ class QualityAspect(Enum):
 
 class ValidationStatus(Enum):
     """Validation result status."""
+
     PASS = "pass"
     WARNING = "warning"
     FAIL = "fail"
@@ -53,6 +54,7 @@ class QualityScore:
         comments: Specific feedback
         issues: List of identified issues
     """
+
     aspect: QualityAspect
     score: float
     status: ValidationStatus
@@ -73,6 +75,7 @@ class ValidationReport:
         passed_validation: Whether image passed quality gates
         raw_assessment: Full LLaVA response
     """
+
     overall_status: ValidationStatus
     scores: List[QualityScore]
     overall_score: float
@@ -172,7 +175,7 @@ List any critical issues found."""
         llava_processor: Optional[LLaVAProcessor] = None,
         pass_threshold: float = 7.0,
         warning_threshold: float = 5.0,
-        **llava_kwargs
+        **llava_kwargs,
     ):
         """Initialize quality validator.
 
@@ -199,7 +202,7 @@ List any critical issues found."""
         self,
         image: Union[str, Path, Image.Image, np.ndarray],
         detailed: bool = True,
-        strict: bool = False
+        strict: bool = False,
     ) -> ValidationReport:
         """Validate image quality.
 
@@ -212,13 +215,17 @@ List any critical issues found."""
             Complete validation report
         """
         # Get assessment from LLaVA
-        prompt = self.DETAILED_VALIDATION_PROMPT if detailed else self.QUICK_VALIDATION_PROMPT
+        prompt = (
+            self.DETAILED_VALIDATION_PROMPT
+            if detailed
+            else self.QUICK_VALIDATION_PROMPT
+        )
 
         raw_assessment = self.processor.analyze_image(
             image,
             prompt=prompt,
             temperature=0.1,  # Low temperature for consistent assessment
-            max_new_tokens=1024 if detailed else 256
+            max_new_tokens=1024 if detailed else 256,
         )
 
         # Parse assessment
@@ -247,13 +254,13 @@ List any critical issues found."""
             artifacts=artifacts,
             recommendations=recommendations,
             passed_validation=passed,
-            raw_assessment=raw_assessment
+            raw_assessment=raw_assessment,
         )
 
     def validate_enhancement(
         self,
         original: Union[str, Path, Image.Image, np.ndarray],
-        enhanced: Union[str, Path, Image.Image, np.ndarray]
+        enhanced: Union[str, Path, Image.Image, np.ndarray],
     ) -> Dict[str, ValidationReport]:
         """Validate enhanced image against original.
 
@@ -278,14 +285,15 @@ List any critical issues found."""
         enhancement_validation = {
             "quality_improved": quality_improved,
             "new_artifacts_introduced": new_artifacts,
-            "score_delta": enhanced_report.overall_score - original_report.overall_score,
+            "score_delta": enhanced_report.overall_score
+            - original_report.overall_score,
             "enhancement_valid": quality_improved and not new_artifacts,
         }
 
         return {
             "original": original_report,
             "enhanced": enhanced_report,
-            "enhancement_validation": enhancement_validation
+            "enhancement_validation": enhancement_validation,
         }
 
     def _parse_detailed_scores(self, text: str) -> List[QualityScore]:
@@ -316,13 +324,15 @@ List any critical issues found."""
             # Extract comments for this aspect
             comments = self._extract_aspect_comments(text, aspect_name)
 
-            scores.append(QualityScore(
-                aspect=aspect,
-                score=score,
-                status=status,
-                comments=comments,
-                issues=issues
-            ))
+            scores.append(
+                QualityScore(
+                    aspect=aspect,
+                    score=score,
+                    status=status,
+                    comments=comments,
+                    issues=issues,
+                )
+            )
 
         return scores
 
@@ -359,7 +369,7 @@ List any critical issues found."""
                 score=base_score,
                 status=status,
                 comments=text[:200],  # First 200 chars as comment
-                issues=[]
+                issues=[],
             )
             for aspect in aspects
         ]
@@ -373,9 +383,9 @@ List any critical issues found."""
 
         # Pattern: Score: X/10 or X/10 or X.X/10
         score_patterns = [
-            r'score:\s*(\d+(?:\.\d+)?)/10',
-            r'(\d+(?:\.\d+)?)/10',
-            r'score:\s*(\d+(?:\.\d+)?)',
+            r"score:\s*(\d+(?:\.\d+)?)/10",
+            r"(\d+(?:\.\d+)?)/10",
+            r"score:\s*(\d+(?:\.\d+)?)",
         ]
 
         for pattern in score_patterns:
@@ -398,7 +408,7 @@ List any critical issues found."""
 
         if section_name_lower in text_lower:
             start = text_lower.index(section_name_lower)
-            return text_lower[start:start + length]
+            return text_lower[start : start + length]
 
         return text_lower[:length]
 
@@ -425,10 +435,23 @@ List any critical issues found."""
 
             # Common artifact keywords
             artifact_keywords = [
-                "halo", "haloing", "noise", "blur", "distortion", "artifact",
-                "inconsistent", "unnatural", "synthetic", "fake", "unrealistic",
-                "oversaturated", "overexposed", "underexposed", "banding",
-                "compression", "posterization"
+                "halo",
+                "haloing",
+                "noise",
+                "blur",
+                "distortion",
+                "artifact",
+                "inconsistent",
+                "unnatural",
+                "synthetic",
+                "fake",
+                "unrealistic",
+                "oversaturated",
+                "overexposed",
+                "underexposed",
+                "banding",
+                "compression",
+                "posterization",
             ]
 
             for keyword in artifact_keywords:
@@ -447,7 +470,10 @@ List any critical issues found."""
         if "issues:" in text_lower or "critical" in text_lower:
             # Extract issues section
             for line in text.split("\n"):
-                if any(word in line.lower() for word in ["issue", "problem", "artifact", "error"]):
+                if any(
+                    word in line.lower()
+                    for word in ["issue", "problem", "artifact", "error"]
+                ):
                     issues.append(line.strip())
 
         return issues
@@ -489,10 +515,7 @@ List any critical issues found."""
             return ValidationStatus.FAIL
 
     def _determine_status(
-        self,
-        overall_score: float,
-        scores: List[QualityScore],
-        strict: bool
+        self, overall_score: float, scores: List[QualityScore], strict: bool
     ) -> ValidationStatus:
         """Determine overall validation status."""
         # Check if any aspect failed critically
@@ -518,8 +541,8 @@ List any critical issues found."""
             Formatted summary string
         """
         summary = []
-        summary.append(f"Quality Validation Report")
-        summary.append(f"=" * 50)
+        summary.append("Quality Validation Report")
+        summary.append("=" * 50)
         summary.append(f"Overall Status: {report.overall_status.value.upper()}")
         summary.append(f"Overall Score: {report.overall_score:.1f}/10")
         summary.append(f"Passed: {'✓ YES' if report.passed_validation else '✗ NO'}")
@@ -531,7 +554,7 @@ List any critical issues found."""
                 ValidationStatus.PASS: "✓",
                 ValidationStatus.WARNING: "⚠",
                 ValidationStatus.FAIL: "✗",
-                ValidationStatus.UNKNOWN: "?"
+                ValidationStatus.UNKNOWN: "?",
             }[score.status]
 
             summary.append(

@@ -3,17 +3,15 @@
 import importlib
 import importlib.util
 import inspect
-import sys
 import warnings
 from pathlib import Path
 from threading import Lock
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Optional
 
 from .interface import (
     PluginInterface,
     PluginMetadata,
     PluginType,
-    PluginValidationError,
 )
 
 
@@ -42,11 +40,7 @@ class PluginRegistry:
         for plugin_type in PluginType:
             self._plugins[plugin_type.value] = {}
 
-    def register(
-        self,
-        plugin: PluginInterface,
-        replace_existing: bool = False
-    ) -> None:
+    def register(self, plugin: PluginInterface, replace_existing: bool = False) -> None:
         """Register a plugin instance.
 
         Args:
@@ -58,7 +52,9 @@ class PluginRegistry:
             PluginValidationError: If plugin fails validation
         """
         if not isinstance(plugin, PluginInterface):
-            raise TypeError(f"Plugin must implement PluginInterface, got {type(plugin)}")
+            raise TypeError(
+                f"Plugin must implement PluginInterface, got {type(plugin)}"
+            )
 
         plugin_type = plugin.metadata.plugin_type.value
         plugin_name = plugin.metadata.name
@@ -85,7 +81,7 @@ class PluginRegistry:
                     f"Plugin '{plugin_name}' is deprecated. "
                     f"Consider using '{plugin.metadata.replacement}' instead.",
                     DeprecationWarning,
-                    stacklevel=2
+                    stacklevel=2,
                 )
 
     def get_plugin(
@@ -93,7 +89,7 @@ class PluginRegistry:
         plugin_type: str,
         plugin_name: str,
         initialize: bool = False,
-        config: Optional[Dict[str, Any]] = None
+        config: Optional[Dict[str, Any]] = None,
     ) -> Optional[PluginInterface]:
         """Retrieve a registered plugin.
 
@@ -115,9 +111,7 @@ class PluginRegistry:
             return plugin
 
     def list_plugins(
-        self,
-        plugin_type: Optional[str] = None,
-        include_deprecated: bool = False
+        self, plugin_type: Optional[str] = None, include_deprecated: bool = False
     ) -> Dict[str, List[str]]:
         """List all registered plugins.
 
@@ -183,15 +177,14 @@ class PluginRegistry:
                 continue
 
             # Find all Python files in plugin directory
-            for plugin_file in path.rglob('*.py'):
-                if plugin_file.name.startswith('_'):
+            for plugin_file in path.rglob("*.py"):
+                if plugin_file.name.startswith("_"):
                     continue
 
                 try:
                     # Load module dynamically
                     spec = importlib.util.spec_from_file_location(
-                        f"plugin_{plugin_file.stem}",
-                        plugin_file
+                        f"plugin_{plugin_file.stem}", plugin_file
                     )
                     if spec and spec.loader:
                         module = importlib.util.module_from_spec(spec)
@@ -199,9 +192,11 @@ class PluginRegistry:
 
                         # Find plugin classes in module
                         for name, obj in inspect.getmembers(module, inspect.isclass):
-                            if (issubclass(obj, PluginInterface) and
-                                obj is not PluginInterface and
-                                not inspect.isabstract(obj)):
+                            if (
+                                issubclass(obj, PluginInterface)
+                                and obj is not PluginInterface
+                                and not inspect.isabstract(obj)
+                            ):
 
                                 # Instantiate and register plugin
                                 plugin_instance = obj()
@@ -210,13 +205,14 @@ class PluginRegistry:
 
                 except Exception as e:
                     warnings.warn(
-                        f"Failed to load plugin from {plugin_file}: {e}",
-                        RuntimeWarning
+                        f"Failed to load plugin from {plugin_file}: {e}", RuntimeWarning
                     )
 
         return discovered
 
-    def get_metadata(self, plugin_type: str, plugin_name: str) -> Optional[PluginMetadata]:
+    def get_metadata(
+        self, plugin_type: str, plugin_name: str
+    ) -> Optional[PluginMetadata]:
         """Get metadata for a specific plugin.
 
         Args:
@@ -235,14 +231,15 @@ class PluginRegistry:
             List of default plugin directories
         """
         paths = [
-            Path.home() / '.transformation_portal' / 'plugins',
-            Path(__file__).parent / 'builtin',
+            Path.home() / ".transformation_portal" / "plugins",
+            Path(__file__).parent / "builtin",
         ]
 
         # Add environment variable path if set
         import os
-        if 'TRANSFORMATION_PORTAL_PLUGINS' in os.environ:
-            paths.append(Path(os.environ['TRANSFORMATION_PORTAL_PLUGINS']))
+
+        if "TRANSFORMATION_PORTAL_PLUGINS" in os.environ:
+            paths.append(Path(os.environ["TRANSFORMATION_PORTAL_PLUGINS"]))
 
         return paths
 
@@ -250,7 +247,7 @@ class PluginRegistry:
         self,
         plugin_type: str,
         plugin_name: str,
-        config: Optional[Dict[str, Any]] = None
+        config: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """Hot-reload a plugin (unregister, reload module, re-register).
 

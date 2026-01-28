@@ -127,10 +127,14 @@ def render_coastal_estate(
         options["neg"] = negative_prompt
 
     if extra_options is not None:
-        conflicting_keys = [key for key in extra_options if key in _MANAGED_OPTION_PARAMS]
+        conflicting_keys = [
+            key for key in extra_options if key in _MANAGED_OPTION_PARAMS
+        ]
         if conflicting_keys:
             formatted = ", ".join(sorted(f"'{key}'" for key in conflicting_keys))
-            raise ValueError(f"extra option {formatted} conflicts with managed argument")
+            raise ValueError(
+                f"extra option {formatted} conflicts with managed argument"
+            )
 
         for key, value in extra_options.items():
             options[key] = value

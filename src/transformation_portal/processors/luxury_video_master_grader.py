@@ -10,6 +10,7 @@ repository, exposing a preset-driven command line with opt-in overrides and a
 dry-run preview.  A short ffprobe inspection is performed up-front to surface
 source metadata before processing.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -79,7 +80,12 @@ PRESETS: Dict[str, GradePreset] = {
     "signature_estate": GradePreset(
         name="Signature Estate",
         description="Flagship Kodak 2393 emulation with gentle highlight roll-off, soft denoise and warm mid-tones.",
-        lut=REPO_ROOT / "assets" / "luts" / "film_emulation" / "Kodak" / "Kodak_2393_D55.cube",
+        lut=REPO_ROOT
+        / "assets"
+        / "luts"
+        / "film_emulation"
+        / "Kodak"
+        / "Kodak_2393_D55.cube",
         lut_strength=0.85,
         denoise="soft",
         contrast=1.06,
@@ -343,7 +349,9 @@ def get_color_space_tag(stream: Dict[str, object]) -> Optional[str]:
     return value
 
 
-def plan_tone_mapping(args: argparse.Namespace, probe: Dict[str, object]) -> ToneMapPlan:
+def plan_tone_mapping(
+    args: argparse.Namespace, probe: Dict[str, object]
+) -> ToneMapPlan:
     """Determine whether tone mapping should run for this clip."""
 
     method = (args.tone_map or "auto").lower()
@@ -351,7 +359,9 @@ def plan_tone_mapping(args: argparse.Namespace, probe: Dict[str, object]) -> Ton
     tone_map_desat = args.tone_map_desat
 
     if method == "off":
-        return ToneMapPlan(enabled=False, note="Tone mapping disabled by user preference.")
+        return ToneMapPlan(
+            enabled=False, note="Tone mapping disabled by user preference."
+        )
 
     video = extract_video_stream(probe)
     transfer = (video.get("color_trc") or "").lower()
@@ -475,7 +485,10 @@ def assess_frame_rate(
     streams = probe.get("streams", [])
     video = next((s for s in streams if s.get("codec_type") == "video"), None)
     if not video:
-        return FrameRatePlan(target=None, note="No video stream detected; skipping frame-rate adjustments.")
+        return FrameRatePlan(
+            target=None,
+            note="No video stream detected; skipping frame-rate adjustments.",
+        )
 
     if user_target:
         normalized, fraction = normalize_frame_rate(user_target)
@@ -630,7 +643,9 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     warmth = float(config.get("warmth", 0.0))
     cool = float(config.get("cool", 0.0))
     post_color_label = post_eq_label
-    if not math.isclose(warmth, 0.0, abs_tol=1e-4) or not math.isclose(cool, 0.0, abs_tol=1e-4):
+    if not math.isclose(warmth, 0.0, abs_tol=1e-4) or not math.isclose(
+        cool, 0.0, abs_tol=1e-4
+    ):
         new_label = next_label()
         # Clamp values to [-0.5, 0.5] to stay within tasteful limits.
         warmth_c = clamp(warmth, -0.5, 0.5)
@@ -705,7 +720,9 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
         )
 
         blur_label = next_label()
-        nodes.append(f"[{highlight_label}]gblur=sigma={radius:.2f}:steps=2[{blur_label}]")
+        nodes.append(
+            f"[{highlight_label}]gblur=sigma={radius:.2f}:steps=2[{blur_label}]"
+        )
 
         tint_label = next_label()
         nodes.append(
@@ -730,11 +747,9 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     return graph, "vout"
 
 
-def determine_color_metadata(args: argparse.Namespace,
-                             probe: Dict[str,
-                                         object]) -> tuple[Optional[str],
-                                                           Optional[str],
-                                                           Optional[str]]:
+def determine_color_metadata(
+    args: argparse.Namespace, probe: Dict[str, object]
+) -> tuple[Optional[str], Optional[str], Optional[str]]:
     """Determine color metadata based on priority: explicit > color-from-source > none."""
 
     # Priority 1: Explicit overrides
@@ -851,7 +866,9 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("input_video", type=Path, help="Source video to be mastered.")
-    parser.add_argument("output_video", type=Path, help="Destination path for the master grade.")
+    parser.add_argument(
+        "output_video", type=Path, help="Destination path for the master grade."
+    )
     parser.add_argument(
         "--preset",
         choices=sorted(PRESETS.keys()),
@@ -863,16 +880,38 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         action=ListPresetsAction,
         help="Print available presets and exit.",
     )
-    parser.add_argument("--custom-lut", type=Path, help="Override the preset LUT with a custom .cube file.")
-    parser.add_argument("--lut-strength", type=float, help="Blend the LUT with the original signal (0.0-1.0).")
-    parser.add_argument("--denoise", choices=list(HQDN3D_PRESETS) + ["of"], help="Override denoise strength.")
+    parser.add_argument(
+        "--custom-lut",
+        type=Path,
+        help="Override the preset LUT with a custom .cube file.",
+    )
+    parser.add_argument(
+        "--lut-strength",
+        type=float,
+        help="Blend the LUT with the original signal (0.0-1.0).",
+    )
+    parser.add_argument(
+        "--denoise",
+        choices=list(HQDN3D_PRESETS) + ["of"],
+        help="Override denoise strength.",
+    )
     parser.add_argument("--contrast", type=float, help="Override contrast multiplier.")
-    parser.add_argument("--saturation", type=float, help="Override saturation multiplier.")
+    parser.add_argument(
+        "--saturation", type=float, help="Override saturation multiplier."
+    )
     parser.add_argument("--gamma", type=float, help="Override gamma adjustment.")
     parser.add_argument("--brightness", type=float, help="Override brightness offset.")
-    parser.add_argument("--warmth", type=float, help="Override warm mid-tone tint (red channel).")
-    parser.add_argument("--cool", type=float, help="Override cool mid-tone tint (blue channel).")
-    parser.add_argument("--sharpen", choices=list(UNSHARP_PRESETS) + ["of"], help="Override clarity setting.")
+    parser.add_argument(
+        "--warmth", type=float, help="Override warm mid-tone tint (red channel)."
+    )
+    parser.add_argument(
+        "--cool", type=float, help="Override cool mid-tone tint (blue channel)."
+    )
+    parser.add_argument(
+        "--sharpen",
+        choices=list(UNSHARP_PRESETS) + ["of"],
+        help="Override clarity setting.",
+    )
     parser.add_argument("--grain", type=float, help="Override film-grain intensity.")
     parser.add_argument(
         "--tone-map",
@@ -915,7 +954,9 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         type=float,
         help="Luminance threshold (0-1) before highlights feed the halation pass.",
     )
-    parser.add_argument("--video-codec", default="prores_ks", help="Video mezzanine codec to use.")
+    parser.add_argument(
+        "--video-codec", default="prores_ks", help="Video mezzanine codec to use."
+    )
     parser.add_argument(
         "--prores-profile",
         type=int,
@@ -924,13 +965,35 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         help="Apple ProRes profile when using prores_ks (3 = 422 HQ).",
     )
     parser.add_argument("--bitrate", help="Explicit video bitrate target (e.g. 800M).")
-    parser.add_argument("--audio-codec", default="copy", help="Audio codec to use (pcm_s24le for master-grade PCM).")
-    parser.add_argument("--audio-bitrate", help="Override audio bitrate when transcoding audio.")
+    parser.add_argument(
+        "--audio-codec",
+        default="copy",
+        help="Audio codec to use (pcm_s24le for master-grade PCM).",
+    )
+    parser.add_argument(
+        "--audio-bitrate", help="Override audio bitrate when transcoding audio."
+    )
     parser.add_argument("--threads", type=int, help="Limit ffmpeg worker threads.")
-    parser.add_argument("--preview-frames", type=int, help="Render only the first N frames for a quick preview.")
-    parser.add_argument("--overwrite", action="store_true", help="Overwrite destination if it already exists.")
-    parser.add_argument("--dry-run", action="store_true", help="Log the ffmpeg command without executing it.")
-    parser.add_argument("--log-level", default="info", help="ffmpeg log level (quiet, warning, info, verbose).")
+    parser.add_argument(
+        "--preview-frames",
+        type=int,
+        help="Render only the first N frames for a quick preview.",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite destination if it already exists.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Log the ffmpeg command without executing it.",
+    )
+    parser.add_argument(
+        "--log-level",
+        default="info",
+        help="ffmpeg log level (quiet, warning, info, verbose).",
+    )
     parser.add_argument(
         "--target-fps",
         help="Conform the output to this frame rate (e.g. 23.976 or 24000/1001).",
@@ -1032,7 +1095,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         return 2
 
     if output_video.exists() and not args.overwrite:
-        print(f"Output file already exists: {output_video}. Use --overwrite to replace.", file=sys.stderr)
+        print(
+            f"Output file already exists: {output_video}. Use --overwrite to replace.",
+            file=sys.stderr,
+        )
         return 3
 
     try:

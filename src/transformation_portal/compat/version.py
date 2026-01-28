@@ -1,168 +1,76 @@
 """Version checking and compatibility utilities."""
 
-import warnings
-from dataclasses import dataclass
-from typing import Optional, Tuple
-
-from packaging import version as pkg_version
+import re
+from typing import Any, Tuple, Union
 
 
-@dataclass
 class Version:
-    """Represents a semantic version."""
-    major: int
-    minor: int
-    patch: int
-    prerelease: Optional[str] = None
+    """Simple semantic version parser and comparator."""
 
-    @classmethod
-    def from_string(cls, version_str: str) -> 'Version':
-        """Parse version string.
+    def __init__(self, version_str: str) -> None:
+        self.raw = version_str
+        self.major, self.minor, self.patch, self.prerelease = self._parse(version_str)
 
-        Args:
-            version_str: Version string (e.g., "1.2.3" or "1.2.3-beta")
+    def _parse(self, v: str) -> Tuple[int, int, int, str]:
+        """Parse version string (e.g., '1.2.3', '2.0.0-beta')."""
+        # Regex for SemVer-ish strings
+        match = re.match(r"^(\d+)\.(\d+)(?:\.(\d+))?(?:[.-](.+))?$", v)
+        if not match:
+            raise ValueError(f"Invalid version string: {v}")
+        
+        major = int(match.group(1))
+        minor = int(match.group(2))
+        patch = int(match.group(3) or 0)
+        prerelease = match.group(4) or ""
+        
+        return major, minor, patch, prerelease
 
-        Returns:
-            Version instance
-        """
-        parsed = pkg_version.parse(version_str)
+    def __repr__(self) -> str:
+        return f"Version('{self.raw}')"
 
-        if isinstance(parsed, pkg_version.Version):
-            return cls(
-                major=parsed.major,
-                minor=parsed.minor,
-                patch=parsed.micro,
-                prerelease=str(parsed.pre) if parsed.pre else None
-            )
-        else:
-            raise ValueError(f"Invalid version string: {version_str}")
-
-    def __str__(self) -> str:
-        """String representation."""
-        version_str = f"{self.major}.{self.minor}.{self.patch}"
-        if self.prerelease:
-            version_str += f"-{self.prerelease}"
-        return version_str
-
-    def __lt__(self, other: 'Version') -> bool:
-        """Less than comparison."""
-        return pkg_version.parse(str(self)) < pkg_version.parse(str(other))
-
-    def __le__(self, other: 'Version') -> bool:
-        """Less than or equal comparison."""
-        return pkg_version.parse(str(self)) <= pkg_version.parse(str(other))
-
-    def __gt__(self, other: 'Version') -> bool:
-        """Greater than comparison."""
-        return pkg_version.parse(str(self)) > pkg_version.parse(str(other))
-
-    def __ge__(self, other: 'Version') -> bool:
-        """Greater than or equal comparison."""
-        return pkg_version.parse(str(self)) >= pkg_version.parse(str(other))
-
-    def __eq__(self, other: object) -> bool:
-        """Equality comparison."""
+    def __lt__(self, other: Any) -> bool:
         if not isinstance(other, Version):
-            return False
-        return pkg_version.parse(str(self)) == pkg_version.parse(str(other))
+            return NotImplemented
+        return (self.major, self.minor, self.patch) < (other.major, other.minor, other.patch)
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, Version):
+            return NotImplemented
+        return (self.major, self.minor, self.patch) == (other.major, other.minor, other.patch)
+
+    def __ge__(self, other: Any) -> bool:
+        return not self < other
 
 
 def check_version_compatibility(
-    current_version: str,
-    min_version: Optional[str] = None,
-    max_version: Optional[str] = None
-) -> Tuple[bool, Optional[str]]:
-    """Check if current version is compatible with requirements.
+    current_version: str, required_version: str
+) -> bool:
+    """Check if current version meets required version.
 
     Args:
-        current_version: Current version string
-        min_version: Minimum required version
-        max_version: Maximum supported version
+        current_version: The version of the library currently running.
+        required_version: The minimum version required.
 
     Returns:
-        Tuple of (is_compatible, error_message)
-
-    Example:
-        >>> is_compatible, msg = check_version_compatibility("1.5.0", "1.0.0", "2.0.0")
-        >>> assert is_compatible
-    """
-    current = pkg_version.parse(current_version)
-
-    if min_version:
-        minimum = pkg_version.parse(min_version)
-        if current < minimum:
-            return False, f"Version {current_version} is below minimum required {min_version}"
-
-    if max_version:
-        maximum = pkg_version.parse(max_version)
-        if current > maximum:
-            return False, f"Version {current_version} exceeds maximum supported {max_version}"
-
-    return True, None
-
-
-def require_version(
-    min_version: Optional[str] = None,
-    max_version: Optional[str] = None
-):
-    """Decorator to enforce version requirements.
-
-    Args:
-        min_version: Minimum required version
-        max_version: Maximum supported version
-
-    Example:
-        >>> @require_version(min_version="1.0.0", max_version="2.0.0")
-        ... def my_function():
-        ...     pass
-    """
-    def decorator(func):
-        import functools
-
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            from transformation_portal import __version__
-
-            is_compatible, error_msg = check_version_compatibility(
-                __version__, min_version, max_version
-            )
-
-            if not is_compatible:
-                raise RuntimeError(
-                    f"Version incompatibility in {func.__name__}: {error_msg}"
-                )
-
-            return func(*args, **kwargs)
-
-        return wrapper
-
-    return decorator
-
-
-def get_portal_version() -> str:
-    """Get current Transformation Portal version.
-
-    Returns:
-        Version string
+        True if current >= required.
     """
     try:
-        from transformation_portal import __version__
-        return __version__
-    except ImportError:
-        return "0.0.0"
+        return Version(current_version) >= Version(required_version)
+    except ValueError:
+        return False
 
 
-def is_version_at_least(required_version: str) -> bool:
-    """Check if portal version is at least the required version.
-
-    Args:
-        required_version: Required version string
-
-    Returns:
-        True if current version >= required version
+def require_version(min_version: str) -> None:
+    """Raise RuntimeError if package version is too old.
+    
+    Useful for ensuring plugins define a minimum required version of 
+    Transformation Portal.
     """
-    current = get_portal_version()
-    is_compatible, _ = check_version_compatibility(
-        current, min_version=required_version
-    )
-    return is_compatible
+    # Import here to avoid circular dependency
+    from transformation_portal import __version__ as current_ver
+    
+    if not check_version_compatibility(current_ver, min_version):
+        raise RuntimeError(
+            f"Transformation Portal v{min_version}+ required. "
+            f"Found v{current_ver}."
+        )
