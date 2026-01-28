@@ -272,3 +272,93 @@ def test_stub_not_implemented_errors():
 if __name__ == "__main__":
     # Allow running tests directly
     pytest.main([__file__, "-v"])
+
+
+# Intentional failure tests - verify stubs fail gracefully
+def test_da3_predict_fails_intentionally():
+    """Test that DA3InferenceEngine.predict() raises NotImplementedError, not TypeError."""
+    import numpy as np
+    from transformation_portal.lux_depth_v3.inference import DA3InferenceEngine
+    from transformation_portal.lux_depth_v3.config import DA3Config
+
+    config = DA3Config()
+    engine = DA3InferenceEngine(config=config)
+
+    # Should raise NotImplementedError (intentional stub), not TypeError/AttributeError
+    with pytest.raises(NotImplementedError, match="stub"):
+        engine.predict(np.zeros((64, 64, 3), dtype=np.float32))
+
+
+def test_depth_writer_fails_intentionally():
+    """Test that atomic_write_depth_u16_png_with_stats raises NotImplementedError."""
+    import numpy as np
+    from pathlib import Path
+    from transformation_portal.lux_depth_v3.depth_writer import atomic_write_depth_u16_png_with_stats
+
+    depth_map = np.zeros((64, 64), dtype=np.float32)
+    output_path = Path("/tmp/test_depth.png")
+
+    # Should raise NotImplementedError with call-site compatible signature
+    with pytest.raises(NotImplementedError, match="stub"):
+        atomic_write_depth_u16_png_with_stats(
+            output_path=output_path,
+            depth_map=depth_map,
+            method="u16",
+            debug_verify=False
+        )
+
+
+def test_v2_runner_fails_intentionally():
+    """Test that V2Runner.run() raises NotImplementedError with correct signature."""
+    from pathlib import Path
+    from transformation_portal.lux_depth_v3.v2_runner import V2Runner
+
+    runner = V2Runner()
+
+    # Should raise NotImplementedError with orchestrator-compatible signature
+    with pytest.raises(NotImplementedError, match="stub"):
+        runner.run(
+            input_path=Path("/tmp/input.png"),
+            depth_dir=Path("/tmp/depth"),
+            output_dir=Path("/tmp/output"),
+            preset="default",
+            device="cpu",
+            upscaler_backend="default",
+            log_file=Path("/tmp/v2.log"),
+            timeout=300.0
+        )
+
+
+def test_postprocessor_config_has_required_fields():
+    """Test that PostprocessingConfig has all fields Postprocessor accesses."""
+    from transformation_portal.lux_depth_v3.config import PostprocessingConfig
+
+    config = PostprocessingConfig()
+
+    # These fields are accessed by postprocessing.py - must not raise AttributeError
+    assert hasattr(config, 'apply_metric_scaling')
+    assert hasattr(config, 'scale_factor')
+    assert hasattr(config, 'apply_median_filter')
+    assert hasattr(config, 'median_kernel_size')
+    assert hasattr(config, 'apply_bilateral_filter')
+    assert hasattr(config, 'bilateral_sigma_color')
+    assert hasattr(config, 'bilateral_sigma_space')
+    assert hasattr(config, 'preserve_edges')
+    assert hasattr(config, 'edge_threshold')
+    assert hasattr(config, 'fusion_mode')
+    assert hasattr(config, 'refinement')
+
+
+def test_depth_result_has_depth_alias():
+    """Test that DepthResult.depth property works (orchestrator uses .depth, not .depth_map)."""
+    import numpy as np
+    from transformation_portal.lux_depth_v3.inference import DepthResult
+
+    depth_map = np.zeros((64, 64), dtype=np.float32)
+    image = np.zeros((64, 64, 3), dtype=np.float32)
+
+    result = DepthResult(depth_map=depth_map, original_image=image, metadata={})
+
+    # Should not raise AttributeError - orchestrator accesses .depth
+    assert result.depth is not None
+    assert result.depth is result.depth_map  # Verify it's an alias
