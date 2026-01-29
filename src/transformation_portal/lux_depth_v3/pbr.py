@@ -116,17 +116,17 @@ def generate_pbr_maps(
     # Pre-blur depth if requested
     depth_for_normals = _box_blur_gray(depth, config.normal_blur_radius) if config.normal_blur_radius > 0 else depth
 
-    # Compute gradients
+    # Compute gradients (unscaled, for use in both normals and AO)
     grad_x, grad_y = _sobel(depth_for_normals)
 
-    # Scale by strength
-    grad_x *= config.normal_strength
-    grad_y *= config.normal_strength
+    # Scale gradients for normal map only
+    grad_x_scaled = grad_x * config.normal_strength
+    grad_y_scaled = grad_y * config.normal_strength
 
     # Build normal vectors: N = (-dx, -dy, 1)
     normals = np.stack([
-        -grad_x,   # X component
-        -grad_y,   # Y component
+        -grad_x_scaled,   # X component
+        -grad_y_scaled,   # Y component
         np.ones_like(grad_x)  # Z component (up)
     ], axis=-1)
 
@@ -153,7 +153,7 @@ def generate_pbr_maps(
     roughness_map = (roughness * 255).astype(np.uint8)
 
     # 3. AMBIENT OCCLUSION MAP
-    # Approximate occlusion from depth gradients
+    # Use UNSCALED gradients to decouple AO from normal_strength
     grad_mag = np.sqrt(grad_x**2 + grad_y**2)
 
     # Blur to spread occlusion

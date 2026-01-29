@@ -247,6 +247,9 @@ class EnhanceOrchestrator:
         depth_runtime_s = 0.0
         depth_metadata = None
 
+        # Initialize pbr_assets for all code paths (prevents UnboundLocalError)
+        pbr_assets = None
+
         if not skip_depth:
             logger.info(f"Stage A: Generating depth for {output_key}...")
             t0 = time.time()
@@ -375,7 +378,10 @@ class EnhanceOrchestrator:
         else:
             if manifest_path.exists():
                 try:
-                    depth_metadata = CombinedManifest.load(manifest_path).depth
+                    m = CombinedManifest.load(manifest_path)
+                    depth_metadata = m.depth
+                    # Preserve previous PBR paths when resuming from cached depth
+                    pbr_assets = getattr(m, "pbr_assets", None)
                 except Exception:  # Do not swallow KeyboardInterrupt/SystemExit
                     pass
 
@@ -419,9 +425,13 @@ class EnhanceOrchestrator:
             depth=depth_metadata,
             v2=v2_metadata,
             timing=TimingMetadata(depth_runtime_s, v2_runtime_s, depth_runtime_s + v2_runtime_s),
-                pbr_assets=pbr_assets,
-            repro=ReproMetadata(self.v3_git, self.v2_git, self.config.depth_device),
-            config_fingerprint=self.compute_config_fingerprint().to_sha256(),
+            pbr_assets=pbr_assets,
+            repro=ReproMetadata(
+                v3_git_revision=self.v3_git,
+                v2_git_revision=self.v2_git,
+                environment=self.environment,
+            ),
+            config_fingerprint=self.compute_config_fingerprint(),
             environment=self.environment
         )
         manifest.write(manifest_path)
