@@ -8,8 +8,6 @@ Validates:
 """
 import pytest
 import os
-from pathlib import Path
-import tempfile
 
 from transformation_portal.lux_depth_v3.io_atomic import (
     atomic_temp_file,
@@ -20,7 +18,6 @@ from transformation_portal.lux_depth_v3.io_atomic import (
 )
 
 from PIL import Image
-import numpy as np
 
 
 class TestAtomicTempFile:
