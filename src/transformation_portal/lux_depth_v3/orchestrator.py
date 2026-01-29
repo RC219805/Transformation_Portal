@@ -414,7 +414,12 @@ class EnhanceOrchestrator:
         input_sha = self._compute_or_skip_hash(image_input.path)
 
         manifest = CombinedManifest(
-            input=InputMetadata(str(image_input.path), input_sha, True, str(normalized_path)),
+            input=InputMetadata(
+                image_path=str(image_input.path),
+                image_sha256=input_sha,
+                image_size_bytes=None,
+                image_dimensions=None,
+            ),
             depth=depth_metadata,
             v2=v2_metadata,
             timing=TimingMetadata(
