@@ -110,8 +110,6 @@ def generate_pbr_maps(
         >>> assert normal.shape == (512, 512, 3)
         >>> assert roughness.shape == (512, 512)
     """
-    h, w = depth.shape
-
     # 1. NORMAL MAP
     # Pre-blur depth if requested
     depth_for_normals = _box_blur_gray(depth, config.normal_blur_radius) if config.normal_blur_radius > 0 else depth
@@ -132,7 +130,7 @@ def generate_pbr_maps(
 
     # Normalize to unit length
     norm = np.linalg.norm(normals, axis=-1, keepdims=True)
-    norm = np.maximum(norm, 1e-8)  # Avoid division by zero
+    norm = np.maximum(norm, 1e-6)  # Avoid division by zero
     normals = normals / norm
 
     # Map from [-1, 1] to [0, 255]
@@ -149,6 +147,8 @@ def generate_pbr_maps(
     # Normalize to 0-1
     if roughness.max() > roughness.min():
         roughness = (roughness - roughness.min()) / (roughness.max() - roughness.min())
+    else:
+        roughness = np.zeros_like(roughness)  # Constant field = no roughness
 
     roughness_map = (roughness * 255).astype(np.uint8)
 
@@ -163,6 +163,8 @@ def generate_pbr_maps(
     occlusion *= config.ao_strength
     if occlusion.max() > occlusion.min():
         occlusion = (occlusion - occlusion.min()) / (occlusion.max() - occlusion.min())
+    else:
+        occlusion = np.zeros_like(occlusion)  # Constant field = no occlusion
 
     # Apply bias (darker = more occluded, so invert and apply bias)
     ao = 1.0 - occlusion

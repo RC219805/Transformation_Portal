@@ -1,7 +1,6 @@
 """Tests for PBR map generation."""
 
 import numpy as np
-import pytest
 
 from transformation_portal.lux_depth_v3.pbr import (
     PBRConfig,

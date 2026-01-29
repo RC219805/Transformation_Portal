@@ -4,9 +4,10 @@ Handles atomic writing of PBR maps (normal, roughness, AO) using PIL only.
 """
 
 import logging
+import os
 from pathlib import Path
 import tempfile
-from typing import Dict, Optional
+from typing import Dict
 
 import numpy as np
 from PIL import Image
@@ -79,8 +80,8 @@ def write_pbr_maps(
                 else:
                     raise ValueError(f"Invalid map shape for {map_type}: {map_data.shape}")
 
-                # Write to temp file (use file descriptor)
-                with open(temp_fd, 'wb') as f:
+                # Write to temp file (convert file descriptor to file object)
+                with os.fdopen(temp_fd, 'wb') as f:
                     pil_image.save(f, format='PNG', optimize=True)
 
                 # Atomic rename

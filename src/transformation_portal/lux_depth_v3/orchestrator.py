@@ -424,7 +424,12 @@ class EnhanceOrchestrator:
             input=InputMetadata(str(image_input.path), input_sha, True, str(normalized_path)),
             depth=depth_metadata,
             v2=v2_metadata,
-            timing=TimingMetadata(depth_runtime_s, v2_runtime_s, depth_runtime_s + v2_runtime_s),
+            timing=TimingMetadata(
+                total_seconds=depth_runtime_s + v2_runtime_s,
+                depth_seconds=depth_runtime_s,
+                v2_seconds=v2_runtime_s,
+                timestamp_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            ),
             pbr_assets=pbr_assets,
             repro=ReproMetadata(
                 v3_git_revision=self.v3_git,
