@@ -15,7 +15,6 @@ from __future__ import annotations
 import os
 import tempfile
 from pathlib import Path
-from typing import Optional, BinaryIO
 from contextlib import contextmanager
 
 try:
@@ -30,20 +29,23 @@ except ImportError:
 def atomic_temp_file(
     output_path: Path,
     suffix: str = ".tmp",
-    prefix: str = ".tmp_"
+    prefix: str = ".tmp_",
+    create_file: bool = False
 ):
     """Context manager for atomic temp file creation.
 
-    Creates a temporary file in the same directory as output_path,
+    Creates a temporary file path (or file) in the same directory as output_path,
     then atomically renames it on successful exit.
 
     Args:
         output_path: Final destination path
         suffix: Temp file suffix (default: ".tmp")
         prefix: Temp file prefix (default: ".tmp_")
+        create_file: If True, pre-create file with mkstemp (for FD-based writers).
+                     If False, generate unique path only (for path-based writers).
 
     Yields:
-        Path to temporary file
+        Path to temporary file (may or may not exist yet)
 
     Ensures:
         - Temp file is in same directory as output_path
@@ -52,34 +54,65 @@ def atomic_temp_file(
         - No FD leaks
 
     Example:
+        >>> # Path-based writer (cv2.imwrite)
         >>> with atomic_temp_file(Path("output.png"), suffix=".png") as temp_path:
-        ...     temp_path.write_bytes(data)
+        ...     cv2.imwrite(str(temp_path), image)  # Creates file with umask perms
         # output.png now exists atomically
+
+        >>> # FD-based writer (requires pre-created file)
+        >>> with atomic_temp_file(Path("out.bin"), create_file=True) as temp_path:
+        ...     temp_path.write_bytes(data)
+        # out.bin now exists atomically
     """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Create temp file in same directory (same filesystem for atomic rename)
-    temp_fd, temp_path_str = tempfile.mkstemp(
-        suffix=suffix,
-        dir=output_path.parent,
-        prefix=prefix
-    )
-    temp_path = Path(temp_path_str)
+    if create_file:
+        # Pre-create file with mkstemp (for FD-based or direct file access)
+        temp_fd, temp_path_str = tempfile.mkstemp(
+            suffix=suffix,
+            dir=output_path.parent,
+            prefix=prefix
+        )
+        temp_path = Path(temp_path_str)
 
-    try:
-        # Close FD immediately - caller will use path directly
-        os.close(temp_fd)
+        try:
+            # Close FD immediately - caller will use path directly
+            os.close(temp_fd)
 
-        yield temp_path
+            # Fix permissions: mkstemp creates 0600, restore to umask-based
+            # This ensures shared pipelines can read the output
+            os.chmod(temp_path, 0o644)
 
-        # Atomic rename on success
-        os.replace(temp_path, output_path)
+            yield temp_path
 
-    except Exception:
-        # Cleanup temp file on any failure
-        temp_path.unlink(missing_ok=True)
-        raise
+            # Atomic rename on success
+            os.replace(temp_path, output_path)
+
+        except Exception:
+            # Cleanup temp file on any failure
+            temp_path.unlink(missing_ok=True)
+            raise
+    else:
+        # Generate unique temp path without creating file
+        # Writer creates file with umask-based permissions
+        import uuid
+        temp_name = f"{prefix}{uuid.uuid4().hex}{suffix}"
+        temp_path = output_path.parent / temp_name
+
+        try:
+            yield temp_path
+
+            # Atomic rename on success (temp_path should exist by now)
+            if temp_path.exists():
+                os.replace(temp_path, output_path)
+            else:
+                raise IOError(f"Writer did not create temp file: {temp_path}")
+
+        except Exception:
+            # Cleanup temp file on any failure
+            temp_path.unlink(missing_ok=True)
+            raise
 
 
 def atomic_write_bytes(output_path: Path, data: bytes) -> Path:
@@ -100,7 +133,7 @@ def atomic_write_bytes(output_path: Path, data: bytes) -> Path:
         >>> assert path.read_bytes() == b"hello"
     """
     try:
-        with atomic_temp_file(output_path) as temp_path:
+        with atomic_temp_file(output_path, create_file=True) as temp_path:
             temp_path.write_bytes(data)
         return Path(output_path)
     except Exception as e:
@@ -140,7 +173,8 @@ def atomic_write_pil_png(
         )
 
     try:
-        with atomic_temp_file(output_path, suffix=".png") as temp_path:
+        # PIL creates file with umask-based permissions, no pre-creation needed
+        with atomic_temp_file(output_path, suffix=".png", create_file=False) as temp_path:
             # Save directly to temp file path
             pil_image.save(
                 temp_path,
@@ -204,6 +238,9 @@ def atomic_write_with_fd(
                 os.close(temp_fd)
             except OSError:
                 pass  # Already closed by writer
+
+        # Fix permissions: mkstemp creates 0600, restore to umask-based
+        os.chmod(temp_path, 0o644)
 
         # Atomic rename
         os.replace(temp_path, output_path)

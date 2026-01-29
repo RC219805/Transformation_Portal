@@ -107,7 +107,8 @@ def atomic_write_depth_u16_png_with_stats(
     # 3. Atomic Write using shared helper
     # cv2.imwrite requires a file path, so we use atomic_temp_file context manager
     try:
-        with atomic_temp_file(output_path, suffix=".png") as temp_path:
+        # cv2.imwrite is path-based and creates file with umask permissions
+        with atomic_temp_file(output_path, suffix=".png", create_file=False) as temp_path:
             # Use explicit PNG compression parameters
             success = cv2.imwrite(
                 str(temp_path),

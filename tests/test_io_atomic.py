@@ -19,9 +19,8 @@ from transformation_portal.lux_depth_v3.io_atomic import (
     HAS_PIL,
 )
 
-if HAS_PIL:
-    from PIL import Image
-    import numpy as np
+from PIL import Image
+import numpy as np
 
 
 class TestAtomicTempFile:
@@ -31,7 +30,7 @@ class TestAtomicTempFile:
         """Successful write should create final file via atomic rename."""
         output_path = tmp_path / "output.txt"
 
-        with atomic_temp_file(output_path) as temp_path:
+        with atomic_temp_file(output_path, create_file=True) as temp_path:
             # Temp file should exist
             assert temp_path.exists()
             # Should be in same directory
@@ -56,7 +55,7 @@ class TestAtomicTempFile:
         temp_path_captured = None
 
         try:
-            with atomic_temp_file(output_path) as temp_path:
+            with atomic_temp_file(output_path, create_file=True) as temp_path:
                 temp_path_captured = temp_path
                 temp_path.write_text("partial")
                 # Simulate failure
@@ -76,7 +75,7 @@ class TestAtomicTempFile:
         """Should create parent directories if needed."""
         output_path = tmp_path / "subdir" / "nested" / "output.txt"
 
-        with atomic_temp_file(output_path) as temp_path:
+        with atomic_temp_file(output_path, create_file=True) as temp_path:
             temp_path.write_text("test")
 
         assert output_path.exists()
@@ -86,7 +85,7 @@ class TestAtomicTempFile:
         """Should respect custom suffix and prefix."""
         output_path = tmp_path / "output.png"
 
-        with atomic_temp_file(output_path, suffix=".png", prefix="custom_") as temp_path:
+        with atomic_temp_file(output_path, suffix=".png", prefix="custom_", create_file=True) as temp_path:
             # Should have custom prefix
             assert temp_path.name.startswith("custom_")
             # Should have custom suffix
@@ -145,6 +144,22 @@ class TestAtomicWriteBytes:
 
         assert output_path.exists()
         assert len(output_path.read_bytes()) == len(data)
+
+    def test_preserves_readable_permissions(self, tmp_path):
+        """Should create files with readable permissions (not 0600)."""
+        output_path = tmp_path / "permissions.bin"
+
+        atomic_write_bytes(output_path, b"test data")
+
+        # File should exist
+        assert output_path.exists()
+
+        # Should be readable by group/others (not 0600)
+        stat_info = output_path.stat()
+        # Check that group or others have read permission
+        # 0o044 = group read (0o040) | others read (0o004)
+        assert stat_info.st_mode & 0o044 != 0, \
+            f"File has restrictive permissions: {oct(stat_info.st_mode)}"
 
 
 @pytest.mark.skipif(not HAS_PIL, reason="Pillow not installed")
