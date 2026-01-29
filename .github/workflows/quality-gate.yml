@@ -1,6 +1,4 @@
 name: Quality Gate
-permissions:
-  contents: write
 
 on:
   pull_request:
