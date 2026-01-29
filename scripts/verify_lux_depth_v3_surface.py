@@ -87,7 +87,8 @@ def verify_intentional_failures():
             )
             # Verify it worked
             assert path.exists()
-            assert stats["shape"] == (64, 64)
+            assert stats.shape == (64, 64)
+            assert hasattr(stats, '_asdict')  # Verify orchestrator compatibility
             print("✅ atomic_write_depth_u16_png_with_stats() works (real implementation)")
             checks_passed += 1
     except NotImplementedError:

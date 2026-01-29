@@ -309,7 +309,8 @@ def test_depth_writer_opencv_dependency():
                 debug_verify=False
             )
             assert path.exists()
-            assert stats["shape"] == (64, 64)
+            assert stats.shape == (64, 64)
+            assert hasattr(stats, '_asdict')  # Orchestrator compatibility
         finally:
             # Cleanup
             if output_path.exists():

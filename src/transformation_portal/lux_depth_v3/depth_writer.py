@@ -11,6 +11,7 @@ import os
 import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
+from dataclasses import dataclass, asdict
 import numpy as np
 
 try:
@@ -23,13 +24,32 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class DepthWriteStats:
+    """Statistics from depth map write operation.
+
+    Provides _asdict() for backward compatibility with orchestrator.
+    """
+    min: float
+    max: float
+    mean: float
+    std: float
+    shape: tuple[int, ...]
+    dtype: str
+    method: str
+
+    def _asdict(self) -> dict:
+        """Return stats as dict (orchestrator compatibility)."""
+        return asdict(self)
+
+
 def atomic_write_depth_u16_png_with_stats(
     output_path: Path,
     depth_map: np.ndarray,
     method: str = "u16",
     debug_verify: bool = False,
     **kwargs
-) -> tuple[Path, Optional[Path], Dict[str, Any]]:
+) -> tuple[Path, Optional[Path], DepthWriteStats]:
     """Atomically write depth map as 16-bit PNG with statistics.
 
     Performs safe atomic write via temporary file + rename.
@@ -38,15 +58,16 @@ def atomic_write_depth_u16_png_with_stats(
     Args:
         output_path: Output file path
         depth_map: Depth map as numpy array (float32, range [0.0, 1.0])
-        method: Quantization method ("u16" for 16-bit unsigned)
+        method: Quantization method (only "u16" supported)
         debug_verify: Whether to verify write integrity by reading back
         **kwargs: Additional arguments (reserved for future use)
 
     Returns:
-        Tuple of (output_path, verification_path_or_none, statistics_dict)
+        Tuple of (output_path, verification_path_or_none, statistics)
 
     Raises:
         ImportError: If opencv-python not installed
+        ValueError: If unsupported quantization method specified
         IOError: If write or verification fails
     """
     if not HAS_CV2:
@@ -54,15 +75,22 @@ def atomic_write_depth_u16_png_with_stats(
             "opencv-python required for depth_writer. Install with: pip install opencv-python"
         )
 
+    # Validate method
+    if method != "u16":
+        raise ValueError(
+            f"Unsupported depth quantization method: {method!r}. Only 'u16' is supported."
+        )
+
     # 1. Calculate statistics on original data
-    stats = {
-        "min": float(np.min(depth_map)),
-        "max": float(np.max(depth_map)),
-        "mean": float(np.mean(depth_map)),
-        "std": float(np.std(depth_map)),
-        "shape": depth_map.shape,
-        "dtype": str(depth_map.dtype)
-    }
+    stats = DepthWriteStats(
+        min=float(np.min(depth_map)),
+        max=float(np.max(depth_map)),
+        mean=float(np.mean(depth_map)),
+        std=float(np.std(depth_map)),
+        shape=tuple(depth_map.shape),
+        dtype=str(depth_map.dtype),
+        method=method
+    )
 
     # 2. Normalize to 16-bit (0-65535)
     # Assumes input is 0.0-1.0 float. Clip just in case.

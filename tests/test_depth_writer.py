@@ -9,7 +9,8 @@ from pathlib import Path
 from transformation_portal.lux_depth_v3.depth_writer import (
     atomic_write_depth_u16_png_with_stats,
     read_depth_u16_png,
-    HAS_CV2
+    HAS_CV2,
+    DepthWriteStats
 )
 
 # Skip all tests if opencv-python not installed
@@ -31,10 +32,10 @@ class TestDepthWriter:
         )
 
         assert path.exists()
-        assert stats["shape"] == (100, 100)
-        assert stats["dtype"] == "float32"
-        assert 0.0 <= stats["min"] <= 1.0
-        assert 0.0 <= stats["max"] <= 1.0
+        assert stats.shape == (100, 100)
+        assert stats.dtype == "float32"
+        assert 0.0 <= stats.min <= 1.0
+        assert 0.0 <= stats.max <= 1.0
 
         # Read back
         loaded = read_depth_u16_png(path)
@@ -73,10 +74,10 @@ class TestDepthWriter:
         _, _, stats = atomic_write_depth_u16_png_with_stats(output_path, depth_map)
 
         # Check statistics
-        assert abs(stats["min"] - 0.0) < 1e-6
-        assert abs(stats["max"] - 1.0) < 1e-6
-        assert abs(stats["mean"] - 0.5) < 0.01  # Should be close to 0.5
-        assert stats["shape"] == (100, 100)
+        assert abs(stats.min - 0.0) < 1e-6
+        assert abs(stats.max - 1.0) < 1e-6
+        assert abs(stats.mean - 0.5) < 0.01  # Should be close to 0.5
+        assert stats.shape == (100, 100)
 
     def test_clipping_out_of_range(self, tmp_path):
         """Verify values outside [0, 1] are clipped."""
@@ -156,7 +157,7 @@ class TestDepthWriterEdgeCases:
         path, _, stats = atomic_write_depth_u16_png_with_stats(output_path, depth_map)
 
         assert path.exists()
-        assert stats["shape"] == (1, 1)
+        assert stats.shape == (1, 1)
 
         loaded = read_depth_u16_png(path)
         assert abs(loaded[0, 0] - 0.5) < 1e-4
@@ -170,7 +171,7 @@ class TestDepthWriterEdgeCases:
         path, _, stats = atomic_write_depth_u16_png_with_stats(output_path, depth_map)
 
         assert path.exists()
-        assert stats["shape"] == (2160, 3840)
+        assert stats.shape == (2160, 3840)
 
         # Read back (verify it doesn't crash)
         loaded = read_depth_u16_png(path)
@@ -183,9 +184,9 @@ class TestDepthWriterEdgeCases:
 
         path, _, stats = atomic_write_depth_u16_png_with_stats(output_path, depth_map)
 
-        assert stats["min"] == 0.0
-        assert stats["max"] == 0.0
-        assert stats["mean"] == 0.0
+        assert stats.min == 0.0
+        assert stats.max == 0.0
+        assert stats.mean == 0.0
 
         loaded = read_depth_u16_png(path)
         assert np.all(loaded == 0.0)
@@ -197,9 +198,73 @@ class TestDepthWriterEdgeCases:
 
         path, _, stats = atomic_write_depth_u16_png_with_stats(output_path, depth_map)
 
-        assert stats["min"] == 1.0
-        assert stats["max"] == 1.0
-        assert stats["mean"] == 1.0
+        assert stats.min == 1.0
+        assert stats.max == 1.0
+        assert stats.mean == 1.0
 
         loaded = read_depth_u16_png(path)
         assert np.all(loaded > 0.99)  # Account for quantization
+
+
+class TestDepthWriteStats:
+    """Test DepthWriteStats dataclass and compatibility."""
+
+    def test_stats_has_asdict_method(self, tmp_path):
+        """Verify DepthWriteStats has _asdict() for orchestrator compatibility."""
+        depth_map = np.random.rand(10, 10).astype(np.float32)
+        output_path = tmp_path / "stats_test.png"
+
+        _, _, stats = atomic_write_depth_u16_png_with_stats(output_path, depth_map)
+
+        # Should have _asdict method
+        assert hasattr(stats, '_asdict')
+        assert callable(stats._asdict)
+
+        # Should return dict
+        stats_dict = stats._asdict()
+        assert isinstance(stats_dict, dict)
+        assert 'min' in stats_dict
+        assert 'max' in stats_dict
+        assert 'mean' in stats_dict
+        assert 'std' in stats_dict
+        assert 'shape' in stats_dict
+        assert 'dtype' in stats_dict
+        assert 'method' in stats_dict
+
+    def test_stats_includes_method(self, tmp_path):
+        """Verify stats includes method field."""
+        depth_map = np.random.rand(10, 10).astype(np.float32)
+        output_path = tmp_path / "method_test.png"
+
+        _, _, stats = atomic_write_depth_u16_png_with_stats(
+            output_path, depth_map, method="u16"
+        )
+
+        assert stats.method == "u16"
+        assert stats._asdict()['method'] == "u16"
+
+    def test_invalid_method_raises_error(self, tmp_path):
+        """Verify unsupported quantization methods raise ValueError."""
+        depth_map = np.random.rand(10, 10).astype(np.float32)
+        output_path = tmp_path / "invalid_method.png"
+
+        with pytest.raises(ValueError, match="Unsupported depth quantization method"):
+            atomic_write_depth_u16_png_with_stats(
+                output_path, depth_map, method="none"
+            )
+
+        with pytest.raises(ValueError, match="Unsupported depth quantization method"):
+            atomic_write_depth_u16_png_with_stats(
+                output_path, depth_map, method="u8"
+            )
+
+    def test_stats_is_frozen(self, tmp_path):
+        """Verify DepthWriteStats is immutable (frozen dataclass)."""
+        depth_map = np.random.rand(10, 10).astype(np.float32)
+        output_path = tmp_path / "frozen_test.png"
+
+        _, _, stats = atomic_write_depth_u16_png_with_stats(output_path, depth_map)
+
+        # Should not be able to modify
+        with pytest.raises(Exception):  # FrozenInstanceError or AttributeError
+            stats.min = 999.0
