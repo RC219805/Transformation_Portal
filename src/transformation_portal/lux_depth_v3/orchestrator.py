@@ -19,6 +19,8 @@ from .inference import DA3InferenceEngine
 from .postprocessing import Postprocessor
 from .input_manager import ImageInput
 from .depth_writer import atomic_write_depth_u16_png_with_stats
+from .pbr import PBRConfig, generate_pbr_maps
+from .pbr_writer import write_pbr_maps
 from .v2_runner import V2Runner, find_v2_report
 from .security import (
     HashMode,
@@ -245,6 +247,9 @@ class EnhanceOrchestrator:
         depth_runtime_s = 0.0
         depth_metadata = None
 
+        # Initialize pbr_assets for all code paths (prevents UnboundLocalError)
+        pbr_assets = None
+
         if not skip_depth:
             logger.info(f"Stage A: Generating depth for {output_key}...")
             t0 = time.time()
@@ -294,6 +299,61 @@ class EnhanceOrchestrator:
                     }, f, indent=2)
                 logger.debug(f"Wrote depth metadata: {depth_metadata_path}")
 
+                # 5. PBR map generation (optional)
+                if self.config.generate_pbr:
+                    try:
+                        logger.info("Generating PBR maps...")
+                        pbr_t0 = time.time()
+
+                        # Use to_pbr_config() for consistent parameter conversion
+                        pbr_config = self.config.to_pbr_config()
+
+                        # Generate maps from depth
+                        normal_map, roughness_map, ao_map = generate_pbr_maps(
+                            result.depth,
+                            config=pbr_config
+                        )
+
+                        # Write PBR maps
+                        pbr_dir = self.output_root / "pbr"
+                        pbr_dir.mkdir(parents=True, exist_ok=True)
+
+                        # Derive base name from output_key for consistent artifact naming
+                        sanitized_stem = output_key.stem if output_key.suffix else output_key.name
+
+                        pbr_paths = write_pbr_maps(
+                            normal_map=normal_map,
+                            roughness_map=roughness_map,
+                            ao_map=ao_map,
+                            output_dir=pbr_dir,
+                            base_name=sanitized_stem
+                        )
+
+                        pbr_runtime = time.time() - pbr_t0
+                        logger.info(f"PBR maps generated in {pbr_runtime:.2f}s: {list(pbr_paths.keys())}")
+
+                        # Store paths for manifest
+                        pbr_assets = {
+                            "normal_path": str(pbr_paths["normal"]),
+                            "roughness_path": str(pbr_paths["roughness"]),
+                            "ao_path": str(pbr_paths["ao"]),
+                            "runtime_seconds": pbr_runtime,
+                            "config": {
+                                "normal_strength": pbr_config.normal_strength,
+                                "normal_blur_radius": pbr_config.normal_blur_radius,
+                                "roughness_strength": pbr_config.roughness_strength,
+                                "roughness_blur_radius": pbr_config.roughness_blur_radius,
+                                "ao_strength": pbr_config.ao_strength,
+                                "ao_blur_radius": pbr_config.ao_blur_radius,
+                                "ao_bias": pbr_config.ao_bias,
+                            }
+                        }
+
+                    except Exception as pbr_error:
+                        logger.warning(f"PBR generation failed (non-blocking): {pbr_error}")
+                        pbr_assets = None
+
+
             except Exception as e:
                 logger.error(f"Depth failed: {e}")
                 if self.config.depth_fallback == "fail":
@@ -311,7 +371,10 @@ class EnhanceOrchestrator:
         else:
             if manifest_path.exists():
                 try:
-                    depth_metadata = CombinedManifest.load(manifest_path).depth
+                    m = CombinedManifest.load(manifest_path)
+                    depth_metadata = m.depth
+                    # Preserve previous PBR paths when resuming from cached depth
+                    pbr_assets = getattr(m, "pbr_assets", None)
                 except Exception:  # Do not swallow KeyboardInterrupt/SystemExit
                     pass
 
@@ -354,9 +417,19 @@ class EnhanceOrchestrator:
             input=InputMetadata(str(image_input.path), input_sha, True, str(normalized_path)),
             depth=depth_metadata,
             v2=v2_metadata,
-            timing=TimingMetadata(depth_runtime_s, v2_runtime_s, depth_runtime_s + v2_runtime_s),
-            repro=ReproMetadata(self.v3_git, self.v2_git, self.config.depth_device),
-            config_fingerprint=self.compute_config_fingerprint().to_sha256(),
+            timing=TimingMetadata(
+                depth_seconds=depth_runtime_s,
+                v2_seconds=v2_runtime_s,
+                total_seconds=depth_runtime_s + v2_runtime_s,
+                timestamp_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            ),
+            pbr_assets=pbr_assets,
+            repro=ReproMetadata(
+                v3_git_revision=self.v3_git,
+                v2_git_revision=self.v2_git,
+                environment=self.environment,
+            ),
+            config_fingerprint=self.compute_config_fingerprint(),
             environment=self.environment
         )
         manifest.write(manifest_path)
