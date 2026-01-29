@@ -227,9 +227,11 @@ class DA3InferenceEngine:
                             model=fallback_model,
                             device=device_arg,
                         )
-                    except (ValueError, TypeError) as device_error:
+                    except (RuntimeError, ValueError, TypeError) as device_error:
                         # If model uses accelerate, device arg not allowed
-                        if "accelerate" in str(device_error).lower():
+                        # Check for accelerate-specific error messages
+                        msg = str(device_error).lower()
+                        if "accelerate" in msg or "cannot be moved" in msg:
                             logger.info("Model uses accelerate, loading without device arg")
                             self.model = pipeline(
                                 task="depth-estimation",
