@@ -4,6 +4,9 @@ on:
   issues:
     types: [opened, edited]
 
+permissions:
+  contents: read  # Read-only access for issue inspection
+
 jobs:
   print-info:
     runs-on: ubuntu-latest

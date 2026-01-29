@@ -6,6 +6,10 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  contents: read  # Workflow only checks formatting; does not push commits
+  pull-requests: read
+
 jobs:
   pre-commit-checks:
     runs-on: ubuntu-latest
