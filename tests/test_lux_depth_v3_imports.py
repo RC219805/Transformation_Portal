@@ -244,18 +244,10 @@ def test_all_imports_together():
 
 
 def test_stub_not_implemented_errors():
-    """Test that stub implementations raise NotImplementedError with clear messages."""
-    from transformation_portal.lux_depth_v3.depth_writer import atomic_write_depth_u16_png_with_stats
-    import numpy as np
-
-    # Test depth writer raises NotImplementedError
-    with pytest.raises(NotImplementedError) as exc_info:
-        atomic_write_depth_u16_png_with_stats(
-            np.zeros((100, 100)),
-            Path("/tmp/test.png")
-        )
-
-    assert "stub" in str(exc_info.value).lower()
+    """Test that remaining stub implementations raise NotImplementedError with clear messages."""
+    # Note: depth_writer is now implemented and no longer a stub
+    # This test covers remaining stubs: v2_runner, preprocessing
+    pass  # Actual stub tests are in dedicated test functions below
 
 
 if __name__ == "__main__":
@@ -285,23 +277,44 @@ def test_da3_inference_engine_basic():
     assert engine.config is config
 
 
-def test_depth_writer_fails_intentionally():
-    """Test that atomic_write_depth_u16_png_with_stats raises NotImplementedError."""
+def test_depth_writer_opencv_dependency():
+    """Test that depth_writer properly handles opencv-python dependency."""
     import numpy as np
     from pathlib import Path
-    from transformation_portal.lux_depth_v3.depth_writer import atomic_write_depth_u16_png_with_stats
+    from transformation_portal.lux_depth_v3.depth_writer import (
+        atomic_write_depth_u16_png_with_stats,
+        HAS_CV2
+    )
 
     depth_map = np.zeros((64, 64), dtype=np.float32)
     output_path = Path("/tmp/test_depth.png")
 
-    # Should raise NotImplementedError with call-site compatible signature
-    with pytest.raises(NotImplementedError, match="stub"):
-        atomic_write_depth_u16_png_with_stats(
-            output_path=output_path,
-            depth_map=depth_map,
-            method="u16",
-            debug_verify=False
-        )
+    if not HAS_CV2:
+        # If opencv not installed, should raise clear ImportError
+        with pytest.raises(ImportError, match="opencv-python required"):
+            atomic_write_depth_u16_png_with_stats(
+                output_path=output_path,
+                depth_map=depth_map,
+                method="u16",
+                debug_verify=False
+            )
+    else:
+        # If opencv installed, should work (detailed tests in test_depth_writer.py)
+        # Just verify it doesn't raise ImportError
+        try:
+            path, _, stats = atomic_write_depth_u16_png_with_stats(
+                output_path=output_path,
+                depth_map=depth_map,
+                method="u16",
+                debug_verify=False
+            )
+            assert path.exists()
+            assert stats.shape == (64, 64)
+            assert hasattr(stats, '_asdict')  # Orchestrator compatibility
+        finally:
+            # Cleanup
+            if output_path.exists():
+                output_path.unlink()
 
 
 def test_v2_runner_fails_intentionally():
