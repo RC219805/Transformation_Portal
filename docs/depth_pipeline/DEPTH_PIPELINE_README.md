@@ -513,16 +513,24 @@ If you use this pipeline in research, please cite:
 - `True` incorrectly assigned to `image_size_bytes`
 - `normalized_path` incorrectly assigned to `image_dimensions`
 
-**Fix**: Changed to keyword-based construction:
-```python
-# Before (WRONG):
-metadata = InputMetadata(file_path, True, normalized_path)
+**Fix**: Changed to keyword-based construction (matches `InputMetadata` fields):
 
-# After (CORRECT):
+```python
+# Before (WRONG): positional args silently mis-assigned
+# image_size_bytes=True, image_dimensions=str(normalized_path)
 metadata = InputMetadata(
-    file_path=file_path,
+    str(image_input.path),
+    input_sha,
+    True,
+    str(normalized_path),
+)
+
+# After (CORRECT): explicit keyword args
+metadata = InputMetadata(
+    image_path=str(image_input.path),
+    image_sha256=input_sha,
     image_size_bytes=None,
-    image_dimensions=None
+    image_dimensions=None,
 )
 ```
 
