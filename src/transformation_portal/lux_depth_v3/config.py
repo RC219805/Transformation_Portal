@@ -6,8 +6,7 @@ Full implementation pending.
 from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Any
 from .security import HashMode
 
 
@@ -85,14 +84,18 @@ class EnhanceConfig:
     preset: Optional[Preset] = None
     depth_device: str = "cpu"
     depth_quantization: str = "none"
+    depth_fallback: str = "fail"  # "fail", "skip", or "v2-auto"
+    verify_depth_writes: bool = False
 
     # V2 configuration
     v2_preset: str = "default"
     v2_device: str = "cpu"
     v2_upscaler_backend: str = "default"
+    v2_timeout: Optional[float] = None
 
     # Flags
     force_depth: bool = False
+    force_v2: bool = False
     non_commercial_ok: bool = False
 
     # Hash mode

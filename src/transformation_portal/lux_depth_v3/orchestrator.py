@@ -5,7 +5,6 @@ Two-stage pipeline:
 2. Stage B (V2): Consume depth assets -> V2 Subprocess -> Output
 """
 from __future__ import annotations
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import time
@@ -13,7 +12,7 @@ import logging
 import datetime
 
 # Note: Imports adjusted to relative for package context compatibility
-from .config import DA3Config, ModelVariant, Preset, EnhanceConfig
+from .config import DA3Config, ModelVariant, EnhanceConfig
 from .inference import DA3InferenceEngine
 from .postprocessing import Postprocessor
 from .input_manager import ImageInput
@@ -23,9 +22,6 @@ from .security import (
     HashMode,
     sanitize_file_stem,
     sanitize_path_component_nonlossy,
-    validate_device_spec,
-    validate_quantization_method,
-    validate_depth_fallback,
 )
 from .manifest import (
     CombinedManifest,
@@ -44,6 +40,7 @@ from .batch_stats import compute_batch_runtime_stats
 
 logger = logging.getLogger(__name__)
 
+
 def make_output_key(input_path: Path, input_root: Path) -> Path:
     """Generate collision-free output key preserving directory structure."""
     try:
@@ -59,6 +56,7 @@ def make_output_key(input_path: Path, input_root: Path) -> Path:
         return Path(*sanitized_parts) / stem_sanitized
     else:
         return Path(stem_sanitized)
+
 
 class EnhanceOrchestrator:
     """Orchestrates V3 depth generation + V2 enhancement pipeline."""
@@ -113,6 +111,36 @@ class EnhanceOrchestrator:
         self.v3_git = git_rev
         self.v2_git = git_rev
         self.environment = capture_environment()
+
+    def run_pipeline(
+        self,
+        input_path: Path,
+        output_dir: Optional[Path] = None,
+        run_v2: bool = True
+    ) -> Dict[str, Any]:
+        """Run the complete depth pipeline on a single image.
+
+        Simplified entry point for processing:
+        1. Validate image format
+        2. Preprocess image
+        3. Run DA3 inference
+        4. Save depth output
+        5. Optionally run V2 enhancement
+
+        Args:
+            input_path: Path to input image
+            output_dir: Optional override for output directory
+            run_v2: Whether to run V2 enhancement (default: True)
+
+        Returns:
+            Dict containing status, paths, and runtime information
+        """
+        input_path = Path(input_path)
+        if not input_path.exists():
+            raise FileNotFoundError(f"Input image not found: {input_path}")
+
+        image_input = ImageInput(path=input_path)
+        return self.enhance_image(image_input)
 
     def compute_config_fingerprint(self) -> ConfigFingerprint:
         return ConfigFingerprint(
@@ -176,14 +204,21 @@ class EnhanceOrchestrator:
             # Quick read check
             from .depth_writer import read_depth_u16_png
             d = read_depth_u16_png(depth_path)
-            if d.ndim != 2: return False
+            if d.ndim != 2:
+                return False
 
             logger.debug(f"Resuming with existing depth: {depth_path}")
             return True
         except Exception:
             return False
 
-    def should_skip_v2(self, v2_report_path: Optional[Path], manifest_path: Path, image_input: ImageInput, depth_was_skipped: bool) -> bool:
+    def should_skip_v2(
+        self,
+        v2_report_path: Optional[Path],
+        manifest_path: Path,
+        image_input: ImageInput,
+        depth_was_skipped: bool
+    ) -> bool:
         if not v2_report_path or not v2_report_path.exists() or not manifest_path.exists():
             return False
 
@@ -191,12 +226,15 @@ class EnhanceOrchestrator:
             manifest = CombinedManifest.load(manifest_path)
 
             # Config Check
-            if not manifest.config_fingerprint: return False
+            if not manifest.config_fingerprint:
+                return False
 
             current_fp = self.compute_config_fingerprint()
             manifest_fp = ConfigFingerprint(
                 model_variant=manifest.depth.model if manifest.depth else "",
-                depth_quantization=(manifest.depth.scaling.get("method", "") if manifest.depth else ""),
+                depth_quantization=(
+                    manifest.depth.scaling.get("method", "") if manifest.depth else ""
+                ),
                 depth_device=self.config.depth_device,
                 preset=self.config.preset.value if self.config.preset else None,
                 v2_preset=manifest.v2.preset if manifest.v2 else "",
@@ -220,7 +258,28 @@ class EnhanceOrchestrator:
             return False
 
     def enhance_image(self, image_input: ImageInput, input_root: Optional[Path] = None) -> Dict[str, Any]:
-        output_key = make_output_key(image_input.path, input_root) if input_root else Path(sanitize_file_stem(image_input.path.stem))
+        """Process a single image through V3 depth generation + optional V2 enhancement.
+
+        Workflow:
+        1. Validate: Call preprocessing.validate_image_format
+        2. Preprocess: Call preprocessing.preprocess_image
+        3. Inference: Pass preprocessed data to DA3InferenceEngine.predict
+        4. Save: Pass result to depth_writer.atomic_write_depth_u16_png_with_stats
+        5. Legacy (Optional): If configured, invoke V2Runner.run
+
+        Args:
+            image_input: ImageInput wrapper containing path to input image
+            input_root: Optional root directory for relative path calculation
+
+        Returns:
+            Dict containing status, paths, and runtime information
+        """
+        from .preprocessing import validate_image_format, preprocess_image
+
+        if input_root:
+            output_key = make_output_key(image_input.path, input_root)
+        else:
+            output_key = Path(sanitize_file_stem(image_input.path.stem))
         logger.info(f"Processing {output_key}...")
 
         # Paths
@@ -232,13 +291,17 @@ class EnhanceOrchestrator:
         for p in [depth_path, manifest_path, v2_log_path]:
             p.parent.mkdir(parents=True, exist_ok=True)
 
-        # Normalize Input (EXIF)
-        from .preprocessing import normalize_exif_orientation, validate_depth_image_alignment
-        tmp_dir = self.output_root / "tmp_inputs"
-        tmp_dir.mkdir(parents=True, exist_ok=True)
-        normalized_path = tmp_dir / f"{output_key.name}_normalized.png"
-        normalize_exif_orientation(image_input.path, normalized_path)
-        normalized_input = ImageInput(path=normalized_path)
+        # --- STEP 1: VALIDATE ---
+        try:
+            validated_path = validate_image_format(image_input.path)
+        except (FileNotFoundError, ValueError) as e:
+            raise RuntimeError(f"Image validation failed for {image_input.path}") from e
+
+        # --- STEP 2: PREPROCESS ---
+        try:
+            preprocessed_image, original_shape = preprocess_image(validated_path)
+        except Exception as e:
+            raise RuntimeError(f"Image preprocessing failed for {image_input.path}") from e
 
         # --- STAGE A: DEPTH ---
         skip_depth = not self.config.force_depth and self.should_skip_depth(depth_path, manifest_path, image_input)
@@ -249,15 +312,15 @@ class EnhanceOrchestrator:
             logger.info(f"Stage A: Generating depth for {output_key}...")
             t0 = time.time()
             try:
-                # 1. Inference
-                result = self.inference_engine.predict(normalized_input)
+                # 3. Inference - pass preprocessed numpy array directly
+                result = self.inference_engine.predict(preprocessed_image)
 
-                # 2. Post-Processing (Refinement)
+                # 4. Post-Processing (Refinement)
                 result = self.postprocessor.process(result)
 
                 depth_runtime_s = time.time() - t0
 
-                # 3. Write
+                # 5. Write
                 _, _, depth_stats = atomic_write_depth_u16_png_with_stats(
                     depth_path,
                     result.depth,
@@ -266,78 +329,101 @@ class EnhanceOrchestrator:
                 )
 
                 depth_metadata = DepthMetadata(
-                    backend="da3",
                     model=self.config.model_variant.value.name,
-                    license="CC-BY-NC",
-                    non_commercial_ok=self.config.non_commercial_ok,
                     depth_path=str(depth_path),
-                    dtype="uint16",
-                    shape=list(result.depth.shape[:2]),
+                    runtime_seconds=depth_runtime_s,
                     scaling=depth_stats._asdict(),
-                    runtime_ms=depth_runtime_s * 1000,
-                    representation="depth",
-                    convention="higher_is_farther",
-                    unit="relative",
+                    stats={
+                        "original_shape": original_shape,
+                        "processed_shape": list(result.depth.shape[:2]),
+                        "dtype": "uint16",
+                        "non_commercial_ok": self.config.non_commercial_ok,
+                    }
                 )
             except Exception as e:
-                logger.error(f"Depth failed: {e}")
-                if self.config.depth_fallback == "fail": raise
-                if self.config.depth_fallback == "skip": return {"status": "skipped", "reason": str(e), "image": str(image_input.path)}
+                logger.error(f"Depth inference failed: {e}")
+                if self.config.depth_fallback == "fail":
+                    raise RuntimeError(f"V3 depth inference failed for {image_input.path}") from e
+                if self.config.depth_fallback == "skip":
+                    return {"status": "skipped", "reason": str(e), "image": str(image_input.path)}
                 if self.config.depth_fallback == "v2-auto":
-                    if depth_path.exists(): depth_path.unlink()
+                    logger.warning(f"V3 depth failed, attempting V2 fallback: {e}")
+                    if depth_path.exists():
+                        depth_path.unlink()
                     depth_path = None
         else:
             if manifest_path.exists():
-                try: depth_metadata = CombinedManifest.load(manifest_path).depth
-                except: pass
+                try:
+                    depth_metadata = CombinedManifest.load(manifest_path).depth
+                except Exception:
+                    pass
 
         # --- STAGE B: V2 ENHANCE ---
-        if depth_path and depth_path.exists():
-            validate_depth_image_alignment(normalized_path, depth_path)
 
         v2_report_path = find_v2_report(self.v2_dir, output_key.name)
         skip_v2 = not self.config.force_v2 and self.should_skip_v2(v2_report_path, manifest_path, image_input, skip_depth)
+        v2_runtime_s = 0.0
 
         if skip_v2:
             logger.info("V2 outputs valid, skipping.")
-            v2_runtime_s = 0.0
             v2_result = {"status": "ok"}
         else:
-            v2_result = self.v2_runner.run(
-                input_path=normalized_path,
-                depth_dir=self.depth_dir if depth_path else None,
-                output_dir=self.v2_dir,
-                preset=self.config.v2_preset,
-                device=self.config.v2_device,
-                upscaler_backend=self.config.v2_upscaler_backend,
-                log_file=v2_log_path,
-                timeout=self.config.v2_timeout
-            )
-            v2_runtime_s = v2_result.get("runtime_s", 0.0)
-            v2_report_path = find_v2_report(self.v2_dir, output_key.name)
+            try:
+                v2_result = self.v2_runner.run(
+                    input_path=image_input.path,
+                    depth_dir=self.depth_dir if depth_path else None,
+                    output_dir=self.v2_dir,
+                    preset=self.config.v2_preset,
+                    device=self.config.v2_device,
+                    upscaler_backend=self.config.v2_upscaler_backend,
+                    log_file=v2_log_path,
+                    timeout=self.config.v2_timeout
+                )
+                v2_runtime_s = v2_result.get("runtime_s", 0.0)
+                v2_report_path = find_v2_report(self.v2_dir, output_key.name)
+            except (FileNotFoundError, RuntimeError, TimeoutError) as e:
+                # V2 fallback failed - if V3 also failed, raise with full context
+                if depth_path is None:
+                    raise RuntimeError(
+                        f"Both V3 and V2 pipelines failed for {image_input.path}. "
+                        f"V2 error: {e}"
+                    ) from e
+                # V3 succeeded but V2 failed - log warning but continue
+                logger.warning(f"V2 enhancement failed (V3 depth available): {e}")
+                v2_result = {"status": "error", "error": str(e)}
 
         # Manifest
         v2_metadata = V2Metadata(
             preset=self.config.v2_preset,
-            strict_depth=depth_path is not None,
-            output_dir="v2/",
-            report_path=str(v2_report_path) if v2_report_path else "",
-            status=v2_result["status"],
-            error_message=v2_result.get("error"),
+            status=v2_result.get("status", "ok"),
+            runtime_seconds=v2_runtime_s,
+            output_paths=[str(self.v2_dir)],
         )
 
         input_sha = self._compute_or_skip_hash(image_input.path)
 
+        import datetime as dt
         manifest = CombinedManifest(
-            input=InputMetadata(str(image_input.path), input_sha, True, str(normalized_path)),
+            input=InputMetadata(
+                image_path=str(image_input.path),
+                image_sha256=input_sha,
+            ),
             depth=depth_metadata,
             v2=v2_metadata,
-            timing=TimingMetadata(depth_runtime_s, v2_runtime_s, depth_runtime_s + v2_runtime_s),
-            repro=ReproMetadata(self.v3_git, self.v2_git, self.config.depth_device),
-            config_fingerprint=self.compute_config_fingerprint().to_sha256(),
-            environment=self.environment
+            timing=TimingMetadata(
+                total_seconds=depth_runtime_s + v2_runtime_s,
+                depth_seconds=depth_runtime_s,
+                v2_seconds=v2_runtime_s,
+                timestamp_utc=dt.datetime.utcnow().isoformat(),
+            ),
+            repro=ReproMetadata(
+                v3_git_revision=self.v3_git,
+                v2_git_revision=self.v2_git,
+                environment=self.environment,
+            ),
+            config_fingerprint=self.compute_config_fingerprint(),
         )
-        manifest.write(manifest_path)
+        manifest.save(manifest_path)
 
         return {
             "status": "ok",
