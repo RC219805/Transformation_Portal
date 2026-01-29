@@ -219,12 +219,25 @@ class DA3InferenceEngine:
                     fallback_model
                 )
                 try:
+                    # Try with device first
                     device_arg = self.device if self.device != "mps" else 0
-                    self.model = pipeline(
-                        task="depth-estimation",
-                        model=fallback_model,
-                        device=device_arg,
-                    )
+                    try:
+                        self.model = pipeline(
+                            task="depth-estimation",
+                            model=fallback_model,
+                            device=device_arg,
+                        )
+                    except (ValueError, TypeError) as device_error:
+                        # If model uses accelerate, device arg not allowed
+                        if "accelerate" in str(device_error).lower():
+                            logger.info("Model uses accelerate, loading without device arg")
+                            self.model = pipeline(
+                                task="depth-estimation",
+                                model=fallback_model,
+                            )
+                        else:
+                            raise
+
                     logger.info("Loaded fallback V2 model: %s", fallback_model)
                     self._using_fallback_model = True
                     self._fallback_model_id = fallback_model
