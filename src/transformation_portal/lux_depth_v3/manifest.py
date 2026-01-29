@@ -104,11 +104,8 @@ class ConfigFingerprint:
 
     def to_sha256(self) -> str:
         """Compute SHA256 hash of fingerprint for caching keys."""
-        import hashlib
-        import json
-        data = asdict(self)
-        serialized = json.dumps(data, sort_keys=True)
-        return hashlib.sha256(serialized.encode('utf-8')).hexdigest()
+        payload = json.dumps(asdict(self), sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 @dataclass

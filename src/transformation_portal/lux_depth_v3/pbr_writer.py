@@ -36,7 +36,7 @@ def write_pbr_maps(
             {"normal": Path, "roughness": Path, "ao": Path}
 
     Raises:
-        IOError: If writing fails
+        IOError: If all maps fail to write
 
     Example:
         >>> paths = write_pbr_maps(
@@ -49,65 +49,69 @@ def write_pbr_maps(
 
     written_paths = {}
     temp_files = []
+    errors = []
 
-    try:
-        # Define output paths
-        maps_to_write = [
-            ("normal", normal_map, f"{base_name}_normal.png"),
-            ("roughness", roughness_map, f"{base_name}_roughness.png"),
-            ("ao", ao_map, f"{base_name}_ao.png"),
-        ]
+    maps_to_write = [
+        ("normal", normal_map, f"{base_name}_normal.png"),
+        ("roughness", roughness_map, f"{base_name}_roughness.png"),
+        ("ao", ao_map, f"{base_name}_ao.png"),
+    ]
 
-        for map_type, map_data, filename in maps_to_write:
-            output_path = output_dir / filename
+    for map_type, map_data, filename in maps_to_write:
+        output_path = output_dir / filename
+        temp_fd = None
+        temp_path = None
 
+        try:
             # Create temporary file in same directory (atomic rename requirement)
             temp_fd, temp_path = tempfile.mkstemp(
                 suffix=".png",
                 dir=output_dir,
                 prefix=f".tmp_{base_name}_"
             )
+            temp_files.append(temp_path)
 
-            try:
-                # Convert numpy array to PIL Image
-                if map_data.ndim == 2:
-                    # Grayscale
-                    pil_image = Image.fromarray(map_data, 'L')
-                elif map_data.ndim == 3 and map_data.shape[2] == 3:
-                    # RGB
-                    pil_image = Image.fromarray(map_data, 'RGB')
-                else:
-                    os.close(temp_fd)  # Close FD before raising
-                    raise ValueError(f"Invalid map shape for {map_type}: {map_data.shape}")
+            # Convert numpy array to PIL Image
+            if map_data.ndim == 2:
+                pil_image = Image.fromarray(map_data, 'L')
+            elif map_data.ndim == 3 and map_data.shape[2] == 3:
+                pil_image = Image.fromarray(map_data, 'RGB')
+            else:
+                raise ValueError(f"Invalid map shape for {map_type}: {map_data.shape}")
 
-                # CRITICAL FIX: Convert file descriptor to file object
-                with os.fdopen(temp_fd, 'wb') as f:
-                    pil_image.save(f, format='PNG', optimize=True)
+            # os.fdopen consumes the FD, so we don't need to close it
+            with os.fdopen(temp_fd, 'wb') as f:
+                temp_fd = None  # Mark as consumed
+                pil_image.save(f, format='PNG', optimize=True)
 
-                # Atomic rename (truly atomic on POSIX)
-                os.replace(temp_path, output_path)
-                temp_files.remove(temp_path) if temp_path in temp_files else None
+            # Atomic rename (truly atomic on POSIX)
+            os.replace(temp_path, output_path)
+            temp_files.remove(temp_path)
 
-                written_paths[map_type] = output_path
-                logger.info(f"Wrote {map_type} map: {output_path}")
+            written_paths[map_type] = output_path
+            logger.info(f"Wrote {map_type} map: {output_path}")
 
-            except Exception as e:
-                # Close FD if still open
+        except Exception as e:
+            # Close FD if not consumed by fdopen
+            if temp_fd is not None:
                 try:
                     os.close(temp_fd)
                 except Exception:
                     pass
-                logger.error(f"Failed to write {map_type} map: {e}")
-                raise IOError(f"Failed to write {map_type} map to {output_path}") from e
 
-        return written_paths
+            error_msg = f"Failed to write {map_type} map: {e}"
+            logger.error(error_msg)
+            errors.append(error_msg)
 
-    except Exception as e:
-        # Cleanup any remaining temp files
-        for temp_path in temp_files:
-            try:
-                Path(temp_path).unlink(missing_ok=True)
-            except Exception as cleanup_error:
-                logger.warning(f"Failed to cleanup temp file {temp_path}: {cleanup_error}")
+    # Cleanup any remaining temp files
+    for temp_path in temp_files:
+        try:
+            Path(temp_path).unlink(missing_ok=True)
+        except Exception as cleanup_error:
+            logger.warning(f"Failed to cleanup temp file {temp_path}: {cleanup_error}")
 
-        raise IOError(f"PBR map writing failed: {e}") from e
+    # Only raise if ALL maps failed
+    if not written_paths:
+        raise IOError(f"All PBR map writes failed: {'; '.join(errors)}")
+
+    return written_paths

@@ -2,11 +2,14 @@
 
 import numpy as np
 import pytest
+from pathlib import Path
+import tempfile
 
 from transformation_portal.lux_depth_v3.pbr import (
     PBRConfig,
     generate_pbr_maps,
 )
+from transformation_portal.lux_depth_v3.pbr_writer import write_pbr_maps
 
 
 def test_pbr_flat_depth_normal_is_up():
@@ -138,4 +141,35 @@ def test_pbr_ao_bias_effect():
 
     # High bias should produce brighter AO overall
     assert ao_high.mean() > ao_low.mean(), "Higher ao_bias should produce brighter AO"
-    assert ao_high.min() >= 0.8 * 255 * 0.9, "High bias should clamp minimum AO brightness"
+    assert ao_high.min() >= 0.8 * 255 - 5, "High bias should clamp minimum AO brightness"
+
+
+def test_write_pbr_maps_creates_pngs_and_no_tmp_files():
+    """Verify write_pbr_maps creates PNGs atomically without temp file leaks."""
+    depth = np.random.rand(128, 128).astype(np.float32)
+    normal_map, roughness_map, ao_map = generate_pbr_maps(depth)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_dir = Path(tmpdir)
+
+        # Write PBR maps
+        paths = write_pbr_maps(normal_map, roughness_map, ao_map, output_dir, "test_render")
+
+        # Verify all maps were written
+        assert "normal" in paths
+        assert "roughness" in paths
+        assert "ao" in paths
+
+        # Verify files exist
+        assert paths["normal"].exists()
+        assert paths["roughness"].exists()
+        assert paths["ao"].exists()
+
+        # Verify no temp files remain
+        temp_files = list(output_dir.glob(".tmp_*"))
+        assert len(temp_files) == 0, f"Found temp files: {temp_files}"
+
+        # Verify file names
+        assert paths["normal"].name == "test_render_normal.png"
+        assert paths["roughness"].name == "test_render_roughness.png"
+        assert paths["ao"].name == "test_render_ao.png"
