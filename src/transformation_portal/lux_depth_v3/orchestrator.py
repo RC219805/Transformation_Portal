@@ -232,13 +232,10 @@ class EnhanceOrchestrator:
         for p in [depth_path, manifest_path, v2_log_path]:
             p.parent.mkdir(parents=True, exist_ok=True)
 
-        # Normalize Input (EXIF)
-        from .preprocessing import normalize_exif_orientation, validate_depth_image_alignment
-        tmp_dir = self.output_root / "tmp_inputs"
-        tmp_dir.mkdir(parents=True, exist_ok=True)
-        normalized_path = tmp_dir / f"{output_key.name}_normalized.png"
-        normalize_exif_orientation(image_input.path, normalized_path)
-        normalized_input = ImageInput(path=normalized_path)
+        # Preprocess Input (Validation + Normalization)
+        from .preprocessing import validate_image_format, preprocess_image
+        validated_path = validate_image_format(image_input.path)
+        preprocessed_array, original_shape = preprocess_image(validated_path)
 
         # --- STAGE A: DEPTH ---
         skip_depth = not self.config.force_depth and self.should_skip_depth(depth_path, manifest_path, image_input)
@@ -249,8 +246,8 @@ class EnhanceOrchestrator:
             logger.info(f"Stage A: Generating depth for {output_key}...")
             t0 = time.time()
             try:
-                # 1. Inference
-                result = self.inference_engine.predict(normalized_input)
+                # 1. Inference (using preprocessed numpy array)
+                result = self.inference_engine.predict(preprocessed_array)
 
                 # 2. Post-Processing (Refinement)
                 result = self.postprocessor.process(result)
@@ -279,22 +276,38 @@ class EnhanceOrchestrator:
                     convention="higher_is_farther",
                     unit="relative",
                 )
+
+                # 4. Write depth metadata JSON (quick access to depth stats)
+                depth_metadata_path = depth_path.parent / f"{depth_path.stem}_metadata.json"
+                import json
+                with open(depth_metadata_path, 'w') as f:
+                    json.dump({
+                        "backend": depth_metadata.backend,
+                        "model": depth_metadata.model,
+                        "shape": depth_metadata.shape,
+                        "scaling": depth_metadata.scaling,
+                        "runtime_ms": depth_metadata.runtime_ms,
+                        "representation": depth_metadata.representation,
+                        "convention": depth_metadata.convention,
+                        "unit": depth_metadata.unit,
+                    }, f, indent=2)
+                logger.debug(f"Wrote depth metadata: {depth_metadata_path}")
+
             except Exception as e:
                 logger.error(f"Depth failed: {e}")
                 if self.config.depth_fallback == "fail": raise
                 if self.config.depth_fallback == "skip": return {"status": "skipped", "reason": str(e), "image": str(image_input.path)}
                 if self.config.depth_fallback == "v2-auto":
+                    logger.info("V2 fallback mode: V3 failed, will attempt V2 with independent depth generation")
                     if depth_path.exists(): depth_path.unlink()
                     depth_path = None
+                    depth_metadata = None
         else:
             if manifest_path.exists():
                 try: depth_metadata = CombinedManifest.load(manifest_path).depth
                 except: pass
 
         # --- STAGE B: V2 ENHANCE ---
-        if depth_path and depth_path.exists():
-            validate_depth_image_alignment(normalized_path, depth_path)
-
         v2_report_path = find_v2_report(self.v2_dir, output_key.name)
         skip_v2 = not self.config.force_v2 and self.should_skip_v2(v2_report_path, manifest_path, image_input, skip_depth)
 
@@ -303,9 +316,10 @@ class EnhanceOrchestrator:
             v2_runtime_s = 0.0
             v2_result = {"status": "ok"}
         else:
+            # V2 runner: depth_dir=None triggers independent depth generation in V2
             v2_result = self.v2_runner.run(
-                input_path=normalized_path,
-                depth_dir=self.depth_dir if depth_path else None,
+                input_path=image_input.path,
+                depth_dir=self.depth_dir if (depth_path and depth_path.exists()) else None,
                 output_dir=self.v2_dir,
                 preset=self.config.v2_preset,
                 device=self.config.v2_device,

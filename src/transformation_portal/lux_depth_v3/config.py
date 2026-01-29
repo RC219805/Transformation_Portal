@@ -93,7 +93,13 @@ class EnhanceConfig:
 
     # Flags
     force_depth: bool = False
+    force_v2: bool = False
     non_commercial_ok: bool = False
+    verify_depth_writes: bool = True
+
+    # Fallback configuration
+    depth_fallback: str = "fail"  # Options: "fail", "skip", "v2-auto"
+    v2_timeout: int = 300
 
     # Hash mode
     hash_mode: HashMode = HashMode.IF_MANIFEST_EXISTS
