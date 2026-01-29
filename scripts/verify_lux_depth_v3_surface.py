@@ -99,7 +99,7 @@ def verify_intentional_failures():
     except Exception as e:
         print(f"❌ atomic_write_depth_u16_png_with_stats() failed: {type(e).__name__}: {e}")
 
-    # Test 3: V2Runner.run() (still a stub)
+    # Test 3: V2Runner.run() (now implemented, expects FileNotFoundError when script missing)
     checks_total += 1
     try:
         runner = V2Runner()
@@ -110,23 +110,24 @@ def verify_intentional_failures():
             preset="default",
             device="cpu"
         )
-        print("❌ V2Runner.run() should raise NotImplementedError")
-    except NotImplementedError:
-        print("✅ V2Runner.run() raises NotImplementedError")
+        print("❌ V2Runner.run() should raise FileNotFoundError (script missing)")
+    except FileNotFoundError:
+        print("✅ V2Runner.run() raises FileNotFoundError (honest failure, script missing)")
         checks_passed += 1
     except Exception as e:
-        print(f"❌ V2Runner.run() raised wrong exception: {type(e).__name__}")
+        print(f"❌ V2Runner.run() raised wrong exception: {type(e).__name__}: {e}")
 
-    # Test 4: find_v2_report()
+    # Test 4: find_v2_report() (now implemented, returns None when not found)
     checks_total += 1
     try:
-        find_v2_report(Path("/tmp/output"), "test_image")
-        print("❌ find_v2_report() should raise NotImplementedError")
-    except NotImplementedError:
-        print("✅ find_v2_report() raises NotImplementedError")
-        checks_passed += 1
+        result = find_v2_report(Path("/tmp/output"), "test_image")
+        if result is None:
+            print("✅ find_v2_report() returns None when not found (real implementation)")
+            checks_passed += 1
+        else:
+            print(f"❌ find_v2_report() should return None for missing report, got {result}")
     except Exception as e:
-        print(f"❌ find_v2_report() raised wrong exception: {type(e).__name__}")
+        print(f"❌ find_v2_report() raised exception: {type(e).__name__}: {e}")
 
     return checks_passed == checks_total
 

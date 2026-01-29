@@ -318,14 +318,14 @@ def test_depth_writer_opencv_dependency():
 
 
 def test_v2_runner_fails_intentionally():
-    """Test that V2Runner.run() raises NotImplementedError with correct signature."""
+    """Test that V2Runner.run() raises FileNotFoundError when legacy script missing."""
     from pathlib import Path
     from transformation_portal.lux_depth_v3.v2_runner import V2Runner
 
     runner = V2Runner()
 
-    # Should raise NotImplementedError with orchestrator-compatible signature
-    with pytest.raises(NotImplementedError, match="stub"):
+    # Should raise FileNotFoundError when scripts/enhance_image.py doesn't exist
+    with pytest.raises(FileNotFoundError, match="V2 enhancement script not found"):
         runner.run(
             input_path=Path("/tmp/input.png"),
             depth_dir=Path("/tmp/depth"),
