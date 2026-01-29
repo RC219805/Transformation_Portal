@@ -5,7 +5,6 @@ Two-stage pipeline:
 2. Stage B (V2): Consume depth assets -> V2 Subprocess -> Output
 """
 from __future__ import annotations
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import time
@@ -14,21 +13,18 @@ import datetime
 import json
 
 # Note: Imports adjusted to relative for package context compatibility
-from .config import DA3Config, ModelVariant, Preset, EnhanceConfig
+from .config import DA3Config, ModelVariant, EnhanceConfig
 from .inference import DA3InferenceEngine
 from .postprocessing import Postprocessor
 from .input_manager import ImageInput
 from .depth_writer import atomic_write_depth_u16_png_with_stats
-from .pbr import PBRConfig, generate_pbr_maps
+from .pbr import generate_pbr_maps
 from .pbr_writer import write_pbr_maps
 from .v2_runner import V2Runner, find_v2_report
 from .security import (
     HashMode,
     sanitize_file_stem,
     sanitize_path_component_nonlossy,
-    validate_device_spec,
-    validate_quantization_method,
-    validate_depth_fallback,
 )
 from .manifest import (
     CombinedManifest,
@@ -47,6 +43,7 @@ from .batch_stats import compute_batch_runtime_stats
 
 logger = logging.getLogger(__name__)
 
+
 def make_output_key(input_path: Path, input_root: Path) -> Path:
     """Generate collision-free output key preserving directory structure."""
     try:
@@ -62,6 +59,7 @@ def make_output_key(input_path: Path, input_root: Path) -> Path:
         return Path(*sanitized_parts) / stem_sanitized
     else:
         return Path(stem_sanitized)
+
 
 class EnhanceOrchestrator:
     """Orchestrates V3 depth generation + V2 enhancement pipeline."""
@@ -179,14 +177,18 @@ class EnhanceOrchestrator:
             # Quick read check
             from .depth_writer import read_depth_u16_png
             d = read_depth_u16_png(depth_path)
-            if d.ndim != 2: return False
+            if d.ndim != 2:
+                return False
 
             logger.debug(f"Resuming with existing depth: {depth_path}")
             return True
         except Exception:
             return False
 
-    def should_skip_v2(self, v2_report_path: Optional[Path], manifest_path: Path, image_input: ImageInput, depth_was_skipped: bool) -> bool:
+    def should_skip_v2(
+        self, v2_report_path: Optional[Path], manifest_path: Path,
+        image_input: ImageInput, depth_was_skipped: bool
+    ) -> bool:
         if not v2_report_path or not v2_report_path.exists() or not manifest_path.exists():
             return False
 
@@ -194,7 +196,8 @@ class EnhanceOrchestrator:
             manifest = CombinedManifest.load(manifest_path)
 
             # Config Check
-            if not manifest.config_fingerprint: return False
+            if not manifest.config_fingerprint:
+                return False
 
             current_fp = self.compute_config_fingerprint()
             manifest_fp = ConfigFingerprint(
@@ -222,8 +225,13 @@ class EnhanceOrchestrator:
         except Exception:
             return False
 
-    def enhance_image(self, image_input: ImageInput, input_root: Optional[Path] = None) -> Dict[str, Any]:
-        output_key = make_output_key(image_input.path, input_root) if input_root else Path(sanitize_file_stem(image_input.path.stem))
+    def enhance_image(
+        self, image_input: ImageInput, input_root: Optional[Path] = None
+    ) -> Dict[str, Any]:
+        output_key = (
+            make_output_key(image_input.path, input_root)
+            if input_root else Path(sanitize_file_stem(image_input.path.stem))
+        )
         logger.info(f"Processing {output_key}...")
 
         # Paths
@@ -238,8 +246,6 @@ class EnhanceOrchestrator:
         # Preprocess Input (Validation + Normalization)
         from .preprocessing import validate_image_format, preprocess_image
         validated_path = validate_image_format(image_input.path)
-        # Keep normalized_path alias for backward-compatible manifest metadata
-        normalized_path = validated_path
         preprocessed_array, original_shape = preprocess_image(validated_path)
 
         # --- STAGE A: DEPTH ---
@@ -352,7 +358,6 @@ class EnhanceOrchestrator:
                     except Exception as pbr_error:
                         logger.warning(f"PBR generation failed (non-blocking): {pbr_error}")
                         pbr_assets = None
-
 
             except Exception as e:
                 logger.error(f"Depth failed: {e}")
