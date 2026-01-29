@@ -85,14 +85,18 @@ class EnhanceConfig:
     preset: Optional[Preset] = None
     depth_device: str = "cpu"
     depth_quantization: str = "none"
+    depth_fallback: str = "fail"  # Options: fail, skip, v2-auto
+    verify_depth_writes: bool = False
 
     # V2 configuration
     v2_preset: str = "default"
     v2_device: str = "cpu"
     v2_upscaler_backend: str = "default"
+    v2_timeout: float = 300.0
 
     # Flags
     force_depth: bool = False
+    force_v2: bool = False
     non_commercial_ok: bool = False
 
     # Hash mode

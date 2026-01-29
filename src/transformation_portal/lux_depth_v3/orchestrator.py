@@ -281,15 +281,25 @@ class EnhanceOrchestrator:
                 )
             except Exception as e:
                 logger.error(f"Depth failed: {e}")
-                if self.config.depth_fallback == "fail": raise
-                if self.config.depth_fallback == "skip": return {"status": "skipped", "reason": str(e), "image": str(image_input.path)}
-                if self.config.depth_fallback == "v2-auto":
-                    if depth_path.exists(): depth_path.unlink()
+                if self.config.depth_fallback == "fail":
+                    raise
+                elif self.config.depth_fallback == "skip":
+                    return {"status": "skipped", "reason": str(e), "image": str(image_input.path)}
+                elif self.config.depth_fallback == "v2-auto":
+                    if depth_path.exists():
+                        depth_path.unlink()
                     depth_path = None
+                else:
+                    raise ValueError(
+                        f"Invalid depth_fallback={self.config.depth_fallback!r}. "
+                        f"Expected one of: fail, skip, v2-auto"
+                    )
         else:
             if manifest_path.exists():
-                try: depth_metadata = CombinedManifest.load(manifest_path).depth
-                except: pass
+                try:
+                    depth_metadata = CombinedManifest.load(manifest_path).depth
+                except Exception:
+                    pass
 
         # --- STAGE B: V2 ENHANCE ---
         if depth_path and depth_path.exists():

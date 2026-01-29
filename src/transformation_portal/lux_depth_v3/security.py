@@ -116,10 +116,11 @@ def validate_quantization_method(method: str) -> str:
 def validate_depth_fallback(fallback: Optional[str]) -> Optional[str]:
     """Validate depth fallback strategy.
 
-    STUB: Basic validation.
-
     Args:
-        fallback: Fallback strategy (none/zeros/previous, etc.)
+        fallback: Fallback strategy when depth generation fails.
+            - 'fail': Raise exception and stop processing
+            - 'skip': Skip this image and continue batch
+            - 'v2-auto': Continue to V2 enhancement without depth
 
     Returns:
         Validated fallback strategy
@@ -132,7 +133,7 @@ def validate_depth_fallback(fallback: Optional[str]) -> Optional[str]:
 
     fallback = fallback.lower().strip()
 
-    valid_fallbacks = {'none', 'zeros', 'previous', 'interpolate'}
+    valid_fallbacks = {'fail', 'skip', 'v2-auto'}
 
     if fallback in valid_fallbacks:
         return fallback
