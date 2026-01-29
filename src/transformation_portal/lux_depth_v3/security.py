@@ -132,7 +132,8 @@ def validate_depth_fallback(fallback: Optional[str]) -> Optional[str]:
 
     fallback = fallback.lower().strip()
 
-    valid_fallbacks = {'none', 'zeros', 'previous', 'interpolate'}
+    # Updated to match documented interface in config.py
+    valid_fallbacks = {'fail', 'skip', 'v2-auto'}
 
     if fallback in valid_fallbacks:
         return fallback
