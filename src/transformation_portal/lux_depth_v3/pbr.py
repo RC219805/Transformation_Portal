@@ -104,17 +104,37 @@ def generate_pbr_maps(
             - roughness_map: Grayscale uint8 (H, W)
             - ao_map: Grayscale uint8 (H, W)
 
+    Raises:
+        ValueError: If depth is not 2D or contains invalid values
+
     Example:
         >>> depth = np.random.rand(512, 512)
         >>> normal, roughness, ao = generate_pbr_maps(depth)
         >>> assert normal.shape == (512, 512, 3)
         >>> assert roughness.shape == (512, 512)
     """
+    # Input validation
+    if depth.ndim != 2:
+        raise ValueError(f"Depth must be 2D, got shape {depth.shape}")
+
+    if np.any(np.isnan(depth)) or np.any(np.isinf(depth)):
+        raise ValueError("Depth contains NaN or Inf values")
+
+    # Normalize depth to 0-1 range if needed
+    depth_min, depth_max = depth.min(), depth.max()
+    if depth_max > depth_min:
+        depth_normalized = (depth - depth_min) / (depth_max - depth_min)
+    else:
+        depth_normalized = np.zeros_like(depth)
+
+    # Clamp to ensure 0-1 range
+    depth_normalized = np.clip(depth_normalized, 0.0, 1.0)
+
     # 1. NORMAL MAP
     # Pre-blur depth if requested
-    depth_for_normals = _box_blur_gray(depth, config.normal_blur_radius) if config.normal_blur_radius > 0 else depth
+    depth_for_normals = _box_blur_gray(depth_normalized, config.normal_blur_radius) if config.normal_blur_radius > 0 else depth_normalized
 
-    # Compute gradients (unscaled, for use in both normals and AO)
+    # Compute gradients (UNSCALED, raw from depth)
     grad_x, grad_y = _sobel(depth_for_normals)
 
     # Scale gradients for normal map only
@@ -138,35 +158,42 @@ def generate_pbr_maps(
 
     # 2. ROUGHNESS MAP
     # Compute surface detail via Laplacian
-    detail = np.abs(_laplacian(depth))
+    detail = np.abs(_laplacian(depth_normalized))
 
     # Scale and blur
     detail *= config.roughness_strength
     roughness = _box_blur_gray(detail, config.roughness_blur_radius)
 
     # Normalize to 0-1
-    if roughness.max() > roughness.min():
-        roughness = (roughness - roughness.min()) / (roughness.max() - roughness.min())
+    roughness_min, roughness_max = roughness.min(), roughness.max()
+    if roughness_max > roughness_min:
+        roughness = (roughness - roughness_min) / (roughness_max - roughness_min)
     else:
         roughness = np.zeros_like(roughness)  # Constant field = no roughness
 
     roughness_map = (roughness * 255).astype(np.uint8)
 
     # 3. AMBIENT OCCLUSION MAP
-    # Use UNSCALED gradients to decouple AO from normal_strength
+    # CRITICAL FIX: Use UNSCALED gradients to decouple AO from normal_strength
     grad_mag = np.sqrt(grad_x**2 + grad_y**2)
 
     # Blur to spread occlusion
     occlusion = _box_blur_gray(grad_mag, config.ao_blur_radius)
 
-    # Scale and apply bias
+    # Scale by AO strength
     occlusion *= config.ao_strength
-    if occlusion.max() > occlusion.min():
-        occlusion = (occlusion - occlusion.min()) / (occlusion.max() - occlusion.min())
+
+    # Normalize to 0-1
+    occlusion_min, occlusion_max = occlusion.min(), occlusion.max()
+    if occlusion_max > occlusion_min:
+        occlusion = (occlusion - occlusion_min) / (occlusion_max - occlusion_min)
     else:
         occlusion = np.zeros_like(occlusion)  # Constant field = no occlusion
 
     # Apply bias (darker = more occluded, so invert and apply bias)
+    # AO = 1 - occlusion (invert so occluded areas are dark)
+    # Then apply bias: AO * (1 - bias) + bias
+    # This ensures AO values are in range [bias, 1.0]
     ao = 1.0 - occlusion
     ao = np.clip(ao * (1.0 - config.ao_bias) + config.ao_bias, 0.0, 1.0)
 

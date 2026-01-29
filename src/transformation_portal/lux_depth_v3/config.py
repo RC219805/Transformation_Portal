@@ -104,11 +104,34 @@ class EnhanceConfig:
     # Hash mode
     hash_mode: HashMode = HashMode.IF_MANIFEST_EXISTS
     # PBR map generation
-    enable_pbr: bool = False
+    generate_pbr: bool = False
     pbr_normal_strength: float = 1.0
     pbr_normal_blur_radius: int = 0
     pbr_roughness_strength: float = 1.0
     pbr_roughness_blur_radius: int = 3
     pbr_ao_strength: float = 1.0
     pbr_ao_blur_radius: int = 5
+    pbr_ao_bias: float = 0.5
+
+    @property
+    def enable_pbr(self) -> bool:
+        """Alias for generate_pbr (backward compatibility)."""
+        return self.generate_pbr
+
+    def to_pbr_config(self):
+        """Convert EnhanceConfig to PBRConfig.
+
+        Returns:
+            PBRConfig instance with parameters from this config
+        """
+        from .pbr import PBRConfig
+        return PBRConfig(
+            normal_strength=self.pbr_normal_strength,
+            normal_blur_radius=self.pbr_normal_blur_radius,
+            roughness_strength=self.pbr_roughness_strength,
+            roughness_blur_radius=self.pbr_roughness_blur_radius,
+            ao_strength=self.pbr_ao_strength,
+            ao_blur_radius=self.pbr_ao_blur_radius,
+            ao_bias=self.pbr_ao_bias,
+        )
 

@@ -67,31 +67,36 @@ def write_pbr_maps(
                 dir=output_dir,
                 prefix=f".tmp_{base_name}_"
             )
-            temp_files.append(temp_path)
 
             try:
                 # Convert numpy array to PIL Image
                 if map_data.ndim == 2:
                     # Grayscale
-                    pil_image = Image.fromarray(map_data, mode='L')
+                    pil_image = Image.fromarray(map_data, 'L')
                 elif map_data.ndim == 3 and map_data.shape[2] == 3:
                     # RGB
-                    pil_image = Image.fromarray(map_data, mode='RGB')
+                    pil_image = Image.fromarray(map_data, 'RGB')
                 else:
+                    os.close(temp_fd)  # Close FD before raising
                     raise ValueError(f"Invalid map shape for {map_type}: {map_data.shape}")
 
-                # Write to temp file (convert file descriptor to file object)
+                # CRITICAL FIX: Convert file descriptor to file object
                 with os.fdopen(temp_fd, 'wb') as f:
                     pil_image.save(f, format='PNG', optimize=True)
 
-                # Atomic rename
-                Path(temp_path).rename(output_path)
-                temp_files.remove(temp_path)  # Successfully written
+                # Atomic rename (truly atomic on POSIX)
+                os.replace(temp_path, output_path)
+                temp_files.remove(temp_path) if temp_path in temp_files else None
 
                 written_paths[map_type] = output_path
                 logger.info(f"Wrote {map_type} map: {output_path}")
 
             except Exception as e:
+                # Close FD if still open
+                try:
+                    os.close(temp_fd)
+                except Exception:
+                    pass
                 logger.error(f"Failed to write {map_type} map: {e}")
                 raise IOError(f"Failed to write {map_type} map to {output_path}") from e
 

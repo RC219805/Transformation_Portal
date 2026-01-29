@@ -10,6 +10,16 @@ from typing import Optional, Dict, Any, List
 import json
 import hashlib
 import subprocess
+import datetime
+
+
+def _utcnow_iso() -> str:
+    """Get current UTC time in ISO format.
+
+    Returns:
+        ISO 8601 formatted timestamp with timezone
+    """
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
 @dataclass
@@ -43,9 +53,9 @@ class V2Metadata:
 @dataclass
 class TimingMetadata:
     """Timing information for the pipeline."""
-    total_seconds: float
     depth_seconds: float
     v2_seconds: float
+    total_seconds: float
     timestamp_utc: str
 
 
@@ -91,6 +101,14 @@ class ConfigFingerprint:
             v2_device=self.v2_device,
             v2_upscaler_backend=self.v2_upscaler_backend,
         )
+
+    def to_sha256(self) -> str:
+        """Compute SHA256 hash of fingerprint for caching keys."""
+        import hashlib
+        import json
+        data = asdict(self)
+        serialized = json.dumps(data, sort_keys=True)
+        return hashlib.sha256(serialized.encode('utf-8')).hexdigest()
 
 
 @dataclass
@@ -150,7 +168,11 @@ class CombinedManifest:
         manifest = cls()
 
         if 'input' in data:
-            manifest.input = InputMetadata(**data['input'])
+            input_data = data['input']
+            # Fix: Handle tuple/list for image_dimensions
+            if 'image_dimensions' in input_data and isinstance(input_data['image_dimensions'], list):
+                input_data['image_dimensions'] = tuple(input_data['image_dimensions'])
+            manifest.input = InputMetadata(**input_data)
         if 'depth' in data:
             manifest.depth = DepthMetadata(**data['depth'])
         if 'v2' in data:

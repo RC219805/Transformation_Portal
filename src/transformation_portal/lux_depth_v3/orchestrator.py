@@ -300,21 +300,13 @@ class EnhanceOrchestrator:
                 logger.debug(f"Wrote depth metadata: {depth_metadata_path}")
 
                 # 5. PBR map generation (optional)
-                pbr_assets = None
-                if self.config.enable_pbr:
+                if self.config.generate_pbr:
                     try:
                         logger.info("Generating PBR maps...")
                         pbr_t0 = time.time()
 
-                        # Build PBR configuration from EnhanceConfig
-                        pbr_config = PBRConfig(
-                            normal_strength=self.config.pbr_normal_strength,
-                            normal_blur_radius=self.config.pbr_normal_blur_radius,
-                            roughness_strength=self.config.pbr_roughness_strength,
-                            roughness_blur_radius=self.config.pbr_roughness_blur_radius,
-                            ao_strength=self.config.pbr_ao_strength,
-                            ao_blur_radius=self.config.pbr_ao_blur_radius,
-                        )
+                        # Use to_pbr_config() for consistent parameter conversion
+                        pbr_config = self.config.to_pbr_config()
 
                         # Generate maps from depth
                         normal_map, roughness_map, ao_map = generate_pbr_maps(
@@ -353,6 +345,7 @@ class EnhanceOrchestrator:
                                 "roughness_blur_radius": pbr_config.roughness_blur_radius,
                                 "ao_strength": pbr_config.ao_strength,
                                 "ao_blur_radius": pbr_config.ao_blur_radius,
+                                "ao_bias": pbr_config.ao_bias,
                             }
                         }
 
@@ -425,9 +418,9 @@ class EnhanceOrchestrator:
             depth=depth_metadata,
             v2=v2_metadata,
             timing=TimingMetadata(
-                total_seconds=depth_runtime_s + v2_runtime_s,
                 depth_seconds=depth_runtime_s,
                 v2_seconds=v2_runtime_s,
+                total_seconds=depth_runtime_s + v2_runtime_s,
                 timestamp_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),
             ),
             pbr_assets=pbr_assets,
