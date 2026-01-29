@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 import logging
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Optional
 from dataclasses import dataclass, asdict
 import numpy as np
 
@@ -74,6 +74,11 @@ def atomic_write_depth_u16_png_with_stats(
         raise ImportError(
             "opencv-python required for depth_writer. Install with: pip install opencv-python"
         )
+
+    # Normalize legacy/config values
+    # EnhanceConfig defaults to "none", which means "default behavior" (u16 for this writer)
+    if method in (None, "", "none"):
+        method = "u16"
 
     # Validate method
     if method != "u16":

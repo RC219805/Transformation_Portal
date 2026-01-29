@@ -243,19 +243,36 @@ class TestDepthWriteStats:
         assert stats.method == "u16"
         assert stats._asdict()['method'] == "u16"
 
+    def test_method_normalization(self, tmp_path):
+        """Verify legacy/config method values are normalized to u16."""
+        depth_map = np.random.rand(10, 10).astype(np.float32)
+
+        # Test each legacy value that should normalize to "u16"
+        for legacy_method in ["none", "", None]:
+            output_path = tmp_path / f"norm_{legacy_method or 'None'}.png"
+
+            _, _, stats = atomic_write_depth_u16_png_with_stats(
+                output_path, depth_map, method=legacy_method
+            )
+
+            # Should normalize to "u16"
+            assert stats.method == "u16"
+            assert output_path.exists()
+
     def test_invalid_method_raises_error(self, tmp_path):
         """Verify unsupported quantization methods raise ValueError."""
         depth_map = np.random.rand(10, 10).astype(np.float32)
         output_path = tmp_path / "invalid_method.png"
 
+        # "none" is now normalized, so test with truly invalid methods
         with pytest.raises(ValueError, match="Unsupported depth quantization method"):
             atomic_write_depth_u16_png_with_stats(
-                output_path, depth_map, method="none"
+                output_path, depth_map, method="u8"
             )
 
         with pytest.raises(ValueError, match="Unsupported depth quantization method"):
             atomic_write_depth_u16_png_with_stats(
-                output_path, depth_map, method="u8"
+                output_path, depth_map, method="float32"
             )
 
     def test_stats_is_frozen(self, tmp_path):
