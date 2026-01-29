@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-01-29
+
+**Security & Bug Fixes:**
+- Fixed CVE-2026-0994 by bumping protobuf to 6.34.0 (baf69e04)
+- Hardened workflow token permissions across all GitHub Actions workflows (baf69e04)
+- Fixed duplicate `permissions:` block in quality-gate workflow (aa555e0a)
+- Fixed InputMetadata positional args bug in lux_depth_v3 orchestrator (0fe68a41)
+  - Resolved silent metadata corruption where `True` was incorrectly assigned to `image_size_bytes`
+  - Changed to keyword-based construction for safer dataclass initialization
+
+**Dependency Updates:**
+- virtualenv: 20.35.4 → 20.36.1 (cc8b3bae)
+
+**Known Issues:**
+- Issue #761: quality-gate workflow contains local-only git commit (optional cleanup, non-urgent)
+
 ## 2025-10-03
 
 - Enhanced `.github/copilot-instructions.md` with best practice sections following GitHub Copilot coding agent guidelines:

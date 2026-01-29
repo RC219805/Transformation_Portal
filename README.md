@@ -192,7 +192,7 @@ pip install -e .
 > **Important**: Installing the package in editable mode with `pip install -e .` is **required** for:
 > - Using CLI console scripts (`luxury-tiff-batch`, etc.)
 > - Importing from the `transformation_portal` package
-> - Running the test suite correctly  
+> - Running the test suite correctly
 > The editable installation makes the package importable and registers command-line entry points.
 
 ### Optional Extras
@@ -590,8 +590,8 @@ Professional use permitted with attribution.
 
 ## Support and Contact
 
-Author: Richard Cheetham  
-Brand: Carolwood Estates · RACLuxe Division  
+Author: Richard Cheetham
+Brand: Carolwood Estates · RACLuxe Division
 Email: info@racluxe.com
 
 Resources:
@@ -602,4 +602,4 @@ Resources:
 
 ---
 
-**Last Updated: 2025-11-13**
+**Last Updated: 2026-01-29**

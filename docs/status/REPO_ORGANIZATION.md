@@ -125,6 +125,19 @@ Only these files should remain in the repository root:
 - **CI/CD**: `.travis.yml`, `.circleci/` (prefer `.github/workflows/`)
 - **Organization system**: `.auto-organize.sh`, `REPO_ORGANIZATION.md`
 
+### Root Directory Limits
+
+The repository enforces a maximum of **10 markdown files** in the root directory (currently 6):
+1. `README.md`
+2. `SECURITY.md`
+3. `REPO_ORGANIZATION.md`
+4. `CACHE_VALIDATION_IMPLEMENTATION.md`
+5. `DA3_IMPLEMENTATION_SUMMARY.md`
+6. `PR_SUMMARY_LUX_DEPTH_V3.md`
+7. `DOCUMENTATION_REVIEW_REPORT.md`
+
+This limit is enforced by the `quality-gate.yml` workflow. Additional documentation should be placed in `docs/` subdirectories to maintain repository cleanliness and navigability.
+
 ## Helper Scripts
 
 To keep `.auto-organize.sh` focused and maintainable, the organization system is implemented as a set of modular helper scripts. In most cases you only run `.auto-organize.sh`; it delegates work to specialized helpers:

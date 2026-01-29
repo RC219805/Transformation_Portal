@@ -503,6 +503,33 @@ If you use this pipeline in research, please cite:
 }
 ```
 
+## Known Issues & Fixes
+
+### Fixed: InputMetadata Positional Args Bug (0fe68a41)
+
+**Issue**: Silent metadata corruption in lux_depth_v3 orchestrator when using positional arguments.
+
+**Symptom**:
+- `True` incorrectly assigned to `image_size_bytes`
+- `normalized_path` incorrectly assigned to `image_dimensions`
+
+**Fix**: Changed to keyword-based construction:
+```python
+# Before (WRONG):
+metadata = InputMetadata(file_path, True, normalized_path)
+
+# After (CORRECT):
+metadata = InputMetadata(
+    file_path=file_path,
+    image_size_bytes=None,
+    image_dimensions=None
+)
+```
+
+**Lesson**: Always use keyword arguments for dataclass construction to prevent silent bugs.
+
+**Fixed in**: January 2026 (commit 0fe68a41)
+
 ## Support
 
 For issues, questions, or contributions:
@@ -514,4 +541,4 @@ For issues, questions, or contributions:
 
 **Status**: Production-ready (v1.0.0)
 **Platform**: macOS (M1/M2/M3/M4), Linux, Windows
-**Last Updated**: 2025-01-27
+**Last Updated**: 2026-01-29
