@@ -1,7 +1,7 @@
 """Depth map writer with atomic operations and statistics.
 
 Provides robust, atomic depth map I/O with 16-bit precision:
-- Atomic writes via temp file + os.replace()
+- Atomic writes via shared atomic write primitives
 - Statistics calculation on original float data
 - Optional verification after write
 - Read/write cycle preserves precision within quantization error
@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Optional
 from dataclasses import dataclass, asdict
 import numpy as np
+
+from .io_atomic import atomic_temp_file
 
 try:
     import cv2
@@ -102,33 +104,22 @@ def atomic_write_depth_u16_png_with_stats(
     depth_clipped = np.clip(depth_map, 0.0, 1.0)
     depth_u16 = (depth_clipped * 65535.0).astype(np.uint16)
 
-    # 3. Atomic Write
-    # Write to a temp file in the same directory to ensure atomic rename works (same filesystem)
-    # Important: Must use .png extension so cv2 recognizes the format
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Use .tmp.png to ensure cv2 recognizes PNG codec
-    temp_name = f"{output_path.stem}_tmp{output_path.suffix}"
-    temp_path = output_path.parent / temp_name
-
+    # 3. Atomic Write using shared helper
+    # cv2.imwrite requires a file path, so we use atomic_temp_file context manager
     try:
-        # Use explicit PNG compression parameters
-        success = cv2.imwrite(
-            str(temp_path),
-            depth_u16,
-            [cv2.IMWRITE_PNG_COMPRESSION, 3]  # Compression level 0-9
-        )
-        if not success:
-            raise IOError(f"cv2.imwrite returned False for {temp_path}")
-
-        # Atomic rename
-        os.replace(temp_path, output_path)
+        with atomic_temp_file(output_path, suffix=".png") as temp_path:
+            # Use explicit PNG compression parameters
+            success = cv2.imwrite(
+                str(temp_path),
+                depth_u16,
+                [cv2.IMWRITE_PNG_COMPRESSION, 3]  # Compression level 0-9
+            )
+            if not success:
+                raise IOError(f"cv2.imwrite returned False for {temp_path}")
+            # atomic_temp_file will handle os.replace on success
 
     except Exception as e:
-        # Cleanup temp file on failure
-        if temp_path.exists():
-            os.remove(temp_path)
+        # atomic_temp_file handles cleanup, but we re-raise with context
         raise IOError(f"Failed to write depth map to {output_path}") from e
 
     # 4. Verification (Optional)

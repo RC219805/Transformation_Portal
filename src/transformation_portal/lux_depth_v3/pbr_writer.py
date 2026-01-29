@@ -1,16 +1,16 @@
 """PBR Map File Writer for Lux Depth V3.
 
-Handles atomic writing of PBR maps (normal, roughness, AO) using PIL only.
+Handles atomic writing of PBR maps (normal, roughness, AO) using shared atomic write primitives.
 """
 
 import logging
-import os
 from pathlib import Path
-import tempfile
 from typing import Dict
 
 import numpy as np
 from PIL import Image
+
+from .io_atomic import atomic_write_pil_png
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,6 @@ def write_pbr_maps(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     written_paths = {}
-    temp_files = []
     errors = []
 
     maps_to_write = [
@@ -59,18 +58,8 @@ def write_pbr_maps(
 
     for map_type, map_data, filename in maps_to_write:
         output_path = output_dir / filename
-        temp_fd = None
-        temp_path = None
 
         try:
-            # Create temporary file in same directory (atomic rename requirement)
-            temp_fd, temp_path = tempfile.mkstemp(
-                suffix=".png",
-                dir=output_dir,
-                prefix=f".tmp_{base_name}_"
-            )
-            temp_files.append(temp_path)
-
             # Convert numpy array to PIL Image
             if map_data.ndim == 2:
                 pil_image = Image.fromarray(map_data, 'L')
@@ -79,36 +68,16 @@ def write_pbr_maps(
             else:
                 raise ValueError(f"Invalid map shape for {map_type}: {map_data.shape}")
 
-            # os.fdopen consumes the FD, so we don't need to close it
-            with os.fdopen(temp_fd, 'wb') as f:
-                temp_fd = None  # Mark as consumed
-                pil_image.save(f, format='PNG', optimize=True)
-
-            # Atomic rename (truly atomic on POSIX)
-            os.replace(temp_path, output_path)
-            temp_files.remove(temp_path)
+            # Use shared atomic write helper
+            atomic_write_pil_png(output_path, pil_image, optimize=True)
 
             written_paths[map_type] = output_path
             logger.info(f"Wrote {map_type} map: {output_path}")
 
         except Exception as e:
-            # Close FD if not consumed by fdopen
-            if temp_fd is not None:
-                try:
-                    os.close(temp_fd)
-                except Exception:
-                    pass
-
             error_msg = f"Failed to write {map_type} map: {e}"
             logger.error(error_msg)
             errors.append(error_msg)
-
-    # Cleanup any remaining temp files
-    for temp_path in temp_files:
-        try:
-            Path(temp_path).unlink(missing_ok=True)
-        except Exception as cleanup_error:
-            logger.warning(f"Failed to cleanup temp file {temp_path}: {cleanup_error}")
 
     # Only raise if ALL maps failed
     if not written_paths:
