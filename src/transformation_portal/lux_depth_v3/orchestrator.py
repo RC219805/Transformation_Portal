@@ -323,6 +323,9 @@ class EnhanceOrchestrator:
                         pbr_dir = self.output_root / "pbr"
                         pbr_dir.mkdir(parents=True, exist_ok=True)
 
+                        # Derive base name from output_key for consistent artifact naming
+                        sanitized_stem = output_key.stem if output_key.suffix else output_key.name
+
                         pbr_paths = write_pbr_maps(
                             normal_map=normal_map,
                             roughness_map=roughness_map,
