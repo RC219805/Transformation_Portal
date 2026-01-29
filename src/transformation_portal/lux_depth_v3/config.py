@@ -103,3 +103,12 @@ class EnhanceConfig:
 
     # Hash mode
     hash_mode: HashMode = HashMode.IF_MANIFEST_EXISTS
+    # PBR map generation
+    enable_pbr: bool = False
+    pbr_normal_strength: float = 1.0
+    pbr_normal_blur_radius: int = 0
+    pbr_roughness_strength: float = 1.0
+    pbr_roughness_blur_radius: int = 3
+    pbr_ao_strength: float = 1.0
+    pbr_ao_blur_radius: int = 5
+

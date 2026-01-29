@@ -19,6 +19,8 @@ from .inference import DA3InferenceEngine
 from .postprocessing import Postprocessor
 from .input_manager import ImageInput
 from .depth_writer import atomic_write_depth_u16_png_with_stats
+from .pbr import PBRConfig, generate_pbr_maps
+from .pbr_writer import write_pbr_maps
 from .v2_runner import V2Runner, find_v2_report
 from .security import (
     HashMode,
@@ -294,6 +296,65 @@ class EnhanceOrchestrator:
                     }, f, indent=2)
                 logger.debug(f"Wrote depth metadata: {depth_metadata_path}")
 
+                # 5. PBR map generation (optional)
+                pbr_assets = None
+                if self.config.enable_pbr:
+                    try:
+                        logger.info("Generating PBR maps...")
+                        pbr_t0 = time.time()
+
+                        # Build PBR configuration from EnhanceConfig
+                        pbr_config = PBRConfig(
+                            normal_strength=self.config.pbr_normal_strength,
+                            normal_blur_radius=self.config.pbr_normal_blur_radius,
+                            roughness_strength=self.config.pbr_roughness_strength,
+                            roughness_blur_radius=self.config.pbr_roughness_blur_radius,
+                            ao_strength=self.config.pbr_ao_strength,
+                            ao_blur_radius=self.config.pbr_ao_blur_radius,
+                        )
+
+                        # Generate maps from depth
+                        normal_map, roughness_map, ao_map = generate_pbr_maps(
+                            result.depth,
+                            config=pbr_config
+                        )
+
+                        # Write PBR maps
+                        pbr_dir = self.output_root / "pbr"
+                        pbr_dir.mkdir(parents=True, exist_ok=True)
+
+                        pbr_paths = write_pbr_maps(
+                            normal_map=normal_map,
+                            roughness_map=roughness_map,
+                            ao_map=ao_map,
+                            output_dir=pbr_dir,
+                            base_name=sanitized_stem
+                        )
+
+                        pbr_runtime = time.time() - pbr_t0
+                        logger.info(f"PBR maps generated in {pbr_runtime:.2f}s: {list(pbr_paths.keys())}")
+
+                        # Store paths for manifest
+                        pbr_assets = {
+                            "normal_path": str(pbr_paths["normal"]),
+                            "roughness_path": str(pbr_paths["roughness"]),
+                            "ao_path": str(pbr_paths["ao"]),
+                            "runtime_seconds": pbr_runtime,
+                            "config": {
+                                "normal_strength": pbr_config.normal_strength,
+                                "normal_blur_radius": pbr_config.normal_blur_radius,
+                                "roughness_strength": pbr_config.roughness_strength,
+                                "roughness_blur_radius": pbr_config.roughness_blur_radius,
+                                "ao_strength": pbr_config.ao_strength,
+                                "ao_blur_radius": pbr_config.ao_blur_radius,
+                            }
+                        }
+
+                    except Exception as pbr_error:
+                        logger.warning(f"PBR generation failed (non-blocking): {pbr_error}")
+                        pbr_assets = None
+
+
             except Exception as e:
                 logger.error(f"Depth failed: {e}")
                 if self.config.depth_fallback == "fail":
@@ -355,6 +416,7 @@ class EnhanceOrchestrator:
             depth=depth_metadata,
             v2=v2_metadata,
             timing=TimingMetadata(depth_runtime_s, v2_runtime_s, depth_runtime_s + v2_runtime_s),
+                pbr_assets=pbr_assets,
             repro=ReproMetadata(self.v3_git, self.v2_git, self.config.depth_device),
             config_fingerprint=self.compute_config_fingerprint().to_sha256(),
             environment=self.environment

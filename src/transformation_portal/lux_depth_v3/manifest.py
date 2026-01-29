@@ -111,8 +111,10 @@ class CombinedManifest:
     depth: Optional[DepthMetadata] = None
     v2: Optional[V2Metadata] = None
     timing: Optional[TimingMetadata] = None
+    pbr_assets: Optional[Dict[str, Any]] = None
     repro: Optional[ReproMetadata] = None
     config_fingerprint: Optional[ConfigFingerprint] = None
+    environment: Optional[Dict[str, Any]] = None
 
     def save(self, path: Path):
         """Save manifest to JSON file.
@@ -123,10 +125,14 @@ class CombinedManifest:
 
         # Convert dataclasses to dict
         data = {}
-        for field_name in ['input', 'depth', 'v2', 'timing', 'repro', 'config_fingerprint']:
+        for field_name in ['input', 'depth', 'v2', 'timing', 'pbr_assets', 'repro', 'config_fingerprint', 'environment']:
             field_value = getattr(self, field_name)
             if field_value is not None:
-                data[field_name] = asdict(field_value)
+                if field_name in ['pbr_assets', 'environment']:
+                    # Already a dict, no need to convert
+                    data[field_name] = field_value
+                else:
+                    data[field_name] = asdict(field_value)
 
         with open(path, 'w') as f:
             json.dump(data, f, indent=2)
@@ -155,8 +161,16 @@ class CombinedManifest:
             manifest.repro = ReproMetadata(**data['repro'])
         if 'config_fingerprint' in data:
             manifest.config_fingerprint = ConfigFingerprint(**data['config_fingerprint'])
+        if 'pbr_assets' in data:
+            manifest.pbr_assets = data['pbr_assets']
+        if 'environment' in data:
+            manifest.environment = data['environment']
 
         return manifest
+
+    def write(self, path: Path):
+        """Alias for save() for backward compatibility."""
+        self.save(path)
 
 
 def compute_file_sha256(file_path: Path) -> str:
