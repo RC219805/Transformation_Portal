@@ -4,9 +4,7 @@ Provides EXIF normalization and depth/image alignment validation.
 """
 from __future__ import annotations
 from pathlib import Path
-from typing import Optional
 import logging
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -41,17 +39,17 @@ def normalize_exif_orientation(input_path: Path, output_path: Path):
         import shutil
         shutil.copy(input_path, output_path)
         return
-    
+
     input_path = Path(input_path)
     output_path = Path(output_path)
-    
+
     # Ensure output directory exists
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     try:
         # Open image
         image = Image.open(input_path)
-        
+
         # Get EXIF orientation tag if present
         try:
             exif = image.getexif()
@@ -62,10 +60,10 @@ def normalize_exif_orientation(input_path: Path, output_path: Path):
                     if tag_name == 'Orientation':
                         orientation_key = tag_id
                         break
-                
+
                 if orientation_key and orientation_key in exif:
                     orientation = exif[orientation_key]
-                    
+
                     # Apply orientation transformations
                     # See EXIF orientation spec: https://www.impulseadventure.com/photo/exif-orientation.html
                     if orientation == 2:
@@ -82,18 +80,18 @@ def normalize_exif_orientation(input_path: Path, output_path: Path):
                         image = image.transpose(Image.FLIP_LEFT_RIGHT).rotate(90, expand=True)
                     elif orientation == 8:
                         image = image.rotate(90, expand=True)
-                    
+
                     logger.debug(f"Normalized EXIF orientation {orientation} for {input_path}")
         except (AttributeError, KeyError, IndexError):
             # No EXIF data or orientation tag - that's fine
             pass
-        
+
         # Save normalized image
         # Remove EXIF data to prevent re-application
         image.save(output_path, exif=b'')
-        
+
         logger.debug(f"Saved normalized image to {output_path}")
-        
+
     except Exception as e:
         logger.error(f"Failed to normalize EXIF orientation: {e}")
         # Fallback: copy original file
@@ -116,13 +114,13 @@ def validate_depth_image_alignment(
     """
     image_path = Path(image_path)
     depth_path = Path(depth_path)
-    
+
     # Check files exist
     if not image_path.exists():
         raise FileNotFoundError(f"Image not found: {image_path}")
     if not depth_path.exists():
         raise FileNotFoundError(f"Depth map not found: {depth_path}")
-    
+
     try:
         # Load image dimensions
         if PIL_AVAILABLE:
@@ -138,7 +136,7 @@ def validate_depth_image_alignment(
                 "Either Pillow or opencv-python is required. "
                 "Install with: pip install Pillow or pip install opencv-python"
             )
-        
+
         # Load depth map dimensions
         if CV2_AVAILABLE:
             depth = cv2.imread(str(depth_path), cv2.IMREAD_ANYDEPTH)
@@ -153,17 +151,17 @@ def validate_depth_image_alignment(
                 "Either opencv-python or Pillow is required. "
                 "Install with: pip install opencv-python or pip install Pillow"
             )
-        
+
         # Check dimensions match
         if image_shape != depth_shape:
             logger.error(
                 f"Dimension mismatch: image {image_shape} != depth {depth_shape}"
             )
             return False
-        
+
         logger.debug(f"Validation passed: {image_path} and {depth_path} have matching dimensions {image_shape}")
         return True
-        
+
     except Exception as e:
         logger.error(f"Failed to validate alignment: {e}")
         raise

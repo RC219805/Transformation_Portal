@@ -49,7 +49,7 @@ def atomic_write_depth_u16_png_with_stats(
     """
     # Ensure output_path is a Path object
     output_path = Path(output_path)
-    
+
     # Calculate statistics before conversion
     stats = {
         "min": float(np.min(depth_map)),
@@ -60,7 +60,7 @@ def atomic_write_depth_u16_png_with_stats(
         "dtype": str(depth_map.dtype),
         "method": method,
     }
-    
+
     # Convert to 16-bit unsigned integer
     if method == "u16":
         # Normalize to [0, 65535] range
@@ -74,22 +74,22 @@ def atomic_write_depth_u16_png_with_stats(
             depth_u16 = depth_map
     else:
         raise ValueError(f"Unknown quantization method: {method}")
-    
+
     # Ensure parent directory exists
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     # Write to temporary file first (atomic operation)
     temp_fd, temp_path = tempfile.mkstemp(
         suffix=".png",
         dir=output_path.parent,
         prefix=f".{output_path.stem}_"
     )
-    
+
     try:
         # Close the file descriptor (we'll use the path)
         import os
         os.close(temp_fd)
-        
+
         # Write depth map
         if CV2_AVAILABLE:
             # Prefer cv2 for 16-bit PNG writing
@@ -105,12 +105,12 @@ def atomic_write_depth_u16_png_with_stats(
                 "Either opencv-python or Pillow is required for depth writing. "
                 "Install with: pip install opencv-python or pip install Pillow"
             )
-        
+
         # Atomic rename
         shutil.move(str(temp_path), str(output_path))
-        
+
         logger.info("Wrote depth map to %s (method=%s)", output_path, method)
-        
+
     except Exception as e:
         # Clean up temp file on error
         try:
@@ -118,42 +118,42 @@ def atomic_write_depth_u16_png_with_stats(
         except Exception:  # pylint: disable=broad-exception-caught
             pass
         raise IOError(f"Failed to write depth map: {e}") from e
-    
+
     # Verification step
     verification_path = None
     if debug_verify:
         # Read back and verify
         try:
             depth_verify = read_depth_u16_png(output_path)
-            
+
             # Check shape matches
             if depth_verify.shape != depth_u16.shape:
                 raise ValueError(
                     f"Verification failed: shape mismatch "
                     f"(expected {depth_u16.shape}, got {depth_verify.shape})"
                 )
-            
+
             # Check values match (allow small rounding errors)
             max_diff = np.max(np.abs(depth_verify.astype(float) - depth_u16.astype(float)))
             if max_diff > 1.0:
                 raise ValueError(
                     f"Verification failed: max difference {max_diff} exceeds threshold"
                 )
-            
+
             # Write verification report
             verification_path = output_path.parent / f"{output_path.stem}_verify.txt"
             with open(verification_path, 'w') as f:
-                f.write(f"Verification successful\n")
+                f.write("Verification successful\n")
                 f.write(f"Output: {output_path}\n")
                 f.write(f"Shape: {depth_verify.shape}\n")
                 f.write(f"Max difference: {max_diff}\n")
-            
+
             logger.info("Depth map verification passed: %s", output_path)
-            
+
         except Exception as e:
             logger.error("Depth map verification failed: %s", e)
             raise
-    
+
     return output_path, verification_path, stats
 
 
@@ -167,10 +167,10 @@ def read_depth_u16_png(depth_path: Path) -> np.ndarray:
         Depth map as numpy array (uint16)
     """
     depth_path = Path(depth_path)
-    
+
     if not depth_path.exists():
         raise FileNotFoundError(f"Depth map not found: {depth_path}")
-    
+
     # Read depth map
     if CV2_AVAILABLE:
         # Prefer cv2 for 16-bit PNG reading
@@ -186,7 +186,7 @@ def read_depth_u16_png(depth_path: Path) -> np.ndarray:
             "Either opencv-python or Pillow is required for depth reading. "
             "Install with: pip install opencv-python or pip install Pillow"
         )
-    
+
     # Ensure uint16
     if depth_map.dtype != np.uint16:
         logger.warning(
@@ -194,5 +194,5 @@ def read_depth_u16_png(depth_path: Path) -> np.ndarray:
             depth_map.dtype
         )
         depth_map = depth_map.astype(np.uint16)
-    
+
     return depth_map
