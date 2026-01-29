@@ -118,7 +118,11 @@ class DepthCache:
     - Disk persistence (optional)
     - Memory-efficient storage (FP16)
     - Cache statistics tracking
+    - Validation and corruption detection for disk cache
     """
+
+    # Maximum size per disk cache entry (2GB)
+    MAX_DISK_CACHE_SIZE = 2 * 1024 * 1024 * 1024
 
     def __init__(
         self,
@@ -273,14 +277,95 @@ class DepthCache:
         except Exception as e:
             logger.warning(f"Failed to save disk cache: {e}")
 
+    def _validate_disk_entry(self, cache_file: Path, expected_type: str = 'depth') -> bool:
+        """
+        Validate disk-cached depth entry.
+
+        Checks:
+        - File exists and is readable
+        - File size is reasonable (>100 bytes, <2GB)
+        - Pickle can be loaded without errors
+        - Result contains expected keys ('depth', 'depth_raw', etc.)
+
+        Args:
+            cache_file: Path to cache file
+            expected_type: Expected type of cache entry (for validation)
+
+        Returns:
+            True if valid, False otherwise
+        """
+        try:
+            # Check file exists
+            if not cache_file.exists():
+                logger.debug(f"Validation failed: file not found {cache_file}")
+                return False
+
+            # Check file is readable
+            if not cache_file.is_file():
+                logger.debug(f"Validation failed: not a file {cache_file}")
+                return False
+
+            # Check file size is reasonable
+            file_size = cache_file.stat().st_size
+            if file_size < 100:
+                logger.warning(f"Validation failed: file too small {cache_file} ({file_size} bytes)")
+                return False
+            if file_size > self.MAX_DISK_CACHE_SIZE:
+                logger.warning(
+                    f"Validation failed: file too large {cache_file} "
+                    f"({file_size / (1024*1024):.1f} MB > {self.MAX_DISK_CACHE_SIZE / (1024*1024):.0f} MB)"
+                )
+                return False
+
+            # Try to load pickle and validate structure
+            try:
+                with open(cache_file, "rb") as f:
+                    result = pickle.load(f)  # nosec B301 - loading self-generated cache
+            except Exception as e:
+                logger.warning(f"Validation failed: cannot unpickle {cache_file}: {e}")
+                return False
+
+            # Validate structure
+            if not isinstance(result, dict):
+                logger.warning(f"Validation failed: result is not a dict in {cache_file}")
+                return False
+
+            # Check for expected keys based on type
+            if expected_type == 'depth':
+                required_keys = ['depth']
+                if not any(key in result for key in required_keys):
+                    logger.warning(
+                        f"Validation failed: missing required keys in {cache_file}. "
+                        f"Expected one of {required_keys}, got {list(result.keys())}"
+                    )
+                    return False
+
+            logger.debug(f"Validation passed for {cache_file}")
+            return True
+
+        except Exception as e:
+            logger.warning(f"Validation error for {cache_file}: {e}")
+            return False
+
     def _load_from_disk(self, key: str) -> Optional[dict]:
-        """Load depth result from disk."""
+        """Load depth result from disk with validation."""
         try:
             cache_file = self.cache_dir / f"{key}.pkl"
 
             if not cache_file.exists():
                 return None
 
+            # Validate entry before loading
+            if not self._validate_disk_entry(cache_file):
+                logger.warning(f"Corrupted disk cache entry, removing: {key[:8]}")
+                # Delete corrupted file
+                try:
+                    cache_file.unlink()
+                except Exception as e:
+                    logger.warning(f"Failed to delete corrupted cache file {cache_file}: {e}")
+                return None
+
+            # Load validated cache entry
             with open(cache_file, "rb") as f:
                 result = pickle.load(f)  # nosec B301 - loading self-generated cache
 
@@ -294,6 +379,14 @@ class DepthCache:
 
         except Exception as e:
             logger.warning(f"Failed to load disk cache: {e}")
+            # Attempt to clean up corrupted file
+            try:
+                cache_file = self.cache_dir / f"{key}.pkl"
+                if cache_file.exists():
+                    cache_file.unlink()
+                    logger.debug(f"Removed corrupted cache file: {cache_file}")
+            except Exception:
+                pass
             return None
 
     def clear(self, clear_disk: bool = False):
