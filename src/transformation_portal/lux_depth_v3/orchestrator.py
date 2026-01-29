@@ -266,32 +266,31 @@ class EnhanceOrchestrator:
                 )
 
                 depth_metadata = DepthMetadata(
-                    backend="da3",
                     model=self.config.model_variant.value.name,
-                    license="CC-BY-NC",
-                    non_commercial_ok=self.config.non_commercial_ok,
                     depth_path=str(depth_path),
-                    dtype="uint16",
-                    shape=list(result.depth.shape[:2]),
+                    runtime_seconds=depth_runtime_s,
                     scaling=depth_stats._asdict(),
-                    runtime_ms=depth_runtime_s * 1000,
-                    representation="depth",
-                    convention="higher_is_farther",
-                    unit="relative",
+                    stats={
+                        "backend": "da3",
+                        "license": "CC-BY-NC",
+                        "non_commercial_ok": self.config.non_commercial_ok,
+                        "dtype": "uint16",
+                        "shape": list(result.depth.shape[:2]),
+                        "representation": "depth",
+                        "convention": "higher_is_farther",
+                        "unit": "relative",
+                    },
                 )
 
                 # 4. Write depth metadata JSON (quick access to depth stats)
                 depth_metadata_path = depth_path.parent / f"{depth_path.stem}_metadata.json"
                 with open(depth_metadata_path, 'w') as f:
                     json.dump({
-                        "backend": depth_metadata.backend,
                         "model": depth_metadata.model,
-                        "shape": depth_metadata.shape,
+                        "depth_path": depth_metadata.depth_path,
+                        "runtime_seconds": depth_metadata.runtime_seconds,
                         "scaling": depth_metadata.scaling,
-                        "runtime_ms": depth_metadata.runtime_ms,
-                        "representation": depth_metadata.representation,
-                        "convention": depth_metadata.convention,
-                        "unit": depth_metadata.unit,
+                        "stats": depth_metadata.stats,
                     }, f, indent=2)
                 logger.debug(f"Wrote depth metadata: {depth_metadata_path}")
 

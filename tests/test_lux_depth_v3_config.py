@@ -66,7 +66,7 @@ class TestEnhanceConfig:
         """Test that EnhanceConfig has v2_timeout field."""
         config = EnhanceConfig()
         assert hasattr(config, 'v2_timeout')
-        assert config.v2_timeout == 300.0
+        assert config.v2_timeout == 300  # int type
 
     @pytest.mark.parametrize("mode", ["fail", "skip", "v2-auto"])
     def test_enhance_config_accepts_valid_depth_fallback(self, mode):
