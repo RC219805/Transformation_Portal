@@ -11,6 +11,7 @@ from typing import Optional, List, Dict, Any
 import time
 import logging
 import datetime
+import json
 
 # Note: Imports adjusted to relative for package context compatibility
 from .config import DA3Config, ModelVariant, Preset, EnhanceConfig
@@ -235,6 +236,8 @@ class EnhanceOrchestrator:
         # Preprocess Input (Validation + Normalization)
         from .preprocessing import validate_image_format, preprocess_image
         validated_path = validate_image_format(image_input.path)
+        # Keep normalized_path alias for backward-compatible manifest metadata
+        normalized_path = validated_path
         preprocessed_array, original_shape = preprocess_image(validated_path)
 
         # --- STAGE A: DEPTH ---
@@ -279,7 +282,6 @@ class EnhanceOrchestrator:
 
                 # 4. Write depth metadata JSON (quick access to depth stats)
                 depth_metadata_path = depth_path.parent / f"{depth_path.stem}_metadata.json"
-                import json
                 with open(depth_metadata_path, 'w') as f:
                     json.dump({
                         "backend": depth_metadata.backend,
@@ -295,17 +297,24 @@ class EnhanceOrchestrator:
 
             except Exception as e:
                 logger.error(f"Depth failed: {e}")
-                if self.config.depth_fallback == "fail": raise
-                if self.config.depth_fallback == "skip": return {"status": "skipped", "reason": str(e), "image": str(image_input.path)}
-                if self.config.depth_fallback == "v2-auto":
+                if self.config.depth_fallback == "fail":
+                    raise
+                elif self.config.depth_fallback == "skip":
+                    return {"status": "skipped", "reason": str(e), "image": str(image_input.path)}
+                elif self.config.depth_fallback == "v2-auto":
                     logger.info("V2 fallback mode: V3 failed, will attempt V2 with independent depth generation")
-                    if depth_path.exists(): depth_path.unlink()
+                    if depth_path.exists():
+                        depth_path.unlink()
                     depth_path = None
                     depth_metadata = None
+                else:
+                    raise ValueError(f"Unsupported depth_fallback mode: {self.config.depth_fallback}") from e
         else:
             if manifest_path.exists():
-                try: depth_metadata = CombinedManifest.load(manifest_path).depth
-                except: pass
+                try:
+                    depth_metadata = CombinedManifest.load(manifest_path).depth
+                except Exception:  # Do not swallow KeyboardInterrupt/SystemExit
+                    pass
 
         # --- STAGE B: V2 ENHANCE ---
         v2_report_path = find_v2_report(self.v2_dir, output_key.name)
