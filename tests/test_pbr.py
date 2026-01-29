@@ -165,7 +165,7 @@ def test_write_pbr_maps_creates_pngs_and_no_tmp_files():
         assert paths["roughness"].exists()
         assert paths["ao"].exists()
 
-        # Verify no temp files remain
+        # Verify no temp files remain (new atomic write helper should clean up)
         temp_files = list(output_dir.glob(".tmp_*"))
         assert len(temp_files) == 0, f"Found temp files: {temp_files}"
 
@@ -173,3 +173,27 @@ def test_write_pbr_maps_creates_pngs_and_no_tmp_files():
         assert paths["normal"].name == "test_render_normal.png"
         assert paths["roughness"].name == "test_render_roughness.png"
         assert paths["ao"].name == "test_render_ao.png"
+
+
+def test_write_pbr_maps_partial_failure_cleanup():
+    """Verify that even with partial failures, no temp files are left behind."""
+    depth = np.random.rand(128, 128).astype(np.float32)
+    normal_map, roughness_map, ao_map = generate_pbr_maps(depth)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_dir = Path(tmpdir)
+
+        # Create invalid map to trigger failure for one map
+        # (but valid maps should still succeed)
+        invalid_map = np.zeros((128, 128, 5), dtype=np.uint8)  # Invalid shape
+
+        try:
+            # This should partially succeed (normal is invalid, but roughness and ao should work)
+            write_pbr_maps(invalid_map, roughness_map, ao_map, output_dir, "partial_test")
+        except Exception:
+            # Some failure expected due to invalid normal map
+            pass
+
+        # Verify no temp files remain even after partial failure
+        temp_files = list(output_dir.glob(".tmp_*"))
+        assert len(temp_files) == 0, f"Temp files leaked after partial failure: {temp_files}"

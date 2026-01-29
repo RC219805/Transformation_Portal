@@ -285,3 +285,38 @@ class TestDepthWriteStats:
         # Should not be able to modify
         with pytest.raises(Exception):  # FrozenInstanceError or AttributeError
             stats.min = 999.0
+
+    def test_no_temp_files_after_write(self, tmp_path):
+        """Verify no temp files remain after successful write."""
+        depth_map = np.random.rand(10, 10).astype(np.float32)
+        output_path = tmp_path / "clean_test.png"
+
+        atomic_write_depth_u16_png_with_stats(output_path, depth_map)
+
+        # Verify output exists
+        assert output_path.exists()
+
+        # Verify no temp files remain (new atomic write helper should clean up)
+        temp_files = list(tmp_path.glob(".tmp_*"))
+        assert len(temp_files) == 0, f"Temp files leaked: {temp_files}"
+
+    def test_cleanup_on_write_failure(self, tmp_path):
+        """Verify temp files are cleaned up even when write fails."""
+        # Create an invalid depth map that will cause cv2.imwrite to fail
+        # (cv2 doesn't support certain data types or shapes)
+        invalid_map = np.zeros((10, 10, 10), dtype=np.float32)  # 3D instead of 2D
+        output_path = tmp_path / "fail_test.png"
+
+        try:
+            # This should fail during the write
+            atomic_write_depth_u16_png_with_stats(output_path, invalid_map)
+        except Exception:
+            # Failure expected
+            pass
+
+        # Verify no temp files remain even after failure
+        temp_files = list(tmp_path.glob(".tmp_*"))
+        assert len(temp_files) == 0, f"Temp files leaked after failure: {temp_files}"
+
+        # Verify output file was not created
+        assert not output_path.exists()
