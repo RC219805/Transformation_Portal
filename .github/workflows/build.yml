@@ -1,3 +1,4 @@
+# .github/workflows/ci.yml
 name: CI (Lint, Tests & Manifest)
 
 permissions:
@@ -18,17 +19,23 @@ defaults:
     shell: bash
 
 env:
+  # Disk-friendly installs
   PIP_NO_CACHE_DIR: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+  # Cleaner CI behavior/logging
   PYTHONDONTWRITEBYTECODE: "1"
   PYTHONUNBUFFERED: "1"
-  PIP_DISABLE_PIP_VERSION_CHECK: "1"
-  HF_HIDE_PROGESS_BARS: "1"
+  TOKENIZERS_PARALLELISM: "false"
+
+  # Hugging Face: silence telemetry/progress safely (no behavior change to tests)
   HF_HUB_DISABLE_TELEMETRY: "1"
+  HF_HUB_DISABLE_PROGRESS_BARS: "1"
 
 jobs:
-  # Single lint job - no need to run on multiple Python versions
   lint:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
 
     steps:
       - name: Maximize available disk space
@@ -36,7 +43,7 @@ jobs:
           set -euo pipefail
           echo "Initial disk usage:"
           df -h
-          # Aggressive cleanup - free up to ~30GB
+          # Aggressive cleanup - free up disk
           sudo rm -rf /usr/share/dotnet || true
           sudo rm -rf /opt/ghc || true
           sudo rm -rf /usr/local/lib/android || true
@@ -64,9 +71,8 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          pip install --no-cache-dir flake8 pylint
-          # Minimal deps for linting
-          pip install --no-cache-dir -r requirements-lint.txt
+          python -m pip install --no-cache-dir flake8 pylint
+          python -m pip install --no-cache-dir -r requirements-lint.txt
           pip cache purge || true
 
           echo "Disk space after dependency install:"
@@ -75,37 +81,34 @@ jobs:
           echo "Running flake8..."
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 
-          echo "Running pylint on changed files..."
-          # NOTE: for PRs we can diff against origin/main; for pushes to main this
-          # will often be empty (fine) and we fall back to linting all tracked files (filtered).
-          files="$(git diff --diff-filter=d --name-only origin/main...HEAD \
-            | grep '\.py$' \
-            | grep -v -e '/deprecated/' \
-                     -e '^src/transformation_portal/' \
-                     -e '^src/luxury_tiff_batch_processor/' \
-                     -e '^scripts/' \
-                     -e '^.backup_local/' \
-                     -e '^.github/' \
-                     -e '^examples/' \
-                     -e '^projects/' \
-            || true)"
+          # Ensure origin/main exists for PR diffs (safe no-op on pushes)
+          git fetch origin main --depth=1 || true
+
+          echo "Running pylint..."
+          # Prefer linting changed files; fall back to filtered full repo.
+          mapfile -t pyfiles < <(
+            git diff --diff-filter=d --name-only origin/main...HEAD \
+              | grep -E '\.py$' \
+              | grep -v -E '(/deprecated/|^src/transformation_portal/|^src/luxury_tiff_batch_processor/|^scripts/|^\.backup_local/|^\.github/|^examples/|^projects/)' \
+              || true
+          )
+
+          if [ "${#pyfiles[@]}" -eq 0 ]; then
+            mapfile -t pyfiles < <(
+              git ls-files '*.py' \
+                | grep -v -E '(/deprecated/|^src/transformation_portal/|^src/luxury_tiff_batch_processor/|^scripts/|^\.backup_local/|^\.github/|^examples/|^projects/)' \
+                || true
+            )
+          fi
+
+          if [ "${#pyfiles[@]}" -eq 0 ]; then
+            echo "No Python files matched pylint filters; skipping pylint."
+            exit 0
+          fi
 
           set +e
-          if [ -z "$files" ]; then
-            pylint $(git ls-files '*.py' \
-              | grep -v -e '/deprecated/' \
-                       -e '^src/transformation_portal/' \
-                       -e '^src/luxury_tiff_batch_processor/' \
-                       -e '^scripts/' \
-                       -e '^.backup_local/' \
-                       -e '^.github/' \
-                       -e '^examples/' \
-                       -e '^projects/')
-            PYLINT_EXIT=$?
-          else
-            pylint $files
-            PYLINT_EXIT=$?
-          fi
+          pylint "${pyfiles[@]}"
+          PYLINT_EXIT=$?
           set -e
 
           # Fail only on critical pylint bits: 1 (fatal), 2 (error), 32 (usage)
@@ -113,12 +116,14 @@ jobs:
             echo "Pylint found critical issues (exit code: $PYLINT_EXIT)"
             exit 1
           fi
+
           echo "Pylint passed (exit code: $PYLINT_EXIT)"
 
-  # Streamlined test job - reduced matrix
   test:
     needs: lint
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
     strategy:
       fail-fast: true
       matrix:
@@ -126,12 +131,18 @@ jobs:
           - python-version: "3.10"
             device: cpu
             test-type: core
+            markexpr: "not ml and not slow"
           - python-version: "3.12"
             device: cpu
             test-type: core
+            markexpr: "not ml and not slow"
           - python-version: "3.11"
             device: cpu
             test-type: ml
+            # Critical: ML leg must NOT pull slow integration tests.
+            markexpr: "ml and not slow"
+
+    name: test (${{ matrix.python-version }}, ${{ matrix.device }}, ${{ matrix.test-type }})
 
     steps:
       - name: Maximize available disk space
@@ -164,14 +175,14 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip wheel
-          pip install --no-cache-dir pytest pytest-cov
-          pip install --no-cache-dir -r requirements-ci.txt
+          python -m pip install --no-cache-dir pytest pytest-cov
+          python -m pip install --no-cache-dir -r requirements-ci.txt
           pip cache purge || true
           rm -rf /tmp/pip-* || true
           echo "Disk space after core install:"
           df -h
 
-      - name: Install ML dependencies (if needed)
+      - name: Install ML dependencies (ml leg only)
         if: matrix.test-type == 'ml'
         env:
           TRANSFORMERS_OFFLINE: "1"
@@ -180,14 +191,14 @@ jobs:
         run: |
           set -euo pipefail
           # CPU-only torch wheels
-          pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
-          # ML extras
-          pip install --no-cache-dir -e ".[ml]"
+          python -m pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          # ML extras installs the package too
+          python -m pip install --no-cache-dir -e ".[ml]"
 
-          # Ensure scikit-learn constraint is respected if present
+          # Respect scikit-learn constraint if present
           SKLEARN_CONSTRAINT="$(grep -E '^scikit-learn[^#]*' requirements-ci.txt | head -n1 || true)"
           if [ -n "$SKLEARN_CONSTRAINT" ]; then
-            pip install --no-cache-dir --force-reinstall "$SKLEARN_CONSTRAINT"
+            python -m pip install --no-cache-dir --force-reinstall "$SKLEARN_CONSTRAINT"
           fi
 
           pip cache purge || true
@@ -196,10 +207,11 @@ jobs:
           echo "Disk space after ML install:"
           df -h
 
-      - name: Install package
+      - name: Install package (core legs only)
+        if: matrix.test-type == 'core'
         run: |
           set -euo pipefail
-          pip install --no-cache-dir -e .
+          python -m pip install --no-cache-dir -e .
 
       - name: Run tests with cleanup
         env:
@@ -211,15 +223,8 @@ jobs:
           set -euo pipefail
           pytest_exit=0
 
-          if [ "${{ matrix.test-type }}" = "core" ]; then
-            echo "Running CORE tests: not ml, not slow"
-            # Prefer markers if present; fall back to -k logic if you later need it.
-            pytest -v tests/ -m "not ml and not slow" --maxfail=1 || pytest_exit=$?
-          else
-            echo "Running ML tests: ml, not slow"
-            # Critical fix: DO NOT include slow here. That was the source of the discrepancy.
-            pytest -v tests/ -m "ml and not slow" --maxfail=1 || pytest_exit=$?
-          fi
+          echo "Running tests with marker expression: ${{ matrix.markexpr }}"
+          pytest -v tests/ -ra -m "${{ matrix.markexpr }}" --maxfail=1 || pytest_exit=$?
 
           # Cleanup regardless of outcome
           find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
@@ -242,8 +247,7 @@ jobs:
     name: Build Montecito Manifest
     needs: [test]
     runs-on: ubuntu-24.04
-    permissions:
-      contents: read
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v6
@@ -257,7 +261,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          pip install --no-cache-dir pandas numpy
+          python -m pip install --no-cache-dir pandas numpy
 
       - name: Run Montecito Manifest Tool
         id: manifest
