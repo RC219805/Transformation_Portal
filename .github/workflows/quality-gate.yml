@@ -52,11 +52,3 @@ jobs:
             echo "Please move documentation files to docs/ subdirectories"
             exit 1
           fi
-
-      - name: Commit formatting fixes
-        if: success()
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git diff --quiet || git commit -am "Auto-fix: Code formatting (trailing whitespace, line length)"
-        continue-on-error: true
