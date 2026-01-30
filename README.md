@@ -33,6 +33,43 @@ The repository has been significantly reorganized for better performance and mai
 
 See `docs/REFACTORING_SUMMARY.md` for details.
 
+---
+
+## ⚠️ Deprecation Notice (v1.8.0 - February 2026)
+
+The following depth processing modules are **deprecated** and will be removed in **v2.0.0 (August 2026)**:
+
+- `transformation_portal.depth` → Use `depth_canonical` instead
+- `transformation_portal.lux_depth_v3` → Use `depth_canonical` instead
+- `transformation_portal.depth_intelligence` → Use `depth_canonical` instead
+
+**Migration Timeline:**
+- **v1.8.0 (Feb 2026):** Deprecation warnings active (current release)
+- **v1.9.0 (Apr 2026):** Final reminder warnings
+- **v2.0.0 (Aug 2026):** Old modules removed
+
+**Backward Compatibility:** ✅ All deprecated modules still work via compatibility shims. **Zero breaking changes** in v1.8.0.
+
+**Migration Guide:** [docs/migration/depth_v2_migration.md](docs/migration/depth_v2_migration.md)
+
+**Automated Migration:**
+```bash
+# Scan for deprecated imports
+python scripts/migrate_to_depth_canonical.py --scan src/
+
+# Auto-migrate (creates .bak backups)
+python scripts/migrate_to_depth_canonical.py --migrate src/
+```
+
+**Why Migrate?**
+- ✨ Unified API for all depth processing
+- 🎨 PBR map generation (Normal, Roughness, AO)
+- ⚡ 10-20x faster with two-tier caching
+- 🖥️ Auto-device detection (CoreML/ANE, CUDA, MPS, CPU)
+- ✅ 100% test coverage (61 comprehensive tests)
+
+---
+
 ## 🗂️ Automated Repository Organization
 
 The repository now includes an automated file organization system to maintain a clean, structured directory hierarchy:
