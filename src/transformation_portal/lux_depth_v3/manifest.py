@@ -24,11 +24,63 @@ def _utcnow_iso() -> str:
 
 @dataclass
 class InputMetadata:
-    """Metadata for input image."""
+    """Metadata for input image with schema versioning.
+
+    Schema version 1.0: Initial release with path, hash, size, dimensions.
+
+    Attributes:
+        schema_version: Schema version for forward/backward compatibility
+        image_path: Path to input image (relative or absolute)
+        image_sha256: SHA256 hash of image file
+        image_size_bytes: Size of image file in bytes
+        image_dimensions: Image dimensions as (width, height) tuple
+    """
     image_path: str
     image_sha256: Optional[str] = None
     image_size_bytes: Optional[int] = None
     image_dimensions: Optional[tuple] = None
+    schema_version: str = "1.0"
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to dictionary with schema version.
+
+        Returns:
+            Dictionary representation with all fields
+        """
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> InputMetadata:
+        """Deserialize from dictionary with schema validation.
+
+        Args:
+            data: Dictionary representation
+
+        Returns:
+            InputMetadata instance
+
+        Raises:
+            ValueError: If schema_version is unsupported
+        """
+        schema_version = data.get('schema_version', '1.0')
+        if schema_version != '1.0':
+            raise ValueError(
+                f"Unsupported InputMetadata schema version: {schema_version}. "
+                f"This code supports version 1.0 only."
+            )
+
+        # Handle tuple/list conversion for image_dimensions
+        dimensions = data.get('image_dimensions')
+        if dimensions is not None and isinstance(dimensions, list):
+            dimensions = tuple(dimensions)
+
+        return cls(
+            image_path=data['image_path'],
+            image_sha256=data.get('image_sha256'),
+            image_size_bytes=data.get('image_size_bytes'),
+            image_dimensions=dimensions,
+            schema_version=schema_version,
+        )
 
 
 @dataclass
@@ -165,11 +217,7 @@ class CombinedManifest:
         manifest = cls()
 
         if 'input' in data:
-            input_data = data['input']
-            # Fix: Handle tuple/list for image_dimensions
-            if 'image_dimensions' in input_data and isinstance(input_data['image_dimensions'], list):
-                input_data['image_dimensions'] = tuple(input_data['image_dimensions'])
-            manifest.input = InputMetadata(**input_data)
+            manifest.input = InputMetadata.from_dict(data['input'])
         if 'depth' in data:
             manifest.depth = DepthMetadata(**data['depth'])
         if 'v2' in data:
