@@ -1,4 +1,16 @@
 """
+DEPRECATED: This module is deprecated and will be removed in v2.0.0.
+
+Please use `transformation_portal.depth_canonical` instead.
+
+Migration Guide: https://github.com/RC219805/Transformation_Portal/blob/main/docs/migration/depth_v2_migration.md
+
+Deprecation Timeline:
+- v1.8.0 (Feb 2026): Deprecation warnings added
+- v1.9.0 (Apr 2026): Final reminder warnings
+- v2.0.0 (Aug 2026): Module removed
+
+Original Documentation:
 Phase 3: Depth and Spatial Intelligence
 
 This module provides depth-aware ML pipelines and spatial intelligence processing
@@ -28,30 +40,35 @@ Usage:
     atmospheric = pipeline.apply_atmospheric_model(image, depth_map)
 """
 
-from .depth_estimator import DepthEstimator, DepthConfig, DepthMap
-from .spatial_processor import SpatialProcessor, SpatialFeatures
-from .atmospheric_modeler import (
-    AtmosphericModeler,
-    AtmosphericConfig,
-    MontecitoCoastalModel,
-)
-from .depth_pipeline import DepthPipeline, DepthPipelineConfig
-from .depth_filters import DepthGuidedFilter, DepthAwareBlur, DepthAwareSharpen
-
-__all__ = [
-    "DepthEstimator",
-    "DepthConfig",
-    "DepthMap",
-    "SpatialProcessor",
-    "SpatialFeatures",
-    "AtmosphericModeler",
-    "AtmosphericConfig",
-    "MontecitoCoastalModel",
-    "DepthPipeline",
-    "DepthPipelineConfig",
-    "DepthGuidedFilter",
-    "DepthAwareBlur",
-    "DepthAwareSharpen",
-]
+import warnings
 
 __version__ = "1.0.0"
+
+# Issue deprecation warning on import
+warnings.warn(
+    "transformation_portal.depth_intelligence is deprecated and will be removed in v2.0.0. "
+    "Use transformation_portal.depth_canonical instead. "
+    "See https://github.com/RC219805/Transformation_Portal/blob/main/docs/migration/depth_v2_migration.md",
+    FutureWarning,
+    stacklevel=2
+)
+
+# Import canonical implementations for compatibility shims
+from ..depth_canonical import ModelRegistry as _CanonicalModelRegistry
+
+# Original imports (only import what exists in this sparse module)
+try:
+    from .depth_estimator import DepthEstimator, DepthConfig, DepthMap
+    _has_depth_estimator = True
+except ImportError:
+    _has_depth_estimator = False
+    DepthEstimator = None
+    DepthConfig = None
+    DepthMap = None
+
+# Note: Most of depth_intelligence was never fully implemented
+# Users should migrate to depth_canonical.ModelRegistry
+
+__all__ = []
+if _has_depth_estimator:
+    __all__.extend(["DepthEstimator", "DepthConfig", "DepthMap"])

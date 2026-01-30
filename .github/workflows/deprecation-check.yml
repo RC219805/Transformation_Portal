@@ -1,0 +1,37 @@
+name: Deprecation Check
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  check-deprecated-usage:
+    name: Check for Deprecated API Usage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Scan for deprecated imports in source code
+        run: |
+          echo "Scanning for deprecated API usage in src/..."
+          python scripts/check_deprecated_usage.py --strict src/
+        continue-on-error: false
+
+      - name: Check migration script works
+        run: |
+          echo "Testing migration script..."
+          python scripts/migrate_to_depth_canonical.py --scan src/

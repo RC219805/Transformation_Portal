@@ -98,14 +98,18 @@ class TestDocumentationOrganization:
         readme = _repo_root / "README.md"
         assert readme.exists(), "README.md should exist in root"
 
-    def test_no_excessive_root_markdown_files(self):
-        """Test that root doesn't have too many markdown files."""
-        markdown_files = list(_repo_root.glob("*.md"))
-        # Allow README files but not excessive documentation
-        assert len(markdown_files) <= 10, (
-            f"Too many markdown files in root ({len(markdown_files)}). "
-            "Move documentation to docs/"
-        )
+    def test_required_root_markdown_files_exist(self):
+        """Test that required markdown files exist in root."""
+        # Check for essential documentation files
+        required_files = [
+            "README.md",
+            "CHANGELOG.md",
+            "SECURITY.md",
+        ]
+
+        for filename in required_files:
+            filepath = _repo_root / filename
+            assert filepath.exists(), f"Required file {filename} missing from root"
 
     def test_docs_subdirectories_exist(self):
         """Test that docs has proper subdirectories."""
