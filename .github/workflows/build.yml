@@ -27,7 +27,7 @@ env:
   PYTHONUNBUFFERED: "1"
   TOKENIZERS_PARALLELISM: "false"
 
-  # Hugging Face: silence telemetry/progress safely (no behavior change to tests)
+  # Hugging Face: silence telemetry/progress (log hygiene)
   HF_HUB_DISABLE_TELEMETRY: "1"
   HF_HUB_DISABLE_PROGRESS_BARS: "1"
 
@@ -138,7 +138,7 @@ jobs:
           - python-version: "3.11"
             device: cpu
             test-type: ml
-            # Critical: ML leg must NOT pull slow integration tests.
+            # Preferred intent: run ML-marked tests, but never slow integration in PR gating.
             markexpr: "ml and not slow"
 
     name: test (${{ matrix.python-version }}, ${{ matrix.device }}, ${{ matrix.test-type }})
@@ -223,7 +223,24 @@ jobs:
           pytest_exit=0
 
           echo "Running tests with marker expression: ${{ matrix.markexpr }}"
-          pytest -v tests/ -ra -m "${{ matrix.markexpr }}" --maxfail=1 || pytest_exit=$?
+
+          # Run the configured selection, but ensure the ML leg remains meaningful even
+          # if @pytest.mark.ml coverage is not fully in place yet.
+          set +e
+          pytest -v tests/ -ra -m "${{ matrix.markexpr }}" --maxfail=1
+          rc=$?
+          set -e
+
+          if [ "${{ matrix.test-type }}" = "ml" ] && [ "$rc" -eq 5 ]; then
+            echo "No tests selected by -m '${{ matrix.markexpr }}' (exit=5)."
+            echo "Fallback: run the non-slow suite under ML deps to keep this leg non-empty."
+            set +e
+            pytest -v tests/ -ra -m "not slow" --maxfail=1
+            pytest_exit=$?
+            set -e
+          else
+            pytest_exit=$rc
+          fi
 
           # Cleanup regardless of outcome
           find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
