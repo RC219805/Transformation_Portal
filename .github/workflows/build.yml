@@ -220,26 +220,24 @@ jobs:
           TRANSFORMERS_OFFLINE: "1"
         run: |
           set -euo pipefail
-          pytest_exit=0
 
           echo "Running tests with marker expression: ${{ matrix.markexpr }}"
 
-          # Run the configured selection, but ensure the ML leg remains meaningful even
-          # if @pytest.mark.ml coverage is not fully in place yet.
+          # Run the configured selection and capture exit code safely.
           set +e
           pytest -v tests/ -ra -m "${{ matrix.markexpr }}" --maxfail=1
           rc=$?
           set -e
 
+          # If ML markers aren't fully wired yet, pytest may select zero tests (exit=5).
+          # Keep the ML leg meaningful by falling back to "not slow" under ML deps.
           if [ "${{ matrix.test-type }}" = "ml" ] && [ "$rc" -eq 5 ]; then
-            echo "No tests selected by -m '${{ matrix.markexpr }}' (exit=5)."
-            echo "Fallback: run the non-slow suite under ML deps to keep this leg non-empty."
+            echo "No tests selected by -m '${{ matrix.markexpr }}' (exit=5)." >&2
+            echo "Fallback: running the non-slow suite under ML deps." >&2
             set +e
             pytest -v tests/ -ra -m "not slow" --maxfail=1
-            pytest_exit=$?
+            rc=$?
             set -e
-          else
-            pytest_exit=$rc
           fi
 
           # Cleanup regardless of outcome
@@ -250,7 +248,7 @@ jobs:
           rm -rf /tmp/hf_home || true
           rm -rf ~/.cache/huggingface || true
 
-          exit "$pytest_exit"
+          exit "$rc"
 
       - name: Final disk usage
         if: always()
@@ -285,7 +283,10 @@ jobs:
           set -euo pipefail
           OUT="montecito_manifest.csv"
           python tools/montecito_manifest.py . "$OUT"
-          test -f "$OUT"
+          if [ ! -f "$OUT" ]; then
+            echo "Error: Montecito manifest was not created at expected path: $OUT" >&2
+            exit 1
+          fi
           echo "manifest_path=$OUT" >> "$GITHUB_OUTPUT"
 
       - name: Upload manifest artifact
