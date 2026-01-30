@@ -15,9 +15,9 @@ def test_model_registry_supports_da3_variants():
     """Test ModelRegistry recognizes DA3 variants as supported."""
     registry = ModelRegistry()
 
-    assert registry.is_variant_supported(ModelVariant.DA3_METRIC_LARGE)
-    assert registry.is_variant_supported(ModelVariant.DA3_METRIC_BASE)
-    assert registry.is_variant_supported(ModelVariant.DA3_METRIC_SMALL)
+    assert registry.is_variant_supported(ModelVariant.DA3_LARGE)
+    assert registry.is_variant_supported(ModelVariant.DA3_BASE)
+    assert registry.is_variant_supported(ModelVariant.DA3_SMALL)
 
 
 def test_model_registry_supports_da2_variants():
@@ -26,6 +26,7 @@ def test_model_registry_supports_da2_variants():
 
     assert registry.is_variant_supported(ModelVariant.DA2_LARGE)
     assert registry.is_variant_supported(ModelVariant.DA2_BASE)
+    assert registry.is_variant_supported(ModelVariant.DA2_SMALL)
 
 
 @pytest.mark.slow
@@ -38,7 +39,7 @@ def test_model_registry_get_model_returns_model():
 
     # Get a model (will download if needed)
     model = registry.get_model(
-        variant=ModelVariant.DA3_METRIC_SMALL,  # Use small for faster testing
+        variant=ModelVariant.DA3_SMALL,  # Use small for faster testing
         device=DeviceType.CPU
     )
 
@@ -54,12 +55,12 @@ def test_model_registry_caches_models():
 
     # Load model twice
     model1 = registry.get_model(
-        variant=ModelVariant.DA3_METRIC_SMALL,
+        variant=ModelVariant.DA3_SMALL,
         device=DeviceType.CPU
     )
 
     model2 = registry.get_model(
-        variant=ModelVariant.DA3_METRIC_SMALL,
+        variant=ModelVariant.DA3_SMALL,
         device=DeviceType.CPU
     )
 

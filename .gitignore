@@ -165,8 +165,22 @@ input_images/**/*.tiff
 *.mlmodel
 *.mlpackage
 
-# Model directories
-models/
+# Model weights and checkpoints (not Python packages)
+/models/
+*.pth
+*.pt
+*.onnx
+*.pb
+*.safetensors
+*.bin
+*.tflite
+*.mlmodel
+
+# Allow Python packages named 'models'
+!src/**/models/__init__.py
+!src/**/models/*.py
+
+# Model directories at root
 weights/
 checkpoints/
 pretrained/

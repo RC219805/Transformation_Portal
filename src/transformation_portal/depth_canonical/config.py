@@ -17,11 +17,15 @@ class DeviceType(str, Enum):
 
 class ModelVariant(Enum):
     """Supported depth estimation models."""
-    DA3_METRIC_LARGE = "depth-anything-v3-metric-large"
-    DA3_METRIC_BASE = "depth-anything-v3-metric-base"
-    DA3_METRIC_SMALL = "depth-anything-v3-metric-small"
+    # Depth Anything V2 models (via HuggingFace transformers)
     DA2_LARGE = "depth-anything-v2-large"
     DA2_BASE = "depth-anything-v2-base"
+    DA2_SMALL = "depth-anything-v2-small"
+
+    # DA3 aliases for V2 models (V3 uses same V2 models)
+    DA3_LARGE = "depth-anything-v2-large"
+    DA3_BASE = "depth-anything-v2-base"
+    DA3_SMALL = "depth-anything-v2-small"
 
 
 @dataclass(frozen=True)
@@ -51,7 +55,7 @@ class PBRConfig:
 @dataclass
 class ModelConfig:
     """Model selection and device configuration."""
-    variant: ModelVariant = ModelVariant.DA3_METRIC_LARGE
+    variant: ModelVariant = ModelVariant.DA3_SMALL
     device: DeviceType = DeviceType.CPU
     dtype: str = "float32"
 
@@ -106,7 +110,7 @@ class UnifiedDepthConfig:
 
     Example:
         >>> config = UnifiedDepthConfig(
-        ...     model=ModelConfig(variant=ModelVariant.DA3_METRIC_LARGE),
+        ...     model=ModelConfig(variant=ModelVariant.DA3_LARGE),
         ...     processing=ProcessingConfig(
         ...         pbr=PBRConfig(enabled=True, normal_strength=1.2)
         ...     )

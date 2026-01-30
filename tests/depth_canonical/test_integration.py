@@ -33,7 +33,7 @@ def simple_config():
     """Create a simple config for testing."""
     return UnifiedDepthConfig(
         model=ModelConfig(
-            variant=ModelVariant.DA3_METRIC_SMALL,  # Use small for speed
+            variant=ModelVariant.DA3_SMALL,  # Use small for speed
             device=DeviceType.CPU,
         ),
         processing=ProcessingConfig(
@@ -47,7 +47,7 @@ def pbr_config():
     """Create config with PBR enabled."""
     return UnifiedDepthConfig(
         model=ModelConfig(
-            variant=ModelVariant.DA3_METRIC_SMALL,
+            variant=ModelVariant.DA3_SMALL,
             device=DeviceType.CPU,
         ),
         processing=ProcessingConfig(

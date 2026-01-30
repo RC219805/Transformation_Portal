@@ -49,7 +49,7 @@ class ModelRegistry:
     Example:
         >>> registry = ModelRegistry()
         >>> model = registry.get_model(
-        ...     variant=ModelVariant.DA3_METRIC_LARGE,
+        ...     variant=ModelVariant.DA3_LARGE,
         ...     device=DeviceType.MPS
         ... )
         >>> result = model.estimate(image)
@@ -60,11 +60,12 @@ class ModelRegistry:
         """Initialize the model registry."""
         self._models: Dict[str, DepthEstimationModel] = {}
         self._supported_variants = {
-            ModelVariant.DA3_METRIC_LARGE,
-            ModelVariant.DA3_METRIC_BASE,
-            ModelVariant.DA3_METRIC_SMALL,
+            ModelVariant.DA3_LARGE,
+            ModelVariant.DA3_BASE,
+            ModelVariant.DA3_SMALL,
             ModelVariant.DA2_LARGE,
             ModelVariant.DA2_BASE,
+            ModelVariant.DA2_SMALL,
         }
 
     def get_model(
@@ -168,16 +169,20 @@ class ModelRegistry:
         Raises:
             ImportError: If required dependencies not available
         """
-        # DA3 models
+        # DA3 models (same as DA2 - V3 uses V2 models)
         if variant in {
-            ModelVariant.DA3_METRIC_LARGE,
-            ModelVariant.DA3_METRIC_BASE,
-            ModelVariant.DA3_METRIC_SMALL
+            ModelVariant.DA3_LARGE,
+            ModelVariant.DA3_BASE,
+            ModelVariant.DA3_SMALL
         }:
             return self._load_da3_model(variant, device, dtype)
 
         # DA2 models
-        if variant in {ModelVariant.DA2_LARGE, ModelVariant.DA2_BASE}:
+        if variant in {
+            ModelVariant.DA2_LARGE,
+            ModelVariant.DA2_BASE,
+            ModelVariant.DA2_SMALL
+        }:
             return self._load_da2_model(variant, device, dtype)
 
         raise ValueError(f"Unknown variant: {variant}")
@@ -188,7 +193,7 @@ class ModelRegistry:
         device: DeviceType,
         dtype: str
     ) -> DepthEstimationModel:
-        """Load Depth Anything V3 model.
+        """Load Depth Anything V3 model (uses V2 models).
 
         Args:
             variant: DA3 variant
@@ -200,11 +205,11 @@ class ModelRegistry:
         """
         from .da3_wrapper import DA3ModelWrapper
 
-        # Map variant to model ID
+        # Map variant to HuggingFace model ID
         model_id_map = {
-            ModelVariant.DA3_METRIC_LARGE: "depth-anything/Depth-Anything-V2-Metric-Hypersim-Large",
-            ModelVariant.DA3_METRIC_BASE: "depth-anything/Depth-Anything-V2-Metric-Hypersim-Base",
-            ModelVariant.DA3_METRIC_SMALL: "depth-anything/Depth-Anything-V2-Metric-Hypersim-Small",
+            ModelVariant.DA3_LARGE: "depth-anything/Depth-Anything-V2-Large-hf",
+            ModelVariant.DA3_BASE: "depth-anything/Depth-Anything-V2-Base-hf",
+            ModelVariant.DA3_SMALL: "depth-anything/Depth-Anything-V2-Small-hf",
         }
 
         model_id = model_id_map.get(variant)
@@ -235,10 +240,11 @@ class ModelRegistry:
         """
         from .da2_wrapper import DA2ModelWrapper
 
-        # Map variant to model ID
+        # Map variant to HuggingFace model ID
         model_id_map = {
             ModelVariant.DA2_LARGE: "depth-anything/Depth-Anything-V2-Large-hf",
             ModelVariant.DA2_BASE: "depth-anything/Depth-Anything-V2-Base-hf",
+            ModelVariant.DA2_SMALL: "depth-anything/Depth-Anything-V2-Small-hf",
         }
 
         model_id = model_id_map.get(variant)

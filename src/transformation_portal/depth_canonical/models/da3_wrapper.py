@@ -27,7 +27,7 @@ class DA3ModelWrapper:
 
     Example:
         >>> wrapper = DA3ModelWrapper(
-        ...     model_id="depth-anything/Depth-Anything-V2-Metric-Hypersim-Large",
+        ...     model_id="depth-anything/Depth-Anything-V2-Small-hf",
         ...     device=DeviceType.MPS
         ... )
         >>> result = wrapper.estimate(image)

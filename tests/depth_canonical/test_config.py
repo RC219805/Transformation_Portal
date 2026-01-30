@@ -26,13 +26,14 @@ def test_model_variant_enum_has_da2_and_da3():
     variants = set(ModelVariant)
 
     # Check DA3 variants
-    assert ModelVariant.DA3_METRIC_LARGE in variants
-    assert ModelVariant.DA3_METRIC_BASE in variants
-    assert ModelVariant.DA3_METRIC_SMALL in variants
+    assert ModelVariant.DA3_LARGE in variants
+    assert ModelVariant.DA3_BASE in variants
+    assert ModelVariant.DA3_SMALL in variants
 
     # Check DA2 variants
     assert ModelVariant.DA2_LARGE in variants
     assert ModelVariant.DA2_BASE in variants
+    assert ModelVariant.DA2_SMALL in variants
 
 
 def test_pbr_config_is_frozen():
@@ -84,7 +85,7 @@ def test_model_config_defaults():
     """Test ModelConfig has sensible defaults."""
     config = ModelConfig()
 
-    assert config.variant == ModelVariant.DA3_METRIC_LARGE
+    assert config.variant == ModelVariant.DA3_SMALL
     assert config.device == DeviceType.CPU
     assert config.dtype == "float32"
 
@@ -148,7 +149,7 @@ def test_unified_depth_config_defaults():
 def test_unified_depth_config_custom_subconfigs():
     """Test UnifiedDepthConfig accepts custom sub-configurations."""
     model_config = ModelConfig(
-        variant=ModelVariant.DA3_METRIC_BASE,
+        variant=ModelVariant.DA3_BASE,
         device=DeviceType.CUDA
     )
     processing_config = ProcessingConfig(
@@ -164,7 +165,7 @@ def test_unified_depth_config_custom_subconfigs():
         security=security_config,
     )
 
-    assert config.model.variant == ModelVariant.DA3_METRIC_BASE
+    assert config.model.variant == ModelVariant.DA3_BASE
     assert config.model.device == DeviceType.CUDA
     assert config.processing.pbr.enabled is True
     assert config.processing.pbr.normal_strength == 1.5
