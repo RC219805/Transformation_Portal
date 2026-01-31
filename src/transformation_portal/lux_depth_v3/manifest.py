@@ -95,11 +95,26 @@ class DepthMetadata:
 
 @dataclass
 class V2Metadata:
-    """Metadata for V2 enhancement."""
+    """Metadata for V2 enhancement.
+
+    Attributes:
+        preset: V2 enhancement preset used
+        status: Processing status ('ok', 'error', etc.)
+        runtime_seconds: Time taken for V2 processing
+        output_paths: List of output file paths
+        strict_depth: Whether depth was required/used
+        output_dir: V2 output directory
+        report_path: Path to V2 report file
+        error_message: Error message if status is not 'ok'
+    """
     preset: str
     status: str
     runtime_seconds: Optional[float] = None
     output_paths: Optional[List[str]] = None
+    strict_depth: Optional[bool] = None
+    output_dir: Optional[str] = None
+    report_path: Optional[str] = None
+    error_message: Optional[str] = None
 
 
 @dataclass
@@ -162,18 +177,53 @@ class ConfigFingerprint:
 
 @dataclass
 class BatchManifest:
-    """Manifest for batch processing statistics."""
-    total_images: int
-    successful: int
-    failed: int
-    skipped_depth: int
-    skipped_v2: int
-    total_runtime_seconds: float
+    """Manifest for batch processing with accurate timestamps.
+
+    Attributes:
+        batch_id: Unique identifier for the batch
+        start_time: ISO 8601 formatted start time (UTC)
+        end_time: ISO 8601 formatted end time (UTC)
+        config: Configuration used for the batch
+        results: List of per-image processing results
+        stats: Aggregated batch statistics
+    """
+    batch_id: str
+    start_time: str
+    end_time: str
+    config: Dict[str, Any]
+    results: List[Dict[str, Any]]
+    stats: Dict[str, Any]
+
+    def write(self, path: Path):
+        """Write batch manifest to JSON file."""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, 'w') as f:
+            json.dump(asdict(self), f, indent=2)
+
+    @classmethod
+    def load(cls, path: Path) -> BatchManifest:
+        """Load batch manifest from JSON file."""
+        with open(path, 'r') as f:
+            data = json.load(f)
+        return cls(**data)
 
 
 @dataclass
 class CombinedManifest:
-    """Combined manifest for all pipeline stages."""
+    """Combined manifest for all pipeline stages with accurate timestamps.
+
+    Attributes:
+        input: Input image metadata
+        depth: Depth estimation metadata
+        v2: V2 enhancement metadata
+        timing: Timing information
+        pbr_assets: PBR map output paths and config
+        repro: Reproducibility metadata
+        config_fingerprint: Configuration fingerprint for cache validation
+        environment: Environment capture
+        start_time: ISO 8601 formatted pipeline start time (UTC)
+        end_time: ISO 8601 formatted pipeline end time (UTC)
+    """
     input: Optional[InputMetadata] = None
     depth: Optional[DepthMetadata] = None
     v2: Optional[V2Metadata] = None
@@ -182,11 +232,13 @@ class CombinedManifest:
     repro: Optional[ReproMetadata] = None
     config_fingerprint: Optional[ConfigFingerprint] = None
     environment: Optional[Dict[str, Any]] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
 
     def save(self, path: Path):
         """Save manifest to JSON file.
 
-        STUB: Basic JSON serialization.
+        Serializes all fields including timestamps for accurate execution tracking.
         """
         path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -201,6 +253,12 @@ class CombinedManifest:
                 else:
                     data[field_name] = asdict(field_value)
 
+        # Include timestamp fields
+        if self.start_time:
+            data['start_time'] = self.start_time
+        if self.end_time:
+            data['end_time'] = self.end_time
+
         with open(path, 'w') as f:
             json.dump(data, f, indent=2)
 
@@ -208,7 +266,7 @@ class CombinedManifest:
     def load(cls, path: Path) -> CombinedManifest:
         """Load manifest from JSON file.
 
-        STUB: Basic JSON deserialization.
+        Deserializes all fields including timestamps.
         """
         with open(path, 'r') as f:
             data = json.load(f)
@@ -232,6 +290,11 @@ class CombinedManifest:
             manifest.pbr_assets = data['pbr_assets']
         if 'environment' in data:
             manifest.environment = data['environment']
+        # Load timestamp fields
+        if 'start_time' in data:
+            manifest.start_time = data['start_time']
+        if 'end_time' in data:
+            manifest.end_time = data['end_time']
 
         return manifest
 

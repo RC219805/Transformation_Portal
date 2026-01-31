@@ -6,8 +6,7 @@ Full implementation pending.
 from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Any
 from .security import HashMode
 
 
@@ -103,6 +102,10 @@ class EnhanceConfig:
 
     # Hash mode
     hash_mode: HashMode = HashMode.IF_MANIFEST_EXISTS
+
+    # Float depth saving for high-precision PBR
+    save_float_depth: bool = False
+
     # PBR map generation
     generate_pbr: bool = False
     pbr_normal_strength: float = 1.0
@@ -134,4 +137,3 @@ class EnhanceConfig:
             ao_blur_radius=self.pbr_ao_blur_radius,
             ao_bias=self.pbr_ao_bias,
         )
-
