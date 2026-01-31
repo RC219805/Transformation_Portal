@@ -1,4 +1,4 @@
-# Copilot Instructions — Transformation Portal
+# Copilot Instructions - Transformation Portal
 
 You are working in a production-oriented image/video processing repository. Optimize for correctness, repeatability, and safe change management.
 
@@ -8,13 +8,13 @@ You are working in a production-oriented image/video processing repository. Opti
 3) Make changes easy to review: small PRs, clear diffs, updated docs/tests.
 
 ## Repo Map (where things go)
-- `src/` — installable package code (preferred for new production logic)
-- `scripts/` — operational runners / orchestration scripts (thin wrappers)
-- `config/` — YAML presets and configuration
-- `assets/` — LUTs and look assets
-- `docs/` — architecture, guides, reports, changelogs
-- `tools/` — developer/ops utilities (audits, manifests, dashboards)
-- `tests/` — pytest suite
+- `src/` - installable package code (preferred for new production logic)
+- `scripts/` - operational runners / orchestration scripts (thin wrappers)
+- `config/` - YAML presets and configuration
+- `assets/` - LUTs and look assets
+- `docs/` - architecture, guides, reports, changelogs
+- `tools/` - developer/ops utilities (audits, manifests, dashboards)
+- `tests/` - pytest suite
 
 Avoid creating new root-level scripts unless there is a strong reason.
 
@@ -63,7 +63,7 @@ Any change that affects user workflows must update:
 - Examples (if they exist for that workflow)
 
 ## Before You Finalize
-- Run `pytest -v tests/ -k "not (ml or slow)"` for core behavior
-- Run `pytest -v tests/ -k "ml or slow"` only when needed and dependencies are installed
+- Run `pytest -v tests/ -ra -m "not ml and not slow" --maxfail=1` for core behavior (mirrors CI)
+- Run `pytest -v tests/ -ra -m "ml and not slow" --maxfail=1` only when ML dependencies are installed
 - Ensure linting does not regress (`flake8`, `pylint` where applicable)
 - Keep diffs tight and reviewable

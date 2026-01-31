@@ -20,6 +20,10 @@ Quick discovery:
 ```bash
 lux-depth-v2 --list-stable
 lux-depth-v2 --describe-preset interior_luxury
+
+# If console scripts aren't on PATH, run as module:
+python -m lux_depth_v2 --list-stable
+python -m lux_depth_v2 --describe-preset interior_luxury
 ```
 
 Install the release:
@@ -27,7 +31,7 @@ Install the release:
 pip install "git+https://github.com/RC219805/Transformation_Portal.git@v2.0.0"
 ```
 
-⸻
+---
 
 ## Major Feature: Context-Aware Rendering (Nov 2025)
 
@@ -41,7 +45,7 @@ Context-Aware Rendering extracts architectural intelligence from construction do
 Docs:
 - docs/CONTEXT_AWARE_RENDERING.md
 
-⸻
+---
 
 ## What this repository provides
 
@@ -54,9 +58,9 @@ Core capabilities:
 - TIFF workflows (high bit-depth + metadata preservation, where supported)
 - Video grading workflows (FFmpeg-based pipelines)
 
-⸻
+---
 
-⸻
+---
 
 ## Quick Start
 
@@ -71,19 +75,19 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
 2) Install (choose your environment)
 
-**Option A — Minimal runtime**
+**Option A - Minimal runtime**
 ```bash
 pip install -r requirements.txt
 pip install -e .
 ```
 
-**Option B — Runtime + tests (CI-like)**
+**Option B - Runtime + tests (CI-like)**
 ```bash
 pip install -r requirements-ci.txt
 pip install -e .
 ```
 
-**Option C — Full dev environment**
+**Option C - Full dev environment**
 ```bash
 pip install -r requirements-dev.txt
 pip install -e .
@@ -95,7 +99,7 @@ pip install -e .
 python verify_core.py
 ```
 
-⸻
+---
 
 ## Dependency Management
 
@@ -126,7 +130,7 @@ cd requirements/
 make compile
 ```
 
-⸻
+---
 
 ## Repository Layout (high level)
 
@@ -143,7 +147,7 @@ tools/        # Dev/ops tools (manifests, audits, utilities)
 workflows/    # Workflow artifacts / operational workflow utilities
 ```
 
-⸻
+---
 
 ## Supported File Formats (summary)
 
@@ -154,7 +158,7 @@ workflows/    # Workflow artifacts / operational workflow utilities
 - MP4, MOV, AVI, MKV (codec/container dependent)
 - HDR pipelines supported where FFmpeg metadata and filters allow (PQ/HLG workflows)
 
-⸻
+---
 
 ## System Requirements
 - Python: 3.10+
@@ -166,18 +170,23 @@ CI note:
 - ML tests run on Python 3.11
 - Lint runs on Python 3.12
 
-⸻
+---
 
 ## Testing
 
-Fast local run:
+Fast local run (mirrors CI core suite):
 ```bash
-pytest -v tests/ -k "not (ml or slow)"
+pytest -v tests/ -ra -m "not ml and not slow" --maxfail=1
 ```
 
-ML/slow tests (requires ML extras):
+ML tests (requires ML extras):
 ```bash
-pytest -v tests/ -k "ml or slow"
+pytest -v tests/ -ra -m "ml and not slow" --maxfail=1
+```
+
+All tests except slow:
+```bash
+pytest -v tests/ -ra -m "not slow" --maxfail=1
 ```
 
 Repo Make targets may exist (see Makefile):
@@ -187,7 +196,7 @@ make test-full
 make ci
 ```
 
-⸻
+---
 
 ## License
 
@@ -199,7 +208,7 @@ Component licenses:
 - Depth Anything V2 Base/Large: CC-BY-NC-4.0 (non-commercial)
 - LUT collection: attribution required
 
-⸻
+---
 
 ## Support and Contact
 
@@ -212,6 +221,6 @@ Resources:
 - Documentation: docs/
 - Examples: examples/
 
-⸻
+---
 
 Last Updated: 2026-01-31
