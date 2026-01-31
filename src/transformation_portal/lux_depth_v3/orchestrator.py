@@ -194,7 +194,9 @@ class EnhanceOrchestrator:
         self,
         image_path: Path,
         manifest_exists: bool = False,
-        saved_hash: Optional[str] = None
+        saved_hash: Optional[str] = None,
+        *,
+        for_manifest_write: bool = False
     ) -> Optional[str]:
         """Compute file hash respecting HashMode configuration.
 
@@ -202,6 +204,8 @@ class EnhanceOrchestrator:
             image_path: Path to the image file
             manifest_exists: Whether a manifest exists (for IF_MANIFEST_EXISTS mode)
             saved_hash: Previously saved hash from manifest (for IF_MANIFEST_EXISTS mode)
+            for_manifest_write: If True, compute hash for writing manifest (establishes baseline).
+                              If False, compute hash for comparison only.
 
         Returns:
             SHA256 hash string, or None if hash not computed
@@ -212,13 +216,18 @@ class EnhanceOrchestrator:
         if self.config.hash_mode == HashMode.NEVER:
             return None
 
-        # IF_MANIFEST_EXISTS: only compute hash if manifest exists with a saved hash
+        # IF_MANIFEST_EXISTS: behavior depends on context
         if self.config.hash_mode == HashMode.IF_MANIFEST_EXISTS:
-            if not manifest_exists or not saved_hash:
-                # No manifest or no saved hash - skip hashing on first run
-                return None
+            if for_manifest_write:
+                # Writing manifest: always compute hash to establish/update baseline
+                pass  # Fall through to compute hash
+            else:
+                # Reading for comparison: only compute if we have a baseline
+                if not manifest_exists or not saved_hash:
+                    # No baseline exists - skip comparison
+                    return None
 
-        # ALWAYS or IF_MANIFEST_EXISTS (with existing manifest)
+        # ALWAYS or IF_MANIFEST_EXISTS (when baseline exists or writing manifest)
         try:
             return compute_file_sha256(image_path)
         except Exception as e:
@@ -251,7 +260,8 @@ class EnhanceOrchestrator:
                 current_hash = self._compute_or_skip_hash(
                     image_input.path,
                     manifest_exists=True,
-                    saved_hash=saved_hash
+                    saved_hash=saved_hash,
+                    for_manifest_write=False
                 )
                 if current_hash and current_hash != saved_hash:
                     logger.info(f"Input image changed - regenerating depth: {image_input.path}")
@@ -298,7 +308,11 @@ class EnhanceOrchestrator:
         self, v2_report_path: Optional[Path], manifest_path: Path,
         image_input: ImageInput, depth_was_skipped: bool
     ) -> bool:
-        """Determine whether to skip V2 (PBR/enhancement) stage.
+        """Determine whether to skip V2 enhancement stage.
+
+        V2 skip logic is independent of PBR generation. V2 enhancement is a separate
+        stage from PBR map generation, and should be evaluated based on V2 config
+        changes and output existence.
 
         Uses stored config fingerprint for comparison and performs defensive
         output existence checks if enabled.
@@ -318,11 +332,6 @@ class EnhanceOrchestrator:
         try:
             manifest = CombinedManifest.load(manifest_path)
 
-            # If PBR not enabled, nothing to skip (or not needed)
-            pbr_enabled = getattr(self.config, 'generate_pbr', False)
-            if not pbr_enabled:
-                return True  # No PBR needed, so skip is allowed
-
             # Config Fingerprint Check - use stored fingerprint directly
             if not manifest.config_fingerprint:
                 logger.debug("No config fingerprint in manifest - regenerating V2")
@@ -341,11 +350,17 @@ class EnhanceOrchestrator:
                 logger.info("Depth was regenerated - V2 must rerun")
                 return False
 
-            # V2 Metadata Check
+            # V2 Metadata Check - verify V2 ran successfully
             if not manifest.v2 or manifest.v2.status != "ok":
                 return False
 
-            # Defensive output existence check for PBR assets
+            # Defensive output existence check for V2 report
+            if self.verify_outputs and v2_report_path:
+                if not v2_report_path.exists():
+                    logger.debug(f"V2 report missing: {v2_report_path}")
+                    return False
+
+            # Defensive output existence check for PBR assets (only if they exist in manifest)
             if self.verify_outputs and manifest.pbr_assets:
                 pbr_outputs = manifest.pbr_assets
                 for label, filepath in pbr_outputs.items():
@@ -538,8 +553,8 @@ class EnhanceOrchestrator:
                     depth_metadata = m.depth
                     # Preserve previous PBR paths when resuming from cached depth
                     pbr_assets = getattr(m, "pbr_assets", None)
-                except Exception:  # Do not swallow KeyboardInterrupt/SystemExit
-                    pass
+                except Exception as e:
+                    logger.debug(f"Failed to load previous manifest metadata: {e}")
 
             # PBR generation with cached depth (if enabled but not previously generated)
             if self.config.generate_pbr and (pbr_assets is None or not self._verify_pbr_outputs(pbr_assets)):
@@ -634,12 +649,13 @@ class EnhanceOrchestrator:
                 m = CombinedManifest.load(manifest_path)
                 if m.input:
                     saved_hash = m.input.image_sha256
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to load previous hash from manifest: {e}")
         input_sha = self._compute_or_skip_hash(
             image_input.path,
             manifest_exists=manifest_exists,
-            saved_hash=saved_hash
+            saved_hash=saved_hash,
+            for_manifest_write=True
         )
 
         # Capture end time for accurate timestamps
@@ -727,8 +743,20 @@ class EnhanceOrchestrator:
             try:
                 from .depth_writer import read_depth_u16_png
                 depth_data = read_depth_u16_png(depth_path)
-                # Convert 16-bit to float [0, 1] range
-                depth_data = depth_data.astype(np.float32) / 65535.0
+
+                # Robust normalization - handle both uint16 and pre-normalized float
+                depth_data = np.asarray(depth_data)
+                if depth_data.dtype == np.uint16:
+                    # Reader returned uint16 - normalize once
+                    depth_data = depth_data.astype(np.float32) / 65535.0
+                else:
+                    # Reader returned float - ensure correct range
+                    depth_data = depth_data.astype(np.float32, copy=False)
+                    # If reader returned unnormalized values, normalize
+                    maxv = float(np.nanmax(depth_data)) if depth_data.size else 0.0
+                    if maxv > 1.5:
+                        depth_data /= 65535.0
+
                 logger.debug(f"Loaded quantized depth from: {depth_path}")
                 return depth_data
             except Exception as e:
