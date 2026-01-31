@@ -1,578 +1,200 @@
-[![CI](https://github.com/RC219805/Transformation_Portal/actions/workflows/python-app.yml/badge.svg)](https://github.com/RC219805/Transformation_Portal/actions)
-[![License](https://img.shields.io/badge/license-Attribution-blue.svg)](#license)
+[![CI](https://github.com/RC219805/Transformation_Portal/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/RC219805/Transformation_Portal/actions/workflows/build.yml)
 [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)
-[![Status](https://img.shields.io/badge/build-passing-success.svg)](https://github.com/RC219805/Transformation_Portal)
+[![License](https://img.shields.io/badge/license-Attribution-blue.svg)](#license)
+[![Release](https://img.shields.io/github/v/release/RC219805/Transformation_Portal?sort=semver)](https://github.com/RC219805/Transformation_Portal/releases)
 
 # Transformation Portal
 
 Professional image and video processing toolkit for luxury real estate rendering, architectural visualization, and editorial post-production.
 
-## 🚀 Latest Update: Context-Aware Rendering (November 2025)
+## Current Release: v2.0.0 (Golden Path)
 
-NEW: Revolutionary Context-Aware Rendering System that extracts architectural intelligence from construction documents (floor plans, elevations, specifications) and uses this knowledge to inform every processing decision.
+Transformation Portal v2.0.0 is the first stable release with production-ready contracts and preset governance.
 
-### What's New
-- 🏗️ Architectural Context Extraction - Reads PDFs to extract room types, dimensions, materials, and design style
-- 🧠 Intelligent Strategy Derivation - Automatically optimizes processing for each specific space
-- 🎯 Room-Specific Processing - Kitchen, bedroom, bathroom, living, outdoor areas each get tailored treatment
-- 📐 Dimension-Aware - Depth processing respects actual room proportions
-- 🎨 Style-Consistent - Color grading aligns with architectural design language
-- 📄 Document Provenance - Direct connection between construction docs and final renders
+Key improvements in v2.0.0:
+- Versioned API contracts (schema-aligned payloads)
+- Preset stability taxonomy (stable / canary / experimental) discoverable via CLI
+- Service hardening including `/ready` for readiness checks
 
-See: [Context-Aware Rendering Guide](docs/CONTEXT_AWARE_RENDERING.md) | [Quick Start](#quick-start) | [Implementation Summary](docs/CONTEXT_AWARE_RENDERING.md#implementation-summary)
-
----
-
-## 🎉 Recent Update: Repository Refactored (October 2025)
-
-The repository has been significantly reorganized for better performance and maintainability:
-- 92% smaller repository size (180MB → 15MB)
-- 60% faster imports with lazy loading
-- Clear modular structure with organized packages
-- Comprehensive documentation in `docs/` directory
-
-See `docs/REFACTORING_SUMMARY.md` for details.
-
-## 🗂️ Automated Repository Organization
-
-The repository now includes an automated file organization system to maintain a clean, structured directory hierarchy:
-
-- Automatic file organization with `.auto-organize.sh`
-- Pre-commit hooks to prevent misplaced files
-- Clear directory structure for docs, scripts, assets, and data
-
-See `REPO_ORGANIZATION.md` for complete documentation.
-
-Quick Start:
+Quick discovery:
 ```bash
-# Install organization system
-./scripts/setup/auto-organize-install.sh
+lux-depth-v2 --list-stable
+lux-depth-v2 --describe-preset interior_luxury
 
-# Organize repository (dry-run first)
-./.auto-organize.sh --dry-run
-./.auto-organize.sh
+# If console scripts aren't on PATH, run as module:
+python -m lux_depth_v2 --list-stable
+python -m lux_depth_v2 --describe-preset interior_luxury
 ```
 
-## Overview
-
-Transformation Portal is a comprehensive suite of AI-powered tools and pipelines designed for high-end architectural rendering, real estate photography, and video post-production. It combines cutting-edge machine learning models, professional color grading techniques, and proprietary Material Response technology to transform raw renders and photographs into polished marketing visuals.
-
-### 🤖 Custom AI Agent Available (Enhanced v2.0) 🚀
-
-A specialized Transformation Portal Specialist GitHub Copilot agent is available to assist with development. **NEW in v2.0**: Enhanced with 8 advanced capabilities including multi-modal analysis, proactive automation, deep debugging, performance optimization, CI/CD intelligence, and quality assurance.
-
-**Use it in Copilot Chat**: `@transformation-portal-specialist [your request]`
-
-**New Capabilities**:
-- 🖼️ Multi-modal artifact analysis (image/video quality assessment)
-- 🤖 Proactive workflow automation (suggests next steps)
-- 🔍 Deep debugging with root cause analysis
-- ⚡ Automated performance optimization (2-5x improvements)
-- 🔄 Smart CI/CD (60% faster test feedback)
-- 🧠 Interactive learning (adapts to your style)
-- 📝 Context-aware responses (tutorial/quick-ref modes)
-- ✨ Automated quality assurance and security scanning
-
-**Quick Start**: See [Agent Quick Start v2.0](.github/agents/QUICK_START_v2.md)
-**Full Details**: See [Agent Enhancements v2.0](.github/agents/AGENT_ENHANCEMENTS_v2.md)
-**User Guide**: See [Custom Agent Guide](docs/CUSTOM_AGENT_GUIDE.md)
-
-## Table of Contents
-
-* [Features](#features)
-* [Quick Start](#quick-start)
-* [Installation](#installation)
-* [Supported File Formats](#supported-file-formats)
-* [📖 Pipeline Operations Guide](#pipeline-operations-guide)
-* [Core Components](#core-components)
-    * [Context-Aware Rendering 🆕](#context-aware-rendering-)
-    * [Depth Pipeline](#depth-pipeline)
-    * [Lux Render Pipeline](#lux-render-pipeline)
-    * [Luxury TIFF Batch Processor](#luxury-tiff-batch-processor)
-    * [Luxury Video Master Grader](#luxury-video-master-grader)
-    * [Material Response System](#material-response-system)
-    * [Board Material Aerial Enhancer](#board-material-aerial-enhancer)
-* [LUT Collection](#lut-collection)
-* [Developer Tools](#developer-tools)
-* [Usage Examples](#usage-examples)
-* [Configuration](#configuration)
-* [Performance](#performance)
-* [Testing](#testing)
-* [License](#license)
+Install the release:
+```bash
+pip install "git+https://github.com/RC219805/Transformation_Portal.git@v2.0.0"
+```
 
 ---
 
-## Features
+## Major Feature: Context-Aware Rendering (Nov 2025)
 
-### Core Capabilities
+Context-Aware Rendering extracts architectural intelligence from construction documents (floor plans, elevations, specifications) and uses that context to inform processing decisions.
+- Architectural context extraction from PDFs (room types, dimensions, materials, design style)
+- Room-specific strategy derivation (kitchen, bedroom, bath, living, outdoor)
+- Dimension-aware depth decisions (proportion-respecting depth logic)
+- Style-consistent color decisions aligned to design language
+- Document provenance: explicit linkage from construction docs → final render decisions
 
-- ✅ Context-Aware Rendering - First-of-its-kind system that reads architectural documents and adapts processing accordingly
-- ✅ AI-Powered Enhancement - Stable Diffusion XL, ControlNet, Real-ESRGAN upscaling
-- ✅ Depth-Aware Processing - Depth Anything V2 with Apple Neural Engine optimization
-- ✅ Material Response Technology - Physics-based surface enhancement for wood, metal, glass, textiles
-- ✅ Professional Color Grading - 16+ LUTs with Film Emulation and Location Aesthetics
-- ✅ 16-bit TIFF Support - Metadata-preserving batch processing for high-end photography
-- ✅ HDR Production Pipeline - ACES color space, adaptive debanding, halation effects
-- ✅ Batch Processing - 400-600 images/hour throughput on M4 Max
-- ✅ Production-Ready - Comprehensive test suite, CI/CD, performance profiling
+Docs:
+- docs/CONTEXT_AWARE_RENDERING.md
 
-### Technology Stack
+---
 
-| Technology         | Purpose                                             |
-|--------------------|-----------------------------------------------------|
-| Depth Anything V2  | Monocular depth estimation (24ms @ 518px on M4 Max) |
-| Stable Diffusion XL| AI-powered render refinement                        |
-| ControlNet         | Edge-preserving image-to-image translation          |
-| Real-ESRGAN        | Intelligent 4x upscaling                            |
-| FFmpeg             | Video processing and LUT application                |
-| PyTorch/CoreML     | GPU acceleration (CUDA, MPS, Apple Neural Engine)   |
-| Colour Science     | Professional color space transformations            |
+## What this repository provides
+
+Core capabilities:
+- Context-aware rendering workflows (document-informed processing)
+- Depth-aware enhancement (monocular depth + depth-guided processing)
+- AI-powered refinement (optional ML stack)
+- Material Response technology (surface-aware finishing)
+- Professional grading looks (LUT library for film/location/material aesthetics)
+- TIFF workflows (high bit-depth + metadata preservation, where supported)
+- Video grading workflows (FFmpeg-based pipelines)
+
+---
 
 ---
 
 ## Quick Start
 
-📖 New to the pipelines? Check out the complete Pipeline Operations Guide for step-by-step instructions on how to operate each pipeline, or see the Quick Start Cheat Sheet for common commands.
-
-## Installation
-
-### Dependency Management
-
-Transformation Portal uses a **layered dependency system** managed in the `requirements/` directory. This system provides fine-grained control over core, ML, development, and CI dependencies, and is compatible with modern Python dependency management tools (e.g., `pip-tools`).
-
-```text
-requirements/
-├── base.in      # Core runtime dependencies (human-editable)
-├── base.txt     # Core runtime dependencies (compiled, for pip install)
-├── ml.in        # ML/AI dependencies (human-editable)
-├── ml.txt       # ML/AI dependencies (compiled)
-├── dev.in       # Development tools (human-editable)
-├── dev.txt      # Development tools (compiled)
-├── ci.in        # CI/test dependencies (human-editable)
-└── ci.txt       # CI/test dependencies (compiled)
-### Quick Installation
+1) Clone (recommended for development / local ops)
 
 ```bash
-# Clone repository
 git clone https://github.com/RC219805/Transformation_Portal.git
 cd Transformation_Portal
-
-# Create virtual environment (recommended)
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 ```
 
-**Option 1 (Recommended for contributors): full dev environment**
+2) Install (choose your environment)
 
-```bash
-pip install -r requirements-dev.txt
-pip install -e .
-```
-
-This installs:
-
-- Runtime dependencies
-- Test dependencies
-- Developer tooling (linting, formatting, type checking)
-
-**Option 2: runtime + tests (CI-like environment)**
-
-```bash
-pip install -r requirements-ci.txt
-pip install -e .
-```
-
-**Option 3: minimal runtime only**
-
+**Option A - Minimal runtime**
 ```bash
 pip install -r requirements.txt
 pip install -e .
 ```
 
-> **Important**: Installing the package in editable mode with `pip install -e .` is **required** for:
-> - Using CLI console scripts (`luxury-tiff-batch`, etc.)
-> - Importing from the `transformation_portal` package
-> - Running the test suite correctly
-> The editable installation makes the package importable and registers command-line entry points.
-
-### Optional Extras
-
-If your packaging configuration defines extras like `[tiff]`, `[ml]`, `[dev]`, `[all]`, you can install them as:
-
+**Option B - Runtime + tests (CI-like)**
 ```bash
-# Optional: Install extras (if defined)
-pip install -e ".[tiff]"   # 16-bit TIFF processing
-pip install -e ".[ml]"     # ML extras for AI pipelines
-pip install -e ".[dev]"    # pytest, linting, dev tooling
-pip install -e ".[all]"    # everything
+pip install -r requirements-ci.txt
+pip install -e .
 ```
 
-### Verify Installation
-
-```bash
-# Test depth pipeline
-python -c "from depth_pipeline import ArchitecturalDepthPipeline; print('✓ Depth Pipeline ready')"
-
-# Test Material Response
-python -c "from material_response import MaterialResponse; print('✓ Material Response ready')"
-
-# Run test suite
-make test-fast
-```
-
-### Process Your First Image
-
-```bash
-# Depth-aware enhancement
-python depth_pipeline/pipeline.py --input render.jpg --output enhanced.jpg
-
-# TIFF batch processing (requires pip install -e . first)
-luxury-tiff-batch input_folder/ output_folder/ --preset signature
-
-# AI render refinement
-python lux_render_pipeline.py --input bedroom.jpg --out ./enhanced --prompt "luxury bedroom interior" --material-response
-```
-
----
-
-## Supported File Formats
-
-Transformation Portal supports a wide range of image and video formats across its pipelines.
-
-### Image Formats
-
-**Universal Support (All image pipelines):**
-
-- PNG (.png) - Lossless, alpha channel support
-- JPEG (.jpg, .jpeg) - Lossy, widely compatible
-- TIFF (.tif, .tiff) - 16-bit precision with metadata preservation
-- WebP (.webp) - Modern compression
-- BMP (.bmp) - Uncompressed bitmap
-
-All formats are case-insensitive (`.PNG`, `.Png`, `.png` all accepted).
-
-### Video Formats
-
-**Luxury Video Master Grader:**
-
-- MP4 (.mp4) - H.264, H.265/HEVC
-- MOV (.mov) - ProRes, QuickTime
-- AVI (.avi) - Various codecs
-- MKV (.mkv) - Matroska container
-- HDR support: PQ (HDR10), HLG (Hybrid Log-Gamma)
-
-### Pipeline-Specific Recommendations
-
-| Pipeline               | Best Format      | Notes                                         |
-|------------------------|------------------|-----------------------------------------------|
-| TIFF Batch Processor   | 16-bit TIFF      | Requires `tifffile` for full precision        |
-| Depth Pipeline         | PNG, TIFF        | Lossless for architectural rendering          |
-| Lux Render Pipeline    | PNG, TIFF        | AI enhancement works with any PIL format      |
-| Material Response      | TIFF, PNG        | High-res input recommended (4K+)              |
-| Video Grading          | ProRes MOV       | Master format for color grading               |
-
-### Installation for Full Format Support
-
-```bash
-# Install base image support (included in requirements.txt)
-pip install Pillow
-
-# Install high-fidelity TIFF support (16-bit precision)
-pip install tifffile imagecodecs
-
-# FFmpeg required for video (system package)
-# Ubuntu/Debian: sudo apt install ffmpeg
-# macOS: brew install ffmpeg
-```
-
----
-
-## Core Components
-
-### 🧠 Context-Aware Rendering System (NEW!)
-
-Revolutionary intelligence-driven rendering that reads architectural documents and adapts processing to each specific space.
-
-#### Workflow:
-1. Extract Context - Parse PDFs (floor plans, elevations, specs) to extract architectural intelligence
-2. Derive Strategy - Automatically determine optimal processing for each rendering
-3. Process with Intelligence - Apply context-aware depth, materials, and color grading
-
-#### Capabilities:
-- ✅ Document Intelligence - Extracts room types, dimensions, materials, design style from PDFs
-- ✅ Room-Specific Optimization - Kitchen, bedroom, bathroom, living, outdoor each get tailored processing
-- ✅ Material-Aware - Prioritizes enhancement for actual materials used in design
-- ✅ Style-Consistent - Color grading respects architectural design language
-- ✅ Dimension-Aware - Depth processing accounts for actual room proportions
-- ✅ Three Quality Tiers - Standard (30-45s), Premium (60-90s), Ultimate (3-5min with 4K)
-
-#### Example Workflow:
-```bash
-# Step 1: Extract architectural context from PDF
-python scripts/architectural_context_extractor.py     "750_Picacho_Plans.pdf"     --output extracted_context     --verbose
-
-# Step 2: Process rendering with context intelligence
-python scripts/premium_context_pipeline.py     "input_images/Kitchen_Rendering.tiff"     --context "extracted_context/750_Picacho_context.json"     --quality premium     --output output_premium
-
-# Or use shortcut:
-bash scripts/context_aware_quickstart.sh  # Interactive guide
-```
-
-#### What Gets Extracted:
-- Room types and dimensions (e.g., Kitchen: 18' x 14.5', 10' ceiling)
-- Material palette (Quartzite, Stainless Steel, White Oak)
-- Design style (Modern, Traditional, Contemporary, etc.)
-- Floor plans and elevations (as images)
-- Project metadata (name, number, address)
-
-#### How It Adapts:
-- Kitchen → Bright lighting, balanced depth, metal/stone/glass emphasis, neutral temperature
-- Bedroom → Soft lighting, atmospheric depth, wood/fabric emphasis, warm temperature
-- Bathroom → Soft lighting, stone/glass/metal, spa aesthetic, neutral temperature
-- Outdoor → Natural lighting, atmospheric depth, stone/concrete, enhanced perspective
-
-#### Performance:
-- Context extraction: 5-60 seconds (depending on PDF size)
-- Strategy derivation: < 100ms
-- Full pipeline: 30-45s (standard), 60-90s (premium), 3-5min (ultimate)
-
----
-
-### 🌟 Professional Pipeline (NEW!)
-
-Fully-integrated orchestrator combining all pipeline stages into a unified, production-ready workflow.
-
-#### Capabilities:
-- ✅ 5-Stage Integration - Depth → AI → Material → Grading → Finishing
-- ✅ 10 Professional Presets - Optimized for common use cases
-- ✅ Batch Processing - 400-600 images/hour throughput
-- ✅ Intelligent Stage Management - Enable/disable stages as needed
-- ✅ Performance Optimized - Apple Silicon (CoreML + MPS) + CUDA support
-
-#### Quick Start:
-```bash
-# Single image with preset
-python pro_pipeline.py process render.jpg --preset architectural-hero --out ./enhanced
-
-# Batch processing
-python pro_pipeline.py batch ./renders --preset interior-dramatic --out ./final
-
-# List available presets
-python pro_pipeline.py list-presets
-```
-
----
-
-### Depth Pipeline
-
-State-of-the-art depth-aware image processing using Depth Anything V2 for architectural rendering.
-
-#### Key Features:
-- Monocular depth estimation (24-65ms per image on M4 Max)
-- Apple Neural Engine optimization via CoreML
-- Depth-aware denoising with edge preservation
-- Zone-based tone mapping (AgX, Reinhard, Filmic)
-- Atmospheric effects (haze, aerial perspective)
-- Depth-guided clarity enhancement
-- LRU caching for 10-20x speedup in iterative workflows
-
-#### Usage:
-```python
-from depth_pipeline import ArchitecturalDepthPipeline
-
-# Load preset configuration
-pipeline = ArchitecturalDepthPipeline.from_config('config/interior_preset.yaml')
-
-# Process single image
-result = pipeline.process_render('interior.jpg')
-pipeline.save_result(result, 'output/')
-
-# Batch process
-from pathlib import Path
-image_paths = Path('input/').glob('*.jpg')
-results = pipeline.batch_process(image_paths, output_dir='output/')
-```
-
----
-
-### Lux Render Pipeline
-
-AI-powered render refinement combining ControlNet, Stable Diffusion, and intelligent upscaling.
-
-#### Example:
-```bash
-python lux_render_pipeline.py   --input bedroom_render.jpg   --out ./enhanced   --prompt "minimalist bedroom interior, natural daylight, oak wood floor"   --neg "low detail, cartoon, blurry"   --width 1024 --height 768 --steps 30 --strength 0.45   --material-response --texture-boost 0.28   --brand_text "The Veridian | Penthouse 21B" --logo ./brand/logo.png
-```
-
----
-
-### Luxury TIFF Batch Processor
-
-High-end workflow for polishing large-format TIFF photography with metadata preservation.
-
-#### Usage:
-```bash
-# After installing the package (pip install -e .)
-luxury-tiff-batch input_folder/ output_folder/ --preset signature
-```
-
----
-
-### Luxury Video Master Grader
-
-FFmpeg-based video color grading with LUT application and batch processing.
-
-#### Usage:
-```bash
-python luxury_video_master_grader.py input_video.mp4 output_video.mp4 --lut path/to/lut.cube
-```
-
----
-
-### Material Response System
-
-Proprietary surface-aware rendering technology that analyzes and enhances how different materials interact with light.
-
-```python
-from material_response import MaterialResponse, SurfaceType
-
-mr = MaterialResponse()
-result = mr.enhance(
-    image,
-    surfaces=[SurfaceType.WOOD, SurfaceType.METAL, SurfaceType.GLASS],
-    strength=0.7
-)
-```
-
----
-
-### Board Material Aerial Enhancer
-
-Material-aware palette assignment for aerial photography using clustering and texture blending.
-
-```bash
-python board_material_aerial_enhancer.py aerial_image.jpg output_enhanced.jpg
-```
-
----
-
-## LUT Collection
-
-Professional color grading LUTs for film emulation and location aesthetics.
-
----
-
-## Managing Dependencies 🔧
-
-### For Contributors
-
-Use the development requirements for reproducible local environments:
-
+**Option C - Full dev environment**
 ```bash
 pip install -r requirements-dev.txt
 pip install -e .
 ```
 
-This installs:
-
-- Core runtime dependencies
-- Test dependencies
-- Developer tooling (linting, formatting, type checking)
-
-### Adding New Dependencies
-
-The project uses a layered dependency system in the `requirements/` directory. To add a new dependency:
-
-1. **Edit the appropriate `.in` file** in the `requirements/` directory:
-   - **Core runtime dependency** → edit `requirements/base.in`
-   - **ML/AI dependency** → edit `requirements/ml.in`
-   - **Test-only dependency** → edit `requirements/dev.in`
-   - **CI/CD tooling** → edit `requirements/ci.in`
-
-2. **Recompile the pinned requirements**:
-   ```bash
-   cd requirements/
-   make compile
-   ```
-
-3. **Commit both `.in` and `.txt` files**:
-   ```bash
-   git add requirements/
-   git commit -m "Add new dependency: package-name"
-   ```
-
-After changes, refresh your environment:
+3) Verify installation
 
 ```bash
-pip install -r requirements/all.txt
-pip install -e .
+python verify_core.py
 ```
-
-### Updating Dependencies
-
-To update all dependencies to their latest allowed versions:
-
-```bash
-cd requirements/
-make update
-```
-
-This respects the version constraints in `.in` files while finding the newest compatible versions. After updating, commit both `.in` and `.txt` files.
 
 ---
 
-## Developer Tools
+## Dependency Management
 
-- Decision Decay Dashboard
-- HDR Production Pipeline
-- Prophetic Orchestrator
-- Temporal Evolution
+This repo uses two layers:
+1. Convenience pinned files at repo root:
+   - `requirements.txt`
+   - `requirements-ci.txt`
+   - `requirements-dev.txt`
+   - `requirements-lint.txt`
 
-(See relevant docs in `tools/` and `docs/` for details.)
+2. Source-of-truth layered inputs in `requirements/` for maintainers:
+
+```
+requirements/
+├── base.in      # Core runtime deps (human-editable)
+├── base.txt     # Compiled/pinned
+├── ml.in        # ML/AI deps (human-editable)
+├── ml.txt       # Compiled/pinned
+├── dev.in       # Dev deps (human-editable)
+├── dev.txt      # Compiled/pinned
+├── ci.in        # CI/test deps (human-editable)
+└── ci.txt       # Compiled/pinned
+```
+
+If you update `.in` files, recompile and commit both `.in` and `.txt` outputs:
+```bash
+cd requirements/
+make compile
+```
+
+---
+
+## Repository Layout (high level)
+
+```
+assets/       # LUTs, branding, look assets
+config/       # YAML presets and configuration
+docs/         # Architecture, guides, reports
+examples/     # Usage examples
+requirements/ # Layered dependency sources (pip-tools style)
+scripts/      # Operational scripts / pipeline runners
+src/          # Installable package source
+tests/        # pytest suite
+tools/        # Dev/ops tools (manifests, audits, utilities)
+workflows/    # Workflow artifacts / operational workflow utilities
+```
+
+---
+
+## Supported File Formats (summary)
+
+**Images:**
+- PNG, JPEG, TIFF/TIF, WebP, BMP (case-insensitive)
+
+**Video:**
+- MP4, MOV, AVI, MKV (codec/container dependent)
+- HDR pipelines supported where FFmpeg metadata and filters allow (PQ/HLG workflows)
+
+---
+
+## System Requirements
+- Python: 3.10+
+- FFmpeg: 6+ (for video workflows)
+- Hardware: CPU-only supported; GPU/Apple Silicon acceleration optional depending on pipeline
+
+CI note:
+- Core tests run on Python 3.10 and 3.12
+- ML tests run on Python 3.11
+- Lint runs on Python 3.12
 
 ---
 
 ## Testing
 
-### Run Test Suite
-
+Fast local run (mirrors CI core suite):
 ```bash
-# Fast tests only
-make test-fast
-
-# Full test suite
-make test-full
-
-# CI simulation (linting + tests)
-make ci
-
-# Specific test file
-pytest tests/test_depth_pipeline.py -v
-
-# With coverage
-pytest tests/ --cov=. --cov-report=html
+pytest -v tests/ -ra -m "not ml and not slow" --maxfail=1
 ```
 
----
+ML tests (requires ML extras):
+```bash
+pytest -v tests/ -ra -m "ml and not slow" --maxfail=1
+```
 
-## Requirements
+All tests except slow:
+```bash
+pytest -v tests/ -ra -m "not slow" --maxfail=1
+```
 
-### System Requirements
-- Python: 3.10+
-- OS: macOS (M1/M2/M3/M4), Linux, Windows
-- RAM: 16GB minimum, 36GB+ recommended for batch processing
-- GPU: CUDA-capable GPU or Apple Silicon with Neural Engine
-
-### Python Dependencies (Overview)
-
-**Core (see `requirements.txt` for full list):**
-- numpy>=1.24,<3
-- Pillow>=10.0.0,<12
-- scipy>=1.10,<2
-- torch>=2.0,<3
-- typer>=0.12,<1
-- diffusers, transformers, controlnet-aux, realesrgan, torchvision, opencv-python
-- tifffile, imagecodecs
+Repo Make targets may exist (see Makefile):
+```bash
+make test-fast
+make test-full
+make ci
+```
 
 ---
 
@@ -580,11 +202,11 @@ pytest tests/ --cov=. --cov-report=html
 
 Professional use permitted with attribution.
 
-**Component Licenses:**
-- Pipeline code: Proprietary with attribution requirements
-- Depth Anything V2 Small: Apache 2.0 License
+Component licenses:
+- Pipeline code: proprietary with attribution requirements
+- Depth Anything V2 Small: Apache 2.0
 - Depth Anything V2 Base/Large: CC-BY-NC-4.0 (non-commercial)
-- LUT Collection: Attribution required
+- LUT collection: attribution required
 
 ---
 
@@ -595,11 +217,10 @@ Brand: Carolwood Estates · RACLuxe Division
 Email: info@racluxe.com
 
 Resources:
-
-- GitHub Issues: Bug reports and feature requests
-- Documentation: See inline code documentation and `docs/`
-- Examples: See `examples/` directory
+- GitHub Issues: bug reports and feature requests
+- Documentation: docs/
+- Examples: examples/
 
 ---
 
-**Last Updated: 2026-01-29**
+Last Updated: 2026-01-31
