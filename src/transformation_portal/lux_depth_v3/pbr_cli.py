@@ -205,6 +205,10 @@ def generate(
 
     Requires either --depth (single file) or --depth-dir (batch mode).
     """
+    # JSON mode implies quiet (suppress non-JSON stdout)
+    if json_output:
+        quiet = True
+
     # Configure logging at entrypoint
     _configure_logging(verbose=verbose, quiet=quiet, log_level=log_level)
 
@@ -267,7 +271,15 @@ def generate(
     # Single file mode
     if depth:
         if not depth.exists():
-            typer.echo(f"Error: Depth file not found: {depth}", err=True)
+            if json_output:
+                error_result = {
+                    "status": "error",
+                    "input": str(depth),
+                    "error": f"Depth file not found: {depth}"
+                }
+                typer.echo(json.dumps(error_result, indent=2))
+            else:
+                typer.echo(f"Error: Depth file not found: {depth}", err=True)
             raise typer.Exit(1)
 
         # Ensure output directory exists
