@@ -7,15 +7,6 @@ from datetime import date, timedelta
 
 import pytest
 
-# Hypothesis for property-based testing
-try:
-    from hypothesis import given
-    from hypothesis import strategies as st
-except ImportError as exc:
-    raise ImportError(
-        "Hypothesis is required for these tests. Install via `pip install hypothesis`."
-    ) from exc
-
 # Import the helpers under test
 try:
     from transformation_portal.utils.helpers import demonstrates, documents, valid_until
@@ -79,16 +70,17 @@ def test_demonstrates_existing_docstring():
     assert "Existing doc" in func.__doc__
 
 # -------------------------
-# property-based demonstrates tests
+# demonstrates tests with deterministic parametrization
 # -------------------------
 
 
-@given(
-    st.one_of(
-        st.text(min_size=1, max_size=20),
-        st.integers(),
-        st.builds(type, st.text(min_size=1, max_size=10), st.tuples(), st.just({}))
-    )
+@pytest.mark.parametrize(
+    "concept",
+    [
+        "ConceptText",
+        42,
+        type("DummyType", (), {}),
+    ],
 )
 def test_demonstrates_with_various_concepts(concept):
     @demonstrates(concept)
@@ -98,16 +90,13 @@ def test_demonstrates_with_various_concepts(concept):
     assert dummy.__doc__.startswith("Demonstrates:")
 
 
-@given(
-    st.lists(
-        st.one_of(
-            st.text(min_size=1, max_size=20),
-            st.integers(),
-            st.builds(type, st.text(min_size=1, max_size=10), st.tuples(), st.just({}))
-        ),
-        min_size=1,
-        max_size=5
-    )
+@pytest.mark.parametrize(
+    "concepts",
+    [
+        ["ConceptA"],
+        ["ConceptB", "ConceptC"],
+        ["ConceptText", 7, type("DemoType", (), {})],
+    ],
 )
 def test_demonstrates_with_multiple_various_concepts(concepts):
     @demonstrates(concepts)

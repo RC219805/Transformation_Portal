@@ -7,6 +7,9 @@ import numpy as np
 import scipy.ndimage
 from typing import Dict, Any
 
+from .pixel_ops_decider import decide_pixel_ops
+from .pixel_ops_registry import OP_REGISTRY
+
 def compute_edge_signals(mask_np: np.ndarray, rgb_np: np.ndarray) -> Dict[str, float]:
     """Computes objective boundary metrics using image gradients."""
     if mask_np is None or mask_np.sum() == 0:
@@ -79,29 +82,7 @@ def _decide_refinement(material_key: str, stats: Dict, edge_signals: Dict, confi
 
 def _decide_pixel_ops(material_key: str, stats: Dict, config: Any) -> Dict[str, Any]:
     """Decision Block B: Pixel Ops Gate."""
-    should_apply = False
-    eligible = False
-    reason = "no_implementation"
-    recommended_ops = []
-
-    if material_key == "glass":
-        eligible = stats['coverage_px'] >= 1000
-        if not eligible:
-            reason = "below_coverage_threshold"
-        else:
-            if stats['mean_conf'] < 0.80:
-                should_apply = True; reason = "low_mean_confidence"
-            elif stats.get('edge_conf', 1.0) < 0.55:
-                should_apply = True; reason = "low_edge_confidence"
-            else:
-                should_apply = False; reason = "confidence_already_high"
-        recommended_ops = ["brightness_boost", "edge_contrast"]
-    else:
-        recommended_ops = ["microcontrast"]
-        eligible = False
-        reason = "no_implementation"
-
-    return {"should_apply": should_apply, "eligible": eligible, "reason": reason, "recommended_ops": recommended_ops}
+    return decide_pixel_ops(material_key, stats, config, registry=OP_REGISTRY)
 
 def generate_response_plan(per_class_stats: Dict[str, Any], rgb_image: np.ndarray, config: Any) -> Dict[str, Any]:
     """Generates Schema v3.1 Response Plan."""

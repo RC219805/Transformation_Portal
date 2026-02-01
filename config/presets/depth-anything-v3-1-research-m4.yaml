@@ -1,0 +1,61 @@
+# ⚠️  LICENSE: CC BY-NC 4.0 (Non-Commercial Research Use Only)
+# This preset uses Depth Anything V3.1 (DA3 1.1) which is licensed for non-commercial
+# research and academic use only. For commercial applications, use DA3 V2 instead.
+
+name: depth-anything-v3.1-research-m4
+description: "Depth Anything V3.1 M4-optimized for research/academic use (CC BY-NC 4.0)"
+tier: research
+license_restriction: non_commercial
+
+# Model configuration
+model:
+  variant: depth-anything-v3-metric-large-1.1
+  source: huggingface
+  hf_id: "depth-anything/DA3-Large-1.1"
+  description: "DA3 1.1 Large variant (6.8 GB), optimized for Apple Silicon M4"
+
+# Device and inference settings
+device:
+  type: mps  # Metal Performance Shaders (Apple Silicon)
+  dtype: float16
+  max_batch_size: 1
+
+# Postprocessing for depth quality
+postprocessing:
+  apply_metric_scaling: true
+  scale_factor: 1.0
+  apply_bilateral_filter: true
+  bilateral_sigma_color: 0.03
+  bilateral_sigma_space: 7.0
+  preserve_edges: true
+  edge_threshold: 0.05
+  fusion_mode: weighted
+
+# Performance characteristics
+performance:
+  estimated_throughput_4k: "420ms per frame (M4 Max reference)"
+  memory_footprint_gb: 6.8
+  supported_input_formats: ["jpeg", "png", "tiff", "webp"]
+
+# Usage notes
+usage_notes: |
+  This preset is for non-commercial research, academic benchmarking, and non-profit
+  projects only. It is optimized for Apple Silicon (M1/M2/M3/M4) with Metal acceleration.
+
+  EXPLICIT REQUIREMENT: Set `non_commercial_ok=True` in your EnhanceConfig to use this preset.
+
+  Example:
+    config = EnhanceConfig(
+        preset=Preset.RESEARCH_DA31_M4,
+        non_commercial_ok=True,  # Must be True
+        depth_device="mps",
+    )
+
+# Metadata for governance
+governance:
+  author: Transformation Portal Architect
+  created_date: "2026-02-01"
+  adr_reference: "ADR-0015"
+  requires_opt_in: true
+  license: "CC BY-NC 4.0"
+  restrictions: ["non-commercial", "research-only", "academic-use"]

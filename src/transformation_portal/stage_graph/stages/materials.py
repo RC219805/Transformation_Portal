@@ -85,6 +85,7 @@ class MaterialSegmentationStage(Stage):
             status=StageStatus.COMPLETED,
             artifacts={
                 "material_masks": material_masks,
+                "materials": material_masks,
                 "material_metadata": {
                     "backend": self.backend,
                     "materials": list(material_masks.keys()),

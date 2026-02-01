@@ -61,6 +61,40 @@ Core capabilities:
 
 ---
 
+## Depth Models: Commercial vs. Research
+
+Transformation Portal supports depth models across two tiers with different licensing and use cases.
+
+### Production (Commercial)
+- **Depth Anything V3 (V2 commercial variant):** Fully supported, production-ready
+- **Use for:** Commercial applications, products, revenue-generating services
+- **Licensing:** Commercial-friendly licensing
+- **Default:** All standard presets use this tier
+
+### Research & Non-Commercial
+- **Depth Anything V3.1 (DA3 1.1, CC BY-NC 4.0):** Available for research/academic use only
+- **Use for:** Academic research, benchmarking, non-profit projects
+- **Licensing:** CC BY-NC 4.0 (non-commercial research only)
+- **Enabled by:** Setting `non_commercial_ok=True` in EnhanceConfig
+- **Example Preset:** `depth-anything-v3.1-research-m4` (Apple Silicon optimized)
+
+**Important:** DA3 1.1 is prohibited for commercial use. If you plan to use these models in a commercial product or service, use the commercial DA3 V2 variants instead. See [ADR-0015: DA3 1.1 Non-Commercial Research Tier](docs/architecture/adr-0015-da3-1-1-non-commercial-research-tier.md) for detailed governance.
+
+### Research Preset Example
+
+```python
+from transformation_portal.lux_depth_v3 import EnhanceConfig, Preset
+
+# Non-commercial research (requires explicit opt-in)
+config = EnhanceConfig(
+    preset=Preset.RESEARCH_DA31_M4,
+    non_commercial_ok=True,  # Acknowledge CC BY-NC 4.0 restrictions
+    depth_device="mps",       # Apple Silicon
+)
+```
+
+---
+
 ## PBR Map Generation
 
 **New in v2.0**: Standalone PBR processor for generating Physically Based Rendering maps from depth data.
@@ -265,9 +299,11 @@ Professional use permitted with attribution.
 
 Component licenses:
 - Pipeline code: proprietary with attribution requirements
-- Depth Anything V2 Small: Apache 2.0
-- Depth Anything V2 Base/Large: CC-BY-NC-4.0 (non-commercial)
+- Depth Anything V3 (commercial variant): Commercial-friendly licensing
+- Depth Anything V3.1 (DA3 1.1): CC BY-NC-4.0 (non-commercial research only) ⚠️
 - LUT collection: attribution required
+
+**⚠️ Important:** DA3 1.1 is non-commercial only. Commercial applications must use DA3 V2 or equivalent commercially-licensed depth models. See [Depth Models: Commercial vs. Research](#depth-models-commercial-vs-research) above.
 
 ---
 
