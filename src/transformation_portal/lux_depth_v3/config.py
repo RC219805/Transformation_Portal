@@ -86,9 +86,10 @@ class EnhanceConfig:
     depth_quantization: str = "none"
 
     # V2 configuration
-    v2_preset: str = "default"
+    v2_preset: Optional[str] = "default"  # None = skip V2 stage entirely
     v2_device: str = "cpu"
     v2_upscaler_backend: str = "default"
+    enable_v2: bool = True  # Master switch for V2 stage
 
     # Flags
     force_depth: bool = False

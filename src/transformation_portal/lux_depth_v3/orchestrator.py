@@ -170,8 +170,24 @@ class EnhanceOrchestrator:
         # Initialize Postprocessor (FIX: Ensures refine_edges/bilateral settings from preset are applied)
         self.postprocessor = Postprocessor(da3_config.postprocessing)
 
-        # Initialize V2 Runner and Environment
-        self.v2_runner = V2Runner()
+        # Initialize V2 Runner and Environment (with fail-fast validation)
+        if config.enable_v2 and config.v2_preset is not None:
+            self.v2_runner = V2Runner()
+            # Fail-fast: Validate V2 script exists before processing
+            if not self.v2_runner.script_path.exists():
+                raise FileNotFoundError(
+                    f"V2 enhancement script not found: {self.v2_runner.script_path}\n"
+                    f"Required location: scripts/enhance_image.py in repository root\n"
+                    f"\nOptions:\n"
+                    f"  1. Create the V2 enhancement script at the expected location\n"
+                    f"  2. Set enable_v2=False for PBR-only workflows\n"
+                    f"  3. Set v2_preset=None to skip V2 stage"
+                )
+            logger.info(f"V2 enhancement enabled with script: {self.v2_runner.script_path}")
+        else:
+            self.v2_runner = None
+            logger.info("V2 enhancement disabled (PBR-only mode)")
+
         # Adjusted path logic for src/transformation_portal/lux_depth_v3 location
         repo_root = Path(__file__).resolve().parent.parent.parent.parent
         git_rev = get_git_revision(repo_root)
@@ -608,28 +624,35 @@ class EnhanceOrchestrator:
                 except Exception as pbr_error:
                     logger.warning(f"PBR generation from cache failed: {pbr_error}")
 
-        # --- STAGE B: V2 ENHANCE ---
-        v2_report_path = find_v2_report(self.v2_dir, output_key.name)
-        skip_v2 = not self.config.force_v2 and self.should_skip_v2(v2_report_path, manifest_path, image_input, skip_depth)
-
-        if skip_v2:
-            logger.info("V2 outputs valid, skipping.")
+        # --- STAGE B: V2 ENHANCE (Optional) ---
+        # Skip V2 stage if disabled or runner not initialized
+        if self.v2_runner is None or not self.config.enable_v2:
+            logger.info("V2 stage disabled, skipping enhancement")
             v2_runtime_s = 0.0
-            v2_result = {"status": "ok"}
+            v2_result = {"status": "skipped"}
+            v2_report_path = None
         else:
-            # V2 runner: depth_dir=None triggers independent depth generation in V2
-            v2_result = self.v2_runner.run(
-                input_path=image_input.path,
-                depth_dir=self.depth_dir if (depth_path and depth_path.exists()) else None,
-                output_dir=self.v2_dir,
-                preset=self.config.v2_preset,
-                device=self.config.v2_device,
-                upscaler_backend=self.config.v2_upscaler_backend,
-                log_file=v2_log_path,
-                timeout=self.config.v2_timeout
-            )
-            v2_runtime_s = v2_result.get("runtime_s", 0.0)
             v2_report_path = find_v2_report(self.v2_dir, output_key.name)
+            skip_v2 = not self.config.force_v2 and self.should_skip_v2(v2_report_path, manifest_path, image_input, skip_depth)
+
+            if skip_v2:
+                logger.info("V2 outputs valid, skipping.")
+                v2_runtime_s = 0.0
+                v2_result = {"status": "ok"}
+            else:
+                # V2 runner: depth_dir=None triggers independent depth generation in V2
+                v2_result = self.v2_runner.run(
+                    input_path=image_input.path,
+                    depth_dir=self.depth_dir if (depth_path and depth_path.exists()) else None,
+                    output_dir=self.v2_dir,
+                    preset=self.config.v2_preset,
+                    device=self.config.v2_device,
+                    upscaler_backend=self.config.v2_upscaler_backend,
+                    log_file=v2_log_path,
+                    timeout=self.config.v2_timeout
+                )
+                v2_runtime_s = v2_result.get("runtime_s", 0.0)
+                v2_report_path = find_v2_report(self.v2_dir, output_key.name)
 
         # Manifest
         v2_metadata = V2Metadata(

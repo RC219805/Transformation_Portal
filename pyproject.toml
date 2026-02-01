@@ -128,4 +128,82 @@ markers = [
     "integration: tests requiring multiple components",
     "ml: tests requiring ML models/large downloads",
     "golden: golden regression tests with curated fixtures",
+    "stress: stress tests for large batches and resource limits (deselect with '-m \"not stress\"')",
+    "benchmark: performance benchmarks with budgets",
 ]
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__pycache__/*",
+    "*/venv/*",
+    "*/venv_py311/*",
+    "*/.venv/*",
+]
+branch = true
+parallel = true
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.coverage.xml]
+output = "coverage.xml"
+
+# Coverage thresholds - enforced in CI
+# Strategy: Start at current baseline, ratchet upward
+[tool.coverage.paths]
+source = ["src/transformation_portal"]
+
+# Black formatting configuration
+[tool.black]
+line-length = 127
+target-version = ["py310", "py311", "py312"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | venv
+  | venv_py311
+  | _build
+  | buck-out
+  | build
+  | dist
+  | deprecated
+)/
+'''
+
+# isort configuration (compatible with black)
+[tool.isort]
+profile = "black"
+line_length = 127
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+skip_glob = ["*/deprecated/*", "*/archive/*", "*/.venv/*", "*/venv/*"]

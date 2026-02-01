@@ -221,3 +221,22 @@ venv_py311/
 
 # Security - prevent sensitive local backups
 .local_backup/
+
+# Coverage artifacts
+.coverage
+coverage.json
+htmlcov/
+.coverage.*
+
+# Workflow markers (operational artifacts)
+DEFER
+MERGE
+ROLLBACK
+SUCCESS
+Continue
+SKIP
+INVESTIGATE
+=
+
+# pytest cache
+.pytest_cache/

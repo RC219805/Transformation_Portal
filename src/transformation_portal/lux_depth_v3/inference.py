@@ -88,17 +88,34 @@ class DA3InferenceEngine:
 
     def __init__(
         self,
-        config: DA3Config,
+        config: Union[DA3Config, str] = "cpu",
         commercial_use: bool = True,
         validate_license_strict: bool = False
     ):
         """Initialize inference engine.
 
         Args:
-            config: DA3 configuration
+            config: Either DA3Config object for full control, or device string
+                   ("cpu", "mps", "cuda", "auto") for simple usage
             commercial_use: Whether commercial use is enabled
             validate_license_strict: Whether to strictly validate license
+
+        Examples:
+            Simple usage with device string:
+            >>> engine = DA3InferenceEngine("mps")
+
+            Full control with DA3Config:
+            >>> config = DA3Config(model_variant=ModelVariant.METRIC_LARGE)
+            >>> engine = DA3InferenceEngine(config)
         """
+        # Support simple string device for convenience
+        if isinstance(config, str):
+            from .config import DeviceConfig
+            device_str = config
+            device_config = DeviceConfig(device=device_str)
+            config = DA3Config(device=device_config)
+            logger.debug(f"Auto-constructed DA3Config with device={device_str}")
+
         self.config = config
         self.commercial_use = commercial_use
         self.validate_license_strict = validate_license_strict
