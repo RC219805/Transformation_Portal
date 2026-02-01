@@ -33,6 +33,13 @@ class MaterialsV3Engine:
         if not self.config.enabled: return {}
 
         # 1. Stats
+        materials = (
+            segmentation_result.get("materials")
+            or segmentation_result.get("material_masks")
+            or {}
+        )
+        segmentation_result = {"materials": materials}
+
         per_class_stats = {}
         for mat_key, mask in segmentation_result.get('materials', {}).items():
             stats = self._compute_mask_stats(mask)
