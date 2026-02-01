@@ -285,7 +285,30 @@ def generate(
         # Ensure output directory exists
         output.mkdir(parents=True, exist_ok=True)
 
-        base = base_name or depth.stem.replace("_depth", "")
+        base = base_name or depth.stem.removesuffix("_depth")
+
+        # Check for existing files if overwrite=False
+        if not overwrite:
+            expected_files = [
+                output / f"{base}_normal.png",
+                output / f"{base}_roughness.png",
+                output / f"{base}_ao.png",
+            ]
+            existing_files = [f for f in expected_files if f.exists()]
+            if existing_files:
+                if json_output:
+                    error_result = {
+                        "status": "error",
+                        "input": str(depth),
+                        "error": "Output files already exist (use --overwrite to replace)",
+                        "existing_files": [str(f) for f in existing_files]
+                    }
+                    typer.echo(json.dumps(error_result, indent=2))
+                else:
+                    typer.echo("Error: Output files already exist (use --overwrite to replace)", err=True)
+                    for f in existing_files:
+                        typer.echo(f"  • {f}", err=True)
+                raise typer.Exit(1)
 
         if dry_run:
             typer.echo(f"\n[DRY RUN] Would process: {depth.name}")
@@ -385,7 +408,27 @@ def generate(
         start_time = time.time()
 
         for depth_file in depth_files:
-            base = depth_file.stem.replace("_depth", "")
+            base = depth_file.stem.removesuffix("_depth")
+
+            # Check for existing files if overwrite=False
+            if not overwrite:
+                expected_files = [
+                    output / f"{base}_normal.png",
+                    output / f"{base}_roughness.png",
+                    output / f"{base}_ao.png",
+                ]
+                existing_files = [f for f in expected_files if f.exists()]
+                if existing_files:
+                    if not quiet:
+                        typer.echo(f" ✗ Skipped (files exist, use --overwrite)")
+                    error_count += 1
+                    failed_files.append(
+                        (depth_file.name, "Output files already exist (use --overwrite to replace)")
+                    )
+                    if fail_fast:
+                        typer.echo("\n[FAIL FAST] Aborting on first error", err=True)
+                        raise typer.Exit(1)
+                    continue
 
             try:
                 if not quiet:
@@ -487,7 +530,9 @@ def _get_preset_description(preset_name: str) -> str:
 
 
 def _write_manifest(manifest_path: Path, all_paths: list, config_fingerprint: str, preset: Optional[str]):
-    """Write manifest of generated files."""
+    """Write manifest of generated files atomically."""
+    from .io_atomic import atomic_write_bytes
+
     manifest_data = {
         "config_fingerprint": config_fingerprint,
         "preset": preset,
@@ -497,8 +542,9 @@ def _write_manifest(manifest_path: Path, all_paths: list, config_fingerprint: st
     for paths in all_paths:
         manifest_data["generated_files"].append({k: str(v) for k, v in paths.items()})
 
-    with open(manifest_path, 'w') as f:
-        json.dump(manifest_data, f, indent=2)
+    # Atomic write to prevent partial files on failure
+    manifest_json = json.dumps(manifest_data, indent=2).encode('utf-8')
+    atomic_write_bytes(manifest_path, manifest_json)
 
     logger.info(f"Wrote manifest to {manifest_path}")
 
