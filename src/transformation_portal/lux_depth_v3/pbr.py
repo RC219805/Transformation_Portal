@@ -171,6 +171,10 @@ def generate_pbr_maps(
         roughness = np.zeros_like(roughness)  # Constant field = no roughness
 
     # Apply strength AFTER normalization using power curve
+    # Validate strength parameter
+    if config.roughness_strength < 0:
+        raise ValueError(f"roughness_strength must be non-negative, got {config.roughness_strength}")
+    
     # strength > 1.0 increases roughness response (brighter, more pronounced)
     # strength < 1.0 reduces roughness response (darker, less pronounced)
     # strength = 1.0 is identity
@@ -200,6 +204,10 @@ def generate_pbr_maps(
         occlusion = np.zeros_like(occlusion)  # Constant field = no occlusion
 
     # Apply AO strength AFTER normalization using scale-and-clip
+    # Validate strength parameter
+    if config.ao_strength < 0:
+        raise ValueError(f"ao_strength must be non-negative, got {config.ao_strength}")
+    
     # strength > 1.0 increases occlusion (darker shadows)
     # strength < 1.0 reduces occlusion (lighter)
     # strength = 1.0 is identity

@@ -178,8 +178,8 @@ class TestEnhanceBatch:
                     # The test might fail due to missing dependencies or other issues
                     # but the important part is that if enhance_batch runs,
                     # it must not fail with a type error when calling compute_batch_runtime_stats
-                    if "takes 1 positional argument but" in str(e) or \
-                       "expected" in str(e) and "List[float]" in str(e):
+                    if ("takes 1 positional argument but" in str(e) or 
+                        ('expected' in str(e) and 'List[float]' in str(e))):
                         pytest.fail(
                             f"enhance_batch failed with signature mismatch error: {e}\n"
                             "This indicates compute_batch_runtime_stats is still being called "
