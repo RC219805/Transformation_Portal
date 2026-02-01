@@ -584,3 +584,112 @@ class TestExitCodes:
         # Should exit with error code due to partial failure
         assert result.exit_code == 1
         assert "Errors:" in result.stdout
+
+
+# P0: Overwrite/Idempotency Tests
+class TestOverwriteBehavior:
+    """Test --overwrite/--no-overwrite flag functionality."""
+
+    def test_no_overwrite_fails_when_outputs_exist(self, cli_runner, sample_depth_npy, tmp_path):
+        """Test that --no-overwrite fails when output files already exist."""
+        output_dir = tmp_path / "output"
+
+        # First run - should succeed
+        result1 = cli_runner.invoke(app, [
+            "generate",
+            "--depth", str(sample_depth_npy),
+            "--output", str(output_dir),
+        ])
+        assert result1.exit_code == 0, f"First run failed: {result1.stdout}"
+
+        # Second run with --no-overwrite should fail
+        result2 = cli_runner.invoke(app, [
+            "generate",
+            "--depth", str(sample_depth_npy),
+            "--output", str(output_dir),
+            "--no-overwrite",
+        ])
+        assert result2.exit_code == 1, f"Expected failure with --no-overwrite: {result2.stdout}"
+        assert "already exist" in result2.output.lower()
+
+    def test_overwrite_succeeds_when_outputs_exist(self, cli_runner, sample_depth_npy, tmp_path):
+        """Test that --overwrite succeeds when output files already exist."""
+        output_dir = tmp_path / "output"
+
+        # First run
+        result1 = cli_runner.invoke(app, [
+            "generate",
+            "--depth", str(sample_depth_npy),
+            "--output", str(output_dir),
+        ])
+        assert result1.exit_code == 0
+
+        # Second run with --overwrite (default) should succeed
+        result2 = cli_runner.invoke(app, [
+            "generate",
+            "--depth", str(sample_depth_npy),
+            "--output", str(output_dir),
+            "--overwrite",
+        ])
+        assert result2.exit_code == 0, f"Expected success with --overwrite: {result2.stdout}"
+
+    def test_batch_no_overwrite_skips_existing(self, cli_runner, tmp_path):
+        """Test that batch mode with --no-overwrite skips files with existing outputs."""
+        batch_dir = tmp_path / "batch"
+        batch_dir.mkdir()
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        # Create two depth files
+        for i in range(2):
+            depth = np.random.rand(128, 128).astype(np.float32)
+            np.save(batch_dir / f"scene_{i}_depth.npy", depth)
+
+        # Run first to create outputs for scene_0
+        result1 = cli_runner.invoke(app, [
+            "generate",
+            "--depth", str(batch_dir / "scene_0_depth.npy"),
+            "--output", str(output_dir),
+        ])
+        assert result1.exit_code == 0
+
+        # Now run batch with --no-overwrite
+        result2 = cli_runner.invoke(app, [
+            "generate",
+            "--depth-dir", str(batch_dir),
+            "--output", str(output_dir),
+            "--no-overwrite",
+        ])
+
+        # Should have partial success (1 skipped, 1 processed)
+        assert result2.exit_code == 1  # Exit with error due to skipped file
+        assert "Errors:" in result2.stdout
+        # Verify the skip message is present (not just any error)
+        assert "files exist" in result2.stdout.lower() or "Skipped" in result2.stdout
+
+
+# P0: Base Name Derivation Tests
+class TestBaseNameDerivation:
+    """Test that base name is correctly derived from depth filename."""
+
+    def test_depth_suffix_removed_from_end_only(self, cli_runner, tmp_path):
+        """Test that _depth is only removed from the end, not middle of filename."""
+        # Create a depth file with "_depth" in the middle
+        depth_data = np.random.rand(128, 128).astype(np.float32)
+        depth_path = tmp_path / "scene_depth_map_depth.npy"
+        np.save(depth_path, depth_data)
+
+        output_dir = tmp_path / "output"
+
+        result = cli_runner.invoke(app, [
+            "generate",
+            "--depth", str(depth_path),
+            "--output", str(output_dir),
+        ])
+
+        assert result.exit_code == 0
+
+        # Output should be named "scene_depth_map_*" not "scene__map_*"
+        # (removesuffix only removes from end)
+        assert (output_dir / "scene_depth_map_normal.png").exists()
+        assert not (output_dir / "scene__map_normal.png").exists()
