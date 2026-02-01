@@ -89,7 +89,7 @@ jobs:
           category: "/language:${{ matrix.language }}"
 
   # ===========================================================================
-  # Job 2: Dependency Security Scan
+  # Job 2: Dependency Security Scan (REQUIRED FOR PR MERGE)
   # ===========================================================================
   dependency-scan:
     name: Dependency Security
@@ -165,6 +165,41 @@ jobs:
       - name: Full Verification with Package Check
         run: python scripts/utilities/verify_no_basicsr_imports.py --check-pkg
 
+      # P0 Enhancement: pip-audit for dependency vulnerability scanning
+      - name: Install pip-audit
+        run: python -m pip install --upgrade pip-audit
+
+      - name: Run pip-audit (BLOCKING for high/critical vulnerabilities)
+        run: |
+          set -euo pipefail
+          echo "🔍 Running pip-audit for dependency vulnerabilities..."
+
+          # Run pip-audit and capture output
+          pip-audit --format json --output audit-report.json || AUDIT_EXIT=$?
+
+          # Display full report
+          if [ -f audit-report.json ]; then
+            echo "📄 Vulnerability Audit Report:"
+            cat audit-report.json | python -m json.tool || cat audit-report.json
+          fi
+
+          # Fail only on HIGH or CRITICAL vulnerabilities
+          if [ -f audit-report.json ]; then
+            CRITICAL_COUNT=$(cat audit-report.json | python -c "
+import json, sys
+data = json.load(sys.stdin)
+vulns = data.get('vulnerabilities', [])
+critical = sum(1 for v in vulns if v.get('severity', '').upper() in ['HIGH', 'CRITICAL'])
+print(critical)
+" || echo "0")
+
+            if [ "$CRITICAL_COUNT" -gt 0 ]; then
+              echo "❌ BLOCKED: Found $CRITICAL_COUNT high/critical vulnerabilities"
+              exit 1
+            fi
+            echo "✅ No high/critical vulnerabilities found"
+          fi
+
       - name: Install Safety for Additional Scanning
         run: python -m pip install -U safety==3.7.0
 
@@ -176,15 +211,30 @@ jobs:
             safety scan --target lux_depth_v2/requirements-repo.txt --output json > safety-lux-depth-v2.json || true
           fi
 
-      - name: Upload Safety Reports
+      - name: Upload Security Reports
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: safety-reports
+          name: security-reports-${{ github.sha }}
           path: |
             safety-report.json
             safety-lux-depth-v2.json
+            audit-report.json
           if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Security Scan Summary
+        if: always()
+        run: |
+          echo "## 🔒 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f audit-report.json ]; then
+            echo "### pip-audit Results" >> $GITHUB_STEP_SUMMARY
+            VULN_COUNT=$(cat audit-report.json | python -c "import json,sys; print(len(json.load(sys.stdin).get('vulnerabilities', [])))" || echo "0")
+            echo "- Total vulnerabilities: $VULN_COUNT" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Security checks completed" >> $GITHUB_STEP_SUMMARY
 
   # ===========================================================================
   # Job 3: Security Gates

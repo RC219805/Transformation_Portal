@@ -212,7 +212,7 @@ jobs:
           set -euo pipefail
           python -m pip install --no-cache-dir -e .
 
-      - name: Run tests with cleanup
+      - name: Run tests with coverage
         env:
           PYTORCH_CUDA_ALLOC_CONF: "max_split_size_mb:128"
           HF_HOME: "/tmp/hf_home"
@@ -223,9 +223,15 @@ jobs:
 
           echo "Running tests with marker expression: ${{ matrix.markexpr }}"
 
-          # Run the configured selection and capture exit code safely.
+          # Run with coverage for all test types
           set +e
-          pytest -v tests/ -ra -m "${{ matrix.markexpr }}" --maxfail=1
+          pytest -v tests/ -ra -m "${{ matrix.markexpr }}" --maxfail=1 \
+            --cov=src/transformation_portal \
+            --cov=lux_depth_v3 \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-report=html \
+            --cov-fail-under=70
           rc=$?
           set -e
 
@@ -235,9 +241,21 @@ jobs:
             echo "No tests selected by -m '${{ matrix.markexpr }}' (exit=5)." >&2
             echo "Fallback: running the non-slow suite under ML deps." >&2
             set +e
-            pytest -v tests/ -ra -m "not slow" --maxfail=1
+            pytest -v tests/ -ra -m "not slow" --maxfail=1 \
+              --cov=src/transformation_portal \
+              --cov=lux_depth_v3 \
+              --cov-report=term-missing \
+              --cov-report=xml \
+              --cov-report=html \
+              --cov-fail-under=70
             rc=$?
             set -e
+          fi
+
+          # Display coverage summary
+          if [ -f coverage.xml ]; then
+            echo "Coverage report generated successfully"
+            ls -lh coverage.xml htmlcov/ || true
           fi
 
           # Cleanup regardless of outcome
@@ -249,6 +267,17 @@ jobs:
           rm -rf ~/.cache/huggingface || true
 
           exit "$rc"
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: coverage-${{ matrix.python-version }}-${{ matrix.test-type }}
+          path: |
+            coverage.xml
+            htmlcov/
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Final disk usage
         if: always()
