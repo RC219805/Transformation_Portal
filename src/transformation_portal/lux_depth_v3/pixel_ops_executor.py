@@ -53,19 +53,37 @@ def apply_pixel_ops(
     plan_per_class = response_plan.get("per_class", {})
 
     for material_key, mask in materials.items():
-        plan_stats = plan_per_class.get(material_key, {})
-        if not plan_stats:
+        plan_entry = plan_per_class.get(material_key, {})
+        if not plan_entry:
             continue
 
-        decision = decide_pixel_ops(material_key, plan_stats, config, registry=registry)
+        plan_decision = plan_entry.get("pixel_ops")
+        decision = plan_decision or decide_pixel_ops(material_key, plan_entry, config, registry=registry)
         ops_for_material = registry.get(material_key, {})
-        if not decision["will_apply"]:
+        recommended_ops = decision.get("recommended_ops") or list(ops_for_material.keys())
+        if not decision.get("will_apply", False):
             telemetry["blocked"].append(
                 {
                     "material": material_key,
-                    "reason": decision["reason"],
-                    "blocked_by": decision["blocked_by"],
-                    "recommended_ops": decision["recommended_ops"],
+                    "reason": decision.get("reason", "not_recommended"),
+                    "blocked_by": decision.get("blocked_by", []),
+                    "recommended_ops": recommended_ops,
+                }
+            )
+            continue
+
+        implemented_ops = [
+            op_name
+            for op_name in recommended_ops
+            if (op_def := ops_for_material.get(op_name)) and op_def.implemented
+        ]
+        if not implemented_ops:
+            telemetry["blocked"].append(
+                {
+                    "material": material_key,
+                    "reason": "no_implementation",
+                    "blocked_by": ["no_implementation"],
+                    "recommended_ops": recommended_ops,
                 }
             )
             continue
@@ -93,7 +111,7 @@ def apply_pixel_ops(
         original_dtype = before.dtype
         if original_dtype == np.uint8:
             working = before.astype(np.float32) / 255.0
-        for op_name in decision["recommended_ops"]:
+        for op_name in recommended_ops:
             op_def = ops_for_material.get(op_name)
             if not op_def or not op_def.implemented:
                 continue
