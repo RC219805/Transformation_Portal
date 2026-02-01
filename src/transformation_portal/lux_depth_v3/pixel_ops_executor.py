@@ -19,11 +19,10 @@ def _bounding_box(mask: np.ndarray) -> tuple[int, int, int, int] | None:
 
 def _compute_delta_stats(before: np.ndarray, after: np.ndarray, mask: np.ndarray) -> Dict[str, float]:
     delta = np.abs(after.astype(np.float32) - before.astype(np.float32))
-    if delta.ndim == 3:
-        delta = np.mean(delta, axis=2)
+    mask = np.squeeze(mask) if mask.ndim == 3 else mask
     mask_bool = mask > 0.5
-    inside = float(np.mean(delta[mask_bool])) if np.any(mask_bool) else 0.0
-    outside = float(np.mean(delta[~mask_bool])) if np.any(~mask_bool) else 0.0
+    inside = float(delta[mask_bool].mean()) if mask_bool.any() else 0.0
+    outside = float(delta[~mask_bool].mean()) if (~mask_bool).any() else 0.0
     return {
         "inside_mask_mean_abs": round(inside, 6),
         "outside_mask_mean_abs": round(outside, 6),

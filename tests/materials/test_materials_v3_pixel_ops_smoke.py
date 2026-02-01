@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from transformation_portal.lux_depth_v3.pixel_ops_decider import decide_pixel_ops
-from transformation_portal.lux_depth_v3.pixel_ops_executor import apply_pixel_ops
+from transformation_portal.lux_depth_v3.pixel_ops_executor import apply_pixel_ops, _compute_delta_stats
 from transformation_portal.lux_depth_v3.pixel_ops_registry import OP_REGISTRY
 
 
@@ -62,3 +62,19 @@ def test_apply_pixel_ops_disabled_still_emits_object():
     assert telemetry["enabled"] is False
     assert telemetry["applied"] == []
     assert telemetry["blocked"] == []
+
+
+def test_compute_delta_stats_handles_mask_shapes():
+    before = np.zeros((4, 4, 3), dtype=np.uint8)
+    after = before.copy()
+    after[1:3, 1:3] = 10
+    mask = np.zeros((4, 4), dtype=np.float32)
+    mask[1:3, 1:3] = 1.0
+
+    stats_2d = _compute_delta_stats(before, after, mask)
+    stats_3d = _compute_delta_stats(before, after, mask[..., None])
+
+    assert isinstance(stats_2d["inside_mask_mean_abs"], float)
+    assert isinstance(stats_2d["outside_mask_mean_abs"], float)
+    assert isinstance(stats_3d["inside_mask_mean_abs"], float)
+    assert isinstance(stats_3d["outside_mask_mean_abs"], float)
