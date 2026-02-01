@@ -223,6 +223,16 @@ jobs:
 
           echo "Running tests with marker expression: ${{ matrix.markexpr }}"
 
+          # ML tier in offline mode: skip coverage enforcement (most tests are skipped by design)
+          # Core tier: enforce 20% minimum coverage
+          if [ "${{ matrix.test-type }}" = "ml" ]; then
+            COV_THRESHOLD=""
+            echo "ML tier: coverage collected but not enforced (offline mode skips most tests)"
+          else
+            COV_THRESHOLD="--cov-fail-under=20"
+            echo "Core tier: enforcing 20% minimum coverage"
+          fi
+
           # Run with coverage for all test types
           set +e
           pytest -v tests/ -ra -m "${{ matrix.markexpr }}" --maxfail=1 \
@@ -231,7 +241,7 @@ jobs:
             --cov-report=term-missing \
             --cov-report=xml \
             --cov-report=html \
-            --cov-fail-under=20
+            $COV_THRESHOLD
           rc=$?
           set -e
 
@@ -247,7 +257,7 @@ jobs:
               --cov-report=term-missing \
               --cov-report=xml \
               --cov-report=html \
-              --cov-fail-under=20
+              $COV_THRESHOLD
             rc=$?
             set -e
           fi
