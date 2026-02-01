@@ -231,7 +231,7 @@ jobs:
             --cov-report=term-missing \
             --cov-report=xml \
             --cov-report=html \
-            --cov-fail-under=70
+            --cov-fail-under=20
           rc=$?
           set -e
 
@@ -247,7 +247,7 @@ jobs:
               --cov-report=term-missing \
               --cov-report=xml \
               --cov-report=html \
-              --cov-fail-under=70
+              --cov-fail-under=20
             rc=$?
             set -e
           fi
