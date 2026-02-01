@@ -147,6 +147,7 @@ def read_depth_u16_png(depth_path: Path) -> np.ndarray:
     """Read depth map from 16-bit PNG.
 
     Returns normalized float32 array [0.0, 1.0].
+    Falls back to PIL if opencv-python is not available.
 
     Args:
         depth_path: Path to depth map PNG
@@ -155,23 +156,36 @@ def read_depth_u16_png(depth_path: Path) -> np.ndarray:
         Depth map as float32 numpy array, normalized to [0.0, 1.0]
 
     Raises:
-        ImportError: If opencv-python not installed
         FileNotFoundError: If depth file doesn't exist
         IOError: If read fails
     """
-    if not HAS_CV2:
-        raise ImportError(
-            "opencv-python required for depth_writer. Install with: pip install opencv-python"
-        )
-
     if not Path(depth_path).exists():
         raise FileNotFoundError(f"Depth file not found: {depth_path}")
 
-    # Read raw 16-bit
-    img_u16 = cv2.imread(str(depth_path), cv2.IMREAD_UNCHANGED)
-    if img_u16 is None:
-        raise IOError(f"Failed to read depth map: {depth_path}")
+    # Prefer opencv for performance, fallback to PIL for CI compatibility
+    if HAS_CV2:
+        # Read raw 16-bit with opencv
+        img_u16 = cv2.imread(str(depth_path), cv2.IMREAD_UNCHANGED)
+        if img_u16 is None:
+            raise IOError(f"Failed to read depth map: {depth_path}")
+        img_f32 = img_u16.astype(np.float32) / 65535.0
+    else:
+        # Fallback to PIL (CI-compatible)
+        from PIL import Image
+        logger.debug(f"Using PIL fallback for PNG read (opencv not available): {depth_path}")
+        img = Image.open(depth_path)
+        img_array = np.array(img)
 
-    # Convert to float32 [0, 1]
-    img_f32 = img_u16.astype(np.float32) / 65535.0
+        # Normalize based on bit depth
+        if img_array.dtype == np.uint16:
+            img_f32 = img_array.astype(np.float32) / 65535.0
+        elif img_array.dtype == np.uint8:
+            img_f32 = img_array.astype(np.float32) / 255.0
+        else:
+            # Already float, ensure [0, 1] range
+            img_f32 = img_array.astype(np.float32)
+            maxv = float(np.nanmax(img_f32)) if img_f32.size else 1.0
+            if maxv > 1.0:
+                img_f32 /= maxv
+
     return img_f32
