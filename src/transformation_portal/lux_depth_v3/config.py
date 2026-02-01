@@ -11,11 +11,19 @@ from .security import HashMode
 
 
 class ModelVariant(Enum):
-    """Depth Anything V3 model variants."""
+    """Depth Anything V3 model variants.
+
+    Note: DA3 models require custom library installation:
+        git clone https://github.com/ByteDance/depth-anything-3
+        cd depth-anything-3
+        pip install -e .
+
+    ⚠️  LICENSE: DA3NESTED-GIANT-LARGE-1.1 is CC BY-NC 4.0 (non-commercial use only).
+    """
     METRIC_LARGE = type('ModelVariantValue', (), {
         'name': 'depth-anything-v3-metric-large',
-        'display_name': 'Depth Anything V3 Metric Large',
-        'huggingface_id': 'depth-anything/Depth-Anything-V3-Metric-Large-hf',
+        'display_name': 'Depth Anything V3 Metric Large (DA3 Nested Giant)',
+        'huggingface_id': 'depth-anything/DA3NESTED-GIANT-LARGE-1.1',
     })()
     METRIC_BASE = type('ModelVariantValue', (), {
         'name': 'depth-anything-v3-metric-base',

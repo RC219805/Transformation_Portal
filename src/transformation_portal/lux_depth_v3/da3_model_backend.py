@@ -1,6 +1,12 @@
 """Direct Model Backend for DA3.
 
 Provides a dependency-free inference path using HuggingFace hub.
+
+NOTE: DA3 Nested models (e.g., depth-anything/da3nested-giant-large)
+require custom library installation:
+    git clone https://github.com/ByteDance-Seed/depth-anything-3
+    cd depth-anything-3
+    pip install -e .
 """
 from __future__ import annotations
 from dataclasses import dataclass
@@ -12,7 +18,7 @@ import torch.nn.functional as F
 
 @dataclass(frozen=True)
 class DA3ModelBackendConfig:
-    model_id: str = "depth-anything/DA3METRIC-LARGE"
+    model_id: str = "depth-anything/Depth-Anything-V2-Large-hf"  # DA2 default. For DA3: depth-anything/da3nested-giant-large
     device: str = "cpu"
     dtype: str = "float32"
     max_side: int = 896

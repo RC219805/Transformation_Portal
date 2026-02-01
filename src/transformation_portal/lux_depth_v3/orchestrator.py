@@ -464,21 +464,29 @@ class EnhanceOrchestrator:
                     np.save(str(float_depth_path), result.depth)
                     logger.debug(f"Saved float depth: {float_depth_path}")
 
+                stats = {
+                    "backend": "da3",
+                    "license": "CC-BY-NC",
+                    "non_commercial_ok": self.config.non_commercial_ok,
+                    "dtype": "uint16",
+                    "shape": list(result.depth.shape[:2]),
+                    "representation": "depth",
+                    "convention": "higher_is_farther",
+                    "unit": "relative",
+                }
+
+                # Merge inference provenance into depth stats (requested vs resolved model ids)
+                _md = getattr(result, 'metadata', None) or {}
+                for _k in ('requested_model_id','resolved_model_id','resolved_model_source'):
+                    if _k in _md:
+                        stats[_k] = _md[_k]
+
                 depth_metadata = DepthMetadata(
                     model=self.config.model_variant.value.name,
                     depth_path=str(depth_path),
                     runtime_seconds=depth_runtime_s,
                     scaling=depth_stats._asdict(),
-                    stats={
-                        "backend": "da3",
-                        "license": "CC-BY-NC",
-                        "non_commercial_ok": self.config.non_commercial_ok,
-                        "dtype": "uint16",
-                        "shape": list(result.depth.shape[:2]),
-                        "representation": "depth",
-                        "convention": "higher_is_farther",
-                        "unit": "relative",
-                    },
+                    stats=stats,
                 )
 
                 # 4. Write depth metadata JSON (quick access to depth stats)

@@ -129,6 +129,9 @@ class DA3InferenceEngine:
         self._model_loaded = False
         self._using_fallback_model = False
         self._fallback_model_id: Optional[str] = None
+        self._requested_model_id: Optional[str] = None
+        self._resolved_model_id: Optional[str] = None
+
 
         logger.info(
             "Initialized DA3InferenceEngine (variant=%s, backend=%s, device=%s)",
@@ -194,6 +197,7 @@ class DA3InferenceEngine:
         """Load PyTorch model using transformers pipeline.
 
         Note: Depth Anything V3 models may not be available in transformers format yet.
+        DA3 Nested models require custom depth-anything-3 library.
         Falls back to V2 metric models if V3 models are not found.
         """
         if not TORCH_AVAILABLE:
@@ -208,6 +212,15 @@ class DA3InferenceEngine:
 
         # Get HuggingFace model ID from config
         model_id = self.config.model_variant.value.huggingface_id
+
+        # Provenance
+        self._requested_model_id = model_id
+        self._resolved_model_id = model_id
+
+        # Check if this is a DA3 Nested model (requires custom library)
+        if self._is_da3_model(model_id):
+            self._load_da3_model(model_id)
+            return
 
         # Fallback mapping to V2 metric models (which exist on HuggingFace)
         v3_to_v2_fallback = {
@@ -245,6 +258,8 @@ class DA3InferenceEngine:
                     logger.info("Loaded fallback V2 model: %s", fallback_model)
                     self._using_fallback_model = True
                     self._fallback_model_id = fallback_model
+                    self._resolved_model_id = fallback_model
+
                     return
                 except Exception as fallback_error:
                     logger.error("Fallback model also failed: %s", fallback_error)
@@ -253,6 +268,66 @@ class DA3InferenceEngine:
             raise RuntimeError(
                 f"Failed to load model {model_id} (and fallback): {e}"
             ) from e
+
+    def _is_da3_model(self, model_id: str) -> bool:
+        """Check if model ID is a DA3 Nested model."""
+        return model_id.startswith("depth-anything/da3") or "da3nested" in model_id.lower()
+
+    def _load_da3_model(self, model_id: str) -> None:
+        """Load DA3 model using custom depth-anything-3 library.
+
+        DA3 Nested models require custom library installation:
+            git clone https://github.com/ByteDance-Seed/depth-anything-3
+            cd depth-anything-3
+            pip install -e .
+
+        DA3 uses a different API than transformers:
+            - DepthAnything3.from_pretrained() instead of AutoModelForDepthEstimation
+            - Different inference interface
+        """
+        try:
+            from depth_anything_3.api import DepthAnything3
+        except ImportError:
+            # Fallback for older/alternate packaging layouts
+            try:
+                from depth_anything_3 import DepthAnything3
+            except ImportError as e:
+                error_msg = (
+                    f"\n{'='*80}\n"
+                    f"ERROR: DA3 model '{model_id}' requires custom library installation.\n\n"
+                    f"DA3 Nested models use a different API than transformers and require:\n"
+                    f"  1. Clone: git clone https://github.com/ByteDance-Seed/depth-anything-3\n"
+                    f"  2. Install: cd depth-anything-3 && pip install -e .\n\n"
+                    f"The DA3 Nested Giant model combines:\n"
+                    f"  - Giant model for any-view depth\n"
+                    f"  - Metric Large model for metric-scale reconstruction\n"
+                    f"  - 1.40B parameters\n"
+                    f"  - Full capabilities: relative depth, metric depth, pose estimation, 3D Gaussians\n\n"
+                    f"FALLBACK OPTIONS:\n"
+                    f"  - Use DA2 model: depth-anything/Depth-Anything-V2-Large-hf (compatible with transformers)\n"
+                    f"  - Use DA2 metric: depth-anything/Depth-Anything-V2-Metric-Indoor-Large-hf\n\n"
+                    f"Original error: {e}\n"
+                    f"{'='*80}\n"
+                )
+                logger.error(error_msg)
+                raise ImportError(error_msg) from e
+
+        logger.info(f"Loading DA3 model: {model_id} (using depth-anything-3 library)")
+
+        try:
+            self.model = DepthAnything3.from_pretrained(model_id)
+            self.model.to(self.device)
+            self.model.eval()
+            logger.info("✓ DA3 model loaded successfully")
+            logger.warning("⚠️  DA3 models use different inference API - custom integration required")
+        except Exception as e:
+            error_msg = (
+                f"Failed to load DA3 model '{model_id}': {e}\n"
+                f"Verify the model ID is correct. Recommended DA3 model:\n"
+                f"  depth-anything/da3nested-giant-large (1.40B params, metric + relative depth)\n"
+            )
+            logger.error(error_msg)
+            raise RuntimeError(error_msg) from e
 
     def _load_coreml_model(self) -> None:
         """Load CoreML model for Apple Neural Engine.
@@ -346,6 +421,11 @@ class DA3InferenceEngine:
         result["metadata"]["model_variant"] = self.config.model_variant.name
         result["metadata"]["backend"] = self.backend.value
         result["metadata"]["device"] = self.device
+        # Provenance: requested vs resolved model id
+        result["metadata"]["requested_model_id"] = self._requested_model_id
+        result["metadata"]["resolved_model_id"] = self._resolved_model_id
+        result["metadata"]["resolved_model_source"] = "fallback" if self._using_fallback_model else "primary"
+
         if self._using_fallback_model:
             result["metadata"]["using_fallback"] = True
             result["metadata"]["fallback_model"] = self._fallback_model_id
