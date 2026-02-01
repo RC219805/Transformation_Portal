@@ -174,14 +174,14 @@ def generate_pbr_maps(
     # Validate strength parameter
     if config.roughness_strength < 0:
         raise ValueError(f"roughness_strength must be non-negative, got {config.roughness_strength}")
-    
+
     # strength > 1.0 increases roughness response (brighter, more pronounced)
     # strength < 1.0 reduces roughness response (darker, less pronounced)
     # strength = 1.0 is identity
     # Use power curve: output = input^(1/strength)
     # For strength=2.0: sqrt(input) - spreads values up (increases mean)
     # For strength=0.5: input^2 - concentrates values down (decreases mean)
-    if config.roughness_strength > 0 and config.roughness_strength != 1.0:
+    if config.roughness_strength > 0 and abs(config.roughness_strength - 1.0) > 1e-9:
         roughness = np.power(roughness, 1.0 / config.roughness_strength)
     elif config.roughness_strength == 0:
         # Special case: zero strength means no roughness
@@ -207,7 +207,7 @@ def generate_pbr_maps(
     # Validate strength parameter
     if config.ao_strength < 0:
         raise ValueError(f"ao_strength must be non-negative, got {config.ao_strength}")
-    
+
     # strength > 1.0 increases occlusion (darker shadows)
     # strength < 1.0 reduces occlusion (lighter)
     # strength = 1.0 is identity

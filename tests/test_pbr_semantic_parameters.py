@@ -107,6 +107,15 @@ class TestRoughnessStrengthEffect:
             assert roughness.min() >= 0
             assert roughness.max() <= 255
 
+    def test_roughness_strength_rejects_negative_values(self):
+        """Verify that negative roughness_strength values raise ValueError."""
+        np.random.seed(42)
+        depth = np.random.rand(128, 128).astype(np.float32)
+
+        with pytest.raises(ValueError, match="roughness_strength must be non-negative"):
+            config = PBRConfig(roughness_strength=-0.5, roughness_blur_radius=3)
+            generate_pbr_maps(depth, config)
+
 
 class TestAOStrengthEffect:
     """Test that ao_strength parameter has measurable effect."""
@@ -213,6 +222,15 @@ class TestAOStrengthEffect:
             assert ao.dtype == np.uint8
             assert ao.min() >= 0
             assert ao.max() <= 255
+
+    def test_ao_strength_rejects_negative_values(self):
+        """Verify that negative ao_strength values raise ValueError."""
+        np.random.seed(42)
+        depth = np.random.rand(128, 128).astype(np.float32)
+
+        with pytest.raises(ValueError, match="ao_strength must be non-negative"):
+            config = PBRConfig(ao_strength=-0.5, ao_blur_radius=5, ao_bias=0.5)
+            generate_pbr_maps(depth, config)
 
 
 class TestPBRParameterIndependence:
