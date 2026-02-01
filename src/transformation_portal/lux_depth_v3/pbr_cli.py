@@ -300,11 +300,12 @@ def generate(
                     error_result = {
                         "status": "error",
                         "input": str(depth),
-                        "error": f"Output files already exist (use --overwrite to replace): {[str(f) for f in existing_files]}"
+                        "error": "Output files already exist (use --overwrite to replace)",
+                        "existing_files": [str(f) for f in existing_files]
                     }
                     typer.echo(json.dumps(error_result, indent=2))
                 else:
-                    typer.echo(f"Error: Output files already exist (use --overwrite to replace):", err=True)
+                    typer.echo("Error: Output files already exist (use --overwrite to replace)", err=True)
                     for f in existing_files:
                         typer.echo(f"  • {f}", err=True)
                 raise typer.Exit(1)

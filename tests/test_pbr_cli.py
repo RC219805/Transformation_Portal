@@ -664,6 +664,8 @@ class TestOverwriteBehavior:
         # Should have partial success (1 skipped, 1 processed)
         assert result2.exit_code == 1  # Exit with error due to skipped file
         assert "Errors:" in result2.stdout
+        # Verify the skip message is present (not just any error)
+        assert "files exist" in result2.stdout.lower() or "Skipped" in result2.stdout
 
 
 # P0: Base Name Derivation Tests
