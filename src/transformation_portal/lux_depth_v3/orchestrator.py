@@ -834,7 +834,7 @@ class EnhanceOrchestrator:
             end_time=batch_end_utc,
             config={"model": self.config.model_variant.value.name},
             results=results,
-            stats={"total": len(results), "batch_runtime_seconds": batch_end_time - batch_start_time, **runtime_stats}
+            stats={**runtime_stats, "total_images": len(results), "batch_runtime_seconds": batch_end_time - batch_start_time}
         )
         bm.write(self.manifests_dir / f"batch_{batch_id}.json")
         return results
