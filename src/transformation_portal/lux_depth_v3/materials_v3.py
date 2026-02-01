@@ -7,6 +7,7 @@ import logging
 import numpy as np
 from typing import Dict, Any, Optional
 from .materials_v3_response import generate_response_plan
+from .pixel_ops_executor import apply_pixel_ops
 
 logger = logging.getLogger(__name__)
 
@@ -46,11 +47,12 @@ class MaterialsV3Engine:
         for mat_key in per_class_stats:
             if 'mask' in per_class_stats[mat_key]: del per_class_stats[mat_key]['mask']
 
-        # 3. Execution would go here (Refinement/Pixel Ops)
-        # For now, we return the plan.
+        # 3. Execution (Pixel Ops)
+        _, pixel_ops = apply_pixel_ops(image, segmentation_result, response_plan, self.config)
 
         return {
             "materials_v3_response_plan": response_plan,
+            "materials_v3_pixel_ops": pixel_ops,
             "materials_v3_metadata": {"version": "3.1"}
         }
 
