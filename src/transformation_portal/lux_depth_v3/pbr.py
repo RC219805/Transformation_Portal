@@ -160,8 +160,7 @@ def generate_pbr_maps(
     # Compute surface detail via Laplacian
     detail = np.abs(_laplacian(depth_normalized))
 
-    # Scale and blur
-    detail *= config.roughness_strength
+    # Blur first
     roughness = _box_blur_gray(detail, config.roughness_blur_radius)
 
     # Normalize to 0-1
@@ -170,6 +169,19 @@ def generate_pbr_maps(
         roughness = (roughness - roughness_min) / (roughness_max - roughness_min)
     else:
         roughness = np.zeros_like(roughness)  # Constant field = no roughness
+
+    # Apply strength AFTER normalization using power curve
+    # strength > 1.0 increases roughness response (brighter, more pronounced)
+    # strength < 1.0 reduces roughness response (darker, less pronounced)
+    # strength = 1.0 is identity
+    # Use power curve: output = input^(1/strength)
+    # For strength=2.0: sqrt(input) - spreads values up (increases mean)
+    # For strength=0.5: input^2 - concentrates values down (decreases mean)
+    if config.roughness_strength > 0 and config.roughness_strength != 1.0:
+        roughness = np.power(roughness, 1.0 / config.roughness_strength)
+    elif config.roughness_strength == 0:
+        # Special case: zero strength means no roughness
+        roughness = np.zeros_like(roughness)
 
     roughness_map = (roughness * 255).astype(np.uint8)
 
@@ -180,15 +192,18 @@ def generate_pbr_maps(
     # Blur to spread occlusion
     occlusion = _box_blur_gray(grad_mag, config.ao_blur_radius)
 
-    # Scale by AO strength
-    occlusion *= config.ao_strength
-
-    # Normalize to 0-1
+    # Normalize to 0-1 first
     occlusion_min, occlusion_max = occlusion.min(), occlusion.max()
     if occlusion_max > occlusion_min:
         occlusion = (occlusion - occlusion_min) / (occlusion_max - occlusion_min)
     else:
         occlusion = np.zeros_like(occlusion)  # Constant field = no occlusion
+
+    # Apply AO strength AFTER normalization using scale-and-clip
+    # strength > 1.0 increases occlusion (darker shadows)
+    # strength < 1.0 reduces occlusion (lighter)
+    # strength = 1.0 is identity
+    occlusion = np.clip(occlusion * config.ao_strength, 0.0, 1.0)
 
     # Apply bias (darker = more occluded, so invert and apply bias)
     # AO = 1 - occlusion (invert so occluded areas are dark)

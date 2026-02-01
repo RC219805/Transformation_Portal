@@ -71,9 +71,51 @@ class DA3Config:
     def from_preset(cls, preset: Preset) -> DA3Config:
         """Create configuration from preset.
 
-        STUB: Returns default configuration.
+        Presets provide different quality/performance tradeoffs:
+        - ARCHITECTURAL_INTERIOR: High quality for interior architectural renders
+        - ARCHITECTURAL_EXTERIOR: Balanced for exterior scenes
+        - LUXURY_ESTATE: Premium quality for luxury real estate
+        - DEFAULT: Standard balanced configuration
         """
-        return cls()
+        # Define preset-specific configurations
+        if preset == Preset.ARCHITECTURAL_INTERIOR:
+            return cls(
+                model_variant=ModelVariant.METRIC_LARGE,
+                postprocessing=PostprocessingConfig(
+                    apply_metric_scaling=True,
+                    scale_factor=1.0,
+                    apply_bilateral_filter=True,
+                    bilateral_sigma_color=0.05,
+                    bilateral_sigma_space=5.0,
+                    preserve_edges=True,
+                    edge_threshold=0.05,
+                )
+            )
+        elif preset == Preset.ARCHITECTURAL_EXTERIOR:
+            return cls(
+                model_variant=ModelVariant.METRIC_BASE,
+                postprocessing=PostprocessingConfig(
+                    apply_metric_scaling=True,
+                    scale_factor=1.0,
+                    preserve_edges=True,
+                    edge_threshold=0.1,
+                )
+            )
+        elif preset == Preset.LUXURY_ESTATE:
+            return cls(
+                model_variant=ModelVariant.METRIC_LARGE,
+                postprocessing=PostprocessingConfig(
+                    apply_metric_scaling=True,
+                    scale_factor=1.0,
+                    apply_bilateral_filter=True,
+                    bilateral_sigma_color=0.03,
+                    bilateral_sigma_space=7.0,
+                    preserve_edges=True,
+                    edge_threshold=0.03,
+                )
+            )
+        else:  # DEFAULT
+            return cls()
 
 
 @dataclass

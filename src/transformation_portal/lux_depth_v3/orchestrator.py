@@ -825,7 +825,9 @@ class EnhanceOrchestrator:
         batch_end_utc = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(batch_end_time))
 
         # Write batch summary with accurate timestamps
-        runtime_stats = compute_batch_runtime_stats(results)
+        # Extract runtime_s from successful results for statistics computation
+        runtimes = [r.get("runtime_s", 0.0) for r in results if r.get("status") == "ok"]
+        runtime_stats = compute_batch_runtime_stats(runtimes)
         bm = BatchManifest(
             batch_id=batch_id,
             start_time=batch_start_utc,
