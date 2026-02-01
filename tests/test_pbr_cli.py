@@ -610,7 +610,7 @@ class TestOverwriteBehavior:
             "--no-overwrite",
         ])
         assert result2.exit_code == 1, f"Expected failure with --no-overwrite: {result2.stdout}"
-        assert "already exist" in result2.stdout.lower()
+        assert "already exist" in result2.output.lower()
 
     def test_overwrite_succeeds_when_outputs_exist(self, cli_runner, sample_depth_npy, tmp_path):
         """Test that --overwrite succeeds when output files already exist."""
