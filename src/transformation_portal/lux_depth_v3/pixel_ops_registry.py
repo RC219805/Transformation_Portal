@@ -33,7 +33,11 @@ def _apply_mask_blend(image: np.ndarray, mask: np.ndarray, modified: np.ndarray)
 def brightness_boost(image: np.ndarray, mask: np.ndarray, params: dict) -> np.ndarray:
     """Increase brightness within the mask."""
     strength = float(params.get("strength", 0.08))
-    normalized, scale = _normalize_image(image)
+    normalized = params.get("normalized")
+    if normalized is None:
+        normalized, scale = _normalize_image(image)
+    else:
+        scale = float(params.get("scale", 1.0))
     boosted = np.clip(normalized + strength, 0.0, 1.0)
     blended = _apply_mask_blend(normalized, mask, boosted)
     return (blended * scale).astype(image.dtype)
@@ -42,7 +46,11 @@ def brightness_boost(image: np.ndarray, mask: np.ndarray, params: dict) -> np.nd
 def edge_contrast(image: np.ndarray, mask: np.ndarray, params: dict) -> np.ndarray:
     """Apply a mild contrast boost within the mask."""
     strength = float(params.get("strength", 0.1))
-    normalized, scale = _normalize_image(image)
+    normalized = params.get("normalized")
+    if normalized is None:
+        normalized, scale = _normalize_image(image)
+    else:
+        scale = float(params.get("scale", 1.0))
     contrast = np.clip((normalized - 0.5) * (1.0 + strength) + 0.5, 0.0, 1.0)
     blended = _apply_mask_blend(normalized, mask, contrast)
     return (blended * scale).astype(image.dtype)

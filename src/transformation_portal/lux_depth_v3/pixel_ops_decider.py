@@ -25,7 +25,7 @@ def decide_pixel_ops(
     registry = registry or OP_REGISTRY
     ops_for_material = registry.get(material_key, {})
     recommended_ops = list(ops_for_material.keys())
-    implemented = bool(ops_for_material) and all(op.implemented for op in ops_for_material.values())
+    implemented = bool(ops_for_material) and any(op.implemented for op in ops_for_material.values())
 
     eligible = False
     reason = "no_implementation"

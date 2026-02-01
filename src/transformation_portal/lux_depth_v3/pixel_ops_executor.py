@@ -42,7 +42,6 @@ def apply_pixel_ops(
         "applied": [],
         "blocked": [],
         "timing_ms": {},
-        "delta_stats": {},
     }
 
     if not telemetry["enabled"]:
@@ -90,12 +89,25 @@ def apply_pixel_ops(
 
         start_material = time.perf_counter()
         applied_ops = []
+        working = after
+        original_dtype = before.dtype
+        if original_dtype == np.uint8:
+            working = before.astype(np.float32) / 255.0
         for op_name in decision["recommended_ops"]:
             op_def = ops_for_material.get(op_name)
             if not op_def or not op_def.implemented:
                 continue
-            after = op_def.op(after, mask_roi, {"material": material_key})
+            working = op_def.op(
+                working,
+                mask_roi,
+                {"material": material_key, "normalized": working, "scale": 1.0},
+            )
             applied_ops.append(op_name)
+
+        if original_dtype == np.uint8:
+            after = np.clip(working * 255.0, 0.0, 255.0).astype(np.uint8)
+        else:
+            after = working.astype(original_dtype)
 
         output[y0:y1, x0:x1] = after
         elapsed_ms = (time.perf_counter() - start_material) * 1000.0
