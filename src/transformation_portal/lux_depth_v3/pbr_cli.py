@@ -422,7 +422,9 @@ def generate(
                     if not quiet:
                         typer.echo(f" ✗ Skipped (files exist, use --overwrite)")
                     error_count += 1
-                    failed_files.append((depth_file.name, "Output files already exist"))
+                    failed_files.append(
+                        (depth_file.name, "Output files already exist (use --overwrite to replace)")
+                    )
                     if fail_fast:
                         typer.echo("\n[FAIL FAST] Aborting on first error", err=True)
                         raise typer.Exit(1)
