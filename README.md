@@ -95,6 +95,35 @@ config = EnhanceConfig(
 
 ---
 
+## Optional Dependencies
+
+### Depth Pro (Experimental)
+
+Apple's Depth Pro model for metric depth estimation. **Experimental tier** - for research and evaluation only.
+
+**Installation:**
+```bash
+pip install depth-pro
+```
+
+**Checkpoint Download (1.9 GB):**
+```bash
+mkdir -p checkpoints
+curl -L https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt -o checkpoints/depth_pro.pt
+```
+
+**Enable in config:**
+Set `depth_backend: depth_pro` in your preset YAML. See [`config/presets/depth_pro_example.yaml`](config/presets/depth_pro_example.yaml) for a complete example.
+
+**Hardware Requirements:**
+- Optimized for Apple Silicon (MPS device)
+- Fallback to CPU supported
+- Memory: ~2 GB for model + checkpoint
+
+**Tier Status:** Experimental - use at your own risk. Default backend remains Depth Anything V3.
+
+---
+
 ## PBR Map Generation
 
 **New in v2.0**: Standalone PBR processor for generating Physically Based Rendering maps from depth data.
