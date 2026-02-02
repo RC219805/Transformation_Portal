@@ -98,13 +98,14 @@ pyenv global 3.11
    - Document breaking change in `[Unreleased]` section
 
 4. **CI Workflows:**
-   - No changes required (already testing only 3.11)
+   - Update `.github/workflows/build.yml` matrix to test 3.11 and 3.12 (remove 3.10)
+   - Update `.github/workflows/ci.yml` matrix to test 3.11 and 3.12 (remove 3.10)
+   - Update `.github/workflows/python-app.yml` comment to reflect 3.11+ support
 
 ### What Does NOT Change
 
 - No dependency version bumps (kept for PR #793b)
 - No code changes (purely policy/declaration)
-- No CI workflow changes (already correct)
 
 ---
 
@@ -114,10 +115,12 @@ pyenv global 3.11
 
 - [x] `pyproject.toml` updated
 - [x] README badge updated
+- [x] README system requirements updated
 - [x] CHANGELOG.md entry added
 - [x] ADR-020 created
+- [x] CI workflows updated to remove Python 3.10
 - [x] No dependency version changes (verified)
-- [x] No test changes required (CI already correct)
+- [x] No test changes required (except structure test for CHANGELOG.md)
 
 ### Post-Merge Validation
 
