@@ -79,7 +79,7 @@ else
     echo -e "${YELLOW}⚠ No Python files staged${NC}"
 fi
 
-# 4. Check markdown file count in root (max 10)
+# 4. Check markdown file count in root (max 11)
 echo -e "\n${YELLOW}→ Checking markdown file count in root...${NC}"
 MD_COUNT=$(find . -maxdepth 1 -name "*.md" -type f | wc -l | tr -d ' ')
 MAX_MD=11
