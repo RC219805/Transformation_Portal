@@ -370,7 +370,7 @@ class DepthProStage(Stage):
             "env": {
                 "python": sys.version.split()[0],
                 "platform": platform.platform(),
-                "torch": torch.__version__,
+                "torch": torch.__version__ if TORCH_AVAILABLE and torch else "not_available",
                 "depth_pro_pkg": self._get_package_version(),
             }
         }
