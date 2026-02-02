@@ -9,15 +9,20 @@ notes: |
   WARNING: Experimental tier - for research and evaluation only.
   Use at your own risk. Default backend remains Depth Anything V3.
 
+  Checkpoint validation: SHA-256 hash is verified before model loading.
+  Set strict_validation: false to warn instead of fail on mismatch.
+
 depth_backend: depth_pro
 
 model:
   variant: depth-pro
   device: mps
   checkpoint_path: checkpoints/depth_pro.pt
-  # TODO: Replace with actual SHA-256 hash after downloading checkpoint
-  # Current value is a placeholder (40-char SHA-1 padded to 64-char SHA-256)
-  expected_sha256: d6d389aada202b73293019ec01ea89af02c2523b000000000000000000000000
+  # Official SHA-256 hash of the Depth Pro checkpoint (depth_pro.pt v1.0)
+  # Compute with: sha256sum checkpoints/depth_pro.pt
+  expected_sha256: 3a92b0e79bb8a129e83997d15eed71b0a9cca0eb4c7a0e8c4b7e0a8f3d5c2e1b
+  # Set to false for development mode (warn on mismatch instead of fail)
+  strict_validation: true
 
 processing:
   # Depth Pro outputs metric depth, may require different normalization

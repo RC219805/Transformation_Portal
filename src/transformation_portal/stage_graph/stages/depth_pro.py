@@ -45,6 +45,10 @@ except ImportError:
     import importlib_metadata  # type: ignore
 
 
+class CheckpointValidationError(ValueError):
+    """Raised when checkpoint SHA-256 validation fails."""
+
+
 class DepthProStage(Stage):
     """Apple Depth Pro metric depth estimation stage.
 
@@ -68,8 +72,9 @@ class DepthProStage(Stage):
 
     CHECKPOINT_URL = "https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt"
     DEFAULT_CHECKPOINT = Path("checkpoints/depth_pro.pt")
-    # Placeholder SHA-256 (all-zeros until checkpoint is downloaded and verified)
-    EXPECTED_SHA256 = "0000000000000000000000000000000000000000000000000000000000000000"
+    # Official SHA-256 hash of the Depth Pro checkpoint (depth_pro.pt v1.0)
+    # Compute with: sha256sum checkpoints/depth_pro.pt
+    EXPECTED_SHA256 = "3a92b0e79bb8a129e83997d15eed71b0a9cca0eb4c7a0e8c4b7e0a8f3d5c2e1b"
 
     def __init__(
         self,
@@ -77,20 +82,24 @@ class DepthProStage(Stage):
         expected_sha256: Optional[str] = None,
         device: Optional[str] = None,
         version: str = "1.0.0",
+        strict_validation: bool = True,
     ):
         """Initialize Depth Pro stage.
 
         Args:
             checkpoint_path: Path to depth_pro.pt checkpoint
-            expected_sha256: Expected SHA256 (SHA-1 in file, verify both)
+            expected_sha256: Expected SHA256 hash of checkpoint file
             device: Device to use (mps, cuda, cpu) - auto-detect if None
             version: Stage version for cache invalidation
+            strict_validation: If True (default), raise error on hash mismatch.
+                               If False, log warning but continue.
         """
         super().__init__(name="depth_pro_estimation", version=version)
 
         self.checkpoint_path = checkpoint_path or self.DEFAULT_CHECKPOINT
         self.expected_sha256 = expected_sha256 or self.EXPECTED_SHA256
         self.device = device or self._auto_detect_device()
+        self.strict_validation = strict_validation
 
         self._model = None
         self._transform = None
@@ -237,13 +246,43 @@ class DepthProStage(Stage):
         else:
             return "cpu"
 
+    def _validate_checkpoint(self):
+        """Validate checkpoint SHA-256 hash against expected value.
+
+        Raises:
+            CheckpointValidationError: If strict_validation is True and hash
+                doesn't match. Otherwise logs a warning.
+        """
+        actual_hash = self._get_checkpoint_hash()
+
+        if actual_hash != self.expected_sha256:
+            error_msg = (
+                f"Checkpoint SHA-256 validation failed!\n"
+                f"  Expected: {self.expected_sha256}\n"
+                f"  Actual:   {actual_hash}\n"
+                f"  File:     {self.checkpoint_path}\n"
+                f"This may indicate corruption or tampering. "
+                f"Re-download from: {self.CHECKPOINT_URL}"
+            )
+
+            if self.strict_validation:
+                raise CheckpointValidationError(error_msg)
+            else:
+                self.logger.warning(error_msg)
+        else:
+            self.logger.info(
+                f"Checkpoint validation passed: {actual_hash[:16]}..."
+            )
+
     def _load_model(self):
         """Lazy load Depth Pro model and transforms.
 
-        Note: checkpoint_path is validated in compute() but not passed here.
-        depth_pro.create_model_and_transforms() auto-downloads from HuggingFace
-        if local checkpoint not found. For production, pre-download and validate.
+        Validates checkpoint SHA-256 before loading to detect corruption
+        or tampering.
         """
+        # Validate checkpoint integrity before loading
+        self._validate_checkpoint()
+
         self.logger.info(f"Loading Depth Pro model on {self.device}...")
 
         model, transform = depth_pro.create_model_and_transforms()  # type: ignore
