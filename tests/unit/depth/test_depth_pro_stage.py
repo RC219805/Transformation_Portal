@@ -52,16 +52,25 @@ class TestDepthProStageUnit:
 
         # Create test image (seeded for determinism)
         np.random.seed(42)
-        img_array = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
-        context = StageContext(artifacts={"image": img_array})
+        img_array_1 = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
+
+        # Create identical image with same seed
+        np.random.seed(42)
+        img_array_2 = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
+
+        # Verify images are identical
+        assert np.array_equal(img_array_1, img_array_2), "Test setup failed: images should be identical"
+
+        context1 = StageContext(artifacts={"image": img_array_1})
+        context2 = StageContext(artifacts={"image": img_array_2})
 
         # Mock checkpoint hash
         with patch.object(stage, '_get_checkpoint_hash', return_value="abcd1234"):
             with patch.object(stage, '_get_package_version', return_value="0.1.2"):
-                key1 = stage.get_cache_key(context)
-                key2 = stage.get_cache_key(context)
+                key1 = stage.get_cache_key(context1)
+                key2 = stage.get_cache_key(context2)
 
-        assert key1 == key2
+        assert key1 == key2, "Identical images should produce identical cache keys"
         assert "depthpro" in key1
         assert "abcd1234" in key1
         assert "0.1.2" in key1
@@ -124,6 +133,7 @@ class TestDepthProStageUnit:
         assert "missing" in result.error.lower()
         assert "image" in result.error.lower()
 
+    @pytest.mark.ml
     @patch('transformation_portal.stage_graph.stages.depth_pro.TORCH_AVAILABLE', True)
     @patch('transformation_portal.stage_graph.stages.depth_pro.torch')
     @patch('transformation_portal.stage_graph.stages.depth_pro.depth_pro')
@@ -152,6 +162,7 @@ class TestDepthProStageUnit:
         assert stage._model is not None
         mock_depth_pro.create_model_and_transforms.assert_called_once()
 
+    @pytest.mark.ml
     @patch('transformation_portal.stage_graph.stages.depth_pro.DEPTH_PRO_AVAILABLE', True)
     @patch('transformation_portal.stage_graph.stages.depth_pro.TORCH_AVAILABLE', True)
     @patch('transformation_portal.stage_graph.stages.depth_pro.torch')
@@ -216,6 +227,7 @@ class TestDepthProStageUnit:
         assert "env" in prov
         assert prov["env"]["depth_pro_pkg"] == "0.1.2"
 
+    @pytest.mark.ml
     @patch('transformation_portal.stage_graph.stages.depth_pro.depth_pro')
     @patch.object(Path, 'exists', return_value=True)
     def test_depth_stats_computation(self, mock_exists, mock_depth_pro):
@@ -271,6 +283,7 @@ class TestDepthProStageUnit:
         assert u16.dtype == np.uint16
         assert np.all(u16 == 0)
 
+    @pytest.mark.ml
     @patch('transformation_portal.stage_graph.stages.depth_pro.DEPTH_PRO_AVAILABLE', True)
     @patch('transformation_portal.stage_graph.stages.depth_pro.TORCH_AVAILABLE', True)
     @patch('transformation_portal.stage_graph.stages.depth_pro.torch')
@@ -354,6 +367,7 @@ class TestDepthProStageUnit:
             version = stage._get_package_version()
             assert version == "unknown"
 
+    @pytest.mark.ml
     @patch('transformation_portal.stage_graph.stages.depth_pro.DEPTH_PRO_AVAILABLE', True)
     @patch('transformation_portal.stage_graph.stages.depth_pro.TORCH_AVAILABLE', True)
     @patch('transformation_portal.stage_graph.stages.depth_pro.torch')
