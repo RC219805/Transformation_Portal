@@ -1,9 +1,11 @@
 """Integration tests for Phase 2 depth estimation."""
 
+import os
 import pytest
 import numpy as np
 from PIL import Image
 from pathlib import Path
+from unittest.mock import Mock, patch, MagicMock
 
 from transformation_portal.depth_canonical import DepthPipeline
 from transformation_portal.depth_canonical.config import (
@@ -14,6 +16,44 @@ from transformation_portal.depth_canonical.config import (
     ProcessingConfig,
     PBRConfig,
 )
+
+
+# Check if we should mock transformers (when TRANSFORMERS_OFFLINE=1)
+TRANSFORMERS_OFFLINE = os.environ.get('TRANSFORMERS_OFFLINE', '0') == '1'
+
+
+@pytest.fixture(autouse=True)
+def mock_transformers_pipeline():
+    """Mock transformers pipeline when running offline.
+    
+    This prevents tests from downloading models during CI runs
+    while still testing the pipeline logic.
+    """
+    if not TRANSFORMERS_OFFLINE:
+        yield None
+        return
+        
+    # Create a mock pipeline that returns depth map dict
+    def mock_pipeline_factory(*args, **kwargs):
+        mock_pipe = MagicMock()
+        
+        def mock_predict(image):
+            # Return a dict with 'depth' key containing a numpy array
+            # Size should match input image
+            if isinstance(image, Image.Image):
+                size = image.size
+                depth = np.random.rand(size[1], size[0]).astype(np.float32)
+            else:
+                depth = np.random.rand(512, 512).astype(np.float32)
+            
+            return {"depth": depth}
+        
+        mock_pipe.side_effect = mock_predict
+        return mock_pipe
+    
+    with patch('transformation_portal.depth_canonical.models.da3_wrapper.hf_pipeline', 
+               side_effect=mock_pipeline_factory):
+        yield
 
 
 @pytest.fixture
