@@ -10,7 +10,7 @@
 
 ## Context
 
-Python 3.10 reached end-of-life for mainstream support in October 2026. The repository currently declares `requires-python = ">=3.10"` but CI workflows already test only Python 3.11.
+Python 3.10 will reach end-of-life for mainstream support in October 2026. The repository currently declares `requires-python = ">=3.10"` but CI workflows already test only Python 3.11.
 
 ### Ecosystem Signal
 
