@@ -1,7 +1,7 @@
 # Performance Regression Fix - Executive Summary
 
-**Date:** February 2, 2026  
-**Issue:** Performance Regression Detected (Nightly Benchmarks)  
+**Date:** February 2, 2026
+**Issue:** Performance Regression Detected (Nightly Benchmarks)
 **Status:** ✅ **RESOLVED**
 
 ---
@@ -40,17 +40,25 @@ Implemented **lazy size evaluation** with approximate size tracking:
 1. **Approximate Size Tracking:** Maintain running estimate of cache size (O(1) operation)
 2. **Periodic Calibration:** Only check actual filesystem size every 10 stores
 3. **Threshold-based Checking:** Force recalibration when approaching 90% of limit
+4. **Thread Safety:** Protected shared state with threading.Lock for concurrent operations
+5. **Restart Resilience:** Initialize approximate size from existing cache contents
 
 ### Code Changes
 
 **Modified:** `src/transformation_portal/lux_depth_v3/depth_cache.py`
-- Added instance variables: `_approximate_size_gb`, `_store_count`, `_size_check_interval`
-- Updated `store()` method with lazy evaluation logic
+- Added instance variables: `_approximate_size_gb`, `_store_count`, `_lock`
+- Added class constants: `SIZE_CHECK_INTERVAL`, `SIZE_CHECK_THRESHOLD` for clarity
+- Updated `store()` method with lazy evaluation logic and thread-safe updates
+- Initialize `_approximate_size_gb` from existing cache on startup
+- Handle overwrites correctly (subtract old size before adding new)
 - Maintains correctness through periodic recalibration
 
 **Enhanced:** `tests/test_performance_regression.py`
-- Added `test_cache_store_scalability()` regression test
-- Validates <3ms per store with 100 cached entries
+- Added `test_cache_store_scalability()` with mechanism verification (mock tracking)
+- Added `test_cache_initialization_with_existing_files()` for restart behavior
+- Added `test_cache_overwrite_handling()` to verify no double-counting
+- Added `test_cache_thread_safety()` for concurrent store operations
+- All tests validate <3ms per store with 100 cached entries
 - Prevents future regressions
 
 **Documented:** `docs/performance/DEPTH_CACHE_OPTIMIZATION.md`
@@ -83,12 +91,15 @@ Implemented **lazy size evaluation** with approximate size tracking:
 - Cache hit/miss behavior unchanged
 - LRU eviction functions correctly
 - Approximate size stays calibrated
-- Thread safety preserved
+- Thread safety enforced with threading.Lock
+- Restart behavior correctly handles existing cache
+- Overwrites handled without double-counting
 
 ✅ **Backward compatibility**
 - No API changes
 - No migration required
 - Existing caches work unchanged
+- Automatic initialization from existing cache state
 
 ---
 
