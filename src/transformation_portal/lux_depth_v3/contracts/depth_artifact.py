@@ -148,7 +148,7 @@ class DepthProvenance:
     checkpoint_sha256: Optional[str] = None
     preset: Optional[str] = None
     device: str = "cpu"
-    runtime_version: str = "2.0.0"
+    runtime_version: str = "3.0.0"
     timestamp_utc: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
@@ -350,7 +350,7 @@ class DepthArtifact:
 class DepthArtifactWriter:
     """Writer for persisting DepthArtifact to disk.
 
-    Handles atomic writes with proper file naming and sidecar generation.
+    Handles I/O with proper file naming and sidecar generation.
 
     Example:
         >>> writer = DepthArtifactWriter(output_dir=Path("./output"))
@@ -384,7 +384,7 @@ class DepthArtifactWriter:
         artifact: DepthArtifact,
         stem: str,
     ) -> Dict[str, Path]:
-        """Write artifact to disk with atomic operations.
+        """Write artifact to disk.
 
         Args:
             artifact: DepthArtifact to persist

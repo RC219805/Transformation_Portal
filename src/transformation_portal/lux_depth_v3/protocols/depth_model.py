@@ -286,11 +286,22 @@ class DepthModelRegistry:
             raise TypeError("backend_class must be a class")
 
         # Validate protocol compliance
-        # Note: runtime_checkable only checks method existence, not signatures
+        # Require core DepthModel surface: info, load, predict
         instance = backend_class()
-        if not hasattr(instance, "info") or not hasattr(instance, "load"):
+        required_attrs = ("load", "predict")
+        missing_or_invalid = [
+            attr
+            for attr in required_attrs
+            if not hasattr(instance, attr) or not callable(getattr(instance, attr, None))
+        ]
+        # Check for info property separately (can be property or method)
+        if not hasattr(instance, "info"):
+            missing_or_invalid.append("info")
+        
+        if missing_or_invalid:
             raise TypeError(
-                f"{backend_class.__name__} does not implement DepthModel protocol"
+                f"{backend_class.__name__} does not implement DepthModel protocol "
+                f"(missing or non-callable: {', '.join(missing_or_invalid)})"
             )
 
         reg_name = name or backend_class.__name__
@@ -346,7 +357,7 @@ class DepthModelRegistry:
 
         Raises:
             KeyError: If no matching backend found
-            LicenseRestrictionError: If commercial_only and only non-commercial available
+            ValueError: If commercial_only is True and the selected backend is not commercially licensed
         """
         # Direct name lookup
         if name is not None:
