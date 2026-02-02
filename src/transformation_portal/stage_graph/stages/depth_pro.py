@@ -17,10 +17,17 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
-import torch
 from PIL import Image
 
 from ..stage import Stage, StageContext, StageResult, StageStatus
+
+# Try importing torch, fail gracefully if not available
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except (ImportError, TypeError):
+    TORCH_AVAILABLE = False
+    torch = None  # type: ignore
 
 # Try importing depth_pro, fail gracefully if not available
 try:
@@ -60,7 +67,8 @@ class DepthProStage(Stage):
 
     CHECKPOINT_URL = "https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt"
     DEFAULT_CHECKPOINT = Path("checkpoints/depth_pro.pt")
-    EXPECTED_SHA256 = "d6d389aada202b73293019ec01ea89af02c2523b"
+    # Placeholder SHA-256 (TODO: update with actual hash after downloading checkpoint)
+    EXPECTED_SHA256 = "d6d389aada202b73293019ec01ea89af02c2523b000000000000000000000000"
 
     def __init__(
         self,
@@ -197,7 +205,11 @@ class DepthProStage(Stage):
             image_hash = "unknown"
 
         # Get checkpoint hash (expensive, cache this)
-        ckpt_hash = self._get_checkpoint_hash()[:16]
+        # Fall back when checkpoint is missing; compute() will surface user-facing errors
+        try:
+            ckpt_hash = self._get_checkpoint_hash()[:16]
+        except (FileNotFoundError, OSError):
+            ckpt_hash = "no_ckpt"
 
         # Get package version
         pkg_ver = self._get_package_version()
@@ -215,6 +227,8 @@ class DepthProStage(Stage):
 
     def _auto_detect_device(self) -> str:
         """Auto-detect optimal device (prefer MPS for Apple Silicon)."""
+        if not TORCH_AVAILABLE or torch is None:
+            return "cpu"
         if torch.backends.mps.is_available():
             return "mps"
         elif torch.cuda.is_available():

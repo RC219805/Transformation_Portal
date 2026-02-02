@@ -1,9 +1,7 @@
 """Unit tests for DepthProStage (100% mocked, no model downloads)."""
 
-import hashlib
-import json
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch, mock_open
+from unittest.mock import MagicMock, patch, mock_open
 
 import numpy as np
 import pytest
@@ -82,6 +80,7 @@ class TestDepthProStageUnit:
         # Keys should be different (different image content)
         assert key1 != key2
 
+    @patch('transformation_portal.stage_graph.stages.depth_pro.DEPTH_PRO_AVAILABLE', True)
     def test_checkpoint_validation_missing(self):
         """Missing checkpoint should produce actionable error."""
         stage = DepthProStage(checkpoint_path=Path("/nonexistent/checkpoint.pt"))
@@ -106,6 +105,7 @@ class TestDepthProStageUnit:
         assert "depth_pro package not installed" in result.error
         assert "pip install" in result.error
 
+    @patch('transformation_portal.stage_graph.stages.depth_pro.DEPTH_PRO_AVAILABLE', True)
     def test_missing_image_artifact(self):
         """Missing image artifact should fail with clear error."""
         stage = DepthProStage()
@@ -138,6 +138,7 @@ class TestDepthProStageUnit:
         assert stage._model is not None
         mock_depth_pro.create_model_and_transforms.assert_called_once()
 
+    @patch('transformation_portal.stage_graph.stages.depth_pro.DEPTH_PRO_AVAILABLE', True)
     @patch('transformation_portal.stage_graph.stages.depth_pro.depth_pro')
     @patch.object(Path, 'exists', return_value=True)
     def test_provenance_structure(self, mock_exists, mock_depth_pro):

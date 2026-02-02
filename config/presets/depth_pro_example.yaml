@@ -15,7 +15,9 @@ model:
   variant: depth-pro
   device: mps
   checkpoint_path: checkpoints/depth_pro.pt
-  expected_sha256: d6d389aada202b73293019ec01ea89af02c2523b
+  # TODO: Replace with actual SHA-256 hash after downloading checkpoint
+  # Current value is a placeholder (40-char SHA-1 padded to 64-char SHA-256)
+  expected_sha256: d6d389aada202b73293019ec01ea89af02c2523b000000000000000000000000
 
 processing:
   # Depth Pro outputs metric depth, may require different normalization
