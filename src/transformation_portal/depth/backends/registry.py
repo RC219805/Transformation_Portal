@@ -157,17 +157,17 @@ class DepthBackendRegistry:
         if backend_name == "depth_pro":
             if not getattr(config, "accept_apple_depth_pro_research_license", False):
                 raise LicenseRestrictionError(
-                    f"Backend 'depth_pro' requires explicit license acceptance.\n\n"
-                    f"Set accept_apple_depth_pro_research_license=True to acknowledge:\n"
-                    f"  - Apple Machine Learning Research License (AMLR)\n"
-                    f"  - Research and non-commercial use only\n"
-                    f"  - No commercial exploitation or deployment\n\n"
-                    f"License details: https://github.com/apple/ml-depth-pro/blob/main/LICENSE\n\n"
-                    f"Required config:\n"
-                    f"  config = EnhanceConfig(\n"
-                    f"      non_commercial_ok=True,\n"
-                    f"      accept_apple_depth_pro_research_license=True,\n"
-                    f"  )"
+                    "Backend 'depth_pro' requires explicit license acceptance.\n\n"
+                    "Set accept_apple_depth_pro_research_license=True to acknowledge:\n"
+                    "  - Apple Machine Learning Research License (AMLR)\n"
+                    "  - Research and non-commercial use only\n"
+                    "  - No commercial exploitation or deployment\n\n"
+                    "License details: https://github.com/apple/ml-depth-pro/blob/main/LICENSE\n\n"
+                    "Required config:\n"
+                    "  config = EnhanceConfig(\n"
+                    "      non_commercial_ok=True,\n"
+                    "      accept_apple_depth_pro_research_license=True,\n"
+                    "  )"
                 )
 
         logger.info(

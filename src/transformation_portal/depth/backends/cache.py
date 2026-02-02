@@ -125,9 +125,6 @@ class DepthCacheWriter:
         Returns:
             DepthResult if found, None otherwise.
         """
-        # Import here to avoid circular dependency
-        from .protocol import DepthResult
-
         # Try enhanced format first
         npz_path = self.cache_dir / f"{cache_key}.npz"
         json_path = self.cache_dir / f"{cache_key}.json"

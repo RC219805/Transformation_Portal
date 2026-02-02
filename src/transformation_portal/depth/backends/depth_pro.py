@@ -12,12 +12,12 @@ import hashlib
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import numpy as np
 from PIL import Image
 
-from .protocol import DepthBackend, DepthResult, LicenseRestrictionError, LicenseType
+from .protocol import DepthResult, LicenseRestrictionError, LicenseType
 
 if TYPE_CHECKING:
     from ...lux_depth_v3.config import EnhanceConfig
@@ -64,6 +64,9 @@ class DepthProBackend:
     # Checkpoint configuration
     CHECKPOINT_URL = "https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt"
     DEFAULT_CHECKPOINT = Path("checkpoints/depth_pro.pt")
+    # PLACEHOLDER: This hash needs verification against actual checkpoint.
+    # Compute actual hash with: sha256sum checkpoints/depth_pro.pt
+    # The value below matches existing DepthProStage for consistency.
     EXPECTED_SHA256 = "3a92b0e79bb8a129e83997d15eed71b0a9cca0eb4c7a0e8c4b7e0a8f3d5c2e1b"
 
     def __init__(self, config: Optional["EnhanceConfig"] = None):
