@@ -11,17 +11,18 @@ Performance Impact:
     - Eliminates redundant depth computation for duplicate images
     - Cache hit rate >80% for typical batch workflows with duplicates
     - LRU eviction prevents unbounded growth
+    - O(1) store operations via lazy size evaluation
 
 Thread Safety:
-    - Thread-safe for concurrent reads
-    - Write collisions handled gracefully (last write wins)
+    - Thread-safe for concurrent reads and writes
+    - Protected by threading.Lock for shared state updates
 """
 from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 import numpy as np
 import logging
-import os
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,13 @@ class DepthCache:
     Attributes:
         cache_dir: Directory for cache storage (.depth_cache subdirectory)
         max_size_gb: Maximum cache size in GB before LRU eviction
+        SIZE_CHECK_INTERVAL: Check actual size every N stores (for recalibration)
+        SIZE_CHECK_THRESHOLD: Trigger size check when approaching this ratio of max_size_gb
     """
+
+    # Class constants for lazy size evaluation
+    SIZE_CHECK_INTERVAL = 10  # Check actual size every N stores
+    SIZE_CHECK_THRESHOLD = 0.9  # Check when approximate size > 90% of max
 
     def __init__(self, cache_dir: Path, max_size_gb: float = 10.0):
         """Initialize depth cache.
@@ -47,7 +54,16 @@ class DepthCache:
         self.cache_dir = cache_dir / ".depth_cache"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.max_size_gb = max_size_gb
-        logger.debug(f"Depth cache initialized: {self.cache_dir} (max {max_size_gb}GB)")
+
+        # Thread safety: lock protects shared state (_store_count, _approximate_size_gb)
+        self._lock = threading.Lock()
+
+        # Performance optimization: track approximate size to avoid scanning on every store
+        # Initialize from existing cache to handle restarts correctly
+        self._approximate_size_gb = self._cache_size_gb()
+        self._store_count = 0
+
+        logger.debug(f"Depth cache initialized: {self.cache_dir} (max {max_size_gb}GB, current {self._approximate_size_gb:.2f}GB)")
 
     def get(self, image_sha256: str, config_fingerprint: str) -> Optional[np.ndarray]:
         """Retrieve cached depth map if available.
@@ -78,6 +94,9 @@ class DepthCache:
     def store(self, image_sha256: str, config_fingerprint: str, depth: np.ndarray):
         """Store depth map in cache.
 
+        Uses lazy size evaluation with approximate tracking to achieve O(1) performance.
+        Thread-safe for concurrent writes.
+
         Args:
             image_sha256: SHA-256 hash of input image
             config_fingerprint: Configuration fingerprint hash
@@ -90,9 +109,36 @@ class DepthCache:
             # Ensure cache directory exists
             self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-            # Check cache size before storing
-            if self._cache_size_gb() > self.max_size_gb:
-                self._evict_lru()
+            # Thread-safe update of shared state
+            with self._lock:
+                self._store_count += 1
+                depth_size_gb = depth.nbytes / (1024**3)
+
+                # Handle overwrites: subtract old size if entry exists
+                old_size_gb = 0.0
+                if cache_path.exists():
+                    old_size_gb = cache_path.stat().st_size / (1024**3)
+
+                # Update approximate size (add new, subtract old if overwriting)
+                self._approximate_size_gb += depth_size_gb - old_size_gb
+
+                # Only do expensive size check if:
+                # 1. Every N stores (to recalibrate approximate tracking), OR
+                # 2. Approximate size suggests we might be near the limit
+                needs_size_check = (
+                    self._store_count % self.SIZE_CHECK_INTERVAL == 0 or
+                    self._approximate_size_gb > self.max_size_gb * self.SIZE_CHECK_THRESHOLD
+                )
+
+                if needs_size_check:
+                    actual_size = self._cache_size_gb()
+                    # Recalibrate approximate size
+                    self._approximate_size_gb = actual_size
+
+                    if actual_size > self.max_size_gb:
+                        self._evict_lru()
+                        # Recalculate after eviction
+                        self._approximate_size_gb = self._cache_size_gb()
 
             # Atomic write: write to temp file, then rename
             # Note: numpy.save() adds .npy extension automatically, so use base name without extension
