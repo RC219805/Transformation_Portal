@@ -24,9 +24,12 @@ model:
   variant: depth-pro
   device: mps
   checkpoint_path: checkpoints/depth_pro.pt
-  # Official SHA-256 hash of the Depth Pro checkpoint (depth_pro.pt v1.0)
-  # Compute with: sha256sum checkpoints/depth_pro.pt
+  # SHA-256 hash for checkpoint validation.
+  # IMPORTANT: This is a placeholder that MUST be updated after downloading the checkpoint.
+  # Compute the actual hash with: sha256sum checkpoints/depth_pro.pt
+  # Then update this value before running with strict_validation: true
   expected_sha256: 3a92b0e79bb8a129e83997d15eed71b0a9cca0eb4c7a0e8c4b7e0a8f3d5c2e1b
+  # For development: set to false to warn instead of fail on hash mismatch
   strict_validation: true
 
 processing:
