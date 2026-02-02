@@ -4,15 +4,15 @@
 # Run `make compile` in this directory to generate pinned ml.txt
 
 # ML and deep learning libraries (optional)
-torch>=2.0,<3
-diffusers>=0.20,<1
+torch>=2.10.0,<3
+diffusers>=0.36.0,<1
 controlnet-aux>=0.0.6,<1
 # realesrgan>=0.3.0,<1  # BANNED: Unmaintained, use local implementation
 
 # HuggingFace ecosystem and vision utilities
-transformers>=4.35.0,<5
+transformers>=4.57.0,<5
 huggingface-hub>=0.19.0,<2
-torchvision>=0.15.0,<1
+torchvision>=0.25.0,<1
 # opencv-python>=4.8.0,<5  # MOVED TO BASE: Required for depth_writer (core pipeline)
 scikit-image>=0.21.0,<1
 

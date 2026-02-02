@@ -4,7 +4,7 @@
 #
 #    pip-compile --constraint=all.txt --output-file=base.txt base.in
 #
-click==8.3.0
+click==8.3.1
     # via
     #   -c all.txt
     #   typer
@@ -12,7 +12,7 @@ imagecodecs==2024.12.30
     # via
     #   -c all.txt
     #   -r base.in
-joblib==1.5.2
+joblib==1.5.3
     # via
     #   -c all.txt
     #   scikit-learn
@@ -45,15 +45,15 @@ pygments==2.19.2
     # via
     #   -c all.txt
     #   rich
-rich==14.2.0
+rich==14.3.2
     # via
     #   -c all.txt
     #   typer
-scikit-learn==1.7.2
+scikit-learn==1.8.0
     # via
     #   -c all.txt
     #   -r base.in
-scipy==1.15.3
+scipy==1.17.0
     # via
     #   -c all.txt
     #   -r base.in
@@ -70,11 +70,11 @@ tifffile==2024.12.12
     # via
     #   -c all.txt
     #   -r base.in
-tqdm==4.67.1
+tqdm==4.67.2
     # via
     #   -c all.txt
     #   -r base.in
-typer==0.20.0
+typer==0.21.1
     # via
     #   -c all.txt
     #   -r base.in
