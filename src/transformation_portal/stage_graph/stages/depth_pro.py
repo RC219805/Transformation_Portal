@@ -48,8 +48,6 @@ except ImportError:
 class CheckpointValidationError(ValueError):
     """Raised when checkpoint SHA-256 validation fails."""
 
-    pass
-
 
 class DepthProStage(Stage):
     """Apple Depth Pro metric depth estimation stage.
