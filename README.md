@@ -308,12 +308,12 @@ workflows/    # Workflow artifacts / operational workflow utilities
 ---
 
 ## System Requirements
-- Python: 3.10+
+- Python: 3.11+
 - FFmpeg: 6+ (for video workflows)
 - Hardware: CPU-only supported; GPU/Apple Silicon acceleration optional depending on pipeline
 
 CI note:
-- Core tests run on Python 3.10 and 3.12
+- Core tests run on Python 3.11 and 3.12
 - ML tests run on Python 3.11
 - Lint runs on Python 3.12
 
