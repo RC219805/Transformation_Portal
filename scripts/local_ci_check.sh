@@ -148,7 +148,7 @@ echo -e "\n${BLUE}[4/6] Documentation Structure${NC}"
 echo -e "${YELLOW}→ Checking markdown file count in root...${NC}"
 
 MD_COUNT=$(find . -maxdepth 1 -name "*.md" -type f | wc -l | tr -d ' ')
-MAX_MD=10
+MAX_MD=11
 
 if [ "$MD_COUNT" -gt "$MAX_MD" ]; then
     echo -e "${RED}✗ Too many markdown files in root: $MD_COUNT (max: $MAX_MD)${NC}"

@@ -13,7 +13,7 @@ permissions:
 
 env:
   PYTHON_VERSION_LINT: "3.12"
-  PYTHON_VERSION_TEST_MIN: "3.10"
+  PYTHON_VERSION_TEST_MIN: "3.11"
   PYTHON_VERSION_TEST_MAX: "3.12"
   PYTHON_VERSION_ML: "3.11"
 
@@ -147,7 +147,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.12"]
+        python-version: ["3.11", "3.12"]
 
     steps:
       - uses: actions/checkout@v4

@@ -47,7 +47,7 @@ jobs:
     strategy:
       matrix:
         # Run only Python 3.11 for now to conserve CI resources
-        # Can expand to ['3.10', '3.11', '3.12'] once stability is confirmed
+        # Can expand to ['3.11', '3.12'] once stability is confirmed
         python-version: ['3.11']
 
     steps:
