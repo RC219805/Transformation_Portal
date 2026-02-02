@@ -160,10 +160,11 @@ class TestDepthProStageUnit:
         stage = DepthProStage()
         context = StageContext(artifacts={"image": Image.new("RGB", (100, 100))})
 
-        # Mock checkpoint hash
+        # Mock checkpoint hash and logger to prevent CI caplog interference
         with patch.object(stage, '_get_checkpoint_hash', return_value="abcd1234"):
             with patch.object(stage, '_get_package_version', return_value="0.1.2"):
-                result = stage.compute(context)
+                with patch.object(stage.logger, 'info'):
+                    result = stage.compute(context)
 
         assert result.status == StageStatus.COMPLETED
         assert "depth_provenance" in result.artifacts
@@ -263,11 +264,12 @@ class TestDepthProStageUnit:
 
         with patch.object(stage, '_get_checkpoint_hash', return_value="abcd1234"):
             with patch.object(stage, '_get_package_version', return_value="0.1.2"):
-                with patch.object(Path, 'mkdir'):
-                    with patch.object(Image.Image, 'save'):
-                        with patch('numpy.save'):
-                            with patch('transformation_portal.stage_graph.stages.depth_pro.open', mock_open()):
-                                result = stage.compute(context)
+                with patch.object(stage.logger, 'info'):
+                    with patch.object(Path, 'mkdir'):
+                        with patch.object(Image.Image, 'save'):
+                            with patch('numpy.save'):
+                                with patch('transformation_portal.stage_graph.stages.depth_pro.open', mock_open()):
+                                    result = stage.compute(context)
 
         assert result.status == StageStatus.COMPLETED
         assert "depth_float_path" in result.artifacts
@@ -317,7 +319,8 @@ class TestDepthProStageUnit:
         context = StageContext(artifacts={"image": Image.new("RGB", (100, 100))})
 
         with patch.object(stage, '_get_checkpoint_hash', return_value="abcd1234"):
-            result = stage.compute(context)
+            with patch.object(stage.logger, 'info'):
+                result = stage.compute(context)
 
         assert result.status == StageStatus.FAILED
         assert "GPU out of memory" in result.error
