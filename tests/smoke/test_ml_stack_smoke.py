@@ -17,7 +17,10 @@ import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
-import torch
+
+# Import ML dependencies only when running ML tests
+# This prevents import errors during test collection in non-ML environments
+torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
 
 
 @pytest.mark.ml
