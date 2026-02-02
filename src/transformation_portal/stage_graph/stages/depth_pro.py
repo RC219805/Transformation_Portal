@@ -274,7 +274,7 @@ class DepthProStage(Stage):
         x = self._transform(image_pil) if callable(self._transform) else image_pil
 
         # Ensure batch dimension and move to device
-        if isinstance(x, torch.Tensor):
+        if TORCH_AVAILABLE and torch is not None and isinstance(x, torch.Tensor):
             if x.ndim == 3:
                 x = x.unsqueeze(0)
             x = x.to(torch.device(self.device), dtype=torch.float32)

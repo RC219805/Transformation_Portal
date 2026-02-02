@@ -47,7 +47,8 @@ class TestDepthProStageUnit:
         """Generate cache key for same image twice - should be identical."""
         stage = DepthProStage()
 
-        # Create test image
+        # Create test image (seeded for determinism)
+        np.random.seed(42)
         img_array = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
         context = StageContext(artifacts={"image": img_array})
 
@@ -66,7 +67,10 @@ class TestDepthProStageUnit:
         """Different images should produce different cache keys."""
         stage = DepthProStage()
 
+        # Seed for determinism
+        np.random.seed(100)
         img1 = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
+        np.random.seed(200)
         img2 = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
 
         context1 = StageContext(artifacts={"image": img1})
@@ -148,9 +152,10 @@ class TestDepthProStageUnit:
         mock_transform = MagicMock()
         mock_depth_pro.create_model_and_transforms.return_value = (mock_model, mock_transform)
 
-        # Mock inference output
+        # Mock inference output (seeded for determinism)
         depth_tensor = MagicMock()
         depth_tensor.ndim = 2
+        np.random.seed(42)
         depth_tensor.detach.return_value.float.return_value.cpu.return_value.numpy.return_value = \
             np.random.rand(100, 100).astype(np.float32)
 
@@ -256,6 +261,7 @@ class TestDepthProStageUnit:
 
         depth_tensor = MagicMock()
         depth_tensor.ndim = 2
+        np.random.seed(42)
         depth_array = np.random.rand(100, 100).astype(np.float32)
         depth_tensor.detach.return_value.float.return_value.cpu.return_value.numpy.return_value = depth_array
         mock_model.infer.return_value = {"depth": depth_tensor}
