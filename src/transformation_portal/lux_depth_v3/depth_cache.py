@@ -132,13 +132,14 @@ class DepthCache:
 
                 if needs_size_check:
                     actual_size = self._cache_size_gb()
-                    # Recalibrate approximate size
-                    self._approximate_size_gb = actual_size
+                    # Recalibrate approximate size, accounting for the current file
+                    # being written (which hasn't been saved yet)
+                    self._approximate_size_gb = actual_size + depth_size_gb - old_size_gb
 
                     if actual_size > self.max_size_gb:
                         self._evict_lru()
-                        # Recalculate after eviction
-                        self._approximate_size_gb = self._cache_size_gb()
+                        # Recalculate after eviction, again accounting for current file
+                        self._approximate_size_gb = self._cache_size_gb() + depth_size_gb - old_size_gb
 
             # Atomic write: write to temp file, then rename
             # Note: numpy.save() adds .npy extension automatically, so use base name without extension
