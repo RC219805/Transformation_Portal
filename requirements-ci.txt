@@ -10,3 +10,6 @@ hypothesis>=6,<7
 
 # Required for RAG system and workflow tests
 PyYAML>=6.0,<7
+
+# Required for depth_writer (used in core pipeline tests)
+opencv-python>=4.8.0,<5

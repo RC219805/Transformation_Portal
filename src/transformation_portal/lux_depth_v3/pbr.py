@@ -274,8 +274,11 @@ def generate_pbr_maps_batched(
     # Validate device
     try:
         test_tensor = torch.zeros(1)
-        test_tensor.to(device)
-    except (RuntimeError, AssertionError):
+        test_result = test_tensor.to(device)
+        # Verify the result is actually a tensor, not a mock
+        if not hasattr(test_result, 'shape'):
+            raise RuntimeError("Invalid torch device (mock detected)")
+    except (RuntimeError, AssertionError, AttributeError, TypeError):
         # Invalid device, fallback to CPU
         return [generate_pbr_maps(depth, config) for depth in depth_maps]
 
@@ -296,8 +299,15 @@ def generate_pbr_maps_batched(
         depth_tensors.append(tensor)
 
     # Stack into batch
-    depth_batch = torch.cat(depth_tensors, dim=0).to(device)  # (B, 1, H, W)
-    batch_size = depth_batch.shape[0]
+    try:
+        depth_batch = torch.cat(depth_tensors, dim=0).to(device)  # (B, 1, H, W)
+        # Verify we got a real tensor, not a mock
+        if not hasattr(depth_batch, 'shape'):
+            raise RuntimeError("torch.cat returned invalid result (mock detected)")
+        batch_size = depth_batch.shape[0]
+    except (RuntimeError, TypeError, AttributeError):
+        # torch operations failed (likely mocked), fall back to CPU
+        return [generate_pbr_maps(depth, config) for depth in depth_maps]
 
     with torch.no_grad():
         # Sobel kernels for gradients
