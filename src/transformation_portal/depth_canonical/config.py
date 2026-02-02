@@ -27,6 +27,9 @@ class ModelVariant(Enum):
     DA3_BASE = "depth-anything-v2-base"
     DA3_SMALL = "depth-anything-v2-small"
 
+    # Depth Pro (metric depth)
+    DEPTH_PRO = "depth-pro"
+
 
 @dataclass(frozen=True)
 class PBRConfig:
