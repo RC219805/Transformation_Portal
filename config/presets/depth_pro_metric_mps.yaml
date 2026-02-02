@@ -3,7 +3,9 @@
 #
 # Requires:
 #   1. Checkpoint: checkpoints/depth_pro.pt (1.9 GB)
-#      Download: curl -L https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt -o checkpoints/depth_pro.pt
+#      Download:
+#        curl -L https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt \
+#          -o checkpoints/depth_pro.pt
 #   2. Package: pip install depth-pro
 #   3. License acceptance: Both flags must be True
 #
@@ -29,8 +31,8 @@ model:
   # Compute the actual hash with: sha256sum checkpoints/depth_pro.pt
   # Then update this value before running with strict_validation: true
   expected_sha256: 3a92b0e79bb8a129e83997d15eed71b0a9cca0eb4c7a0e8c4b7e0a8f3d5c2e1b
-  # For development: set to false to warn instead of fail on hash mismatch
-  strict_validation: true
+  # Default: false until the hash above is verified; set to true to fail on mismatch
+  strict_validation: false
 
 processing:
   # Depth Pro outputs metric depth, incompatible with relative zone mapping

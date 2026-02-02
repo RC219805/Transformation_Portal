@@ -14,7 +14,6 @@ from transformation_portal.depth.backends import (
     LicenseType,
     LicenseRestrictionError,
 )
-from transformation_portal.depth.backends.protocol import DepthBackend
 
 
 class MockEnhanceConfig:

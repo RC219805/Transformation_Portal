@@ -97,7 +97,7 @@ class DepthProBackend:
             elif torch.cuda.is_available():
                 return "cuda"
         except ImportError:
-            pass
+            logger.debug("PyTorch is not installed; falling back to CPU for DepthProBackend.")
 
         return "cpu"
 
@@ -163,6 +163,8 @@ class DepthProBackend:
         Args:
             image: Input image as PIL Image or numpy array (H, W, 3).
             device: Optional device override (cpu, cuda, mps).
+                    Note: Device override requires stage reload; currently uses
+                    device from initialization. See issue for enhancement.
 
         Returns:
             DepthResult with metric depth in meters and focal length.

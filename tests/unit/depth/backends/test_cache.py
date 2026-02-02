@@ -3,8 +3,6 @@
 import json
 import pytest
 import numpy as np
-from pathlib import Path
-from unittest.mock import MagicMock
 
 from transformation_portal.depth.backends import (
     DepthResult,
