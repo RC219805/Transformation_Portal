@@ -1,7 +1,6 @@
 """Integration tests for Phase 2 depth estimation."""
 
 import os
-from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
@@ -26,14 +25,14 @@ TRANSFORMERS_OFFLINE = os.environ.get('TRANSFORMERS_OFFLINE', '0') == '1'
 @pytest.fixture(autouse=True)
 def mock_transformers_pipeline():
     """Mock transformers pipeline when running offline.
-    
+
     This prevents tests from downloading models during CI runs
     while still testing the pipeline logic.
     """
     if not TRANSFORMERS_OFFLINE:
         yield None
         return
-        
+
     # Create a mock pipeline that returns depth map dict
     def mock_pipeline_factory(task=None, model=None, device=None):
         """Factory that creates a mock HF pipeline."""
@@ -46,11 +45,11 @@ def mock_transformers_pipeline():
                 depth = np.random.rand(size[1], size[0]).astype(np.float32)
             else:
                 depth = np.random.rand(512, 512).astype(np.float32)
-            
+
             return {"depth": depth}
-        
+
         return mock_pipe
-    
+
     # Patch the pipeline import in the da3_wrapper module
     with patch('transformers.pipeline', side_effect=mock_pipeline_factory):
         yield

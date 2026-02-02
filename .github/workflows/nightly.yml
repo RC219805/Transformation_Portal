@@ -103,8 +103,9 @@ jobs:
           if [ -f benchmark-results.json ]; then
             python -c "
           import json
-          with open('benchmark-results.json') as f:
-              data = json.load(f)
+          try:
+              with open('benchmark-results.json') as f:
+                  data = json.load(f)
               benchmarks = data.get('benchmarks', [])
               if benchmarks:
                   for bench in benchmarks:
@@ -113,6 +114,9 @@ jobs:
                       print(f'{name}: {mean:.4f}s')
               else:
                   print('No benchmarks were run')
+          except (json.JSONDecodeError, KeyError) as e:
+              print(f'Failed to parse benchmark results: {e}')
+              print('No benchmarks were run or file is empty')
           "
           else
             echo "No benchmark results file found - no benchmarks were run"
