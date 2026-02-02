@@ -99,8 +99,9 @@ class TestCameraIntrinsics:
         assert intrinsics.cx == 960.0
         assert intrinsics.cy == 540.0
         assert intrinsics.source == "estimated"
-        # Check that focal length is reasonable
-        assert intrinsics.fx > 1000  # For 60 FOV, fx should be > width
+        # Check that focal length is reasonable for 60° FOV
+        # fx = width / (2 * tan(30°)) ≈ 1663 for 1920px width
+        assert intrinsics.fx > 1000  # Focal length should be reasonable for typical FOV
 
 
 class TestDepthProvenance:

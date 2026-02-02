@@ -21,12 +21,10 @@ Example:
 from __future__ import annotations
 
 import logging
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
 from typing import (
-    Any,
     Callable,
     Dict,
     Iterator,
@@ -34,7 +32,6 @@ from typing import (
     Optional,
     Protocol,
     Type,
-    Union,
     runtime_checkable,
 )
 
@@ -362,8 +359,6 @@ class DepthModelRegistry:
             instance = self._backends[name]()
 
             if commercial_only and not instance.info.is_commercial_safe():
-                from ..contracts.depth_artifact import LicenseTier
-
                 raise ValueError(
                     f"Backend '{name}' requires non-commercial license "
                     f"(tier: {instance.info.license_tier.value})"
