@@ -1,0 +1,82 @@
+{
+  "status": "ok",
+  "engine": "apple_depth_pro",
+  "device": "mps",
+  "input": {
+    "path": "/Users/rc/Projects/Transformation_Portal/input_images/750_picacho/source_jpegs/750Picacho_Pool.jpg",
+    "resolution": [
+      4000,
+      2250
+    ],
+    "exif": {
+      "orientation_tag": 1,
+      "orientation_applied": false,
+      "notes": "EXIF orientation is recorded but not applied (behavior unchanged)."
+    }
+  },
+  "checkpoint": {
+    "path": "/Users/rc/Projects/Transformation_Portal/checkpoints/depth_pro.pt",
+    "sha256": "3eb35ca68168ad3d14cb150f8947a4edf85589941661fdb2686259c80685c0ce",
+    "bytes": 1904446787
+  },
+  "outputs": {
+    "depth_npy": "/Users/rc/Projects/Transformation_Portal/input_images/750_picacho/source_jpegs/750Picacho_Pool_depthpro_depth.npy",
+    "depth_png16": "/Users/rc/Projects/Transformation_Portal/input_images/750_picacho/source_jpegs/750Picacho_Pool_depthpro_depth16.png",
+    "depth_shape": [
+      2250,
+      4000
+    ],
+    "depth_dtype": "float32",
+    "png16_normalization": {
+      "norm": "p01_p99",
+      "vmin": 2.651268243789673,
+      "vmax": 38.07663730621338
+    },
+    "notes": "depth_npy is raw float depth; depth_png16 is percentile-normalized visualization (p01-p99).",
+    "integrity": {
+      "depth_npy": {
+        "sha256": "fdac530049d5ca7b2531451ae19be26ce28db87154924d352a4a3568d856371b",
+        "bytes": 36000128
+      },
+      "depth_png16": {
+        "sha256": "5e89ae9f033d4023444f2b12cf9b6870b1e39a53f8e1beb1ccb01c79cf50922f",
+        "bytes": 7480903
+      }
+    }
+  },
+  "depth_stats": {
+    "finite_pct": 100.0,
+    "min": 2.2373440265655518,
+    "median": 9.969287872314453,
+    "p95": 33.516334724426265
+  },
+  "timing": {
+    "inference_sec": 1.785644
+  },
+  "units": "unknown",
+  "run": {
+    "timestamp_epoch": 1770001466,
+    "timestamp_iso_utc": "2026-02-02T03:04:26.016252+00:00"
+  },
+  "env": {
+    "python": "3.11.14",
+    "platform": "macOS-26.2-arm64-arm-64bit",
+    "torch": "2.10.0",
+    "torch_mps_available": true,
+    "numpy": "1.26.4",
+    "pillow": "11.3.0",
+    "depth_pro_pkg": "0.1",
+    "depth_pro": "unknown"
+  },
+  "depth_pro_meta": {
+    "model": {
+      "class": "DepthPro",
+      "id": null,
+      "attributes": {}
+    },
+    "transform": {
+      "class": "Compose",
+      "repr": "Compose(\\n    ToTensor()\\n    Lambda()\\n    Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])\\n    ConvertImageDtype()\\n)"
+    }
+  }
+}
