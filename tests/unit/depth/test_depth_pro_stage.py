@@ -236,11 +236,10 @@ class TestDepthProStageUnit:
         assert u16.dtype == np.uint16
         assert np.all(u16 == 0)
 
+    @patch('transformation_portal.stage_graph.stages.depth_pro.DEPTH_PRO_AVAILABLE', True)
     @patch('transformation_portal.stage_graph.stages.depth_pro.depth_pro')
     @patch.object(Path, 'exists', return_value=True)
-    @patch('builtins.open', new_callable=mock_open)
-    @patch('numpy.save')
-    def test_outputs_saved_to_disk(self, mock_np_save, mock_file, mock_exists, mock_depth_pro):
+    def test_outputs_saved_to_disk(self, mock_exists, mock_depth_pro):
         """Outputs should be saved to disk when output_dir provided."""
         # Mock model and inference
         mock_model = MagicMock()
@@ -266,7 +265,9 @@ class TestDepthProStageUnit:
             with patch.object(stage, '_get_package_version', return_value="0.1.2"):
                 with patch.object(Path, 'mkdir'):
                     with patch.object(Image.Image, 'save'):
-                        result = stage.compute(context)
+                        with patch('numpy.save'):
+                            with patch('transformation_portal.stage_graph.stages.depth_pro.open', mock_open()):
+                                result = stage.compute(context)
 
         assert result.status == StageStatus.COMPLETED
         assert "depth_float_path" in result.artifacts
@@ -304,6 +305,7 @@ class TestDepthProStageUnit:
             version = stage._get_package_version()
             assert version == "unknown"
 
+    @patch('transformation_portal.stage_graph.stages.depth_pro.DEPTH_PRO_AVAILABLE', True)
     @patch('transformation_portal.stage_graph.stages.depth_pro.depth_pro')
     @patch.object(Path, 'exists', return_value=True)
     def test_inference_error_handling(self, mock_exists, mock_depth_pro):
@@ -343,23 +345,32 @@ class TestDepthProStageUnit:
         key = stage.get_cache_key(context)
         assert key == "no_image"
 
-    @patch('torch.backends.mps.is_available', return_value=True)
-    @patch('torch.cuda.is_available', return_value=False)
-    def test_auto_detect_device_mps(self, mock_cuda, mock_mps):
+    @patch('transformation_portal.stage_graph.stages.depth_pro.TORCH_AVAILABLE', True)
+    @patch('transformation_portal.stage_graph.stages.depth_pro.torch')
+    def test_auto_detect_device_mps(self, mock_torch):
         """Auto-detect should prefer MPS when available."""
+        mock_torch.backends.mps.is_available.return_value = True
+        mock_torch.cuda.is_available.return_value = False
+        
         stage = DepthProStage()
         assert stage.device == "mps"
 
-    @patch('torch.backends.mps.is_available', return_value=False)
-    @patch('torch.cuda.is_available', return_value=True)
-    def test_auto_detect_device_cuda(self, mock_cuda, mock_mps):
+    @patch('transformation_portal.stage_graph.stages.depth_pro.TORCH_AVAILABLE', True)
+    @patch('transformation_portal.stage_graph.stages.depth_pro.torch')
+    def test_auto_detect_device_cuda(self, mock_torch):
         """Auto-detect should use CUDA when MPS not available."""
+        mock_torch.backends.mps.is_available.return_value = False
+        mock_torch.cuda.is_available.return_value = True
+        
         stage = DepthProStage()
         assert stage.device == "cuda"
 
-    @patch('torch.backends.mps.is_available', return_value=False)
-    @patch('torch.cuda.is_available', return_value=False)
-    def test_auto_detect_device_cpu(self, mock_cuda, mock_mps):
+    @patch('transformation_portal.stage_graph.stages.depth_pro.TORCH_AVAILABLE', True)
+    @patch('transformation_portal.stage_graph.stages.depth_pro.torch')
+    def test_auto_detect_device_cpu(self, mock_torch):
         """Auto-detect should fall back to CPU."""
+        mock_torch.backends.mps.is_available.return_value = False
+        mock_torch.cuda.is_available.return_value = False
+        
         stage = DepthProStage()
         assert stage.device == "cpu"
