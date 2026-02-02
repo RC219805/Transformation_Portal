@@ -49,20 +49,25 @@ class TestDepthProStageUnit:
 
         # Create test image (seeded for determinism)
         np.random.seed(42)
-        img_array = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
-        context = StageContext(artifacts={"image": img_array})
+        img_array_1 = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
+
+        # Create identical image with same seed
+        np.random.seed(42)
+        img_array_2 = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
+
+        # Verify images are identical
+        assert np.array_equal(img_array_1, img_array_2), "Test setup failed: images should be identical"
+
+        context1 = StageContext(artifacts={"image": img_array_1})
+        context2 = StageContext(artifacts={"image": img_array_2})
 
         # Mock checkpoint hash
         with patch.object(stage, '_get_checkpoint_hash', return_value="abcd1234"):
             with patch.object(stage, '_get_package_version', return_value="0.1.2"):
-                key1 = stage.get_cache_key(context)
-                # Reset seed to ensure same image
-                np.random.seed(42)
-                img_array_2 = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
-                context2 = StageContext(artifacts={"image": img_array_2})
+                key1 = stage.get_cache_key(context1)
                 key2 = stage.get_cache_key(context2)
 
-        assert key1 == key2
+        assert key1 == key2, "Identical images should produce identical cache keys"
         assert "depthpro" in key1
         assert "abcd1234" in key1
         assert "0.1.2" in key1
