@@ -1,0 +1,56 @@
+# Depth Pro Metric Depth - CPU Fallback
+# Experimental tier - Research use only
+#
+# Requires:
+#   1. Checkpoint: checkpoints/depth_pro.pt (1.9 GB)
+#      Download:
+#        curl -L https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt \
+#          -o checkpoints/depth_pro.pt
+#   2. Package: pip install depth-pro
+#   3. License acceptance: Both flags must be True
+#
+# License: Apple Machine Learning Research License (AMLR)
+# See: https://github.com/apple/ml-depth-pro/blob/main/LICENSE
+#
+# WARNING: Research and non-commercial use ONLY. This preset cannot be used
+# for commercial products, services, or revenue-generating applications.
+#
+# NOTE: CPU mode is significantly slower than MPS. Use for compatibility
+# testing or systems without Apple Silicon / CUDA support.
+
+name: depth-pro-metric-cpu
+description: "Depth Pro metric depth CPU fallback (slow, for compatibility testing)"
+tier: experimental
+license_restriction: research_only
+
+depth_backend: depth_pro
+
+model:
+  variant: depth-pro
+  device: cpu
+  checkpoint_path: checkpoints/depth_pro.pt
+  # SHA-256 hash for checkpoint validation.
+  # IMPORTANT: This is a placeholder that MUST be updated after downloading the checkpoint.
+  # Compute the actual hash with: sha256sum checkpoints/depth_pro.pt
+  expected_sha256: 3a92b0e79bb8a129e83997d15eed71b0a9cca0eb4c7a0e8c4b7e0a8f3d5c2e1b
+  # Default: false until the hash above is verified; set to true to fail on mismatch
+  strict_validation: false
+
+processing:
+  apply_bilateral: false
+  enable_zone_mapping: false
+
+  pbr:
+    enabled: true
+    normal_strength: 1.2
+    roughness_strength: 1.0
+    ao_strength: 1.0
+
+io:
+  cache_enabled: true
+  output_format: png
+  depth_bit_depth: 16
+
+compliance:
+  non_commercial_ok: true
+  accept_apple_depth_pro_research_license: true

@@ -112,8 +112,31 @@ mkdir -p checkpoints
 curl -L https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt -o checkpoints/depth_pro.pt
 ```
 
-**Enable in config:**
-Set `depth_backend: depth_pro` in your preset YAML. See [`config/presets/depth_pro_example.yaml`](config/presets/depth_pro_example.yaml) for a complete example.
+**License Requirements (Research-Only):**
+
+Depth Pro uses the Apple Machine Learning Research License (AMLR), which restricts usage to **non-commercial research only**. To use Depth Pro, you must explicitly acknowledge both:
+
+```python
+from transformation_portal.lux_depth_v3 import EnhanceConfig
+
+config = EnhanceConfig(
+    depth_backend="depth_pro",
+    non_commercial_ok=True,                          # Required: Acknowledge non-commercial use
+    accept_apple_depth_pro_research_license=True,    # Required: Accept Apple AMLR license
+    depth_device="mps",  # Apple Silicon (or "cpu" for fallback)
+)
+```
+
+**⚠️ Important:** This model cannot be used for:
+- Commercial products or services
+- Revenue-generating applications
+- Paid client work
+
+See [Apple AMLR License](https://github.com/apple/ml-depth-pro/blob/main/LICENSE) for full terms.
+
+**Presets:**
+- `depth_pro_metric_mps.yaml` - Apple Silicon optimized
+- `depth_pro_metric_cpu.yaml` - CPU fallback
 
 **Hardware Requirements:**
 - Optimized for Apple Silicon (MPS device)
