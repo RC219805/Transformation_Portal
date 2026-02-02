@@ -149,6 +149,13 @@ class EnhanceConfig:
     non_commercial_ok: bool = False
     verify_depth_writes: bool = True
 
+    # License acceptance flags (for research-only models)
+    accept_apple_depth_pro_research_license: bool = False  # Apple AMLR license for Depth Pro
+
+    # Depth backend selection
+    depth_backend: Optional[str] = None  # None = auto (DA3), or "depth_pro"
+    depth_pro_checkpoint_path: Optional[str] = None  # Path to depth_pro.pt checkpoint
+
     # Fallback configuration
     depth_fallback: str = "fail"  # Options: "fail", "skip", "v2-auto"
     v2_timeout: int = 300
