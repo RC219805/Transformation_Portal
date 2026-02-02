@@ -121,9 +121,14 @@ class TestDepthProStageUnit:
         assert "missing" in result.error.lower()
         assert "image" in result.error.lower()
 
+    @patch('transformation_portal.stage_graph.stages.depth_pro.TORCH_AVAILABLE', True)
+    @patch('transformation_portal.stage_graph.stages.depth_pro.torch')
     @patch('transformation_portal.stage_graph.stages.depth_pro.depth_pro')
-    def test_lazy_loading(self, mock_depth_pro):
+    def test_lazy_loading(self, mock_depth_pro, mock_torch):
         """Model should not load on init, only on first compute."""
+        # Mock torch.device
+        mock_torch.device.return_value = "cpu"
+
         mock_model = MagicMock()
         mock_transform = MagicMock()
         mock_depth_pro.create_model_and_transforms.return_value = (mock_model, mock_transform)
@@ -143,10 +148,19 @@ class TestDepthProStageUnit:
         mock_depth_pro.create_model_and_transforms.assert_called_once()
 
     @patch('transformation_portal.stage_graph.stages.depth_pro.DEPTH_PRO_AVAILABLE', True)
+    @patch('transformation_portal.stage_graph.stages.depth_pro.TORCH_AVAILABLE', True)
+    @patch('transformation_portal.stage_graph.stages.depth_pro.torch')
     @patch('transformation_portal.stage_graph.stages.depth_pro.depth_pro')
     @patch.object(Path, 'exists', return_value=True)
-    def test_provenance_structure(self, mock_exists, mock_depth_pro):
+    def test_provenance_structure(self, mock_exists, mock_depth_pro, mock_torch):
         """Provenance JSON should contain required keys."""
+        # Mock torch components
+        mock_torch.Tensor = type('MockTensor', (), {})  # Create a mock type for isinstance
+        mock_torch.no_grad.return_value.__enter__.return_value = None
+        mock_torch.no_grad.return_value.__exit__.return_value = None
+        mock_torch.device.return_value = "cpu"
+        mock_torch.__version__ = "2.0.0"
+
         # Mock model and inference
         mock_model = MagicMock()
         mock_transform = MagicMock()
@@ -250,10 +264,19 @@ class TestDepthProStageUnit:
         assert np.all(u16 == 0)
 
     @patch('transformation_portal.stage_graph.stages.depth_pro.DEPTH_PRO_AVAILABLE', True)
+    @patch('transformation_portal.stage_graph.stages.depth_pro.TORCH_AVAILABLE', True)
+    @patch('transformation_portal.stage_graph.stages.depth_pro.torch')
     @patch('transformation_portal.stage_graph.stages.depth_pro.depth_pro')
     @patch.object(Path, 'exists', return_value=True)
-    def test_outputs_saved_to_disk(self, mock_exists, mock_depth_pro):
+    def test_outputs_saved_to_disk(self, mock_exists, mock_depth_pro, mock_torch):
         """Outputs should be saved to disk when output_dir provided."""
+        # Mock torch components
+        mock_torch.Tensor = type('MockTensor', (), {})  # Create a mock type for isinstance
+        mock_torch.no_grad.return_value.__enter__.return_value = None
+        mock_torch.no_grad.return_value.__exit__.return_value = None
+        mock_torch.device.return_value = "cpu"
+        mock_torch.__version__ = "2.0.0"
+
         # Mock model and inference
         mock_model = MagicMock()
         mock_transform = MagicMock()
@@ -321,10 +344,15 @@ class TestDepthProStageUnit:
             assert version == "unknown"
 
     @patch('transformation_portal.stage_graph.stages.depth_pro.DEPTH_PRO_AVAILABLE', True)
+    @patch('transformation_portal.stage_graph.stages.depth_pro.TORCH_AVAILABLE', True)
+    @patch('transformation_portal.stage_graph.stages.depth_pro.torch')
     @patch('transformation_portal.stage_graph.stages.depth_pro.depth_pro')
     @patch.object(Path, 'exists', return_value=True)
-    def test_inference_error_handling(self, mock_exists, mock_depth_pro):
+    def test_inference_error_handling(self, mock_exists, mock_depth_pro, mock_torch):
         """Inference errors should be captured in result."""
+        # Mock torch.device
+        mock_torch.device.return_value = "cpu"
+
         # Make model loading fail
         mock_depth_pro.create_model_and_transforms.side_effect = RuntimeError("GPU out of memory")
 
