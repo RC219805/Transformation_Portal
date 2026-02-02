@@ -9,12 +9,13 @@ Provides reusable, cacheable stages for:
 """
 
 from .depth import DepthEstimationStage
-from .depth_pro import DepthProStage
+from .depth_pro import CheckpointValidationError, DepthProStage
 from .materials import MaterialSegmentationStage
 from .enhancement import EnhancementStage
 from .upscaling import UpscalingStage
 
 __all__ = [
+    "CheckpointValidationError",
     "DepthEstimationStage",
     "DepthProStage",
     "MaterialSegmentationStage",
