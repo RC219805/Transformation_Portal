@@ -1,11 +1,12 @@
 """Integration tests for Phase 2 depth estimation."""
 
 import os
-import pytest
-import numpy as np
-from PIL import Image
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch
+
+import numpy as np
+import pytest
+from PIL import Image
 
 from transformation_portal.depth_canonical import DepthPipeline
 from transformation_portal.depth_canonical.config import (
