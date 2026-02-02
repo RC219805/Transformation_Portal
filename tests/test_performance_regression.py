@@ -336,6 +336,162 @@ class TestPhase2Performance:
         assert len(results) == 2
         print(f"✓ Sequential fallback completed in {total_time:.2f}s (no overhead)")
 
+    @pytest.mark.benchmark
+    def test_cache_store_scalability(self, tmp_path):
+        """Verify cache store operations scale well with cache population.
+
+        Regression test for issue where _cache_size_gb() was called on every store,
+        causing O(N) overhead that degraded performance with large caches.
+
+        Verifies both performance and lazy checking mechanism.
+        """
+        cache = DepthCache(tmp_path / "cache", max_size_gb=10.0)
+
+        # Pre-populate cache with 100 entries to simulate real-world usage
+        print("\n  Pre-populating cache with 100 entries...")
+        for i in range(100):
+            depth = np.random.rand(512, 512).astype(np.float32)
+            cache.store(f"prepop_{i}", "config_123", depth)
+
+        # Benchmark storing 50 additional entries and verify lazy checking
+        depths = [np.random.rand(512, 512).astype(np.float32) for _ in range(50)]
+
+        # Track _cache_size_gb() calls to verify lazy checking
+        with patch.object(cache, '_cache_size_gb', wraps=cache._cache_size_gb) as mock_size:
+            start = time.time()
+            for i, depth in enumerate(depths):
+                cache.store(f"test_{i}", "config_456", depth)
+            elapsed = time.time() - start
+
+            # Verify lazy checking: should call _cache_size_gb() ~5 times (50 / SIZE_CHECK_INTERVAL)
+            # Allow some tolerance for threshold-based checks
+            assert mock_size.call_count <= 10, (
+                f"Too many _cache_size_gb() calls: {mock_size.call_count} > 10 "
+                f"(lazy checking may not be working)"
+            )
+            print(f"  _cache_size_gb() called {mock_size.call_count} times (lazy checking verified)")
+
+        avg_time_ms = (elapsed / 50) * 1000
+
+        # Performance target: < 3ms per store on average (includes numpy I/O)
+        # Without the fix, this would be ~5-10ms due to full cache scanning
+        assert avg_time_ms < 3.0, (
+            f"Cache store too slow: {avg_time_ms:.3f}ms/store > 3.0ms target "
+            f"(possible regression in lazy size checking)"
+        )
+
+        print(f"✓ Cache store scalability: {avg_time_ms:.3f}ms per store (with 100 existing entries)")
+
+    @pytest.mark.benchmark
+    def test_cache_initialization_with_existing_files(self, tmp_path):
+        """Verify cache correctly initializes _approximate_size_gb from existing files."""
+        cache_dir = tmp_path / "cache"
+
+        # Create initial cache with 10 entries
+        cache1 = DepthCache(cache_dir, max_size_gb=10.0)
+        depths = [np.random.rand(512, 512).astype(np.float32) for _ in range(10)]
+        for i, depth in enumerate(depths):
+            cache1.store(f"init_test_{i}", "config_abc", depth)
+
+        # Get actual cache size
+        actual_size = cache1._cache_size_gb()
+        initial_approx = cache1._approximate_size_gb
+
+        print(f"\n  Initial cache: {actual_size:.4f}GB (approximate: {initial_approx:.4f}GB)")
+
+        # Create new cache instance (simulates restart)
+        cache2 = DepthCache(cache_dir, max_size_gb=10.0)
+
+        # Verify: new instance should initialize _approximate_size_gb from existing files
+        assert cache2._approximate_size_gb > 0.0, (
+            "Cache initialization bug: _approximate_size_gb should be seeded from existing files"
+        )
+
+        # Should be reasonably close to actual size (within 10% tolerance)
+        size_diff_ratio = abs(cache2._approximate_size_gb - actual_size) / actual_size
+        assert size_diff_ratio < 0.10, (
+            f"Cache initialization inaccurate: {cache2._approximate_size_gb:.4f}GB vs actual {actual_size:.4f}GB "
+            f"(diff: {size_diff_ratio*100:.1f}%)"
+        )
+
+        print(f"✓ Cache initialization: {cache2._approximate_size_gb:.4f}GB (actual: {actual_size:.4f}GB)")
+
+    @pytest.mark.benchmark
+    def test_cache_overwrite_handling(self, tmp_path):
+        """Verify cache correctly handles overwrites without double-counting size."""
+        cache = DepthCache(tmp_path / "cache", max_size_gb=10.0)
+
+        # Store initial depth
+        depth1 = np.random.rand(512, 512).astype(np.float32)
+        cache.store("overwrite_test", "config_v1", depth1)
+        size_after_first = cache._approximate_size_gb
+
+        print(f"\n  After first store: {size_after_first:.4f}GB")
+
+        # Overwrite with same key
+        depth2 = np.random.rand(512, 512).astype(np.float32)
+        cache.store("overwrite_test", "config_v1", depth2)
+        size_after_second = cache._approximate_size_gb
+
+        print(f"  After overwrite: {size_after_second:.4f}GB")
+
+        # Verify: approximate size should not double (allow some tolerance for size differences)
+        # The two depths should be approximately the same size, so ratio should be ~1.0
+        size_ratio = size_after_second / size_after_first
+        assert 0.8 < size_ratio < 1.2, (
+            f"Overwrite handling bug: size increased by {size_ratio:.2f}x "
+            f"(expected ~1.0x, may be double-counting)"
+        )
+
+        # Verify actual file count: should have 1 file, not 2
+        cache_files = list(cache.cache_dir.glob("*.npy"))
+        assert len(cache_files) == 1, (
+            f"Expected 1 cache file after overwrite, found {len(cache_files)}"
+        )
+
+        print(f"✓ Overwrite handling: size ratio {size_ratio:.2f}x (no double-counting)")
+
+    @pytest.mark.benchmark
+    def test_cache_thread_safety(self, tmp_path):
+        """Verify cache handles concurrent stores without race conditions."""
+        import concurrent.futures
+
+        cache = DepthCache(tmp_path / "cache", max_size_gb=10.0)
+
+        def store_depth(index: int):
+            """Store a depth map (worker function)."""
+            depth = np.random.rand(256, 256).astype(np.float32)
+            cache.store(f"thread_test_{index}", "config_mt", depth)
+            return index
+
+        # Store 50 depths concurrently with 4 threads
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [executor.submit(store_depth, i) for i in range(50)]
+            results = [f.result() for f in concurrent.futures.as_completed(futures)]
+
+        # Verify all stores completed
+        assert len(results) == 50
+
+        # Verify cache has 50 entries
+        cache_files = list(cache.cache_dir.glob("*.npy"))
+        assert len(cache_files) == 50, (
+            f"Thread safety issue: expected 50 cache files, found {len(cache_files)}"
+        )
+
+        # Verify _approximate_size_gb is reasonable (should be > 0 and < max)
+        assert 0.0 < cache._approximate_size_gb < cache.max_size_gb, (
+            f"Thread safety issue: _approximate_size_gb={cache._approximate_size_gb:.4f}GB "
+            f"(should be between 0 and {cache.max_size_gb}GB)"
+        )
+
+        # Verify _store_count is correct
+        assert cache._store_count == 50, (
+            f"Thread safety issue: _store_count={cache._store_count} (expected 50)"
+        )
+
+        print(f"✓ Thread safety: 50 concurrent stores completed successfully")
+        print(f"  Final state: {len(cache_files)} files, {cache._approximate_size_gb:.4f}GB, {cache._store_count} stores")
+
 
 class TestPhase3Performance:
     """Phase 3: Advanced optimizations (PBR batching, msgpack)."""
