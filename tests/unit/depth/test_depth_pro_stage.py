@@ -166,6 +166,13 @@ class TestDepthProStageUnit:
                 with patch.object(stage.logger, 'info'):
                     result = stage.compute(context)
 
+        # Better error reporting for CI debugging
+        if result.status != StageStatus.COMPLETED:
+            raise AssertionError(
+                f"Expected COMPLETED but got {result.status}. "
+                f"Error: {result.error}"
+            )
+
         assert result.status == StageStatus.COMPLETED
         assert "depth_provenance" in result.artifacts
 
@@ -354,7 +361,7 @@ class TestDepthProStageUnit:
         """Auto-detect should prefer MPS when available."""
         mock_torch.backends.mps.is_available.return_value = True
         mock_torch.cuda.is_available.return_value = False
-        
+
         stage = DepthProStage()
         assert stage.device == "mps"
 
@@ -364,7 +371,7 @@ class TestDepthProStageUnit:
         """Auto-detect should use CUDA when MPS not available."""
         mock_torch.backends.mps.is_available.return_value = False
         mock_torch.cuda.is_available.return_value = True
-        
+
         stage = DepthProStage()
         assert stage.device == "cuda"
 
@@ -374,6 +381,6 @@ class TestDepthProStageUnit:
         """Auto-detect should fall back to CPU."""
         mock_torch.backends.mps.is_available.return_value = False
         mock_torch.cuda.is_available.return_value = False
-        
+
         stage = DepthProStage()
         assert stage.device == "cpu"
