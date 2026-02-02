@@ -17,6 +17,7 @@ dependencies = [
     "Pillow>=10.0.0,<12",
     "scipy>=1.15,<2",
     "scikit-learn>=1.0,<2",
+    "opencv-python>=4.8.0,<5",  # required for depth_writer (core pipeline)
     "typer>=0.10.0,<1",
     "tqdm>=4.66,<5",
     "tifffile>=2023.7.18,<2025",
@@ -39,7 +40,7 @@ ml = [
     "transformers>=4.35.0,<5",
     "huggingface-hub>=0.19.0,<2",
     "torchvision>=0.15.0,<1",
-    "opencv-python>=4.8.0,<5",
+    # opencv-python moved to core dependencies (required for depth_writer)
     "scikit-image>=0.21.0,<1",
     "PyYAML>=6.0",
     "colour-science>=0.4.2",
