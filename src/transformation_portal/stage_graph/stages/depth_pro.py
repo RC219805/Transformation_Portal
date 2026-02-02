@@ -48,7 +48,8 @@ except ImportError:
 class DepthProStage(Stage):
     """Apple Depth Pro metric depth estimation stage.
 
-    Outputs metric depth (absolute scale) with audit-quality provenance.
+    Outputs metric depth (absolute scale in meters) with audit-quality provenance.
+    Unlike relative depth models (normalized 0-1), Depth Pro provides real-world scale.
     Requires checkpoint at checkpoints/depth_pro.pt (1.9 GB, not in repo).
 
     Outputs:
@@ -67,8 +68,8 @@ class DepthProStage(Stage):
 
     CHECKPOINT_URL = "https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt"
     DEFAULT_CHECKPOINT = Path("checkpoints/depth_pro.pt")
-    # Placeholder SHA-256 (TODO: update with actual hash after downloading checkpoint)
-    EXPECTED_SHA256 = "d6d389aada202b73293019ec01ea89af02c2523b000000000000000000000000"
+    # Placeholder SHA-256 (all-zeros until checkpoint is downloaded and verified)
+    EXPECTED_SHA256 = "0000000000000000000000000000000000000000000000000000000000000000"
 
     def __init__(
         self,
@@ -103,9 +104,9 @@ class DepthProStage(Stage):
             - output_dir: Optional directory for saving outputs
 
         Output artifacts:
-            - depth_map: Normalized depth map (H, W) as numpy array
+            - depth_map: Metric depth map (H, W) in meters, not normalized
             - depth_float_path: Path to .npy file (if output_dir provided)
-            - depth_preview_path: Path to 16-bit PNG (if output_dir provided)
+            - depth_preview_path: Path to 16-bit PNG (normalized for visualization)
             - depth_provenance: Provenance dict (always)
         """
         start_time = time.time()
@@ -237,7 +238,12 @@ class DepthProStage(Stage):
             return "cpu"
 
     def _load_model(self):
-        """Lazy load Depth Pro model and transforms."""
+        """Lazy load Depth Pro model and transforms.
+
+        Note: checkpoint_path is validated in compute() but not passed here.
+        depth_pro.create_model_and_transforms() auto-downloads from HuggingFace
+        if local checkpoint not found. For production, pre-download and validate.
+        """
         self.logger.info(f"Loading Depth Pro model on {self.device}...")
 
         model, transform = depth_pro.create_model_and_transforms()  # type: ignore
@@ -398,7 +404,7 @@ class DepthProStage(Stage):
         }
 
     def _normalize_to_uint16(self, depth: np.ndarray) -> np.ndarray:
-        """Normalize depth to uint16 for visualization (p01-p99)."""
+        """Normalize depth to uint16 for visualization (p1-p99 percentile clipping)."""
         d = depth.astype(np.float32)
         finite = np.isfinite(d)
 
