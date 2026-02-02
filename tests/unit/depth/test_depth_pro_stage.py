@@ -7,7 +7,10 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from transformation_portal.stage_graph.stages.depth_pro import DepthProStage
+from transformation_portal.stage_graph.stages.depth_pro import (
+    CheckpointValidationError,
+    DepthProStage,
+)
 from transformation_portal.stage_graph.stage import StageContext, StageStatus
 
 
@@ -139,8 +142,10 @@ class TestDepthProStageUnit:
         assert not stage._model_loaded
         assert stage._model is None
 
-        # Call _load_model explicitly
-        stage._load_model()
+        # Call _load_model explicitly (with validation mocked)
+        with patch.object(stage, '_validate_checkpoint'):
+            with patch.object(stage.logger, 'info'):
+                stage._load_model()
 
         # Now model should be loaded
         assert stage._model_loaded
@@ -179,13 +184,14 @@ class TestDepthProStageUnit:
         stage = DepthProStage()
         context = StageContext(artifacts={"image": Image.new("RGB", (100, 100))})
 
-        # Mock checkpoint hash, package version, and file stat
+        # Mock checkpoint hash, package version, validation, and file stat
         with patch.object(stage, '_get_checkpoint_hash', return_value="abcd1234"):
             with patch.object(stage, '_get_package_version', return_value="0.1.2"):
-                with patch('pathlib.Path.stat') as mock_stat:
-                    mock_stat.return_value.st_size = 2000000000  # 2GB checkpoint
-                    with patch.object(stage.logger, 'info'):
-                        result = stage.compute(context)
+                with patch.object(stage, '_validate_checkpoint'):
+                    with patch('pathlib.Path.stat') as mock_stat:
+                        mock_stat.return_value.st_size = 2000000000  # 2GB checkpoint
+                        with patch.object(stage.logger, 'info'):
+                            result = stage.compute(context)
 
         # Better error reporting for CI debugging
         if result.status != StageStatus.COMPLETED:
@@ -302,14 +308,15 @@ class TestDepthProStageUnit:
 
         with patch.object(stage, '_get_checkpoint_hash', return_value="abcd1234"):
             with patch.object(stage, '_get_package_version', return_value="0.1.2"):
-                with patch('pathlib.Path.stat') as mock_stat:
-                    mock_stat.return_value.st_size = 2000000000  # 2GB checkpoint
-                    with patch.object(stage.logger, 'info'):
-                        with patch.object(Path, 'mkdir'):
-                            with patch.object(Image.Image, 'save'):
-                                with patch('numpy.save'):
-                                    with patch('transformation_portal.stage_graph.stages.depth_pro.open', mock_open()):
-                                        result = stage.compute(context)
+                with patch.object(stage, '_validate_checkpoint'):
+                    with patch('pathlib.Path.stat') as mock_stat:
+                        mock_stat.return_value.st_size = 2000000000  # 2GB checkpoint
+                        with patch.object(stage.logger, 'info'):
+                            with patch.object(Path, 'mkdir'):
+                                with patch.object(Image.Image, 'save'):
+                                    with patch('numpy.save'):
+                                        with patch('transformation_portal.stage_graph.stages.depth_pro.open', mock_open()):
+                                            result = stage.compute(context)
 
         assert result.status == StageStatus.COMPLETED
         assert "depth_float_path" in result.artifacts
@@ -364,8 +371,9 @@ class TestDepthProStageUnit:
         context = StageContext(artifacts={"image": Image.new("RGB", (100, 100))})
 
         with patch.object(stage, '_get_checkpoint_hash', return_value="abcd1234"):
-            with patch.object(stage.logger, 'info'):
-                result = stage.compute(context)
+            with patch.object(stage, '_validate_checkpoint'):
+                with patch.object(stage.logger, 'info'):
+                    result = stage.compute(context)
 
         assert result.status == StageStatus.FAILED
         assert "GPU out of memory" in result.error
@@ -422,3 +430,123 @@ class TestDepthProStageUnit:
 
         stage = DepthProStage()
         assert stage.device == "cpu"
+
+    def test_strict_validation_default_true(self):
+        """strict_validation should default to True."""
+        stage = DepthProStage()
+        assert stage.strict_validation is True
+
+    def test_strict_validation_configurable(self):
+        """strict_validation should be configurable."""
+        stage_strict = DepthProStage(strict_validation=True)
+        stage_warn = DepthProStage(strict_validation=False)
+
+        assert stage_strict.strict_validation is True
+        assert stage_warn.strict_validation is False
+
+    @patch.object(Path, 'exists', return_value=True)
+    @patch('builtins.open', new_callable=mock_open, read_data=b'fake_checkpoint_data')
+    def test_validate_checkpoint_hash_mismatch_strict(self, mock_file, mock_exists):
+        """Hash mismatch with strict_validation=True should raise error."""
+        stage = DepthProStage(
+            expected_sha256="expected_hash_that_wont_match",
+            strict_validation=True
+        )
+
+        with pytest.raises(CheckpointValidationError) as exc_info:
+            stage._validate_checkpoint()
+
+        error_msg = str(exc_info.value)
+        assert "SHA-256 validation failed" in error_msg
+        assert "expected_hash_that_wont_match" in error_msg
+        assert "corruption or tampering" in error_msg
+        assert stage.CHECKPOINT_URL in error_msg
+
+    @patch.object(Path, 'exists', return_value=True)
+    @patch('builtins.open', new_callable=mock_open, read_data=b'fake_checkpoint_data')
+    def test_validate_checkpoint_hash_mismatch_warn_only(self, mock_file, mock_exists):
+        """Hash mismatch with strict_validation=False should warn but not raise."""
+        stage = DepthProStage(
+            expected_sha256="expected_hash_that_wont_match",
+            strict_validation=False
+        )
+
+        with patch.object(stage.logger, 'warning') as mock_warning:
+            # Should not raise
+            stage._validate_checkpoint()
+
+            # Should log warning
+            mock_warning.assert_called_once()
+            warning_msg = mock_warning.call_args[0][0]
+            assert "SHA-256 validation failed" in warning_msg
+            assert "expected_hash_that_wont_match" in warning_msg
+
+    @patch.object(Path, 'exists', return_value=True)
+    @patch('builtins.open', new_callable=mock_open, read_data=b'test_data')
+    def test_validate_checkpoint_hash_match(self, mock_file, mock_exists):
+        """Matching hash should pass validation."""
+        # Compute expected hash for 'test_data'
+        import hashlib
+        expected_hash = hashlib.sha256(b'test_data').hexdigest()
+
+        stage = DepthProStage(
+            expected_sha256=expected_hash,
+            strict_validation=True
+        )
+
+        with patch.object(stage.logger, 'info') as mock_info:
+            # Should not raise
+            stage._validate_checkpoint()
+
+            # Should log success
+            mock_info.assert_called()
+            # Check that validation passed message was logged
+            info_calls = [str(call) for call in mock_info.call_args_list]
+            assert any("validation passed" in str(call) for call in info_calls)
+
+    @patch('transformation_portal.stage_graph.stages.depth_pro.DEPTH_PRO_AVAILABLE', True)
+    @patch('transformation_portal.stage_graph.stages.depth_pro.TORCH_AVAILABLE', True)
+    @patch('transformation_portal.stage_graph.stages.depth_pro.torch')
+    @patch('transformation_portal.stage_graph.stages.depth_pro.depth_pro')
+    @patch.object(Path, 'exists', return_value=True)
+    def test_load_model_validates_checkpoint(self, mock_exists, mock_depth_pro, mock_torch):
+        """_load_model should call _validate_checkpoint before loading."""
+        mock_torch.device.return_value = "cpu"
+        mock_model = MagicMock()
+        mock_transform = MagicMock()
+        mock_depth_pro.create_model_and_transforms.return_value = (mock_model, mock_transform)
+
+        stage = DepthProStage(strict_validation=False)
+
+        with patch.object(stage, '_validate_checkpoint') as mock_validate:
+            with patch.object(stage, '_get_checkpoint_hash', return_value="test_hash"):
+                with patch.object(stage.logger, 'info'):
+                    stage._load_model()
+
+            # Validation should be called before model loading
+            mock_validate.assert_called_once()
+
+    @patch('transformation_portal.stage_graph.stages.depth_pro.DEPTH_PRO_AVAILABLE', True)
+    @patch('transformation_portal.stage_graph.stages.depth_pro.TORCH_AVAILABLE', True)
+    @patch('transformation_portal.stage_graph.stages.depth_pro.torch')
+    @patch('transformation_portal.stage_graph.stages.depth_pro.depth_pro')
+    @patch.object(Path, 'exists', return_value=True)
+    def test_compute_fails_on_checkpoint_validation_error(
+        self, mock_exists, mock_depth_pro, mock_torch
+    ):
+        """compute() should fail if checkpoint validation fails."""
+        mock_torch.device.return_value = "cpu"
+
+        stage = DepthProStage(
+            expected_sha256="invalid_hash_for_test",
+            strict_validation=True
+        )
+        context = StageContext(artifacts={"image": Image.new("RGB", (100, 100))})
+
+        with patch.object(stage, '_get_checkpoint_hash', return_value="actual_hash_different"):
+            result = stage.compute(context)
+
+        assert result.status == StageStatus.FAILED
+        assert "SHA-256 validation failed" in result.error
+        assert "invalid_hash_for_test" in result.error
+        assert "actual_hash_different" in result.error
