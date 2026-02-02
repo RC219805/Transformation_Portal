@@ -47,6 +47,12 @@ class DepthCache:
         self.cache_dir = cache_dir / ".depth_cache"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.max_size_gb = max_size_gb
+        
+        # Performance optimization: track approximate size to avoid scanning on every store
+        self._approximate_size_gb = 0.0
+        self._store_count = 0
+        self._size_check_interval = 10  # Check actual size every N stores
+        
         logger.debug(f"Depth cache initialized: {self.cache_dir} (max {max_size_gb}GB)")
 
     def get(self, image_sha256: str, config_fingerprint: str) -> Optional[np.ndarray]:
@@ -90,9 +96,31 @@ class DepthCache:
             # Ensure cache directory exists
             self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-            # Check cache size before storing
-            if self._cache_size_gb() > self.max_size_gb:
-                self._evict_lru()
+            # Performance optimization: Only check actual size periodically or when approaching limit
+            # This avoids O(N) filesystem scans on every store operation
+            self._store_count += 1
+            depth_size_gb = depth.nbytes / (1024**3)
+            
+            # Update approximate size
+            self._approximate_size_gb += depth_size_gb
+            
+            # Only do expensive size check if:
+            # 1. Every N stores (to recalibrate approximate tracking), OR
+            # 2. Approximate size suggests we might be near the limit
+            needs_size_check = (
+                self._store_count % self._size_check_interval == 0 or
+                self._approximate_size_gb > self.max_size_gb * 0.9
+            )
+            
+            if needs_size_check:
+                actual_size = self._cache_size_gb()
+                # Recalibrate approximate size
+                self._approximate_size_gb = actual_size
+                
+                if actual_size > self.max_size_gb:
+                    self._evict_lru()
+                    # Recalculate after eviction
+                    self._approximate_size_gb = self._cache_size_gb()
 
             # Atomic write: write to temp file, then rename
             # Note: numpy.save() adds .npy extension automatically, so use base name without extension

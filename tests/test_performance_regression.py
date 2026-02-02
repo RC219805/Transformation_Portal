@@ -336,6 +336,40 @@ class TestPhase2Performance:
         assert len(results) == 2
         print(f"✓ Sequential fallback completed in {total_time:.2f}s (no overhead)")
 
+    @pytest.mark.benchmark
+    def test_cache_store_scalability(self, tmp_path):
+        """Verify cache store operations scale well with cache population.
+        
+        Regression test for issue where _cache_size_gb() was called on every store,
+        causing O(N) overhead that degraded performance with large caches.
+        """
+        cache = DepthCache(tmp_path / "cache", max_size_gb=10.0)
+        
+        # Pre-populate cache with 100 entries to simulate real-world usage
+        print("\n  Pre-populating cache with 100 entries...")
+        for i in range(100):
+            depth = np.random.rand(512, 512).astype(np.float32)
+            cache.store(f"prepop_{i}", "config_123", depth)
+        
+        # Benchmark storing 50 additional entries
+        depths = [np.random.rand(512, 512).astype(np.float32) for _ in range(50)]
+        
+        start = time.time()
+        for i, depth in enumerate(depths):
+            cache.store(f"test_{i}", "config_456", depth)
+        elapsed = time.time() - start
+        
+        avg_time_ms = (elapsed / 50) * 1000
+        
+        # Performance target: < 3ms per store on average (includes numpy I/O)
+        # Without the fix, this would be ~5-10ms due to full cache scanning
+        assert avg_time_ms < 3.0, (
+            f"Cache store too slow: {avg_time_ms:.3f}ms/store > 3.0ms target "
+            f"(possible regression in lazy size checking)"
+        )
+        
+        print(f"✓ Cache store scalability: {avg_time_ms:.3f}ms per store (with 100 existing entries)")
+
 
 class TestPhase3Performance:
     """Phase 3: Advanced optimizations (PBR batching, msgpack)."""
