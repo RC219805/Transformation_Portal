@@ -34,10 +34,10 @@ def mock_transformers_pipeline():
         return
         
     # Create a mock pipeline that returns depth map dict
-    def mock_pipeline_factory(*args, **kwargs):
-        mock_pipe = MagicMock()
-        
-        def mock_predict(image):
+    def mock_pipeline_factory(task=None, model=None, device=None):
+        """Factory that creates a mock HF pipeline."""
+        def mock_pipe(image):
+            """Mock pipeline call that returns depth dict."""
             # Return a dict with 'depth' key containing a numpy array
             # Size should match input image
             if isinstance(image, Image.Image):
@@ -48,11 +48,10 @@ def mock_transformers_pipeline():
             
             return {"depth": depth}
         
-        mock_pipe.side_effect = mock_predict
         return mock_pipe
     
-    with patch('transformation_portal.depth_canonical.models.da3_wrapper.hf_pipeline', 
-               side_effect=mock_pipeline_factory):
+    # Patch the pipeline import in the da3_wrapper module
+    with patch('transformers.pipeline', side_effect=mock_pipeline_factory):
         yield
 
 
