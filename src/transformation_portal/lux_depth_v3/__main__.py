@@ -269,6 +269,12 @@ def main(
     # Create output directory
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Validate quality tier
+    valid_quality_tiers = ["standard", "premium", "apex"]
+    if quality_tier.lower() not in valid_quality_tiers:
+        logger.error(f"Invalid quality tier '{quality_tier}'. Must be one of: {', '.join(valid_quality_tiers)}")
+        raise typer.Exit(code=1)
+
     # Build configuration
     logger.info(f"Configuring pipeline with quality tier: {quality_tier}")
 
@@ -279,6 +285,10 @@ def main(
         if p.value.lower() == preset_lower:
             preset_enum = p
             break
+
+    # Log warning if preset doesn't map to enum
+    if preset_enum is None and preset != "premium":  # "premium" is default string, doesn't have enum
+        logger.warning(f"Preset '{preset}' does not map to a known Preset enum. Continuing with string value.")
 
     config = EnhanceConfig(
         preset=preset_enum,

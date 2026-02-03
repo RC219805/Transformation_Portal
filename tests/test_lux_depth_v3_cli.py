@@ -93,6 +93,19 @@ class TestCLIValidation:
         assert result.exit_code == 1
         assert "non-commercial" in result.stdout.lower()
 
+    def test_invalid_quality_tier(self, tmp_path):
+        """Test that invalid quality tier is rejected."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+
+        result = runner.invoke(app, [
+            "--input-dir", str(input_dir),
+            "--output-dir", str(tmp_path / "output"),
+            "--quality-tier", "invalid_tier",
+        ])
+        assert result.exit_code == 1
+        assert "invalid" in result.stdout.lower() or "quality tier" in result.stdout.lower()
+
 
 class TestCLIConfiguration:
     """Test CLI configuration building."""
