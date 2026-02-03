@@ -192,6 +192,17 @@ class EnhanceConfig:
     pbr_ao_blur_radius: int = 5
     pbr_ao_bias: float = 0.5
 
+    # Quality tier and Materials V3
+    quality_tier: str = "standard"  # Options: standard, premium, apex
+    enable_materials_v3: bool = False  # Materials V3 surface-aware finishing
+
+    # Emit flags (deliverables)
+    emit_master16: bool = False  # Emit master 16-bit output
+    emit_upscaled16: bool = False  # Emit upscaled 16-bit output
+    emit_marketing: bool = False  # Emit marketing-ready output
+    emit_report: bool = True  # Emit processing report
+    emit_run_card: bool = True  # Emit run card for reproducibility
+
     @property
     def enable_pbr(self) -> bool:
         """Alias for generate_pbr (backward compatibility)."""

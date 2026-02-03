@@ -290,17 +290,14 @@ def main(
         force_depth=force_depth or overwrite,
         enable_depth_cache=enable_cache_depth,
         generate_pbr=enable_pbr,
+        quality_tier=quality_tier,
+        enable_materials_v3=enable_materials_v3,
+        emit_master16=enable_emit_master16,
+        emit_upscaled16=enable_emit_upscaled16,
+        emit_marketing=enable_emit_marketing,
+        emit_report=enable_emit_report,
+        emit_run_card=enable_emit_run_card,
     )
-
-    # Store quality tier and emit flags as custom attributes
-    # (these would normally be part of EnhanceConfig but we're adding them here)
-    config.quality_tier = quality_tier  # type: ignore
-    config.enable_materials_v3 = enable_materials_v3  # type: ignore
-    config.emit_master16 = enable_emit_master16  # type: ignore
-    config.emit_upscaled16 = enable_emit_upscaled16  # type: ignore
-    config.emit_marketing = enable_emit_marketing  # type: ignore
-    config.emit_report = enable_emit_report  # type: ignore
-    config.emit_run_card = enable_emit_run_card  # type: ignore
 
     # Create orchestrator
     logger.info(f"Initializing orchestrator with output dir: {output_dir}")
