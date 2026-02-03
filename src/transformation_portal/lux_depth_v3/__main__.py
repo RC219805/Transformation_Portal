@@ -60,9 +60,8 @@ except ImportError:
     print("Error: typer not installed. Install with: pip install typer", file=sys.stderr)
     sys.exit(1)
 
-from .config import EnhanceConfig, Preset, ModelVariant
+from .config import EnhanceConfig, Preset
 from .orchestrator import EnhanceOrchestrator
-from .input_manager import ImageInput
 
 logger = logging.getLogger(__name__)
 
@@ -272,7 +271,7 @@ def main(
 
     # Build configuration
     logger.info(f"Configuring pipeline with quality tier: {quality_tier}")
-    
+
     # Map preset to Preset enum if possible
     preset_enum = None
     preset_lower = preset.lower().replace("-", "_")
@@ -317,26 +316,23 @@ def main(
 
     logger.info(f"Found {len(image_files)} images to process")
 
-    # Convert to ImageInput objects
-    image_inputs = [ImageInput(path=img) for img in sorted(image_files)]
-
     # Process batch
     try:
         results = orchestrator.enhance_batch(input_dir=input_dir, image_extensions=image_extensions)
-        
+
         # Summary
         successful = sum(1 for r in results if r.get("status") == "success")
         skipped = sum(1 for r in results if r.get("status") == "skipped")
         failed = sum(1 for r in results if r.get("status") == "error")
-        
-        logger.info(f"\nProcessing complete:")
+
+        logger.info("\nProcessing complete:")
         logger.info(f"  Successful: {successful}")
         logger.info(f"  Skipped: {skipped}")
         logger.info(f"  Failed: {failed}")
-        
+
         if failed > 0:
             raise typer.Exit(code=1)
-        
+
     except Exception as e:
         logger.error(f"Pipeline failed: {e}")
         if verbose:

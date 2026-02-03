@@ -3,7 +3,6 @@
 Verifies argument parsing, validation, and non-commercial license checks.
 """
 import pytest
-from pathlib import Path
 from typer.testing import CliRunner
 from transformation_portal.lux_depth_v3.__main__ import app, _parse_bool_flag
 
@@ -55,7 +54,7 @@ class TestCLIValidation:
         """Test that depth_pro backend requires --non-commercial-ok true."""
         input_dir = tmp_path / "input"
         input_dir.mkdir()
-        
+
         result = runner.invoke(app, [
             "--input-dir", str(input_dir),
             "--output-dir", str(tmp_path / "output"),
@@ -69,7 +68,7 @@ class TestCLIValidation:
         """Test that depth_pro backend requires --accept-apple-depth-pro-research-license true."""
         input_dir = tmp_path / "input"
         input_dir.mkdir()
-        
+
         result = runner.invoke(app, [
             "--input-dir", str(input_dir),
             "--output-dir", str(tmp_path / "output"),
@@ -84,7 +83,7 @@ class TestCLIValidation:
         """Test that v3.1 preset requires --non-commercial-ok true."""
         input_dir = tmp_path / "input"
         input_dir.mkdir()
-        
+
         result = runner.invoke(app, [
             "--input-dir", str(input_dir),
             "--output-dir", str(tmp_path / "output"),
@@ -104,7 +103,7 @@ class TestCLIConfiguration:
         input_dir.mkdir()
         # Create a dummy image so the directory isn't empty
         (input_dir / "test.jpg").touch()
-        
+
         # This should not raise validation errors (but will fail due to missing image data)
         result = runner.invoke(app, [
             "--input-dir", str(input_dir),
@@ -133,7 +132,7 @@ class TestCLIConfiguration:
         input_dir = tmp_path / "input"
         input_dir.mkdir()
         (input_dir / "test.jpg").touch()
-        
+
         # This should not raise validation errors (with proper license flags)
         result = runner.invoke(app, [
             "--input-dir", str(input_dir),
