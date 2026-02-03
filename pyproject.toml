@@ -84,8 +84,8 @@ transform-render = "transformation_portal.cli:render_cli"
 transform-process = "transformation_portal.cli:process_cli"
 transform-analyze = "transformation_portal.cli:analyze_cli"
 
-# Lux Depth V3 Pipeline CLI (APEX quality orchestrator)
-lux-depth-v3 = "transformation_portal.lux_depth_v3.cli:app"
+# Lux Depth V3 Pipeline CLI (APEX command variants)
+lux-depth-v3 = "transformation_portal.lux_depth_v3.__main__:app"
 
 # Luxury TIFF Batch Processor CLI
 luxury-tiff-batch = "luxury_tiff_batch_processor.cli:main"
