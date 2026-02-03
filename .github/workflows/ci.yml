@@ -128,7 +128,7 @@ jobs:
       - name: Run pip-audit (dependency vulnerabilities)
         run: |
           # Fail on known vulnerabilities (exit non-zero)
-          pip-audit --desc --require requirements-ci.txt
+          pip-audit --desc -r requirements-ci.txt
 
       - name: Check for secrets with gitleaks
         uses: gitleaks/gitleaks-action@v2
