@@ -33,6 +33,14 @@ def mock_transformers_pipeline():
         yield None
         return
 
+    # Check if transformers is available before trying to patch
+    try:
+        import transformers  # noqa: F401
+    except ImportError:
+        # transformers not installed, skip mocking
+        yield None
+        return
+
     # Create a mock pipeline that returns depth map dict
     def mock_pipeline_factory(task=None, model=None, device=None):
         """Factory that creates a mock HF pipeline."""
