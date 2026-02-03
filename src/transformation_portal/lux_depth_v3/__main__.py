@@ -250,20 +250,28 @@ def main(
 
     # Validate input directory
     if not input_dir.exists():
-        logger.error(f"Input directory does not exist: {input_dir}")
+        error_msg = f"Input directory does not exist: {input_dir}"
+        logger.error(error_msg)
+        print(error_msg, file=sys.stdout)  # Also print to stdout for CLI tests
         raise typer.Exit(code=1)
 
     # Validate non-commercial usage
     if depth_backend == "depth_pro" and not enable_non_commercial:
-        logger.error("Depth Pro backend requires --non-commercial-ok true (AMLR research license)")
+        error_msg = "Depth Pro backend requires --non-commercial-ok true (AMLR research-only license)"
+        logger.error(error_msg)
+        print(error_msg, file=sys.stdout)  # Also print to stdout for CLI tests
         raise typer.Exit(code=1)
 
     if depth_backend == "depth_pro" and not enable_apple_license:
-        logger.error("Depth Pro backend requires --accept-apple-depth-pro-research-license true")
+        error_msg = "Depth Pro backend requires --accept-apple-depth-pro-research-license true (Apple research-only)"
+        logger.error(error_msg)
+        print(error_msg, file=sys.stdout)  # Also print to stdout for CLI tests
         raise typer.Exit(code=1)
 
     if "v3.1" in preset.lower() and not enable_non_commercial:
-        logger.error(f"Preset '{preset}' requires --non-commercial-ok true (CC BY-NC 4.0)")
+        error_msg = f"Preset '{preset}' requires --non-commercial-ok true (CC BY-NC 4.0 non-commercial license)"
+        logger.error(error_msg)
+        print(error_msg, file=sys.stdout)  # Also print to stdout for CLI tests
         raise typer.Exit(code=1)
 
     # Create output directory
@@ -272,7 +280,9 @@ def main(
     # Validate quality tier
     valid_quality_tiers = ["standard", "premium", "apex"]
     if quality_tier.lower() not in valid_quality_tiers:
-        logger.error(f"Invalid quality tier '{quality_tier}'. Must be one of: {', '.join(valid_quality_tiers)}")
+        error_msg = f"Invalid quality tier '{quality_tier}'. Must be one of: {', '.join(valid_quality_tiers)}"
+        logger.error(error_msg)
+        print(error_msg, file=sys.stdout)  # Also print to stdout for CLI tests
         raise typer.Exit(code=1)
 
     # Build configuration
@@ -321,7 +331,9 @@ def main(
         image_files.extend(input_dir.glob(f"**/*{ext.upper()}"))
 
     if not image_files:
-        logger.error(f"No images found in {input_dir}")
+        error_msg = f"No images found in {input_dir}"
+        logger.error(error_msg)
+        print(error_msg, file=sys.stdout)  # Also print to stdout for CLI tests
         raise typer.Exit(code=1)
 
     logger.info(f"Found {len(image_files)} images to process")
