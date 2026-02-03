@@ -157,6 +157,7 @@ jobs:
           --maxfail=5
       env:
         PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
+        PYTHONNOUSERSITE: 1
 
     - name: Upload coverage reports
       if: matrix.python-version == '3.11'
