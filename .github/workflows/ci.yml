@@ -176,18 +176,25 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip wheel setuptools
-          python -m pip install -r requirements-ci.txt
-          python -m pip install -e . --no-deps
+          "${PYTHON}" -m pip install --upgrade pip wheel setuptools
+          "${PYTHON}" -m pip install -r requirements-ci.txt
+          "${PYTHON}" -m pip install -e . --no-deps
+        env:
+          PYTHON: ${{ steps.setup-python.outputs.python-path }}
 
       - name: Verify test environment
         run: |
-          python -c "import pytest; print('pytest', pytest.__version__)"
-          python -m pytest --version
+          which python
+          python -V
+          "${PYTHON}" -V
+          "${PYTHON}" -c "import pytest; print('pytest', pytest.__version__)"
+          "${PYTHON}" -m pytest --version
+        env:
+          PYTHON: ${{ steps.setup-python.outputs.python-path }}
 
       - name: Run core tests (no ML)
         run: |
-          python -m pytest -v tests/ \
+          "${PYTHON}" -m pytest -v tests/ \
             -m "not ml and not slow" \
             --cov=src/transformation_portal \
             --cov-report=xml \
@@ -197,6 +204,7 @@ jobs:
             --maxfail=3 \
             --tb=short
         env:
+          PYTHON: ${{ steps.setup-python.outputs.python-path }}
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
           PYTHONNOUSERSITE: 1
 
@@ -225,6 +233,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Python 3.11
+        id: setup-python-ml
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -254,21 +263,28 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip wheel setuptools
+          "${PYTHON}" -m pip install --upgrade pip wheel setuptools
           # CPU-only PyTorch to save disk space
-          python -m pip install "torch==2.10.0+cpu" "torchvision==0.25.0+cpu" --index-url https://download.pytorch.org/whl/cpu
-          python -m pip install -r requirements-ci.txt
-          python -m pip install -e . --no-deps
+          "${PYTHON}" -m pip install "torch==2.10.0+cpu" "torchvision==0.25.0+cpu" --index-url https://download.pytorch.org/whl/cpu
+          "${PYTHON}" -m pip install -r requirements-ci.txt
+          "${PYTHON}" -m pip install -e . --no-deps
           df -h
+        env:
+          PYTHON: ${{ steps.setup-python-ml.outputs.python-path }}
 
       - name: Verify test environment
         run: |
-          python -c "import pytest; print('pytest', pytest.__version__)"
-          python -m pytest --version
+          which python
+          python -V
+          "${PYTHON}" -V
+          "${PYTHON}" -c "import pytest; print('pytest', pytest.__version__)"
+          "${PYTHON}" -m pytest --version
+        env:
+          PYTHON: ${{ steps.setup-python-ml.outputs.python-path }}
 
       - name: Run ML tests
         run: |
-          python -m pytest -v tests/ \
+          "${PYTHON}" -m pytest -v tests/ \
             -m "ml and not slow" \
             --cov=src/transformation_portal \
             --cov-report=xml \
@@ -276,6 +292,7 @@ jobs:
             --maxfail=3 \
             --tb=short
         env:
+          PYTHON: ${{ steps.setup-python-ml.outputs.python-path }}
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
           PYTHONNOUSERSITE: 1
           TRANSFORMERS_OFFLINE: 1
