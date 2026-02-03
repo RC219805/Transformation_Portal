@@ -137,7 +137,8 @@ def make_output_key(input_path: Path, input_root: Path, use_xxhash: bool = False
     if use_xxhash and XXHASH_AVAILABLE:
         hash_suffix = xxhash.xxh64(hash_input).hexdigest()[:8]
     else:
-        hash_suffix = hashlib.sha1(hash_input).hexdigest()[:8]
+        # Use SHA1 for file naming (not cryptographic security)
+        hash_suffix = hashlib.sha1(hash_input, usedforsecurity=False).hexdigest()[:8]
 
     # Sanitize stem
     stem_sanitized = sanitize_path_component_nonlossy(name)

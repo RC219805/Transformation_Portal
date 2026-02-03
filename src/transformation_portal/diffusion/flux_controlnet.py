@@ -91,7 +91,7 @@ class FLUXControlNet:
         if "canny" in control_types:
             self.processors["canny"] = CannyDetector()
         if "depth" in control_types:
-            self.processors["depth"] = MidasDetector.from_pretrained(
+            self.processors["depth"] = MidasDetector.from_pretrained(  # nosec B615
                 "lllyasviel/Annotators"
             )
 

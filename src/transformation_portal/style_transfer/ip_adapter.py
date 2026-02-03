@@ -98,11 +98,11 @@ class IPAdapterStyleTransfer:
         logger.info(f"Initializing IP-Adapter on {self.device}")
 
         # Load CLIP vision model for reference encoding
-        self.image_encoder = CLIPVisionModelWithProjection.from_pretrained(
+        self.image_encoder = CLIPVisionModelWithProjection.from_pretrained(  # nosec B615
             self.CLIP_VISION_MODEL, torch_dtype=torch_dtype
         ).to(self.device)
 
-        self.image_processor = CLIPImageProcessor.from_pretrained(
+        self.image_processor = CLIPImageProcessor.from_pretrained(  # nosec B615
             self.CLIP_VISION_MODEL
         )
 

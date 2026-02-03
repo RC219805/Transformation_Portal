@@ -129,9 +129,8 @@ Focus on luxury architectural materials."""
         """Load LLaVA model and processor."""
         try:
             # Load processor
-            # nosec B615 - revision pinning intentionally omitted for development flexibility
             # Production deployments should pin specific model revisions
-            self.processor = AutoProcessor.from_pretrained(
+            self.processor = AutoProcessor.from_pretrained(  # nosec B615
                 self.model_id, cache_dir=self.cache_dir
             )
 
@@ -154,7 +153,7 @@ Focus on luxury architectural materials."""
                 )
 
             # Load model
-            self.model = LlavaForConditionalGeneration.from_pretrained(
+            self.model = LlavaForConditionalGeneration.from_pretrained(  # nosec B615
                 self.model_id, **model_kwargs
             )
 

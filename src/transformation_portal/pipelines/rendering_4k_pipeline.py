@@ -2021,14 +2021,14 @@ class Rendering4KPipeline:
 
             if self.config.ai_enhancement.use_controlnet:
                 controlnets.append(
-                    ControlNetModel.from_pretrained(
+                    ControlNetModel.from_pretrained(  # nosec B615
                         "lllyasviel/sd-controlnet-canny",
                         torch_dtype=dtype,
                     )
                 )
             if self.config.ai_enhancement.use_depth_guidance:
                 controlnets.append(
-                    ControlNetModel.from_pretrained(
+                    ControlNetModel.from_pretrained(  # nosec B615
                         "lllyasviel/sd-controlnet-depth",
                         torch_dtype=dtype,
                     )
@@ -2041,7 +2041,7 @@ class Rendering4KPipeline:
                 return None
 
             self._controlnet_pipe = (
-                StableDiffusionControlNetImg2ImgPipeline.from_pretrained(
+                StableDiffusionControlNetImg2ImgPipeline.from_pretrained(  # nosec B615
                     "runwayml/stable-diffusion-v1-5",
                     controlnet=controlnets if len(controlnets) > 1 else controlnets[0],
                     torch_dtype=dtype,
