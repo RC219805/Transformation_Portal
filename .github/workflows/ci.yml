@@ -248,7 +248,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip wheel setuptools
           # CPU-only PyTorch to save disk space
-          pip install "torch==2.5.1+cpu" "torchvision==0.20.1+cpu" --index-url https://download.pytorch.org/whl/cpu
+          pip install "torch==2.10.0+cpu" "torchvision==0.25.0+cpu" --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements-ci.txt
           pip install -e . --no-deps
           df -h

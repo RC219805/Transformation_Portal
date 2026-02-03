@@ -185,13 +185,8 @@ jobs:
 
           # Fail only on HIGH or CRITICAL vulnerabilities
           if [ -f audit-report.json ]; then
-            CRITICAL_COUNT=$(cat audit-report.json | python -c "
-import json, sys
-data = json.load(sys.stdin)
-vulns = data.get('vulnerabilities', [])
-critical = sum(1 for v in vulns if v.get('severity', '').upper() in ['HIGH', 'CRITICAL'])
-print(critical)
-" || echo "0")
+            # Count HIGH and CRITICAL vulnerabilities using jq
+            CRITICAL_COUNT=$(jq '[.vulnerabilities[]? | select(.severity? | ascii_upcase | IN("HIGH", "CRITICAL"))] | length' audit-report.json 2>/dev/null || echo "0")
 
             if [ "$CRITICAL_COUNT" -gt 0 ]; then
               echo "❌ BLOCKED: Found $CRITICAL_COUNT high/critical vulnerabilities"
