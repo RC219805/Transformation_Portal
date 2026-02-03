@@ -28,16 +28,58 @@ To map a check label to its YAML file:
 
 ---
 
+## CI Gate Pattern (Branch Protection Strategy)
+
+### Problem: Matrix-Expanded Checks Break Branch Protection
+
+When branch protection requires specific job names like `test (3.11, cpu, core)`, every matrix change breaks protection:
+- Drop a Python version → PRs stuck waiting for non-existent check
+- Add a new Python version → Admin must manually update branch protection
+- Change test types/devices → All affected checks must be updated by admin
+
+### Solution: Stable Aggregator Job
+
+The **CI Gate pattern** provides a single, stable check that aggregates all critical upstream jobs:
+
+```yaml
+ci_gate:
+  name: CI Gate  # Stable name - never changes
+  needs: [lint, test, generate-manifest]
+  if: ${{ always() }}  # Runs even if upstream fails
+  # Checks that all upstream jobs succeeded
+```
+
+**Benefits:**
+- Branch protection requires only `CI Gate`
+- Test matrix can evolve freely (add/remove Python versions, devices, test types)
+- No admin intervention when matrix changes
+- Clear failure reporting (shows which upstream job failed)
+- Used by major OSS projects (Kubernetes, Terraform, etc.)
+
+**Current Implementation:**
+- Workflow: `.github/workflows/build.yml`
+- Job name: `CI Gate` (require this in branch protection)
+- Aggregates: `lint`, `test` (all matrix combinations), `generate-manifest`
+
+**See:** `docs/operations/branch_protection_setup.md` for configuration details.
+
+---
+
 ## Workflow groups
 
 ### 1) Core CI
 
+**Workflow:** `.github/workflows/build.yml`
+
 Purpose: Validate that code is importable, tests pass, and manifests/config expectations hold.
 
-Typical jobs include:
-- Lint (repo-configured tooling)
-- Unit tests (Python 3.11 baseline)
-- "Manifest" / "contract" verification where applicable
+**Job structure:**
+- `lint` - Repo-configured linting (flake8, pylint)
+- `test` - Matrix-expanded test jobs (Python 3.11/3.12, core/ml tests)
+- `generate-manifest` - Montecito manifest generation
+- `CI Gate` - **Aggregator job** (this is what branch protection requires)
+
+**Branch protection:** Require only `CI Gate` (aggregates all upstream jobs)
 
 Local equivalents:
 - `python -m pytest -q`
@@ -182,3 +224,6 @@ Before merging workflow changes:
 - [ ] Actions meet repository pinning policy.
 - [ ] The workflow does not mutate the repository unless explicitly required and reviewed.
 - [ ] The workflow name and purpose is documented (update this file if it changes behavior).
+- [ ] If adding a new critical job, consider whether `CI Gate` should aggregate it.
+- [ ] If modifying the test matrix dimensions (Python versions, devices, test types), no branch protection changes needed (CI Gate handles it).
+- [ ] If adding/removing top-level jobs that CI Gate should aggregate, update `ci_gate.needs` and enforcement logic in `.github/workflows/build.yml`.

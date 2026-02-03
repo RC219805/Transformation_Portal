@@ -337,3 +337,46 @@ jobs:
           path: ${{ steps.manifest.outputs.manifest_path }}
           if-no-files-found: error
           retention-days: 7
+
+  ci_gate:
+    name: CI Gate
+    runs-on: ubuntu-24.04
+    needs: [lint, test, generate-manifest]
+    if: ${{ always() }}
+    timeout-minutes: 5
+
+    steps:
+      - name: Summarize upstream results
+        run: |
+          set -euo pipefail
+          echo "lint result:  ${{ needs.lint.result }}"
+          echo "test result:  ${{ needs.test.result }}"
+          echo "manifest result: ${{ needs['generate-manifest'].result }}"
+
+      - name: Enforce pass/fail
+        run: |
+          set -euo pipefail
+
+          ok="true"
+
+          if [ "${{ needs.lint.result }}" != "success" ]; then
+            echo "❌ lint did not succeed"
+            ok="false"
+          fi
+
+          if [ "${{ needs.test.result }}" != "success" ]; then
+            echo "❌ test matrix did not succeed"
+            ok="false"
+          fi
+
+          if [ "${{ needs['generate-manifest'].result }}" != "success" ]; then
+            echo "❌ generate-manifest did not succeed"
+            ok="false"
+          fi
+
+          if [ "$ok" != "true" ]; then
+            echo "CI Gate: FAILED"
+            exit 1
+          fi
+
+          echo "CI Gate: PASSED"

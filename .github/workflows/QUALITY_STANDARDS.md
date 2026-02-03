@@ -39,7 +39,7 @@ Jobs:
     - Markdown file count validation
 
   lint-and-test:
-    Matrix: [Python 3.10, 3.11, 3.12] × [CPU, GPU]
+    Matrix: [Python 3.11, 3.12] × [CPU, GPU]
     - Install dependencies
     - Run pytest (548 tests)
     - Code coverage reporting
