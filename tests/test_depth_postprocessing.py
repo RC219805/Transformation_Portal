@@ -2,6 +2,12 @@ import sys
 from unittest.mock import Mock
 
 import numpy as np
+import pytest
+
+# Save original modules before mocking
+_ORIGINAL_TORCH = sys.modules.get('torch')
+_ORIGINAL_TRANSFORMERS = sys.modules.get('transformers')
+_ORIGINAL_COREMLTOOLS = sys.modules.get('coremltools')
 
 # Mock torch and other heavy dependencies before importing pipeline
 sys.modules['torch'] = Mock()
@@ -10,6 +16,23 @@ sys.modules['coremltools'] = Mock()
 
 from transformation_portal.depth.pipeline import ArchitecturalDepthPipeline
 import transformation_portal.depth.pipeline as pipeline_mod
+
+# Immediately restore sys.modules to prevent pollution
+# The pipeline module is already imported and cached, so this is safe
+if _ORIGINAL_TORCH is not None:
+    sys.modules['torch'] = _ORIGINAL_TORCH
+else:
+    sys.modules.pop('torch', None)
+
+if _ORIGINAL_TRANSFORMERS is not None:
+    sys.modules['transformers'] = _ORIGINAL_TRANSFORMERS
+else:
+    sys.modules.pop('transformers', None)
+
+if _ORIGINAL_COREMLTOOLS is not None:
+    sys.modules['coremltools'] = _ORIGINAL_COREMLTOOLS
+else:
+    sys.modules.pop('coremltools', None)
 
 
 class _DummyVariant:
