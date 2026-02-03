@@ -177,27 +177,86 @@ jobs:
 
       - name: Install dependencies
         run: |
-          "${PYTHON}" -m pip install --upgrade pip wheel setuptools
-          "${PYTHON}" -m pip install -r requirements-ci.txt
-          "${PYTHON}" -m pip install -e . --no-deps
-        env:
-          PYTHON: ${{ steps.setup-python.outputs.python-path }}
+          # Diagnostic: introspect python-path output and environment
+          echo "python-path output: ${{ steps.setup-python.outputs.python-path }}"
+          ls -la "$(dirname "${{ steps.setup-python.outputs.python-path }}")" || echo "Directory doesn't exist"
+          ls -la "${{ steps.setup-python.outputs.python-path }}" || echo "python-path file doesn't exist"
+          which -a python || echo "No 'python' in PATH"
+          which -a python3 || echo "No 'python3' in PATH"
+
+          # Guarded fallback: use python-path if it exists, else toolcache python3, else PATH python3
+          PY="${{ steps.setup-python.outputs.python-path }}"
+          if [ -x "$PY" ]; then
+            PYTHON="$PY"
+            echo "Using python-path: $PYTHON"
+          else
+            PYDIR="$(dirname "$PY")"
+            if [ -x "$PYDIR/python3" ]; then
+              PYTHON="$PYDIR/python3"
+              echo "Using toolcache python3: $PYTHON"
+            else
+              PYTHON="$(command -v python3 || true)"
+              if [ -z "$PYTHON" ]; then
+                echo "ERROR: No Python 3 interpreter found in any fallback location"
+                exit 1
+              fi
+              echo "Using PATH python3: $PYTHON"
+            fi
+          fi
+
+          "$PYTHON" -V
+          "$PYTHON" -c "import sys; print('sys.executable:', sys.executable)"
+          "$PYTHON" -m pip install --upgrade pip wheel setuptools
+          "$PYTHON" -m pip install -r requirements-ci.txt
+          "$PYTHON" -m pip install -e . --no-deps
 
       - name: Verify test environment
         run: |
-          which python
-          python -V
-          "${PYTHON}" -V
-          "${PYTHON}" -c "import pytest; print('pytest', pytest.__version__)"
-          "${PYTHON}" -m pytest --version
-        env:
-          PYTHON: ${{ steps.setup-python.outputs.python-path }}
+          # Use same fallback logic as install step
+          PY="${{ steps.setup-python.outputs.python-path }}"
+          if [ -x "$PY" ]; then
+            PYTHON="$PY"
+          else
+            PYDIR="$(dirname "$PY")"
+            if [ -x "$PYDIR/python3" ]; then
+              PYTHON="$PYDIR/python3"
+            else
+              PYTHON="$(command -v python3 || true)"
+              if [ -z "$PYTHON" ]; then
+                echo "ERROR: No Python 3 interpreter found in any fallback location"
+                exit 1
+              fi
+            fi
+          fi
+
+          echo "Verify using: $PYTHON"
+          "$PYTHON" -V
+          "$PYTHON" -c "import sys; print('sys.executable:', sys.executable)"
+          "$PYTHON" -c "import pytest; print('pytest', pytest.__version__)"
+          "$PYTHON" -m pytest --version
 
       - name: Run core tests (no ML)
         run: |
-          echo "PYTHON=${PYTHON}"
-          "${PYTHON}" -c "import sys; print('sys.executable:', sys.executable)"
-          "${PYTHON}" -m pytest -v tests/ \
+          # Use same fallback logic
+          PY="${{ steps.setup-python.outputs.python-path }}"
+          if [ -x "$PY" ]; then
+            PYTHON="$PY"
+          else
+            PYDIR="$(dirname "$PY")"
+            if [ -x "$PYDIR/python3" ]; then
+              PYTHON="$PYDIR/python3"
+            else
+              PYTHON="$(command -v python3 || true)"
+              if [ -z "$PYTHON" ]; then
+                echo "ERROR: No Python 3 interpreter found in any fallback location"
+                exit 1
+              fi
+            fi
+          fi
+
+          echo "Running tests with: $PYTHON"
+          "$PYTHON" -c "import sys; print('sys.executable:', sys.executable)"
+          "$PYTHON" -m pytest -v tests/ \
             -m "not ml and not slow" \
             --cov=src/transformation_portal \
             --cov-report=xml \
@@ -207,7 +266,6 @@ jobs:
             --maxfail=3 \
             --tb=short
         env:
-          PYTHON: ${{ steps.setup-python.outputs.python-path }}
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
           PYTHONNOUSERSITE: 1
 
@@ -266,30 +324,85 @@ jobs:
 
       - name: Install dependencies
         run: |
-          "${PYTHON}" -m pip install --upgrade pip wheel setuptools
+          # Diagnostic: introspect python-path output and environment
+          echo "python-path output: ${{ steps.setup-python-ml.outputs.python-path }}"
+          ls -la "$(dirname "${{ steps.setup-python-ml.outputs.python-path }}")" || echo "Directory doesn't exist"
+          ls -la "${{ steps.setup-python-ml.outputs.python-path }}" || echo "python-path file doesn't exist"
+
+          # Guarded fallback
+          PY="${{ steps.setup-python-ml.outputs.python-path }}"
+          if [ -x "$PY" ]; then
+            PYTHON="$PY"
+            echo "Using python-path: $PYTHON"
+          else
+            PYDIR="$(dirname "$PY")"
+            if [ -x "$PYDIR/python3" ]; then
+              PYTHON="$PYDIR/python3"
+              echo "Using toolcache python3: $PYTHON"
+            else
+              PYTHON="$(command -v python3 || true)"
+              if [ -z "$PYTHON" ]; then
+                echo "ERROR: No Python 3 interpreter found in any fallback location"
+                exit 1
+              fi
+              echo "Using PATH python3: $PYTHON"
+            fi
+          fi
+
+          "$PYTHON" -V
+          "$PYTHON" -c "import sys; print('sys.executable:', sys.executable)"
+          "$PYTHON" -m pip install --upgrade pip wheel setuptools
           # CPU-only PyTorch to save disk space
-          "${PYTHON}" -m pip install "torch==2.10.0+cpu" "torchvision==0.25.0+cpu" --index-url https://download.pytorch.org/whl/cpu
-          "${PYTHON}" -m pip install -r requirements-ci.txt
-          "${PYTHON}" -m pip install -e . --no-deps
+          "$PYTHON" -m pip install "torch==2.10.0+cpu" "torchvision==0.25.0+cpu" --index-url https://download.pytorch.org/whl/cpu
+          "$PYTHON" -m pip install -r requirements-ci.txt
+          "$PYTHON" -m pip install -e . --no-deps
           df -h
-        env:
-          PYTHON: ${{ steps.setup-python-ml.outputs.python-path }}
 
       - name: Verify test environment
         run: |
-          which python
-          python -V
-          "${PYTHON}" -V
-          "${PYTHON}" -c "import pytest; print('pytest', pytest.__version__)"
-          "${PYTHON}" -m pytest --version
-        env:
-          PYTHON: ${{ steps.setup-python-ml.outputs.python-path }}
+          PY="${{ steps.setup-python-ml.outputs.python-path }}"
+          if [ -x "$PY" ]; then
+            PYTHON="$PY"
+          else
+            PYDIR="$(dirname "$PY")"
+            if [ -x "$PYDIR/python3" ]; then
+              PYTHON="$PYDIR/python3"
+            else
+              PYTHON="$(command -v python3 || true)"
+              if [ -z "$PYTHON" ]; then
+                echo "ERROR: No Python 3 interpreter found in any fallback location"
+                exit 1
+              fi
+            fi
+          fi
+
+          echo "Verify using: $PYTHON"
+          "$PYTHON" -V
+          "$PYTHON" -c "import sys; print('sys.executable:', sys.executable)"
+          "$PYTHON" -c "import pytest; print('pytest', pytest.__version__)"
+          "$PYTHON" -m pytest --version
 
       - name: Run ML tests
         run: |
-          echo "PYTHON=${PYTHON}"
-          "${PYTHON}" -c "import sys; print('sys.executable:', sys.executable)"
-          "${PYTHON}" -m pytest -v tests/ \
+          PY="${{ steps.setup-python-ml.outputs.python-path }}"
+          if [ -x "$PY" ]; then
+            PYTHON="$PY"
+          else
+            PYDIR="$(dirname "$PY")"
+            if [ -x "$PYDIR/python3" ]; then
+              PYTHON="$PYDIR/python3"
+            else
+              PYTHON="$(command -v python3 || true)"
+              if [ -z "$PYTHON" ]; then
+                echo "ERROR: No Python 3 interpreter found in any fallback location"
+                exit 1
+              fi
+            fi
+          fi
+
+          echo "Running ML tests with: $PYTHON"
+          "$PYTHON" -c "import sys; print('sys.executable:', sys.executable)"
+          "$PYTHON" -m pytest -v tests/ \
             -m "ml and not slow" \
             --cov=src/transformation_portal \
             --cov-report=xml \
@@ -297,7 +410,6 @@ jobs:
             --maxfail=3 \
             --tb=short
         env:
-          PYTHON: ${{ steps.setup-python-ml.outputs.python-path }}
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
           PYTHONNOUSERSITE: 1
           TRANSFORMERS_OFFLINE: 1
