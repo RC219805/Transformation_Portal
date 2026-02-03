@@ -428,8 +428,8 @@ def process(
     if limit:
         image_paths = image_paths[:limit]
     
-    # Print configuration
-    if not quiet:
+    # Print configuration (suppress if JSON output)
+    if not quiet and not json_output:
         typer.echo(f"\n{'='*70}")
         typer.echo(f"Lux Depth V3 - {quality_tier.value.upper()} Quality Tier")
         typer.echo(f"{'='*70}")
@@ -462,19 +462,19 @@ def process(
     failed_files = []
     
     for i, img_path in enumerate(image_paths, 1):
-        if not quiet:
+        if not quiet and not json_output:
             typer.echo(f"[{i}/{len(image_paths)}] Processing: {img_path.name}...", nl=False)
         
         try:
             image_input = ImageInput(path=img_path)
             result = orchestrator.enhance_image(image_input, input_root=input_dir)
             
-            if not quiet:
+            if not quiet and not json_output:
                 typer.echo(" ✓")
             successful += 1
             
         except Exception as e:
-            if not quiet:
+            if not quiet and not json_output:
                 typer.echo(f" ✗ Error: {e}")
             logger.error(f"Failed to process {img_path.name}: {e}")
             failed += 1
