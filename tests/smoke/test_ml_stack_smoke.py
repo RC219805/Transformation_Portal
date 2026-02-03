@@ -22,38 +22,44 @@ import pytest
 try:
     import torch
     TORCH_AVAILABLE = True
-except ImportError:
+except (ImportError, RuntimeError, TypeError):
     TORCH_AVAILABLE = False
+    torch = None
 
 try:
     import torchvision
     TORCHVISION_AVAILABLE = True
-except ImportError:
+except (ImportError, RuntimeError, TypeError):
     TORCHVISION_AVAILABLE = False
+    torchvision = None
 
 try:
     import timm
     TIMM_AVAILABLE = True
-except ImportError:
+except (ImportError, RuntimeError, TypeError):
     TIMM_AVAILABLE = False
+    timm = None
 
 try:
     import diffusers
     DIFFUSERS_AVAILABLE = True
-except ImportError:
+except (ImportError, RuntimeError, TypeError):
     DIFFUSERS_AVAILABLE = False
+    diffusers = None
 
 try:
     import transformers
     TRANSFORMERS_AVAILABLE = True
-except ImportError:
+except (ImportError, RuntimeError, TypeError):
     TRANSFORMERS_AVAILABLE = False
+    transformers = None
 
 try:
     import sklearn
     SKLEARN_AVAILABLE = True
-except ImportError:
+except (ImportError, RuntimeError, TypeError):
     SKLEARN_AVAILABLE = False
+    sklearn = None
 
 # Skip all ML tests if torch is not available
 pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch required for ML smoke tests")
