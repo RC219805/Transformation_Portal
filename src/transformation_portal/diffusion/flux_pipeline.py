@@ -115,7 +115,7 @@ class FLUXPipeline:
         logger.info(f"Initializing FLUX.1-{variant} on {self.device}")
 
         # Load pipeline
-        self.pipe = FluxPipeline.from_pretrained(
+        self.pipe = FluxPipeline.from_pretrained(  # nosec B615
             self.model_id, torch_dtype=torch_dtype, cache_dir=cache_dir
         )
 

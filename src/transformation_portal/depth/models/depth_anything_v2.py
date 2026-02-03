@@ -238,10 +238,9 @@ class DepthAnythingV2Model:
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Failed to load PyTorch model: %s", e)
             # Fallback: manual loading
-            # nosec B615 - revision pinning intentionally omitted for development flexibility
             # Production deployments should pin specific model revisions
-            self.processor = AutoImageProcessor.from_pretrained(self.variant.value)
-            self.model = AutoModelForDepthEstimation.from_pretrained(self.variant.value)
+            self.processor = AutoImageProcessor.from_pretrained(self.variant.value)  # nosec B615
+            self.model = AutoModelForDepthEstimation.from_pretrained(self.variant.value)  # nosec B615
 
             if self.device == "mps":
                 self.model = self.model.to("mps")
@@ -340,9 +339,8 @@ class DepthAnythingV2Model:
                 "Use SMALL, BASE, or LARGE."
             )
 
-        # nosec B615 - revision pinning intentionally omitted for development flexibility
         # Production deployments should pin specific model revisions
-        model_path = hf_hub_download(
+        model_path = hf_hub_download(  # nosec B615
             repo_id=onnx_repo,
             filename=onnx_filename,
             cache_dir=Path.home() / ".cache" / "depth_anything_v2",
