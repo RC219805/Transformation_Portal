@@ -1,10 +1,10 @@
 name: CI Quality Firewall
 
 on:
-  pull_request:
-    branches: [main, develop]
   push:
     branches: [main, develop]
+  # pull_request disabled - CI Gate in build.yml is the required governance check
+  # This workflow provides post-merge validation only
 
 permissions:
   contents: read
