@@ -211,16 +211,16 @@ jobs:
           path: htmlcov/
 
   test-ml:
-    name: ML Tests (Python ${{ env.PYTHON_VERSION_ML }})
+    name: ML Tests (Python 3.11)
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ env.PYTHON_VERSION_ML }}
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION_ML }}
+          python-version: "3.11"
 
       - name: Free disk space
         run: |
@@ -273,7 +273,7 @@ jobs:
         with:
           files: ./coverage.xml
           flags: ml-tests
-          name: ml-py${{ env.PYTHON_VERSION_ML }}
+          name: ml-py3.11
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
