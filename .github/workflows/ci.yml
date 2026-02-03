@@ -191,6 +191,7 @@ jobs:
             --tb=short
         env:
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
+          PYTHONNOUSERSITE: 1
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.12'
@@ -264,6 +265,7 @@ jobs:
             --tb=short
         env:
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
+          PYTHONNOUSERSITE: 1
           TRANSFORMERS_OFFLINE: 1
 
       - name: Upload coverage to Codecov
