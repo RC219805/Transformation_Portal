@@ -180,9 +180,14 @@ jobs:
           pip install -r requirements-ci.txt
           pip install -e . --no-deps
 
+      - name: Verify test environment
+        run: |
+          python -c "import pytest; print('pytest', pytest.__version__)"
+          python -m pytest --version
+
       - name: Run core tests (no ML)
         run: |
-          pytest -v tests/ \
+          python -m pytest -v tests/ \
             -m "not ml and not slow" \
             --cov=src/transformation_portal \
             --cov-report=xml \
@@ -256,9 +261,14 @@ jobs:
           pip install -e . --no-deps
           df -h
 
+      - name: Verify test environment
+        run: |
+          python -c "import pytest; print('pytest', pytest.__version__)"
+          python -m pytest --version
+
       - name: Run ML tests
         run: |
-          pytest -v tests/ \
+          python -m pytest -v tests/ \
             -m "ml and not slow" \
             --cov=src/transformation_portal \
             --cov-report=xml \
