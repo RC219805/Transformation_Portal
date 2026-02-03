@@ -18,14 +18,52 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Import ML dependencies only when running ML tests
-# This prevents import errors during test collection in non-ML environments
-torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
+# Check if ML packages are available for import
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+
+try:
+    import torchvision
+    TORCHVISION_AVAILABLE = True
+except ImportError:
+    TORCHVISION_AVAILABLE = False
+
+try:
+    import timm
+    TIMM_AVAILABLE = True
+except ImportError:
+    TIMM_AVAILABLE = False
+
+try:
+    import diffusers
+    DIFFUSERS_AVAILABLE = True
+except ImportError:
+    DIFFUSERS_AVAILABLE = False
+
+try:
+    import transformers
+    TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    TRANSFORMERS_AVAILABLE = False
+
+try:
+    import sklearn
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
+
+# Skip all ML tests if torch is not available
+pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch required for ML smoke tests")
 
 
 @pytest.mark.ml
 def test_pytorch_basic_operations():
     """Test basic PyTorch operations work with torch 2.10.0."""
+    import torch
+
     # Create a simple tensor
     x = torch.tensor([1.0, 2.0, 3.0])
     y = torch.tensor([4.0, 5.0, 6.0])
@@ -44,6 +82,8 @@ def test_pytorch_basic_operations():
 @pytest.mark.ml
 def test_pytorch_mps_device_availability():
     """Test MPS (Apple Silicon) device detection with torch 2.10.0."""
+    import torch
+
     # Should not raise even if MPS not available
     if sys.platform == "darwin" and torch.backends.mps.is_available():
         device = torch.device("mps")
@@ -57,8 +97,10 @@ def test_pytorch_mps_device_availability():
 
 
 @pytest.mark.ml
+@pytest.mark.skipif(not TORCHVISION_AVAILABLE, reason="torchvision not installed")
 def test_torchvision_transforms():
     """Test torchvision transforms work with torchvision 0.25.0."""
+    import torch
     from torchvision import transforms
     from PIL import Image
     import numpy as np
@@ -80,6 +122,7 @@ def test_torchvision_transforms():
 
 
 @pytest.mark.ml
+@pytest.mark.skipif(not SKLEARN_AVAILABLE, reason="scikit-learn not installed")
 def test_scikit_learn_basic_classifier():
     """Test scikit-learn basic classifier with scikit-learn 1.8.0."""
     from sklearn.ensemble import RandomForestClassifier
@@ -105,6 +148,7 @@ def test_scikit_learn_basic_classifier():
 
 
 @pytest.mark.ml
+@pytest.mark.skipif(not TIMM_AVAILABLE, reason="timm not installed")
 @patch('timm.create_model')
 def test_timm_model_interface(mock_create_model):
     """Test timm model creation interface with timm 1.0.24."""
@@ -124,9 +168,11 @@ def test_timm_model_interface(mock_create_model):
 
 
 @pytest.mark.ml
+@pytest.mark.skipif(not DIFFUSERS_AVAILABLE, reason="diffusers not installed")
 @patch('diffusers.DiffusionPipeline.from_pretrained')
 def test_diffusers_pipeline_interface(mock_from_pretrained):
     """Test diffusers pipeline interface with diffusers 0.36.0."""
+    import torch
     from diffusers import DiffusionPipeline
 
     # Mock the pipeline to avoid downloading large models
@@ -150,10 +196,12 @@ def test_diffusers_pipeline_interface(mock_from_pretrained):
 
 
 @pytest.mark.ml
+@pytest.mark.skipif(not TRANSFORMERS_AVAILABLE, reason="transformers not installed")
 @patch('transformers.AutoTokenizer.from_pretrained')
 @patch('transformers.AutoModel.from_pretrained')
 def test_transformers_model_interface(mock_model_from_pretrained, mock_tokenizer_from_pretrained):
     """Test transformers model interface with transformers 4.57.6."""
+    import torch
     from transformers import AutoTokenizer, AutoModel
 
     # Mock tokenizer and model to avoid downloading
@@ -179,6 +227,8 @@ def test_transformers_model_interface(mock_model_from_pretrained, mock_tokenizer
 @pytest.mark.ml
 def test_torch_cuda_compatibility():
     """Test CUDA compatibility (if available) with torch 2.10.0."""
+    import torch
+
     # This should not fail even without CUDA
     cuda_available = torch.cuda.is_available()
 
@@ -197,14 +247,6 @@ def test_torch_cuda_compatibility():
 @pytest.mark.ml
 def test_ml_stack_imports():
     """Test that all major ML packages can be imported without errors."""
-    import torch
-    import torchvision
-    import diffusers
-    import transformers
-    import timm
-    import sklearn
-
-    # Verify versions meet minimum requirements
     import pkg_resources
 
     def get_version(package_name):
@@ -213,18 +255,41 @@ def test_ml_stack_imports():
         except pkg_resources.DistributionNotFound:
             return None
 
+    # Always check torch (required for ML tests to run)
+    import torch
     torch_version = get_version("torch")
     assert torch_version is not None, "torch not installed"
     assert torch_version >= "2.10.0", f"torch version {torch_version} < 2.10.0"
 
-    sklearn_version = get_version("scikit-learn")
-    assert sklearn_version is not None, "scikit-learn not installed"
-    assert sklearn_version >= "1.8.0", f"scikit-learn version {sklearn_version} < 1.8.0"
+    # Check sklearn (if available)
+    if SKLEARN_AVAILABLE:
+        import sklearn
+        sklearn_version = get_version("scikit-learn")
+        assert sklearn_version is not None, "scikit-learn not installed"
+        assert sklearn_version >= "1.8.0", f"scikit-learn version {sklearn_version} < 1.8.0"
 
-    diffusers_version = get_version("diffusers")
-    assert diffusers_version is not None, "diffusers not installed"
-    assert diffusers_version >= "0.36.0", f"diffusers version {diffusers_version} < 0.36.0"
+    # Check diffusers (if available)
+    if DIFFUSERS_AVAILABLE:
+        import diffusers
+        diffusers_version = get_version("diffusers")
+        assert diffusers_version is not None, "diffusers not installed"
+        assert diffusers_version >= "0.36.0", f"diffusers version {diffusers_version} < 0.36.0"
 
-    transformers_version = get_version("transformers")
-    assert transformers_version is not None, "transformers not installed"
-    assert transformers_version >= "4.57.0", f"transformers version {transformers_version} < 4.57.0"
+    # Check transformers (if available)
+    if TRANSFORMERS_AVAILABLE:
+        import transformers
+        transformers_version = get_version("transformers")
+        assert transformers_version is not None, "transformers not installed"
+        assert transformers_version >= "4.57.0", f"transformers version {transformers_version} < 4.57.0"
+
+    # Check torchvision (if available)
+    if TORCHVISION_AVAILABLE:
+        import torchvision
+        torchvision_version = get_version("torchvision")
+        assert torchvision_version is not None, "torchvision not installed"
+
+    # Check timm (if available)
+    if TIMM_AVAILABLE:
+        import timm
+        timm_version = get_version("timm")
+        assert timm_version is not None, "timm not installed"
