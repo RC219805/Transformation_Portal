@@ -169,12 +169,20 @@ class DepthAnythingV2Model:
     def _auto_detect_backend(self) -> ModelBackend:
         """Auto-detect optimal backend for current hardware."""
         # Prefer CoreML on Apple Silicon for best performance
-        if TORCH_AVAILABLE and COREML_AVAILABLE and torch.backends.mps.is_available():
-            return ModelBackend.COREML
+        if TORCH_AVAILABLE and COREML_AVAILABLE:
+            try:
+                if hasattr(torch, 'backends') and torch.backends.mps.is_available():
+                    return ModelBackend.COREML
+            except AttributeError:
+                pass
 
         # Fallback to PyTorch with MPS acceleration
-        if TORCH_AVAILABLE and torch.backends.mps.is_available():
-            return ModelBackend.PYTORCH_MPS
+        if TORCH_AVAILABLE:
+            try:
+                if hasattr(torch, 'backends') and torch.backends.mps.is_available():
+                    return ModelBackend.PYTORCH_MPS
+            except AttributeError:
+                pass
 
         # CPU fallback (or ONNX if torch not available)
         if TORCH_AVAILABLE:
