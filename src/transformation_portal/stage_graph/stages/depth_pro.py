@@ -239,12 +239,14 @@ class DepthProStage(Stage):
         """Auto-detect optimal device (prefer MPS for Apple Silicon)."""
         if not TORCH_AVAILABLE or torch is None:
             return "cpu"
-        if torch.backends.mps.is_available():
-            return "mps"
-        elif torch.cuda.is_available():
-            return "cuda"
-        else:
-            return "cpu"
+        try:
+            if hasattr(torch, 'backends') and torch.backends.mps.is_available():
+                return "mps"
+            elif torch.cuda.is_available():
+                return "cuda"
+        except AttributeError:
+            pass
+        return "cpu"
 
     def _validate_checkpoint(self):
         """Validate checkpoint SHA-256 hash against expected value.

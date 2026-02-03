@@ -131,7 +131,7 @@ class ModelRegistry:
             import torch
 
             # Check for Apple Neural Engine via CoreML
-            if torch.backends.mps.is_available():
+            if hasattr(torch, 'backends') and torch.backends.mps.is_available():
                 try:
                     import coremltools  # noqa: F401
                     # CoreML available, prefer for best performance
@@ -144,7 +144,7 @@ class ModelRegistry:
             if torch.cuda.is_available():
                 return DeviceType.CUDA
 
-        except ImportError:
+        except (ImportError, AttributeError):
             pass
 
         # CPU fallback
