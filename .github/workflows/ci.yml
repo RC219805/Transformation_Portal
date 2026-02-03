@@ -187,15 +187,7 @@ jobs:
 
       - name: Run core tests (no ML)
         run: |
-          python -m pytest -v tests/ \
-            -m "not ml and not slow" \
-            --cov=src/transformation_portal \
-            --cov-report=xml \
-            --cov-report=term \
-            --cov-report=html \
-            --cov-config=pyproject.toml \
-            --maxfail=3 \
-            --tb=short
+          python -m pytest -v tests/ -m "not ml and not slow" --cov=src/transformation_portal --cov-report=xml --cov-report=term --cov-report=html --cov-config=pyproject.toml --maxfail=3 --tb=short
         env:
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
           PYTHONNOUSERSITE: 1
@@ -268,13 +260,7 @@ jobs:
 
       - name: Run ML tests
         run: |
-          python -m pytest -v tests/ \
-            -m "ml and not slow" \
-            --cov=src/transformation_portal \
-            --cov-report=xml \
-            --cov-report=term \
-            --maxfail=3 \
-            --tb=short
+          python -m pytest -v tests/ -m "ml and not slow" --cov=src/transformation_portal --cov-report=xml --cov-report=term --maxfail=3 --tb=short
         env:
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
           PYTHONNOUSERSITE: 1
