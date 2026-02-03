@@ -195,7 +195,11 @@ jobs:
               PYTHON="$PYDIR/python3"
               echo "Using toolcache python3: $PYTHON"
             else
-              PYTHON="$(command -v python3)"
+              PYTHON="$(command -v python3 || true)"
+              if [ -z "$PYTHON" ]; then
+                echo "ERROR: No Python 3 interpreter found in any fallback location"
+                exit 1
+              fi
               echo "Using PATH python3: $PYTHON"
             fi
           fi
@@ -217,7 +221,11 @@ jobs:
             if [ -x "$PYDIR/python3" ]; then
               PYTHON="$PYDIR/python3"
             else
-              PYTHON="$(command -v python3)"
+              PYTHON="$(command -v python3 || true)"
+              if [ -z "$PYTHON" ]; then
+                echo "ERROR: No Python 3 interpreter found in any fallback location"
+                exit 1
+              fi
             fi
           fi
 
@@ -238,7 +246,11 @@ jobs:
             if [ -x "$PYDIR/python3" ]; then
               PYTHON="$PYDIR/python3"
             else
-              PYTHON="$(command -v python3)"
+              PYTHON="$(command -v python3 || true)"
+              if [ -z "$PYTHON" ]; then
+                echo "ERROR: No Python 3 interpreter found in any fallback location"
+                exit 1
+              fi
             fi
           fi
 
@@ -328,7 +340,11 @@ jobs:
               PYTHON="$PYDIR/python3"
               echo "Using toolcache python3: $PYTHON"
             else
-              PYTHON="$(command -v python3)"
+              PYTHON="$(command -v python3 || true)"
+              if [ -z "$PYTHON" ]; then
+                echo "ERROR: No Python 3 interpreter found in any fallback location"
+                exit 1
+              fi
               echo "Using PATH python3: $PYTHON"
             fi
           fi
@@ -352,7 +368,11 @@ jobs:
             if [ -x "$PYDIR/python3" ]; then
               PYTHON="$PYDIR/python3"
             else
-              PYTHON="$(command -v python3)"
+              PYTHON="$(command -v python3 || true)"
+              if [ -z "$PYTHON" ]; then
+                echo "ERROR: No Python 3 interpreter found in any fallback location"
+                exit 1
+              fi
             fi
           fi
 
@@ -372,7 +392,11 @@ jobs:
             if [ -x "$PYDIR/python3" ]; then
               PYTHON="$PYDIR/python3"
             else
-              PYTHON="$(command -v python3)"
+              PYTHON="$(command -v python3 || true)"
+              if [ -z "$PYTHON" ]; then
+                echo "ERROR: No Python 3 interpreter found in any fallback location"
+                exit 1
+              fi
             fi
           fi
 
