@@ -487,7 +487,7 @@ def process(
     # Summary
     if json_output:
         result = {
-            "status": "partial" if failed > 0 else "success",
+            "status": "completed_with_errors" if failed > 0 else "success",
             "input_dir": str(input_dir),
             "output_dir": str(output_dir),
             "total_files": len(image_paths),

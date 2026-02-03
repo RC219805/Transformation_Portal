@@ -10,11 +10,10 @@ Tests cover:
 - Feature toggle handling
 """
 
+import json
 import pytest
-
 from typer.testing import CliRunner
 from unittest.mock import patch, MagicMock
-
 from PIL import Image
 
 from transformation_portal.lux_depth_v3.cli import (
@@ -26,6 +25,7 @@ from transformation_portal.lux_depth_v3.cli import (
     _apply_quality_tier,
 )
 from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant, Preset
+
 
 
 @pytest.fixture
@@ -372,7 +372,6 @@ class TestCLIProcessCommand:
         assert result.exit_code == 0
 
         # Parse JSON output
-        import json
         output = json.loads(result.stdout)
 
         assert output["status"] == "success"
