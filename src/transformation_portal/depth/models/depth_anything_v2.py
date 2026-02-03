@@ -392,10 +392,9 @@ class DepthAnythingV2Model:
             )
 
         # Download model package
-        # nosec B615 - revision pinning intentionally omitted for development flexibility
         # Production deployments should pin specific model revisions
         filename = f"DepthAnythingV2{self.variant.name.title()}F16.mlpackage"
-        model_path = hf_hub_download(
+        model_path = hf_hub_download(  # nosec B615
             repo_id=coreml_variant,
             filename=filename,
             cache_dir=Path.home() / ".cache" / "depth_anything_v2",

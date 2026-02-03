@@ -80,13 +80,12 @@ class ReferenceImageEncoder:
         logger.info(f"Initializing reference encoder on {self.device}")
 
         # Load CLIP vision model
-        # nosec B615 - revision pinning intentionally omitted for development flexibility
         # Production deployments should pin specific model revisions
-        self.model = CLIPVisionModelWithProjection.from_pretrained(
+        self.model = CLIPVisionModelWithProjection.from_pretrained(  # nosec B615
             self.MODEL_NAME, torch_dtype=torch_dtype
         ).to(self.device)
 
-        self.processor = CLIPImageProcessor.from_pretrained(self.MODEL_NAME)
+        self.processor = CLIPImageProcessor.from_pretrained(self.MODEL_NAME)  # nosec B615
 
         logger.info("Reference encoder initialized")
 
