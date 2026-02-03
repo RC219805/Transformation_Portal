@@ -214,6 +214,7 @@ jobs:
 
       - name: Run tests with coverage
         env:
+          PYTHONNOUSERSITE: "1"
           PYTORCH_CUDA_ALLOC_CONF: "max_split_size_mb:128"
           HF_HOME: "/tmp/hf_home"
           TRANSFORMERS_CACHE: "/tmp/transformers_cache"
