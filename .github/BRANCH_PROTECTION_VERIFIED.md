@@ -37,7 +37,7 @@ gh pr checks 804 --required --json name,state,workflow
 - Coverage defined in `.github/workflows/build.yml` (ci_gate job dependencies)
 - Current aggregation (as of 2026-02-03): `needs: [lint, test, generate-manifest]`
   - `lint`: runs on Python 3.12
-  - `test`: matrix across Python 3.10, 3.11, 3.12 with cpu/core/ml categories
+  - `test`: matrix across supported Python versions (defined in build.yml) with cpu/core/ml test tiers
   - `generate-manifest`: artifact provenance validation
 - **Note:** Aggregation subject to evolution; verify `.github/workflows/build.yml` for current state
 
