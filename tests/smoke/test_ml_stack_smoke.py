@@ -68,7 +68,7 @@ pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch required for 
 @pytest.mark.ml
 def test_pytorch_basic_operations():
     """Test basic PyTorch operations work with torch 2.10.0."""
-    import torch
+    torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
 
     # Create a simple tensor
     x = torch.tensor([1.0, 2.0, 3.0])
@@ -88,7 +88,7 @@ def test_pytorch_basic_operations():
 @pytest.mark.ml
 def test_pytorch_mps_device_availability():
     """Test MPS (Apple Silicon) device detection with torch 2.10.0."""
-    import torch
+    torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
 
     # Should not raise even if MPS not available
     if sys.platform == "darwin" and torch.backends.mps.is_available():
@@ -106,7 +106,7 @@ def test_pytorch_mps_device_availability():
 @pytest.mark.skipif(not TORCHVISION_AVAILABLE, reason="torchvision not installed")
 def test_torchvision_transforms():
     """Test torchvision transforms work with torchvision 0.25.0."""
-    import torch
+    torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
     from torchvision import transforms
     from PIL import Image
     import numpy as np
@@ -207,7 +207,7 @@ def test_diffusers_pipeline_interface(mock_from_pretrained):
 @patch('transformers.AutoModel.from_pretrained')
 def test_transformers_model_interface(mock_model_from_pretrained, mock_tokenizer_from_pretrained):
     """Test transformers model interface with transformers 4.57.6."""
-    import torch
+    torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
     from transformers import AutoTokenizer, AutoModel
 
     # Mock tokenizer and model to avoid downloading
@@ -233,7 +233,7 @@ def test_transformers_model_interface(mock_model_from_pretrained, mock_tokenizer
 @pytest.mark.ml
 def test_torch_cuda_compatibility():
     """Test CUDA compatibility (if available) with torch 2.10.0."""
-    import torch
+    torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
 
     # This should not fail even without CUDA
     cuda_available = torch.cuda.is_available()
@@ -262,7 +262,7 @@ def test_ml_stack_imports():
             return None
 
     # Always check torch (required for ML tests to run)
-    import torch
+    torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
     torch_version = get_version("torch")
     assert torch_version is not None, "torch not installed"
     assert torch_version >= "2.10.0", f"torch version {torch_version} < 2.10.0"
