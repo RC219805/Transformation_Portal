@@ -15,3 +15,8 @@ rawpy>=0.18.0,<1  # RAW image processing (used in some tools)
 
 # Testing framework (needed for linting test files in tools/)
 pytest>=8,<10
+
+# Linting tools
+flake8>=7.0,<8
+black>=24.0,<25
+isort>=5.13,<6

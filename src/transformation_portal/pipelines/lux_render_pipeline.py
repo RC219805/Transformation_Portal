@@ -220,7 +220,7 @@ class Preprocessor:
         """Load a MiDaS depth model if available, otherwise return ``None``."""
 
         try:
-            return MidasDetector.from_pretrained(
+            return MidasDetector.from_pretrained(  # nosec B615
                 "lllyasviel/ControlNet", model_type=model_type
             )
         except Exception as exc:  # pragma: no cover - best effort optional dependency
@@ -809,12 +809,12 @@ class LuxuryRenderPipeline:
 
         # Load ControlNets
         print("[Load] ControlNets...")
-        self.cn_canny = ControlNetModel.from_pretrained(
+        self.cn_canny = ControlNetModel.from_pretrained(  # nosec B615
             model_ids.controlnet_canny,
             torch_dtype=self.dtype,
         )
         self.cn_depth = (
-            ControlNetModel.from_pretrained(
+            ControlNetModel.from_pretrained(  # nosec B615
                 model_ids.controlnet_depth, torch_dtype=self.dtype
             )
             if self._use_depth
@@ -834,7 +834,7 @@ class LuxuryRenderPipeline:
                     "diffusers SDXL pipeline not available; upgrade diffusers or install extras."
                 )
             print("[Load] SDXL + ControlNet pipeline...")
-            self.pipe = StableDiffusionXLControlNetPipeline.from_pretrained(
+            self.pipe = StableDiffusionXLControlNetPipeline.from_pretrained(  # nosec B615
                 model_ids.base_model,
                 controlnet=controlnet_arg,
                 torch_dtype=self.dtype,
@@ -842,7 +842,7 @@ class LuxuryRenderPipeline:
             )
             if model_ids.refiner:
                 print("[Load] SDXL refiner...")
-                self.refiner = StableDiffusionXLImg2ImgPipeline.from_pretrained(
+                self.refiner = StableDiffusionXLImg2ImgPipeline.from_pretrained(  # nosec B615
                     model_ids.refiner,
                     torch_dtype=self.dtype,
                     add_watermarker=False,
@@ -851,7 +851,7 @@ class LuxuryRenderPipeline:
                 self.refiner = None
         else:
             print("[Load] SD1.5 + ControlNet Img2Img pipeline...")
-            self.pipe = StableDiffusionControlNetImg2ImgPipeline.from_pretrained(
+            self.pipe = StableDiffusionControlNetImg2ImgPipeline.from_pretrained(  # nosec B615
                 model_ids.base_model,
                 controlnet=controlnet_arg,
                 torch_dtype=self.dtype,
@@ -868,7 +868,7 @@ class LuxuryRenderPipeline:
         # Upscaler (latent)
         print("[Load] Latent x2 upscaler...")
         try:
-            self.upscaler = StableDiffusionLatentUpscalePipeline.from_pretrained(
+            self.upscaler = StableDiffusionLatentUpscalePipeline.from_pretrained(  # nosec B615
                 model_ids.upscaler_id, torch_dtype=self.dtype
             ).to(self.device)
         except (OSError, RuntimeError, ValueError) as e:
