@@ -11,7 +11,7 @@
 
 Successfully resolved all Bandit security scanner failures in CI Quality Firewall workflow:
 
-✅ **B324 (SHA1 weak hash):** Replaced with SHA256
+✅ **B324 (SHA1 weak hash):** Added `usedforsecurity=False` to preserve cache stability
 ✅ **B615 (HuggingFace unpinned downloads):** Added inline suppressions with architectural policy
 ✅ **CI Quality Firewall:** All security scans now pass
 
@@ -32,14 +32,14 @@ hash_suffix = hashlib.sha1(hash_input).hexdigest()[:8]  # ❌ B324 warning
 
 **Solution:**
 ```python
-# Use SHA256 for file naming (not cryptographic security)
-hash_suffix = hashlib.sha256(hash_input).hexdigest()[:8]  # ✅ No warning
+# Use SHA1 with usedforsecurity=False (file naming, not cryptographic)
+hash_suffix = hashlib.sha1(hash_input, usedforsecurity=False).hexdigest()[:8]  # ✅ No warning
 ```
 
 **Impact:**
 - Hash is used for unique file naming, not security purposes
-- Maintains backward compatibility (still using 8-char prefix)
-- No functional behavior change
+- Preserves output-key stability and existing caches (no cache invalidation)
+- Algorithm unchanged (SHA1 retained to maintain compatibility)
 
 ---
 
@@ -178,7 +178,7 @@ The prompt mentioned "pytest is not installed" as a CI failure cause, but invest
 ## Conclusion
 
 All CI Quality Firewall security failures diagnosed and resolved:
-1. **B324 fixed:** SHA1 → SHA256 in orchestrator
+1. **B324 fixed:** Added `usedforsecurity=False` to SHA1 in orchestrator (preserves cache keys)
 2. **B615 suppressed:** Inline nosec annotations + ADR-021 policy
 3. **CI gates unblocked:** Bandit scans now pass
 
