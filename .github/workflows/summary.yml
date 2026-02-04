@@ -9,9 +9,9 @@ on:
 
 # Concurrency control: Cancel outdated runs on new events for the same issue/PR
 # This reduces CI minutes and API costs by only processing the latest state
-# Uses github.event.number which works across all event types (issues, PRs, comments, reviews)
+# Uses issue/PR number from event-specific paths to ensure proper deduplication
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.number || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -76,7 +76,7 @@ jobs:
           body  = (os.getenv("ISSUE_BODY") or "").strip()[:4000]
           review_state = (os.getenv("REVIEW_STATE") or "").strip()
           event_name = (os.getenv("EVENT_NAME") or "").strip()
-          
+
           # Adjust prompt based on event type
           if event_name == "pull_request_review":
               prompt = textwrap.dedent(f"""

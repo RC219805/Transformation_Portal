@@ -12,11 +12,11 @@ on:
         default: false
         type: boolean
 
-# Concurrency control: Prevent multiple simultaneous releases
-# Only one release should be processed at a time to avoid conflicts
+# Concurrency control: Global mutual exclusion for all releases
+# Only one release can run at a time across all tags/refs to prevent PyPI conflicts
 # Note: cancel-in-progress is false for release workflows to ensure completion
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-release
   cancel-in-progress: false
 
 jobs:
@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v6
@@ -72,7 +72,7 @@ jobs:
     permissions:
       contents: read
     if: github.event.inputs.test_pypi == 'true'
-    
+
     steps:
     - name: Download build artifacts
       uses: actions/download-artifact@v7
@@ -104,7 +104,7 @@ jobs:
     permissions:
       contents: read
     if: startsWith(github.ref, 'refs/tags/v')
-    
+
     steps:
     - name: Download build artifacts
       uses: actions/download-artifact@v7
