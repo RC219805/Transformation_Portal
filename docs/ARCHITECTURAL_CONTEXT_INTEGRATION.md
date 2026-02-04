@@ -1,3 +1,8 @@
+> ⚠️ **DEPRECATED**
+>
+> This document has been superseded by [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+> Please use that document instead. This file will be removed on 2026-03-06.
+
 # Architectural Context Integration Guide
 
 ## Overview
