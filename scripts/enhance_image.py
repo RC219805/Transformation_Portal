@@ -35,6 +35,10 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
+# Supported image formats for validation
+VALID_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp", ".bmp"}
+
+
 def validate_input_path(path: Path) -> Path:
     """Validate input image path exists and is a file.
     
@@ -55,11 +59,10 @@ def validate_input_path(path: Path) -> Path:
         raise ValueError(f"Input path is not a file: {path}")
     
     # Basic image extension check
-    valid_extensions = {".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp", ".bmp"}
-    if path.suffix.lower() not in valid_extensions:
+    if path.suffix.lower() not in VALID_IMAGE_EXTENSIONS:
         logger.warning(
             f"Input file has unexpected extension: {path.suffix}. "
-            f"Expected one of: {', '.join(sorted(valid_extensions))}"
+            f"Expected one of: {', '.join(sorted(VALID_IMAGE_EXTENSIONS))}"
         )
     
     return path
@@ -198,7 +201,7 @@ def enhance_image_passthrough(
     
     Args:
         input_path: Input image path
-        depth_dir: Depth maps directory (unused in passthrough)
+        depth_dir: Depth maps directory (validated but unused in passthrough; recorded for pipeline continuity)
         output_dir: Output directory
         preset: Enhancement preset (recorded in report)
         device: Processing device (recorded in report)
