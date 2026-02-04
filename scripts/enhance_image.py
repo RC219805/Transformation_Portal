@@ -98,8 +98,9 @@ Status:
     parser.add_argument(
         "--depth-dir",
         type=Path,
-        required=True,
-        help="Directory containing depth maps (required by V2Runner contract)",
+        required=False,
+        default=None,
+        help="Directory containing depth maps (optional if depth was not generated)",
     )
     parser.add_argument(
         "--output-dir",
@@ -191,7 +192,7 @@ def configure_logging(verbose: bool, quiet: bool, log_file: Path | None) -> None
 
 def enhance_image_passthrough(
     input_path: Path,
-    depth_dir: Path,
+    depth_dir: Path | None,
     output_dir: Path,
     preset: str,
     device: str,
@@ -201,7 +202,7 @@ def enhance_image_passthrough(
     
     Args:
         input_path: Input image path
-        depth_dir: Depth maps directory (validated but unused in passthrough; recorded for pipeline continuity)
+        depth_dir: Depth maps directory (optional; None if depth was not generated)
         output_dir: Output directory
         preset: Enhancement preset (recorded in report)
         device: Processing device (recorded in report)
@@ -232,7 +233,7 @@ def enhance_image_passthrough(
         "implementation": "placeholder",
         "input": str(input_path),
         "output": str(output_path),
-        "depth_dir": str(depth_dir),
+        "depth_dir": str(depth_dir) if depth_dir else None,
         "preset": preset,
         "device": device,
         "upscaler": upscaler,
@@ -265,7 +266,7 @@ def main() -> int:
     logger.info("V2 Enhancement Script (Placeholder Implementation)")
     logger.info("=" * 60)
     logger.info(f"Input: {args.input_path}")
-    logger.info(f"Depth Dir: {args.depth_dir}")
+    logger.info(f"Depth Dir: {args.depth_dir if args.depth_dir else 'None (not provided)'}")
     logger.info(f"Output Dir: {args.output_dir}")
     logger.info(f"Preset: {args.preset}")
     logger.info(f"Device: {args.device}")

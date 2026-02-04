@@ -68,7 +68,7 @@ Add CLI flags to expose existing config knobs:
 
 ### Backward Compatibility
 - Default behavior remains unchanged: V2 enabled by default
-- Existing test suite validates fail-fast behavior when script missing
+- Existing test suite validates fail-fast behavior by explicitly simulating a missing script (e.g., by patching `V2Runner.script_path.exists()` / `Path.exists()` or temporarily renaming `scripts/enhance_image.py` during the test run)
 - New CLI flags are additive (no breaking changes)
 
 ### Security
@@ -106,7 +106,7 @@ from pathlib import Path
 def main() -> int:
     parser = argparse.ArgumentParser(description="V2 enhancement entrypoint")
     parser.add_argument("input_path", type=Path)
-    parser.add_argument("--depth-dir", type=Path, required=True)
+    parser.add_argument("--depth-dir", type=Path, required=False, default=None)  # Optional; V2 may generate depth internally or proceed without it
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--preset", default="default")
     parser.add_argument("--device", default="cpu")
