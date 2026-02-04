@@ -90,6 +90,8 @@ for depth_file in depth_dir.glob("*.npy"):
 
 If you only need depth estimation and PBR maps (no V2 enhancement):
 
+### Option 1: Python API
+
 ```python
 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
@@ -108,6 +110,31 @@ orchestrator = EnhanceOrchestrator(config=config, output_root=Path("output/"))
 # Process - will generate depth + PBR, skip V2
 result = orchestrator.process_image(Path("input/image.jpg"))
 ```
+
+### Option 2: CLI (New in v2.0.0+)
+
+```bash
+# PBR-only workflow (disable V2)
+lux-depth-v3 \
+    --input-dir "./input_images" \
+    --output-dir "./output/pbr_only" \
+    --enable-v2 "off" \
+    --pbr "on" \
+    --quality-tier "apex" \
+    --depth-device "mps"
+
+# Alternative: Skip V2 via preset control
+lux-depth-v3 \
+    --input-dir "./input_images" \
+    --output-dir "./output/pbr_only" \
+    --v2-preset "none" \
+    --pbr "on" \
+    --quality-tier "apex"
+```
+
+**V2 Control Flags:**
+- `--enable-v2 on|off`: Master switch for V2 enhancement (default: on)
+- `--v2-preset PRESET|none`: V2 preset or "none" to skip (default: default)
 
 ## Simplified Device Configuration
 
@@ -148,12 +175,26 @@ If you see:
 FileNotFoundError: V2 enhancement script not found: scripts/enhance_image.py
 ```
 
-**Solution**: Disable V2 enhancement:
+**Solutions:**
+
+1. **Disable V2 via CLI** (easiest):
+```bash
+lux-depth-v3 --input-dir ./input --output-dir ./output --enable-v2 "off" --pbr "on"
+```
+
+2. **Disable V2 via Python API**:
 ```python
 config = EnhanceConfig(enable_v2=False)
 # OR
 config = EnhanceConfig(v2_preset=None)
 ```
+
+3. **Create placeholder script** (allows V2 pass-through):
+   - The script `scripts/enhance_image.py` is now included as a placeholder
+   - Provides pass-through behavior (copies input → output)
+   - Replace with full enhancement logic when ready
+
+**Note:** As of v2.0.0+, the V2 enhancement stage can be controlled via CLI flags, eliminating the need to modify code for PBR-only workflows.
 
 ### NaN/Inf in Depth
 
