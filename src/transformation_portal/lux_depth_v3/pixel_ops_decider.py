@@ -1,4 +1,5 @@
 """Shared decision logic for Materials V3 pixel operations."""
+
 from __future__ import annotations
 
 from typing import Any, Dict, List

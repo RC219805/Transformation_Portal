@@ -45,38 +45,79 @@ def __getattr__(name: str):
     but not actually used.
     """
     # Unified Luxury Pipeline exports
-    if name in ("UnifiedLuxuryPipeline", "UnifiedPipelineConfig", "ProcessingProfile",
-                "SceneType", "OutputFormat", "PipelineStage", "PipelineStatistics",
-                "process_luxury_render", "batch_process_luxury_renders"):
+    if name in (
+        "UnifiedLuxuryPipeline",
+        "UnifiedPipelineConfig",
+        "ProcessingProfile",
+        "SceneType",
+        "OutputFormat",
+        "PipelineStage",
+        "PipelineStatistics",
+        "process_luxury_render",
+        "batch_process_luxury_renders",
+    ):
         from .unified_luxury_pipeline import (
-            OutputFormat, PipelineStage, PipelineStatistics, ProcessingProfile,
-            SceneType, UnifiedLuxuryPipeline, UnifiedPipelineConfig,
-            batch_process_luxury_renders, process_luxury_render,
+            OutputFormat,
+            PipelineStage,
+            PipelineStatistics,
+            ProcessingProfile,
+            SceneType,
+            UnifiedLuxuryPipeline,
+            UnifiedPipelineConfig,
+            batch_process_luxury_renders,
+            process_luxury_render,
         )
+
         return locals()[name]
 
     # 4K Rendering Pipeline exports (ML-heavy)
-    elif name in ("Rendering4KPipeline", "PipelineConfig", "ProcessingResult",
-                  "QualityAssessor", "QualityFeedbackConfig", "QualityLevel",
-                  "QualityMetrics", "ToneMappingMethod"):
+    elif name in (
+        "Rendering4KPipeline",
+        "PipelineConfig",
+        "ProcessingResult",
+        "QualityAssessor",
+        "QualityFeedbackConfig",
+        "QualityLevel",
+        "QualityMetrics",
+        "ToneMappingMethod",
+    ):
         from .rendering_4k_pipeline import (
-            PipelineConfig, ProcessingResult, QualityAssessor,
-            QualityFeedbackConfig, QualityLevel, QualityMetrics,
-            Rendering4KPipeline, ToneMappingMethod,
+            PipelineConfig,
+            ProcessingResult,
+            QualityAssessor,
+            QualityFeedbackConfig,
+            QualityLevel,
+            QualityMetrics,
+            Rendering4KPipeline,
+            ToneMappingMethod,
         )
+
         return locals()[name]
 
     # Quality Feedback Bridge exports
-    elif name in ("QualityFeedbackBridge", "QualityTargets", "UnifiedQualityMetrics",
-                  "HeuristicMetrics", "PerceptualMetrics", "MaterialFidelityMetrics",
-                  "create_quality_callback_for_pipeline", "create_rag_indexing_callback",
-                  "index_quality_metrics_to_rag"):
+    elif name in (
+        "QualityFeedbackBridge",
+        "QualityTargets",
+        "UnifiedQualityMetrics",
+        "HeuristicMetrics",
+        "PerceptualMetrics",
+        "MaterialFidelityMetrics",
+        "create_quality_callback_for_pipeline",
+        "create_rag_indexing_callback",
+        "index_quality_metrics_to_rag",
+    ):
         from .quality_feedback_bridge import (
-            HeuristicMetrics, MaterialFidelityMetrics, PerceptualMetrics,
-            QualityFeedbackBridge, QualityTargets, UnifiedQualityMetrics,
-            create_quality_callback_for_pipeline, create_rag_indexing_callback,
+            HeuristicMetrics,
+            MaterialFidelityMetrics,
+            PerceptualMetrics,
+            QualityFeedbackBridge,
+            QualityTargets,
+            UnifiedQualityMetrics,
+            create_quality_callback_for_pipeline,
+            create_rag_indexing_callback,
             index_quality_metrics_to_rag,
         )
+
         return locals()[name]
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

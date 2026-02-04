@@ -3,10 +3,11 @@
 Tests subprocess invocation, argument passing, error handling,
 and report discovery without requiring the actual script to exist.
 """
+
 import json
 import subprocess
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
@@ -40,7 +41,7 @@ class TestV2RunnerInit:
 class TestV2RunnerExecution:
     """Test V2Runner.run() subprocess execution."""
 
-    @patch('transformation_portal.lux_depth_v3.v2_runner.subprocess.run')
+    @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
     def test_successful_execution_basic(self, mock_subprocess, tmp_path):
         """Test basic successful execution."""
         # Mock successful subprocess
@@ -55,15 +56,11 @@ class TestV2RunnerExecution:
 
         # Mock script path to exist (on the instance)
         runner.script_path = Path("/fake/scripts/enhance_image.py")
-        with patch.object(Path, 'exists', return_value=True):
+        with patch.object(Path, "exists", return_value=True):
             input_path = tmp_path / "input.jpg"
             output_dir = tmp_path / "output"
 
-            result = runner.run(
-                input_path=input_path,
-                depth_dir=None,
-                output_dir=output_dir
-            )
+            result = runner.run(input_path=input_path, depth_dir=None, output_dir=output_dir)
 
         # Verify subprocess was called
         assert mock_subprocess.called
@@ -80,7 +77,7 @@ class TestV2RunnerExecution:
         assert "status" in result
         assert result["status"] == "success"
 
-    @patch('transformation_portal.lux_depth_v3.v2_runner.subprocess.run')
+    @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
     def test_command_includes_all_arguments(self, mock_subprocess, tmp_path):
         """Test that all provided arguments appear in command."""
         mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
@@ -89,7 +86,7 @@ class TestV2RunnerExecution:
         runner.script_path = Path("/fake/enhance_image.py")
 
         # Run with all arguments
-        with patch.object(Path, 'exists', return_value=True):
+        with patch.object(Path, "exists", return_value=True):
             result = runner.run(
                 input_path=tmp_path / "input.jpg",
                 depth_dir=tmp_path / "depth",
@@ -98,7 +95,7 @@ class TestV2RunnerExecution:
                 device="cuda",
                 upscaler_backend="esrgan",
                 log_file=tmp_path / "log.txt",
-                timeout=300
+                timeout=300,
             )
 
         # Extract command from mock call
@@ -119,7 +116,7 @@ class TestV2RunnerExecution:
         # Verify timeout passed to subprocess
         assert mock_subprocess.call_args[1]["timeout"] == 300
 
-    @patch('transformation_portal.lux_depth_v3.v2_runner.subprocess.run')
+    @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
     def test_optional_arguments_omitted_when_none(self, mock_subprocess, tmp_path):
         """Test that None arguments are omitted from command."""
         mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
@@ -128,13 +125,13 @@ class TestV2RunnerExecution:
         runner.script_path = Path("/fake/enhance_image.py")
 
         # Run with minimal arguments (many None)
-        with patch.object(Path, 'exists', return_value=True):
+        with patch.object(Path, "exists", return_value=True):
             result = runner.run(
                 input_path=tmp_path / "input.jpg",
                 depth_dir=None,  # Should be omitted
                 output_dir=tmp_path / "output",
                 upscaler_backend=None,  # Should be omitted
-                log_file=None  # Should be omitted
+                log_file=None,  # Should be omitted
             )
 
         cmd = mock_subprocess.call_args[0][0]
@@ -155,33 +152,22 @@ class TestV2RunnerExecution:
         runner.script_path = tmp_path / "nonexistent_script.py"
 
         with pytest.raises(FileNotFoundError, match="not found"):
-            runner.run(
-                input_path=tmp_path / "input.jpg",
-                depth_dir=None,
-                output_dir=tmp_path / "output"
-            )
+            runner.run(input_path=tmp_path / "input.jpg", depth_dir=None, output_dir=tmp_path / "output")
 
-    @patch('transformation_portal.lux_depth_v3.v2_runner.subprocess.run')
+    @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
     def test_subprocess_error_raises_runtimeerror(self, mock_subprocess, tmp_path):
         """Test that subprocess CalledProcessError becomes RuntimeError with context."""
         # Mock subprocess failure
         mock_subprocess.side_effect = subprocess.CalledProcessError(
-            returncode=2,
-            cmd=["python", "/fake/enhance_image.py"],
-            stderr="Fatal error: model not found",
-            output=""
+            returncode=2, cmd=["python", "/fake/enhance_image.py"], stderr="Fatal error: model not found", output=""
         )
 
         runner = V2Runner()
         runner.script_path = Path("/fake/enhance_image.py")
 
-        with patch.object(Path, 'exists', return_value=True):
+        with patch.object(Path, "exists", return_value=True):
             with pytest.raises(RuntimeError) as exc_info:
-                runner.run(
-                    input_path=tmp_path / "input.jpg",
-                    depth_dir=None,
-                    output_dir=tmp_path / "output"
-                )
+                runner.run(input_path=tmp_path / "input.jpg", depth_dir=None, output_dir=tmp_path / "output")
 
         error_msg = str(exc_info.value)
 
@@ -190,14 +176,11 @@ class TestV2RunnerExecution:
         assert "Fatal error: model not found" in error_msg
         assert "enhance_image.py" in error_msg
 
-    @patch('transformation_portal.lux_depth_v3.v2_runner.subprocess.run')
+    @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
     def test_subprocess_timeout_raises_timeouterror(self, mock_subprocess, tmp_path):
         """Test that subprocess TimeoutExpired becomes TimeoutError with partial output."""
         # Mock timeout with partial output
-        timeout_exc = subprocess.TimeoutExpired(
-            cmd=["python", "/fake/enhance_image.py"],
-            timeout=10
-        )
+        timeout_exc = subprocess.TimeoutExpired(cmd=["python", "/fake/enhance_image.py"], timeout=10)
         timeout_exc.stdout = "Processing stage 1..."
         timeout_exc.stderr = "Warning: slow model"
         mock_subprocess.side_effect = timeout_exc
@@ -205,14 +188,9 @@ class TestV2RunnerExecution:
         runner = V2Runner()
         runner.script_path = Path("/fake/enhance_image.py")
 
-        with patch.object(Path, 'exists', return_value=True):
+        with patch.object(Path, "exists", return_value=True):
             with pytest.raises(TimeoutError) as exc_info:
-                runner.run(
-                    input_path=tmp_path / "input.jpg",
-                    depth_dir=None,
-                    output_dir=tmp_path / "output",
-                    timeout=10
-                )
+                runner.run(input_path=tmp_path / "input.jpg", depth_dir=None, output_dir=tmp_path / "output", timeout=10)
 
         error_msg = str(exc_info.value)
 
@@ -224,7 +202,7 @@ class TestV2RunnerExecution:
 class TestReportMerging:
     """Test report JSON discovery and merging."""
 
-    @patch('transformation_portal.lux_depth_v3.v2_runner.subprocess.run')
+    @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
     def test_merges_report_when_found(self, mock_subprocess, tmp_path):
         """Test that report JSON is discovered and merged into result."""
         mock_subprocess.return_value = Mock(returncode=0, stdout="", stderr="")
@@ -233,24 +211,16 @@ class TestReportMerging:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        report_data = {
-            "preset": "custom",
-            "enhancement_strength": 0.8,
-            "upscaler": "esrgan"
-        }
+        report_data = {"preset": "custom", "enhancement_strength": 0.8, "upscaler": "esrgan"}
         report_path = output_dir / "input_report.json"
-        with open(report_path, 'w') as f:
+        with open(report_path, "w") as f:
             json.dump(report_data, f)
 
         runner = V2Runner()
         runner.script_path = Path("/fake/enhance_image.py")
 
-        with patch.object(Path, 'exists', return_value=True):
-            result = runner.run(
-                input_path=tmp_path / "input.jpg",
-                depth_dir=None,
-                output_dir=output_dir
-            )
+        with patch.object(Path, "exists", return_value=True):
+            result = runner.run(input_path=tmp_path / "input.jpg", depth_dir=None, output_dir=output_dir)
 
         # Verify report fields merged
         assert result["preset"] == "custom"
@@ -262,14 +232,10 @@ class TestReportMerging:
         assert "status" in result
         assert "report_path" in result
 
-    @patch('transformation_portal.lux_depth_v3.v2_runner.subprocess.run')
+    @patch("transformation_portal.lux_depth_v3.v2_runner.subprocess.run")
     def test_returns_stdout_stderr_when_no_report(self, mock_subprocess, tmp_path):
         """Test that stdout/stderr included when report not found."""
-        mock_subprocess.return_value = Mock(
-            returncode=0,
-            stdout="Processing complete",
-            stderr="Warning: deprecated option"
-        )
+        mock_subprocess.return_value = Mock(returncode=0, stdout="Processing complete", stderr="Warning: deprecated option")
 
         output_dir = tmp_path / "output"
         output_dir.mkdir()
@@ -277,12 +243,8 @@ class TestReportMerging:
         runner = V2Runner()
         runner.script_path = Path("/fake/enhance_image.py")
 
-        with patch.object(Path, 'exists', return_value=True):
-            result = runner.run(
-                input_path=tmp_path / "input.jpg",
-                depth_dir=None,
-                output_dir=output_dir
-            )
+        with patch.object(Path, "exists", return_value=True):
+            result = runner.run(input_path=tmp_path / "input.jpg", depth_dir=None, output_dir=output_dir)
 
         # No report exists, should include process output
         assert result["report_path"] is None

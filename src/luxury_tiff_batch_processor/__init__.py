@@ -61,6 +61,7 @@ Example Usage
         vibrance=0.25,
     )
 """
+
 from __future__ import annotations
 
 import logging

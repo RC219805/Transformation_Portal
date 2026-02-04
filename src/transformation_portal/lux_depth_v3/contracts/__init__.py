@@ -10,10 +10,10 @@ The contracts enforce:
 """
 
 from .depth_artifact import (
-    DepthArtifact,
-    DepthProvenance,
     CameraIntrinsics,
+    DepthArtifact,
     DepthArtifactWriter,
+    DepthProvenance,
     LicenseTier,
 )
 

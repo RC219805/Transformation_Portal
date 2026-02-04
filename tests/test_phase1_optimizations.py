@@ -6,17 +6,19 @@ Validates:
 3. Chunked SHA-256 computation
 4. Bilateral filter optimization
 """
+
 import hashlib
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
+
 import numpy as np
 import pytest
 
 from transformation_portal.lux_depth_v3.config import DeviceConfig, EnhanceConfig
-from transformation_portal.lux_depth_v3.manifest import compute_file_sha256, CombinedManifest
+from transformation_portal.lux_depth_v3.manifest import CombinedManifest, compute_file_sha256
 from transformation_portal.lux_depth_v3.orchestrator import _load_manifest_cached
-from transformation_portal.lux_depth_v3.postprocessing import Postprocessor, PostprocessingConfig
+from transformation_portal.lux_depth_v3.postprocessing import PostprocessingConfig, Postprocessor
 
 
 class TestChunkedSHA256:
@@ -44,7 +46,7 @@ class TestChunkedSHA256:
 
         # Create a 10MB file
         chunk = b"X" * (1024 * 1024)
-        with open(test_file, 'wb') as f:
+        with open(test_file, "wb") as f:
             for _ in range(10):
                 f.write(chunk)
 
@@ -97,6 +99,7 @@ class TestManifestCaching:
 
         # Modify manifest (different mtime)
         import time
+
         time.sleep(0.01)  # Ensure different mtime
         manifest2 = CombinedManifest()
         manifest2.save(manifest_path)
@@ -123,10 +126,7 @@ class TestEnhanceConfigOptimizations:
 
     def test_optimization_flags_can_be_disabled(self):
         """Verify optimization flags can be disabled."""
-        config = EnhanceConfig(
-            enable_manifest_cache=False,
-            chunked_hashing=False
-        )
+        config = EnhanceConfig(enable_manifest_cache=False, chunked_hashing=False)
         assert config.enable_manifest_cache is False
         assert config.chunked_hashing is False
 
@@ -150,11 +150,7 @@ class TestBilateralFilterOptimization:
 
     def test_bilateral_filter_uses_opencv_when_available(self):
         """Verify bilateral filter uses OpenCV for acceleration."""
-        config = PostprocessingConfig(
-            apply_bilateral_filter=True,
-            bilateral_sigma_color=0.05,
-            bilateral_sigma_space=5.0
-        )
+        config = PostprocessingConfig(apply_bilateral_filter=True, bilateral_sigma_color=0.05, bilateral_sigma_space=5.0)
         processor = Postprocessor(config)
 
         # Create test depth map
@@ -164,11 +160,8 @@ class TestBilateralFilterOptimization:
         # Apply filter
         try:
             import cv2
-            filtered = processor._bilateral_filter(
-                depth, image,
-                sigma_color=0.05,
-                sigma_space=5.0
-            )
+
+            filtered = processor._bilateral_filter(depth, image, sigma_color=0.05, sigma_space=5.0)
 
             # Should return filtered depth
             assert filtered.shape == depth.shape
@@ -180,11 +173,7 @@ class TestBilateralFilterOptimization:
 
     def test_bilateral_filter_fallback_without_opencv(self):
         """Verify bilateral filter falls back to scipy when OpenCV unavailable."""
-        config = PostprocessingConfig(
-            apply_bilateral_filter=True,
-            bilateral_sigma_color=0.05,
-            bilateral_sigma_space=5.0
-        )
+        config = PostprocessingConfig(apply_bilateral_filter=True, bilateral_sigma_color=0.05, bilateral_sigma_space=5.0)
         processor = Postprocessor(config)
 
         # Create test depth map
@@ -193,19 +182,16 @@ class TestBilateralFilterOptimization:
 
         # Mock builtins.__import__ to make cv2 import fail
         import builtins
+
         original_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):
-            if name == 'cv2':
+            if name == "cv2":
                 raise ImportError("Mocked cv2 not available")
             return original_import(name, *args, **kwargs)
 
-        with patch.object(builtins, '__import__', side_effect=mock_import):
-            filtered = processor._bilateral_filter(
-                depth, image,
-                sigma_color=0.05,
-                sigma_space=5.0
-            )
+        with patch.object(builtins, "__import__", side_effect=mock_import):
+            filtered = processor._bilateral_filter(depth, image, sigma_color=0.05, sigma_space=5.0)
 
             # Should still work with scipy fallback
             assert filtered.shape == depth.shape
@@ -218,14 +204,11 @@ class TestOptimizationIntegration:
     def test_enhance_config_preserves_api_compatibility(self):
         """Verify new optimization flags don't break existing API."""
         # Old-style config creation should still work
-        config = EnhanceConfig(
-            depth_device="cpu",
-            v2_preset="default"
-        )
+        config = EnhanceConfig(depth_device="cpu", v2_preset="default")
 
         # Should have optimization defaults
-        assert hasattr(config, 'enable_manifest_cache')
-        assert hasattr(config, 'chunked_hashing')
+        assert hasattr(config, "enable_manifest_cache")
+        assert hasattr(config, "chunked_hashing")
 
     def test_device_config_preserves_api_compatibility(self):
         """Verify FP16 flag doesn't break existing API."""
@@ -233,5 +216,5 @@ class TestOptimizationIntegration:
         config = DeviceConfig(device="cpu")
 
         # Should have FP16 default
-        assert hasattr(config, 'use_fp16')
+        assert hasattr(config, "use_fp16")
         assert config.use_fp16 is True

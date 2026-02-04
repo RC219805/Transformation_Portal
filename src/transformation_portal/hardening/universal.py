@@ -5,6 +5,12 @@ This module provides a generic hardening layer that can wrap any pipeline
 to add security, reproducibility, and observability features.
 """
 
+import hashlib
+import json
+import logging
+import time
+from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -14,12 +20,6 @@ from typing import (
     Protocol,
     runtime_checkable,
 )
-from pathlib import Path
-import time
-import hashlib
-import json
-import logging
-from dataclasses import dataclass, asdict
 
 if TYPE_CHECKING:
     from lux_depth_v2.hardening.policy import HardeningPolicy
@@ -109,9 +109,7 @@ class UniversalHardenedWrapper:
 
                 self.policy = HardeningPolicy.load()
             except ImportError:
-                logger.warning(
-                    "HardeningPolicy not available, input validation disabled"
-                )
+                logger.warning("HardeningPolicy not available, input validation disabled")
                 self.enable_input_validation = False
 
     def process(self, input_path: Path, **kwargs) -> Dict[str, Any]:
@@ -231,9 +229,7 @@ class UniversalHardenedWrapper:
             meta=meta,
         )
 
-    def _create_error_response(
-        self, run_id: str, input_path: Path, kwargs: Dict[str, Any], error: str
-    ) -> Dict[str, Any]:
+    def _create_error_response(self, run_id: str, input_path: Path, kwargs: Dict[str, Any], error: str) -> Dict[str, Any]:
         """Create error response."""
         report = ProcessingReport(
             run_id=run_id,
@@ -289,9 +285,7 @@ class UniversalHardenedWrapper:
         return str(uuid.uuid4())
 
 
-def wrap_function(
-    func: Callable, policy: Optional["HardeningPolicy"] = None, **wrapper_kwargs
-) -> UniversalHardenedWrapper:
+def wrap_function(func: Callable, policy: Optional["HardeningPolicy"] = None, **wrapper_kwargs) -> UniversalHardenedWrapper:
     """
     Wrap a standalone function with hardening.
 
@@ -320,6 +314,4 @@ def wrap_function(
         def process(self, input_path: Path, **kwargs):
             return self.func(input_path, **kwargs)
 
-    return UniversalHardenedWrapper(
-        pipeline=FunctionAdapter(func), policy=policy, **wrapper_kwargs
-    )
+    return UniversalHardenedWrapper(pipeline=FunctionAdapter(func), policy=policy, **wrapper_kwargs)

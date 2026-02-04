@@ -22,8 +22,8 @@ For luxury real estate:
 - Quantify perceptual quality improvements
 """
 
-from transformation_portal.metrics.lpips_metric import LPIPSMetric
 from transformation_portal.metrics.fid_metric import FIDMetric
+from transformation_portal.metrics.lpips_metric import LPIPSMetric
 from transformation_portal.metrics.traditional_metrics import TraditionalMetrics
 
 __all__ = [

@@ -17,10 +17,10 @@ from .base import DepthProcessorMixin
 
 try:
     from .numba_kernels import (
-        apply_atmospheric_haze_jit,
-        apply_aerial_desaturation_jit,
-        apply_color_shift_jit,
         NUMBA_AVAILABLE,
+        apply_aerial_desaturation_jit,
+        apply_atmospheric_haze_jit,
+        apply_color_shift_jit,
     )
 except ImportError:
     NUMBA_AVAILABLE = False
@@ -97,9 +97,7 @@ class AtmosphericEffects(DepthProcessorMixin):
         """
         # Validate inputs
         if image.shape[:2] != depth.shape[:2]:
-            raise ValueError(
-                f"Image shape {image.shape[:2]} doesn't match depth shape {depth.shape[:2]}"
-            )
+            raise ValueError(f"Image shape {image.shape[:2]} doesn't match depth shape {depth.shape[:2]}")
 
         # Scale depth to meters
         depth_meters = depth * self.depth_scale
@@ -190,9 +188,7 @@ class AtmosphericEffects(DepthProcessorMixin):
 
         # NumPy fallback
         # Compute luminance (Rec. 709)
-        luminance = (
-            0.2126 * image[..., 0] + 0.7152 * image[..., 1] + 0.0722 * image[..., 2]
-        )
+        luminance = 0.2126 * image[..., 0] + 0.7152 * image[..., 1] + 0.0722 * image[..., 2]
 
         # Compute desaturation factor based on depth
         # Close objects: no desaturation (factor = 1)
@@ -201,10 +197,7 @@ class AtmosphericEffects(DepthProcessorMixin):
         desaturation_factor = np.clip(desaturation_factor, 0, 1)
 
         # Blend between grayscale and color
-        result = (
-            luminance[..., None] * (1 - desaturation_factor[..., None])
-            + image * desaturation_factor[..., None]
-        )
+        result = luminance[..., None] * (1 - desaturation_factor[..., None]) + image * desaturation_factor[..., None]
 
         return result
 
@@ -241,10 +234,7 @@ class AtmosphericEffects(DepthProcessorMixin):
         shift_amount = depth * 0.15  # Subtle shift
 
         # Shift towards atmospheric color (blue)
-        result = (
-            image * (1 - shift_amount[..., None])
-            + self.haze_color * shift_amount[..., None]
-        )
+        result = image * (1 - shift_amount[..., None]) + self.haze_color * shift_amount[..., None]
 
         return np.clip(result, 0, 1)
 
@@ -308,9 +298,7 @@ class DepthFog:
         fog_factor = 1.0 - np.exp(-self.fog_density * fog_factor)
 
         # Blend with fog color
-        result = (
-            image * (1 - fog_factor[..., None]) + self.fog_color * fog_factor[..., None]
-        )
+        result = image * (1 - fog_factor[..., None]) + self.fog_color * fog_factor[..., None]
 
         return np.clip(result, 0, 1)
 

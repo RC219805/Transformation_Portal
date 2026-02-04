@@ -4,15 +4,16 @@ Tests multi-layer license enforcement (config, registry, runtime).
 See ADR-019 for architectural context.
 """
 
-import pytest
-import numpy as np
 from unittest.mock import MagicMock, patch
+
+import numpy as np
+import pytest
 
 from transformation_portal.depth.backends import (
     DepthBackendRegistry,
     DepthResult,
-    LicenseType,
     LicenseRestrictionError,
+    LicenseType,
 )
 
 
@@ -157,8 +158,9 @@ class TestDepthProBackendUnit:
 
     def test_checkpoint_path_resolution_from_env(self):
         """Checkpoint path should be resolved from environment variable."""
-        from transformation_portal.depth.backends.depth_pro import DepthProBackend
         import os
+
+        from transformation_portal.depth.backends.depth_pro import DepthProBackend
 
         config = MockEnhanceConfig(
             non_commercial_ok=True,
@@ -171,8 +173,9 @@ class TestDepthProBackendUnit:
 
     def test_checkpoint_path_default(self):
         """Checkpoint path should default to checkpoints/depth_pro.pt."""
-        from transformation_portal.depth.backends.depth_pro import DepthProBackend
         import os
+
+        from transformation_portal.depth.backends.depth_pro import DepthProBackend
 
         config = MockEnhanceConfig(
             non_commercial_ok=True,
@@ -203,8 +206,9 @@ class TestDepthProBackendUnit:
 
     def test_ensure_available_missing_checkpoint(self):
         """Should raise FileNotFoundError if checkpoint missing."""
-        from transformation_portal.depth.backends.depth_pro import DepthProBackend
         from pathlib import Path
+
+        from transformation_portal.depth.backends.depth_pro import DepthProBackend
 
         config = MockEnhanceConfig(
             non_commercial_ok=True,
@@ -361,7 +365,7 @@ class TestDepthBackendRegistry:
             def compute(self, image, device=None):
                 return DepthResult(
                     depth_map=np.zeros((10, 10), dtype=np.float32),
-                    original_image=np.array(image) if hasattr(image, '__array__') else image,
+                    original_image=np.array(image) if hasattr(image, "__array__") else image,
                     metadata={},
                 )
 

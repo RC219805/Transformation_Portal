@@ -11,7 +11,7 @@ import threading
 import time
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Dict, List, Optional, Union, Iterator
+from typing import Dict, Iterator, List, Optional, Union
 
 import numpy as np
 import yaml
@@ -219,7 +219,7 @@ class ArchitecturalDepthPipeline:
         preserve_scale_raw = postproc_config.get("preserve_scale", False)
         # Parse boolean from various formats (string, int, bool)
         if isinstance(preserve_scale_raw, str):
-            preserve_scale = preserve_scale_raw.lower() not in ('false', '0', 'no', 'off', '')
+            preserve_scale = preserve_scale_raw.lower() not in ("false", "0", "no", "off", "")
         else:
             preserve_scale = bool(preserve_scale_raw)
 
@@ -232,12 +232,7 @@ class ArchitecturalDepthPipeline:
         edge_preserve = postproc_config.get("edge_preserve", 0.1)
 
         try:
-            smoothed = smooth_depth(
-                depth,
-                method=method,
-                sigma=sigma,
-                edge_preserve=edge_preserve
-            )
+            smoothed = smooth_depth(depth, method=method, sigma=sigma, edge_preserve=edge_preserve)
         except Exception as e:
             logger.error(f"Error during depth smoothing: {e}. Returning original depth.")
             return depth
@@ -303,9 +298,7 @@ class ArchitecturalDepthPipeline:
         image = load_image(image_path, normalize=True)
 
         # Estimate depth (with caching)
-        depth_result = self.cache.get_or_compute(
-            image, lambda: self.depth_model.estimate_depth(image)
-        )
+        depth_result = self.cache.get_or_compute(image, lambda: self.depth_model.estimate_depth(image))
         depth = depth_result["depth"]
 
         # Apply depth postprocessing if configured
@@ -377,10 +370,7 @@ class ArchitecturalDepthPipeline:
         loaded_images = {}
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_path = {
-                executor.submit(load_image, path, normalize=True): str(path)
-                for path in image_paths
-            }
+            future_to_path = {executor.submit(load_image, path, normalize=True): str(path) for path in image_paths}
 
             for future in tqdm(
                 as_completed(future_to_path),
@@ -419,9 +409,7 @@ class ArchitecturalDepthPipeline:
             image = load_image(image_path, normalize=True)
 
         # Estimate depth (with caching)
-        depth_result = self.cache.get_or_compute(
-            image, lambda: self.depth_model.estimate_depth(image)
-        )
+        depth_result = self.cache.get_or_compute(image, lambda: self.depth_model.estimate_depth(image))
         depth = depth_result["depth"]
 
         # Apply processing pipeline
@@ -529,9 +517,7 @@ class ArchitecturalDepthPipeline:
 
                         # Update stats
                         self.stats["images_processed"] += 1
-                        self.stats["total_time"] += result["metadata"][
-                            "processing_time_sec"
-                        ]
+                        self.stats["total_time"] += result["metadata"]["processing_time_sec"]
 
                     except Exception as e:
                         logger.error(f"Failed to process {image_path}: {e}")
@@ -556,9 +542,7 @@ class ArchitecturalDepthPipeline:
 
                     # Update stats
                     self.stats["images_processed"] += 1
-                    self.stats["total_time"] += result["metadata"][
-                        "processing_time_sec"
-                    ]
+                    self.stats["total_time"] += result["metadata"]["processing_time_sec"]
 
                 except Exception as e:
                     logger.error(f"Failed to process {image_path}: {e}")
@@ -732,9 +716,7 @@ class ArchitecturalDepthPipeline:
                 path, image = item
                 try:
                     # Use caching for depth estimation
-                    depth_result = self.cache.get_or_compute(
-                        image, lambda: self.depth_model.estimate_depth(image)
-                    )
+                    depth_result = self.cache.get_or_compute(image, lambda: self.depth_model.estimate_depth(image))
                     depth_queue.put((path, image, depth_result))
                 except Exception as e:
                     logger.error(f"Failed depth estimation for {path}: {e}")
@@ -758,14 +740,10 @@ class ArchitecturalDepthPipeline:
                         result_image = self.processors["denoise"](result_image, depth)
 
                     if "tone_mapping" in self.processors:
-                        result_image = self.processors["tone_mapping"](
-                            result_image, depth
-                        )
+                        result_image = self.processors["tone_mapping"](result_image, depth)
 
                     if "atmospheric" in self.processors:
-                        result_image = self.processors["atmospheric"](
-                            result_image, depth
-                        )
+                        result_image = self.processors["atmospheric"](result_image, depth)
 
                     if "filters" in self.processors:
                         result_image = self.processors["filters"](result_image, depth)
@@ -776,9 +754,7 @@ class ArchitecturalDepthPipeline:
                         "metadata": {
                             "input_path": str(path),
                             "input_shape": image.shape,
-                            "depth_inference_time_ms": depth_result["metadata"][
-                                "inference_time_ms"
-                            ],
+                            "depth_inference_time_ms": depth_result["metadata"]["inference_time_ms"],
                             "processors_applied": list(self.processors.keys()),
                             "depth_stats": depth_statistics(depth),
                         },
@@ -842,9 +818,7 @@ class ArchitecturalDepthPipeline:
         for t in threads:
             t.join()
 
-        logger.info(
-            f"Pipeline processing complete: {processed_count}/{len(image_paths)} images"
-        )
+        logger.info(f"Pipeline processing complete: {processed_count}/{len(image_paths)} images")
 
     def process_render_progressive(
         self,
@@ -893,20 +867,14 @@ class ArchitecturalDepthPipeline:
                 # Downsample for speed
                 h_scaled = int(h_full * scale)
                 w_scaled = int(w_full * scale)
-                image_scaled = resize_image(
-                    image_full, size=(h_scaled, w_scaled), interpolation="bilinear"
-                )
-                logger.info(
-                    f"Processing at {scale:.0%} resolution: {h_scaled}x{w_scaled}"
-                )
+                image_scaled = resize_image(image_full, size=(h_scaled, w_scaled), interpolation="bilinear")
+                logger.info(f"Processing at {scale:.0%} resolution: {h_scaled}x{w_scaled}")
             else:
                 image_scaled = image_full
                 logger.info(f"Processing at full resolution: {h_full}x{w_full}")
 
             # Estimate depth at current scale
-            depth_result = self.cache.get_or_compute(
-                image_scaled, lambda: self.depth_model.estimate_depth(image_scaled)
-            )
+            depth_result = self.cache.get_or_compute(image_scaled, lambda: self.depth_model.estimate_depth(image_scaled))
             depth = depth_result["depth"]
 
             # Apply processing pipeline
@@ -926,12 +894,8 @@ class ArchitecturalDepthPipeline:
 
             # Upscale back to full resolution if needed
             if scale < 1.0:
-                result_image = resize_image(
-                    result_image, size=(h_full, w_full), interpolation="bicubic"
-                )
-                depth = resize_image(
-                    depth, size=(h_full, w_full), interpolation="bilinear"
-                )
+                result_image = resize_image(result_image, size=(h_full, w_full), interpolation="bicubic")
+                depth = resize_image(depth, size=(h_full, w_full), interpolation="bilinear")
 
             processing_time = time.time() - start_time
 
@@ -943,9 +907,7 @@ class ArchitecturalDepthPipeline:
                     "input_shape": image_full.shape,
                     "processing_scale": scale,
                     "processing_time_sec": processing_time,
-                    "depth_inference_time_ms": depth_result["metadata"][
-                        "inference_time_ms"
-                    ],
+                    "depth_inference_time_ms": depth_result["metadata"]["inference_time_ms"],
                     "processors_applied": list(self.processors.keys()),
                     "depth_stats": depth_statistics(depth),
                 },
@@ -967,9 +929,7 @@ class ArchitecturalDepthPipeline:
 
         total_time = sum(r["metadata"]["processing_time_sec"] for r in results)
         avg_time = total_time / len(results)
-        avg_depth_time = np.mean(
-            [r["metadata"]["depth_inference_time_ms"] for r in results]
-        )
+        avg_depth_time = np.mean([r["metadata"]["depth_inference_time_ms"] for r in results])
 
         logger.info("\n" + "=" * 60)
         logger.info("BATCH PROCESSING SUMMARY")
@@ -994,9 +954,7 @@ class ArchitecturalDepthPipeline:
         stats["cache_stats"] = self.cache.get_stats()
 
         if stats["images_processed"] > 0:
-            stats["avg_time_per_image"] = (
-                stats["total_time"] / stats["images_processed"]
-            )
+            stats["avg_time_per_image"] = stats["total_time"] / stats["images_processed"]
 
         return stats
 

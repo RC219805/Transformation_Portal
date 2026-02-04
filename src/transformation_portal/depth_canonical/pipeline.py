@@ -4,16 +4,17 @@ This module provides the main DepthPipeline orchestrator for processing images.
 Phase 2: Full depth estimation integration with caching.
 """
 
-from pathlib import Path
-from typing import Optional, Dict, Union, List
 import hashlib
+from pathlib import Path
+from typing import Dict, List, Optional, Union
+
 import numpy as np
 from PIL import Image
 
 from .config import UnifiedDepthConfig
+from .io import write_pbr_maps
 from .models import ModelRegistry
 from .processing import generate_pbr_maps
-from .io import write_pbr_maps
 
 
 class DepthPipelineResult:
@@ -145,10 +146,7 @@ class DepthPipeline:
 
         # Generate PBR maps if enabled
         if self.config.processing.pbr.enabled:
-            normal_map, roughness_map, ao_map = generate_pbr_maps(
-                depth_map,
-                config=self.config.processing.pbr
-            )
+            normal_map, roughness_map, ao_map = generate_pbr_maps(depth_map, config=self.config.processing.pbr)
 
             result.pbr_maps = {
                 "normal": normal_map,
@@ -158,20 +156,11 @@ class DepthPipeline:
 
             # Save PBR maps if output_dir provided
             if output_dir is not None:
-                result.pbr_paths = write_pbr_maps(
-                    normal_map,
-                    roughness_map,
-                    ao_map,
-                    output_dir,
-                    basename
-                )
+                result.pbr_paths = write_pbr_maps(normal_map, roughness_map, ao_map, output_dir, basename)
 
         return result
 
-    def _estimate_depth(
-        self,
-        image: Union[Path, str, Image.Image, np.ndarray]
-    ) -> np.ndarray:
+    def _estimate_depth(self, image: Union[Path, str, Image.Image, np.ndarray]) -> np.ndarray:
         """Estimate depth from image with caching.
 
         Args:
@@ -195,9 +184,7 @@ class DepthPipeline:
 
         # Get model
         model = self.model_registry.get_model(
-            variant=self.config.model.variant,
-            device=self.config.model.device,
-            dtype=self.config.model.dtype
+            variant=self.config.model.variant, device=self.config.model.device, dtype=self.config.model.dtype
         )
 
         # Estimate depth
@@ -215,10 +202,7 @@ class DepthPipeline:
 
         return depth_map
 
-    def _generate_cache_key(
-        self,
-        image: Union[Path, str, Image.Image, np.ndarray]
-    ) -> str:
+    def _generate_cache_key(self, image: Union[Path, str, Image.Image, np.ndarray]) -> str:
         """Generate cache key for image and config.
 
         Args:
@@ -284,10 +268,7 @@ class DepthPipeline:
             raise ValueError("images parameter is required")
 
         if depth_maps is not None and len(depth_maps) != len(images):
-            raise ValueError(
-                f"Length mismatch: {len(images)} images, "
-                f"{len(depth_maps)} depth maps"
-            )
+            raise ValueError(f"Length mismatch: {len(images)} images, " f"{len(depth_maps)} depth maps")
 
         results = []
         for i, image in enumerate(images):

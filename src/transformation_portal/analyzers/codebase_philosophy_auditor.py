@@ -92,9 +92,7 @@ class _AuditContext:
                 return decision
         return None
 
-    def decision_for_line(
-        self, name: str, line: int, *, max_distance: int = 2
-    ) -> Optional[Decision]:
+    def decision_for_line(self, name: str, line: int, *, max_distance: int = 2) -> Optional[Decision]:
         """Find a decision immediately above (or on) a given line."""
         wanted = name.lower()
         for decision in reversed(self.decisions):
@@ -147,6 +145,7 @@ def _extract_disabled_rules(decisions: Sequence[Decision]) -> Set[str]:
 # Rule framework
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class RuleSpec:
     """Metadata for a single audit rule."""
@@ -160,6 +159,7 @@ class RuleSpec:
 # ---------------------------------------------------------------------------
 # Rules
 # ---------------------------------------------------------------------------
+
 
 def _check_module_docstring(tree: ast.Module, context: _AuditContext) -> List[Violation]:
     if context.is_rule_disabled("module_docstring"):
@@ -180,9 +180,7 @@ def _check_module_docstring(tree: ast.Module, context: _AuditContext) -> List[Vi
     ]
 
 
-def _check_public_api_docstrings(
-    tree: ast.Module, context: _AuditContext
-) -> List[Violation]:
+def _check_public_api_docstrings(tree: ast.Module, context: _AuditContext) -> List[Violation]:
     if context.is_rule_disabled("public_api_documentation"):
         return []
 
@@ -212,9 +210,7 @@ def _check_public_api_docstrings(
     return violations
 
 
-def _check_wildcard_imports(
-    tree: ast.Module, context: _AuditContext
-) -> List[Violation]:
+def _check_wildcard_imports(tree: ast.Module, context: _AuditContext) -> List[Violation]:
     if context.is_rule_disabled("no_wildcard_imports"):
         return []
 
@@ -268,6 +264,7 @@ DEFAULT_RULES: List[RuleSpec] = [
 # ---------------------------------------------------------------------------
 # Auditor
 # ---------------------------------------------------------------------------
+
 
 class CodebasePhilosophyAuditor:
     """Audit Python modules for high-level codebase philosophy violations."""

@@ -6,10 +6,10 @@ Priority P0: CLI Test Coverage
 - Tests valid invocations, edge cases, error handling, output validation
 """
 
-import pytest
 import numpy as np
-from typer.testing import CliRunner
+import pytest
 from PIL import Image
+from typer.testing import CliRunner
 
 from transformation_portal.lux_depth_v3.pbr_cli import app
 
@@ -34,7 +34,7 @@ def sample_depth_npy(tmp_path):
 def sample_depth_png(tmp_path):
     """Create a sample depth map (.png format)."""
     depth = (np.random.rand(512, 512) * 255).astype(np.uint8)
-    depth_img = Image.fromarray(depth, mode='L')
+    depth_img = Image.fromarray(depth, mode="L")
     depth_path = tmp_path / "test_depth.png"
     depth_img.save(depth_path)
     return depth_path
@@ -54,7 +54,7 @@ def sample_depth_batch(tmp_path):
     # Create 2 .png files
     for i in range(2):
         depth = (np.random.rand(256, 256) * 255).astype(np.uint8)
-        depth_img = Image.fromarray(depth, mode='L')
+        depth_img = Image.fromarray(depth, mode="L")
         depth_img.save(batch_dir / f"render_{i:02d}_depth.png")
 
     return batch_dir
@@ -84,11 +84,16 @@ class TestValidInvocations:
         """Test CLI with single depth file - basic invocation."""
         output_dir = tmp_path / "output"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(sample_depth_npy),
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         assert result.exit_code == 0, f"CLI failed: {result.stdout}"
         assert "Processing:" in result.stdout
@@ -99,12 +104,18 @@ class TestValidInvocations:
         """Test CLI with preset parameter."""
         output_dir = tmp_path / "output"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--preset", "premium",
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(sample_depth_npy),
+                "--preset",
+                "premium",
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         assert result.exit_code == 0
         assert "Using preset: premium" in result.stdout
@@ -117,12 +128,18 @@ class TestValidInvocations:
         for preset in presets:
             output_dir = tmp_path / f"output_{preset}"
 
-            result = cli_runner.invoke(app, [
-                "generate",
-                "--depth", str(sample_depth_npy),
-                "--preset", preset,
-                "--output", str(output_dir),
-            ])
+            result = cli_runner.invoke(
+                app,
+                [
+                    "generate",
+                    "--depth",
+                    str(sample_depth_npy),
+                    "--preset",
+                    preset,
+                    "--output",
+                    str(output_dir),
+                ],
+            )
 
             assert result.exit_code == 0, f"Preset '{preset}' failed: {result.stdout}"
             assert f"Using preset: {preset}" in result.stdout
@@ -131,15 +148,24 @@ class TestValidInvocations:
         """Test CLI with custom parameter overrides."""
         output_dir = tmp_path / "output"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--normal-strength", "1.5",
-            "--roughness-strength", "1.2",
-            "--ao-strength", "1.8",
-            "--ao-bias", "0.3",
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(sample_depth_npy),
+                "--normal-strength",
+                "1.5",
+                "--roughness-strength",
+                "1.2",
+                "--ao-strength",
+                "1.8",
+                "--ao-bias",
+                "0.3",
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         assert result.exit_code == 0
         assert "Applied 4 parameter override(s)" in result.stdout
@@ -148,11 +174,16 @@ class TestValidInvocations:
         """Test CLI with PNG depth file."""
         output_dir = tmp_path / "output"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_png),
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(sample_depth_png),
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         assert result.exit_code == 0
         assert "Generated PBR maps" in result.stdout
@@ -161,11 +192,16 @@ class TestValidInvocations:
         """Test CLI in batch directory mode."""
         output_dir = tmp_path / "output"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth-dir", str(sample_depth_batch),
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth-dir",
+                str(sample_depth_batch),
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         assert result.exit_code == 0
         assert "Batch processing 5 depth file(s)" in result.stdout
@@ -177,12 +213,18 @@ class TestValidInvocations:
         """Test batch mode with preset."""
         output_dir = tmp_path / "output"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth-dir", str(sample_depth_batch),
-            "--preset", "wood",
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth-dir",
+                str(sample_depth_batch),
+                "--preset",
+                "wood",
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         assert result.exit_code == 0
         assert "Using preset: wood" in result.stdout
@@ -192,21 +234,29 @@ class TestValidInvocations:
         """Test verbose logging mode."""
         output_dir = tmp_path / "output"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--output", str(output_dir),
-            "--verbose",
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(sample_depth_npy),
+                "--output",
+                str(output_dir),
+                "--verbose",
+            ],
+        )
 
         assert result.exit_code == 0
 
     def test_list_presets(self, cli_runner):
         """Test --list-presets flag."""
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--list-presets",
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--list-presets",
+            ],
+        )
 
         assert result.exit_code == 0
         assert "Available PBR Presets:" in result.stdout
@@ -233,11 +283,16 @@ class TestEdgeCases:
         output_dir = tmp_path / "output"
         fake_path = tmp_path / "nonexistent_depth.npy"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth", str(fake_path),
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(fake_path),
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         assert result.exit_code == 1
         assert "Error: Depth file not found" in result.output
@@ -247,11 +302,16 @@ class TestEdgeCases:
         output_dir = tmp_path / "output"
         fake_dir = tmp_path / "nonexistent_dir"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth-dir", str(fake_dir),
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth-dir",
+                str(fake_dir),
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         assert result.exit_code == 1
         assert "Error: Directory not found" in result.output
@@ -260,11 +320,16 @@ class TestEdgeCases:
         """Test with empty directory (no depth files)."""
         output_dir = tmp_path / "output"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth-dir", str(empty_directory),
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth-dir",
+                str(empty_directory),
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         assert result.exit_code == 1
         assert "Warning: No depth files" in result.output
@@ -273,10 +338,14 @@ class TestEdgeCases:
         """Test with neither --depth nor --depth-dir."""
         output_dir = tmp_path / "output"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         assert result.exit_code == 1
         assert "Error: Either --depth or --depth-dir required" in result.output
@@ -285,12 +354,18 @@ class TestEdgeCases:
         """Test with both --depth and --depth-dir (conflicting)."""
         output_dir = tmp_path / "output"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--depth-dir", str(sample_depth_batch),
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(sample_depth_npy),
+                "--depth-dir",
+                str(sample_depth_batch),
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         assert result.exit_code == 1
         assert "Error: Cannot specify both --depth and --depth-dir" in result.output
@@ -299,12 +374,18 @@ class TestEdgeCases:
         """Test with invalid preset name."""
         output_dir = tmp_path / "output"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--preset", "invalid_preset_name",
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(sample_depth_npy),
+                "--preset",
+                "invalid_preset_name",
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         assert result.exit_code == 1
         # Error message is on stderr, but available presets shown
@@ -316,11 +397,16 @@ class TestEdgeCases:
         output_dir = tmp_path / "nested" / "output" / "dir"
         assert not output_dir.exists()
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(sample_depth_npy),
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         # Should succeed and create directory
         assert result.exit_code == 0
@@ -335,7 +421,7 @@ class TestEdgeCases:
         # Note: The current CLI looks for *_depth.* pattern
         # This test verifies case-insensitive extension handling
         depth = (np.random.rand(128, 128) * 255).astype(np.uint8)
-        depth_img = Image.fromarray(depth, mode='L')
+        depth_img = Image.fromarray(depth, mode="L")
 
         # Create .png (should be found)
         depth_img.save(batch_dir / "test1_depth.png")
@@ -345,11 +431,16 @@ class TestEdgeCases:
 
         output_dir = tmp_path / "output"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth-dir", str(batch_dir),
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth-dir",
+                str(batch_dir),
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         # Should process at least the .png file
         # Current implementation only finds lowercase .png
@@ -365,11 +456,16 @@ class TestErrorHandling:
         """Test handling of corrupt depth file in single mode."""
         output_dir = tmp_path / "output"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth", str(corrupt_depth_file),
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(corrupt_depth_file),
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         # Should fail gracefully with error message
         assert result.exit_code == 1
@@ -391,11 +487,16 @@ class TestErrorHandling:
 
         output_dir = tmp_path / "output"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth-dir", str(batch_dir),
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth-dir",
+                str(batch_dir),
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         # Should report mixed results
         assert "Batch complete" in result.stdout
@@ -411,18 +512,23 @@ class TestErrorHandling:
         output_dir = tmp_path / "output"
         fake_path = tmp_path / "nonexistent.npy"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth", str(fake_path),
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(fake_path),
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         # Should have clean error message
         assert result.exit_code == 1
         assert "Error:" in result.output
         # Should NOT have traceback
         assert "Traceback" not in result.output
-        assert "File \"" not in result.output
+        assert 'File "' not in result.output
 
 
 # P0: Output Validation Tests
@@ -433,11 +539,16 @@ class TestOutputValidation:
         """Test that all PBR maps are created."""
         output_dir = tmp_path / "output"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(sample_depth_npy),
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         assert result.exit_code == 0
 
@@ -450,12 +561,18 @@ class TestOutputValidation:
         """Test output file naming convention."""
         output_dir = tmp_path / "output"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--base-name", "custom_name",
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(sample_depth_npy),
+                "--base-name",
+                "custom_name",
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         assert result.exit_code == 0
 
@@ -466,11 +583,16 @@ class TestOutputValidation:
         """Test batch mode output directory structure."""
         output_dir = tmp_path / "output"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth-dir", str(sample_depth_batch),
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth-dir",
+                str(sample_depth_batch),
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         assert result.exit_code == 0
         assert output_dir.exists()
@@ -487,12 +609,18 @@ class TestParameterValidation:
         """Test handling of invalid float parameters."""
         output_dir = tmp_path / "output"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--normal-strength", "not_a_number",
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(sample_depth_npy),
+                "--normal-strength",
+                "not_a_number",
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         # Typer should handle type validation
         assert result.exit_code != 0
@@ -503,12 +631,18 @@ class TestParameterValidation:
 
         # Negative values might be allowed by the algorithm
         # This documents the behavior
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--normal-strength", "-1.0",
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(sample_depth_npy),
+                "--normal-strength",
+                "-1.0",
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         # Either succeeds (algorithm allows negative) or fails gracefully
         assert result.exit_code in [0, 1]
@@ -519,13 +653,20 @@ class TestParameterValidation:
         """Test handling of extreme parameter values."""
         output_dir = tmp_path / "output"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--normal-strength", "100.0",
-            "--ao-bias", "0.0",
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(sample_depth_npy),
+                "--normal-strength",
+                "100.0",
+                "--ao-bias",
+                "0.0",
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         # Should handle extreme values gracefully
         assert result.exit_code in [0, 1]
@@ -539,11 +680,16 @@ class TestExitCodes:
         """Test that successful execution returns 0."""
         output_dir = tmp_path / "output"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(sample_depth_npy),
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         assert result.exit_code == 0
 
@@ -552,11 +698,16 @@ class TestExitCodes:
         output_dir = tmp_path / "output"
         fake_path = tmp_path / "nonexistent.npy"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth", str(fake_path),
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(fake_path),
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         assert result.exit_code == 1
 
@@ -575,11 +726,16 @@ class TestExitCodes:
 
         output_dir = tmp_path / "output"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth-dir", str(batch_dir),
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth-dir",
+                str(batch_dir),
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         # Should exit with error code due to partial failure
         assert result.exit_code == 1
@@ -595,20 +751,30 @@ class TestOverwriteBehavior:
         output_dir = tmp_path / "output"
 
         # First run - should succeed
-        result1 = cli_runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--output", str(output_dir),
-        ])
+        result1 = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(sample_depth_npy),
+                "--output",
+                str(output_dir),
+            ],
+        )
         assert result1.exit_code == 0, f"First run failed: {result1.stdout}"
 
         # Second run with --no-overwrite should fail
-        result2 = cli_runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--output", str(output_dir),
-            "--no-overwrite",
-        ])
+        result2 = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(sample_depth_npy),
+                "--output",
+                str(output_dir),
+                "--no-overwrite",
+            ],
+        )
         assert result2.exit_code == 1, f"Expected failure with --no-overwrite: {result2.stdout}"
         assert "already exist" in result2.output.lower()
 
@@ -617,20 +783,30 @@ class TestOverwriteBehavior:
         output_dir = tmp_path / "output"
 
         # First run
-        result1 = cli_runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--output", str(output_dir),
-        ])
+        result1 = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(sample_depth_npy),
+                "--output",
+                str(output_dir),
+            ],
+        )
         assert result1.exit_code == 0
 
         # Second run with --overwrite (default) should succeed
-        result2 = cli_runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--output", str(output_dir),
-            "--overwrite",
-        ])
+        result2 = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(sample_depth_npy),
+                "--output",
+                str(output_dir),
+                "--overwrite",
+            ],
+        )
         assert result2.exit_code == 0, f"Expected success with --overwrite: {result2.stdout}"
 
     def test_batch_no_overwrite_skips_existing(self, cli_runner, tmp_path):
@@ -646,20 +822,30 @@ class TestOverwriteBehavior:
             np.save(batch_dir / f"scene_{i}_depth.npy", depth)
 
         # Run first to create outputs for scene_0
-        result1 = cli_runner.invoke(app, [
-            "generate",
-            "--depth", str(batch_dir / "scene_0_depth.npy"),
-            "--output", str(output_dir),
-        ])
+        result1 = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(batch_dir / "scene_0_depth.npy"),
+                "--output",
+                str(output_dir),
+            ],
+        )
         assert result1.exit_code == 0
 
         # Now run batch with --no-overwrite
-        result2 = cli_runner.invoke(app, [
-            "generate",
-            "--depth-dir", str(batch_dir),
-            "--output", str(output_dir),
-            "--no-overwrite",
-        ])
+        result2 = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth-dir",
+                str(batch_dir),
+                "--output",
+                str(output_dir),
+                "--no-overwrite",
+            ],
+        )
 
         # Should have partial success (1 skipped, 1 processed)
         assert result2.exit_code == 1  # Exit with error due to skipped file
@@ -681,11 +867,16 @@ class TestBaseNameDerivation:
 
         output_dir = tmp_path / "output"
 
-        result = cli_runner.invoke(app, [
-            "generate",
-            "--depth", str(depth_path),
-            "--output", str(output_dir),
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(depth_path),
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         assert result.exit_code == 0
 

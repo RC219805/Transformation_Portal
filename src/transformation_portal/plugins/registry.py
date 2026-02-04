@@ -52,9 +52,7 @@ class PluginRegistry:
             PluginValidationError: If plugin fails validation
         """
         if not isinstance(plugin, PluginInterface):
-            raise TypeError(
-                f"Plugin must implement PluginInterface, got {type(plugin)}"
-            )
+            raise TypeError(f"Plugin must implement PluginInterface, got {type(plugin)}")
 
         plugin_type = plugin.metadata.plugin_type.value
         plugin_name = plugin.metadata.name
@@ -68,18 +66,14 @@ class PluginRegistry:
 
             # Validate plugin
             if not plugin.validate():
-                warnings.warn(
-                    f"Plugin '{plugin_name}' validation returned False. "
-                    "Plugin may not be properly initialized."
-                )
+                warnings.warn(f"Plugin '{plugin_name}' validation returned False. " "Plugin may not be properly initialized.")
 
             self._plugins[plugin_type][plugin_name] = plugin
             self._metadata_cache[f"{plugin_type}:{plugin_name}"] = plugin.metadata
 
             if plugin.metadata.deprecated:
                 warnings.warn(
-                    f"Plugin '{plugin_name}' is deprecated. "
-                    f"Consider using '{plugin.metadata.replacement}' instead.",
+                    f"Plugin '{plugin_name}' is deprecated. " f"Consider using '{plugin.metadata.replacement}' instead.",
                     DeprecationWarning,
                     stacklevel=2,
                 )
@@ -110,9 +104,7 @@ class PluginRegistry:
 
             return plugin
 
-    def list_plugins(
-        self, plugin_type: Optional[str] = None, include_deprecated: bool = False
-    ) -> Dict[str, List[str]]:
+    def list_plugins(self, plugin_type: Optional[str] = None, include_deprecated: bool = False) -> Dict[str, List[str]]:
         """List all registered plugins.
 
         Args:
@@ -183,20 +175,14 @@ class PluginRegistry:
 
                 try:
                     # Load module dynamically
-                    spec = importlib.util.spec_from_file_location(
-                        f"plugin_{plugin_file.stem}", plugin_file
-                    )
+                    spec = importlib.util.spec_from_file_location(f"plugin_{plugin_file.stem}", plugin_file)
                     if spec and spec.loader:
                         module = importlib.util.module_from_spec(spec)
                         spec.loader.exec_module(module)
 
                         # Find plugin classes in module
                         for name, obj in inspect.getmembers(module, inspect.isclass):
-                            if (
-                                issubclass(obj, PluginInterface)
-                                and obj is not PluginInterface
-                                and not inspect.isabstract(obj)
-                            ):
+                            if issubclass(obj, PluginInterface) and obj is not PluginInterface and not inspect.isabstract(obj):
 
                                 # Instantiate and register plugin
                                 plugin_instance = obj()
@@ -204,15 +190,11 @@ class PluginRegistry:
                                 discovered += 1
 
                 except Exception as e:
-                    warnings.warn(
-                        f"Failed to load plugin from {plugin_file}: {e}", RuntimeWarning
-                    )
+                    warnings.warn(f"Failed to load plugin from {plugin_file}: {e}", RuntimeWarning)
 
         return discovered
 
-    def get_metadata(
-        self, plugin_type: str, plugin_name: str
-    ) -> Optional[PluginMetadata]:
+    def get_metadata(self, plugin_type: str, plugin_name: str) -> Optional[PluginMetadata]:
         """Get metadata for a specific plugin.
 
         Args:

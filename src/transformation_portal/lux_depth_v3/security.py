@@ -3,15 +3,18 @@
 STUB IMPLEMENTATION - Critical functions to enable package imports.
 Full implementation pending.
 """
+
 from __future__ import annotations
+
+import re
 from enum import Enum
 from pathlib import Path
 from typing import Optional
-import re
 
 
 class HashMode(Enum):
     """Hash computation modes."""
+
     ALWAYS = "always"
     IF_MANIFEST_EXISTS = "if_manifest_exists"
     NEVER = "never"
@@ -29,9 +32,9 @@ def sanitize_file_stem(stem: str) -> str:
         Sanitized file stem
     """
     # Basic sanitization - replace problematic characters
-    sanitized = re.sub(r'[^\w\-_.]', '_', stem)
+    sanitized = re.sub(r"[^\w\-_.]", "_", stem)
     # Ensure it doesn't start with dot or dash
-    sanitized = re.sub(r'^[.-]', '_', sanitized)
+    sanitized = re.sub(r"^[.-]", "_", sanitized)
     return sanitized or "unnamed"
 
 
@@ -47,8 +50,8 @@ def sanitize_path_component_nonlossy(component: str) -> str:
         Sanitized path component
     """
     # Similar to file stem but preserve more characters for paths
-    sanitized = re.sub(r'[<>:"|?*\x00-\x1f]', '_', component)
-    sanitized = sanitized.strip('. ')
+    sanitized = re.sub(r'[<>:"|?*\x00-\x1f]', "_", component)
+    sanitized = sanitized.strip(". ")
     return sanitized or "unnamed"
 
 
@@ -70,20 +73,17 @@ def validate_device_spec(device: str) -> str:
 
     # Allow common device specs
     valid_patterns = [
-        r'^cpu$',
-        r'^cuda(:\d+)?$',
-        r'^mps$',
-        r'^auto$',
+        r"^cpu$",
+        r"^cuda(:\d+)?$",
+        r"^mps$",
+        r"^auto$",
     ]
 
     for pattern in valid_patterns:
         if re.match(pattern, device):
             return device
 
-    raise ValueError(
-        f"Invalid device specification: {device}. "
-        f"Expected one of: cpu, cuda, cuda:N, mps, auto"
-    )
+    raise ValueError(f"Invalid device specification: {device}. " f"Expected one of: cpu, cuda, cuda:N, mps, auto")
 
 
 def validate_quantization_method(method: str) -> str:
@@ -102,15 +102,12 @@ def validate_quantization_method(method: str) -> str:
     """
     method = method.lower().strip()
 
-    valid_methods = {'none', 'int8', 'fp16', 'fp32', 'auto'}
+    valid_methods = {"none", "int8", "fp16", "fp32", "auto"}
 
     if method in valid_methods:
         return method
 
-    raise ValueError(
-        f"Invalid quantization method: {method}. "
-        f"Expected one of: {', '.join(sorted(valid_methods))}"
-    )
+    raise ValueError(f"Invalid quantization method: {method}. " f"Expected one of: {', '.join(sorted(valid_methods))}")
 
 
 def validate_depth_fallback(fallback: Optional[str]) -> Optional[str]:
@@ -133,12 +130,9 @@ def validate_depth_fallback(fallback: Optional[str]) -> Optional[str]:
     fallback = fallback.lower().strip()
 
     # Updated to match documented interface in config.py
-    valid_fallbacks = {'fail', 'skip', 'v2-auto'}
+    valid_fallbacks = {"fail", "skip", "v2-auto"}
 
     if fallback in valid_fallbacks:
         return fallback
 
-    raise ValueError(
-        f"Invalid depth fallback: {fallback}. "
-        f"Expected one of: {', '.join(sorted(valid_fallbacks))}"
-    )
+    raise ValueError(f"Invalid depth fallback: {fallback}. " f"Expected one of: {', '.join(sorted(valid_fallbacks))}")

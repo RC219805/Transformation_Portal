@@ -3,21 +3,24 @@
 STUB IMPLEMENTATION - Critical types to enable package imports.
 Full implementation pending.
 """
+
 from __future__ import annotations
-from dataclasses import dataclass, asdict
-from pathlib import Path
-from typing import Optional, Dict, Any, List
-import json
-import hashlib
-import subprocess
+
 import datetime
+import hashlib
+import json
 import logging
+import subprocess
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 # Phase 3: MessagePack support (optional dependency)
 try:
     import msgpack
+
     MSGPACK_AVAILABLE = True
 except ImportError:
     MSGPACK_AVAILABLE = False
@@ -46,6 +49,7 @@ class InputMetadata:
         image_size_bytes: Size of image file in bytes
         image_dimensions: Image dimensions as (width, height) tuple
     """
+
     image_path: str
     image_sha256: Optional[str] = None
     image_size_bytes: Optional[int] = None
@@ -73,22 +77,21 @@ class InputMetadata:
         Raises:
             ValueError: If schema_version is unsupported
         """
-        schema_version = data.get('schema_version', '1.0')
-        if schema_version != '1.0':
+        schema_version = data.get("schema_version", "1.0")
+        if schema_version != "1.0":
             raise ValueError(
-                f"Unsupported InputMetadata schema version: {schema_version}. "
-                f"This code supports version 1.0 only."
+                f"Unsupported InputMetadata schema version: {schema_version}. " f"This code supports version 1.0 only."
             )
 
         # Handle tuple/list conversion for image_dimensions
-        dimensions = data.get('image_dimensions')
+        dimensions = data.get("image_dimensions")
         if dimensions is not None and isinstance(dimensions, list):
             dimensions = tuple(dimensions)
 
         return cls(
-            image_path=data['image_path'],
-            image_sha256=data.get('image_sha256'),
-            image_size_bytes=data.get('image_size_bytes'),
+            image_path=data["image_path"],
+            image_sha256=data.get("image_sha256"),
+            image_size_bytes=data.get("image_size_bytes"),
             image_dimensions=dimensions,
             schema_version=schema_version,
         )
@@ -97,6 +100,7 @@ class InputMetadata:
 @dataclass
 class DepthMetadata:
     """Metadata for depth generation."""
+
     model: str
     depth_path: str
     runtime_seconds: float
@@ -118,6 +122,7 @@ class V2Metadata:
         report_path: Path to V2 report file
         error_message: Error message if status is not 'ok'
     """
+
     preset: str
     status: str
     runtime_seconds: Optional[float] = None
@@ -131,6 +136,7 @@ class V2Metadata:
 @dataclass
 class TimingMetadata:
     """Timing information for the pipeline."""
+
     depth_seconds: float
     v2_seconds: float
     total_seconds: float
@@ -140,6 +146,7 @@ class TimingMetadata:
 @dataclass
 class ReproMetadata:
     """Reproducibility metadata."""
+
     v3_git_revision: Optional[str] = None
     v2_git_revision: Optional[str] = None
     environment: Optional[Dict[str, Any]] = None
@@ -148,6 +155,7 @@ class ReproMetadata:
 @dataclass
 class ConfigFingerprint:
     """Configuration fingerprint for caching validation."""
+
     model_variant: str
     depth_quantization: str
     depth_device: str
@@ -198,6 +206,7 @@ class BatchManifest:
         results: List of per-image processing results
         stats: Aggregated batch statistics
     """
+
     batch_id: str
     start_time: str
     end_time: str
@@ -208,13 +217,13 @@ class BatchManifest:
     def write(self, path: Path):
         """Write batch manifest to JSON file."""
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             json.dump(asdict(self), f, indent=2)
 
     @classmethod
     def load(cls, path: Path) -> BatchManifest:
         """Load batch manifest from JSON file."""
-        with open(path, 'r') as f:
+        with open(path, "r") as f:
             data = json.load(f)
         return cls(**data)
 
@@ -235,6 +244,7 @@ class CombinedManifest:
         start_time: ISO 8601 formatted pipeline start time (UTC)
         end_time: ISO 8601 formatted pipeline end time (UTC)
     """
+
     input: Optional[InputMetadata] = None
     depth: Optional[DepthMetadata] = None
     v2: Optional[V2Metadata] = None
@@ -255,10 +265,10 @@ class CombinedManifest:
 
         # Convert dataclasses to dict
         data = {}
-        for field_name in ['input', 'depth', 'v2', 'timing', 'pbr_assets', 'repro', 'config_fingerprint', 'environment']:
+        for field_name in ["input", "depth", "v2", "timing", "pbr_assets", "repro", "config_fingerprint", "environment"]:
             field_value = getattr(self, field_name)
             if field_value is not None:
-                if field_name in ['pbr_assets', 'environment']:
+                if field_name in ["pbr_assets", "environment"]:
                     # Already a dict, no need to convert
                     data[field_name] = field_value
                 else:
@@ -266,11 +276,11 @@ class CombinedManifest:
 
         # Include timestamp fields
         if self.start_time:
-            data['start_time'] = self.start_time
+            data["start_time"] = self.start_time
         if self.end_time:
-            data['end_time'] = self.end_time
+            data["end_time"] = self.end_time
 
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             json.dump(data, f, indent=2)
 
     @classmethod
@@ -279,33 +289,33 @@ class CombinedManifest:
 
         Deserializes all fields including timestamps.
         """
-        with open(path, 'r') as f:
+        with open(path, "r") as f:
             data = json.load(f)
 
         # Reconstruct dataclasses
         manifest = cls()
 
-        if 'input' in data:
-            manifest.input = InputMetadata.from_dict(data['input'])
-        if 'depth' in data:
-            manifest.depth = DepthMetadata(**data['depth'])
-        if 'v2' in data:
-            manifest.v2 = V2Metadata(**data['v2'])
-        if 'timing' in data:
-            manifest.timing = TimingMetadata(**data['timing'])
-        if 'repro' in data:
-            manifest.repro = ReproMetadata(**data['repro'])
-        if 'config_fingerprint' in data:
-            manifest.config_fingerprint = ConfigFingerprint(**data['config_fingerprint'])
-        if 'pbr_assets' in data:
-            manifest.pbr_assets = data['pbr_assets']
-        if 'environment' in data:
-            manifest.environment = data['environment']
+        if "input" in data:
+            manifest.input = InputMetadata.from_dict(data["input"])
+        if "depth" in data:
+            manifest.depth = DepthMetadata(**data["depth"])
+        if "v2" in data:
+            manifest.v2 = V2Metadata(**data["v2"])
+        if "timing" in data:
+            manifest.timing = TimingMetadata(**data["timing"])
+        if "repro" in data:
+            manifest.repro = ReproMetadata(**data["repro"])
+        if "config_fingerprint" in data:
+            manifest.config_fingerprint = ConfigFingerprint(**data["config_fingerprint"])
+        if "pbr_assets" in data:
+            manifest.pbr_assets = data["pbr_assets"]
+        if "environment" in data:
+            manifest.environment = data["environment"]
         # Load timestamp fields
-        if 'start_time' in data:
-            manifest.start_time = data['start_time']
-        if 'end_time' in data:
-            manifest.end_time = data['end_time']
+        if "start_time" in data:
+            manifest.start_time = data["start_time"]
+        if "end_time" in data:
+            manifest.end_time = data["end_time"]
 
         return manifest
 
@@ -324,32 +334,32 @@ class CombinedManifest:
         """
         if not MSGPACK_AVAILABLE:
             logger.warning("msgpack not available, falling back to JSON. Install: pip install msgpack")
-            self.save(path.with_suffix('.json'))
+            self.save(path.with_suffix(".json"))
             return
 
-        path = path.with_suffix('.msgpack')
+        path = path.with_suffix(".msgpack")
         path.parent.mkdir(parents=True, exist_ok=True)
 
         # Convert dataclasses to dict (same logic as save)
         data = {}
-        for field_name in ['input', 'depth', 'v2', 'timing', 'pbr_assets', 'repro', 'config_fingerprint', 'environment']:
+        for field_name in ["input", "depth", "v2", "timing", "pbr_assets", "repro", "config_fingerprint", "environment"]:
             field_value = getattr(self, field_name)
             if field_value is not None:
-                if field_name in ['pbr_assets', 'environment']:
+                if field_name in ["pbr_assets", "environment"]:
                     data[field_name] = field_value
                 else:
                     data[field_name] = asdict(field_value)
 
         # Include timestamp fields
         if self.start_time:
-            data['start_time'] = self.start_time
+            data["start_time"] = self.start_time
         if self.end_time:
-            data['end_time'] = self.end_time
+            data["end_time"] = self.end_time
 
         # Atomic write pattern
-        temp_path = path.with_suffix(path.suffix + '.tmp')
+        temp_path = path.with_suffix(path.suffix + ".tmp")
         try:
-            with open(temp_path, 'wb') as f:
+            with open(temp_path, "wb") as f:
                 msgpack.pack(data, f, use_bin_type=True)
 
             temp_path.replace(path)
@@ -372,32 +382,32 @@ class CombinedManifest:
         if not MSGPACK_AVAILABLE:
             raise ImportError("msgpack required to load .msgpack files. Install: pip install msgpack")
 
-        with open(path, 'rb') as f:
+        with open(path, "rb") as f:
             data = msgpack.unpack(f, raw=False)
 
         # Reconstruct manifest (same logic as load)
         manifest = cls()
 
-        if 'input' in data:
-            manifest.input = InputMetadata.from_dict(data['input'])
-        if 'depth' in data:
-            manifest.depth = DepthMetadata(**data['depth'])
-        if 'v2' in data:
-            manifest.v2 = V2Metadata(**data['v2'])
-        if 'timing' in data:
-            manifest.timing = TimingMetadata(**data['timing'])
-        if 'repro' in data:
-            manifest.repro = ReproMetadata(**data['repro'])
-        if 'config_fingerprint' in data:
-            manifest.config_fingerprint = ConfigFingerprint(**data['config_fingerprint'])
-        if 'pbr_assets' in data:
-            manifest.pbr_assets = data['pbr_assets']
-        if 'environment' in data:
-            manifest.environment = data['environment']
-        if 'start_time' in data:
-            manifest.start_time = data['start_time']
-        if 'end_time' in data:
-            manifest.end_time = data['end_time']
+        if "input" in data:
+            manifest.input = InputMetadata.from_dict(data["input"])
+        if "depth" in data:
+            manifest.depth = DepthMetadata(**data["depth"])
+        if "v2" in data:
+            manifest.v2 = V2Metadata(**data["v2"])
+        if "timing" in data:
+            manifest.timing = TimingMetadata(**data["timing"])
+        if "repro" in data:
+            manifest.repro = ReproMetadata(**data["repro"])
+        if "config_fingerprint" in data:
+            manifest.config_fingerprint = ConfigFingerprint(**data["config_fingerprint"])
+        if "pbr_assets" in data:
+            manifest.pbr_assets = data["pbr_assets"]
+        if "environment" in data:
+            manifest.environment = data["environment"]
+        if "start_time" in data:
+            manifest.start_time = data["start_time"]
+        if "end_time" in data:
+            manifest.end_time = data["end_time"]
 
         return manifest
 
@@ -413,7 +423,7 @@ class CombinedManifest:
         Returns:
             CombinedManifest instance
         """
-        if path.suffix == '.msgpack':
+        if path.suffix == ".msgpack":
             return cls.load_msgpack(path)
         else:
             return cls.load(path)
@@ -434,7 +444,7 @@ def compute_file_sha256(file_path: Path, chunk_size: int = 8192) -> str:
     """
     sha256 = hashlib.sha256()
 
-    with open(file_path, 'rb') as f:
+    with open(file_path, "rb") as f:
         while chunk := f.read(chunk_size):
             sha256.update(chunk)
 
@@ -453,13 +463,7 @@ def get_git_revision(repo_root: Path) -> Optional[str]:
         Git revision hash or None if not in a git repo
     """
     try:
-        result = subprocess.run(
-            ['git', 'rev-parse', 'HEAD'],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
+        result = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_root, capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
             return result.stdout.strip()
     except Exception:
@@ -480,7 +484,7 @@ def capture_environment() -> Dict[str, Any]:
     import sys
 
     return {
-        'python_version': sys.version,
-        'platform': platform.platform(),
-        'machine': platform.machine(),
+        "python_version": sys.version,
+        "platform": platform.platform(),
+        "machine": platform.machine(),
     }

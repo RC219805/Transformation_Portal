@@ -68,10 +68,7 @@ class MaterialResponseReport:
         with Path(path).open("r", encoding="utf-8") as fp:
             raw: dict[str, Any] = json.load(fp)
 
-        scenes = {
-            scene_data["name"]: SceneReport.from_mapping(scene_data)
-            for scene_data in raw.get("scenes", [])
-        }
+        scenes = {scene_data["name"]: SceneReport.from_mapping(scene_data) for scene_data in raw.get("scenes", [])}
 
         return cls(
             generated=str(raw.get("generated", "")),
@@ -87,9 +84,7 @@ class MaterialResponseReport:
     def top_scene(self, metric_name: str, *, version: str = "regular") -> SceneReport:
         """Return the scene with the highest ``metric_name`` for ``version``."""
 
-        return max(
-            self.iter_scenes(), key=lambda scene: scene.metric(version, metric_name)
-        )
+        return max(self.iter_scenes(), key=lambda scene: scene.metric(version, metric_name))
 
 
 @dataclass(frozen=True)
@@ -221,16 +216,8 @@ class RenderEnhancementPlanner:
                         "current": base_luminance,
                         "target": target,
                         "focus_areas": [
-                            (
-                                "specular_pool_reflections"
-                                if scene.name == "pool"
-                                else "roofline_glow"
-                            ),
-                            (
-                                "interior_window_bloom"
-                                if scene.name == "aerial"
-                                else "architectural_whites"
-                            ),
+                            ("specular_pool_reflections" if scene.name == "pool" else "roofline_glow"),
+                            ("interior_window_bloom" if scene.name == "aerial" else "architectural_whites"),
                         ],
                         "approach": "sculpted masks and dodge layers to avoid uniform brightening",
                     }
@@ -377,9 +364,7 @@ class RenderEnhancementPlanner:
     def _derive_scene_specific_upgrades(self) -> Dict[str, Any]:
         return {
             "aerial": {
-                "current_luxury": self.report.scenes["aerial"].metric(
-                    "regular", "luxury_index"
-                ),
+                "current_luxury": self.report.scenes["aerial"].metric("regular", "luxury_index"),
                 "target": 0.7,
                 "moves": [
                     "paint champagne sunset across pool",
@@ -388,9 +373,7 @@ class RenderEnhancementPlanner:
                 ],
             },
             "pool": {
-                "current_luxury": self.report.scenes["pool"].metric(
-                    "regular", "luxury_index"
-                ),
+                "current_luxury": self.report.scenes["pool"].metric("regular", "luxury_index"),
                 "target": 0.72,
                 "moves": [
                     "introduce spa steam plumes",
@@ -399,9 +382,7 @@ class RenderEnhancementPlanner:
                 ],
             },
             "great_room": {
-                "current_luxury": self.report.scenes["great_room"].metric(
-                    "regular", "luxury_index"
-                ),
+                "current_luxury": self.report.scenes["great_room"].metric("regular", "luxury_index"),
                 "target": 0.75,
                 "moves": [
                     "intensify fire feature for kinetic shadow play",
@@ -470,9 +451,7 @@ class MaterialAwareEnhancementPlanner(RenderEnhancementPlanner):
                         "layers": material.texture_layers,
                     },
                 },
-                "optimization_notes": self._get_material_optimization(
-                    material, current_texture
-                ),
+                "optimization_notes": self._get_material_optimization(material, current_texture),
             }
 
         return strategies
@@ -528,9 +507,7 @@ class MaterialAwareEnhancementPlanner(RenderEnhancementPlanner):
             },
         }
 
-    def _get_material_optimization(
-        self, material: MaterialDefinition, current: float
-    ) -> str:
+    def _get_material_optimization(self, material: MaterialDefinition, current: float) -> str:
         """Return optimization notes for specific material."""
 
         if material.name == "herringbone_oak":

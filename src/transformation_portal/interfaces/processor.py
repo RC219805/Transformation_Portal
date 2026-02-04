@@ -6,6 +6,7 @@ Base contract for all image processing operations in Transformation Portal.
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict
+
 import numpy as np
 
 

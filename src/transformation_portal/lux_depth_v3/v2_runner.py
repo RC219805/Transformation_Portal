@@ -9,6 +9,7 @@ Design:
 - Comprehensive error handling with command context
 - Report JSON discovery and merging
 """
+
 from __future__ import annotations
 
 import json
@@ -17,7 +18,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +41,7 @@ class V2Runner:
 
         if not self.script_path.exists():
             logger.warning(
-                f"V2 enhancement script not found: {self.script_path}. "
-                f"run() will raise FileNotFoundError if called."
+                f"V2 enhancement script not found: {self.script_path}. " f"run() will raise FileNotFoundError if called."
             )
 
     def _find_repo_root(self) -> Path:
@@ -61,20 +61,20 @@ class V2Runner:
         # Walk up parent directories
         for parent in [current] + list(current.parents):
             # Check for common repo markers
-            if any([
-                (parent / ".git").exists(),
-                (parent / "pyproject.toml").exists(),
-                (parent / "README.md").exists() and (parent / "src").exists(),
-            ]):
+            if any(
+                [
+                    (parent / ".git").exists(),
+                    (parent / "pyproject.toml").exists(),
+                    (parent / "README.md").exists() and (parent / "src").exists(),
+                ]
+            ):
                 logger.debug(f"Found repo root: {parent}")
                 return parent
 
         # Fallback: assume we're in src/transformation_portal/lux_depth_v3/
         # Go up 3 levels
         fallback = current.parents[3]
-        logger.warning(
-            f"Could not find repo root markers, falling back to: {fallback}"
-        )
+        logger.warning(f"Could not find repo root markers, falling back to: {fallback}")
         return fallback
 
     def run(
@@ -87,7 +87,7 @@ class V2Runner:
         upscaler_backend: Optional[str] = None,
         log_file: Optional[Path] = None,
         timeout: Optional[float] = None,
-        **kwargs
+        **kwargs,
     ) -> Dict[str, Any]:
         """Run V2 depth-aware enhancement pipeline.
 
@@ -151,13 +151,7 @@ class V2Runner:
         start_time = time.perf_counter()
 
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=timeout
-            )
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=timeout)
             runtime_s = time.perf_counter() - start_time
 
             logger.info(f"V2 enhancement completed in {runtime_s:.2f}s")
@@ -167,7 +161,7 @@ class V2Runner:
 
             # Extract error info
             error_msg = e.stderr if e.stderr else e.stdout
-            cmd_str = ' '.join(cmd)
+            cmd_str = " ".join(cmd)
 
             raise RuntimeError(
                 f"V2 enhancement failed (returncode={e.returncode}, runtime={runtime_s:.2f}s)\n"
@@ -179,8 +173,8 @@ class V2Runner:
             runtime_s = time.perf_counter() - start_time
 
             # Extract partial output if available
-            partial_stdout = e.stdout if hasattr(e, 'stdout') and e.stdout else ""
-            partial_stderr = e.stderr if hasattr(e, 'stderr') and e.stderr else ""
+            partial_stdout = e.stdout if hasattr(e, "stdout") and e.stdout else ""
+            partial_stderr = e.stderr if hasattr(e, "stderr") and e.stderr else ""
 
             raise TimeoutError(
                 f"V2 enhancement timed out after {timeout}s (partial runtime={runtime_s:.2f}s)\n"
@@ -194,16 +188,11 @@ class V2Runner:
         if report_path:
             logger.info(f"Found V2 report: {report_path}")
             try:
-                with open(report_path, 'r') as f:
+                with open(report_path, "r") as f:
                     report_data = json.load(f)
 
                 # Merge report with runtime info
-                return {
-                    **report_data,
-                    "runtime_s": runtime_s,
-                    "status": "success",
-                    "report_path": str(report_path)
-                }
+                return {**report_data, "runtime_s": runtime_s, "status": "success", "report_path": str(report_path)}
             except Exception as e:
                 logger.warning(f"Failed to load report JSON: {e}")
                 # Fall through to stdout/stderr return
@@ -216,7 +205,7 @@ class V2Runner:
             "status": "success",
             "report_path": None,
             "stdout": result.stdout,
-            "stderr": result.stderr
+            "stderr": result.stderr,
         }
 
 

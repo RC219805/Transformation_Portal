@@ -8,11 +8,12 @@ Priority P2: Stress Testing Infrastructure
 - Check for consistent output quality
 """
 
-import pytest
-import numpy as np
-from pathlib import Path
-from typer.testing import CliRunner
 import time
+from pathlib import Path
+
+import numpy as np
+import pytest
+from typer.testing import CliRunner
 
 from transformation_portal.lux_depth_v3.pbr_cli import app
 
@@ -60,12 +61,18 @@ class TestLargeBatchProcessing:
 
         start_time = time.time()
 
-        result = runner.invoke(app, [
-            "generate",
-            "--depth-dir", str(batch_dir),
-            "--preset", "standard",
-            "--output", str(output_dir),
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth-dir",
+                str(batch_dir),
+                "--preset",
+                "standard",
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         end_time = time.time()
         elapsed = end_time - start_time
@@ -93,8 +100,9 @@ class TestLargeBatchProcessing:
     def test_memory_bounded(self, tmp_path):
         """Test that memory usage stays bounded during large batch."""
         pytest.importorskip("psutil", reason="psutil required for memory testing")
-        import psutil
         import os
+
+        import psutil
 
         # Create smaller batch for memory testing (20 large images)
         batch_dir = tmp_path / "memory_batch"
@@ -114,12 +122,18 @@ class TestLargeBatchProcessing:
         process = psutil.Process(os.getpid())
         mem_before = process.memory_info().rss / 1024 / 1024  # MB
 
-        result = runner.invoke(app, [
-            "generate",
-            "--depth-dir", str(batch_dir),
-            "--preset", "draft",  # Use draft for speed
-            "--output", str(output_dir),
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth-dir",
+                str(batch_dir),
+                "--preset",
+                "draft",  # Use draft for speed
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         # Monitor memory after
         mem_after = process.memory_info().rss / 1024 / 1024  # MB
@@ -156,12 +170,18 @@ class TestLargeBatchProcessing:
         for iteration in range(num_iterations):
             output_dir = tmp_path / f"output_{iteration}"
 
-            result = runner.invoke(app, [
-                "generate",
-                "--depth-dir", str(batch_dir),
-                "--preset", "draft",
-                "--output", str(output_dir),
-            ])
+            result = runner.invoke(
+                app,
+                [
+                    "generate",
+                    "--depth-dir",
+                    str(batch_dir),
+                    "--preset",
+                    "draft",
+                    "--output",
+                    str(output_dir),
+                ],
+            )
 
             assert result.exit_code == 0, f"Iteration {iteration} failed"
             assert f"Success: {num_files}" in result.stdout
@@ -184,12 +204,18 @@ class TestLargeBatchProcessing:
         output_dir = tmp_path / "output"
 
         runner = CliRunner()
-        result = runner.invoke(app, [
-            "generate",
-            "--depth-dir", str(batch_dir),
-            "--preset", "standard",
-            "--output", str(output_dir),
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth-dir",
+                str(batch_dir),
+                "--preset",
+                "standard",
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         assert result.exit_code == 0
         assert f"Success: {len(sizes)}" in result.stdout
@@ -212,12 +238,18 @@ class TestLargeBatchProcessing:
         output_dir = tmp_path / "output"
 
         runner = CliRunner()
-        result = runner.invoke(app, [
-            "generate",
-            "--depth-dir", str(batch_dir),
-            "--preset", "draft",
-            "--output", str(output_dir),
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth-dir",
+                str(batch_dir),
+                "--preset",
+                "draft",
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         # Should report both successes and failures
         assert "Success: 50" in result.stdout
@@ -248,12 +280,18 @@ class TestPerformanceBenchmarks:
 
         # Measure time for standard preset
         start = time.time()
-        result = runner.invoke(app, [
-            "generate",
-            "--depth", str(depth_path),
-            "--preset", "standard",
-            "--output", str(output_dir),
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(depth_path),
+                "--preset",
+                "standard",
+                "--output",
+                str(output_dir),
+            ],
+        )
         standard_time = time.time() - start
 
         assert result.exit_code == 0
@@ -261,12 +299,18 @@ class TestPerformanceBenchmarks:
         # Measure time for draft preset (should be faster)
         output_dir2 = tmp_path / "output2"
         start = time.time()
-        result = runner.invoke(app, [
-            "generate",
-            "--depth", str(depth_path),
-            "--preset", "draft",
-            "--output", str(output_dir2),
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(depth_path),
+                "--preset",
+                "draft",
+                "--output",
+                str(output_dir2),
+            ],
+        )
         draft_time = time.time() - start
 
         assert result.exit_code == 0
@@ -300,12 +344,18 @@ class TestPerformanceBenchmarks:
             output_dir = tmp_path / f"output_{preset}"
 
             start = time.time()
-            result = runner.invoke(app, [
-                "generate",
-                "--depth-dir", str(batch_dir),
-                "--preset", preset,
-                "--output", str(output_dir),
-            ])
+            result = runner.invoke(
+                app,
+                [
+                    "generate",
+                    "--depth-dir",
+                    str(batch_dir),
+                    "--preset",
+                    preset,
+                    "--output",
+                    str(output_dir),
+                ],
+            )
             elapsed = time.time() - start
 
             assert result.exit_code == 0
@@ -339,12 +389,18 @@ class TestResourceLimits:
         output_dir = tmp_path / "output"
 
         runner = CliRunner()
-        result = runner.invoke(app, [
-            "generate",
-            "--depth", str(depth_path),
-            "--preset", "draft",  # Use draft for speed
-            "--output", str(output_dir),
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(depth_path),
+                "--preset",
+                "draft",  # Use draft for speed
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         # Should handle large image gracefully
         # Either succeeds or fails with clear error
@@ -363,11 +419,16 @@ class TestResourceLimits:
         output_dir = tmp_path / "output"
 
         runner = CliRunner()
-        result = runner.invoke(app, [
-            "generate",
-            "--depth-dir", str(empty_dir),
-            "--output", str(output_dir),
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth-dir",
+                str(empty_dir),
+                "--output",
+                str(output_dir),
+            ],
+        )
 
         # Should fail gracefully
         assert result.exit_code == 1

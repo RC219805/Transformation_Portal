@@ -10,8 +10,8 @@ Provides reusable, cacheable stages for:
 
 from .depth import DepthEstimationStage
 from .depth_pro import CheckpointValidationError, DepthProStage
-from .materials import MaterialSegmentationStage
 from .enhancement import EnhancementStage
+from .materials import MaterialSegmentationStage
 from .upscaling import UpscalingStage
 
 __all__ = [

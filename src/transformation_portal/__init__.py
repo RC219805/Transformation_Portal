@@ -15,7 +15,8 @@ Key Components:
 
 from __future__ import annotations
 
-from importlib.metadata import PackageNotFoundError, version as _pkg_version
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 
 # Runtime version - synchronized with pyproject.toml
 # Contract surfaces (schemas) are versioned at 2.0.0; package follows contract major

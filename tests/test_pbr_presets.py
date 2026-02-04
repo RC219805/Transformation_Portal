@@ -1,62 +1,72 @@
 """Tests for PBR EnhanceConfig presets."""
 
 import pytest
+
+from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
 from transformation_portal.lux_depth_v3.pbr_presets import (
-    STANDARD_QUALITY,
-    PREMIUM_QUALITY,
-    FAST_PREVIEW,
-    WOOD_OPTIMIZED,
-    METAL_OPTIMIZED,
-    GLASS_OPTIMIZED,
-    STONE_OPTIMIZED,
     FABRIC_OPTIMIZED,
+    FAST_PREVIEW,
+    GLASS_OPTIMIZED,
+    METAL_OPTIMIZED,
+    PREMIUM_QUALITY,
+    STANDARD_QUALITY,
+    STONE_OPTIMIZED,
+    WOOD_OPTIMIZED,
     get_preset,
     list_presets,
 )
-from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
 
 
 class TestPresetConfiguration:
     """Test preset configuration validity."""
 
-    @pytest.mark.parametrize("preset", [
-        STANDARD_QUALITY,
-        PREMIUM_QUALITY,
-        FAST_PREVIEW,
-        WOOD_OPTIMIZED,
-        METAL_OPTIMIZED,
-        GLASS_OPTIMIZED,
-        STONE_OPTIMIZED,
-        FABRIC_OPTIMIZED,
-    ])
+    @pytest.mark.parametrize(
+        "preset",
+        [
+            STANDARD_QUALITY,
+            PREMIUM_QUALITY,
+            FAST_PREVIEW,
+            WOOD_OPTIMIZED,
+            METAL_OPTIMIZED,
+            GLASS_OPTIMIZED,
+            STONE_OPTIMIZED,
+            FABRIC_OPTIMIZED,
+        ],
+    )
     def test_preset_is_enhance_config(self, preset):
         """All presets should be EnhanceConfig instances."""
         assert isinstance(preset, EnhanceConfig)
 
-    @pytest.mark.parametrize("preset", [
-        STANDARD_QUALITY,
-        PREMIUM_QUALITY,
-        FAST_PREVIEW,
-        WOOD_OPTIMIZED,
-        METAL_OPTIMIZED,
-        GLASS_OPTIMIZED,
-        STONE_OPTIMIZED,
-        FABRIC_OPTIMIZED,
-    ])
+    @pytest.mark.parametrize(
+        "preset",
+        [
+            STANDARD_QUALITY,
+            PREMIUM_QUALITY,
+            FAST_PREVIEW,
+            WOOD_OPTIMIZED,
+            METAL_OPTIMIZED,
+            GLASS_OPTIMIZED,
+            STONE_OPTIMIZED,
+            FABRIC_OPTIMIZED,
+        ],
+    )
     def test_preset_enables_pbr(self, preset):
         """All presets should enable PBR generation."""
         assert preset.generate_pbr is True
 
-    @pytest.mark.parametrize("preset", [
-        STANDARD_QUALITY,
-        PREMIUM_QUALITY,
-        FAST_PREVIEW,
-        WOOD_OPTIMIZED,
-        METAL_OPTIMIZED,
-        GLASS_OPTIMIZED,
-        STONE_OPTIMIZED,
-        FABRIC_OPTIMIZED,
-    ])
+    @pytest.mark.parametrize(
+        "preset",
+        [
+            STANDARD_QUALITY,
+            PREMIUM_QUALITY,
+            FAST_PREVIEW,
+            WOOD_OPTIMIZED,
+            METAL_OPTIMIZED,
+            GLASS_OPTIMIZED,
+            STONE_OPTIMIZED,
+            FABRIC_OPTIMIZED,
+        ],
+    )
     def test_preset_has_valid_model_variant(self, preset):
         """All presets should have valid model variant."""
         assert isinstance(preset.model_variant, ModelVariant)
@@ -65,31 +75,37 @@ class TestPresetConfiguration:
 class TestPresetParameterRanges:
     """Test that preset parameters are in valid ranges."""
 
-    @pytest.mark.parametrize("preset", [
-        STANDARD_QUALITY,
-        PREMIUM_QUALITY,
-        FAST_PREVIEW,
-        WOOD_OPTIMIZED,
-        METAL_OPTIMIZED,
-        GLASS_OPTIMIZED,
-        STONE_OPTIMIZED,
-        FABRIC_OPTIMIZED,
-    ])
+    @pytest.mark.parametrize(
+        "preset",
+        [
+            STANDARD_QUALITY,
+            PREMIUM_QUALITY,
+            FAST_PREVIEW,
+            WOOD_OPTIMIZED,
+            METAL_OPTIMIZED,
+            GLASS_OPTIMIZED,
+            STONE_OPTIMIZED,
+            FABRIC_OPTIMIZED,
+        ],
+    )
     def test_normal_strength_positive(self, preset):
         """Normal strength should be positive."""
         assert preset.pbr_normal_strength > 0
         assert preset.pbr_normal_strength <= 2.0  # Reasonable upper bound
 
-    @pytest.mark.parametrize("preset", [
-        STANDARD_QUALITY,
-        PREMIUM_QUALITY,
-        FAST_PREVIEW,
-        WOOD_OPTIMIZED,
-        METAL_OPTIMIZED,
-        GLASS_OPTIMIZED,
-        STONE_OPTIMIZED,
-        FABRIC_OPTIMIZED,
-    ])
+    @pytest.mark.parametrize(
+        "preset",
+        [
+            STANDARD_QUALITY,
+            PREMIUM_QUALITY,
+            FAST_PREVIEW,
+            WOOD_OPTIMIZED,
+            METAL_OPTIMIZED,
+            GLASS_OPTIMIZED,
+            STONE_OPTIMIZED,
+            FABRIC_OPTIMIZED,
+        ],
+    )
     def test_blur_radii_non_negative(self, preset):
         """Blur radii should be non-negative integers."""
         assert preset.pbr_normal_blur_radius >= 0
@@ -99,16 +115,19 @@ class TestPresetParameterRanges:
         assert isinstance(preset.pbr_roughness_blur_radius, int)
         assert isinstance(preset.pbr_ao_blur_radius, int)
 
-    @pytest.mark.parametrize("preset", [
-        STANDARD_QUALITY,
-        PREMIUM_QUALITY,
-        FAST_PREVIEW,
-        WOOD_OPTIMIZED,
-        METAL_OPTIMIZED,
-        GLASS_OPTIMIZED,
-        STONE_OPTIMIZED,
-        FABRIC_OPTIMIZED,
-    ])
+    @pytest.mark.parametrize(
+        "preset",
+        [
+            STANDARD_QUALITY,
+            PREMIUM_QUALITY,
+            FAST_PREVIEW,
+            WOOD_OPTIMIZED,
+            METAL_OPTIMIZED,
+            GLASS_OPTIMIZED,
+            STONE_OPTIMIZED,
+            FABRIC_OPTIMIZED,
+        ],
+    )
     def test_ao_bias_in_range(self, preset):
         """AO bias should be in [0.0, 1.0] range."""
         assert 0.0 <= preset.pbr_ao_bias <= 1.0
@@ -283,14 +302,12 @@ class TestPresetConsistency:
 
     def test_material_presets_enable_float_depth(self):
         """All material-optimized presets should enable float depth."""
-        for preset in [WOOD_OPTIMIZED, METAL_OPTIMIZED, GLASS_OPTIMIZED,
-                       STONE_OPTIMIZED, FABRIC_OPTIMIZED]:
+        for preset in [WOOD_OPTIMIZED, METAL_OPTIMIZED, GLASS_OPTIMIZED, STONE_OPTIMIZED, FABRIC_OPTIMIZED]:
             assert preset.save_float_depth is True
 
     def test_material_presets_use_large_model(self):
         """All material-optimized presets should use large model."""
-        for preset in [WOOD_OPTIMIZED, METAL_OPTIMIZED, GLASS_OPTIMIZED,
-                       STONE_OPTIMIZED, FABRIC_OPTIMIZED]:
+        for preset in [WOOD_OPTIMIZED, METAL_OPTIMIZED, GLASS_OPTIMIZED, STONE_OPTIMIZED, FABRIC_OPTIMIZED]:
             assert preset.model_variant == ModelVariant.METRIC_LARGE
 
 
@@ -322,17 +339,24 @@ class TestPresetPerformanceCharacteristics:
         """Standard should be balanced between draft and premium."""
         # Parameters should be between draft and premium
         assert FAST_PREVIEW.pbr_normal_strength < STANDARD_QUALITY.pbr_normal_strength < PREMIUM_QUALITY.pbr_normal_strength
-        assert FAST_PREVIEW.pbr_roughness_strength < STANDARD_QUALITY.pbr_roughness_strength < PREMIUM_QUALITY.pbr_roughness_strength
+        assert (
+            FAST_PREVIEW.pbr_roughness_strength
+            < STANDARD_QUALITY.pbr_roughness_strength
+            < PREMIUM_QUALITY.pbr_roughness_strength
+        )
 
 
 class TestPresetPBRConfigConversion:
     """Test conversion from EnhanceConfig to PBRConfig."""
 
-    @pytest.mark.parametrize("preset", [
-        STANDARD_QUALITY,
-        PREMIUM_QUALITY,
-        FAST_PREVIEW,
-    ])
+    @pytest.mark.parametrize(
+        "preset",
+        [
+            STANDARD_QUALITY,
+            PREMIUM_QUALITY,
+            FAST_PREVIEW,
+        ],
+    )
     def test_preset_converts_to_pbr_config(self, preset):
         """Test that presets can be converted to PBRConfig."""
         pbr_config = preset.to_pbr_config()
@@ -353,6 +377,7 @@ class TestPresetDocumentation:
     def test_module_has_docstring(self):
         """Module should have comprehensive docstring."""
         import transformation_portal.lux_depth_v3.pbr_presets as module
+
         assert module.__doc__ is not None
         assert "STANDARD_QUALITY" in module.__doc__
         assert "PREMIUM_QUALITY" in module.__doc__

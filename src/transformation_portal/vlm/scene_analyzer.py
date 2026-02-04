@@ -119,9 +119,7 @@ class SceneAnalyzer:
 
 Provide your analysis in this exact format with clear sections."""
 
-    def __init__(
-        self, llava_processor: Optional[LLaVAProcessor] = None, **llava_kwargs
-    ):
+    def __init__(self, llava_processor: Optional[LLaVAProcessor] = None, **llava_kwargs):
         """Initialize scene analyzer.
 
         Args:
@@ -135,9 +133,7 @@ Provide your analysis in this exact format with clear sections."""
 
         logger.info("SceneAnalyzer initialized")
 
-    def analyze(
-        self, image: Union[str, Path, Image.Image, np.ndarray], detailed: bool = True
-    ) -> SceneAnalysis:
+    def analyze(self, image: Union[str, Path, Image.Image, np.ndarray], detailed: bool = True) -> SceneAnalysis:
         """Analyze architectural scene.
 
         Args:
@@ -156,20 +152,14 @@ Provide your analysis in this exact format with clear sections."""
 
         # Parse structured response
         space_type = self._extract_space_type(raw_analysis)
-        room_type = (
-            self._extract_room_type(raw_analysis)
-            if space_type == SpaceType.INTERIOR
-            else None
-        )
+        room_type = self._extract_room_type(raw_analysis) if space_type == SpaceType.INTERIOR else None
         architectural_style = self._extract_style(raw_analysis)
         materials = self._extract_materials(raw_analysis)
         luxury_features = self._extract_luxury_features(raw_analysis)
         lighting = self._extract_lighting(raw_analysis)
 
         # Confidence estimation (could be enhanced with entropy-based scoring)
-        confidence = (
-            0.85  # Placeholder - LLaVA doesn't provide native confidence scores
-        )
+        confidence = 0.85  # Placeholder - LLaVA doesn't provide native confidence scores
 
         return SceneAnalysis(
             space_type=space_type,
@@ -188,11 +178,7 @@ Provide your analysis in this exact format with clear sections."""
 
         if "aerial" in text_lower or "overhead" in text_lower or "drone" in text_lower:
             return SpaceType.AERIAL
-        elif (
-            "exterior" in text_lower
-            or "outdoor" in text_lower
-            or "facade" in text_lower
-        ):
+        elif "exterior" in text_lower or "outdoor" in text_lower or "facade" in text_lower:
             return SpaceType.EXTERIOR
         elif "interior" in text_lower or "indoor" in text_lower or "room" in text_lower:
             return SpaceType.INTERIOR

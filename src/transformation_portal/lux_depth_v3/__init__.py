@@ -26,56 +26,56 @@ v3.0 Contract Example:
     ... )
 """
 
-# Orchestration
-from .orchestrator import EnhanceOrchestrator
-
 # Configuration
 from .config import (
     DA3Config,
-    ModelVariant,
-    Preset,
-    EnhanceConfig,
-    PostprocessingConfig,
     DeviceConfig,
+    EnhanceConfig,
+    ModelVariant,
+    PostprocessingConfig,
+    Preset,
 )
-
-# Core processing
-from .postprocessing import Postprocessor
-from .inference import DA3InferenceEngine, DepthResult
-
-# PBR presets
-from .pbr_presets import (
-    STANDARD_QUALITY,
-    PREMIUM_QUALITY,
-    FAST_PREVIEW,
-    WOOD_OPTIMIZED,
-    METAL_OPTIMIZED,
-    GLASS_OPTIMIZED,
-    STONE_OPTIMIZED,
-    FABRIC_OPTIMIZED,
-    get_preset,
-    list_presets,
-)
-
-# PBR processor (NEW - standalone PBR generation)
-from .pbr import PBRConfig
-from .pbr_processor import PBRProcessor
 
 # v3.0 Contracts (Universal Depth Currency)
 from .contracts import (
-    DepthArtifact,
-    DepthProvenance,
     CameraIntrinsics,
+    DepthArtifact,
     DepthArtifactWriter,
+    DepthProvenance,
     LicenseTier,
 )
+from .inference import DA3InferenceEngine, DepthResult
+
+# Orchestration
+from .orchestrator import EnhanceOrchestrator
+
+# PBR processor (NEW - standalone PBR generation)
+from .pbr import PBRConfig
+
+# PBR presets
+from .pbr_presets import (
+    FABRIC_OPTIMIZED,
+    FAST_PREVIEW,
+    GLASS_OPTIMIZED,
+    METAL_OPTIMIZED,
+    PREMIUM_QUALITY,
+    STANDARD_QUALITY,
+    STONE_OPTIMIZED,
+    WOOD_OPTIMIZED,
+    get_preset,
+    list_presets,
+)
+from .pbr_processor import PBRProcessor
+
+# Core processing
+from .postprocessing import Postprocessor
 
 # v3.0 Protocols (Depth Model Interface)
 from .protocols import (
-    DepthModel,
-    BackendRole,
     BackendCapability,
     BackendInfo,
+    BackendRole,
+    DepthModel,
     DepthModelRegistry,
 )
 

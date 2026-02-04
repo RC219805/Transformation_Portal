@@ -22,9 +22,7 @@ try:
     CV2_AVAILABLE = True
 except ImportError:
     CV2_AVAILABLE = False
-    logging.warning(
-        "cv2 (opencv-python) not available. Some depth filtering features will be limited."
-    )
+    logging.warning("cv2 (opencv-python) not available. Some depth filtering features will be limited.")
 
 logger = logging.getLogger(__name__)
 
@@ -80,9 +78,7 @@ class DepthGuidedFilters:
         """
         # Validate inputs
         if image.shape[:2] != depth.shape[:2]:
-            raise ValueError(
-                f"Image shape {image.shape[:2]} doesn't match depth shape {depth.shape[:2]}"
-            )
+            raise ValueError(f"Image shape {image.shape[:2]} doesn't match depth shape {depth.shape[:2]}")
 
         # Detect depth edges
         edge_map = self._detect_edges(depth)
@@ -160,9 +156,7 @@ class DepthGuidedFilters:
         """
         if not CV2_AVAILABLE:
             # Fallback: simple unsharp masking
-            logger.warning(
-                "cv2 not available, using simple unsharp mask instead of multiscale clarity"
-            )
+            logger.warning("cv2 not available, using simple unsharp mask instead of multiscale clarity")
             blurred = gaussian_filter(image, sigma=2.0)
             return image + self.strength * (image - blurred)
 
@@ -184,9 +178,7 @@ class DepthGuidedFilters:
 
             # Match size if needed
             if upsampled.shape[:2] != pyramid[i].shape[:2]:
-                upsampled = cv2.resize(
-                    upsampled, (pyramid[i].shape[1], pyramid[i].shape[0])
-                )
+                upsampled = cv2.resize(upsampled, (pyramid[i].shape[1], pyramid[i].shape[0]))
 
             # Laplacian = current - upsampled
             laplacian = pyramid[i] - upsampled
@@ -219,9 +211,7 @@ class DepthGuidedFilters:
 
             # Match size
             if result.shape[:2] != enhanced_pyramid[i].shape[:2]:
-                result = cv2.resize(
-                    result, (enhanced_pyramid[i].shape[1], enhanced_pyramid[i].shape[0])
-                )
+                result = cv2.resize(result, (enhanced_pyramid[i].shape[1], enhanced_pyramid[i].shape[0]))
 
             # Add enhanced details
             result = result + enhanced_pyramid[i]
@@ -325,9 +315,7 @@ class DepthGuidedSharpening:
     ) -> np.ndarray:
         """Apply depth-guided sharpening."""
         # Compute spatially-varying sharpening amount
-        amount_map = (
-            self.foreground_amount * (1 - depth) + self.background_amount * depth
-        )
+        amount_map = self.foreground_amount * (1 - depth) + self.background_amount * depth
 
         # Blur image
         blurred = gaussian_filter(image, sigma=(self.radius, self.radius, 0))
@@ -388,9 +376,7 @@ class LocalContrastEnhancement:
         """Apply local contrast enhancement."""
         # Convert to luminance
         if image.ndim == 3:
-            luminance = (
-                0.2126 * image[..., 0] + 0.7152 * image[..., 1] + 0.0722 * image[..., 2]
-            )
+            luminance = 0.2126 * image[..., 0] + 0.7152 * image[..., 1] + 0.0722 * image[..., 2]
         else:
             luminance = image
 

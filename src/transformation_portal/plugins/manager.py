@@ -103,9 +103,7 @@ class PluginManager:
         if auto_discover:
             self.discover_plugins()
 
-    def discover_plugins(
-        self, search_paths: Optional[List[Path]] = None
-    ) -> Dict[str, LoadedPlugin]:
+    def discover_plugins(self, search_paths: Optional[List[Path]] = None) -> Dict[str, LoadedPlugin]:
         """Discover and load all plugins.
 
         Args:
@@ -128,14 +126,10 @@ class PluginManager:
 
                     # Initialize context for plugin
                     with self._lock:
-                        self._contexts[loaded_plugin.manifest.name] = PluginContext(
-                            state=PluginState.LOADED
-                        )
+                        self._contexts[loaded_plugin.manifest.name] = PluginContext(state=PluginState.LOADED)
 
                 except Exception as e:
-                    logger.error(
-                        f"Failed to register plugin {loaded_plugin.manifest.name}: {e}"
-                    )
+                    logger.error(f"Failed to register plugin {loaded_plugin.manifest.name}: {e}")
 
         return self._loader.get_loaded_plugins()
 
@@ -176,9 +170,7 @@ class PluginManager:
         loaded = self._loader.get_plugins_by_type(plugin_type)
         return [lp.plugin for lp in loaded if lp.plugin]
 
-    def initialize_plugin(
-        self, name: str, config: Optional[Dict[str, Any]] = None
-    ) -> bool:
+    def initialize_plugin(self, name: str, config: Optional[Dict[str, Any]] = None) -> bool:
         """Initialize a plugin with configuration.
 
         Args:
@@ -223,13 +215,9 @@ class PluginManager:
                     self._contexts[name].state = PluginState.ERROR
                     self._contexts[name].error_message = str(e)
 
-            raise PluginInitializationError(
-                f"Failed to initialize '{name}': {e}"
-            ) from e
+            raise PluginInitializationError(f"Failed to initialize '{name}': {e}") from e
 
-    def execute(
-        self, name: str, *args, fallback_plugins: Optional[List[str]] = None, **kwargs
-    ) -> ExecutionResult:
+    def execute(self, name: str, *args, fallback_plugins: Optional[List[str]] = None, **kwargs) -> ExecutionResult:
         """Execute a plugin's main function.
 
         Args:
@@ -336,14 +324,10 @@ class PluginManager:
             plugin_names.remove(prefer_plugin)
             plugin_names.insert(0, prefer_plugin)
 
-        return self.execute(
-            plugin_names[0], *args, fallback_plugins=plugin_names[1:], **kwargs
-        )
+        return self.execute(plugin_names[0], *args, fallback_plugins=plugin_names[1:], **kwargs)
 
     @contextmanager
-    def plugin_session(
-        self, name: str, config: Optional[Dict[str, Any]] = None
-    ) -> Iterator[PluginInterface]:
+    def plugin_session(self, name: str, config: Optional[Dict[str, Any]] = None) -> Iterator[PluginInterface]:
         """Context manager for plugin session with automatic cleanup.
 
         Args:

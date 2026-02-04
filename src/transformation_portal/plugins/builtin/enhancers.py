@@ -80,9 +80,7 @@ class ContrastEnhancer(EnhancerPlugin):
             raise ValueError("min_factor cannot be greater than max_factor")
 
         self._initialized = True
-        logger.info(
-            f"ContrastEnhancer initialized with base_factor={self._base_factor}"
-        )
+        logger.info(f"ContrastEnhancer initialized with base_factor={self._base_factor}")
 
     @measure_performance
     def enhance(
@@ -130,10 +128,7 @@ class ContrastEnhancer(EnhancerPlugin):
 
     def validate(self) -> bool:
         """Validate enhancer state."""
-        return (
-            self._initialized
-            and self._min_factor <= self._base_factor <= self._max_factor
-        )
+        return self._initialized and self._min_factor <= self._base_factor <= self._max_factor
 
     def cleanup(self) -> None:
         """Clean up resources."""
@@ -197,8 +192,7 @@ class SharpenEnhancer(EnhancerPlugin):
 
         self._initialized = True
         logger.info(
-            f"SharpenEnhancer initialized: radius={self._radius}, "
-            f"percent={self._percent}, threshold={self._threshold}"
+            f"SharpenEnhancer initialized: radius={self._radius}, " f"percent={self._percent}, threshold={self._threshold}"
         )
 
     @measure_performance
@@ -238,22 +232,13 @@ class SharpenEnhancer(EnhancerPlugin):
         threshold = kwargs.get("threshold", self._threshold)
 
         # Apply unsharp mask
-        sharpened = pil_image.filter(
-            ImageFilter.UnsharpMask(
-                radius=radius, percent=effective_percent, threshold=threshold
-            )
-        )
+        sharpened = pil_image.filter(ImageFilter.UnsharpMask(radius=radius, percent=effective_percent, threshold=threshold))
 
         return np.array(sharpened) if is_numpy else sharpened
 
     def validate(self) -> bool:
         """Validate state."""
-        return (
-            self._initialized
-            and self._radius >= 0
-            and self._percent >= 0
-            and self._threshold >= 0
-        )
+        return self._initialized and self._radius >= 0 and self._percent >= 0 and self._threshold >= 0
 
     def cleanup(self) -> None:
         """Clean up resources."""

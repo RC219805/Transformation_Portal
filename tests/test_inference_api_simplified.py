@@ -10,19 +10,20 @@ This test suite validates:
 Coverage target: Issue #3 from PBR Implementation Audit
 """
 
-import pytest
-import numpy as np
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
 
-from transformation_portal.lux_depth_v3.inference import DA3InferenceEngine
+import numpy as np
+import pytest
+
 from transformation_portal.lux_depth_v3.config import DA3Config, DeviceConfig, ModelVariant
+from transformation_portal.lux_depth_v3.inference import DA3InferenceEngine
 
 
 class TestSimplifiedAPI:
     """Test simplified string device API."""
 
-    @patch('transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE', True)
-    @patch('transformation_portal.lux_depth_v3.inference.torch')
+    @patch("transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE", True)
+    @patch("transformation_portal.lux_depth_v3.inference.torch")
     def test_string_device_cpu(self, mock_torch):
         """Test simple string device='cpu' works."""
         mock_torch.cuda.is_available.return_value = False
@@ -36,8 +37,8 @@ class TestSimplifiedAPI:
         assert engine.config.device.device == "cpu"
         assert engine.device == "cpu"
 
-    @patch('transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE', True)
-    @patch('transformation_portal.lux_depth_v3.inference.torch')
+    @patch("transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE", True)
+    @patch("transformation_portal.lux_depth_v3.inference.torch")
     def test_string_device_mps(self, mock_torch):
         """Test simple string device='mps' works."""
         mock_torch.cuda.is_available.return_value = False
@@ -51,8 +52,8 @@ class TestSimplifiedAPI:
         assert engine.config.device.device == "mps"
         assert engine.device == "mps"
 
-    @patch('transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE', True)
-    @patch('transformation_portal.lux_depth_v3.inference.torch')
+    @patch("transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE", True)
+    @patch("transformation_portal.lux_depth_v3.inference.torch")
     def test_string_device_cuda(self, mock_torch):
         """Test simple string device='cuda' works."""
         mock_torch.cuda.is_available.return_value = True
@@ -64,8 +65,8 @@ class TestSimplifiedAPI:
         assert engine.config.device.device == "cuda"
         assert engine.device == "cuda"
 
-    @patch('transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE', True)
-    @patch('transformation_portal.lux_depth_v3.inference.torch')
+    @patch("transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE", True)
+    @patch("transformation_portal.lux_depth_v3.inference.torch")
     def test_string_device_auto(self, mock_torch):
         """Test device='auto' auto-detects optimal device."""
         mock_torch.cuda.is_available.return_value = False
@@ -80,8 +81,8 @@ class TestSimplifiedAPI:
 class TestBackwardCompatibility:
     """Test backward compatibility with DA3Config objects."""
 
-    @patch('transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE', True)
-    @patch('transformation_portal.lux_depth_v3.inference.torch')
+    @patch("transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE", True)
+    @patch("transformation_portal.lux_depth_v3.inference.torch")
     def test_da3config_object_still_works(self, mock_torch):
         """Test existing DA3Config object API still works."""
         mock_torch.cuda.is_available.return_value = False
@@ -97,18 +98,15 @@ class TestBackwardCompatibility:
         assert engine.config is config
         assert engine.device == "cpu"
 
-    @patch('transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE', True)
-    @patch('transformation_portal.lux_depth_v3.inference.torch')
+    @patch("transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE", True)
+    @patch("transformation_portal.lux_depth_v3.inference.torch")
     def test_da3config_with_custom_variant(self, mock_torch):
         """Test DA3Config with custom model variant works."""
         mock_torch.cuda.is_available.return_value = False
         mock_torch.backends.mps.is_available.return_value = False
 
         # Complex config with custom model
-        config = DA3Config(
-            model_variant=ModelVariant.METRIC_BASE,
-            device=DeviceConfig(device="cpu")
-        )
+        config = DA3Config(model_variant=ModelVariant.METRIC_BASE, device=DeviceConfig(device="cpu"))
 
         engine = DA3InferenceEngine(config=config)
 
@@ -119,8 +117,8 @@ class TestBackwardCompatibility:
 class TestAPIUsability:
     """Test API reduces boilerplate and is intuitive."""
 
-    @patch('transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE', True)
-    @patch('transformation_portal.lux_depth_v3.inference.torch')
+    @patch("transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE", True)
+    @patch("transformation_portal.lux_depth_v3.inference.torch")
     def test_minimal_boilerplate_for_common_case(self, mock_torch):
         """Test common use case requires minimal code."""
         mock_torch.cuda.is_available.return_value = False
@@ -138,8 +136,8 @@ class TestAPIUsability:
         # Verify it works
         assert engine.device == "mps"
 
-    @patch('transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE', True)
-    @patch('transformation_portal.lux_depth_v3.inference.torch')
+    @patch("transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE", True)
+    @patch("transformation_portal.lux_depth_v3.inference.torch")
     def test_default_device_is_auto(self, mock_torch):
         """Test default device is 'cpu' for predictability."""
         mock_torch.cuda.is_available.return_value = False
@@ -154,8 +152,8 @@ class TestAPIUsability:
 class TestDeviceConsistency:
     """Test device parameter is consistent across API."""
 
-    @patch('transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE', True)
-    @patch('transformation_portal.lux_depth_v3.inference.torch')
+    @patch("transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE", True)
+    @patch("transformation_portal.lux_depth_v3.inference.torch")
     def test_string_device_matches_config_device(self, mock_torch):
         """Test string device parameter matches internal config."""
         mock_torch.cuda.is_available.return_value = False
@@ -182,8 +180,8 @@ class TestErrorHandling:
         """
         pass
 
-    @patch('transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE', True)
-    @patch('transformation_portal.lux_depth_v3.inference.torch')
+    @patch("transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE", True)
+    @patch("transformation_portal.lux_depth_v3.inference.torch")
     def test_invalid_device_handled_gracefully(self, mock_torch):
         """Test invalid device string handled gracefully."""
         mock_torch.cuda.is_available.return_value = False
@@ -212,10 +210,11 @@ class TestAPIDocumentation:
     def test_init_signature_shows_union_type(self):
         """Test __init__ signature shows Union[DA3Config, str]."""
         import inspect
+
         sig = inspect.signature(DA3InferenceEngine.__init__)
 
         # config parameter should have Union type hint
-        config_param = sig.parameters['config']
+        config_param = sig.parameters["config"]
 
         # Type annotation should exist
         assert config_param.annotation != inspect.Parameter.empty
@@ -224,8 +223,8 @@ class TestAPIDocumentation:
 class TestRealWorldUsage:
     """Test real-world usage patterns work as expected."""
 
-    @patch('transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE', True)
-    @patch('transformation_portal.lux_depth_v3.inference.torch')
+    @patch("transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE", True)
+    @patch("transformation_portal.lux_depth_v3.inference.torch")
     def test_quick_script_usage(self, mock_torch):
         """Test usage in a quick script is minimal."""
         mock_torch.cuda.is_available.return_value = False
@@ -238,23 +237,16 @@ class TestRealWorldUsage:
         assert engine is not None
         assert engine.device == "mps"
 
-    @patch('transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE', True)
-    @patch('transformation_portal.lux_depth_v3.inference.torch')
+    @patch("transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE", True)
+    @patch("transformation_portal.lux_depth_v3.inference.torch")
     def test_production_usage_with_config(self, mock_torch):
         """Test production usage with full config still works."""
         mock_torch.cuda.is_available.return_value = False
         mock_torch.backends.mps.is_available.return_value = False
 
         # Production usage with detailed config
-        config = DA3Config(
-            model_variant=ModelVariant.METRIC_LARGE,
-            device=DeviceConfig(device="cpu", dtype="float32")
-        )
-        engine = DA3InferenceEngine(
-            config=config,
-            commercial_use=True,
-            validate_license_strict=True
-        )
+        config = DA3Config(model_variant=ModelVariant.METRIC_LARGE, device=DeviceConfig(device="cpu", dtype="float32"))
+        engine = DA3InferenceEngine(config=config, commercial_use=True, validate_license_strict=True)
 
         # Should work with all features
         assert engine.config.model_variant == ModelVariant.METRIC_LARGE

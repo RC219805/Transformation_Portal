@@ -126,9 +126,7 @@ class ZoneToneMapping:
         """
         # Validate inputs
         if image.shape[:2] != depth.shape[:2]:
-            raise ValueError(
-                f"Image shape {image.shape[:2]} doesn't match depth shape {depth.shape[:2]}"
-            )
+            raise ValueError(f"Image shape {image.shape[:2]} doesn't match depth shape {depth.shape[:2]}")
 
         # Create depth zones
         zone_masks = self._create_depth_zones(depth)
@@ -136,9 +134,7 @@ class ZoneToneMapping:
         # Apply tone mapping to each zone
         result = np.zeros_like(image)
 
-        for zone_id, (zone_mask, params) in enumerate(
-            zip(zone_masks, self.zone_params)
-        ):
+        for zone_id, (zone_mask, params) in enumerate(zip(zone_masks, self.zone_params)):
             # Apply tone curve to this zone
             zone_mapped = self._apply_tone_curve(image, params)
 
@@ -307,9 +303,7 @@ class ZoneToneMapping:
             Saturation-adjusted image
         """
         # Compute luminance (Rec. 709)
-        luminance = (
-            0.2126 * image[..., 0] + 0.7152 * image[..., 1] + 0.0722 * image[..., 2]
-        )
+        luminance = 0.2126 * image[..., 0] + 0.7152 * image[..., 1] + 0.0722 * image[..., 2]
 
         # Blend between grayscale and color
         result = luminance[..., None] * (1 - saturation) + image * saturation
@@ -396,10 +390,7 @@ class SimpleZoneToneMap:
         depth_norm = (depth - depth.min()) / (depth.max() - depth.min() + 1e-8)
 
         # Compute per-pixel exposure
-        exposure_map = (
-            self.foreground_exposure * (1 - depth_norm)
-            + self.background_exposure * depth_norm
-        )
+        exposure_map = self.foreground_exposure * (1 - depth_norm) + self.background_exposure * depth_norm
 
         # Apply exposure
         result = image * np.power(2.0, exposure_map[..., None])

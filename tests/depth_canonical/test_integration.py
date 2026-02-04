@@ -9,17 +9,16 @@ from PIL import Image
 
 from transformation_portal.depth_canonical import DepthPipeline
 from transformation_portal.depth_canonical.config import (
-    UnifiedDepthConfig,
+    DeviceType,
     ModelConfig,
     ModelVariant,
-    DeviceType,
-    ProcessingConfig,
     PBRConfig,
+    ProcessingConfig,
+    UnifiedDepthConfig,
 )
 
-
 # Check if we should mock transformers (when TRANSFORMERS_OFFLINE=1)
-TRANSFORMERS_OFFLINE = os.environ.get('TRANSFORMERS_OFFLINE', '0') == '1'
+TRANSFORMERS_OFFLINE = os.environ.get("TRANSFORMERS_OFFLINE", "0") == "1"
 
 
 @pytest.fixture(autouse=True)
@@ -44,6 +43,7 @@ def mock_transformers_pipeline():
     # Create a mock pipeline that returns depth map dict
     def mock_pipeline_factory(task=None, model=None, device=None):
         """Factory that creates a mock HF pipeline."""
+
         def mock_pipe(image):
             """Mock pipeline call that returns depth dict."""
             # Return a dict with 'depth' key containing a numpy array
@@ -59,7 +59,7 @@ def mock_transformers_pipeline():
         return mock_pipe
 
     # Patch the pipeline import in the da3_wrapper module
-    with patch('transformers.pipeline', side_effect=mock_pipeline_factory):
+    with patch("transformers.pipeline", side_effect=mock_pipeline_factory):
         yield
 
 
@@ -83,9 +83,7 @@ def simple_config():
             variant=ModelVariant.DA3_SMALL,  # Use small for speed
             device=DeviceType.CPU,
         ),
-        processing=ProcessingConfig(
-            pbr=PBRConfig(enabled=False)  # Disable PBR for pure depth tests
-        )
+        processing=ProcessingConfig(pbr=PBRConfig(enabled=False)),  # Disable PBR for pure depth tests
     )
 
 
@@ -104,7 +102,7 @@ def pbr_config():
                 roughness_strength=1.0,
                 ao_strength=1.0,
             )
-        )
+        ),
     )
 
 
@@ -149,11 +147,7 @@ def test_depth_estimation_with_pbr_generation(test_image, pbr_config, tmp_path):
     """Test full pipeline: depth estimation + PBR generation."""
     pipeline = DepthPipeline(pbr_config)
 
-    result = pipeline.process(
-        image=test_image,
-        output_dir=tmp_path,
-        basename="test"
-    )
+    result = pipeline.process(image=test_image, output_dir=tmp_path, basename="test")
 
     # Check depth map
     assert result.depth_map is not None
@@ -203,10 +197,7 @@ def test_batch_processing(simple_config, tmp_path):
 
     pipeline = DepthPipeline(simple_config)
 
-    results = pipeline.batch_process(
-        images=images,
-        output_dir=tmp_path / "output"
-    )
+    results = pipeline.batch_process(images=images, output_dir=tmp_path / "output")
 
     # Check all results
     assert len(results) == 3
@@ -223,11 +214,7 @@ def test_backward_compatibility_with_provided_depth(pbr_config, tmp_path):
 
     pipeline = DepthPipeline(pbr_config)
 
-    result = pipeline.process(
-        depth_map=depth_map,
-        output_dir=tmp_path,
-        basename="test"
-    )
+    result = pipeline.process(depth_map=depth_map, output_dir=tmp_path, basename="test")
 
     # Should use provided depth map
     assert np.array_equal(result.depth_map, depth_map)

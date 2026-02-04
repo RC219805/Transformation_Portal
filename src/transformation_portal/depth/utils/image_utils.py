@@ -16,9 +16,7 @@ try:
     CV2_AVAILABLE = True
 except ImportError:
     CV2_AVAILABLE = False
-    logging.warning(
-        "cv2 (opencv-python) not available. Some image processing features will be limited."
-    )
+    logging.warning("cv2 (opencv-python) not available. Some image processing features will be limited.")
 
 logger = logging.getLogger(__name__)
 
@@ -306,13 +304,9 @@ def pad_to_multiple(
 
     # Pad
     if image.ndim == 2:
-        padded = np.pad(
-            image, ((pad_top, pad_bottom), (pad_left, pad_right)), mode=mode
-        )
+        padded = np.pad(image, ((pad_top, pad_bottom), (pad_left, pad_right)), mode=mode)
     else:
-        padded = np.pad(
-            image, ((pad_top, pad_bottom), (pad_left, pad_right), (0, 0)), mode=mode
-        )
+        padded = np.pad(image, ((pad_top, pad_bottom), (pad_left, pad_right), (0, 0)), mode=mode)
 
     return padded, (pad_top, pad_bottom, pad_left, pad_right)
 
@@ -378,9 +372,7 @@ def linear_to_srgb(image: np.ndarray) -> np.ndarray:
     """
     # sRGB transfer function
     linear_mask = image <= 0.0031308
-    srgb = np.where(
-        linear_mask, image * 12.92, 1.055 * np.power(image, 1.0 / 2.4) - 0.055
-    )
+    srgb = np.where(linear_mask, image * 12.92, 1.055 * np.power(image, 1.0 / 2.4) - 0.055)
 
     return srgb
 

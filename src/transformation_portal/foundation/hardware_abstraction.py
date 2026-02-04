@@ -12,11 +12,11 @@ Key Features:
 - Seamless model migration between backends
 """
 
-from enum import Enum
-from typing import Optional, List, Callable, Any, Dict
-from dataclasses import dataclass
-import logging
 import functools
+import logging
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional
 
 import torch
 from torch import Tensor, nn
@@ -84,8 +84,7 @@ class BackendRegistry:
                 supports_fp16=True,
                 supports_bf16=torch.cuda.is_bf16_supported(),
                 supports_int8=True,
-                max_tensor_size_gb=torch.cuda.get_device_properties(0).total_memory
-                / (1024**3),
+                max_tensor_size_gb=torch.cuda.get_device_properties(0).total_memory / (1024**3),
                 recommended_for_inference=True,
                 recommended_for_training=True,
                 special_features=["tensor_cores", "flash_attention", "cudnn"],
@@ -130,9 +129,7 @@ class BackendRegistry:
         """Get list of available backends."""
         return [b for b, cap in self.backends.items() if cap.available]
 
-    def get_optimal_backend(
-        self, for_inference: bool = True, prefer_performance: bool = True
-    ) -> BackendType:
+    def get_optimal_backend(self, for_inference: bool = True, prefer_performance: bool = True) -> BackendType:
         """
         Get optimal backend for the task.
 
@@ -214,12 +211,8 @@ class HardwareAbstraction:
         # Get primary device
         self.primary_device = self._backend_to_device(self.primary_backend)
 
-        logger.info(
-            f"Hardware abstraction initialized with primary backend: {self.primary_backend.value}"
-        )
-        logger.info(
-            f"Fallback chain: {' -> '.join(b.value for b in self.fallback_chain)}"
-        )
+        logger.info(f"Hardware abstraction initialized with primary backend: {self.primary_backend.value}")
+        logger.info(f"Fallback chain: {' -> '.join(b.value for b in self.fallback_chain)}")
 
     def _create_fallback_chain(self) -> List[BackendType]:
         """Create backend fallback chain."""
@@ -248,9 +241,7 @@ class HardwareAbstraction:
         else:
             return torch.device("cpu")
 
-    def execute_with_fallback(
-        self, operation: Callable, *args, operation_name: str = "operation", **kwargs
-    ) -> Any:
+    def execute_with_fallback(self, operation: Callable, *args, operation_name: str = "operation", **kwargs) -> Any:
         """
         Execute operation with automatic fallback on failure.
 
@@ -335,9 +326,7 @@ class HardwareAbstraction:
         backend = backend or self.primary_backend
         return self._backend_to_device(backend)
 
-    def supports_operation(
-        self, operation_name: str, backend: Optional[BackendType] = None
-    ) -> bool:
+    def supports_operation(self, operation_name: str, backend: Optional[BackendType] = None) -> bool:
         """
         Check if backend supports specific operation.
 
@@ -428,9 +417,7 @@ class HardwareAbstraction:
                 avg_time = elapsed / num_iterations
                 results[backend] = avg_time
 
-                logger.info(
-                    f"Benchmark {backend.value}: {avg_time*1000:.3f}ms per iteration"
-                )
+                logger.info(f"Benchmark {backend.value}: {avg_time*1000:.3f}ms per iteration")
 
             except Exception as e:
                 logger.warning(f"Benchmark failed on {backend.value}: {e}")
@@ -451,17 +438,13 @@ class HardwareAbstraction:
         def decorator(func: Callable) -> Callable:
             @functools.wraps(func)
             def wrapper(*args, **kwargs):
-                return self.execute_with_fallback(
-                    func, *args, operation_name=operation_name, **kwargs
-                )
+                return self.execute_with_fallback(func, *args, operation_name=operation_name, **kwargs)
 
             return wrapper
 
         return decorator
 
-    def get_optimal_dtype(
-        self, backend: Optional[BackendType] = None, prefer_speed: bool = True
-    ) -> torch.dtype:
+    def get_optimal_dtype(self, backend: Optional[BackendType] = None, prefer_speed: bool = True) -> torch.dtype:
         """
         Get optimal data type for backend.
 
@@ -493,7 +476,4 @@ class HardwareAbstraction:
 
     def __repr__(self) -> str:
         available = self.registry.get_available_backends()
-        return (
-            f"HardwareAbstraction(primary={self.primary_backend.value}, "
-            f"available={[b.value for b in available]})"
-        )
+        return f"HardwareAbstraction(primary={self.primary_backend.value}, " f"available={[b.value for b in available]})"

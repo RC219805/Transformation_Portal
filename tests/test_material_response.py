@@ -2,8 +2,6 @@
 
 import pytest
 
-import pytest
-
 pytestmark = pytest.mark.skip(reason="material_response module not yet migrated to src package")
 
 try:

@@ -11,14 +11,17 @@ All operations use atomic rename (os.replace) and guarantee:
 - No orphaned temp files on failure
 - Temp files created in destination directory (same filesystem)
 """
+
 from __future__ import annotations
+
 import os
 import tempfile
-from pathlib import Path
 from contextlib import contextmanager
+from pathlib import Path
 
 try:
     from PIL import Image
+
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
@@ -26,12 +29,7 @@ except ImportError:
 
 
 @contextmanager
-def atomic_temp_file(
-    output_path: Path,
-    suffix: str = ".tmp",
-    prefix: str = ".tmp_",
-    create_file: bool = False
-):
+def atomic_temp_file(output_path: Path, suffix: str = ".tmp", prefix: str = ".tmp_", create_file: bool = False):
     """Context manager for atomic temp file creation.
 
     Creates a temporary file path (or file) in the same directory as output_path,
@@ -69,11 +67,7 @@ def atomic_temp_file(
 
     if create_file:
         # Pre-create file with mkstemp (for FD-based or direct file access)
-        temp_fd, temp_path_str = tempfile.mkstemp(
-            suffix=suffix,
-            dir=output_path.parent,
-            prefix=prefix
-        )
+        temp_fd, temp_path_str = tempfile.mkstemp(suffix=suffix, dir=output_path.parent, prefix=prefix)
         temp_path = Path(temp_path_str)
 
         try:
@@ -97,6 +91,7 @@ def atomic_temp_file(
         # Generate unique temp path without creating file
         # Writer creates file with umask-based permissions
         import uuid
+
         temp_name = f"{prefix}{uuid.uuid4().hex}{suffix}"
         temp_path = output_path.parent / temp_name
 
@@ -140,12 +135,7 @@ def atomic_write_bytes(output_path: Path, data: bytes) -> Path:
         raise IOError(f"Failed to write {output_path}") from e
 
 
-def atomic_write_pil_png(
-    output_path: Path,
-    pil_image: "Image.Image",
-    optimize: bool = True,
-    **save_kwargs
-) -> Path:
+def atomic_write_pil_png(output_path: Path, pil_image: "Image.Image", optimize: bool = True, **save_kwargs) -> Path:
     """Atomically write PIL Image as PNG.
 
     Args:
@@ -168,30 +158,19 @@ def atomic_write_pil_png(
         >>> assert path.exists()
     """
     if not HAS_PIL:
-        raise ImportError(
-            "Pillow required for atomic_write_pil_png. Install with: pip install Pillow"
-        )
+        raise ImportError("Pillow required for atomic_write_pil_png. Install with: pip install Pillow")
 
     try:
         # PIL creates file with umask-based permissions, no pre-creation needed
         with atomic_temp_file(output_path, suffix=".png", create_file=False) as temp_path:
             # Save directly to temp file path
-            pil_image.save(
-                temp_path,
-                format='PNG',
-                optimize=optimize,
-                **save_kwargs
-            )
+            pil_image.save(temp_path, format="PNG", optimize=optimize, **save_kwargs)
         return Path(output_path)
     except Exception as e:
         raise IOError(f"Failed to write PNG {output_path}") from e
 
 
-def atomic_write_with_fd(
-    output_path: Path,
-    writer_func,
-    suffix: str = ".tmp"
-) -> Path:
+def atomic_write_with_fd(output_path: Path, writer_func, suffix: str = ".tmp") -> Path:
     """Atomically write using a file descriptor-based writer function.
 
     For writers that need an open file descriptor (e.g., cv2.imwrite with fdopen).
@@ -222,11 +201,7 @@ def atomic_write_with_fd(
 
     try:
         # Create temp file with FD
-        temp_fd, temp_path_str = tempfile.mkstemp(
-            suffix=suffix,
-            dir=output_path.parent,
-            prefix=".tmp_"
-        )
+        temp_fd, temp_path_str = tempfile.mkstemp(suffix=suffix, dir=output_path.parent, prefix=".tmp_")
         temp_path = Path(temp_path_str)
 
         # Call writer function - it's responsible for closing FD if needed

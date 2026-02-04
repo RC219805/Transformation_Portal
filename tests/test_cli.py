@@ -47,18 +47,18 @@ class TestCLIImport:
         from transformation_portal import cli
 
         # Check __all__ exports
-        assert hasattr(cli, '__all__')
+        assert hasattr(cli, "__all__")
         expected_exports = [
-            'app',
-            'render_app',
-            'process_app',
-            'analyze_app',
-            'render_cli',
-            'process_cli',
-            'analyze_cli',
-            'main',
-            'version',
-            'info',
+            "app",
+            "render_app",
+            "process_app",
+            "analyze_app",
+            "render_cli",
+            "process_cli",
+            "analyze_cli",
+            "main",
+            "version",
+            "info",
         ]
 
         for export in expected_exports:
@@ -71,18 +71,21 @@ class TestCLIFunctions:
     def test_render_cli_callable(self):
         """Test that render_cli is callable."""
         from transformation_portal.cli import render_cli
+
         assert callable(render_cli)
 
     def test_process_cli_callable(self):
         """Test that process_cli is callable."""
         from transformation_portal.cli import process_cli
+
         assert callable(process_cli)
 
     def test_analyze_cli_callable(self):
         """Test that analyze_cli is callable."""
         from transformation_portal.cli import analyze_cli
+
         assert callable(analyze_cli)
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

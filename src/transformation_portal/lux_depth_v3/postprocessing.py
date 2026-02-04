@@ -2,11 +2,15 @@
 
 Handles metric scaling, filtering, and edge preservation.
 """
+
 from __future__ import annotations
+
 from pathlib import Path
-from typing import List, Optional, Tuple, Dict
+from typing import Dict, List, Optional, Tuple
+
 import numpy as np
 from scipy.ndimage import median_filter
+
 from .config import PostprocessingConfig
 from .inference import DepthResult
 
@@ -16,11 +20,19 @@ try:
 except ImportError:
     DepthRefiner = None
 
+
 class _NoOpDepthRefiner:
     """Fallback refiner used when the optional edge_refinement module isn't available."""
-    def __init__(self, *args, **kwargs): self._stats = {"enabled": False, "available": False}
-    def refine(self, depth: np.ndarray, image: np.ndarray) -> np.ndarray: return depth
-    def get_stats(self): return dict(self._stats)
+
+    def __init__(self, *args, **kwargs):
+        self._stats = {"enabled": False, "available": False}
+
+    def refine(self, depth: np.ndarray, image: np.ndarray) -> np.ndarray:
+        return depth
+
+    def get_stats(self):
+        return dict(self._stats)
+
 
 class Postprocessor:
     """Postprocessor for depth maps."""
@@ -52,17 +64,12 @@ class Postprocessor:
 
         if self.config.apply_bilateral_filter:
             depth = self._bilateral_filter(
-                depth, result.original_image,
-                self.config.bilateral_sigma_color,
-                self.config.bilateral_sigma_space
+                depth, result.original_image, self.config.bilateral_sigma_color, self.config.bilateral_sigma_space
             )
 
         # Edge preservation
         if self.config.preserve_edges:
-            depth = self._preserve_edges(
-                depth, result.original_image,
-                self.config.edge_threshold
-            )
+            depth = self._preserve_edges(depth, result.original_image, self.config.edge_threshold)
 
         # Edge-aware refinement (Optional Module)
         if self.refiner and getattr(self.config.refinement, "enable_refinement", False):
@@ -75,9 +82,7 @@ class Postprocessor:
 
         return result
 
-    def _bilateral_filter(
-        self, depth: np.ndarray, image: np.ndarray, sigma_color: float, sigma_space: float
-    ) -> np.ndarray:
+    def _bilateral_filter(self, depth: np.ndarray, image: np.ndarray, sigma_color: float, sigma_space: float) -> np.ndarray:
         """Apply bilateral filter with OpenCV acceleration.
 
         Uses cv2.bilateralFilter for 2-3x speedup via SIMD optimization
@@ -101,10 +106,7 @@ class Postprocessor:
             # Apply bilateral filter
             # d parameter: diameter of pixel neighborhood (0 = auto-compute from sigmaSpace)
             filtered = cv2.bilateralFilter(
-                depth_u8,
-                d=int(sigma_space * 2 + 1),
-                sigmaColor=sigma_color * 255,
-                sigmaSpace=sigma_space
+                depth_u8, d=int(sigma_space * 2 + 1), sigmaColor=sigma_color * 255, sigmaSpace=sigma_space
             )
 
             # Convert back to float32 normalized
@@ -113,11 +115,13 @@ class Postprocessor:
         except ImportError:
             # Fallback to scipy for environments without OpenCV
             from scipy.ndimage import gaussian_filter
+
             return gaussian_filter(depth, sigma=sigma_space / 3.0)
 
     def _preserve_edges(self, depth: np.ndarray, image: np.ndarray, threshold: float) -> np.ndarray:
         gray = np.mean(image, axis=2) if image.ndim == 3 else image
         from scipy.ndimage import sobel
+
         mag = np.hypot(sobel(gray, axis=0), sobel(gray, axis=1))
         mag = mag / (mag.max() + 1e-8)
         # Simple mask-based preservation logic (placeholder for more complex logic)
@@ -126,11 +130,15 @@ class Postprocessor:
 
     def fuse_multiview(self, results: List[DepthResult]) -> DepthResult:
         """Simple fusion stub."""
-        if not results: raise ValueError("No results to fuse")
+        if not results:
+            raise ValueError("No results to fuse")
         depths = np.stack([r.depth_map for r in results], axis=0)
 
-        if self.config.fusion_mode == "mean": fused = np.mean(depths, axis=0)
-        elif self.config.fusion_mode == "median": fused = np.median(depths, axis=0)
-        else: fused = np.mean(depths, axis=0)  # Default
+        if self.config.fusion_mode == "mean":
+            fused = np.mean(depths, axis=0)
+        elif self.config.fusion_mode == "median":
+            fused = np.median(depths, axis=0)
+        else:
+            fused = np.mean(depths, axis=0)  # Default
 
         return DepthResult(fused, results[0].original_image, metadata={"fusion_mode": self.config.fusion_mode})

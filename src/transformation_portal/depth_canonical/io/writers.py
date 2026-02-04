@@ -16,11 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def write_pbr_maps(
-    normal_map: np.ndarray,
-    roughness_map: np.ndarray,
-    ao_map: np.ndarray,
-    output_dir: Path,
-    base_name: str
+    normal_map: np.ndarray, roughness_map: np.ndarray, ao_map: np.ndarray, output_dir: Path, base_name: str
 ) -> Dict[str, Path]:
     """Write PBR maps to disk with atomic operations.
 
@@ -62,9 +58,9 @@ def write_pbr_maps(
         try:
             # Convert numpy array to PIL Image
             if map_data.ndim == 2:
-                pil_image = Image.fromarray(map_data, 'L')
+                pil_image = Image.fromarray(map_data, "L")
             elif map_data.ndim == 3 and map_data.shape[2] == 3:
-                pil_image = Image.fromarray(map_data, 'RGB')
+                pil_image = Image.fromarray(map_data, "RGB")
             else:
                 raise ValueError(f"Invalid map shape for {map_type}: {map_data.shape}")
 

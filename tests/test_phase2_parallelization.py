@@ -7,12 +7,14 @@ Validates:
 4. Cache hit rate tracking
 5. Graceful fallback to sequential processing
 """
+
 import tempfile
+import time
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
+
 import numpy as np
 import pytest
-import time
 
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
 from transformation_portal.lux_depth_v3.depth_cache import DepthCache
@@ -77,7 +79,7 @@ class TestDepthCache:
 
         # Cache should have evicted some entries
         stats = cache.stats()
-        assert stats['entry_count'] < 10
+        assert stats["entry_count"] < 10
 
     def test_cache_stats(self, tmp_path):
         """Verify cache statistics are accurate."""
@@ -90,9 +92,9 @@ class TestDepthCache:
 
         stats = cache.stats()
 
-        assert stats['entry_count'] == 5
-        assert stats['size_gb'] > 0
-        assert stats['max_size_gb'] == 10.0
+        assert stats["entry_count"] == 5
+        assert stats["size_gb"] > 0
+        assert stats["max_size_gb"] == 10.0
 
     def test_cache_clear(self, tmp_path):
         """Verify cache can be cleared."""
@@ -108,7 +110,7 @@ class TestDepthCache:
 
         # Verify all entries removed
         stats = cache.stats()
-        assert stats['entry_count'] == 0
+        assert stats["entry_count"] == 0
 
     def test_cache_atomic_writes(self, tmp_path):
         """Verify cache writes are atomic (no partial files)."""
@@ -143,8 +145,8 @@ class TestParallelProcessing:
     @pytest.fixture
     def mock_orchestrator(self, tmp_path):
         """Create mock orchestrator with parallel processing enabled."""
-        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
         from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
         config = EnhanceConfig(
             model_variant=ModelVariant.METRIC_LARGE,
@@ -153,7 +155,7 @@ class TestParallelProcessing:
             enable_v2=False,  # Disable V2 for simpler testing
         )
 
-        with patch('transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine'):
+        with patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine"):
             orch = EnhanceOrchestrator(config, tmp_path, verify_outputs=False)
             return orch
 
@@ -174,9 +176,9 @@ class TestParallelProcessing:
 
         # Verify each result has required fields
         for result in results:
-            assert 'status' in result
-            assert 'image_input' in result
-            assert 'output_key' in result
+            assert "status" in result
+            assert "image_input" in result
+            assert "output_key" in result
 
     def test_parallel_batch_processing_fallback(self, mock_orchestrator, tmp_path):
         """Verify fallback to sequential for small batches."""
@@ -185,7 +187,7 @@ class TestParallelProcessing:
         for img in test_images:
             img.path.touch()
 
-        with patch.object(mock_orchestrator, 'enhance_image', return_value={'status': 'ok'}):
+        with patch.object(mock_orchestrator, "enhance_image", return_value={"status": "ok"}):
             results = mock_orchestrator.enhance_batch_parallel(test_images, tmp_path)
 
         # Should use sequential processing
@@ -202,14 +204,14 @@ class TestParallelProcessing:
         def mock_enhance(img, input_root):
             if "test_2" in str(img.path):
                 raise RuntimeError("Simulated failure")
-            return {'status': 'ok', 'image': str(img.path)}
+            return {"status": "ok", "image": str(img.path)}
 
-        with patch.object(mock_orchestrator, 'enhance_image', side_effect=mock_enhance):
+        with patch.object(mock_orchestrator, "enhance_image", side_effect=mock_enhance):
             results = mock_orchestrator.enhance_batch_parallel(test_images, tmp_path)
 
         # Verify some succeeded, some failed
         assert len(results) == 5
-        error_count = sum(1 for r in results if r.get('status') == 'error')
+        error_count = sum(1 for r in results if r.get("status") == "error")
         assert error_count == 1
 
 
@@ -236,10 +238,7 @@ class TestPhase2Config:
 
     def test_depth_cache_size_limit_configurable(self):
         """Verify cache size limit is configurable."""
-        config = EnhanceConfig(
-            enable_depth_cache=True,
-            depth_cache_max_size_gb=5.0
-        )
+        config = EnhanceConfig(enable_depth_cache=True, depth_cache_max_size_gb=5.0)
 
         assert config.depth_cache_max_size_gb == 5.0
 
@@ -256,8 +255,8 @@ class TestCacheIntegration:
     @pytest.fixture
     def orchestrator_with_cache(self, tmp_path):
         """Create orchestrator with depth cache enabled."""
-        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
         from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
         config = EnhanceConfig(
             model_variant=ModelVariant.METRIC_LARGE,
@@ -266,7 +265,7 @@ class TestCacheIntegration:
             enable_v2=False,
         )
 
-        with patch('transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine'):
+        with patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine"):
             orch = EnhanceOrchestrator(config, tmp_path, verify_outputs=False)
             return orch
 
@@ -277,8 +276,8 @@ class TestCacheIntegration:
 
     def test_cache_disabled_when_flag_off(self, tmp_path):
         """Verify cache is None when disabled."""
-        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
         from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
         config = EnhanceConfig(
             model_variant=ModelVariant.METRIC_LARGE,
@@ -286,7 +285,7 @@ class TestCacheIntegration:
             enable_v2=False,
         )
 
-        with patch('transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine'):
+        with patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine"):
             orch = EnhanceOrchestrator(config, tmp_path)
 
         assert orch.depth_cache is None
@@ -340,17 +339,18 @@ class TestPerformanceMetrics:
 
         stats = cache.stats()
 
-        assert 'entry_count' in stats
-        assert 'size_gb' in stats
-        assert 'max_size_gb' in stats
-        assert 'cache_dir' in stats
-        assert stats['entry_count'] == 3
+        assert "entry_count" in stats
+        assert "size_gb" in stats
+        assert "max_size_gb" in stats
+        assert "cache_dir" in stats
+        assert stats["entry_count"] == 3
 
     def test_parallel_worker_count_calculation(self, tmp_path):
         """Verify worker count is calculated correctly."""
-        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
-        from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
         from multiprocessing import cpu_count
+
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
         config = EnhanceConfig(
             model_variant=ModelVariant.METRIC_LARGE,
@@ -359,7 +359,7 @@ class TestPerformanceMetrics:
             enable_v2=False,
         )
 
-        with patch('transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine'):
+        with patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine"):
             orch = EnhanceOrchestrator(config, tmp_path)
 
         # Should be cpu_count - 1, minimum 1
@@ -372,8 +372,9 @@ class TestThreadSafety:
 
     def test_manifest_cache_concurrent_reads(self, tmp_path):
         """Test LRU cache handles concurrent reads safely."""
-        import threading
         import os
+        import threading
+
         from transformation_portal.lux_depth_v3.manifest import CombinedManifest, InputMetadata
         from transformation_portal.lux_depth_v3.orchestrator import _load_manifest_cached
 
@@ -381,10 +382,7 @@ class TestThreadSafety:
         manifest_path = tmp_path / "test_manifest.json"
         manifest = CombinedManifest(
             input=InputMetadata(
-                image_path="test.jpg",
-                image_sha256="abc123",
-                image_size_bytes=1000,
-                image_dimensions=[100, 100]
+                image_path="test.jpg", image_sha256="abc123", image_size_bytes=1000, image_dimensions=[100, 100]
             )
         )
         manifest.write(manifest_path)
@@ -417,8 +415,9 @@ class TestThreadSafety:
 
     def test_manifest_cache_concurrent_writes(self, tmp_path):
         """Test LRU cache handles concurrent writes to different manifests safely."""
-        import threading
         import os
+        import threading
+
         from transformation_portal.lux_depth_v3.manifest import CombinedManifest, InputMetadata
         from transformation_portal.lux_depth_v3.orchestrator import _load_manifest_cached
 
@@ -432,7 +431,7 @@ class TestThreadSafety:
                         image_path=f"test_{idx}.jpg",
                         image_sha256=f"hash_{idx}",
                         image_size_bytes=1000,
-                        image_dimensions=[100, 100]
+                        image_dimensions=[100, 100],
                     )
                 )
                 manifest.write(manifest_path)
@@ -459,6 +458,7 @@ class TestThreadSafety:
     def test_depth_cache_concurrent_store(self, tmp_path):
         """Test depth cache handles concurrent stores safely."""
         import threading
+
         from transformation_portal.lux_depth_v3.depth_cache import DepthCache
 
         cache = DepthCache(tmp_path, max_size_gb=1.0)
@@ -482,11 +482,12 @@ class TestThreadSafety:
         # Verify: no exceptions, all entries stored
         assert len(exceptions) == 0, f"Exceptions during concurrent stores: {exceptions}"
         stats = cache.stats()
-        assert stats['entry_count'] == 10
+        assert stats["entry_count"] == 10
 
     def test_depth_cache_concurrent_same_key(self, tmp_path):
         """Test depth cache handles concurrent writes to same key (last write wins)."""
         import threading
+
         from transformation_portal.lux_depth_v3.depth_cache import DepthCache
 
         cache = DepthCache(tmp_path, max_size_gb=1.0)
@@ -509,7 +510,7 @@ class TestThreadSafety:
         # Verify: no exceptions, one cache entry exists
         assert len(exceptions) == 0, f"Exceptions during concurrent same-key stores: {exceptions}"
         stats = cache.stats()
-        assert stats['entry_count'] == 1
+        assert stats["entry_count"] == 1
 
         # Verify final value is from one of the writers (last write wins)
         result = cache.get("same_image", "same_config")
@@ -518,6 +519,7 @@ class TestThreadSafety:
     def test_depth_cache_read_while_evict(self, tmp_path):
         """Test depth cache handles read during eviction gracefully."""
         import threading
+
         from transformation_portal.lux_depth_v3.depth_cache import DepthCache
 
         # Small cache to trigger eviction
@@ -560,27 +562,25 @@ class TestThreadSafety:
 
     def test_parallel_batch_no_race_conditions(self, tmp_path):
         """Test parallel batch processing is thread-safe."""
-        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+        from PIL import Image
+
         from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
         from transformation_portal.lux_depth_v3.input_manager import ImageInput
-        from PIL import Image
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
         # Create test images
         test_images = []
         for i in range(10):
             img_path = tmp_path / f"test_{i}.jpg"
-            img = Image.new('RGB', (100, 100), color=(i*20, i*20, i*20))
+            img = Image.new("RGB", (100, 100), color=(i * 20, i * 20, i * 20))
             img.save(img_path, quality=95)
             test_images.append(ImageInput(img_path))
 
         config = EnhanceConfig(
-            model_variant=ModelVariant.METRIC_SMALL,
-            enable_parallel_processing=True,
-            enable_v2=False,
-            max_parallel_workers=4
+            model_variant=ModelVariant.METRIC_SMALL, enable_parallel_processing=True, enable_v2=False, max_parallel_workers=4
         )
 
-        with patch('transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine') as mock_engine:
+        with patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine") as mock_engine:
             # Mock depth inference with correct shape for postprocessing
             mock_instance = MagicMock()
 
@@ -602,11 +602,12 @@ class TestThreadSafety:
 
         # Verify: all images processed, no corruption
         assert len(results) == 10
-        assert all(r.get('status') in ['ok', 'skipped'] for r in results)
+        assert all(r.get("status") in ["ok", "skipped"] for r in results)
 
     def test_atomic_writes_prevent_corruption(self, tmp_path):
         """Test atomic write pattern prevents corruption during concurrent access."""
         import threading
+
         from transformation_portal.lux_depth_v3.io_atomic import atomic_write_bytes
 
         target_file = tmp_path / "concurrent_test.txt"
@@ -616,15 +617,12 @@ class TestThreadSafety:
             try:
                 # Simulate slow write
                 time.sleep(0.01)
-                atomic_write_bytes(target_file, content.encode('utf-8'))
+                atomic_write_bytes(target_file, content.encode("utf-8"))
             except Exception as e:
                 exceptions.append(e)
 
         # Spawn 5 threads writing different content
-        threads = [
-            threading.Thread(target=write_atomically, args=(f"Content_{i}\n" * 100,))
-            for i in range(5)
-        ]
+        threads = [threading.Thread(target=write_atomically, args=(f"Content_{i}\n" * 100,)) for i in range(5)]
         for t in threads:
             t.start()
         for t in threads:
@@ -636,7 +634,7 @@ class TestThreadSafety:
 
         # File should contain complete content from one writer (not corrupted)
         content = target_file.read_text()
-        assert content.count('\n') % 100 == 0, "File corruption detected"
+        assert content.count("\n") % 100 == 0, "File corruption detected"
 
     def test_lru_cache_eviction_thread_safe(self, tmp_path):
         """Test LRU cache eviction doesn't break concurrent access."""
@@ -675,6 +673,7 @@ class TestThreadSafety:
     def test_depth_cache_stats_accurate_under_concurrency(self, tmp_path):
         """Test cache stats remain accurate with concurrent access."""
         import threading
+
         from transformation_portal.lux_depth_v3.depth_cache import DepthCache
 
         cache = DepthCache(tmp_path, max_size_gb=1.0)
@@ -700,8 +699,8 @@ class TestThreadSafety:
         # Verify: no exceptions, stats accurate
         assert len(exceptions) == 0, f"Exceptions during concurrent ops: {exceptions}"
         stats = cache.stats()
-        assert stats['entry_count'] == 10
-        assert stats['size_gb'] > 0
+        assert stats["entry_count"] == 10
+        assert stats["size_gb"] > 0
 
 
 if __name__ == "__main__":

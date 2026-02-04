@@ -25,9 +25,7 @@ _TEXTURE_PATTERN = re.compile(r"[a-z]+")
 def _is_sequence(value: object) -> bool:
     """Return ``True`` when ``value`` should be treated as a sequence."""
 
-    return isinstance(value, SequenceABC) and not isinstance(
-        value, (str, bytes, bytearray)
-    )
+    return isinstance(value, SequenceABC) and not isinstance(value, (str, bytes, bytearray))
 
 
 def _coerce_matrix(data: Sequence[Sequence[float]]) -> List[List[float]]:
@@ -203,10 +201,7 @@ class MaterialResponsePrinciple:
     """
 
     name: str = "Material Response"
-    focus: str = (
-        "Honor the unique light interaction of each surface instead of applying "
-        "purely global transforms."
-    )
+    focus: str = "Honor the unique light interaction of each surface instead of applying " "purely global transforms."
 
     tenets: List[str] = [
         "Respect energy conservation in highlights so reflective materials retain believable sheen.",
@@ -295,10 +290,7 @@ def _clamp(value: float, minimum: float = 0.0, maximum: float = 1.0) -> float:
     """Return ``value`` limited to the inclusive ``[minimum, maximum]`` range."""
 
     if minimum > maximum:
-        raise ValueError(
-            "minimum cannot be greater than maximum: "
-            f"minimum={minimum!r}, maximum={maximum!r}"
-        )
+        raise ValueError("minimum cannot be greater than maximum: " f"minimum={minimum!r}, maximum={maximum!r}")
 
     return max(minimum, min(maximum, value))
 
@@ -317,9 +309,7 @@ class MaterialAestheticProfile:
         for attribute in ("rarity", "craftsmanship", "innovation"):
             value = getattr(self, attribute)
             if not 0.0 <= value <= 1.0:
-                raise ValueError(
-                    f"{attribute} must be between 0.0 and 1.0 inclusive; received {value!r}"
-                )
+                raise ValueError(f"{attribute} must be between 0.0 and 1.0 inclusive; received {value!r}")
 
 
 @dataclass(frozen=True)
@@ -334,9 +324,7 @@ class LightingProfile:
         for attribute in ("warmth", "intensity", "diffusion"):
             value = getattr(self, attribute)
             if not 0.0 <= value <= 1.0:
-                raise ValueError(
-                    f"{attribute} must be between 0.0 and 1.0 inclusive; received {value!r}"
-                )
+                raise ValueError(f"{attribute} must be between 0.0 and 1.0 inclusive; received {value!r}")
 
 
 @dataclass(frozen=True)
@@ -351,9 +339,7 @@ class ViewerProfile:
         for attribute in ("novelty_preference", "heritage_affinity"):
             value = getattr(self, attribute)
             if not 0.0 <= value <= 1.0:
-                raise ValueError(
-                    f"{attribute} must be between 0.0 and 1.0 inclusive; received {value!r}"
-                )
+                raise ValueError(f"{attribute} must be between 0.0 and 1.0 inclusive; received {value!r}")
 
         if not self.cultural_background:
             raise ValueError("cultural_background must be a non-empty string")
@@ -372,9 +358,7 @@ class EmotionalResonance:
         for attribute in ("awe", "comfort", "focus"):
             value = getattr(self, attribute)
             if not 0.0 <= value <= 1.0:
-                raise ValueError(
-                    f"{attribute} must be between 0.0 and 1.0 inclusive; received {value!r}"
-                )
+                raise ValueError(f"{attribute} must be between 0.0 and 1.0 inclusive; received {value!r}")
 
         if not self.cultural_background:
             raise ValueError("cultural_background must be a non-empty string")
@@ -401,15 +385,11 @@ class ContextualResonance:
         required_keys = {"awe", "comfort", "focus"}
         missing = required_keys.difference(self.scores)
         if missing:
-            raise ValueError(
-                f"scores must include {sorted(required_keys)}; missing keys: {sorted(missing)}"
-            )
+            raise ValueError(f"scores must include {sorted(required_keys)}; missing keys: {sorted(missing)}")
 
         for key, value in self.scores.items():
             if not 0.0 <= value <= 1.0:
-                raise ValueError(
-                    f"Score {key!r} must be between 0.0 and 1.0 inclusive; received {value!r}"
-                )
+                raise ValueError(f"Score {key!r} must be between 0.0 and 1.0 inclusive; received {value!r}")
 
         if not self.narrative:
             raise ValueError("narrative must be a non-empty string")
@@ -429,9 +409,7 @@ class NeuroAestheticEngine:
         "lacquer": {"awe": 0.06, "focus": 0.05},
     }
 
-    def predict_limbic_response(
-        self, texture: str, warmth: float, cultural_background: str
-    ) -> EmotionalResonance:
+    def predict_limbic_response(self, texture: str, warmth: float, cultural_background: str) -> EmotionalResonance:
         """Return an :class:`EmotionalResonance` derived from qualitative inputs."""
 
         if not 0.0 <= warmth <= 1.0:
@@ -488,9 +466,7 @@ class GlobalLuxurySemantics:
         "usa": "american",
     }
 
-    def recontextualize(
-        self, material: MaterialAestheticProfile, resonance: EmotionalResonance
-    ) -> ContextualResonance:
+    def recontextualize(self, material: MaterialAestheticProfile, resonance: EmotionalResonance) -> ContextualResonance:
         """Return resonance tuned to cultural and material narratives."""
 
         background_key = resonance.cultural_background.strip().lower()
@@ -498,33 +474,21 @@ class GlobalLuxurySemantics:
         weights = self._CULTURAL_WEIGHTS.get(background, {})
 
         awe = _clamp(resonance.awe + weights.get("awe", 0.0) + 0.12 * material.rarity)
-        comfort = _clamp(
-            resonance.comfort
-            + weights.get("comfort", 0.0)
-            + 0.1 * material.craftsmanship
-        )
-        focus = _clamp(
-            resonance.focus
-            + weights.get("focus", 0.0)
-            + 0.08 * (1.0 - material.innovation)
-        )
+        comfort = _clamp(resonance.comfort + weights.get("comfort", 0.0) + 0.1 * material.craftsmanship)
+        focus = _clamp(resonance.focus + weights.get("focus", 0.0) + 0.08 * (1.0 - material.innovation))
 
         narrative = (
             f"{material.name} channels a {background or 'global'} sensibility by "
             f"balancing awe ({awe:.2f}), comfort ({comfort:.2f}) and focus ({focus:.2f})."
         )
 
-        return ContextualResonance(
-            scores={"awe": awe, "comfort": comfort, "focus": focus}, narrative=narrative
-        )
+        return ContextualResonance(scores={"awe": awe, "comfort": comfort, "focus": focus}, narrative=narrative)
 
 
 class FutureStatePredictor:
     """Projects how a material treatment will age alongside design trends."""
 
-    def project(
-        self, material: MaterialAestheticProfile, resonance: ContextualResonance
-    ) -> float:
+    def project(self, material: MaterialAestheticProfile, resonance: ContextualResonance) -> float:
         """Return a 0-1 score indicating forward-looking relevance."""
 
         awe = resonance.scores["awe"]
@@ -570,9 +534,7 @@ class CognitiveMaterialResponse:
     ) -> Dict[str, object]:
         """Blend cultural and temporal heuristics into actionable guidance."""
 
-        contextualized = self.cultural_context.recontextualize(
-            material, emotional_resonance
-        )
+        contextualized = self.cultural_context.recontextualize(material, emotional_resonance)
         future_alignment = self.temporal_relevance.project(material, contextualized)
         luxury_index = self._composite_index(material, contextualized, future_alignment)
 
@@ -596,46 +558,30 @@ class CognitiveMaterialResponse:
     ) -> float:
         craftsmanship_weight = 0.35 * material.craftsmanship
         rarity_weight = 0.25 * material.rarity
-        emotional_weight = 0.25 * (
-            0.5 * resonance.scores["awe"] + 0.5 * resonance.scores["comfort"]
-        )
+        emotional_weight = 0.25 * (0.5 * resonance.scores["awe"] + 0.5 * resonance.scores["comfort"])
         future_weight = 0.15 * future_alignment
 
-        return _clamp(
-            craftsmanship_weight + rarity_weight + emotional_weight + future_weight
-        )
+        return _clamp(craftsmanship_weight + rarity_weight + emotional_weight + future_weight)
 
     @staticmethod
-    def _recommendations(
-        material: MaterialAestheticProfile, resonance: ContextualResonance
-    ) -> List[str]:
+    def _recommendations(material: MaterialAestheticProfile, resonance: ContextualResonance) -> List[str]:
         recommendations: List[str] = []
         awe = resonance.scores["awe"]
         comfort = resonance.scores["comfort"]
         focus = resonance.scores["focus"]
 
         if awe < 0.6:
-            recommendations.append(
-                "Introduce controlled specular accents to elevate perceived grandeur."
-            )
+            recommendations.append("Introduce controlled specular accents to elevate perceived grandeur.")
         if comfort < 0.55:
-            recommendations.append(
-                "Blend warmer fill lighting or tactile styling to soften the presentation."
-            )
+            recommendations.append("Blend warmer fill lighting or tactile styling to soften the presentation.")
         if focus < 0.5:
-            recommendations.append(
-                "Shape negative space to emphasise the material's structural rhythm."
-            )
+            recommendations.append("Shape negative space to emphasise the material's structural rhythm.")
 
         if material.innovation > 0.65 and awe >= 0.6:
-            recommendations.append(
-                "Document the treatment narrative for launch collateral while momentum is high."
-            )
+            recommendations.append("Document the treatment narrative for launch collateral while momentum is high.")
 
         if not recommendations:
-            recommendations.append(
-                "Maintain current treatment; responses align with luxury objectives."
-            )
+            recommendations.append("Maintain current treatment; responses align with luxury objectives.")
 
         return recommendations
 
@@ -719,9 +665,7 @@ def violates(decision: str, tenet: str) -> bool:
 class MarketingClaimValidator:
     """Validates that implementation decisions align with marketing principles."""
 
-    def assess_decision(
-        self, decision: str, principle: MaterialResponsePrinciple
-    ) -> bool:
+    def assess_decision(self, decision: str, principle: MaterialResponsePrinciple) -> bool:
         """Return ``True`` when ``decision`` honours ``principle``'s tenets."""
 
         for tenet in principle.guidelines():
@@ -759,9 +703,7 @@ class MaterialResponseValidator:
     analysis of BRDFs or fractal geometry.
     """
 
-    def measure_specular_preservation(
-        self, before: Sequence[Sequence[float]], after: Sequence[Sequence[float]]
-    ) -> float:
+    def measure_specular_preservation(self, before: Sequence[Sequence[float]], after: Sequence[Sequence[float]]) -> float:
         """Return the energy ratio for the high-frequency Fourier band.
 
         ``before`` and ``after`` are expected to be array-like objects that can
@@ -797,9 +739,7 @@ class MaterialResponseValidator:
         before_matrix = _coerce_matrix(before)
         after_matrix = _coerce_matrix(after)
 
-        if len(before_matrix) != len(after_matrix) or len(before_matrix[0]) != len(
-            after_matrix[0]
-        ):
+        if len(before_matrix) != len(after_matrix) or len(before_matrix[0]) != len(after_matrix[0]):
             raise ValueError("before and after arrays must share the same shape")
 
         dft_before = _dft2(before_matrix)
@@ -891,9 +831,7 @@ class MaterialResponseValidator:
 OperationLike = Any
 
 
-def compose_operations(
-    *operations: OperationLike, size: int = 3, dtype: np.dtype | None = None
-) -> np.ndarray:
+def compose_operations(*operations: OperationLike, size: int = 3, dtype: np.dtype | None = None) -> np.ndarray:
     """Return a composite linear transformation for channel-wise operations.
 
     Parameters
@@ -933,9 +871,7 @@ def compose_operations(
 
     def _normalise(operation: OperationLike) -> Tuple[np.ndarray, str | None]:
         if operation is None:
-            raise ValueError(
-                "compose_operations received an empty operation placeholder"
-            )
+            raise ValueError("compose_operations received an empty operation placeholder")
 
         name: str | None = None
 
@@ -964,9 +900,7 @@ def compose_operations(
                 return _coerce_diagonal(diag_source, size), name
             if "weights" in operation:
                 return _coerce_diagonal(operation["weights"], size), name
-            raise ValueError(
-                "operation mapping must contain 'matrix', 'mix', 'scale', 'diag', or 'weights'"
-            )
+            raise ValueError("operation mapping must contain 'matrix', 'mix', 'scale', 'diag', or 'weights'")
 
         return _ensure_matrix(operation, size), None
 
@@ -991,9 +925,7 @@ def compose_operations(
     result = identity
     for matrix in composed:
         if matrix.shape != (size, size):
-            raise ValueError(
-                "operation matrix must be square with side length matching the channel size"
-            )
+            raise ValueError("operation matrix must be square with side length matching the channel size")
         result = result @ matrix
 
     return result.astype(matrix_dtype, copy=False)
@@ -1009,9 +941,7 @@ def _coerce_diagonal(operation: object, size: int) -> np.ndarray:
     if diag.ndim != 1:
         raise ValueError("diagonal operation must be a scalar or a 1-D sequence")
     if diag.shape[0] != size:
-        raise ValueError(
-            f"diagonal operation expects {size} coefficients; received {diag.shape[0]}"
-        )
+        raise ValueError(f"diagonal operation expects {size} coefficients; received {diag.shape[0]}")
     return np.diag(diag)
 
 
@@ -1025,9 +955,7 @@ def _ensure_matrix(operation: object, size: int) -> np.ndarray:
     if matrix.ndim == 1:
         if matrix.shape[0] == size:
             return np.diag(matrix)
-        raise ValueError(
-            f"matrix operation expects a vector of length {size}; received {matrix.shape[0]}"
-        )
+        raise ValueError(f"matrix operation expects a vector of length {size}; received {matrix.shape[0]}")
 
     if matrix.ndim != 2:
         raise ValueError("matrix operation must be 1-D or 2-D")
@@ -1037,9 +965,7 @@ def _ensure_matrix(operation: object, size: int) -> np.ndarray:
         coerced_array = np.asarray(coerced, dtype=np.float64)
         if coerced_array.shape == (size, size):
             return coerced_array
-        raise ValueError(
-            "operation matrix must be square with side length matching the channel size"
-        )
+        raise ValueError("operation matrix must be square with side length matching the channel size")
 
     return matrix
 
@@ -1075,10 +1001,7 @@ class QuantumMaterialResponse:
 
     def __init__(self, coherence_gain: float = 0.68) -> None:
         if not 0.0 <= coherence_gain <= 1.0:
-            raise ValueError(
-                "coherence_gain must be between 0.0 and 1.0 inclusive; "
-                f"received {coherence_gain!r}"
-            )
+            raise ValueError("coherence_gain must be between 0.0 and 1.0 inclusive; " f"received {coherence_gain!r}")
 
         self.coherence_gain = coherence_gain
         self.cognitive_engine = CognitiveMaterialResponse()
@@ -1115,9 +1038,7 @@ class QuantumMaterialResponse:
 
         coherence_map = self._apply_coherence(amplitude_normalised, context_wave)
         entanglement_matrix = self._entanglement_matrix(coherence_map, frequency_domain)
-        conflict_resolution = self.identify_and_resolve_conflicts(
-            coherence_map, context_wave
-        )
+        conflict_resolution = self.identify_and_resolve_conflicts(coherence_map, context_wave)
 
         collapse_guidance = self._collapse_guidance(conflict_resolution, context_wave)
 
@@ -1147,28 +1068,21 @@ class QuantumMaterialResponse:
         conflicts: List[str] = []
         resolutions: List[str] = []
 
-        sorted_context = sorted(
-            context_wave.items(), key=lambda item: item[1], reverse=True
-        )
+        sorted_context = sorted(context_wave.items(), key=lambda item: item[1], reverse=True)
 
         for index, deviation in np.ndenumerate(deviations):
             if abs(float(deviation)) > threshold:
                 descriptor = f"surface[{index[0]}][{index[1]}]"
                 direction = "dominates" if deviation > 0 else "lags"
-                conflicts.append(
-                    f"{descriptor} {direction} the quantum palette by {deviation:+.3f}."
-                )
+                conflicts.append(f"{descriptor} {direction} the quantum palette by {deviation:+.3f}.")
 
                 if sorted_context:
                     anchor_keyword = sorted_context[0][0]
                     resolutions.append(
-                        "Channel excess from "
-                        f"{descriptor} into {anchor_keyword} narratives to restore balance."
+                        "Channel excess from " f"{descriptor} into {anchor_keyword} narratives to restore balance."
                     )
                 else:
-                    resolutions.append(
-                        f"Apply decoherence damping to {descriptor} to restore equilibrium."
-                    )
+                    resolutions.append(f"Apply decoherence damping to {descriptor} to restore equilibrium.")
 
         max_deviation = float(np.max(np.abs(deviations))) if np_map.size else 0.0
         if math.isclose(max_deviation, 0.0):
@@ -1214,15 +1128,11 @@ class QuantumMaterialResponse:
 
         return {key: value / total for key, value in weights.items()}
 
-    def _apply_coherence(
-        self, amplitude_normalised: np.ndarray, context_wave: Mapping[str, float]
-    ) -> np.ndarray:
+    def _apply_coherence(self, amplitude_normalised: np.ndarray, context_wave: Mapping[str, float]) -> np.ndarray:
         """Blend amplitude data with context weights to produce coherence."""
 
         contextual_intensity = sum(context_wave.values())
-        scaled = amplitude_normalised * (
-            1.0 + self.coherence_gain * contextual_intensity
-        )
+        scaled = amplitude_normalised * (1.0 + self.coherence_gain * contextual_intensity)
         maximum = np.max(scaled) if scaled.size else 0.0
         if math.isclose(float(maximum), 0.0):
             return np.zeros_like(amplitude_normalised)
@@ -1230,9 +1140,7 @@ class QuantumMaterialResponse:
         return np.clip(scaled / maximum, 0.0, 1.0)
 
     @staticmethod
-    def _entanglement_matrix(
-        coherence_map: np.ndarray, frequency_domain: np.ndarray
-    ) -> np.ndarray:
+    def _entanglement_matrix(coherence_map: np.ndarray, frequency_domain: np.ndarray) -> np.ndarray:
         """Return a matrix describing coupled surface influence."""
 
         phase = np.angle(frequency_domain)
@@ -1244,9 +1152,7 @@ class QuantumMaterialResponse:
         return entangled / normaliser
 
     @staticmethod
-    def _superposition_states(
-        matrix: np.ndarray, coherence_map: np.ndarray
-    ) -> List[Dict[str, float]]:
+    def _superposition_states(matrix: np.ndarray, coherence_map: np.ndarray) -> List[Dict[str, float]]:
         """Return descriptors for each surface prior to observation."""
 
         states: List[Dict[str, float]] = []
@@ -1269,9 +1175,7 @@ class QuantumMaterialResponse:
         return states
 
     @staticmethod
-    def _collapse_guidance(
-        conflict_resolution: Mapping[str, Any], context_wave: Mapping[str, float]
-    ) -> str:
+    def _collapse_guidance(conflict_resolution: Mapping[str, Any], context_wave: Mapping[str, float]) -> str:
         """Return narrative guidance for collapsing the quantum aesthetic state."""
 
         conflicts = conflict_resolution.get("conflicts", [])
@@ -1281,18 +1185,13 @@ class QuantumMaterialResponse:
 
         if conflicts:
             pivot = top_context or "the prevailing narrative"
-            return (
-                "Stabilise decoherence by articulating "
-                f"{pivot} themes while applying the proposed resolutions."
-            )
+            return "Stabilise decoherence by articulating " f"{pivot} themes while applying the proposed resolutions."
 
         if top_context:
             return (
-                "Observation can proceed smoothly; anchor the reveal in "
-                f"{top_context} storytelling to preserve coherence."
+                "Observation can proceed smoothly; anchor the reveal in " f"{top_context} storytelling to preserve coherence."
             )
 
         return (
-            "Observation can proceed smoothly; employ a neutral cultural frame "
-            "to preserve the entangled aesthetic state."
+            "Observation can proceed smoothly; employ a neutral cultural frame " "to preserve the entangled aesthetic state."
         )

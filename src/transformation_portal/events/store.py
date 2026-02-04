@@ -82,9 +82,7 @@ class EventStore:
             self._events.append(event)
             self._persist_event(event)
 
-    def get_events(
-        self, limit: Optional[int] = None, offset: int = 0, reverse: bool = True
-    ) -> List[Event]:
+    def get_events(self, limit: Optional[int] = None, offset: int = 0, reverse: bool = True) -> List[Event]:
         """Get events from store.
 
         Args:
@@ -109,9 +107,7 @@ class EventStore:
 
         return events
 
-    def get_events_by_type(
-        self, event_type: str, limit: Optional[int] = None
-    ) -> List[Event]:
+    def get_events_by_type(self, event_type: str, limit: Optional[int] = None) -> List[Event]:
         """Get events of a specific type.
 
         Args:
@@ -169,9 +165,7 @@ class EventStore:
             event: Event to persist
         """
         # Store events by date for easier management
-        date_dir = self.storage_path / time.strftime(
-            "%Y-%m-%d", time.localtime(event.timestamp)
-        )
+        date_dir = self.storage_path / time.strftime("%Y-%m-%d", time.localtime(event.timestamp))
         date_dir.mkdir(exist_ok=True)
 
         event_file = date_dir / f"{event.id}.json"

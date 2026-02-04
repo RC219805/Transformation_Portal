@@ -249,9 +249,7 @@ class TestPBRParameterIndependence:
 
         # Roughness maps should be identical
         np.testing.assert_array_equal(
-            roughness_weak_normal,
-            roughness_strong_normal,
-            err_msg="normal_strength should not affect roughness map"
+            roughness_weak_normal, roughness_strong_normal, err_msg="normal_strength should not affect roughness map"
         )
 
     def test_normal_strength_does_not_affect_ao(self):
@@ -269,7 +267,7 @@ class TestPBRParameterIndependence:
         np.testing.assert_array_equal(
             ao_weak_normal,
             ao_strong_normal,
-            err_msg="normal_strength should not affect AO map (validates gradient decoupling)"
+            err_msg="normal_strength should not affect AO map (validates gradient decoupling)",
         )
 
     def test_roughness_strength_does_not_affect_ao(self):
@@ -285,7 +283,5 @@ class TestPBRParameterIndependence:
 
         # AO maps should be identical
         np.testing.assert_array_equal(
-            ao_weak_roughness,
-            ao_strong_roughness,
-            err_msg="roughness_strength should not affect AO map"
+            ao_weak_roughness, ao_strong_roughness, err_msg="roughness_strength should not affect AO map"
         )

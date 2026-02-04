@@ -34,12 +34,14 @@ logger = logging.getLogger(__name__)
 
 class PhysicsViolationError(ValueError):
     """Raised when a transformation would break optical consistency."""
+
     pass
 
 
 @dataclass
 class LightingProfile:
     """Estimated lighting conditions from the source image."""
+
     azimuth: float  # 0-360 degrees
     elevation: float  # 0-90 degrees
     confidence: float  # 0.0-1.0
@@ -48,6 +50,7 @@ class LightingProfile:
 @dataclass
 class CorrectionSuggestion:
     """The AI's counter-offer to a physically impossible request."""
+
     original_request_azimuth: float
     measured_source_azimuth: float
     confidence: float
@@ -134,9 +137,7 @@ class SunConsistencyGuard:
             message=msg,
         )
 
-    def _estimate_dominant_light_source(
-        self, img: np.ndarray, depth: np.ndarray
-    ) -> LightingProfile:
+    def _estimate_dominant_light_source(self, img: np.ndarray, depth: np.ndarray) -> LightingProfile:
         """Uses 'Spherical Harmonic Gradient' analysis to find the sun."""
         # 1. Compute Surface Normals from Depth
         # gradients: dz/dx, dz/dy (Negated as depth 'uphill' points to camera)
@@ -171,9 +172,7 @@ class SunConsistencyGuard:
         # Confidence metric: Variance of brightness
         confidence = min(np.std(gray) * 4.0, 1.0)
 
-        return LightingProfile(
-            azimuth=azimuth_deg, elevation=45.0, confidence=confidence
-        )
+        return LightingProfile(azimuth=azimuth_deg, elevation=45.0, confidence=confidence)
 
 
 class SkyBlender:
@@ -215,9 +214,7 @@ class SkyBlender:
         """
         # 1. ANALYSIS PASS
         depth_map = self._estimate_depth(source_image)
-        suggestion = self.guardrail.analyze_and_suggest(
-            source_image, depth_map, sky_params
-        )
+        suggestion = self.guardrail.analyze_and_suggest(source_image, depth_map, sky_params)
 
         # 2. DECISION LOGIC
         active_params = sky_params
@@ -285,18 +282,14 @@ class SkyBlender:
         unified_depth = depth_map * (1.0 - sky_mask[:, :, 0]) + 1.0 * sky_mask[:, :, 0]
 
         # Apply Aerial Perspective (Rayleigh Scattering)
-        unified_scene = self.atmosphere.apply_aerial_perspective(
-            scene_linear, unified_depth, atmo_params
-        )
+        unified_scene = self.atmosphere.apply_aerial_perspective(scene_linear, unified_depth, atmo_params)
 
         # Apply Marine Layer (Volumetric Fog)
         if marine_params and marine_params.present:
             # Approximation: Darker/Lower pixels in depth map = Lower elevation
             # Scale to 0-500 meters
             pseudo_height_map = (1.0 - unified_depth) * 500.0
-            unified_scene = self.atmosphere.simulate_marine_layer(
-                unified_scene, pseudo_height_map, marine_params
-            )
+            unified_scene = self.atmosphere.simulate_marine_layer(unified_scene, pseudo_height_map, marine_params)
         else:
             # Clip if no extra processing needed
             unified_scene = unified_scene.clip(0, 10.0)  # Soft clip for HDR
@@ -315,9 +308,7 @@ class SkyBlender:
             midas = torch.hub.load("intel-isl/MiDaS", model_type, trust_repo=True)
             midas.to(self.device).eval()
 
-            input_batch = (
-                torch.from_numpy(image).permute(2, 0, 1).unsqueeze(0).float().to(self.device)
-            )
+            input_batch = torch.from_numpy(image).permute(2, 0, 1).unsqueeze(0).float().to(self.device)
 
             with torch.no_grad():
                 prediction = midas(input_batch)

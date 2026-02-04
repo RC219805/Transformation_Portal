@@ -25,6 +25,7 @@ def test_documents_appends_docstring():
     @documents("Test note")
     def func():
         pass
+
     assert func.__doc__ == "Test note"
 
 
@@ -33,7 +34,9 @@ def test_documents_preserves_existing_docstring():
     def func():
         """Original doc"""
         return True
+
     assert func.__doc__ == "Prefix note\nOriginal doc"
+
 
 # -------------------------
 # tests for demonstrates
@@ -44,6 +47,7 @@ def test_demonstrates_single_string():
     @demonstrates("ConceptA")
     def func():
         return True
+
     assert func.__demonstrates__ == ("ConceptA",)
     assert func.__doc__.startswith("Demonstrates: ConceptA")
 
@@ -55,6 +59,7 @@ def test_demonstrates_class():
     @demonstrates(Dummy)
     def func():
         return True
+
     assert func.__demonstrates__ == (Dummy,)
     doc = func.__doc__
     assert doc is not None
@@ -66,8 +71,10 @@ def test_demonstrates_existing_docstring():
     def func():
         """Existing doc"""
         return True
+
     assert func.__doc__.startswith("Demonstrates: ConceptB\n")
     assert "Existing doc" in func.__doc__
+
 
 # -------------------------
 # demonstrates tests with deterministic parametrization
@@ -86,6 +93,7 @@ def test_demonstrates_with_various_concepts(concept):
     @demonstrates(concept)
     def dummy():
         return True
+
     assert dummy.__demonstrates__[0] == concept
     assert dummy.__doc__.startswith("Demonstrates:")
 
@@ -102,6 +110,7 @@ def test_demonstrates_with_multiple_various_concepts(concepts):
     @demonstrates(concepts)
     def dummy():
         return True
+
     assert dummy.__demonstrates__ == tuple(concepts)
     expected_parts = []
     for c in concepts:
@@ -111,6 +120,7 @@ def test_demonstrates_with_multiple_various_concepts(concepts):
             expected_parts.append(str(c))
     expected_prefix = "Demonstrates: " + ", ".join(expected_parts)
     assert dummy.__doc__.startswith(expected_prefix)
+
 
 # -------------------------
 # tests for valid_until
@@ -123,6 +133,7 @@ def test_valid_until_future_allows_execution():
     @valid_until(future_date, reason="future test")
     def func():
         return 42
+
     assert func() == 42
     assert func.__doc__.startswith(f"Valid until {future_date}")
 
@@ -133,10 +144,12 @@ def test_valid_until_past_raises():
     @valid_until(past_date, reason="expired test")
     def func():
         return 42
+
     with pytest.raises(AssertionError) as exc:
         func()
     assert "expired" in str(exc.value)
     assert func.__doc__.startswith(f"Valid until {past_date}")
+
 
 # -------------------------
 # test suite sanity
@@ -145,8 +158,10 @@ def test_valid_until_past_raises():
 
 def test_basic_callable_property():
     """Sanity check: decorated functions are still callable."""
+
     @documents("note")
     @demonstrates("C")
     def func():
         return "ok"
+
     assert func() == "ok"

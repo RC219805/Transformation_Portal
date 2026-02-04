@@ -12,19 +12,20 @@ This test suite validates:
 Coverage target: >90% for pbr_processor.py
 """
 
+import shutil
+import tempfile
+from pathlib import Path
+
 import numpy as np
 import pytest
-from pathlib import Path
-import tempfile
-import shutil
 
-from transformation_portal.lux_depth_v3.pbr_processor import PBRProcessor
+from transformation_portal.lux_depth_v3.pbr import PBRConfig
 from transformation_portal.lux_depth_v3.pbr_presets import (
+    STANDARD_QUALITY,
     get_preset,
     list_presets,
-    STANDARD_QUALITY,
 )
-from transformation_portal.lux_depth_v3.pbr import PBRConfig
+from transformation_portal.lux_depth_v3.pbr_processor import PBRProcessor
 
 
 @pytest.fixture
@@ -36,7 +37,7 @@ def sample_depth():
 
     # Radial gradient from center
     center_y, center_x = h // 2, w // 2
-    depth = np.sqrt((y - center_y)**2 + (x - center_x)**2)
+    depth = np.sqrt((y - center_y) ** 2 + (x - center_x) ** 2)
     depth = depth / depth.max()  # Normalize to [0, 1]
 
     return depth.astype(np.float32)
@@ -73,10 +74,7 @@ class TestPBRProcessorFromCachedDepth:
         output_dir = temp_dir / "output"
 
         paths = PBRProcessor.from_cached_depth(
-            depth_path=sample_depth_file,
-            config=standard_config,
-            output_dir=output_dir,
-            base_name="test_scene"
+            depth_path=sample_depth_file, config=standard_config, output_dir=output_dir, base_name="test_scene"
         )
 
         # Verify returned paths
@@ -98,17 +96,15 @@ class TestPBRProcessorFromCachedDepth:
         """Test loading from .png depth file when .npy not available."""
         # Save depth as PNG (simulating quantized depth output)
         from PIL import Image
+
         depth_path = temp_dir / "test_depth.png"
         depth_u16 = (sample_depth * 65535).astype(np.uint16)
-        Image.fromarray(depth_u16, mode='I;16').save(depth_path)
+        Image.fromarray(depth_u16, mode="I;16").save(depth_path)
 
         output_dir = temp_dir / "output"
 
         paths = PBRProcessor.from_cached_depth(
-            depth_path=depth_path,
-            config=standard_config,
-            output_dir=output_dir,
-            base_name="test_scene"
+            depth_path=depth_path, config=standard_config, output_dir=output_dir, base_name="test_scene"
         )
 
         # Verify all outputs created
@@ -123,8 +119,9 @@ class TestPBRProcessorFromCachedDepth:
         depth_npy = temp_dir / "test_depth.npy"
 
         from PIL import Image
+
         depth_u16 = (sample_depth * 65535).astype(np.uint16)
-        Image.fromarray(depth_u16, mode='I;16').save(depth_png)
+        Image.fromarray(depth_u16, mode="I;16").save(depth_png)
 
         # Save .npy with slightly different values to verify it's used
         modified_depth = sample_depth * 0.8  # Different from PNG
@@ -134,10 +131,7 @@ class TestPBRProcessorFromCachedDepth:
 
         # Call with .png path, should auto-detect .npy
         paths = PBRProcessor.from_cached_depth(
-            depth_path=depth_png,
-            config=standard_config,
-            output_dir=output_dir,
-            base_name="test_scene"
+            depth_path=depth_png, config=standard_config, output_dir=output_dir, base_name="test_scene"
         )
 
         # Should succeed (proves .npy was loaded, not .png)
@@ -149,10 +143,7 @@ class TestPBRProcessorFromCachedDepth:
 
         with pytest.raises(FileNotFoundError, match="Depth file not found"):
             PBRProcessor.from_cached_depth(
-                depth_path=missing_path,
-                config=standard_config,
-                output_dir=temp_dir / "output",
-                base_name="test"
+                depth_path=missing_path, config=standard_config, output_dir=temp_dir / "output", base_name="test"
             )
 
     def test_from_cached_depth_invalid_ndim_raises(self, temp_dir, standard_config):
@@ -164,10 +155,7 @@ class TestPBRProcessorFromCachedDepth:
 
         with pytest.raises(ValueError, match="Expected 2D depth array"):
             PBRProcessor.from_cached_depth(
-                depth_path=depth_path,
-                config=standard_config,
-                output_dir=temp_dir / "output",
-                base_name="test"
+                depth_path=depth_path, config=standard_config, output_dir=temp_dir / "output", base_name="test"
             )
 
     def test_from_cached_depth_nan_values_raise(self, temp_dir, standard_config):
@@ -180,10 +168,7 @@ class TestPBRProcessorFromCachedDepth:
 
         with pytest.raises(ValueError, match="NaN or Inf"):
             PBRProcessor.from_cached_depth(
-                depth_path=depth_path,
-                config=standard_config,
-                output_dir=temp_dir / "output",
-                base_name="test"
+                depth_path=depth_path, config=standard_config, output_dir=temp_dir / "output", base_name="test"
             )
 
     def test_from_cached_depth_inf_values_raise(self, temp_dir, standard_config):
@@ -196,10 +181,7 @@ class TestPBRProcessorFromCachedDepth:
 
         with pytest.raises(ValueError, match="NaN or Inf"):
             PBRProcessor.from_cached_depth(
-                depth_path=depth_path,
-                config=standard_config,
-                output_dir=temp_dir / "output",
-                base_name="test"
+                depth_path=depth_path, config=standard_config, output_dir=temp_dir / "output", base_name="test"
             )
 
     def test_from_cached_depth_creates_output_dir(self, sample_depth_file, temp_dir, standard_config):
@@ -208,10 +190,7 @@ class TestPBRProcessorFromCachedDepth:
         assert not output_dir.exists()
 
         paths = PBRProcessor.from_cached_depth(
-            depth_path=sample_depth_file,
-            config=standard_config,
-            output_dir=output_dir,
-            base_name="test"
+            depth_path=sample_depth_file, config=standard_config, output_dir=output_dir, base_name="test"
         )
 
         # Verify directory was created
@@ -302,13 +281,16 @@ class TestPBRProcessorFromDepth:
             assert map_data.min() >= 0, f"{map_name} has values < 0"
             assert map_data.max() <= 255, f"{map_name} has values > 255"
 
-    @pytest.mark.parametrize("shape", [
-        (128, 128),
-        (256, 256),
-        (512, 512),
-        (256, 512),  # Non-square
-        (100, 200),  # Arbitrary
-    ])
+    @pytest.mark.parametrize(
+        "shape",
+        [
+            (128, 128),
+            (256, 256),
+            (512, 512),
+            (256, 512),  # Non-square
+            (100, 200),  # Arbitrary
+        ],
+    )
     def test_from_depth_various_shapes(self, temp_dir, standard_config, shape):
         """Test PBR generation with various input shapes."""
         h, w = shape
@@ -359,10 +341,7 @@ class TestPBRProcessorPresets:
         output_dir = temp_dir / preset_name
 
         paths = PBRProcessor.from_cached_depth(
-            depth_path=sample_depth_file,
-            config=config,
-            output_dir=output_dir,
-            base_name="test"
+            depth_path=sample_depth_file, config=config, output_dir=output_dir, base_name="test"
         )
 
         # Verify all outputs exist
@@ -383,10 +362,7 @@ class TestPBRProcessorPresets:
         output_dir = temp_dir / preset_name
 
         paths = PBRProcessor.from_cached_depth(
-            depth_path=sample_depth_file,
-            config=config,
-            output_dir=output_dir,
-            base_name="test"
+            depth_path=sample_depth_file, config=config, output_dir=output_dir, base_name="test"
         )
 
         # Verify all outputs exist
@@ -433,10 +409,7 @@ class TestPBRProcessorErrorHandling:
 
         with pytest.raises(Exception):  # NumPy will raise various exceptions
             PBRProcessor.from_cached_depth(
-                depth_path=corrupt_path,
-                config=standard_config,
-                output_dir=temp_dir / "output",
-                base_name="test"
+                depth_path=corrupt_path, config=standard_config, output_dir=temp_dir / "output", base_name="test"
             )
 
 
@@ -495,10 +468,7 @@ class TestPBRProcessorIntegration:
         output_dir = temp_dir / "pbr_output"
 
         paths = PBRProcessor.from_cached_depth(
-            depth_path=depth_path,
-            config=standard_config,
-            output_dir=output_dir,
-            base_name="scene1"
+            depth_path=depth_path, config=standard_config, output_dir=output_dir, base_name="scene1"
         )
 
         # Verify PBR maps generated
@@ -512,10 +482,7 @@ class TestPBRProcessorIntegration:
         base_name = "luxury_estate_001"
 
         paths = PBRProcessor.from_cached_depth(
-            depth_path=sample_depth_file,
-            config=standard_config,
-            output_dir=output_dir,
-            base_name=base_name
+            depth_path=sample_depth_file, config=standard_config, output_dir=output_dir, base_name=base_name
         )
 
         # Verify naming convention
@@ -614,7 +581,7 @@ class TestPBRProcessorConfigVariations:
             roughness_blur_radius=0,
             ao_strength=1.0,
             ao_blur_radius=0,
-            ao_bias=0.5
+            ao_bias=0.5,
         )
 
         processor = PBRProcessor(config=config, output_dir=temp_dir)
@@ -631,7 +598,7 @@ class TestPBRProcessorConfigVariations:
             roughness_blur_radius=0,
             ao_strength=2.0,
             ao_blur_radius=0,
-            ao_bias=0.5
+            ao_bias=0.5,
         )
 
         processor = PBRProcessor(config=config, output_dir=temp_dir)
@@ -649,7 +616,7 @@ class TestPBRProcessorConfigVariations:
             roughness_blur_radius=0,
             ao_strength=1.0,
             ao_blur_radius=0,
-            ao_bias=0.0
+            ao_bias=0.0,
         )
 
         processor = PBRProcessor(config=config_dark, output_dir=temp_dir)
@@ -663,7 +630,7 @@ class TestPBRProcessorConfigVariations:
             roughness_blur_radius=0,
             ao_strength=1.0,
             ao_blur_radius=0,
-            ao_bias=1.0
+            ao_bias=1.0,
         )
 
         processor_bright = PBRProcessor(config=config_bright, output_dir=temp_dir)

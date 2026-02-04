@@ -37,12 +37,12 @@ Example:
 """
 
 from transformation_portal.style_transfer.ip_adapter import IPAdapterStyleTransfer
+from transformation_portal.style_transfer.multi_reference import MultiReferenceBlender
+from transformation_portal.style_transfer.reference_encoder import ReferenceImageEncoder
 from transformation_portal.style_transfer.style_presets import (
     ArchitecturalStylePresets,
     StylePreset,
 )
-from transformation_portal.style_transfer.reference_encoder import ReferenceImageEncoder
-from transformation_portal.style_transfer.multi_reference import MultiReferenceBlender
 
 __all__ = [
     "IPAdapterStyleTransfer",

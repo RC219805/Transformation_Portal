@@ -1,9 +1,10 @@
 """Tests for PBR map generation."""
 
+import tempfile
+from pathlib import Path
+
 import numpy as np
 import pytest
-from pathlib import Path
-import tempfile
 
 from transformation_portal.lux_depth_v3.pbr import (
     PBRConfig,
@@ -35,13 +36,16 @@ def test_pbr_flat_depth_normal_is_up():
     assert center[:, :, 2].mean() > 250, "Z channel should be ~255 (up vector)"
 
 
-@pytest.mark.parametrize("shape", [
-    (256, 256),
-    (512, 512),
-    (128, 256),  # Non-square
-    (100, 100),  # Small
-    (1024, 768),  # HD-like
-])
+@pytest.mark.parametrize(
+    "shape",
+    [
+        (256, 256),
+        (512, 512),
+        (128, 256),  # Non-square
+        (100, 100),  # Small
+        (1024, 768),  # HD-like
+    ],
+)
 def test_pbr_output_shapes_match_input(shape):
     """CRITICAL: Output maps must have SAME dimensions as input depth.
 
@@ -97,10 +101,7 @@ def test_pbr_ao_independent_of_normal_strength():
     _, _, ao_strong = generate_pbr_maps(depth, config_strong)
 
     # AO maps should be IDENTICAL despite different normal_strength
-    np.testing.assert_array_equal(
-        ao_weak, ao_strong,
-        err_msg="AO must be independent of normal_strength"
-    )
+    np.testing.assert_array_equal(ao_weak, ao_strong, err_msg="AO must be independent of normal_strength")
 
 
 def test_pbr_input_validation_2d():

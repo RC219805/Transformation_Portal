@@ -3,7 +3,9 @@
 STUB IMPLEMENTATION - Critical types to enable package imports.
 Full implementation pending.
 """
+
 from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -12,6 +14,7 @@ from typing import Optional
 @dataclass
 class ImageInput:
     """Represents an input image for processing."""
+
     path: Path
     metadata: Optional[dict] = None
 

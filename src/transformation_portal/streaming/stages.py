@@ -150,11 +150,7 @@ class ImageLoadStage(AsyncStage[Path, ImageData]):
                     try:
                         exif = img._getexif()
                         if exif:
-                            metadata["exif"] = {
-                                k: v
-                                for k, v in exif.items()
-                                if isinstance(v, (str, int, float, bytes))
-                            }
+                            metadata["exif"] = {k: v for k, v in exif.items() if isinstance(v, (str, int, float, bytes))}
                     except Exception:
                         pass  # EXIF extraction optional
 
@@ -365,11 +361,7 @@ class DepthEstimationStage(AsyncStage[ImageData, ImageData]):
             if hasattr(torch, "cuda") and torch.cuda.is_available():
                 return "cuda"
             # Check for MPS (Apple Silicon) - verify attribute chain exists
-            if (
-                hasattr(torch, "backends")
-                and hasattr(torch.backends, "mps")
-                and torch.backends.mps.is_available()
-            ):
+            if hasattr(torch, "backends") and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
                 return "mps"
         except (ImportError, AttributeError):
             # ImportError: torch not installed
@@ -403,9 +395,7 @@ class DepthEstimationStage(AsyncStage[ImageData, ImageData]):
             # Try to import from transformation_portal depth module
             from transformation_portal.depth.models import load_depth_model
 
-            self._model = load_depth_model(
-                model_size=self._model_size, device=self._torch_device
-            )
+            self._model = load_depth_model(model_size=self._model_size, device=self._torch_device)
         except ImportError:
             # Fallback: create a placeholder that returns mock depth
             self._model = self._create_mock_model()
@@ -540,9 +530,7 @@ class MaterialResponseStage(AsyncStage[ImageData, ImageData]):
 
         # Compute luminance and saturation for material detection
         if len(array.shape) == 3 and array.shape[2] >= 3:
-            luminance = (
-                0.2126 * array[..., 0] + 0.7152 * array[..., 1] + 0.0722 * array[..., 2]
-            )
+            luminance = 0.2126 * array[..., 0] + 0.7152 * array[..., 1] + 0.0722 * array[..., 2]
             saturation = np.maximum(array.max(axis=2) - array.min(axis=2), 1e-6)
         else:
             luminance = array[..., 0] if len(array.shape) == 3 else array
@@ -599,23 +587,15 @@ class MaterialResponseStage(AsyncStage[ImageData, ImageData]):
         # Wood detection (warm mid-tones, moderate saturation)
         wood_mask = np.zeros((h, w), dtype=np.float32)
         if "wood" in self._materials:
-            warm_bias = (
-                array[..., 0] - 0.5 * (array[..., 1] + array[..., 2])
-                if is_rgb
-                else np.zeros((h, w))
-            )
+            warm_bias = array[..., 0] - 0.5 * (array[..., 1] + array[..., 2]) if is_rgb else np.zeros((h, w))
             wood_mask = (
                 np.clip(
                     (warm_bias + WOOD_WARM_BIAS_THRESHOLD) / WOOD_WARM_BIAS_RANGE,
                     0.0,
                     1.0,
                 )
-                * np.clip(
-                    (saturation - WOOD_SATURATION_MIN) / WOOD_SATURATION_RANGE, 0.0, 1.0
-                )
-                * np.clip(
-                    (luminance - WOOD_LUMINANCE_MIN) / WOOD_LUMINANCE_RANGE, 0.0, 1.0
-                )
+                * np.clip((saturation - WOOD_SATURATION_MIN) / WOOD_SATURATION_RANGE, 0.0, 1.0)
+                * np.clip((luminance - WOOD_LUMINANCE_MIN) / WOOD_LUMINANCE_RANGE, 0.0, 1.0)
             )
             wood_mask *= floor_mask  # Wood typically on floors
             wood_mask = gaussian_filter(wood_mask, sigma=WOOD_GAUSSIAN_SIGMA)
@@ -628,25 +608,17 @@ class MaterialResponseStage(AsyncStage[ImageData, ImageData]):
                 0.0,
                 1.0,
             )
-            edge_mag = np.abs(sobel(luminance, axis=0)) + np.abs(
-                sobel(luminance, axis=1)
-            )
+            edge_mag = np.abs(sobel(luminance, axis=0)) + np.abs(sobel(luminance, axis=1))
             edge_mag = gaussian_filter(edge_mag, sigma=METAL_EDGE_SIGMA)
             if edge_mag.max() > 0:
                 edge_mag = edge_mag / edge_mag.max()
-            metal_mask = (
-                neutral
-                * edge_mag
-                * np.clip(luminance, METAL_LUMINANCE_MIN, METAL_LUMINANCE_MAX)
-            )
+            metal_mask = neutral * edge_mag * np.clip(luminance, METAL_LUMINANCE_MIN, METAL_LUMINANCE_MAX)
             metal_mask = gaussian_filter(metal_mask, sigma=METAL_GAUSSIAN_SIGMA)
 
         # Glass detection (high brightness, low saturation, transparency regions)
         glass_mask = np.zeros((h, w), dtype=np.float32)
         if "glass" in self._materials:
-            glass_mask = np.clip(
-                (luminance - GLASS_LUMINANCE_MIN) / GLASS_LUMINANCE_RANGE, 0.0, 1.0
-            ) * np.clip(
+            glass_mask = np.clip((luminance - GLASS_LUMINANCE_MIN) / GLASS_LUMINANCE_RANGE, 0.0, 1.0) * np.clip(
                 (GLASS_SATURATION_MAX - saturation) / GLASS_SATURATION_RANGE, 0.0, 1.0
             )
             glass_mask = gaussian_filter(glass_mask, sigma=GLASS_GAUSSIAN_SIGMA)
@@ -675,9 +647,7 @@ class MaterialResponseStage(AsyncStage[ImageData, ImageData]):
         enhanced = array.copy()
 
         # 1. High-frequency texture boost (reveals grain and fabric weave)
-        blurred = gaussian_filter(
-            array, sigma=(1.2, 1.2, 0) if len(array.shape) == 3 else 1.2
-        )
+        blurred = gaussian_filter(array, sigma=(1.2, 1.2, 0) if len(array.shape) == 3 else 1.2)
         texture_detail = array - blurred
         texture_boost = 0.25 * intensity * midtone_mask[..., np.newaxis]
         enhanced = np.clip(enhanced + texture_boost * texture_detail, 0.0, 1.0)
@@ -690,12 +660,8 @@ class MaterialResponseStage(AsyncStage[ImageData, ImageData]):
             if grain.max() > 0:
                 grain = grain / grain.max()
             warm_wood = np.array([0.88, 0.76, 0.60], dtype=np.float32)
-            wood_enhance = (
-                0.15 * intensity * wood_mask[..., np.newaxis] * grain[..., np.newaxis]
-            )
-            enhanced = np.clip(
-                enhanced + wood_enhance * (warm_wood - enhanced), 0.0, 1.0
-            )
+            wood_enhance = 0.15 * intensity * wood_mask[..., np.newaxis] * grain[..., np.newaxis]
+            enhanced = np.clip(enhanced + wood_enhance * (warm_wood - enhanced), 0.0, 1.0)
 
         # 3. Metal specular enhancement (preserve reflections, add sheen)
         if "metal" in self._materials and metal_mask.max() > 0.01 and is_rgb:
@@ -703,34 +669,21 @@ class MaterialResponseStage(AsyncStage[ImageData, ImageData]):
             specular = gaussian_filter(luminance * metal_mask, sigma=2.0)
             specular = np.clip((specular - 0.4) / 0.5, 0.0, 1.0)
             cool_metal = np.array([0.92, 0.94, 0.98], dtype=np.float32)
-            metal_enhance = (
-                0.12
-                * intensity
-                * metal_mask[..., np.newaxis]
-                * specular[..., np.newaxis]
-            )
-            enhanced = np.clip(
-                enhanced + metal_enhance * (cool_metal - enhanced), 0.0, 1.0
-            )
+            metal_enhance = 0.12 * intensity * metal_mask[..., np.newaxis] * specular[..., np.newaxis]
+            enhanced = np.clip(enhanced + metal_enhance * (cool_metal - enhanced), 0.0, 1.0)
 
         # 4. Glass clarity enhancement (subtle edge sharpening, reflection)
         if "glass" in self._materials and glass_mask.max() > 0.01:
-            glass_edges = np.abs(sobel(luminance, axis=0)) + np.abs(
-                sobel(luminance, axis=1)
-            )
+            glass_edges = np.abs(sobel(luminance, axis=0)) + np.abs(sobel(luminance, axis=1))
             glass_edges = gaussian_filter(glass_edges, sigma=0.8)
             if glass_edges.max() > 0:
                 glass_edges = glass_edges / glass_edges.max()
             glass_enhance = 0.08 * intensity * glass_mask[..., np.newaxis]
-            enhanced = np.clip(
-                enhanced + glass_enhance * glass_edges[..., np.newaxis], 0.0, 1.0
-            )
+            enhanced = np.clip(enhanced + glass_enhance * glass_edges[..., np.newaxis], 0.0, 1.0)
 
         # 5. Textile softness (micro-contrast for fabric texture)
         if "textile" in self._materials and textile_mask.max() > 0.01:
-            textile_detail = array - gaussian_filter(
-                array, sigma=(1.5, 1.5, 0) if len(array.shape) == 3 else 1.5
-            )
+            textile_detail = array - gaussian_filter(array, sigma=(1.5, 1.5, 0) if len(array.shape) == 3 else 1.5)
             textile_enhance = 0.18 * intensity * textile_mask[..., np.newaxis]
             enhanced = np.clip(enhanced + textile_enhance * textile_detail, 0.0, 1.0)
 
@@ -745,9 +698,7 @@ class MaterialResponseStage(AsyncStage[ImageData, ImageData]):
             edge_mag = edge_mag / edge_mag.max()
         occlusion = gaussian_filter(edge_mag, sigma=1.5)
         ao_strength = 0.1 * intensity
-        enhanced = np.clip(
-            enhanced * (1.0 - ao_strength * occlusion[..., np.newaxis]), 0.0, 1.0
-        )
+        enhanced = np.clip(enhanced * (1.0 - ao_strength * occlusion[..., np.newaxis]), 0.0, 1.0)
 
         # 8. Transition blending (smooth material boundaries)
         # Apply final gaussian smoothing to mask edges
@@ -849,11 +800,7 @@ class ColorGradingStage(AsyncStage[ImageData, ImageData]):
                     line = line.strip()
                     if line.startswith("LUT_3D_SIZE"):
                         lut_size = int(line.split()[-1])
-                    elif (
-                        line
-                        and not line.startswith("#")
-                        and not line.startswith("TITLE")
-                    ):
+                    elif line and not line.startswith("#") and not line.startswith("TITLE"):
                         parts = line.split()
                         if len(parts) == 3:
                             try:
@@ -864,9 +811,7 @@ class ColorGradingStage(AsyncStage[ImageData, ImageData]):
 
             if lut_size > 0 and len(lut_data) == lut_size**3:
                 # pylint: disable=too-many-function-args  # numpy reshape accepts multiple positional args
-                self._lut_data = np.array(lut_data).reshape(
-                    lut_size, lut_size, lut_size, 3
-                )
+                self._lut_data = np.array(lut_data).reshape(lut_size, lut_size, lut_size, 3)
         except Exception:
             self._lut_data = None
 
@@ -970,8 +915,8 @@ class ResizeStage(AsyncStage[ImageData, ImageData]):
 
     def _resize_sync(self, image_data: ImageData) -> ImageData:
         """Synchronous image resizing."""
-        from PIL import Image
         import numpy as np
+        from PIL import Image
 
         array = image_data.array
         original_dtype = array.dtype
@@ -1089,9 +1034,7 @@ class DenoiseStage(AsyncStage[ImageData, ImageData]):
         base_sigma = self._strength * 2.0
 
         if self._use_depth and image_data.depth_map is not None:
-            array = self._apply_depth_adaptive_denoise(
-                array, image_data.depth_map, base_sigma
-            )
+            array = self._apply_depth_adaptive_denoise(array, image_data.depth_map, base_sigma)
         else:
             array = self._apply_simple_denoise(array, base_sigma)
 
@@ -1211,9 +1154,7 @@ def create_luxury_pipeline_stages(
     if enable_color_grading:
         stages.append(ColorGradingStage(lut_path=lut_path, max_concurrent=4))
 
-    stages.append(
-        ImageSaveStage(output_dir=output_dir, output_format="TIFF", max_concurrent=4)
-    )
+    stages.append(ImageSaveStage(output_dir=output_dir, output_format="TIFF", max_concurrent=4))
 
     return stages
 

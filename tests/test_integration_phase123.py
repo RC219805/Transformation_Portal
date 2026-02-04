@@ -6,43 +6,45 @@ Validates:
 - Phases work together correctly
 - Manifest format backward compatibility
 """
+
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
+
 import numpy as np
 import pytest
 from PIL import Image
 
 from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+from transformation_portal.lux_depth_v3.inference import DepthResult
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
 from transformation_portal.lux_depth_v3.manifest import CombinedManifest, InputMetadata
 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
-from transformation_portal.lux_depth_v3.inference import DepthResult
-
 
 # ============================================================================
 # Shared Test Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def mock_depth_result():
     """Create a realistic mock DepthResult with proper array shapes."""
+
     def _create(height=256, width=256):
         depth_map = np.random.rand(height, width).astype(np.float32)
         original_image = np.random.rand(height, width, 3).astype(np.float32)
-        return DepthResult(
-            depth_map=depth_map,
-            original_image=original_image,
-            metadata={"model": "mock", "backend": "test"}
-        )
+        return DepthResult(depth_map=depth_map, original_image=original_image, metadata={"model": "mock", "backend": "test"})
+
     return _create
 
 
 @pytest.fixture(autouse=True)
 def mock_inference_and_postprocessor(mock_depth_result):
     """Auto-setup mocks for all integration tests."""
-    with patch('transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine') as mock_engine_class, \
-         patch('transformation_portal.lux_depth_v3.orchestrator.Postprocessor') as mock_proc_class:
+    with (
+        patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine") as mock_engine_class,
+        patch("transformation_portal.lux_depth_v3.orchestrator.Postprocessor") as mock_proc_class,
+    ):
 
         # Configure inference engine mock
         mock_engine = MagicMock()
@@ -64,7 +66,7 @@ class TestPhase123Integration:
         """Ensure all optimizations can be disabled (sequential fallback)."""
         # Create test image
         img_path = tmp_path / "test.jpg"
-        img = Image.new('RGB', (256, 256), color=(128, 128, 128))
+        img = Image.new("RGB", (256, 256), color=(128, 128, 128))
         img.save(img_path, quality=95)
 
         config = EnhanceConfig(
@@ -81,15 +83,15 @@ class TestPhase123Integration:
         result = orch.enhance_image(ImageInput(img_path))
 
         # Verify: works correctly with all optimizations disabled
-        assert result['status'] == 'ok'
-        assert 'depth_path' in result
-        assert 'manifest' in result
+        assert result["status"] == "ok"
+        assert "depth_path" in result
+        assert "manifest" in result
 
     def test_phase1_only_enabled(self, tmp_path):
         """Test Phase 1 optimizations in isolation."""
         # Create test image
         img_path = tmp_path / "test.jpg"
-        img = Image.new('RGB', (256, 256), color=(128, 128, 128))
+        img = Image.new("RGB", (256, 256), color=(128, 128, 128))
         img.save(img_path, quality=95)
 
         config = EnhanceConfig(
@@ -110,8 +112,8 @@ class TestPhase123Integration:
         result2 = orch.enhance_image(ImageInput(img_path))
 
         # Verify: Phase 1 features work
-        assert result1['status'] == 'ok'
-        assert result2['status'] == 'ok'
+        assert result1["status"] == "ok"
+        assert result2["status"] == "ok"
 
     def test_phase1_phase2_enabled(self, tmp_path):
         """Test Phase 1+2 work together."""
@@ -120,7 +122,7 @@ class TestPhase123Integration:
         for i in range(5):
             img_path = tmp_path / "input" / f"test_{i}.jpg"
             img_path.parent.mkdir(parents=True, exist_ok=True)
-            img = Image.new('RGB', (256, 256), color=(i*50, i*50, i*50))
+            img = Image.new("RGB", (256, 256), color=(i * 50, i * 50, i * 50))
             img.save(img_path, quality=95)
             test_images.append(ImageInput(img_path))
 
@@ -144,7 +146,7 @@ class TestPhase123Integration:
 
         # Verify: caching + parallelization work together
         assert len(results) == 5
-        assert all(r.get('status') in ['ok', 'skipped'] for r in results)
+        assert all(r.get("status") in ["ok", "skipped"] for r in results)
 
     def test_all_optimizations_enabled(self, tmp_path):
         """Test Phase 1+2+3 all enabled."""
@@ -153,7 +155,7 @@ class TestPhase123Integration:
         for i in range(5):
             img_path = tmp_path / "input" / f"test_{i}.jpg"
             img_path.parent.mkdir(parents=True, exist_ok=True)
-            img = Image.new('RGB', (256, 256), color=(i*50, i*50, i*50))
+            img = Image.new("RGB", (256, 256), color=(i * 50, i * 50, i * 50))
             img.save(img_path, quality=95)
             test_images.append(ImageInput(img_path))
 
@@ -178,7 +180,7 @@ class TestPhase123Integration:
 
         # Verify: all optimizations coexist correctly
         assert len(results) == 5
-        assert all(r.get('status') in ['ok', 'skipped'] for r in results)
+        assert all(r.get("status") in ["ok", "skipped"] for r in results)
 
         # Verify PBR maps were generated
         pbr_dir = tmp_path / "output" / "pbr"
@@ -194,22 +196,15 @@ class TestPhase123Integration:
 
         manifest = CombinedManifest(
             input=InputMetadata(
-                image_path="test.jpg",
-                image_sha256="abc123",
-                image_size_bytes=1000,
-                image_dimensions=[100, 100]
+                image_path="test.jpg", image_sha256="abc123", image_size_bytes=1000, image_dimensions=[100, 100]
             ),
             pbr_assets={
                 "normal_path": "/path/to/normal.png",
                 "roughness_path": "/path/to/roughness.png",
                 "ao_path": "/path/to/ao.png",
                 "runtime_seconds": 0.5,
-                "config": {
-                    "normal_strength": 1.0,
-                    "roughness_strength": 0.8,
-                    "ao_strength": 0.5
-                }
-            }
+                "config": {"normal_strength": 1.0, "roughness_strength": 0.8, "ao_strength": 0.5},
+            },
         )
         manifest.write(manifest_path)
 
@@ -220,9 +215,9 @@ class TestPhase123Integration:
         assert loaded.input.image_sha256 == "abc123"
 
         # Verify: new fields are preserved
-        assert hasattr(loaded, 'pbr_assets')
+        assert hasattr(loaded, "pbr_assets")
         if loaded.pbr_assets:
-            assert 'normal_path' in loaded.pbr_assets
+            assert "normal_path" in loaded.pbr_assets
 
     def test_config_default_values_backward_compatible(self):
         """Ensure EnhanceConfig without new flags uses safe defaults."""
@@ -251,7 +246,7 @@ class TestGracefulDegradation:
         """Test graceful fallback when xxhash is unavailable."""
         # Create test image
         img_path = tmp_path / "test.jpg"
-        img = Image.new('RGB', (256, 256), color=(128, 128, 128))
+        img = Image.new("RGB", (256, 256), color=(128, 128, 128))
         img.save(img_path, quality=95)
 
         config = EnhanceConfig(
@@ -261,12 +256,12 @@ class TestGracefulDegradation:
         )
 
         # Patch xxhash as unavailable (it's defined in orchestrator module)
-        with patch('transformation_portal.lux_depth_v3.orchestrator.XXHASH_AVAILABLE', False):
+        with patch("transformation_portal.lux_depth_v3.orchestrator.XXHASH_AVAILABLE", False):
             orch = EnhanceOrchestrator(config, tmp_path / "output")
             result = orch.enhance_image(ImageInput(img_path))
 
         # Verify: falls back to SHA-256, still works
-        assert result['status'] == 'ok'
+        assert result["status"] == "ok"
 
     def test_msgpack_unavailable_fallback(self, tmp_path):
         """Test graceful fallback when msgpack is unavailable."""
@@ -274,15 +269,12 @@ class TestGracefulDegradation:
 
         manifest = CombinedManifest(
             input=InputMetadata(
-                image_path="test.jpg",
-                image_sha256="abc123",
-                image_size_bytes=1000,
-                image_dimensions=[100, 100]
+                image_path="test.jpg", image_sha256="abc123", image_size_bytes=1000, image_dimensions=[100, 100]
             )
         )
 
         # Patch msgpack as unavailable
-        with patch('transformation_portal.lux_depth_v3.manifest.MSGPACK_AVAILABLE', False):
+        with patch("transformation_portal.lux_depth_v3.manifest.MSGPACK_AVAILABLE", False):
             # Write manifest (should use JSON fallback)
             manifest.write(manifest_path)
 
@@ -300,7 +292,7 @@ class TestRegressionPrevention:
     def test_single_image_workflow_unchanged(self, tmp_path):
         """Ensure single-image workflow behavior unchanged."""
         img_path = tmp_path / "test.jpg"
-        img = Image.new('RGB', (256, 256), color=(128, 128, 128))
+        img = Image.new("RGB", (256, 256), color=(128, 128, 128))
         img.save(img_path, quality=95)
 
         # Use default config (all optimizations enabled)
@@ -313,14 +305,14 @@ class TestRegressionPrevention:
         result = orch.enhance_image(ImageInput(img_path))
 
         # Verify: single-image processing works as before
-        assert result['status'] == 'ok'
-        assert 'depth_path' in result
-        assert 'manifest' in result
-        assert 'runtime_s' in result
+        assert result["status"] == "ok"
+        assert "depth_path" in result
+        assert "manifest" in result
+        assert "runtime_s" in result
 
         # Verify outputs exist
-        depth_path = Path(result['depth_path'])
-        manifest_path = Path(result['manifest'])
+        depth_path = Path(result["depth_path"])
+        manifest_path = Path(result["manifest"])
         assert depth_path.exists()
         assert manifest_path.exists()
 
@@ -331,7 +323,7 @@ class TestRegressionPrevention:
         for i in range(10):
             img_path = tmp_path / "input" / f"test_{i}.jpg"
             img_path.parent.mkdir(parents=True, exist_ok=True)
-            img = Image.new('RGB', (256, 256), color=(i*25, i*25, i*25))
+            img = Image.new("RGB", (256, 256), color=(i * 25, i * 25, i * 25))
             img.save(img_path, quality=95)
             test_images.append(ImageInput(img_path))
 
@@ -346,13 +338,13 @@ class TestRegressionPrevention:
 
         # Verify: all images processed correctly
         assert len(results) == 10
-        assert all(r.get('status') in ['ok', 'skipped'] for r in results)
+        assert all(r.get("status") in ["ok", "skipped"] for r in results)
 
         # Verify: each image has depth and manifest
         for result in results:
-            if result['status'] == 'ok':
-                assert 'depth_path' in result or result.get('depth_path') is not None
-                assert 'manifest' in result
+            if result["status"] == "ok":
+                assert "depth_path" in result or result.get("depth_path") is not None
+                assert "manifest" in result
 
 
 if __name__ == "__main__":

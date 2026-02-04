@@ -6,10 +6,10 @@ protocol for swappable, governed model execution.
 """
 
 from .depth_model import (
-    DepthModel,
-    BackendRole,
     BackendCapability,
     BackendInfo,
+    BackendRole,
+    DepthModel,
     DepthModelRegistry,
 )
 

@@ -24,9 +24,7 @@ def validate_path(path: Union[str, Path], base_dir: Union[str, Path]) -> Path:
     try:
         path.relative_to(base_dir)
     except ValueError:
-        raise ValueError(
-            f"Path traversal detected: {path} is not under {base_dir}"
-        )
+        raise ValueError(f"Path traversal detected: {path} is not under {base_dir}")
 
     return path
 
@@ -42,7 +40,4 @@ def validate_image_extension(path: Path, allowed_extensions: tuple) -> None:
         ValueError: If extension is not allowed
     """
     if path.suffix.lower() not in allowed_extensions:
-        raise ValueError(
-            f"Invalid file extension: {path.suffix}. "
-            f"Allowed: {allowed_extensions}"
-        )
+        raise ValueError(f"Invalid file extension: {path.suffix}. " f"Allowed: {allowed_extensions}")

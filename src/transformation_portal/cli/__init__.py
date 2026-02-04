@@ -108,12 +108,8 @@ analyze_app = typer.Typer(
 def render_lux(
     input_path: Path = typer.Option(..., "--input", "-i", help="Input image path"),
     output_dir: Path = typer.Option(..., "--output", "-o", help="Output directory"),
-    prompt: Optional[str] = typer.Option(
-        None, "--prompt", "-p", help="Enhancement prompt"
-    ),
-    strength: float = typer.Option(
-        0.7, "--strength", "-s", help="Enhancement strength (0.0-1.0)"
-    ),
+    prompt: Optional[str] = typer.Option(None, "--prompt", "-p", help="Enhancement prompt"),
+    strength: float = typer.Option(0.7, "--strength", "-s", help="Enhancement strength (0.0-1.0)"),
     upscale: bool = typer.Option(False, "--upscale", "-u", help="Apply 4x upscaling"),
 ):
     """Run Lux Render Pipeline for AI-powered enhancement.
@@ -131,9 +127,7 @@ def render_lux(
         raise typer.Exit(code=1)
 
     # Verify pipeline module is available
-    check_module_availability(
-        "transformation_portal.pipelines.lux_render_pipeline", "Lux Render Pipeline"
-    )
+    check_module_availability("transformation_portal.pipelines.lux_render_pipeline", "Lux Render Pipeline")
     typer.echo("✅ Pipeline module loaded successfully")
     typer.echo("⚠️  Note: Full pipeline execution requires ML dependencies")
     typer.echo("   Install with: pip install -e '.[ml]'")
@@ -160,9 +154,7 @@ def render_depth(
         raise typer.Exit(code=1)
 
     # Verify depth tools module is available
-    check_module_availability(
-        "transformation_portal.pipelines.depth_tools", "Depth Tools"
-    )
+    check_module_availability("transformation_portal.pipelines.depth_tools", "Depth Tools")
     typer.echo("✅ Depth tools module loaded successfully")
 
 
@@ -175,9 +167,7 @@ def render_depth(
 def process_material(
     input_path: Path = typer.Option(..., "--input", "-i", help="Input image path"),
     output_path: Path = typer.Option(..., "--output", "-o", help="Output image path"),
-    strength: float = typer.Option(
-        0.7, "--strength", "-s", help="Enhancement strength (0.0-1.0)"
-    ),
+    strength: float = typer.Option(0.7, "--strength", "-s", help="Enhancement strength (0.0-1.0)"),
     surfaces: Optional[str] = typer.Option(
         None,
         "--surfaces",
@@ -199,9 +189,7 @@ def process_material(
         raise typer.Exit(code=1)
 
     # Verify Material Response module is available
-    check_module_availability(
-        "transformation_portal.processors.material_response.core", "Material Response"
-    )
+    check_module_availability("transformation_portal.processors.material_response.core", "Material Response")
     typer.echo("✅ Material Response module loaded successfully")
 
 
@@ -209,12 +197,8 @@ def process_material(
 def process_video(
     input_path: Path = typer.Option(..., "--input", "-i", help="Input video path"),
     output_path: Path = typer.Option(..., "--output", "-o", help="Output video path"),
-    preset: str = typer.Option(
-        "signature_estate", "--preset", "-p", help="Grading preset"
-    ),
-    lut_strength: float = typer.Option(
-        0.7, "--lut-strength", help="LUT strength (0.0-1.0)"
-    ),
+    preset: str = typer.Option("signature_estate", "--preset", "-p", help="Grading preset"),
+    lut_strength: float = typer.Option(0.7, "--lut-strength", help="LUT strength (0.0-1.0)"),
 ):
     """Process video with Luxury Video Master Grader.
 
@@ -244,9 +228,7 @@ def process_tiff(
     input_dir: Path = typer.Option(..., "--input", "-i", help="Input directory"),
     output_dir: Path = typer.Option(..., "--output", "-o", help="Output directory"),
     preset: str = typer.Option("signature", "--preset", "-p", help="Processing preset"),
-    recursive: bool = typer.Option(
-        False, "--recursive", "-r", help="Process subdirectories"
-    ),
+    recursive: bool = typer.Option(False, "--recursive", "-r", help="Process subdirectories"),
 ):
     """Process TIFF images with Luxury TIFF Batch Processor.
 
@@ -275,9 +257,7 @@ def process_tiff(
 @analyze_app.command("philosophy")
 def analyze_philosophy(
     path: Path = typer.Option(".", "--path", "-p", help="Path to analyze"),
-    output: Optional[Path] = typer.Option(
-        None, "--output", "-o", help="Output report path"
-    ),
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output report path"),
 ):
     """Run codebase philosophy auditor.
 
@@ -302,9 +282,7 @@ def analyze_philosophy(
 @analyze_app.command("decay")
 def analyze_decay(
     path: Path = typer.Option(".", "--path", "-p", help="Path to analyze"),
-    threshold_days: int = typer.Option(
-        90, "--threshold", "-t", help="Decay threshold in days"
-    ),
+    threshold_days: int = typer.Option(90, "--threshold", "-t", help="Decay threshold in days"),
 ):
     """Run decision decay dashboard.
 
@@ -329,9 +307,7 @@ def analyze_decay(
 
 @analyze_app.command("workflow")
 def analyze_workflow(
-    path: Path = typer.Option(
-        ".github/workflows", "--path", "-p", help="Workflows directory"
-    ),
+    path: Path = typer.Option(".github/workflows", "--path", "-p", help="Workflows directory"),
 ):
     """Parse and analyze GitHub Actions workflows.
 
@@ -346,9 +322,7 @@ def analyze_workflow(
         raise typer.Exit(code=1)
 
     # Verify workflow parser module is available
-    check_module_availability(
-        "transformation_portal.analyzers.parse_workflows", "Workflow Parser"
-    )
+    check_module_availability("transformation_portal.analyzers.parse_workflows", "Workflow Parser")
     typer.echo("✅ Workflow parser module loaded successfully")
 
 
@@ -385,14 +359,10 @@ pipeline_app = typer.Typer(
 
 @pipeline_app.command("process")
 def process_command(
-    input_glob: str = typer.Option(
-        ..., "--input", "-i", help="Input glob pattern (e.g., 'inputs/*.jpg')"
-    ),
+    input_glob: str = typer.Option(..., "--input", "-i", help="Input glob pattern (e.g., 'inputs/*.jpg')"),
     output_dir: Path = typer.Option(..., "--output", "-o", help="Output directory"),
     recipe: Path = typer.Option(..., "--recipe", "-r", help="Recipe YAML file path"),
-    dry_run: bool = typer.Option(
-        False, "--dry-run", "-n", help="Preview processing plan without executing"
-    ),
+    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Preview processing plan without executing"),
 ):
     """Run unified enhancement pipeline with recipe.
 
@@ -433,9 +403,7 @@ def process_command(
 
 @pipeline_app.command("list-recipes")
 def pipeline_list_recipes(
-    recipes_dir: Path = typer.Option(
-        Path("config/recipes"), "--dir", "-d", help="Recipes directory path"
-    ),
+    recipes_dir: Path = typer.Option(Path("config/recipes"), "--dir", "-d", help="Recipes directory path"),
 ):
     """List all available recipe presets.
 
@@ -486,9 +454,7 @@ def pipeline_list_recipes(
 @pipeline_app.command("validate-recipe")
 def pipeline_validate_recipe(
     recipe_path: Path = typer.Argument(..., help="Recipe YAML file to validate"),
-    verbose: bool = typer.Option(
-        False, "--verbose", "-v", help="Show detailed validation results"
-    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed validation results"),
 ):
     """Validate a recipe configuration.
 
@@ -506,9 +472,9 @@ def pipeline_validate_recipe(
 
     try:
         from transformation_portal.config_loader import (
+            get_recipe_info,
             load_recipe,
             validate_recipe,
-            get_recipe_info,
         )
 
         # Load the recipe
@@ -524,9 +490,7 @@ def pipeline_validate_recipe(
             typer.echo(f"  Description: {info.get('description', 'None')}")
             typer.echo(f"  Stages: {', '.join(info.get('stages', []))}")
             typer.echo(f"  Has Depth: {info.get('has_depth', False)}")
-            typer.echo(
-                f"  Has Material Response: {info.get('has_material_response', False)}"
-            )
+            typer.echo(f"  Has Material Response: {info.get('has_material_response', False)}")
             typer.echo(f"  Has Color Grading: {info.get('has_color_grading', False)}")
             typer.echo(f"  Output Format: {info.get('output_format', 'unknown')}")
             typer.echo()

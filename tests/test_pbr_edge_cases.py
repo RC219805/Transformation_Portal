@@ -11,16 +11,17 @@ This test suite validates:
 Coverage target: Issue #4 from PBR Implementation Audit
 """
 
-import pytest
-import numpy as np
-from pathlib import Path
-import tempfile
 import shutil
+import tempfile
+from pathlib import Path
+
+import numpy as np
+import pytest
 from PIL import Image
 
-from transformation_portal.lux_depth_v3.pbr_processor import PBRProcessor
 from transformation_portal.lux_depth_v3.pbr import PBRConfig, generate_pbr_maps
 from transformation_portal.lux_depth_v3.pbr_presets import get_preset
+from transformation_portal.lux_depth_v3.pbr_processor import PBRProcessor
 
 
 @pytest.fixture
@@ -123,12 +124,7 @@ class TestMissingAndCorruptedFiles:
         config = PBRConfig()
 
         with pytest.raises((FileNotFoundError, ValueError)):
-            PBRProcessor.from_cached_depth(
-                depth_path=missing_path,
-                config=config,
-                output_dir=temp_dir,
-                base_name="test"
-            )
+            PBRProcessor.from_cached_depth(depth_path=missing_path, config=config, output_dir=temp_dir, base_name="test")
 
     def test_corrupted_npy_file_raises_error(self, temp_dir):
         """Test loading from corrupted .npy file raises error."""
@@ -139,12 +135,7 @@ class TestMissingAndCorruptedFiles:
         config = PBRConfig()
 
         with pytest.raises((ValueError, IOError, OSError)):
-            PBRProcessor.from_cached_depth(
-                depth_path=corrupt_path,
-                config=config,
-                output_dir=temp_dir,
-                base_name="test"
-            )
+            PBRProcessor.from_cached_depth(depth_path=corrupt_path, config=config, output_dir=temp_dir, base_name="test")
 
     def test_wrong_dtype_depth_file(self, temp_dir):
         """Test loading depth file with wrong dtype."""
@@ -158,10 +149,7 @@ class TestMissingAndCorruptedFiles:
         # Should handle dtype conversion gracefully
         try:
             paths = PBRProcessor.from_cached_depth(
-                depth_path=wrong_dtype_path,
-                config=config,
-                output_dir=temp_dir,
-                base_name="test"
+                depth_path=wrong_dtype_path, config=config, output_dir=temp_dir, base_name="test"
             )
             # If it succeeds, verify output
             assert paths["normal"].exists()
@@ -177,12 +165,7 @@ class TestMissingAndCorruptedFiles:
         config = PBRConfig()
 
         with pytest.raises((ValueError, IOError, OSError, EOFError)):
-            PBRProcessor.from_cached_depth(
-                depth_path=empty_path,
-                config=config,
-                output_dir=temp_dir,
-                base_name="test"
-            )
+            PBRProcessor.from_cached_depth(depth_path=empty_path, config=config, output_dir=temp_dir, base_name="test")
 
 
 class TestInvalidConfigurations:
@@ -192,11 +175,7 @@ class TestInvalidConfigurations:
         """Test negative strength parameters are handled."""
         # Should not crash or accept silently
         try:
-            config = PBRConfig(
-                normal_strength=-1.0,
-                roughness_strength=-0.5,
-                ao_strength=-2.0
-            )
+            config = PBRConfig(normal_strength=-1.0, roughness_strength=-0.5, ao_strength=-2.0)
             # If allowed, behavior should be defined
             assert config.normal_strength == -1.0
         except ValueError:
@@ -206,11 +185,7 @@ class TestInvalidConfigurations:
     def test_zero_strength_parameters(self):
         """Test zero strength parameters produce neutral output."""
         depth = np.random.rand(128, 128).astype(np.float32)
-        config = PBRConfig(
-            normal_strength=0.0,
-            roughness_strength=0.0,
-            ao_strength=0.0
-        )
+        config = PBRConfig(normal_strength=0.0, roughness_strength=0.0, ao_strength=0.0)
 
         # Should produce minimal effect
         normal, roughness, ao = generate_pbr_maps(depth, config)
@@ -219,11 +194,7 @@ class TestInvalidConfigurations:
     def test_extreme_blur_radius(self):
         """Test very large blur radius doesn't crash."""
         depth = np.random.rand(128, 128).astype(np.float32)
-        config = PBRConfig(
-            normal_blur_radius=99,
-            roughness_blur_radius=99,
-            ao_blur_radius=99
-        )
+        config = PBRConfig(normal_blur_radius=99, roughness_blur_radius=99, ao_blur_radius=99)
 
         # Should not crash
         normal, roughness, ao = generate_pbr_maps(depth, config)
@@ -326,6 +297,7 @@ class TestSaveErrorHandling:
 
         # Make directory read-only (platform-specific)
         import os
+
         try:
             os.chmod(temp_dir, 0o444)
 
@@ -382,20 +354,10 @@ class TestConcurrentAccess:
         np.save(str(depth_path), depth)
 
         # Write first time
-        paths1 = PBRProcessor.from_cached_depth(
-            depth_path=depth_path,
-            config=config,
-            output_dir=temp_dir,
-            base_name="output"
-        )
+        paths1 = PBRProcessor.from_cached_depth(depth_path=depth_path, config=config, output_dir=temp_dir, base_name="output")
 
         # Second write should overwrite (depth already exists)
-        paths2 = PBRProcessor.from_cached_depth(
-            depth_path=depth_path,
-            config=config,
-            output_dir=temp_dir,
-            base_name="output"
-        )
+        paths2 = PBRProcessor.from_cached_depth(depth_path=depth_path, config=config, output_dir=temp_dir, base_name="output")
 
         # Paths should be identical
         assert paths1 == paths2
@@ -430,10 +392,7 @@ class TestOutputValidation:
 
         config = PBRConfig()
         paths = PBRProcessor.from_cached_depth(
-            depth_path=temp_dir / "test.npy",
-            config=config,
-            output_dir=temp_dir,
-            base_name="test"
+            depth_path=temp_dir / "test.npy", config=config, output_dir=temp_dir, base_name="test"
         )
 
         # Verify PNG files can be loaded

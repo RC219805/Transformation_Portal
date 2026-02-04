@@ -7,6 +7,7 @@ Provides generic validation logic for ensuring data integrity before processing.
 from dataclasses import dataclass
 from typing import Any, List, Optional
 
+
 @dataclass
 class ValidationResult:
     valid: bool
@@ -17,13 +18,16 @@ class ValidationResult:
     def has_errors(self) -> bool:
         return len(self.errors) > 0
 
+
 class ValidationError(ValueError):
     """Raised when critical validation fails."""
+
     pass
+
 
 class InputValidator:
     """Base validator class."""
-    
+
     @staticmethod
     def check_not_empty(value: Any, field_name: str) -> Optional[str]:
         if value is None or (isinstance(value, (str, list, dict)) and not value):

@@ -4,16 +4,17 @@ These tests verify that the PBR module from lux_depth_v3 is correctly
 integrated into the canonical depth pipeline.
 """
 
+import tempfile
+from pathlib import Path
+
 import numpy as np
 import pytest
-from pathlib import Path
-import tempfile
 
 from transformation_portal.depth_canonical import (
     DepthPipeline,
-    UnifiedDepthConfig,
-    ProcessingConfig,
     PBRConfig,
+    ProcessingConfig,
+    UnifiedDepthConfig,
     generate_pbr_maps,
     write_pbr_maps,
 )
@@ -42,13 +43,16 @@ def test_generate_pbr_maps_flat_depth_normal_is_up():
     assert center[:, :, 2].mean() > 250, "Z channel should be ~255 (up vector)"
 
 
-@pytest.mark.parametrize("shape", [
-    (256, 256),
-    (512, 512),
-    (128, 256),  # Non-square
-    (100, 100),  # Small
-    (1024, 768),  # HD-like
-])
+@pytest.mark.parametrize(
+    "shape",
+    [
+        (256, 256),
+        (512, 512),
+        (128, 256),  # Non-square
+        (100, 100),  # Small
+        (1024, 768),  # HD-like
+    ],
+)
 def test_generate_pbr_maps_output_shapes_match_input(shape):
     """CRITICAL: Output maps must have SAME dimensions as input depth."""
     h, w = shape
@@ -97,10 +101,7 @@ def test_generate_pbr_maps_ao_independent_of_normal_strength():
     _, _, ao_strong = generate_pbr_maps(depth, config_strong)
 
     # AO maps should be IDENTICAL despite different normal_strength
-    np.testing.assert_array_equal(
-        ao_weak, ao_strong,
-        err_msg="AO must be independent of normal_strength"
-    )
+    np.testing.assert_array_equal(ao_weak, ao_strong, err_msg="AO must be independent of normal_strength")
 
 
 def test_generate_pbr_maps_input_validation_2d():
@@ -160,11 +161,7 @@ def test_write_pbr_maps_creates_pngs_atomically():
 
 def test_depth_pipeline_with_pbr_disabled():
     """Test DepthPipeline with PBR disabled."""
-    config = UnifiedDepthConfig(
-        processing=ProcessingConfig(
-            pbr=PBRConfig(enabled=False)
-        )
-    )
+    config = UnifiedDepthConfig(processing=ProcessingConfig(pbr=PBRConfig(enabled=False)))
     pipeline = DepthPipeline(config)
 
     depth = np.random.rand(256, 256).astype(np.float32)
@@ -182,11 +179,7 @@ def test_depth_pipeline_with_pbr_disabled():
 
 def test_depth_pipeline_with_pbr_enabled():
     """Test DepthPipeline generates PBR maps when enabled."""
-    config = UnifiedDepthConfig(
-        processing=ProcessingConfig(
-            pbr=PBRConfig(enabled=True, normal_strength=1.2)
-        )
-    )
+    config = UnifiedDepthConfig(processing=ProcessingConfig(pbr=PBRConfig(enabled=True, normal_strength=1.2)))
     pipeline = DepthPipeline(config)
 
     depth = np.random.rand(256, 256).astype(np.float32)
@@ -210,11 +203,7 @@ def test_depth_pipeline_with_pbr_enabled():
 
 def test_depth_pipeline_saves_pbr_maps_when_output_dir_provided():
     """Test DepthPipeline saves PBR maps to disk when output_dir is provided."""
-    config = UnifiedDepthConfig(
-        processing=ProcessingConfig(
-            pbr=PBRConfig(enabled=True)
-        )
-    )
+    config = UnifiedDepthConfig(processing=ProcessingConfig(pbr=PBRConfig(enabled=True)))
     pipeline = DepthPipeline(config)
 
     depth = np.random.rand(128, 128).astype(np.float32)
@@ -222,11 +211,7 @@ def test_depth_pipeline_saves_pbr_maps_when_output_dir_provided():
     with tempfile.TemporaryDirectory() as tmpdir:
         output_dir = Path(tmpdir)
 
-        result = pipeline.process(
-            depth_map=depth,
-            output_dir=output_dir,
-            basename="test_image"
-        )
+        result = pipeline.process(depth_map=depth, output_dir=output_dir, basename="test_image")
 
         # PBR paths should be set
         assert result.pbr_paths is not None
@@ -272,11 +257,7 @@ def test_depth_pipeline_validates_depth_map_dimensionality():
 
 def test_depth_pipeline_batch_processing():
     """Test DepthPipeline batch processing."""
-    config = UnifiedDepthConfig(
-        processing=ProcessingConfig(
-            pbr=PBRConfig(enabled=True)
-        )
-    )
+    config = UnifiedDepthConfig(processing=ProcessingConfig(pbr=PBRConfig(enabled=True)))
     pipeline = DepthPipeline(config)
 
     # Create batch of depth maps
@@ -290,11 +271,7 @@ def test_depth_pipeline_batch_processing():
     with tempfile.TemporaryDirectory() as tmpdir:
         output_dir = Path(tmpdir)
 
-        results = pipeline.process_batch(
-            image_paths=image_paths,
-            output_dir=output_dir,
-            depth_maps=depths
-        )
+        results = pipeline.process_batch(image_paths=image_paths, output_dir=output_dir, depth_maps=depths)
 
         # Check results
         assert len(results) == 3
@@ -320,11 +297,7 @@ def test_depth_pipeline_batch_requires_depth_maps():
 
         # Missing images should raise error
         with pytest.raises(ValueError, match="images parameter is required"):
-            pipeline.process_batch(
-                images=None,
-                output_dir=output_dir,
-                depth_maps=None
-            )
+            pipeline.process_batch(images=None, output_dir=output_dir, depth_maps=None)
 
 
 def test_depth_pipeline_batch_length_mismatch():
@@ -339,8 +312,4 @@ def test_depth_pipeline_batch_length_mismatch():
         output_dir = Path(tmpdir)
 
         with pytest.raises(ValueError, match="Length mismatch"):
-            pipeline.process_batch(
-                image_paths=image_paths,
-                output_dir=output_dir,
-                depth_maps=depths
-            )
+            pipeline.process_batch(image_paths=image_paths, output_dir=output_dir, depth_maps=depths)

@@ -6,6 +6,7 @@ Base contract for image enhancement algorithms.
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
+
 import numpy as np
 
 
@@ -95,9 +96,7 @@ class AdaptiveEnhancer(Enhancer):
         pass
 
     @abstractmethod
-    def enhance_adaptive(
-        self, image: np.ndarray, analysis: Optional[Dict[str, Any]] = None, **kwargs
-    ) -> np.ndarray:
+    def enhance_adaptive(self, image: np.ndarray, analysis: Optional[Dict[str, Any]] = None, **kwargs) -> np.ndarray:
         """
         Apply adaptive enhancement based on image analysis.
 

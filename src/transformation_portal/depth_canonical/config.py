@@ -9,6 +9,7 @@ from enum import Enum
 
 class DeviceType(str, Enum):
     """Canonical device enumeration for depth processing."""
+
     CPU = "cpu"
     CUDA = "cuda"
     MPS = "mps"
@@ -17,6 +18,7 @@ class DeviceType(str, Enum):
 
 class ModelVariant(Enum):
     """Supported depth estimation models."""
+
     # Depth Anything V2 models (via HuggingFace transformers)
     DA2_LARGE = "depth-anything-v2-large"
     DA2_BASE = "depth-anything-v2-base"
@@ -45,6 +47,7 @@ class PBRConfig:
         ao_blur_radius: Occlusion spread radius
         ao_bias: Brightness offset (0.0-1.0) - higher values prevent dark occlusion
     """
+
     enabled: bool = False
     normal_strength: float = 1.0
     normal_blur_radius: int = 0
@@ -58,6 +61,7 @@ class PBRConfig:
 @dataclass
 class ModelConfig:
     """Model selection and device configuration."""
+
     variant: ModelVariant = ModelVariant.DA3_SMALL
     device: DeviceType = DeviceType.CPU
     dtype: str = "float32"
@@ -66,6 +70,7 @@ class ModelConfig:
 @dataclass
 class ProcessingConfig:
     """Depth processing and enhancement configuration."""
+
     # Postprocessing
     apply_bilateral: bool = True
     bilateral_sigma_color: float = 10.0
@@ -91,6 +96,7 @@ class ProcessingConfig:
 @dataclass
 class IOConfig:
     """I/O and caching configuration."""
+
     cache_enabled: bool = True
     cache_size: int = 128
     output_format: str = "png"  # png, tiff
@@ -100,6 +106,7 @@ class IOConfig:
 @dataclass
 class SecurityConfig:
     """Security and validation configuration."""
+
     validate_paths: bool = True
     max_image_size: int = 8192  # Maximum dimension in pixels
     allowed_extensions: tuple = (".jpg", ".jpeg", ".png", ".tiff", ".tif")
@@ -120,6 +127,7 @@ class UnifiedDepthConfig:
         ... )
         >>> pipeline = DepthPipeline(config)
     """
+
     model: ModelConfig = field(default_factory=ModelConfig)
     processing: ProcessingConfig = field(default_factory=ProcessingConfig)
     io: IOConfig = field(default_factory=IOConfig)
@@ -145,6 +153,7 @@ class UnifiedDepthConfig:
             >>> config = UnifiedDepthConfig.from_preset("config/presets/my_preset.yaml")
         """
         from pathlib import Path
+
         import yaml
 
         def _coerce_enum(enum_cls, raw, field, preset_path):
@@ -158,13 +167,11 @@ class UnifiedDepthConfig:
                     return enum_cls(raw)
                 except ValueError as exc:
                     valid = ", ".join(e.value for e in enum_cls)
-                    raise ValueError(
-                        f"Invalid {field}='{raw}' in preset '{preset_path}'. Expected one of: {valid}"
-                    ) from exc
+                    raise ValueError(f"Invalid {field}='{raw}' in preset '{preset_path}'. Expected one of: {valid}") from exc
             raise ValueError(f"{field} must be a string or {enum_cls.__name__}, got {type(raw).__name__}")
 
         # Determine preset path
-        if preset_name.endswith(('.yaml', '.yml')):
+        if preset_name.endswith((".yaml", ".yml")):
             preset_path = Path(preset_name)
         else:
             # Look in config/presets/ directory
@@ -174,14 +181,11 @@ class UnifiedDepthConfig:
                 preset_path = Path(f"presets/{preset_name}.yaml")
 
         if not preset_path.exists():
-            raise FileNotFoundError(
-                f"Preset file not found: {preset_path}\n"
-                f"Looked in: config/presets/{preset_name}.yaml"
-            )
+            raise FileNotFoundError(f"Preset file not found: {preset_path}\n" f"Looked in: config/presets/{preset_name}.yaml")
 
         # Load YAML
         try:
-            with open(preset_path, 'r', encoding='utf-8') as f:
+            with open(preset_path, "r", encoding="utf-8") as f:
                 data = yaml.safe_load(f)
         except yaml.YAMLError as exc:
             raise ValueError(f"Invalid YAML in preset '{preset_path}': {exc}") from exc
@@ -190,10 +194,10 @@ class UnifiedDepthConfig:
             raise ValueError(f"Preset must be a dictionary, got {type(data).__name__}")
 
         # Parse configuration sections
-        model_data = data.get('model', {}).copy()
-        processing_data = data.get('processing', {}).copy()
-        io_data = data.get('io', {})
-        security_data = data.get('security', {})
+        model_data = data.get("model", {}).copy()
+        processing_data = data.get("processing", {}).copy()
+        io_data = data.get("io", {})
+        security_data = data.get("security", {})
 
         # Coerce enum fields in model_data
         if "variant" in model_data:
@@ -202,7 +206,7 @@ class UnifiedDepthConfig:
             model_data["device"] = _coerce_enum(DeviceType, model_data["device"], "model.device", preset_path)
 
         # Parse nested PBR config if present
-        pbr_data = processing_data.pop('pbr', {})
+        pbr_data = processing_data.pop("pbr", {})
 
         # Build config objects
         model_config = ModelConfig(**model_data) if model_data else ModelConfig()
@@ -213,12 +217,7 @@ class UnifiedDepthConfig:
         io_config = IOConfig(**io_data) if io_data else IOConfig()
         security_config = SecurityConfig(**security_data) if security_data else SecurityConfig()
 
-        return cls(
-            model=model_config,
-            processing=processing_config,
-            io=io_config,
-            security=security_config
-        )
+        return cls(model=model_config, processing=processing_config, io=io_config, security=security_config)
 
     def to_yaml(self, output_path: str = None) -> str:
         """Export configuration to YAML format.
@@ -234,19 +233,20 @@ class UnifiedDepthConfig:
             >>> yaml_str = config.to_yaml()
             >>> config.to_yaml("my_config.yaml")  # Write to file
         """
-        import yaml
-        from pathlib import Path
         from dataclasses import asdict
+        from pathlib import Path
+
+        import yaml
 
         # Convert to dictionary
         config_dict = {
-            'model': asdict(self.model),
-            'processing': {
-                **{k: v for k, v in asdict(self.processing).items() if k != 'pbr'},
-                'pbr': asdict(self.processing.pbr)
+            "model": asdict(self.model),
+            "processing": {
+                **{k: v for k, v in asdict(self.processing).items() if k != "pbr"},
+                "pbr": asdict(self.processing.pbr),
             },
-            'io': asdict(self.io),
-            'security': asdict(self.security)
+            "io": asdict(self.io),
+            "security": asdict(self.security),
         }
 
         # Convert enums to strings
@@ -266,6 +266,6 @@ class UnifiedDepthConfig:
 
         # Write to file if path provided
         if output_path:
-            Path(output_path).write_text(yaml_str, encoding='utf-8')
+            Path(output_path).write_text(yaml_str, encoding="utf-8")
 
         return yaml_str

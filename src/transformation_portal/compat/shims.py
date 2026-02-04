@@ -55,17 +55,13 @@ class LegacyAPIShim:
         return f"<LegacyAPIShim for {self._real_object!r}>"
 
 
-def create_compatibility_wrapper(
-    func: Callable[..., Any], old_name: str, new_name: str
-) -> Callable[..., Any]:
+def create_compatibility_wrapper(func: Callable[..., Any], old_name: str, new_name: str) -> Callable[..., Any]:
     """Create a wrapper function that warns when the old name is used."""
-    
+
     def wrapper(*args: Any, **kwargs: Any) -> Any:
-        logger.warning(
-            f"'{old_name}' is deprecated. Please use '{new_name}'."
-        )
+        logger.warning(f"'{old_name}' is deprecated. Please use '{new_name}'.")
         return func(*args, **kwargs)
-    
+
     wrapper.__name__ = old_name
     wrapper.__doc__ = f"Deprecated alias for {new_name}. {func.__doc__}"
     return wrapper

@@ -10,9 +10,9 @@ Provides ready-to-use workflows for luxury real estate enhancement:
 
 import logging
 from pathlib import Path
-from typing import Optional, List
+from typing import List, Optional
 
-from transformation_portal.comfyui.workflow_builder import WorkflowBuilder, Workflow
+from transformation_portal.comfyui.workflow_builder import Workflow, WorkflowBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +38,7 @@ class WorkflowTemplates:
         builder = WorkflowBuilder(name="Full Luxury Estate Enhancement")
 
         workflow = (
-            builder
-            .add_input(input_path)
+            builder.add_input(input_path)
             # Analysis phase
             .add_scene_analysis(detailed=True)
             .add_material_segmentation()
@@ -68,9 +67,7 @@ class WorkflowTemplates:
                 optimize_spatial_frequency=True,
             )
             # Quality validation
-            .add_quality_validation(
-                pass_threshold=quality_threshold, warning_threshold=5.0
-            )
+            .add_quality_validation(pass_threshold=quality_threshold, warning_threshold=5.0)
             # Output
             .add_output(output_path, quality=95)
             .build()
@@ -100,9 +97,7 @@ class WorkflowTemplates:
                 use_controlnet=False,
             )
             # Quick validation
-            .add_quality_validation(
-                pass_threshold=quality_threshold, warning_threshold=4.0
-            )
+            .add_quality_validation(pass_threshold=quality_threshold, warning_threshold=4.0)
             .add_output(output_path, quality=90)
             .build()
         )
@@ -165,7 +160,7 @@ class WorkflowTemplates:
                 time_of_day=time_of_day,
                 cloud_coverage=cloud_coverage,
                 update_reflections=True,
-                auto_correct=True, # Ensure shadows match new sky
+                auto_correct=True,  # Ensure shadows match new sky
             )
             .add_atmospheric_model(
                 apply_aerial_perspective=True,
@@ -193,9 +188,7 @@ class WorkflowTemplates:
         flux_strengths: Optional[List[float]] = None,
     ) -> List[Workflow]:
         """Generate multiple enhancement variants."""
-        logger.info(
-            f"Creating multi-variant generation workflows ({num_variants} variants)"
-        )
+        logger.info(f"Creating multi-variant generation workflows ({num_variants} variants)")
 
         # Default emotional targets
         if emotional_targets is None:
@@ -220,16 +213,12 @@ class WorkflowTemplates:
             variant_name = f"variant_{i+1}_{emotional_target}"
             output_path = str(output_path_obj / f"{variant_name}.jpg")
 
-            builder = WorkflowBuilder(
-                name=f"Variant {i+1} - {emotional_target.title()}"
-            )
+            builder = WorkflowBuilder(name=f"Variant {i+1} - {emotional_target.title()}")
 
             workflow = (
                 builder.add_input(input_path)
                 .add_scene_analysis(detailed=True)
-                .add_flux_enhancement(
-                    strength=strength, num_steps=4, variant="dev", use_controlnet=True
-                )
+                .add_flux_enhancement(strength=strength, num_steps=4, variant="dev", use_controlnet=True)
                 .add_neuroaesthetics_optimization(emotional_target=emotional_target)
                 .add_quality_validation(pass_threshold=6.5)
                 .add_output(output_path, quality=92)
@@ -270,7 +259,7 @@ class WorkflowTemplates:
                 time_of_day="golden_hour",
                 cloud_coverage=0.2,
                 update_reflections=True,
-                auto_correct=True, # Critical for Golden Hour alignment
+                auto_correct=True,  # Critical for Golden Hour alignment
             )
             .add_atmospheric_model(
                 apply_aerial_perspective=True,
@@ -299,15 +288,11 @@ class WorkflowTemplates:
         logger.info(f"Saving workflow templates to {output_dir}")
 
         # Full pipeline
-        full_pipeline = WorkflowTemplates.full_luxury_estate_pipeline(
-            input_path="input.jpg", output_path="output.jpg"
-        )
+        full_pipeline = WorkflowTemplates.full_luxury_estate_pipeline(input_path="input.jpg", output_path="output.jpg")
         full_pipeline.save(output_path / "full_luxury_estate_pipeline.json")
 
         # Quick iterative
-        quick_enhancement = WorkflowTemplates.quick_iterative_enhancement(
-            input_path="input.jpg", output_path="output.jpg"
-        )
+        quick_enhancement = WorkflowTemplates.quick_iterative_enhancement(input_path="input.jpg", output_path="output.jpg")
         quick_enhancement.save(output_path / "quick_iterative_enhancement.json")
 
         # Material-specific
@@ -317,21 +302,15 @@ class WorkflowTemplates:
         material_enhancement.save(output_path / "material_specific_enhancement.json")
 
         # Atmospheric
-        atmospheric = WorkflowTemplates.location_specific_atmospheric(
-            input_path="input.jpg", output_path="output.jpg"
-        )
+        atmospheric = WorkflowTemplates.location_specific_atmospheric(input_path="input.jpg", output_path="output.jpg")
         atmospheric.save(output_path / "location_specific_atmospheric.json")
 
         # Coastal golden hour
-        coastal = WorkflowTemplates.coastal_property_golden_hour(
-            input_path="input.jpg", output_path="output.jpg"
-        )
+        coastal = WorkflowTemplates.coastal_property_golden_hour(input_path="input.jpg", output_path="output.jpg")
         coastal.save(output_path / "coastal_property_golden_hour.json")
 
         # Multi-variant
-        variants = WorkflowTemplates.multi_variant_generation(
-            input_path="input.jpg", output_dir="variants"
-        )
+        variants = WorkflowTemplates.multi_variant_generation(input_path="input.jpg", output_dir="variants")
         for i, variant in enumerate(variants):
             variant.save(output_path / f"multi_variant_{i+1}.json")
 

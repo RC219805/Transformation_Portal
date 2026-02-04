@@ -243,9 +243,7 @@ class PipelineStatistics:
             "Stage timings:",
         ]
 
-        for stage_name, elapsed in sorted(
-            self.stage_times.items(), key=lambda x: -x[1]
-        ):
+        for stage_name, elapsed in sorted(self.stage_times.items(), key=lambda x: -x[1]):
             pct = (elapsed / self.total_time * 100) if self.total_time > 0 else 0
             lines.append(f"  {stage_name:30s} {elapsed:6.2f}s ({pct:5.1f}%)")
 
@@ -290,17 +288,11 @@ class UnifiedLuxuryPipeline:
         # Initialize stages
         self.stages = {
             "load": PipelineStage("Load & Validate", enabled=True, required=True),
-            "scene_detect": PipelineStage(
-                "Scene Detection", enabled=config.scene_type == SceneType.AUTO
-            ),
+            "scene_detect": PipelineStage("Scene Detection", enabled=config.scene_type == SceneType.AUTO),
             "depth": PipelineStage("Depth Processing", enabled=config.enable_depth),
-            "material": PipelineStage(
-                "Material Response", enabled=config.enable_material_response
-            ),
+            "material": PipelineStage("Material Response", enabled=config.enable_material_response),
             "vfx": PipelineStage("VFX Effects", enabled=config.enable_vfx),
-            "color_grade": PipelineStage(
-                "Color Grading", enabled=config.enable_color_grading
-            ),
+            "color_grade": PipelineStage("Color Grading", enabled=config.enable_color_grading),
             "output": PipelineStage("Output Generation", enabled=True, required=True),
         }
 
@@ -310,9 +302,7 @@ class UnifiedLuxuryPipeline:
         self._lut_processor = None
 
         # Detect device
-        self.device = (
-            self._detect_device() if config.device == "auto" else config.device
-        )
+        self.device = self._detect_device() if config.device == "auto" else config.device
 
         # Create output directory
         self.config.output_dir.mkdir(parents=True, exist_ok=True)
@@ -331,11 +321,7 @@ class UnifiedLuxuryPipeline:
             if torch.cuda.is_available():
                 log.info("CUDA GPU detected")
                 return "cuda"
-            elif (
-                hasattr(torch, "backends")
-                and hasattr(torch.backends, "mps")
-                and torch.backends.mps.is_available()
-            ):
+            elif hasattr(torch, "backends") and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
                 log.info("Apple Metal (MPS) detected")
                 return "mps"
         except ImportError:
@@ -352,10 +338,7 @@ class UnifiedLuxuryPipeline:
             self.config.lut_path = None
 
         # Warn if VFX enabled with PERFORMANCE profile
-        if (
-            self.config.enable_vfx
-            and self.config.profile == ProcessingProfile.PERFORMANCE
-        ):
+        if self.config.enable_vfx and self.config.profile == ProcessingProfile.PERFORMANCE:
             log.warning("VFX enabled with PERFORMANCE profile - may impact speed")
 
     def process(self, input_path: Path, **overrides) -> Dict[str, Path]:
@@ -394,9 +377,7 @@ class UnifiedLuxuryPipeline:
 
             # Stage 2: Scene Detection (if AUTO)
             if self.stages["scene_detect"].enabled:
-                scene_type = self._execute_stage(
-                    "scene_detect", self._detect_scene_type, image
-                )
+                scene_type = self._execute_stage("scene_detect", self._detect_scene_type, image)
                 temp_config.scene_type = scene_type
                 log.info(f"  Detected scene type: {scene_type.value}")
 
@@ -405,9 +386,7 @@ class UnifiedLuxuryPipeline:
 
             # Stage 3: Depth Processing
             if self.stages["depth"].enabled:
-                image = self._execute_stage(
-                    "depth", self._apply_depth_processing, image, params
-                )
+                image = self._execute_stage("depth", self._apply_depth_processing, image, params)
 
             # Stage 4: Material Response
             if self.stages["material"].enabled:
@@ -421,15 +400,11 @@ class UnifiedLuxuryPipeline:
 
             # Stage 5: VFX Effects
             if self.stages["vfx"].enabled:
-                image = self._execute_stage(
-                    "vfx", self._apply_vfx_effects, image, params
-                )
+                image = self._execute_stage("vfx", self._apply_vfx_effects, image, params)
 
             # Stage 6: Color Grading
             if self.stages["color_grade"].enabled:
-                image = self._execute_stage(
-                    "color_grade", self._apply_color_grading, image, params
-                )
+                image = self._execute_stage("color_grade", self._apply_color_grading, image, params)
 
             # Stage 7: Generate Outputs
             outputs = self._execute_stage(
@@ -458,9 +433,7 @@ class UnifiedLuxuryPipeline:
             log.error(f"Pipeline failed for {input_path.name}: {e}")
             raise
 
-    def batch_process(
-        self, input_paths: List[Path], show_progress: bool = True
-    ) -> Dict[Path, Dict[str, Path]]:
+    def batch_process(self, input_paths: List[Path], show_progress: bool = True) -> Dict[Path, Dict[str, Path]]:
         """
         Process multiple images with progress tracking.
 
@@ -481,9 +454,7 @@ class UnifiedLuxuryPipeline:
         log.info(f"Batch processing {len(input_paths)} images")
 
         results = {}
-        iterator = (
-            tqdm(input_paths, desc="Processing") if show_progress else input_paths
-        )
+        iterator = tqdm(input_paths, desc="Processing") if show_progress else input_paths
 
         for input_path in iterator:
             try:
@@ -514,9 +485,7 @@ class UnifiedLuxuryPipeline:
             "images_processed": self.stats.images_processed,
             "images_failed": self.stats.images_failed,
             "stage_times": self.stats.stage_times.copy(),
-            "output_files": {
-                str(k): [str(p) for p in v] for k, v in self.stats.output_files.items()
-            },
+            "output_files": {str(k): [str(p) for p in v] for k, v in self.stats.output_files.items()},
             "config": {
                 "profile": self.config.profile.value,
                 "scene_type": self.config.scene_type.value,
@@ -699,9 +668,7 @@ class UnifiedLuxuryPipeline:
 
         return params
 
-    def _apply_depth_processing(
-        self, image: Image.Image, params: Dict[str, Any]
-    ) -> Image.Image:
+    def _apply_depth_processing(self, image: Image.Image, params: Dict[str, Any]) -> Image.Image:
         """
         Apply depth-aware processing using Depth Anything V2.
 
@@ -728,14 +695,10 @@ class UnifiedLuxuryPipeline:
                     "large": "config/interior_preset.yaml",
                 }
 
-                config_path = Path(
-                    config_map.get(model_size, "config/interior_preset.yaml")
-                )
+                config_path = Path(config_map.get(model_size, "config/interior_preset.yaml"))
 
                 if config_path.exists():
-                    self._depth_pipeline = ArchitecturalDepthPipeline.from_config(
-                        str(config_path)
-                    )
+                    self._depth_pipeline = ArchitecturalDepthPipeline.from_config(str(config_path))
                     log.info(f"    Loaded depth pipeline: {model_size}")
                 else:
                     log.warning(f"    Depth config not found: {config_path}")
@@ -784,9 +747,7 @@ class UnifiedLuxuryPipeline:
                             return Image.fromarray(val)
                         elif isinstance(val, Image.Image):
                             return val
-                log.warning(
-                    f"    Could not extract image from depth result dict (keys: {list(result.keys())})"
-                )
+                log.warning(f"    Could not extract image from depth result dict (keys: {list(result.keys())})")
                 return image
             elif isinstance(result, np.ndarray):
                 # Convert float32 to uint8 if needed
@@ -806,9 +767,7 @@ class UnifiedLuxuryPipeline:
                 temp_path.unlink()
             return image
 
-    def _apply_material_response(
-        self, image: Image.Image, params: Dict[str, Any], scene_type: SceneType
-    ) -> Image.Image:
+    def _apply_material_response(self, image: Image.Image, params: Dict[str, Any], scene_type: SceneType) -> Image.Image:
         """
         Apply Material Response technology for physics-based surface enhancement.
 
@@ -885,30 +844,22 @@ class UnifiedLuxuryPipeline:
         METAL_GAUSSIAN_SIGMA = 2.0
 
         # Floor region (lower portion, perspective)
-        floor_mask = np.clip(
-            (y_norm - FLOOR_Y_OFFSET) / FLOOR_Y_RANGE, 0.0, 1.0
-        ).astype(np.float32)
+        floor_mask = np.clip((y_norm - FLOOR_Y_OFFSET) / FLOOR_Y_RANGE, 0.0, 1.0).astype(np.float32)
 
         # Wall region (upper-mid, low saturation)
         wall_mask = (
             np.clip((luminance - WALL_LUMINANCE_MIN) / WALL_LUMINANCE_RANGE, 0.0, 1.0)
-            * np.clip(
-                (WALL_SATURATION_MAX - saturation) / WALL_SATURATION_MAX, 0.0, 1.0
-            )
+            * np.clip((WALL_SATURATION_MAX - saturation) / WALL_SATURATION_MAX, 0.0, 1.0)
             * np.clip(1.0 - floor_mask, 0.0, 1.0)
         )
         wall_mask = gaussian_filter(wall_mask, sigma=1.5)
 
         # Highlight mask for energy conservation
-        highlight_mask = np.clip(
-            (luminance - HIGHLIGHT_LUMINANCE_MIN) / HIGHLIGHT_LUMINANCE_RANGE, 0.0, 1.0
-        )
+        highlight_mask = np.clip((luminance - HIGHLIGHT_LUMINANCE_MIN) / HIGHLIGHT_LUMINANCE_RANGE, 0.0, 1.0)
         highlight_mask = gaussian_filter(highlight_mask, sigma=2.0)
 
         # Midtone mask for texture preservation
-        midtone_mask = np.clip(
-            1.0 - np.abs(luminance - MIDTONE_CENTER) / MIDTONE_RANGE, 0.0, 1.0
-        )
+        midtone_mask = np.clip(1.0 - np.abs(luminance - MIDTONE_CENTER) / MIDTONE_RANGE, 0.0, 1.0)
         midtone_mask = gaussian_filter(midtone_mask, sigma=1.5)
 
         # ============================================================
@@ -918,12 +869,8 @@ class UnifiedLuxuryPipeline:
         # Wood detection (warm mid-tones on floor regions)
         warm_bias = arr[..., 0] - 0.5 * (arr[..., 1] + arr[..., 2])
         wood_mask = (
-            np.clip(
-                (warm_bias + WOOD_WARM_BIAS_OFFSET) / WOOD_WARM_BIAS_RANGE, 0.0, 1.0
-            )
-            * np.clip(
-                (saturation - WOOD_SATURATION_MIN) / WOOD_SATURATION_RANGE, 0.0, 1.0
-            )
+            np.clip((warm_bias + WOOD_WARM_BIAS_OFFSET) / WOOD_WARM_BIAS_RANGE, 0.0, 1.0)
+            * np.clip((saturation - WOOD_SATURATION_MIN) / WOOD_SATURATION_RANGE, 0.0, 1.0)
             * np.clip((luminance - WOOD_LUMINANCE_MIN) / WOOD_LUMINANCE_RANGE, 0.0, 1.0)
             * floor_mask
         )
@@ -931,29 +878,19 @@ class UnifiedLuxuryPipeline:
 
         # Textile detection (soft, mid-brightness, neutral)
         textile_mask = (
-            np.clip(
-                (luminance - TEXTILE_LUMINANCE_MIN) / TEXTILE_LUMINANCE_RANGE, 0.0, 1.0
-            )
-            * np.clip(
-                (TEXTILE_SATURATION_MAX - saturation) / TEXTILE_SATURATION_MAX, 0.0, 1.0
-            )
+            np.clip((luminance - TEXTILE_LUMINANCE_MIN) / TEXTILE_LUMINANCE_RANGE, 0.0, 1.0)
+            * np.clip((TEXTILE_SATURATION_MAX - saturation) / TEXTILE_SATURATION_MAX, 0.0, 1.0)
             * np.clip(1.0 - floor_mask, 0.0, 1.0)
         )
         textile_mask = gaussian_filter(textile_mask, sigma=TEXTILE_GAUSSIAN_SIGMA)
 
         # Metal/glass detection (neutral, high contrast)
-        neutral_mask = np.clip(
-            (METAL_SATURATION_MAX - saturation) / METAL_SATURATION_MAX, 0.0, 1.0
-        )
+        neutral_mask = np.clip((METAL_SATURATION_MAX - saturation) / METAL_SATURATION_MAX, 0.0, 1.0)
         edge_mag = np.abs(sobel(luminance, axis=0)) + np.abs(sobel(luminance, axis=1))
         edge_mag = gaussian_filter(edge_mag, sigma=1.0)
         if edge_mag.max() > 0:
             edge_mag = edge_mag / edge_mag.max()
-        metal_mask = (
-            neutral_mask
-            * edge_mag
-            * np.clip(luminance, METAL_LUMINANCE_MIN, METAL_LUMINANCE_MAX)
-        )
+        metal_mask = neutral_mask * edge_mag * np.clip(luminance, METAL_LUMINANCE_MIN, METAL_LUMINANCE_MAX)
         metal_mask = gaussian_filter(metal_mask, sigma=METAL_GAUSSIAN_SIGMA)
 
         # ============================================================
@@ -976,12 +913,8 @@ class UnifiedLuxuryPipeline:
             if grain.max() > 0:
                 grain = grain / grain.max()
             warm_wood = np.array([0.86, 0.74, 0.58], dtype=np.float32)
-            wood_weight = (
-                0.12 * strength * wood_mask[..., np.newaxis] * grain[..., np.newaxis]
-            )
-            enhanced = np.clip(
-                enhanced + wood_weight * (warm_wood - enhanced), 0.0, 1.0
-            )
+            wood_weight = 0.12 * strength * wood_mask[..., np.newaxis] * grain[..., np.newaxis]
+            enhanced = np.clip(enhanced + wood_weight * (warm_wood - enhanced), 0.0, 1.0)
 
             # Floor specular streaks
             floor_grad = np.abs(sobel(luminance * floor_mask, axis=1))
@@ -989,12 +922,8 @@ class UnifiedLuxuryPipeline:
                 floor_grad = floor_grad / floor_grad.max()
             streaks = gaussian_filter(floor_grad, sigma=(2.0, 5.0))
             spec_color = np.array([1.0, 0.94, 0.80], dtype=np.float32)
-            streak_weight = (
-                0.15 * strength * streaks[..., np.newaxis] * floor_mask[..., np.newaxis]
-            )
-            enhanced = np.clip(
-                enhanced + streak_weight * (spec_color - enhanced), 0.0, 1.0
-            )
+            streak_weight = 0.15 * strength * streaks[..., np.newaxis] * floor_mask[..., np.newaxis]
+            enhanced = np.clip(enhanced + streak_weight * (spec_color - enhanced), 0.0, 1.0)
             log.info("    Applied wood/floor enhancement")
 
         # 3. Textile micro-contrast (linen/fabric separation)
@@ -1009,12 +938,8 @@ class UnifiedLuxuryPipeline:
             specular = gaussian_filter(luminance * metal_mask, sigma=2.0)
             specular = np.clip((specular - 0.35) / 0.5, 0.0, 1.0)
             cool_metal = np.array([0.93, 0.95, 0.98], dtype=np.float32)
-            metal_weight = (
-                0.1 * strength * metal_mask[..., np.newaxis] * specular[..., np.newaxis]
-            )
-            enhanced = np.clip(
-                enhanced + metal_weight * (cool_metal - enhanced), 0.0, 1.0
-            )
+            metal_weight = 0.1 * strength * metal_mask[..., np.newaxis] * specular[..., np.newaxis]
+            enhanced = np.clip(enhanced + metal_weight * (cool_metal - enhanced), 0.0, 1.0)
             log.info("    Applied metal/glass enhancement")
 
         # 5. Wall subtle texture
@@ -1042,9 +967,7 @@ class UnifiedLuxuryPipeline:
         # 8. Highlight warmth (subtle warm spill in bright regions)
         warm_highlight = np.array([1.0, 0.80, 0.58], dtype=np.float32)
         highlight_warmth = 0.06 * strength * highlight_mask[..., np.newaxis]
-        enhanced = np.clip(
-            enhanced + highlight_warmth * (warm_highlight - enhanced), 0.0, 1.0
-        )
+        enhanced = np.clip(enhanced + highlight_warmth * (warm_highlight - enhanced), 0.0, 1.0)
 
         # 9. TRANSITION BLENDING: Smooth material boundaries
         # This respects the third Material Response tenet
@@ -1072,9 +995,7 @@ class UnifiedLuxuryPipeline:
 
         return Image.fromarray((enhanced * 255).astype(np.uint8), "RGB")
 
-    def _apply_vfx_effects(
-        self, image: Image.Image, params: Dict[str, Any]
-    ) -> Image.Image:
+    def _apply_vfx_effects(self, image: Image.Image, params: Dict[str, Any]) -> Image.Image:
         """
         Apply VFX effects (bloom, fog, depth-of-field).
 
@@ -1092,9 +1013,7 @@ class UnifiedLuxuryPipeline:
 
         return image
 
-    def _apply_color_grading(
-        self, image: Image.Image, params: Dict[str, Any]
-    ) -> Image.Image:
+    def _apply_color_grading(self, image: Image.Image, params: Dict[str, Any]) -> Image.Image:
         """
         Apply professional color grading with optional LUT.
 
@@ -1127,24 +1046,15 @@ class UnifiedLuxuryPipeline:
 
         # Saturation
         if abs(saturation - 1.0) > 0.001:
-            luminance = (
-                0.299 * arr[:, :, 0] + 0.587 * arr[:, :, 1] + 0.114 * arr[:, :, 2]
-            )
-            arr = (
-                luminance[:, :, np.newaxis]
-                + (arr - luminance[:, :, np.newaxis]) * saturation
-            )
+            luminance = 0.299 * arr[:, :, 0] + 0.587 * arr[:, :, 1] + 0.114 * arr[:, :, 2]
+            arr = luminance[:, :, np.newaxis] + (arr - luminance[:, :, np.newaxis]) * saturation
             log.info(f"    Saturation: {saturation:.2f}x")
 
         # Apply LUT if specified
         if self.config.lut_path is not None:
             try:
-                arr = self._apply_lut(
-                    arr, self.config.lut_path, self.config.lut_strength
-                )
-                log.info(
-                    f"    LUT: {self.config.lut_path.name} @ {self.config.lut_strength:.0%}"
-                )
+                arr = self._apply_lut(arr, self.config.lut_path, self.config.lut_strength)
+                log.info(f"    LUT: {self.config.lut_path.name} @ {self.config.lut_strength:.0%}")
             except Exception as e:
                 log.warning(f"    LUT application failed: {e}")
 
@@ -1152,9 +1062,7 @@ class UnifiedLuxuryPipeline:
 
         return Image.fromarray((arr * 255).astype(np.uint8), "RGB")
 
-    def _apply_lut(
-        self, arr: np.ndarray, lut_path: Path, strength: float
-    ) -> np.ndarray:
+    def _apply_lut(self, arr: np.ndarray, lut_path: Path, strength: float) -> np.ndarray:
         """
         Apply LUT (Look-Up Table) to image array.
 
@@ -1222,9 +1130,7 @@ class UnifiedLuxuryPipeline:
         else:
             for fmt in config.output_formats:
                 try:
-                    path = self._generate_single_output(
-                        image, basename, fmt, icc_profile, metadata
-                    )
+                    path = self._generate_single_output(image, basename, fmt, icc_profile, metadata)
                     outputs[fmt.value] = path
                 except Exception as e:
                     log.error(f"    Failed to generate {fmt.value}: {e}")
@@ -1267,9 +1173,7 @@ class UnifiedLuxuryPipeline:
         else:
             raise ValueError(f"Unknown output format: {fmt}")
 
-    def _save_master_tiff(
-        self, image: Image.Image, basename: str, metadata: Dict
-    ) -> Path:
+    def _save_master_tiff(self, image: Image.Image, basename: str, metadata: Dict) -> Path:
         """Save 16-bit TIFF master with full resolution."""
         output_path = self.config.output_dir / f"{basename}_MASTER.tif"
 
@@ -1292,9 +1196,7 @@ class UnifiedLuxuryPipeline:
                 else:
                     raise TypeError(f"Unsupported array dtype: {image.dtype}")
             else:
-                raise TypeError(
-                    f"Image must be PIL.Image or numpy.ndarray, got {type(image)}"
-                )
+                raise TypeError(f"Image must be PIL.Image or numpy.ndarray, got {type(image)}")
 
             # CRITICAL: Always clip to [0,1] before converting to 16-bit
             # This prevents float32 TIFFs with values outside [0,1] range
@@ -1319,9 +1221,7 @@ class UnifiedLuxuryPipeline:
             )
         else:
             # Fallback to PIL (8-bit only)
-            log.warning(
-                "    tifffile not available - saving 8-bit TIFF (install tifffile for 16-bit)"
-            )
+            log.warning("    tifffile not available - saving 8-bit TIFF (install tifffile for 16-bit)")
             image.save(output_path, compression="lzw", dpi=(300, 300))
             log.info(
                 f"    Master TIFF: {image.size[0]}x{image.size[1]}, 8-bit, {output_path.stat().st_size / (1024**2):.1f} MB"
@@ -1329,9 +1229,7 @@ class UnifiedLuxuryPipeline:
 
         return output_path
 
-    def _save_web_4k(
-        self, image: Image.Image, basename: str, icc_profile: Optional[bytes]
-    ) -> Path:
+    def _save_web_4k(self, image: Image.Image, basename: str, icc_profile: Optional[bytes]) -> Path:
         """Save 4K web-optimized JPEG."""
         output_path = self.config.output_dir / f"{basename}_WEB_4K.jpg"
 
@@ -1358,15 +1256,11 @@ class UnifiedLuxuryPipeline:
         resized.save(output_path, **save_kwargs)
 
         size_mb = output_path.stat().st_size / (1024**2)
-        log.info(
-            f"    Web 4K: {resized.size[0]}x{resized.size[1]}, Q96, {size_mb:.1f} MB"
-        )
+        log.info(f"    Web 4K: {resized.size[0]}x{resized.size[1]}, Q96, {size_mb:.1f} MB")
 
         return output_path
 
-    def _save_print_8k(
-        self, image: Image.Image, basename: str, icc_profile: Optional[bytes]
-    ) -> Path:
+    def _save_print_8k(self, image: Image.Image, basename: str, icc_profile: Optional[bytes]) -> Path:
         """Save 8K print-quality JPEG."""
         output_path = self.config.output_dir / f"{basename}_PRINT_8K.jpg"
 
@@ -1393,15 +1287,11 @@ class UnifiedLuxuryPipeline:
         resized.save(output_path, **save_kwargs)
 
         size_mb = output_path.stat().st_size / (1024**2)
-        log.info(
-            f"    Print 8K: {resized.size[0]}x{resized.size[1]}, Q98, {size_mb:.1f} MB"
-        )
+        log.info(f"    Print 8K: {resized.size[0]}x{resized.size[1]}, Q98, {size_mb:.1f} MB")
 
         return output_path
 
-    def _save_social(
-        self, image: Image.Image, basename: str, icc_profile: Optional[bytes]
-    ) -> Path:
+    def _save_social(self, image: Image.Image, basename: str, icc_profile: Optional[bytes]) -> Path:
         """Save 1080p social media optimized JPEG."""
         output_path = self.config.output_dir / f"{basename}_SOCIAL_1080p.jpg"
 
@@ -1425,15 +1315,11 @@ class UnifiedLuxuryPipeline:
         resized.save(output_path, **save_kwargs)
 
         size_mb = output_path.stat().st_size / (1024**2)
-        log.info(
-            f"    Social: {resized.size[0]}x{resized.size[1]}, Q92, {size_mb:.1f} MB"
-        )
+        log.info(f"    Social: {resized.size[0]}x{resized.size[1]}, Q92, {size_mb:.1f} MB")
 
         return output_path
 
-    def _save_magazine(
-        self, image: Image.Image, basename: str, icc_profile: Optional[bytes]
-    ) -> Path:
+    def _save_magazine(self, image: Image.Image, basename: str, icc_profile: Optional[bytes]) -> Path:
         """Save 2K magazine layout JPEG."""
         output_path = self.config.output_dir / f"{basename}_MAGAZINE_2K.jpg"
 
@@ -1460,9 +1346,7 @@ class UnifiedLuxuryPipeline:
         resized.save(output_path, **save_kwargs)
 
         size_mb = output_path.stat().st_size / (1024**2)
-        log.info(
-            f"    Magazine 2K: {resized.size[0]}x{resized.size[1]}, Q95, {size_mb:.1f} MB"
-        )
+        log.info(f"    Magazine 2K: {resized.size[0]}x{resized.size[1]}, Q95, {size_mb:.1f} MB")
 
         return output_path
 
@@ -1484,9 +1368,7 @@ class UnifiedLuxuryPipeline:
             "images_processed": self.stats.images_processed,
             "images_failed": self.stats.images_failed,
             "stage_times": self.stats.stage_times,
-            "output_files": {
-                str(k): [str(p) for p in v] for k, v in self.stats.output_files.items()
-            },
+            "output_files": {str(k): [str(p) for p in v] for k, v in self.stats.output_files.items()},
             "config": {
                 "profile": self.config.profile.value,
                 "scene_type": self.config.scene_type.value,

@@ -18,7 +18,7 @@ Example:
     >>> result = wrapped.process(input_path)
 """
 
-from .universal import UniversalHardenedWrapper, Pipeline, wrap_function
+from .universal import Pipeline, UniversalHardenedWrapper, wrap_function
 
 __all__ = [
     "UniversalHardenedWrapper",

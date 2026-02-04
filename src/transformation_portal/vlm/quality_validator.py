@@ -193,10 +193,7 @@ List any critical issues found."""
         self.pass_threshold = pass_threshold
         self.warning_threshold = warning_threshold
 
-        logger.info(
-            f"QualityValidator initialized "
-            f"(pass>={pass_threshold}, warning>={warning_threshold})"
-        )
+        logger.info(f"QualityValidator initialized " f"(pass>={pass_threshold}, warning>={warning_threshold})")
 
     def validate(
         self,
@@ -215,11 +212,7 @@ List any critical issues found."""
             Complete validation report
         """
         # Get assessment from LLaVA
-        prompt = (
-            self.DETAILED_VALIDATION_PROMPT
-            if detailed
-            else self.QUICK_VALIDATION_PROMPT
-        )
+        prompt = self.DETAILED_VALIDATION_PROMPT if detailed else self.QUICK_VALIDATION_PROMPT
 
         raw_assessment = self.processor.analyze_image(
             image,
@@ -285,8 +278,7 @@ List any critical issues found."""
         enhancement_validation = {
             "quality_improved": quality_improved,
             "new_artifacts_introduced": new_artifacts,
-            "score_delta": enhanced_report.overall_score
-            - original_report.overall_score,
+            "score_delta": enhanced_report.overall_score - original_report.overall_score,
             "enhancement_valid": quality_improved and not new_artifacts,
         }
 
@@ -470,10 +462,7 @@ List any critical issues found."""
         if "issues:" in text_lower or "critical" in text_lower:
             # Extract issues section
             for line in text.split("\n"):
-                if any(
-                    word in line.lower()
-                    for word in ["issue", "problem", "artifact", "error"]
-                ):
+                if any(word in line.lower() for word in ["issue", "problem", "artifact", "error"]):
                     issues.append(line.strip())
 
         return issues
@@ -514,9 +503,7 @@ List any critical issues found."""
         else:
             return ValidationStatus.FAIL
 
-    def _determine_status(
-        self, overall_score: float, scores: List[QualityScore], strict: bool
-    ) -> ValidationStatus:
+    def _determine_status(self, overall_score: float, scores: List[QualityScore], strict: bool) -> ValidationStatus:
         """Determine overall validation status."""
         # Check if any aspect failed critically
         failed_aspects = [s for s in scores if s.status == ValidationStatus.FAIL]
@@ -557,10 +544,7 @@ List any critical issues found."""
                 ValidationStatus.UNKNOWN: "?",
             }[score.status]
 
-            summary.append(
-                f"  {status_symbol} {score.aspect.value.replace('_', ' ').title()}: "
-                f"{score.score:.1f}/10"
-            )
+            summary.append(f"  {status_symbol} {score.aspect.value.replace('_', ' ').title()}: " f"{score.score:.1f}/10")
 
         if report.artifacts:
             summary.append("")

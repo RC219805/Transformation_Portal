@@ -192,9 +192,7 @@ class MaterialResponseEngine:
 
         return cls(config)
 
-    def apply(
-        self, image: Image.Image, profile: Optional[str] = None, strength: float = 1.0
-    ) -> Image.Image:
+    def apply(self, image: Image.Image, profile: Optional[str] = None, strength: float = 1.0) -> Image.Image:
         """Apply Material Response enhancement to an image.
 
         Args:
@@ -210,8 +208,7 @@ class MaterialResponseEngine:
             import logging
 
             logging.getLogger(__name__).warning(
-                "scipy not available, returning original image. "
-                "Install scipy for Material Response processing."
+                "scipy not available, returning original image. " "Install scipy for Material Response processing."
             )
             return image
 
@@ -293,9 +290,7 @@ class MaterialResponseEngine:
         # Wood grain enhancement
         if self.config.floor_plank_contrast > 0 and wood_mask.max() > 0.01:
             # High-frequency floor detail
-            blurred_floor = gaussian_filter(
-                rgb * floor_mask[..., np.newaxis], sigma=(1.6, 1.2, 0)
-            )
+            blurred_floor = gaussian_filter(rgb * floor_mask[..., np.newaxis], sigma=(1.6, 1.2, 0))
             floor_detail = rgb * floor_mask[..., np.newaxis] - blurred_floor
 
             plank_strength = self.config.floor_plank_contrast * strength
@@ -313,12 +308,7 @@ class MaterialResponseEngine:
 
             # Warm wood color contribution
             warm_wood = np.array([0.86, 0.74, 0.58], dtype=np.float32)
-            wood_weight = (
-                0.12
-                * plank_strength
-                * wood_mask[..., np.newaxis]
-                * grain[..., np.newaxis]
-            )
+            wood_weight = 0.12 * plank_strength * wood_mask[..., np.newaxis] * grain[..., np.newaxis]
             result = np.clip(result + wood_weight * (warm_wood - result), 0.0, 1.0)
 
         # Specular streaks
@@ -330,16 +320,12 @@ class MaterialResponseEngine:
 
             spec_strength = self.config.floor_specular * strength
             spec_color = np.array([1.0, 0.94, 0.80], dtype=np.float32)
-            streak_weight = (
-                spec_strength * streaks[..., np.newaxis] * floor_mask[..., np.newaxis]
-            )
+            streak_weight = spec_strength * streaks[..., np.newaxis] * floor_mask[..., np.newaxis]
             result = np.clip(result + streak_weight * (spec_color - result), 0.0, 1.0)
 
         return result
 
-    def enhance_textiles(
-        self, rgb: np.ndarray, textile_mask: np.ndarray, strength: float = 1.0
-    ) -> np.ndarray:
+    def enhance_textiles(self, rgb: np.ndarray, textile_mask: np.ndarray, strength: float = 1.0) -> np.ndarray:
         """Enhance textile surfaces with micro-contrast.
 
         Args:
@@ -363,9 +349,7 @@ class MaterialResponseEngine:
 
         return result
 
-    def enhance_metals(
-        self, rgb: np.ndarray, metal_mask: np.ndarray, strength: float = 1.0
-    ) -> np.ndarray:
+    def enhance_metals(self, rgb: np.ndarray, metal_mask: np.ndarray, strength: float = 1.0) -> np.ndarray:
         """Enhance metal and glass surfaces with specular preservation.
 
         Args:
@@ -388,16 +372,12 @@ class MaterialResponseEngine:
 
         cool_metal = np.array([0.93, 0.95, 0.98], dtype=np.float32)
         metal_strength = 0.1 * strength
-        metal_weight = (
-            metal_strength * metal_mask[..., np.newaxis] * specular[..., np.newaxis]
-        )
+        metal_weight = metal_strength * metal_mask[..., np.newaxis] * specular[..., np.newaxis]
         result = np.clip(result + metal_weight * (cool_metal - result), 0.0, 1.0)
 
         return result
 
-    def add_atmospheric_effects(
-        self, rgb: np.ndarray, height: int, width: int, strength: float = 1.0
-    ) -> np.ndarray:
+    def add_atmospheric_effects(self, rgb: np.ndarray, height: int, width: int, strength: float = 1.0) -> np.ndarray:
         """Add atmospheric haze effect.
 
         Args:
@@ -420,8 +400,7 @@ class MaterialResponseEngine:
         tint = np.clip(tint, 0.0, 1.0)
 
         result = np.clip(
-            result * (1.0 - haze_amount[..., np.newaxis])
-            + tint * haze_amount[..., np.newaxis],
+            result * (1.0 - haze_amount[..., np.newaxis]) + tint * haze_amount[..., np.newaxis],
             0.0,
             1.0,
         )
@@ -503,9 +482,7 @@ class MaterialResponseEngine:
             midtone=midtone_mask.astype(np.float32),
         )
 
-    def _enhance_texture(
-        self, rgb: np.ndarray, midtone_mask: np.ndarray, strength: float
-    ) -> np.ndarray:
+    def _enhance_texture(self, rgb: np.ndarray, midtone_mask: np.ndarray, strength: float) -> np.ndarray:
         """Apply texture boost to midtones."""
         blurred = gaussian_filter(rgb, sigma=(1.1, 1.1, 0))
         texture_detail = rgb - blurred
@@ -513,9 +490,7 @@ class MaterialResponseEngine:
         texture_weight = texture_strength * midtone_mask[..., np.newaxis]
         return np.clip(rgb + texture_weight * texture_detail, 0.0, 1.0)
 
-    def _enhance_walls(
-        self, rgb: np.ndarray, wall_mask: np.ndarray, strength: float
-    ) -> np.ndarray:
+    def _enhance_walls(self, rgb: np.ndarray, wall_mask: np.ndarray, strength: float) -> np.ndarray:
         """Apply subtle wall texture enhancement."""
         if wall_mask.max() < 0.01:
             return rgb
@@ -533,11 +508,7 @@ class MaterialResponseEngine:
         strength: float,
     ) -> np.ndarray:
         """Apply ambient occlusion (contact shadows)."""
-        luminance = (
-            0.2126 * original[..., 0]
-            + 0.7152 * original[..., 1]
-            + 0.0722 * original[..., 2]
-        )
+        luminance = 0.2126 * original[..., 0] + 0.7152 * original[..., 1] + 0.0722 * original[..., 2]
 
         # Edge-based occlusion
         grad_x = sobel(luminance, axis=1)
@@ -558,9 +529,7 @@ class MaterialResponseEngine:
 
         return np.clip(rgb * shadow[..., np.newaxis], 0.0, 1.0)
 
-    def _apply_window_effects(
-        self, rgb: np.ndarray, floor_mask: np.ndarray, h: int, w: int, strength: float
-    ) -> np.ndarray:
+    def _apply_window_effects(self, rgb: np.ndarray, floor_mask: np.ndarray, h: int, w: int, strength: float) -> np.ndarray:
         """Apply window light wrap and reflection effects."""
         result = rgb.copy()
         luminance = 0.2126 * rgb[..., 0] + 0.7152 * rgb[..., 1] + 0.0722 * rgb[..., 2]
@@ -573,9 +542,7 @@ class MaterialResponseEngine:
             window_side = np.clip((x_norm - 0.45) / 0.55, 0.0, 1.0)
             wrap = gaussian_filter(luminance * window_side, sigma=3.2)
             if wrap.max() > wrap.min():
-                wrap = np.clip(
-                    (wrap - wrap.min()) / (wrap.max() - wrap.min() + 1e-6), 0.0, 1.0
-                )
+                wrap = np.clip((wrap - wrap.min()) / (wrap.max() - wrap.min() + 1e-6), 0.0, 1.0)
 
             wrap_strength = self.config.window_light_wrap * strength
             wrap_color = np.array([1.0, 0.95, 0.82], dtype=np.float32)
@@ -597,16 +564,12 @@ class MaterialResponseEngine:
 
             refl_strength = self.config.window_reflection * strength
             refl_color = np.array([1.0, 0.98, 0.9], dtype=np.float32)
-            refl_mix = (
-                refl_strength * reflection[..., np.newaxis] * (refl_color - result)
-            )
+            refl_mix = refl_strength * reflection[..., np.newaxis] * (refl_color - result)
             result = np.clip(result + refl_mix, 0.0, 1.0)
 
         return result
 
-    def _apply_highlight_warmth(
-        self, rgb: np.ndarray, highlight_mask: np.ndarray, strength: float
-    ) -> np.ndarray:
+    def _apply_highlight_warmth(self, rgb: np.ndarray, highlight_mask: np.ndarray, strength: float) -> np.ndarray:
         """Apply warm tint to highlights (energy conservation)."""
         warm_highlight = np.array([1.0, 0.80, 0.58], dtype=np.float32)
         warmth_strength = self.config.highlight_warmth * strength

@@ -17,12 +17,12 @@ class Version:
         match = re.match(r"^(\d+)\.(\d+)(?:\.(\d+))?(?:[.-](.+))?$", v)
         if not match:
             raise ValueError(f"Invalid version string: {v}")
-        
+
         major = int(match.group(1))
         minor = int(match.group(2))
         patch = int(match.group(3) or 0)
         prerelease = match.group(4) or ""
-        
+
         return major, minor, patch, prerelease
 
     def __repr__(self) -> str:
@@ -42,9 +42,7 @@ class Version:
         return not self < other
 
 
-def check_version_compatibility(
-    current_version: str, required_version: str
-) -> bool:
+def check_version_compatibility(current_version: str, required_version: str) -> bool:
     """Check if current version meets required version.
 
     Args:
@@ -62,15 +60,12 @@ def check_version_compatibility(
 
 def require_version(min_version: str) -> None:
     """Raise RuntimeError if package version is too old.
-    
-    Useful for ensuring plugins define a minimum required version of 
+
+    Useful for ensuring plugins define a minimum required version of
     Transformation Portal.
     """
     # Import here to avoid circular dependency
     from transformation_portal import __version__ as current_ver
-    
+
     if not check_version_compatibility(current_ver, min_version):
-        raise RuntimeError(
-            f"Transformation Portal v{min_version}+ required. "
-            f"Found v{current_ver}."
-        )
+        raise RuntimeError(f"Transformation Portal v{min_version}+ required. " f"Found v{current_ver}.")

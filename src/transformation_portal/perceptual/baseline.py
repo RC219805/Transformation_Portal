@@ -6,20 +6,20 @@ images and provides empirical foundation for measuring enhancement trajectories
 beyond conventional photorealistic limitations.
 """
 
-from dataclasses import dataclass
-from typing import List, Dict, Optional, Any, Union
-from pathlib import Path
-import logging
 import json
+import logging
 import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 from torch import Tensor
 
+from .analyzer import AnalysisResult, PerceptualAnalyzer
 from .image_loader import ImageLoader, ImageMetadata, ImageType
-from .analyzer import PerceptualAnalyzer, AnalysisResult
-from .tracker import EnhancementTracker
 from .metrics import MetricType
+from .tracker import EnhancementTracker
 
 logger = logging.getLogger(__name__)
 
@@ -136,13 +136,9 @@ class PerceptualBaseline:
             preserve_aspect=self.config.preserve_aspect,
         )
 
-        self.analyzer = PerceptualAnalyzer(
-            substrate, metric_weights=self.config.metric_weights
-        )
+        self.analyzer = PerceptualAnalyzer(substrate, metric_weights=self.config.metric_weights)
 
-        self.tracker = EnhancementTracker(
-            target_quality_multiplier=self.config.target_quality_multiplier
-        )
+        self.tracker = EnhancementTracker(target_quality_multiplier=self.config.target_quality_multiplier)
 
         # Storage
         self.baseline_results: List[AnalysisResult] = []
@@ -247,16 +243,11 @@ class PerceptualBaseline:
         # Track in enhancement tracker
         self.tracker.track_enhancement(result, step, description)
 
-        logger.info(
-            f"Analyzed enhanced image: {metadata.path.name}, "
-            f"quality={result.overall_quality:.3f}"
-        )
+        logger.info(f"Analyzed enhanced image: {metadata.path.name}, " f"quality={result.overall_quality:.3f}")
 
         return result
 
-    def compare_to_baseline(
-        self, enhanced_path: Union[str, Path], baseline_name: str
-    ) -> Dict[str, Any]:
+    def compare_to_baseline(self, enhanced_path: Union[str, Path], baseline_name: str) -> Dict[str, Any]:
         """
         Compare enhanced image to its baseline.
 
@@ -278,9 +269,7 @@ class PerceptualBaseline:
         baseline_metadata = self.baseline_metadatas[baseline_name]
 
         # Compare
-        comparison = self.analyzer.compare(
-            baseline_tensor, enhanced_tensor, baseline_metadata, enhanced_metadata
-        )
+        comparison = self.analyzer.compare(baseline_tensor, enhanced_tensor, baseline_metadata, enhanced_metadata)
 
         return comparison
 
@@ -412,11 +401,7 @@ class PerceptualBaseline:
             image_data = {
                 "name": result.image_path.stem,
                 "path": str(result.image_path),
-                "type": (
-                    result.image_metadata.image_type.value
-                    if result.image_metadata.image_type
-                    else None
-                ),
+                "type": (result.image_metadata.image_type.value if result.image_metadata.image_type else None),
                 "dimensions": {
                     "width": result.image_metadata.width,
                     "height": result.image_metadata.height,

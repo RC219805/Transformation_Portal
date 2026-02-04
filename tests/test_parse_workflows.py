@@ -1,6 +1,7 @@
 """
 Tests for the workflow parser that detects bugs in GitHub Actions workflows.
 """
+
 # pylint: disable=redefined-outer-name  # pytest fixtures
 
 import shutil
@@ -70,8 +71,8 @@ jobs:
 
         # Should find unclosed conditional
         assert len(bugs) > 0
-        assert any('Unclosed conditional' in bug.message for bug in bugs)
-        assert any(bug.severity == 'error' for bug in bugs)
+        assert any("Unclosed conditional" in bug.message for bug in bugs)
+        assert any(bug.severity == "error" for bug in bugs)
 
     def test_missing_step_id_detected(self, temp_workflow_dir):
         """Test that missing step IDs are detected when outputs are referenced."""
@@ -95,7 +96,7 @@ jobs:
 
         # Should find missing step ID
         assert len(bugs) > 0
-        assert any('step id' in bug.message.lower() for bug in bugs)
+        assert any("step id" in bug.message.lower() for bug in bugs)
 
     def test_valid_step_id_reference(self, temp_workflow_dir):
         """Test that valid step ID references don't trigger bugs."""
@@ -145,7 +146,7 @@ jobs:
 
         # Should find invalid dependency
         assert len(bugs) > 0
-        assert any('nonexistent_job' in bug.message for bug in bugs)
+        assert any("nonexistent_job" in bug.message for bug in bugs)
 
     def test_inefficient_matrix_usage(self, temp_workflow_dir):
         """Test that inefficient matrix usage is detected."""
@@ -175,7 +176,7 @@ jobs:
 
         # Should find inefficient matrix
         assert len(bugs) > 0
-        assert any('device matrix' in bug.message for bug in bugs)
+        assert any("device matrix" in bug.message for bug in bugs)
 
     def test_matrix_with_exclusions_ok(self, temp_workflow_dir):
         """Test that matrix with proper exclusions doesn't trigger warnings."""
@@ -207,7 +208,7 @@ jobs:
         bugs = parser.parse_all_workflows()
 
         # Should not find matrix warning
-        assert not any('device matrix' in bug.message for bug in bugs)
+        assert not any("device matrix" in bug.message for bug in bugs)
 
     def test_invalid_openai_model(self, temp_workflow_dir):
         """Test that invalid OpenAI model names are detected."""
@@ -231,7 +232,7 @@ jobs:
 
         # Should find invalid model
         assert len(bugs) > 0
-        assert any('gpt-4.1-mini' in bug.message for bug in bugs)
+        assert any("gpt-4.1-mini" in bug.message for bug in bugs)
 
     def test_valid_openai_model(self, temp_workflow_dir):
         """Test that valid OpenAI model names don't trigger warnings."""
@@ -254,7 +255,7 @@ jobs:
         bugs = parser.parse_all_workflows()
 
         # Should not find model bugs
-        assert not any('model' in bug.message.lower() for bug in bugs)
+        assert not any("model" in bug.message.lower() for bug in bugs)
 
     def test_yaml_syntax_error(self, temp_workflow_dir):
         """Test that YAML syntax errors are caught."""
@@ -273,7 +274,7 @@ jobs:
 
         # Should find YAML error
         assert len(bugs) > 0
-        assert any('YAML syntax error' in bug.message for bug in bugs)
+        assert any("YAML syntax error" in bug.message for bug in bugs)
 
     def test_multiple_workflows(self, temp_workflow_dir):
         """Test parsing multiple workflow files."""
@@ -308,8 +309,8 @@ jobs:
 
         # Should find bug only in workflow1
         assert len(bugs) > 0
-        assert any('workflow1.yml' in bug.file_path for bug in bugs)
-        assert not any('workflow2.yml' in bug.file_path for bug in bugs)
+        assert any("workflow1.yml" in bug.file_path for bug in bugs)
+        assert not any("workflow2.yml" in bug.file_path for bug in bugs)
 
 
 class TestWorkflowBug:
@@ -317,12 +318,7 @@ class TestWorkflowBug:
 
     def test_bug_string_representation(self):
         """Test string representation of bugs."""
-        bug = WorkflowBug(
-            file_path="/path/to/workflow.yml",
-            line_number=42,
-            severity="error",
-            message="Test error message"
-        )
+        bug = WorkflowBug(file_path="/path/to/workflow.yml", line_number=42, severity="error", message="Test error message")
 
         bug_str = str(bug)
         assert "/path/to/workflow.yml:42" in bug_str
@@ -331,12 +327,7 @@ class TestWorkflowBug:
 
     def test_bug_without_line_number(self):
         """Test bug representation without line number."""
-        bug = WorkflowBug(
-            file_path="/path/to/workflow.yml",
-            line_number=None,
-            severity="warning",
-            message="Test warning"
-        )
+        bug = WorkflowBug(file_path="/path/to/workflow.yml", line_number=None, severity="warning", message="Test warning")
 
         bug_str = str(bug)
         assert "/path/to/workflow.yml" in bug_str

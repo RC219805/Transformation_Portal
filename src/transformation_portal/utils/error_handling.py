@@ -63,16 +63,13 @@ def validate_file_path(
     if extensions is not None:
         if path_obj.suffix.lower() not in [ext.lower() for ext in extensions]:
             raise FileValidationError(
-                f"Invalid file extension {path_obj.suffix}. "
-                f"Expected one of: {', '.join(extensions)}"
+                f"Invalid file extension {path_obj.suffix}. " f"Expected one of: {', '.join(extensions)}"
             )
 
     return path_obj
 
 
-def validate_directory(
-    path: Union[str, Path], create: bool = False, writable: bool = False
-) -> Path:
+def validate_directory(path: Union[str, Path], create: bool = False, writable: bool = False) -> Path:
     """Validate and optionally create a directory.
 
     Args:
@@ -100,9 +97,7 @@ def validate_directory(
                 path_obj.mkdir(parents=True, exist_ok=True)
                 logger.info(f"Created directory: {path_obj}")
             except OSError as e:
-                raise FileValidationError(
-                    f"Failed to create directory: {path_obj}"
-                ) from e
+                raise FileValidationError(f"Failed to create directory: {path_obj}") from e
         else:
             raise FileValidationError(f"Directory not found: {path_obj}")
 
@@ -152,8 +147,7 @@ def check_dependency(
         module = __import__(module_name)
     except ImportError as e:
         raise DependencyError(
-            f"Required package '{package_name}' is not installed. "
-            f"Install with: pip install {package_name}"
+            f"Required package '{package_name}' is not installed. " f"Install with: pip install {package_name}"
         ) from e
 
     if min_version is not None:
@@ -162,14 +156,10 @@ def check_dependency(
 
             module_version = getattr(module, "__version__", None)
             if module_version is None:
-                logger.warning(
-                    f"Cannot verify version of {package_name} "
-                    "(no __version__ attribute)"
-                )
+                logger.warning(f"Cannot verify version of {package_name} " "(no __version__ attribute)")
             elif version.parse(module_version) < version.parse(min_version):
                 raise DependencyError(
-                    f"Package '{package_name}' version {module_version} is too old. "
-                    f"Required: >={min_version}"
+                    f"Package '{package_name}' version {module_version} is too old. " f"Required: >={min_version}"
                 )
         except ImportError:
             logger.warning("packaging module not available, skipping version check")
@@ -294,18 +284,13 @@ def batch_with_error_handling(
             errors.append((i, item, e))
 
             if error_limit is not None and len(errors) >= error_limit:
-                raise ProcessingError(
-                    f"Error limit ({error_limit}) exceeded. "
-                    f"Failed items: {len(errors)}/{len(items)}"
-                )
+                raise ProcessingError(f"Error limit ({error_limit}) exceeded. " f"Failed items: {len(errors)}/{len(items)}")
 
             if not skip_errors:
                 raise ProcessingError(error_msg) from e
 
     if errors:
-        logger.warning(
-            f"Completed with errors: {len(errors)}/{len(items)} items failed"
-        )
+        logger.warning(f"Completed with errors: {len(errors)}/{len(items)} items failed")
 
     return results
 

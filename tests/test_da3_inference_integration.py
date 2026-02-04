@@ -77,6 +77,7 @@ def _rand_image(h: int, w: int, dtype: np.dtype = np.float32) -> np.ndarray:
 # Real-model integration tests (opt-in)
 # -----------------------------------------------------------------------------
 
+
 @skip_hf
 @skip_offline
 @skip_no_token
@@ -263,6 +264,7 @@ def test_da3_infer_from_path_roundtrip(tmp_path: Path):
 # -----------------------------------------------------------------------------
 # Lightweight, non-network tests (always run in ML tier)
 # -----------------------------------------------------------------------------
+
 
 def test_da3_commercial_use_flag():
     """Test commercial_use initialization parameter (no model load)."""

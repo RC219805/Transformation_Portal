@@ -6,9 +6,10 @@ explicit authorization.
 """
 
 import functools
-from typing import Any, Callable, Dict, Optional, TypeVar
-import yaml
 from pathlib import Path
+from typing import Any, Callable, Dict, Optional, TypeVar
+
+import yaml
 
 
 class LicenseRestrictionError(Exception):
@@ -17,10 +18,11 @@ class LicenseRestrictionError(Exception):
     This exception is raised when attempting to use a non-commercial model
     without explicit opt-in via `non_commercial_ok=True`.
     """
+
     pass
 
 
-F = TypeVar('F', bound=Callable[..., Any])
+F = TypeVar("F", bound=Callable[..., Any])
 
 
 def require_non_commercial(reason: str = "") -> Callable[[F], F]:
@@ -45,15 +47,16 @@ def require_non_commercial(reason: str = "") -> Callable[[F], F]:
             ...
         ```
     """
+
     def decorator(func: F) -> F:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             # Extract config from first positional arg or 'config' kwarg
             config = None
-            if args and hasattr(args[0], 'non_commercial_ok'):
+            if args and hasattr(args[0], "non_commercial_ok"):
                 config = args[0]
-            elif 'config' in kwargs and hasattr(kwargs['config'], 'non_commercial_ok'):
-                config = kwargs['config']
+            elif "config" in kwargs and hasattr(kwargs["config"], "non_commercial_ok"):
+                config = kwargs["config"]
 
             if config is None:
                 raise TypeError(
@@ -72,7 +75,9 @@ def require_non_commercial(reason: str = "") -> Callable[[F], F]:
                     "depth model instead."
                 )
             return func(*args, **kwargs)
+
         return wrapper  # type: ignore
+
     return decorator
 
 
@@ -94,25 +99,23 @@ def validate_non_commercial_preset(preset_dict: Dict[str, Any]) -> bool:
         LicenseRestrictionError: If preset uses non-commercial model
                                 without proper marker
     """
-    model = preset_dict.get('model', {})
-    hf_id = model.get('hf_id', '')
+    model = preset_dict.get("model", {})
+    hf_id = model.get("hf_id", "")
 
     # Check for known non-commercial models
     non_commercial_identifiers = [
-        'DA3-Large-1.1',
-        'DA3-Base-1.1',
-        'DA3-Small-1.1',
-        'DA3NESTED-GIANT-LARGE-1.1',
+        "DA3-Large-1.1",
+        "DA3-Base-1.1",
+        "DA3-Small-1.1",
+        "DA3NESTED-GIANT-LARGE-1.1",
     ]
 
-    is_non_commercial_model = any(
-        identifier in hf_id for identifier in non_commercial_identifiers
-    )
+    is_non_commercial_model = any(identifier in hf_id for identifier in non_commercial_identifiers)
 
     if is_non_commercial_model:
         # Verify marker exists
-        license_restriction = preset_dict.get('license_restriction')
-        if license_restriction != 'non_commercial':
+        license_restriction = preset_dict.get("license_restriction")
+        if license_restriction != "non_commercial":
             raise LicenseRestrictionError(
                 f"Preset uses non-commercial model (hf_id={hf_id}) "
                 "but lacks license_restriction='non_commercial' marker.\n"

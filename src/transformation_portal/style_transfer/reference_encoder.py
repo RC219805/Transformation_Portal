@@ -9,16 +9,16 @@ that can be used for IP-Adapter style transfer. Supports:
 """
 
 import logging
+import pickle
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
-import pickle
 
 import numpy as np
 import torch
 from PIL import Image
 
 try:
-    from transformers import CLIPVisionModelWithProjection, CLIPImageProcessor
+    from transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
 
     ENCODER_AVAILABLE = True
 except ImportError:
@@ -65,10 +65,7 @@ class ReferenceImageEncoder:
             cache_dir: Directory for caching features
         """
         if not ENCODER_AVAILABLE:
-            raise ImportError(
-                "Reference encoder requires transformers. "
-                "Install with: pip install transformers>=4.38.0"
-            )
+            raise ImportError("Reference encoder requires transformers. " "Install with: pip install transformers>=4.38.0")
 
         self.device = device or self._detect_device()
         self.torch_dtype = torch_dtype
@@ -81,9 +78,9 @@ class ReferenceImageEncoder:
 
         # Load CLIP vision model
         # Production deployments should pin specific model revisions
-        self.model = CLIPVisionModelWithProjection.from_pretrained(  # nosec B615
-            self.MODEL_NAME, torch_dtype=torch_dtype
-        ).to(self.device)
+        self.model = CLIPVisionModelWithProjection.from_pretrained(self.MODEL_NAME, torch_dtype=torch_dtype).to(  # nosec B615
+            self.device
+        )
 
         self.processor = CLIPImageProcessor.from_pretrained(self.MODEL_NAME)  # nosec B615
 
@@ -97,9 +94,7 @@ class ReferenceImageEncoder:
             return "mps"
         return "cpu"
 
-    def encode(
-        self, image: Union[str, Path, Image.Image, np.ndarray], normalize: bool = True
-    ) -> torch.Tensor:
+    def encode(self, image: Union[str, Path, Image.Image, np.ndarray], normalize: bool = True) -> torch.Tensor:
         """Encode image to style features.
 
         Args:
@@ -155,9 +150,7 @@ class ReferenceImageEncoder:
         weights = weights / weights.sum()
 
         # Weighted average
-        averaged = sum(
-            features * weight for features, weight in zip(features_list, weights)
-        )
+        averaged = sum(features * weight for features, weight in zip(features_list, weights))
 
         # Normalize if requested
         if normalize:
@@ -192,9 +185,7 @@ class ReferenceImageEncoder:
             pil_images = [self._load_image(img) for img in batch]
 
             # Preprocess batch
-            inputs = self.processor(images=pil_images, return_tensors="pt").to(
-                self.device
-            )
+            inputs = self.processor(images=pil_images, return_tensors="pt").to(self.device)
 
             # Encode batch
             with torch.inference_mode():
@@ -258,9 +249,7 @@ class ReferenceImageEncoder:
 
         return features, metadata
 
-    def compute_similarity(
-        self, features1: torch.Tensor, features2: torch.Tensor
-    ) -> float:
+    def compute_similarity(self, features1: torch.Tensor, features2: torch.Tensor) -> float:
         """Compute cosine similarity between feature vectors.
 
         Args:
@@ -270,9 +259,7 @@ class ReferenceImageEncoder:
         Returns:
             Similarity score (0-1)
         """
-        similarity = torch.nn.functional.cosine_similarity(
-            features1, features2, dim=-1
-        ).item()
+        similarity = torch.nn.functional.cosine_similarity(features1, features2, dim=-1).item()
 
         # Normalize to 0-1
         return (similarity + 1) / 2
@@ -294,9 +281,7 @@ class ReferenceImageEncoder:
             List of (index, similarity) tuples
         """
         # Compute similarities
-        similarities = torch.nn.functional.cosine_similarity(
-            query_features.unsqueeze(0), reference_features, dim=-1
-        )
+        similarities = torch.nn.functional.cosine_similarity(query_features.unsqueeze(0), reference_features, dim=-1)
 
         # Normalize to 0-1
         similarities = (similarities + 1) / 2
@@ -349,9 +334,7 @@ class ReferenceImageEncoder:
 
         logger.info(f"Style library created with {len(image_paths)} references")
 
-    def _load_image(
-        self, image: Union[str, Path, Image.Image, np.ndarray]
-    ) -> Image.Image:
+    def _load_image(self, image: Union[str, Path, Image.Image, np.ndarray]) -> Image.Image:
         """Load image as PIL Image."""
         if isinstance(image, Image.Image):
             return image.convert("RGB")

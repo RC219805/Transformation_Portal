@@ -3,8 +3,10 @@
 
 Shows basic usage matching the task requirements.
 """
-from transformation_portal.lux_depth_v3 import DA3Config, DA3InferenceEngine
+
 import numpy as np
+
+from transformation_portal.lux_depth_v3 import DA3Config, DA3InferenceEngine
 
 
 def main():
@@ -41,13 +43,13 @@ def main():
     print(f"   - Backend: {result.metadata['backend']}")
     print(f"   - Device: {result.metadata['device']}")
 
-    if result.metadata.get('using_fallback'):
+    if result.metadata.get("using_fallback"):
         print(f"   - Using fallback model: {result.metadata['fallback_model']}")
 
     # Verify assertions from task
     assert result.depth_map.shape[:2] == image.shape[:2], "Shape mismatch"
     assert result.depth is result.depth_map, "Depth alias not working"
-    assert result.metadata['inference_time_ms'] > 0, "Inference time not recorded"
+    assert result.metadata["inference_time_ms"] > 0, "Inference time not recorded"
 
     print(f"\n✅ All assertions passed!")
     print(f"=" * 60)

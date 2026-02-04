@@ -82,9 +82,7 @@ class GaussianBlurProcessor(ProcessorPlugin):
         logger.info(f"GaussianBlurProcessor initialized with radius={self._radius}")
 
     @measure_performance
-    def process(
-        self, input_data: Union[Image.Image, np.ndarray], **kwargs
-    ) -> Union[Image.Image, np.ndarray]:
+    def process(self, input_data: Union[Image.Image, np.ndarray], **kwargs) -> Union[Image.Image, np.ndarray]:
         """Apply Gaussian blur to input image.
 
         Args:
@@ -241,9 +239,7 @@ class ResizeProcessor(ProcessorPlugin):
 
         self._initialized = True
 
-    def process(
-        self, input_data: Union[Image.Image, np.ndarray], **kwargs
-    ) -> Union[Image.Image, np.ndarray]:
+    def process(self, input_data: Union[Image.Image, np.ndarray], **kwargs) -> Union[Image.Image, np.ndarray]:
         """Resize input image.
 
         Args:

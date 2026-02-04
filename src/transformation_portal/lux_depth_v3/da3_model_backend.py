@@ -8,13 +8,17 @@ require custom library installation:
     cd depth-anything-3
     pip install -e .
 """
+
 from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Tuple
+
 import numpy as np
 import torch
 import torch.nn.functional as F
+
 
 @dataclass(frozen=True)
 class DA3ModelBackendConfig:
@@ -24,13 +28,15 @@ class DA3ModelBackendConfig:
     max_side: int = 896
     cache_dir: Optional[Path] = None
 
+
 class DA3ModelBackend:
     def __init__(self, config: DA3ModelBackendConfig):
         self.cfg = config
         self.model = None
 
     def _load_model(self):
-        if self.model is not None: return
+        if self.model is not None:
+            return
         # Logic to load model from hub (omitted for brevity, implies _require logic)
         # self.model = ...
         pass
@@ -59,7 +65,8 @@ class DA3ModelBackend:
         if preprocessor:
             tensor, _ = preprocessor.preprocess(rgb01, return_tensors=True)
             # Add batch dim if needed
-            if tensor.ndim == 3: tensor = tensor.unsqueeze(0)
+            if tensor.ndim == 3:
+                tensor = tensor.unsqueeze(0)
             return self.predict_from_tensor(tensor)
 
         # Fallback (internal logic)

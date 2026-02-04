@@ -28,12 +28,7 @@ except ImportError:
 
 
 # Default schema path relative to repo root
-DEFAULT_SCHEMA_PATH = (
-    Path(__file__).parent.parent.parent.parent
-    / "config"
-    / "schemas"
-    / "recipe_schema.json"
-)
+DEFAULT_SCHEMA_PATH = Path(__file__).parent.parent.parent.parent / "config" / "schemas" / "recipe_schema.json"
 
 
 def get_recipe_schema() -> Dict[str, Any]:

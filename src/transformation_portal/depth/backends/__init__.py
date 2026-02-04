@@ -34,14 +34,14 @@ See Also:
     - docs/architecture/ADR-019-depth-backend-unification.md
 """
 
+from .cache import DepthCacheWriter
 from .protocol import (
     DepthBackend,
     DepthResult,
-    LicenseType,
     LicenseRestrictionError,
+    LicenseType,
 )
 from .registry import DepthBackendRegistry
-from .cache import DepthCacheWriter
 
 __all__ = [
     "DepthBackend",

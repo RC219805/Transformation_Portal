@@ -1,4 +1,5 @@
 """Pixel operations registry for Materials V3."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

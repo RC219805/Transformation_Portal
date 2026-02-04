@@ -11,24 +11,24 @@ Provides Pydantic schemas for type-safe, validated configuration
 with preset support and automatic validation.
 """
 
+from .presets import (
+    Preset,
+    PresetRegistry,
+    list_presets,
+    load_preset,
+    register_preset,
+)
 from .schemas import (
     ConfigSchema,
     DeviceConfig,
+    OutputConfig,
     PathsConfig,
     PerformanceConfig,
-    OutputConfig,
     ValidationConfig,
 )
-from .presets import (
-    PresetRegistry,
-    Preset,
-    load_preset,
-    register_preset,
-    list_presets,
-)
 from .validation import (
-    validate_config,
     ConfigValidationError,
+    validate_config,
 )
 
 __all__ = [
