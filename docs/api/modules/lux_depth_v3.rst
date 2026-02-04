@@ -6,22 +6,6 @@ Lux Depth V3
    :undoc-members:
    :show-inheritance:
 
-Depth Estimation Pipeline
---------------------------
-
-.. automodule:: transformation_portal.lux_depth_v3.pipeline
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Depth Processors
-----------------
-
-.. automodule:: transformation_portal.lux_depth_v3.processors
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 Overview
 --------
 
