@@ -291,6 +291,7 @@ jobs:
             --cov=src/transformation_portal \
             --cov-report=xml \
             --cov-report=term \
+            --cov-report=html \
             --maxfail=3 \
             --tb=short
         env:
@@ -352,8 +353,9 @@ jobs:
       - name: Combine coverage data
         run: |
           # Combine all .coverage.* files from different test runs
-          if ls .coverage.* 1> /dev/null 2>&1; then
-            coverage combine --keep .coverage.*
+          # Also accept single .coverage file for robustness
+          if ls .coverage .coverage.* 1> /dev/null 2>&1; then
+            coverage combine --keep .coverage .coverage.* 2>/dev/null || coverage combine --keep .coverage.* 2>/dev/null || coverage combine --keep .coverage
             echo "Coverage files combined successfully"
           else
             echo "No .coverage files found to combine"
