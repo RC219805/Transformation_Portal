@@ -94,7 +94,7 @@ class TestPyPIWorkflows:
     def test_python_app_workflow_has_cleanup(self, workflows_dir):
         """Test that python-app.yml has cleanup job."""
         workflow_file = workflows_dir / "python-app.yml"
-        
+
         # Skip if workflow has been disabled/removed (CI-001 consolidation)
         if not workflow_file.exists():
             pytest.skip("python-app.yml has been disabled (CI consolidation)")
@@ -112,7 +112,7 @@ class TestPyPIWorkflows:
     def test_python_app_workflow_has_test_pypi(self, workflows_dir):
         """Test that python-app.yml has Test PyPI deployment."""
         workflow_file = workflows_dir / "python-app.yml"
-        
+
         # Skip if workflow has been disabled/removed (CI-001 consolidation)
         if not workflow_file.exists():
             pytest.skip("python-app.yml has been disabled (CI consolidation)")
