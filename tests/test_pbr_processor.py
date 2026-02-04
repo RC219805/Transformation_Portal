@@ -23,7 +23,7 @@ from transformation_portal.lux_depth_v3.pbr_processor import PBRProcessor
 
 
 @pytest.fixture
-def sample_depth(deterministic_rng):
+def sample_depth():
     """Create sample depth map for testing (256x256)."""
     # Create depth with some variation to produce interesting PBR
     h, w = 256, 256
