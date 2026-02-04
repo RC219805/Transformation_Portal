@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main, develop]
 
+# Concurrency control: Cancel outdated runs on new pushes to the same branch/PR
+# This reduces CI minutes and speeds up feedback on the latest code
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
