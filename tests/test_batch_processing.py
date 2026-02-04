@@ -107,7 +107,7 @@ class TestEnhanceBatch:
                 patch("transformation_portal.lux_depth_v3.preprocessing.validate_image_format") as mock_validate,
                 patch("transformation_portal.lux_depth_v3.preprocessing.preprocess_image") as mock_preprocess,
                 patch(
-                    "transformation_portal.lux_depth_v3.orchestrator." "atomic_write_depth_u16_png_with_stats"
+                    "transformation_portal.lux_depth_v3.orchestrator.atomic_write_depth_u16_png_with_stats"
                 ) as mock_write,
             ):
 

@@ -19,6 +19,8 @@ Tests will automatically find the package if installed via pip install -e .
 or if PYTHONPATH is set correctly.
 """
 
+# pylint: disable=redefined-outer-name  # pytest fixtures use other fixtures as params
+
 from __future__ import annotations
 
 import os
@@ -102,7 +104,7 @@ def temp_workspace(tmp_path: Path) -> dict[str, Path]:
 
 
 @pytest.fixture
-def sample_rgb_image(deterministic_rng) -> np.ndarray:  # pylint: disable=redefined-outer-name
+def sample_rgb_image(deterministic_rng) -> np.ndarray:
     """Create small deterministic RGB image (100x100x3, uint8)."""
     arr = (deterministic_rng.random((100, 100, 3)) * 255).astype(np.uint8)
     return arr
