@@ -66,11 +66,13 @@ def _make_engine(config: DA3Config | None = None) -> DA3InferenceEngine:
     return DA3InferenceEngine(config)
 
 
-def _rand_image(h: int, w: int, dtype: np.dtype = np.float32) -> np.ndarray:
+def _rand_image(h: int, w: int, dtype: np.dtype = np.float32, rng=None) -> np.ndarray:
     """Create a random RGB test image."""
+    if rng is None:
+        rng = np.random
     if dtype == np.uint8:
-        return np.random.randint(0, 256, (h, w, 3), dtype=np.uint8)
-    return np.random.rand(h, w, 3).astype(np.float32)
+        return rng.integers(0, 256, (h, w, 3), dtype=np.uint8)
+    return rng.random((h, w, 3)).astype(np.float32)
 
 
 # -----------------------------------------------------------------------------
