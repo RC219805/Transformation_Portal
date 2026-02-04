@@ -37,8 +37,10 @@ Basic usage example:
     from transformation_portal.config_loader import load_recipe
     from transformation_portal.lux_depth_v3 import DA3InferenceEngine, DA3Config
 
-    # Load configuration
-    config = load_recipe("luxury_estate")
+    # Load recipe configuration
+    recipe = load_recipe("config/recipes/luxury_estate.yaml")
+    print(recipe["name"])
+    print(recipe["stages"])
 
     # Initialize depth inference engine
     da3_config = DA3Config()

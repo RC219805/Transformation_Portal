@@ -5,29 +5,29 @@ Configuration Loader
    :members:
    :undoc-members:
    :show-inheritance:
-   :special-members: __init__
 
 Overview
 --------
 
-The configuration loader module provides utilities for loading and validating
-YAML-based pipeline configurations. It supports:
-
-- Preset configurations for common workflows
-- Schema validation with clear error messages
-- Environment variable interpolation
-- Cascading configuration inheritance
+YAML-based recipe and configuration loading with environment variable expansion
+and path resolution.
 
 Usage Example
 -------------
 
 .. code-block:: python
 
-    from transformation_portal.config_loader import load_recipe
+    from transformation_portal.config_loader import load_recipe, list_recipes
 
-    # Load a preset recipe
-    recipe = load_recipe("luxury_estate")
-
-    # Access recipe metadata
-    print(recipe.name)
-    print(recipe.description)
+    # Load a recipe file
+    recipe = load_recipe("config/recipes/luxury_estate.yaml")
+    
+    # Access recipe data (dict)
+    print(recipe["name"])
+    print(recipe.get("description", ""))
+    print(recipe["stages"])
+    
+    # List available recipes
+    recipes = list_recipes("config/recipes")
+    for recipe_path in recipes:
+        print(recipe_path.name)
