@@ -342,8 +342,8 @@ jobs:
 
       - name: List downloaded artifacts
         run: |
-          echo "Downloaded files:"
-          ls -laR
+          echo "Downloaded coverage files:"
+          ls -la .coverage.* coverage.xml 2>/dev/null || echo "Warning: Expected coverage files not found"
 
       - name: Combine coverage data
         run: |
