@@ -131,14 +131,116 @@ class UnifiedDepthConfig:
 
         Args:
             preset_name: Name of preset file (without .yaml extension)
+                        or full path to YAML file
 
         Returns:
             UnifiedDepthConfig loaded from preset
 
-        Note:
-            This is a stub implementation. Full YAML loading will be
-            implemented in Phase 2.
+        Raises:
+            FileNotFoundError: If preset file not found
+            ValueError: If YAML is invalid or missing required fields
+
+        Example:
+            >>> config = UnifiedDepthConfig.from_preset("depth_pro_example")
+            >>> config = UnifiedDepthConfig.from_preset("config/presets/my_preset.yaml")
         """
-        # Stub: Return default for now
-        # TODO: Implement YAML loading in Phase 2
-        return cls()
+        from pathlib import Path
+        import yaml
+        
+        # Determine preset path
+        if preset_name.endswith(('.yaml', '.yml')):
+            preset_path = Path(preset_name)
+        else:
+            # Look in config/presets/ directory
+            preset_path = Path(f"config/presets/{preset_name}.yaml")
+            if not preset_path.exists():
+                # Try without config/ prefix (in case called from config dir)
+                preset_path = Path(f"presets/{preset_name}.yaml")
+        
+        if not preset_path.exists():
+            raise FileNotFoundError(
+                f"Preset file not found: {preset_path}\n"
+                f"Looked in: config/presets/{preset_name}.yaml"
+            )
+        
+        # Load YAML
+        with open(preset_path, 'r', encoding='utf-8') as f:
+            data = yaml.safe_load(f)
+        
+        if not isinstance(data, dict):
+            raise ValueError(f"Preset must be a dictionary, got {type(data).__name__}")
+        
+        # Parse configuration sections
+        model_data = data.get('model', {})
+        processing_data = data.get('processing', {})
+        io_data = data.get('io', {})
+        security_data = data.get('security', {})
+        
+        # Parse nested PBR config if present
+        pbr_data = processing_data.pop('pbr', {}) if 'pbr' in processing_data else {}
+        
+        # Build config objects
+        model_config = ModelConfig(**model_data) if model_data else ModelConfig()
+        
+        pbr_config = PBRConfig(**pbr_data) if pbr_data else PBRConfig()
+        processing_config = ProcessingConfig(pbr=pbr_config, **processing_data) if processing_data else ProcessingConfig()
+        
+        io_config = IOConfig(**io_data) if io_data else IOConfig()
+        security_config = SecurityConfig(**security_data) if security_data else SecurityConfig()
+        
+        return cls(
+            model=model_config,
+            processing=processing_config,
+            io=io_config,
+            security=security_config
+        )
+
+    def to_yaml(self, output_path: str = None) -> str:
+        """Export configuration to YAML format.
+
+        Args:
+            output_path: Optional path to write YAML file. If None, returns YAML string.
+
+        Returns:
+            YAML string representation of configuration
+
+        Example:
+            >>> config = UnifiedDepthConfig.from_preset("depth_pro_example")
+            >>> yaml_str = config.to_yaml()
+            >>> config.to_yaml("my_config.yaml")  # Write to file
+        """
+        import yaml
+        from pathlib import Path
+        from dataclasses import asdict
+        
+        # Convert to dictionary
+        config_dict = {
+            'model': asdict(self.model),
+            'processing': {
+                **{k: v for k, v in asdict(self.processing).items() if k != 'pbr'},
+                'pbr': asdict(self.processing.pbr)
+            },
+            'io': asdict(self.io),
+            'security': asdict(self.security)
+        }
+        
+        # Convert enums to strings
+        def _convert_enums(obj):
+            if isinstance(obj, dict):
+                return {k: _convert_enums(v) for k, v in obj.items()}
+            elif isinstance(obj, (list, tuple)):
+                return [_convert_enums(item) for item in obj]
+            elif isinstance(obj, Enum):
+                return obj.value
+            return obj
+        
+        config_dict = _convert_enums(config_dict)
+        
+        # Generate YAML
+        yaml_str = yaml.safe_dump(config_dict, default_flow_style=False, sort_keys=False)
+        
+        # Write to file if path provided
+        if output_path:
+            Path(output_path).write_text(yaml_str, encoding='utf-8')
+        
+        return yaml_str
