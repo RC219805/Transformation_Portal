@@ -174,6 +174,8 @@ def mock_config():
 | config_loader.py | `src/transformation_portal/` | 385 | ❌ No tests |
 | pipeline_unified.py | `src/transformation_portal/` | 1,077 | ❌ No tests |
 
+*Note: Line counts measured via `wc -l` for consistency and reproducibility.*
+
 **Recommendation:** Prioritize tests by usage frequency:
 1. `config_loader.py` - Core functionality, high usage
 2. `scene_types.py` - Data structures used throughout
