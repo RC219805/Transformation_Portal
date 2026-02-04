@@ -212,12 +212,21 @@ jobs:
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
+      - name: Rename coverage file for combining
+        if: matrix.python-version == '3.12'
+        run: |
+          # Rename .coverage to include job identifier for later combining
+          mv .coverage .coverage.core-py${{ matrix.python-version }}
+
       - name: Upload coverage reports
         if: matrix.python-version == '3.12'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-core-py${{ matrix.python-version }}
-          path: htmlcov/
+          path: |
+            .coverage.core-py${{ matrix.python-version }}
+            coverage.xml
+            htmlcov/
 
   test-ml:
     name: ML Tests (Python 3.11)
@@ -293,6 +302,19 @@ jobs:
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
+      - name: Rename coverage file for combining
+        run: |
+          # Rename .coverage to include job identifier for later combining
+          mv .coverage .coverage.ml-py3.11
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-ml-py3.11
+          path: |
+            .coverage.ml-py3.11
+            coverage.xml
+
   coverage-gate:
     name: Coverage Quality Gate
     needs: [test-core, test-ml]
@@ -317,6 +339,27 @@ jobs:
       - name: Install coverage tools
         run: |
           pip install coverage diff-cover
+
+      - name: List downloaded artifacts
+        run: |
+          echo "Downloaded files:"
+          ls -laR
+
+      - name: Combine coverage data
+        run: |
+          # Combine all .coverage.* files from different test runs
+          if ls .coverage.* 1> /dev/null 2>&1; then
+            coverage combine --keep .coverage.*
+            echo "Coverage files combined successfully"
+          else
+            echo "No .coverage files found to combine"
+            exit 1
+          fi
+          # Generate XML report for diff-cover
+          coverage xml
+          # Generate text report for verification
+          echo "Coverage report:"
+          coverage report
 
       - name: Check coverage thresholds
         run: |
