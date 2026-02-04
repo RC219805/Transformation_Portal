@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import tempfile
+import os
 from pathlib import Path
 
 import pytest
@@ -18,14 +18,13 @@ from transformation_portal.depth_canonical.config import (
 )
 
 
-def test_from_preset_basic():
+def test_from_preset_basic(temp_workspace):
     """Test loading a basic YAML preset."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        preset_dir = Path(tmpdir) / "config" / "presets"
-        preset_dir.mkdir(parents=True)
+    preset_dir = temp_workspace["root"] / "config" / "presets"
+    preset_dir.mkdir(parents=True)
 
-        preset_path = preset_dir / "test_preset.yaml"
-        preset_content = """
+    preset_path = preset_dir / "test_preset.yaml"
+    preset_content = """
 model:
   variant: depth-anything-v2-large
   device: cpu
@@ -40,32 +39,29 @@ io:
   cache_enabled: false
   output_format: tiff
 """
-        preset_path.write_text(preset_content)
+    preset_path.write_text(preset_content)
 
-        # Change to tmpdir so relative paths work
-        import os
+    # Change to temp dir so relative paths work
+    orig_dir = os.getcwd()
+    try:
+        os.chdir(temp_workspace["root"])
+        config = UnifiedDepthConfig.from_preset("test_preset")
 
-        orig_dir = os.getcwd()
-        try:
-            os.chdir(tmpdir)
-            config = UnifiedDepthConfig.from_preset("test_preset")
-
-            assert config.model.variant == ModelVariant.DA2_LARGE
-            assert config.model.device == DeviceType.CPU
-            assert config.processing.apply_bilateral is True
-            assert config.processing.pbr.enabled is True
-            assert config.processing.pbr.normal_strength == 1.5
-            assert config.io.cache_enabled is False
-            assert config.io.output_format == "tiff"
-        finally:
-            os.chdir(orig_dir)
+        assert config.model.variant == ModelVariant.DA2_LARGE
+        assert config.model.device == DeviceType.CPU
+        assert config.processing.apply_bilateral is True
+        assert config.processing.pbr.enabled is True
+        assert config.processing.pbr.normal_strength == 1.5
+        assert config.io.cache_enabled is False
+        assert config.io.output_format == "tiff"
+    finally:
+        os.chdir(orig_dir)
 
 
-def test_from_preset_full_path():
+def test_from_preset_full_path(temp_workspace):
     """Test loading preset with full path."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        preset_path = Path(tmpdir) / "my_preset.yaml"
-        preset_content = """
+    preset_path = temp_workspace["root"] / "my_preset.yaml"
+    preset_content = """
 model:
   variant: depth-anything-v2-base
   device: cuda
@@ -74,13 +70,13 @@ processing:
   pbr:
     enabled: false
 """
-        preset_path.write_text(preset_content)
+    preset_path.write_text(preset_content)
 
-        config = UnifiedDepthConfig.from_preset(str(preset_path))
+    config = UnifiedDepthConfig.from_preset(str(preset_path))
 
-        assert config.model.variant == ModelVariant.DA2_BASE
-        assert config.model.device == DeviceType.CUDA
-        assert config.processing.pbr.enabled is False
+    assert config.model.variant == ModelVariant.DA2_BASE
+    assert config.model.device == DeviceType.CUDA
+    assert config.processing.pbr.enabled is False
 
 
 def test_from_preset_not_found():
@@ -89,14 +85,13 @@ def test_from_preset_not_found():
         UnifiedDepthConfig.from_preset("nonexistent_preset")
 
 
-def test_from_preset_invalid_yaml():
+def test_from_preset_invalid_yaml(temp_workspace):
     """Test that ValueError is raised for invalid YAML."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        preset_path = Path(tmpdir) / "invalid.yaml"
-        preset_path.write_text("- item1\n- item2\n")  # List instead of dict
+    preset_path = temp_workspace["root"] / "invalid.yaml"
+    preset_path.write_text("- item1\n- item2\n")  # List instead of dict
 
-        with pytest.raises(ValueError, match="Preset must be a dictionary"):
-            UnifiedDepthConfig.from_preset(str(preset_path))
+    with pytest.raises(ValueError, match="Preset must be a dictionary"):
+        UnifiedDepthConfig.from_preset(str(preset_path))
 
 
 def test_to_yaml_basic():
@@ -117,39 +112,37 @@ def test_to_yaml_basic():
     assert "cache_enabled: false" in yaml_str
 
 
-def test_to_yaml_file():
+def test_to_yaml_file(temp_workspace):
     """Test writing config to YAML file."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        output_path = Path(tmpdir) / "output_config.yaml"
+    output_path = temp_workspace["root"] / "output_config.yaml"
 
-        config = UnifiedDepthConfig(model=ModelConfig(variant=ModelVariant.DA2_BASE))
+    config = UnifiedDepthConfig(model=ModelConfig(variant=ModelVariant.DA2_BASE))
 
-        config.to_yaml(str(output_path))
+    config.to_yaml(str(output_path))
 
-        assert output_path.exists()
-        content = output_path.read_text()
-        assert "depth-anything-v2-base" in content
+    assert output_path.exists()
+    content = output_path.read_text()
+    assert "depth-anything-v2-base" in content
 
 
-def test_yaml_roundtrip():
+def test_yaml_roundtrip(temp_workspace):
     """Test that config can be saved and loaded back."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        # Create original config
-        original = UnifiedDepthConfig(
-            model=ModelConfig(variant=ModelVariant.DA2_LARGE, device=DeviceType.CUDA),
-            processing=ProcessingConfig(apply_bilateral=True, pbr=PBRConfig(enabled=True, normal_strength=2.0)),
-        )
+    # Create original config
+    original = UnifiedDepthConfig(
+        model=ModelConfig(variant=ModelVariant.DA2_LARGE, device=DeviceType.CUDA),
+        processing=ProcessingConfig(apply_bilateral=True, pbr=PBRConfig(enabled=True, normal_strength=2.0)),
+    )
 
-        # Save to YAML
-        yaml_path = Path(tmpdir) / "config.yaml"
-        original.to_yaml(str(yaml_path))
+    # Save to YAML
+    yaml_path = temp_workspace["root"] / "config.yaml"
+    original.to_yaml(str(yaml_path))
 
-        # Load back
-        loaded = UnifiedDepthConfig.from_preset(str(yaml_path))
+    # Load back
+    loaded = UnifiedDepthConfig.from_preset(str(yaml_path))
 
-        # Verify values match
-        assert loaded.model.variant == original.model.variant
-        assert loaded.model.device == original.model.device
-        assert loaded.processing.apply_bilateral == original.processing.apply_bilateral
-        assert loaded.processing.pbr.enabled == original.processing.pbr.enabled
-        assert loaded.processing.pbr.normal_strength == original.processing.pbr.normal_strength
+    # Verify values match
+    assert loaded.model.variant == original.model.variant
+    assert loaded.model.device == original.model.device
+    assert loaded.processing.apply_bilateral == original.processing.apply_bilateral
+    assert loaded.processing.pbr.enabled == original.processing.pbr.enabled
+    assert loaded.processing.pbr.normal_strength == original.processing.pbr.normal_strength
