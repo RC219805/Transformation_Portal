@@ -35,16 +35,17 @@ Basic usage example:
 .. code-block:: python
 
     from transformation_portal.config_loader import load_config
-    from transformation_portal.lux_depth_v3 import DepthEstimator
+    from transformation_portal.lux_depth_v3 import DA3InferenceEngine, DA3Config
 
     # Load configuration
     config = load_config("config/presets/luxury_estate.yaml")
 
-    # Initialize depth estimator
-    estimator = DepthEstimator(model="depth_anything_v2")
+    # Initialize depth inference engine
+    da3_config = DA3Config()
+    engine = DA3InferenceEngine(da3_config)
 
     # Process image with depth awareness
-    result = estimator.process_image("input.jpg")
+    result = engine.infer_depth("input.jpg")
 
 Module Index
 ------------

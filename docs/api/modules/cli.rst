@@ -9,39 +9,26 @@ Command Line Interface
 Overview
 --------
 
-Command-line interface built with Typer for user-friendly operation.
+Command-line tools for image and video processing pipelines.
 
-Available Commands
-------------------
+Available Console Scripts
+-------------------------
 
-- **process**: Process single images or directories
-- **batch**: High-performance batch processing
-- **video**: Video processing with HDR support
-- **preview**: Quick preview with draft settings
-- **config**: Configuration management
+The package installs the following command-line tools:
+
+- **transformation-portal**: Main CLI entry point
 
 Usage Examples
 --------------
 
 .. code-block:: bash
 
-    # Process single image
-    transformation-portal process input.jpg --preset luxury_estate
+    # Basic image processing
+    transformation-portal process input.jpg output.jpg
 
-    # Batch process directory
-    transformation-portal batch input_dir/ output_dir/ --workers 4
+    # Batch processing
+    transformation-portal batch input_dir/ output_dir/
 
-    # Video processing with HDR
-    transformation-portal video input.mp4 output.mp4 --hdr --tone-map aces
-
-    # Generate preview
-    transformation-portal preview input.jpg --fast
-
-CLI Reference
--------------
-
-.. autofunction:: transformation_portal.cli.process
-.. autofunction:: transformation_portal.cli.batch
-.. autofunction:: transformation_portal.cli.video
-.. autofunction:: transformation_portal.cli.preview
-.. autofunction:: transformation_portal.cli.config
+    # Check version and help
+    transformation-portal --version
+    transformation-portal --help

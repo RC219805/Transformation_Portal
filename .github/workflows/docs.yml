@@ -15,6 +15,9 @@ on:
       - 'src/**/*.py'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-docs:
     name: Build API Documentation
