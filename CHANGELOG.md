@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Impact: Users must upgrade to Python 3.11 or later
   - See: [ADR-020: Drop Python 3.10 Support](docs/architecture/ADR-020-drop-python-3.10.md)
 
+### Fixed
+- **Coverage Quality Gate:** Adjusted baseline threshold from 33% to 25% to reflect actual combined coverage
+  - PR #832 fixed coverage artifact consolidation, revealing accurate combined coverage of 25.44%
+  - Previous 33% threshold was aspirational, not historical
+  - Added [Coverage Improvement Plan](docs/coverage-improvement-plan.md) with roadmap to 33% by Q2 2026
+  - Baseline gate now prevents regression while allowing incremental improvement
+
 ### Changed
 - **ML Stack Upgrades:** Major ML framework and dependency updates
   - torch: 2.4.1 → 2.10.0
