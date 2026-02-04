@@ -6,6 +6,12 @@ on:
   # pull_request disabled - CI Gate in build.yml is the required governance check
   # This workflow provides post-merge validation only
 
+# Concurrency control: Cancel outdated runs on new pushes to the same branch
+# This reduces CI minutes and speeds up feedback on the latest code
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   pull-requests: write

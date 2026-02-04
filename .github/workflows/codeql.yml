@@ -19,6 +19,13 @@ on:
   schedule:
     - cron: '27 22 * * 2'
 
+# Concurrency control: Cancel outdated runs on new pushes to the same branch/PR
+# Scheduled runs use unique groups and won't be cancelled
+# Note: Security scans are set to cancel-in-progress because CodeQL can be re-run on latest code
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})

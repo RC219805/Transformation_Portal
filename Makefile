@@ -16,7 +16,7 @@ FAST_TESTS := \
 	tests/test_float_roundtrip.py \
 	tests/test_golden_hour_courtyard_workflow.py
 
-.PHONY: help test-fast test-novideo test-full test-structure test-utils venv setup clean \
+.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils venv setup clean \
         lint ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs \
         lock lock-prod lock-ci lock-dev install-core install-ml
 
@@ -28,6 +28,7 @@ help:
 	@echo "  test-fast          Run fast subset (no video/optional heavy paths)"
 	@echo "  test-novideo       Run all tests excluding video suite via -k filter"
 	@echo "  test-full          Run entire test suite (parallel if xdist present)"
+	@echo "  test-integration   Run integration tests (requires HF_TOKEN)"
 	@echo "  test-structure     Run codebase structure validation tests"
 	@echo "  test-utils         Run tests for performance and error handling utilities"
 	@echo "  venv               Create local .venv if missing"
@@ -91,6 +92,10 @@ test-full:
 	else \
 		"$(PY)" -m pytest -q tests; \
 	fi
+
+test-integration:
+	@echo "Running integration tests (requires HF_TOKEN)..."
+	@TP_RUN_HF_MODEL_TESTS=1 "$(PY)" -m pytest -v tests/test_da3_inference_integration.py
 
 test-structure:
 	@echo "Running codebase structure validation tests..."

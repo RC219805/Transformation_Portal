@@ -88,7 +88,7 @@ def _load_manifest_cached(manifest_path: str, mtime: float) -> CombinedManifest:
     return CombinedManifest.load(Path(manifest_path))
 
 
-def make_output_key(input_path: Path, input_root: Path, use_xxhash: bool = False) -> Path:
+def make_output_key(input_path: Path, input_root: Path, use_xxhash: bool = XXHASH_AVAILABLE) -> Path:
     """Generate collision-free output key preserving directory structure.
 
     Creates a unique output key that:
@@ -96,7 +96,7 @@ def make_output_key(input_path: Path, input_root: Path, use_xxhash: bool = False
     2. Includes the sanitized original extension (without dot)
     3. Appends an 8-character hash of the full relative path
 
-    Phase 3: Supports xxHash for 5x faster hashing (opt-in).
+    Phase 3: xxHash is now default when available (5x faster than SHA-1).
 
     This ensures unique output names even for files with the same name
     in different directories or with different extensions.
@@ -104,7 +104,7 @@ def make_output_key(input_path: Path, input_root: Path, use_xxhash: bool = False
     Args:
         input_path: Full path to input file
         input_root: Base directory for relative path calculation
-        use_xxhash: Use xxHash instead of SHA-1 (5x faster, opt-in)
+        use_xxhash: Use xxHash instead of SHA-1 (default: True if available, else False)
 
     Returns:
         Path object representing the output key (without final extension)
