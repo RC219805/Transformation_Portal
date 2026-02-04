@@ -23,11 +23,11 @@ Usage Example
 
 .. code-block:: python
 
-    from transformation_portal.config_loader import load_config
+    from transformation_portal.config_loader import load_recipe
 
-    # Load a preset configuration
-    config = load_config("config/presets/luxury_estate.yaml")
+    # Load a preset recipe
+    recipe = load_recipe("luxury_estate")
 
-    # Access configuration values
-    print(config.depth_model)  # "depth_anything_v2"
-    print(config.enhancement_strength)  # 0.75
+    # Access recipe metadata
+    print(recipe.name)
+    print(recipe.description)

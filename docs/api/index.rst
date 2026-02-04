@@ -34,11 +34,11 @@ Basic usage example:
 
 .. code-block:: python
 
-    from transformation_portal.config_loader import load_config
+    from transformation_portal.config_loader import load_recipe
     from transformation_portal.lux_depth_v3 import DA3InferenceEngine, DA3Config
 
     # Load configuration
-    config = load_config("config/presets/luxury_estate.yaml")
+    config = load_recipe("luxury_estate")
 
     # Initialize depth inference engine
     da3_config = DA3Config()
