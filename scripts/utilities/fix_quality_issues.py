@@ -4,6 +4,7 @@ Comprehensive quality fix script for Transformation Portal.
 Addresses all linting issues automatically where possible.
 """
 
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -13,7 +14,9 @@ def run_command(cmd, description):
     print(f"\n{'='*60}")
     print(f"{description}")
     print(f"{'='*60}")
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=False)
+    # Convert string to list for safe subprocess execution (no shell injection risk)
+    cmd_list = shlex.split(cmd) if isinstance(cmd, str) else cmd
+    result = subprocess.run(cmd_list, capture_output=True, text=True, check=False)
     if result.stdout:
         print(result.stdout)
     if result.stderr and result.returncode != 0:

@@ -54,7 +54,6 @@ jobs:
           sudo apt-get autoremove -y || true
           sudo apt-get autoclean -y || true
           docker system prune -af --volumes || true
-          rm -rf ~/.cache/pip || true
           echo "Disk usage after cleanup:"
           df -h
 
@@ -66,13 +65,20 @@ jobs:
         with:
           python-version: "3.12" # latest for linting
 
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-lint-${{ hashFiles('requirements-lint.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-lint-
+
       - name: Lint with minimal dependencies
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install --no-cache-dir flake8 pylint
-          python -m pip install --no-cache-dir -r requirements-lint.txt
-          pip cache purge || true
+          python -m pip install flake8 pylint
+          python -m pip install -r requirements-lint.txt
 
           echo "Disk space after dependency install:"
           df -h
@@ -160,7 +166,6 @@ jobs:
           sudo apt-get autoremove -y || true
           sudo apt-get autoclean -y || true
           docker system prune -af --volumes || true
-          rm -rf ~/.cache/pip || true
           echo "Disk usage after cleanup:"
           df -h
 
@@ -170,14 +175,21 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ matrix.test-type }}-${{ hashFiles('requirements-ci.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ matrix.test-type }}-
+            ${{ runner.os }}-pip-
+
       - name: Install core dependencies
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip wheel
-          python -m pip install --no-cache-dir pytest pytest-cov
-          python -m pip install --no-cache-dir -r requirements-ci.txt
-          pip cache purge || true
-          rm -rf /tmp/pip-* || true
+          python -m pip install pytest pytest-cov
+          python -m pip install -r requirements-ci.txt
           echo "Disk space after core install:"
           df -h
 
