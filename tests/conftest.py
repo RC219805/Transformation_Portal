@@ -83,7 +83,7 @@ def temp_workspace(tmp_path: Path) -> dict[str, Path]:
     """Create structured temporary workspace for tests.
 
     Returns:
-        Dictionary with keys: input_dir, output_dir, cache_dir
+        Dictionary with keys: root, input_dir, output_dir, cache_dir
     """
     input_dir = tmp_path / "input"
     output_dir = tmp_path / "output"
@@ -182,11 +182,11 @@ def transformers_offline():
 
 
 @pytest.fixture
-def mock_depth_model():
+def mock_depth_model(deterministic_rng):
     """Mock depth estimation model for testing without ML dependencies."""
     pytest.importorskip("unittest.mock")
     from unittest.mock import MagicMock
 
     mock = MagicMock()
-    mock.infer.return_value = np.random.rand(100, 100).astype(np.float32)
+    mock.infer.return_value = deterministic_rng.random((100, 100)).astype(np.float32)
     return mock
