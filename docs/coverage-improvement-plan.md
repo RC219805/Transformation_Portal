@@ -3,8 +3,8 @@
 **Current Status (as of 2026-02-04)**
 - **Combined Coverage**: 25.44%
 - **Total Statements**: 24,820
-- **Covered Statements**: 6,746 (24820 - 18074)
-- **Baseline Gate**: 25% (prevents regression)
+- **Covered Statements**: ~6,314 (24,820 × 0.2544)
+- **Baseline Gate**: 25% (prevents regression below this floor)
 
 ## Historical Context
 
@@ -18,10 +18,19 @@ The coverage baseline was previously set at 33% but this was aspirational rather
 
 ## Roadmap to 33% Coverage
 
-To reach 33% coverage, we need to cover **~1,800 additional statements** (from 6,746 to 8,186).
+To reach 33% coverage, we need to cover **~1,877 additional statements** (from 6,314 to 8,191).
+
+**Calculation:**
+- Target statements @ 33%: 24,820 × 0.33 ≈ 8,191
+- Current covered: 6,314
+- Gap: 8,191 - 6,314 = ~1,877 statements
 
 ### Phase 1: Low-Hanging Fruit (Q1 2026) – Target: 28%
-**Goal**: +630 covered statements
+**Goal**: +636 covered statements (6,314 → 6,950)
+
+**Calculation:**
+- Target @ 28%: 24,820 × 0.28 ≈ 6,950
+- Increment: 6,950 - 6,314 = +636
 
 Priority modules (currently 0% coverage):
 1. **CLI & Entrypoints** (~250 statements)
@@ -37,7 +46,11 @@ Priority modules (currently 0% coverage):
    - Already high: `utils/error_handling.py` (89%), focus on edge cases
 
 ### Phase 2: Core Pipelines (Q2 2026) – Target: 33%
-**Goal**: +1,170 more covered statements
+**Goal**: +1,241 more covered statements (6,950 → 8,191)
+
+**Calculation:**
+- Target @ 33%: 24,820 × 0.33 ≈ 8,191
+- Increment from Phase 1: 8,191 - 6,950 = +1,241
 
 Priority modules:
 1. **Depth Processing Extensions** (~400 statements)
