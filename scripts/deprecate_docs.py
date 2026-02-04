@@ -18,6 +18,7 @@ DUPLICATES = [
     ("docs/CODE_QUALITY_SYSTEM.md", "docs/CODE_QUALITY_STANDARDS.md"),
     ("docs/QUALITY_CONTROL_SYSTEM.md", "docs/CODE_QUALITY_STANDARDS.md"),
     ("docs/ARCHITECTURAL_CONTEXT_INTEGRATION.md", "docs/ARCHITECTURE.md"),
+    ("docs/ARCHITECTURE_PHILOSOPHY.md", "docs/ARCHITECTURE.md"),
 ]
 
 DEPRECATION_TEMPLATE = """> ⚠️ **DEPRECATED**
@@ -35,7 +36,7 @@ def add_deprecation_notice(filepath: str, canonical: str):
         print(f"Skip {filepath} (not found)")
         return
 
-    content = path.read_text()
+    content = path.read_text(encoding="utf-8")
 
     # Check if already deprecated
     if "DEPRECATED" in content[:200]:
@@ -57,7 +58,7 @@ def add_deprecation_notice(filepath: str, canonical: str):
         date=deprecation_date,
     )
     new_content = notice + content
-    path.write_text(new_content)
+    path.write_text(new_content, encoding="utf-8")
     print(f"✓ Deprecated {filepath} → {relative_link}")
 
 

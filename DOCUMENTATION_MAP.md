@@ -2,7 +2,7 @@
 
 **Purpose:** Single source of truth for finding documentation in Transformation Portal.
 
-**Last Updated:** 2026-02-04  
+**Last Updated:** 2026-02-04
 **Maintainer:** Repository Architect
 
 ---
@@ -33,7 +33,7 @@
 
 | Topic | Canonical Document | Status |
 |-------|-------------------|--------|
-| **CI/CD Overview** | [docs/ci/README.md](docs/ci/README.md) | ✅ Stable |
+| **CI/CD Overview** | [docs/ci_cd/README.md](docs/ci_cd/README.md) | ✅ Stable |
 | **Workflow Reference** | [.github/workflows/build.yml](.github/workflows/build.yml) | ✅ Stable (Primary CI) |
 | **Branch Protection** | [docs/BRANCH_PROTECTION_SETUP.md](docs/BRANCH_PROTECTION_SETUP.md) | ✅ Stable |
 
@@ -60,7 +60,7 @@
 
 ### Format Support
 - **File Formats:** [docs/SUPPORTED_FILE_FORMATS.md](docs/SUPPORTED_FILE_FORMATS.md)
-- **TIFF Handling:** [docs/fixes/TIFF_FIX_QUICKREF.md](docs/fixes/TIFF_FIX_QUICKREF.md)
+- **TIFF Handling:** [docs/TIFF_FIX_QUICKREF.md](docs/TIFF_FIX_QUICKREF.md)
 
 ### Advanced Features
 - **Temporal Architecture:** [docs/TEMPORAL_ARCHITECTURE_QUICKREF.md](docs/TEMPORAL_ARCHITECTURE_QUICKREF.md)
@@ -79,7 +79,7 @@
 docs/
 ├── DOCUMENTATION_MAP.md      ← You are here
 ├── architecture/             ← Architecture decision records (ADRs)
-├── ci/                       ← CI/CD documentation
+├── ci_cd/                    ← CI/CD documentation
 ├── fixes/                    ← Bug fix documentation and postmortems
 ├── guides/                   ← User guides and tutorials
 ├── pipeline/                 ← Pipeline-specific documentation
