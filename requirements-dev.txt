@@ -14,6 +14,6 @@ autopep8>=2.0,<3
 libcst>=1.2,<2
 
 # Documentation generation
-sphinx>=7.2,<8
+sphinx>=7.2,<10
 sphinx-rtd-theme>=2.0,<3
 sphinx-autodoc-typehints>=2.0,<3
