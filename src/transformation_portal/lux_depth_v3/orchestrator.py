@@ -15,56 +15,56 @@ Improvements implemented (per requirements):
 8. Lazy manifest loading with LRU cache (15-20% I/O reduction)
 9. Phase 3: xxHash for output keys (5x faster, opt-in)
 """
+
 from __future__ import annotations
-from pathlib import Path
-from typing import Optional, List, Dict, Any
-from functools import lru_cache
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from multiprocessing import cpu_count
-import time
-import logging
+
 import datetime
-import json
 import hashlib
+import json
+import logging
 import os
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import lru_cache
+from multiprocessing import cpu_count
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 # Phase 3: xxHash support (optional dependency)
 try:
     import xxhash
+
     XXHASH_AVAILABLE = True
 except ImportError:
     XXHASH_AVAILABLE = False
     xxhash = None  # type: ignore
 
+from .batch_stats import compute_batch_runtime_stats
+
 # Note: Imports adjusted to relative for package context compatibility
-from .config import DA3Config, ModelVariant, EnhanceConfig
-from .inference import DA3InferenceEngine
-from .postprocessing import Postprocessor
-from .input_manager import ImageInput
+from .config import DA3Config, EnhanceConfig, ModelVariant
+from .depth_cache import DepthCache
 from .depth_writer import atomic_write_depth_u16_png_with_stats
-from .pbr import generate_pbr_maps
-from .pbr_writer import write_pbr_maps
-from .v2_runner import V2Runner, find_v2_report
-from .security import (
-    HashMode,
-    sanitize_file_stem,
-    sanitize_path_component_nonlossy,
-)
+from .inference import DA3InferenceEngine
+from .input_manager import ImageInput
 from .manifest import (
+    BatchManifest,
     CombinedManifest,
     ConfigFingerprint,
-    InputMetadata,
     DepthMetadata,
-    V2Metadata,
-    TimingMetadata,
+    InputMetadata,
     ReproMetadata,
-    BatchManifest,
+    TimingMetadata,
+    V2Metadata,
+    capture_environment,
     compute_file_sha256,
     get_git_revision,
-    capture_environment,
 )
-from .batch_stats import compute_batch_runtime_stats
-from .depth_cache import DepthCache
+from .pbr import generate_pbr_maps
+from .pbr_writer import write_pbr_maps
+from .postprocessing import Postprocessor
+from .security import HashMode, sanitize_file_stem, sanitize_path_component_nonlossy
+from .v2_runner import V2Runner, find_v2_report
 
 logger = logging.getLogger(__name__)
 
@@ -128,12 +128,12 @@ def make_output_key(input_path: Path, input_root: Path, use_xxhash: bool = XXHAS
     sanitized_parts = [sanitize_path_component_nonlossy(p) for p in rel_dir.parts]
 
     # Sanitize extension (remove dot, lowercase, default to "noext")
-    ext_label = ext.lstrip('.').lower() if ext else "noext"
+    ext_label = ext.lstrip(".").lower() if ext else "noext"
     ext_label = sanitize_path_component_nonlossy(ext_label)
 
     # Compute 8-char hash of full relative path for uniqueness
     # Phase 3: Use xxHash if available and enabled (5x faster)
-    hash_input = relpath.as_posix().encode('utf-8')
+    hash_input = relpath.as_posix().encode("utf-8")
     if use_xxhash and XXHASH_AVAILABLE:
         hash_suffix = xxhash.xxh64(hash_input).hexdigest()[:8]
     else:
@@ -242,10 +242,9 @@ class EnhanceOrchestrator:
         logger.debug(f"Parallel processing: {'enabled' if self._use_parallel else 'disabled'} (workers={self.max_workers})")
 
         # Phase 2: Content-addressable depth cache (opt-in)
-        self.depth_cache = DepthCache(
-            self.output_root,
-            max_size_gb=config.depth_cache_max_size_gb
-        ) if config.enable_depth_cache else None
+        self.depth_cache = (
+            DepthCache(self.output_root, max_size_gb=config.depth_cache_max_size_gb) if config.enable_depth_cache else None
+        )
         if self.depth_cache:
             logger.info(f"Depth cache enabled: {self.depth_cache.cache_dir}")
 
@@ -266,7 +265,7 @@ class EnhanceOrchestrator:
         manifest_exists: bool = False,
         saved_hash: Optional[str] = None,
         *,
-        for_manifest_write: bool = False
+        for_manifest_write: bool = False,
     ) -> Optional[str]:
         """Compute file hash respecting HashMode configuration.
 
@@ -333,10 +332,7 @@ class EnhanceOrchestrator:
             saved_hash = manifest.input.image_sha256 if manifest.input else None
             if saved_hash and self.config.hash_mode != HashMode.NEVER:
                 current_hash = self._compute_or_skip_hash(
-                    image_input.path,
-                    manifest_exists=True,
-                    saved_hash=saved_hash,
-                    for_manifest_write=False
+                    image_input.path, manifest_exists=True, saved_hash=saved_hash, for_manifest_write=False
                 )
                 if current_hash and current_hash != saved_hash:
                     logger.info(f"Input image changed - regenerating depth: {image_input.path}")
@@ -368,6 +364,7 @@ class EnhanceOrchestrator:
 
                 # Quick read check to verify file integrity
                 from .depth_writer import read_depth_u16_png
+
                 d = read_depth_u16_png(depth_path)
                 if d.ndim != 2:
                     logger.debug(f"Depth file has invalid dimensions: {d.ndim}")
@@ -380,8 +377,7 @@ class EnhanceOrchestrator:
             return False
 
     def should_skip_v2(
-        self, v2_report_path: Optional[Path], manifest_path: Path,
-        image_input: ImageInput, depth_was_skipped: bool
+        self, v2_report_path: Optional[Path], manifest_path: Path, image_input: ImageInput, depth_was_skipped: bool
     ) -> bool:
         """Determine whether to skip V2 enhancement stage.
 
@@ -444,7 +440,7 @@ class EnhanceOrchestrator:
             if self.verify_outputs and manifest.pbr_assets:
                 pbr_outputs = manifest.pbr_assets
                 for label, filepath in pbr_outputs.items():
-                    if isinstance(filepath, str) and filepath and label.endswith('_path'):
+                    if isinstance(filepath, str) and filepath and label.endswith("_path"):
                         if not os.path.exists(filepath):
                             logger.debug(f"PBR output missing: {filepath}")
                             return False
@@ -461,7 +457,7 @@ class EnhanceOrchestrator:
         depth_path: Path,
         float_depth_path: Path,
         manifest_path: Path,
-        skip_depth: bool
+        skip_depth: bool,
     ) -> tuple[Optional[Any], float, Optional[dict]]:
         """Stage A: Depth computation with caching and PBR generation.
 
@@ -482,7 +478,8 @@ class EnhanceOrchestrator:
 
         if not skip_depth:
             # Lazy preprocessing: Only validate and preprocess if we're running depth
-            from .preprocessing import validate_image_format, preprocess_image
+            from .preprocessing import preprocess_image, validate_image_format
+
             validated_path = validate_image_format(image_input.path)
             preprocessed_array, original_shape = preprocess_image(validated_path)
 
@@ -493,11 +490,7 @@ class EnhanceOrchestrator:
                 cached_depth = None
                 image_sha256 = None
                 if self.depth_cache:
-                    image_sha256 = self._compute_or_skip_hash(
-                        image_input.path,
-                        manifest_exists=False,
-                        for_manifest_write=True
-                    )
+                    image_sha256 = self._compute_or_skip_hash(image_input.path, manifest_exists=False, for_manifest_write=True)
                     if image_sha256:
                         config_fp_hash = self.compute_config_fingerprint().depth_only().to_sha256()
                         cached_depth = self.depth_cache.get(image_sha256, config_fp_hash)
@@ -508,11 +501,8 @@ class EnhanceOrchestrator:
                 if cached_depth is not None:
                     # Use cached depth - wrap in result-like object
                     from .inference import DepthResult
-                    result = DepthResult(
-                        depth=cached_depth,
-                        original_image=preprocessed_array,
-                        metadata={'cached': True}
-                    )
+
+                    result = DepthResult(depth=cached_depth, original_image=preprocessed_array, metadata={"cached": True})
                 else:
                     # Run inference
                     result = self.inference_engine.predict(preprocessed_array)
@@ -532,12 +522,13 @@ class EnhanceOrchestrator:
                     depth_path,
                     result.depth,
                     method=self.config.depth_quantization,
-                    debug_verify=self.config.verify_depth_writes
+                    debug_verify=self.config.verify_depth_writes,
                 )
 
                 # 3b. Save float depth (.npy) for high-precision PBR if enabled
-                if getattr(self.config, 'save_float_depth', False):
+                if getattr(self.config, "save_float_depth", False):
                     import numpy as np
+
                     np.save(str(float_depth_path), result.depth)
                     logger.debug(f"Saved float depth: {float_depth_path}")
 
@@ -553,8 +544,8 @@ class EnhanceOrchestrator:
                 }
 
                 # Merge inference provenance into depth stats
-                _md = getattr(result, 'metadata', None) or {}
-                for _k in ('requested_model_id', 'resolved_model_id', 'resolved_model_source'):
+                _md = getattr(result, "metadata", None) or {}
+                for _k in ("requested_model_id", "resolved_model_id", "resolved_model_source"):
                     if _k in _md:
                         stats[_k] = _md[_k]
 
@@ -568,14 +559,18 @@ class EnhanceOrchestrator:
 
                 # 4. Write depth metadata JSON
                 depth_metadata_path = depth_path.parent / f"{depth_path.stem}_metadata.json"
-                with open(depth_metadata_path, 'w') as f:
-                    json.dump({
-                        "model": depth_metadata.model,
-                        "depth_path": depth_metadata.depth_path,
-                        "runtime_seconds": depth_metadata.runtime_seconds,
-                        "scaling": depth_metadata.scaling,
-                        "stats": depth_metadata.stats,
-                    }, f, indent=2)
+                with open(depth_metadata_path, "w") as f:
+                    json.dump(
+                        {
+                            "model": depth_metadata.model,
+                            "depth_path": depth_metadata.depth_path,
+                            "runtime_seconds": depth_metadata.runtime_seconds,
+                            "scaling": depth_metadata.scaling,
+                            "stats": depth_metadata.stats,
+                        },
+                        f,
+                        indent=2,
+                    )
                 logger.debug(f"Wrote depth metadata: {depth_metadata_path}")
 
                 # 5. PBR map generation (optional)
@@ -588,16 +583,12 @@ class EnhanceOrchestrator:
                 elif self.config.depth_fallback == "skip":
                     return None, 0.0, None
                 elif self.config.depth_fallback == "v2-auto":
-                    logger.info(
-                        "V2 fallback mode: V3 failed, will attempt V2 with independent depth"
-                    )
+                    logger.info("V2 fallback mode: V3 failed, will attempt V2 with independent depth")
                     if depth_path.exists():
                         depth_path.unlink()
                     return None, 0.0, None
                 else:
-                    raise ValueError(
-                        f"Unsupported depth_fallback mode: {self.config.depth_fallback}"
-                    ) from e
+                    raise ValueError(f"Unsupported depth_fallback mode: {self.config.depth_fallback}") from e
         else:
             # Depth was skipped - load from cache
             if manifest_path.exists():
@@ -609,9 +600,7 @@ class EnhanceOrchestrator:
                     logger.debug(f"Failed to load previous manifest metadata: {e}")
 
             # PBR generation with cached depth (if enabled but not previously generated)
-            if self.config.generate_pbr and (
-                pbr_assets is None or not self._verify_pbr_outputs(pbr_assets)
-            ):
+            if self.config.generate_pbr and (pbr_assets is None or not self._verify_pbr_outputs(pbr_assets)):
                 logger.info("Generating PBR maps from cached depth...")
                 try:
                     depth_data_for_pbr = self._load_cached_depth(depth_path, float_depth_path)
@@ -653,11 +642,7 @@ class EnhanceOrchestrator:
             sanitized_stem = output_key.stem if output_key.suffix else output_key.name
 
             pbr_paths = write_pbr_maps(
-                normal_map=normal_map,
-                roughness_map=roughness_map,
-                ao_map=ao_map,
-                output_dir=pbr_dir,
-                base_name=sanitized_stem
+                normal_map=normal_map, roughness_map=roughness_map, ao_map=ao_map, output_dir=pbr_dir, base_name=sanitized_stem
             )
 
             pbr_runtime = time.time() - pbr_t0
@@ -677,7 +662,7 @@ class EnhanceOrchestrator:
                     "ao_strength": pbr_config.ao_strength,
                     "ao_blur_radius": pbr_config.ao_blur_radius,
                     "ao_bias": pbr_config.ao_bias,
-                }
+                },
             }
             return pbr_assets
 
@@ -692,7 +677,7 @@ class EnhanceOrchestrator:
         output_key: Path,
         v2_log_path: Path,
         manifest_path: Path,
-        skip_depth: bool
+        skip_depth: bool,
     ) -> tuple[dict, float, Optional[Path]]:
         """Stage B: V2 enhancement subprocess.
 
@@ -713,9 +698,7 @@ class EnhanceOrchestrator:
             return {"status": "skipped"}, 0.0, None
 
         v2_report_path = find_v2_report(self.v2_dir, output_key.name)
-        skip_v2 = not self.config.force_v2 and self.should_skip_v2(
-            v2_report_path, manifest_path, image_input, skip_depth
-        )
+        skip_v2 = not self.config.force_v2 and self.should_skip_v2(v2_report_path, manifest_path, image_input, skip_depth)
 
         if skip_v2:
             logger.info("V2 outputs valid, skipping.")
@@ -730,7 +713,7 @@ class EnhanceOrchestrator:
             device=self.config.v2_device,
             upscaler_backend=self.config.v2_upscaler_backend,
             log_file=v2_log_path,
-            timeout=self.config.v2_timeout
+            timeout=self.config.v2_timeout,
         )
         v2_runtime_s = v2_result.get("runtime_s", 0.0)
         v2_report_path = find_v2_report(self.v2_dir, output_key.name)
@@ -748,7 +731,7 @@ class EnhanceOrchestrator:
         depth_runtime_s: float,
         v2_runtime_s: float,
         pipeline_start_time: float,
-        pipeline_end_time: float
+        pipeline_end_time: float,
     ) -> None:
         """Write combined manifest with all pipeline metadata.
 
@@ -786,10 +769,7 @@ class EnhanceOrchestrator:
                 logger.debug(f"Failed to load previous hash from manifest: {e}")
 
         input_sha = self._compute_or_skip_hash(
-            image_input.path,
-            manifest_exists=manifest_exists,
-            saved_hash=saved_hash,
-            for_manifest_write=True
+            image_input.path, manifest_exists=manifest_exists, saved_hash=saved_hash, for_manifest_write=True
         )
 
         manifest = CombinedManifest(
@@ -821,9 +801,7 @@ class EnhanceOrchestrator:
         )
         manifest.write(manifest_path)
 
-    def enhance_image(
-        self, image_input: ImageInput, input_root: Optional[Path] = None
-    ) -> Dict[str, Any]:
+    def enhance_image(self, image_input: ImageInput, input_root: Optional[Path] = None) -> Dict[str, Any]:
         """Run full enhancement pipeline on a single image.
 
         Orchestrates the depth computation, PBR generation, V2 enhancement,
@@ -841,10 +819,11 @@ class EnhanceOrchestrator:
         pipeline_start_time = time.time()
 
         # Generate output key for consistent artifact naming
-        use_xxhash = getattr(self.config, 'use_xxhash', False)
+        use_xxhash = getattr(self.config, "use_xxhash", False)
         output_key = (
             make_output_key(image_input.path, input_root, use_xxhash=use_xxhash)
-            if input_root else Path(sanitize_file_stem(image_input.path.stem))
+            if input_root
+            else Path(sanitize_file_stem(image_input.path.stem))
         )
         logger.info(f"Processing {output_key}...")
 
@@ -859,9 +838,7 @@ class EnhanceOrchestrator:
             p.parent.mkdir(parents=True, exist_ok=True)
 
         # Determine skip logic BEFORE preprocessing (lazy evaluation)
-        skip_depth = not self.config.force_depth and self.should_skip_depth(
-            depth_path, manifest_path, image_input
-        )
+        skip_depth = not self.config.force_depth and self.should_skip_depth(depth_path, manifest_path, image_input)
 
         # --- STAGE A: DEPTH COMPUTATION ---
         depth_metadata, depth_runtime_s, pbr_assets = self._compute_depth_stage(
@@ -870,17 +847,13 @@ class EnhanceOrchestrator:
             depth_path=depth_path,
             float_depth_path=float_depth_path,
             manifest_path=manifest_path,
-            skip_depth=skip_depth
+            skip_depth=skip_depth,
         )
 
         # Handle depth stage failures that return early
         if depth_metadata is None and depth_runtime_s == 0.0 and pbr_assets is None:
             if self.config.depth_fallback == "skip":
-                return {
-                    "status": "skipped",
-                    "reason": "Depth computation failed",
-                    "image": str(image_input.path)
-                }
+                return {"status": "skipped", "reason": "Depth computation failed", "image": str(image_input.path)}
 
         # --- STAGE B: V2 ENHANCEMENT ---
         v2_result, v2_runtime_s, v2_report_path = self._run_v2_stage(
@@ -889,7 +862,7 @@ class EnhanceOrchestrator:
             output_key=output_key,
             v2_log_path=v2_log_path,
             manifest_path=manifest_path,
-            skip_depth=skip_depth
+            skip_depth=skip_depth,
         )
 
         # Capture end time for accurate timestamps
@@ -906,7 +879,7 @@ class EnhanceOrchestrator:
             depth_runtime_s=depth_runtime_s,
             v2_runtime_s=v2_runtime_s,
             pipeline_start_time=pipeline_start_time,
-            pipeline_end_time=pipeline_end_time
+            pipeline_end_time=pipeline_end_time,
         )
 
         return {
@@ -914,7 +887,7 @@ class EnhanceOrchestrator:
             "image": str(image_input.path),
             "depth_path": str(depth_path) if depth_metadata else None,
             "manifest": str(manifest_path),
-            "runtime_s": pipeline_end_time - pipeline_start_time
+            "runtime_s": pipeline_end_time - pipeline_start_time,
         }
 
     def _verify_pbr_outputs(self, pbr_assets: Optional[Dict[str, Any]]) -> bool:
@@ -930,7 +903,7 @@ class EnhanceOrchestrator:
             return False
 
         for key, value in pbr_assets.items():
-            if isinstance(value, str) and key.endswith('_path'):
+            if isinstance(value, str) and key.endswith("_path"):
                 if not os.path.exists(value):
                     logger.debug(f"PBR output missing: {value}")
                     return False
@@ -961,6 +934,7 @@ class EnhanceOrchestrator:
         if depth_path.exists():
             try:
                 from .depth_writer import read_depth_u16_png
+
                 depth_data = read_depth_u16_png(depth_path)
 
                 # Robust normalization - handle both uint16 and pre-normalized float
@@ -998,10 +972,7 @@ class EnhanceOrchestrator:
             List of preprocessing results with skip flags and paths
         """
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            futures = {
-                executor.submit(self._preprocess_single, img, input_root): img
-                for img in image_inputs
-            }
+            futures = {executor.submit(self._preprocess_single, img, input_root): img for img in image_inputs}
 
             results = []
             for future in as_completed(futures):
@@ -1011,11 +982,7 @@ class EnhanceOrchestrator:
                 except Exception as e:
                     img = futures[future]
                     logger.error(f"Preprocessing failed for {img.path}: {e}")
-                    results.append({
-                        'status': 'error',
-                        'image_input': img,
-                        'error': str(e)
-                    })
+                    results.append({"status": "error", "image_input": img, "error": str(e)})
 
             return results
 
@@ -1029,27 +996,26 @@ class EnhanceOrchestrator:
         Returns:
             Dictionary with preprocessing metadata
         """
-        use_xxhash = getattr(self.config, 'use_xxhash', False)
+        use_xxhash = getattr(self.config, "use_xxhash", False)
         output_key = (
             make_output_key(image_input.path, input_root, use_xxhash=use_xxhash)
-            if input_root else Path(sanitize_file_stem(image_input.path.stem))
+            if input_root
+            else Path(sanitize_file_stem(image_input.path.stem))
         )
 
         depth_path = self.depth_dir / output_key.parent / f"{output_key.name}_depth.png"
         manifest_path = self.manifests_dir / output_key.parent / f"{output_key.name}_combined.json"
 
         # Check skip logic (uses cached manifest loading from Phase 1)
-        should_skip = not self.config.force_depth and self.should_skip_depth(
-            depth_path, manifest_path, image_input
-        )
+        should_skip = not self.config.force_depth and self.should_skip_depth(depth_path, manifest_path, image_input)
 
         return {
-            'status': 'ok',
-            'image_input': image_input,
-            'output_key': output_key,
-            'should_skip': should_skip,
-            'depth_path': depth_path,
-            'manifest_path': manifest_path,
+            "status": "ok",
+            "image_input": image_input,
+            "output_key": output_key,
+            "should_skip": should_skip,
+            "depth_path": depth_path,
+            "manifest_path": manifest_path,
         }
 
     def enhance_batch_parallel(
@@ -1082,20 +1048,16 @@ class EnhanceOrchestrator:
         # Phase 2: Sequential depth inference (GPU-bound, avoid contention)
         results = []
         for item in preprocessed:
-            if item['status'] == 'error':
+            if item["status"] == "error":
                 results.append(item)
                 continue
 
             try:
-                result = self.enhance_image(item['image_input'], input_root)
+                result = self.enhance_image(item["image_input"], input_root)
                 results.append(result)
             except Exception as e:
                 logger.error(f"Enhancement failed for {item['image_input'].path}: {e}")
-                results.append({
-                    'status': 'error',
-                    'image': str(item['image_input'].path),
-                    'error': str(e)
-                })
+                results.append({"status": "error", "image": str(item["image_input"].path), "error": str(e)})
 
         return results
 
@@ -1154,7 +1116,7 @@ class EnhanceOrchestrator:
             end_time=batch_end_utc,
             config={"model": self.config.model_variant.value.name},
             results=results,
-            stats={**runtime_stats, "total_images": len(results), "batch_runtime_seconds": batch_end_time - batch_start_time}
+            stats={**runtime_stats, "total_images": len(results), "batch_runtime_seconds": batch_end_time - batch_start_time},
         )
         bm.write(self.manifests_dir / f"batch_{batch_id}.json")
         return results

@@ -1,18 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """Tests for performance utilities."""
+
 import time
 
 import pytest
 
 # Use proper package imports (assumes package is installed or PYTHONPATH is set)
 # For development: pip install -e . or set PYTHONPATH to include src/
-from transformation_portal.utils.performance import (
-    PerformanceMonitor,
-    cache_result,
-    retry_on_failure,
-    timing_decorator,
-)
+from transformation_portal.utils.performance import PerformanceMonitor, cache_result, retry_on_failure, timing_decorator
 
 
 class TestTimingDecorator:
@@ -20,6 +16,7 @@ class TestTimingDecorator:
 
     def test_timing_decorator_success(self):
         """Test timing decorator logs execution time."""
+
         @timing_decorator
         def fast_function():
             return 42
@@ -29,6 +26,7 @@ class TestTimingDecorator:
 
     def test_timing_decorator_with_exception(self):
         """Test timing decorator handles exceptions."""
+
         @timing_decorator
         def failing_function():
             raise ValueError("test error")
@@ -42,30 +40,31 @@ class TestCacheResult:
 
     def test_cache_basic(self):
         """Test basic caching functionality."""
-        call_count = {'count': 0}
+        call_count = {"count": 0}
 
         @cache_result(maxsize=4)
         def expensive_function(x):
-            call_count['count'] += 1
+            call_count["count"] += 1
             return x * 2
 
         # First call - cache miss
         result1 = expensive_function(5)
         assert result1 == 10
-        assert call_count['count'] == 1
+        assert call_count["count"] == 1
 
         # Second call with same arg - cache hit
         result2 = expensive_function(5)
         assert result2 == 10
-        assert call_count['count'] == 1  # Not called again
+        assert call_count["count"] == 1  # Not called again
 
         # Different arg - cache miss
         result3 = expensive_function(10)
         assert result3 == 20
-        assert call_count['count'] == 2
+        assert call_count["count"] == 2
 
     def test_cache_info(self):
         """Test cache info is accessible."""
+
         @cache_result(maxsize=4)
         def cached_func(x):
             return x
@@ -80,6 +79,7 @@ class TestCacheResult:
 
     def test_cache_clear(self):
         """Test cache can be cleared."""
+
         @cache_result(maxsize=4)
         def cached_func(x):
             return x
@@ -101,21 +101,22 @@ class TestRetryOnFailure:
 
     def test_retry_succeeds_eventually(self):
         """Test function succeeds after retries."""
-        attempts = {'count': 0}
+        attempts = {"count": 0}
 
         @retry_on_failure(max_attempts=3, delay=0.01, backoff=1.0)
         def flaky_function():
-            attempts['count'] += 1
-            if attempts['count'] < 3:
+            attempts["count"] += 1
+            if attempts["count"] < 3:
                 raise ValueError("not yet")
             return "success"
 
         result = flaky_function()
         assert result == "success"
-        assert attempts['count'] == 3
+        assert attempts["count"] == 3
 
     def test_retry_exhausts_attempts(self):
         """Test function fails after max attempts."""
+
         @retry_on_failure(max_attempts=2, delay=0.01)
         def always_fails():
             raise ValueError("always fails")
@@ -125,11 +126,8 @@ class TestRetryOnFailure:
 
     def test_retry_specific_exceptions(self):
         """Test retry only catches specified exceptions."""
-        @retry_on_failure(
-            max_attempts=2,
-            delay=0.01,
-            exceptions=(IOError,)
-        )
+
+        @retry_on_failure(max_attempts=2, delay=0.01, exceptions=(IOError,))
         def raises_wrong_exception():
             raise ValueError("wrong exception")
 
@@ -176,6 +174,7 @@ class TestIntegration:
 
     def test_cached_and_timed(self):
         """Test combining caching and timing decorators."""
+
         @timing_decorator
         @cache_result(maxsize=8)
         def expensive_operation(x):

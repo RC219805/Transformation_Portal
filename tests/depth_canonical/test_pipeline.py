@@ -1,16 +1,17 @@
 """Tests for DepthPipeline orchestrator."""
 
+import tempfile
+from pathlib import Path
+
 import numpy as np
 import pytest
-from pathlib import Path
-import tempfile
 
 from transformation_portal.depth_canonical import (
     DepthPipeline,
     DepthPipelineResult,
-    UnifiedDepthConfig,
-    ProcessingConfig,
     PBRConfig,
+    ProcessingConfig,
+    UnifiedDepthConfig,
 )
 
 
@@ -55,11 +56,7 @@ def test_depth_pipeline_creates_output_directory():
     with tempfile.TemporaryDirectory() as tmpdir:
         output_dir = Path(tmpdir) / "subdir" / "nested"
 
-        result = pipeline.process(
-            depth_map=depth,
-            output_dir=output_dir,
-            basename="test"
-        )
+        result = pipeline.process(depth_map=depth, output_dir=output_dir, basename="test")
 
         # Directory should be created
         assert output_dir.exists()
@@ -68,11 +65,7 @@ def test_depth_pipeline_creates_output_directory():
 
 def test_depth_pipeline_uses_image_stem_for_basename():
     """Test pipeline uses image filename stem as default basename."""
-    config = UnifiedDepthConfig(
-        processing=ProcessingConfig(
-            pbr=PBRConfig(enabled=True)
-        )
-    )
+    config = UnifiedDepthConfig(processing=ProcessingConfig(pbr=PBRConfig(enabled=True)))
     pipeline = DepthPipeline(config)
 
     depth = np.random.rand(128, 128).astype(np.float32)
@@ -80,11 +73,7 @@ def test_depth_pipeline_uses_image_stem_for_basename():
     with tempfile.TemporaryDirectory() as tmpdir:
         output_dir = Path(tmpdir)
 
-        result = pipeline.process(
-            image_path=Path("/path/to/my_render.jpg"),
-            depth_map=depth,
-            output_dir=output_dir
-        )
+        result = pipeline.process(image_path=Path("/path/to/my_render.jpg"), depth_map=depth, output_dir=output_dir)
 
         # Basename should be "my_render"
         assert result.pbr_paths["normal"].name == "my_render_normal.png"
@@ -92,11 +81,7 @@ def test_depth_pipeline_uses_image_stem_for_basename():
 
 def test_depth_pipeline_uses_default_basename_if_no_image_path():
     """Test pipeline uses 'depth_output' if no image_path or basename provided."""
-    config = UnifiedDepthConfig(
-        processing=ProcessingConfig(
-            pbr=PBRConfig(enabled=True)
-        )
-    )
+    config = UnifiedDepthConfig(processing=ProcessingConfig(pbr=PBRConfig(enabled=True)))
     pipeline = DepthPipeline(config)
 
     depth = np.random.rand(128, 128).astype(np.float32)
@@ -104,10 +89,7 @@ def test_depth_pipeline_uses_default_basename_if_no_image_path():
     with tempfile.TemporaryDirectory() as tmpdir:
         output_dir = Path(tmpdir)
 
-        result = pipeline.process(
-            depth_map=depth,
-            output_dir=output_dir
-        )
+        result = pipeline.process(depth_map=depth, output_dir=output_dir)
 
         # Basename should be "depth_output"
         assert result.pbr_paths["normal"].name == "depth_output_normal.png"
@@ -116,14 +98,7 @@ def test_depth_pipeline_uses_default_basename_if_no_image_path():
 def test_depth_pipeline_custom_pbr_config():
     """Test pipeline uses custom PBR configuration."""
     config = UnifiedDepthConfig(
-        processing=ProcessingConfig(
-            pbr=PBRConfig(
-                enabled=True,
-                normal_strength=2.0,
-                roughness_blur_radius=7,
-                ao_bias=0.8
-            )
-        )
+        processing=ProcessingConfig(pbr=PBRConfig(enabled=True, normal_strength=2.0, roughness_blur_radius=7, ao_bias=0.8))
     )
     pipeline = DepthPipeline(config)
 
@@ -139,11 +114,7 @@ def test_depth_pipeline_custom_pbr_config():
 
 def test_depth_pipeline_no_output_when_output_dir_none():
     """Test pipeline doesn't save files when output_dir is None."""
-    config = UnifiedDepthConfig(
-        processing=ProcessingConfig(
-            pbr=PBRConfig(enabled=True)
-        )
-    )
+    config = UnifiedDepthConfig(processing=ProcessingConfig(pbr=PBRConfig(enabled=True)))
     pipeline = DepthPipeline(config)
 
     depth = np.random.rand(128, 128).astype(np.float32)

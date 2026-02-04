@@ -19,11 +19,8 @@ from typing import Dict, Optional, Tuple
 
 import numpy as np
 
+from transformation_portal.atmosphere.atmospheric_model import AtmosphericParameters, MarineLayerParameters
 from transformation_portal.atmosphere.skygan_generator import SkyParameters
-from transformation_portal.atmosphere.atmospheric_model import (
-    AtmosphericParameters,
-    MarineLayerParameters,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -139,9 +136,7 @@ class LocationPresets:
             sun_elevation = 45.0
 
         # Get atmospheric conditions
-        cloud_coverage, haze_density, turbidity = self._get_condition_parameters(
-            condition, season or "fall"
-        )
+        cloud_coverage, haze_density, turbidity = self._get_condition_parameters(condition, season or "fall")
 
         return SkyParameters(
             sun_azimuth=sun_azimuth,
@@ -171,9 +166,7 @@ class LocationPresets:
         Returns:
             AtmosphericParameters
         """
-        _profile = self.LOCATIONS.get(
-            location, self.LOCATIONS["montecito"]
-        )  # noqa: F841
+        _profile = self.LOCATIONS.get(location, self.LOCATIONS["montecito"])  # noqa: F841
 
         # Base parameters for coastal location
         base_params = AtmosphericParameters(
@@ -219,9 +212,7 @@ class LocationPresets:
 
         return base_params
 
-    def get_marine_layer_parameters(
-        self, season: str = "summer", time_of_day: float = 8.0
-    ) -> MarineLayerParameters:
+    def get_marine_layer_parameters(self, season: str = "summer", time_of_day: float = 8.0) -> MarineLayerParameters:
         """Get marine layer parameters.
 
         Marine layer is most common in summer (June gloom) and
@@ -312,9 +303,7 @@ class LocationPresets:
         decl_rad = np.deg2rad(declination)
         hour_rad = np.deg2rad(hour_angle)
 
-        sin_elevation = np.sin(lat_rad) * np.sin(decl_rad) + np.cos(lat_rad) * np.cos(
-            decl_rad
-        ) * np.cos(hour_rad)
+        sin_elevation = np.sin(lat_rad) * np.sin(decl_rad) + np.cos(lat_rad) * np.cos(decl_rad) * np.cos(hour_rad)
         elevation = np.rad2deg(np.arcsin(np.clip(sin_elevation, -1, 1)))
 
         # Solar azimuth (simplified)
@@ -333,9 +322,7 @@ class LocationPresets:
 
         return float(azimuth), float(max(0, elevation))
 
-    def _get_condition_parameters(
-        self, condition: str, season: str
-    ) -> Tuple[float, float, float]:
+    def _get_condition_parameters(self, condition: str, season: str) -> Tuple[float, float, float]:
         """Get cloud coverage, haze density, turbidity for condition.
 
         Args:

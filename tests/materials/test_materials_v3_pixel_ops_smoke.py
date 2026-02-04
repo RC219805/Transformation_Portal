@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from transformation_portal.lux_depth_v3.pixel_ops_decider import decide_pixel_ops
-from transformation_portal.lux_depth_v3.pixel_ops_executor import apply_pixel_ops, _compute_delta_stats
+from transformation_portal.lux_depth_v3.pixel_ops_executor import _compute_delta_stats, apply_pixel_ops
 from transformation_portal.lux_depth_v3.pixel_ops_registry import OP_REGISTRY
 
 

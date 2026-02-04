@@ -1,10 +1,11 @@
 """
 Tests for PyPI workflow configurations.
 """
+
 # pylint: disable=redefined-outer-name  # pytest fixtures
 
-from pathlib import Path
 import re
+from pathlib import Path
 
 import pytest
 import yaml
@@ -66,10 +67,10 @@ class TestPyPIWorkflows:
 
         # Verify build steps include essential tasks
         step_names = [step.get("name", "") for step in build_job["steps"]]
-        assert any("build" in name.lower() for name in step_names), \
-            "Build job should include build step"
-        assert any("twine" in name.lower() or "check" in name.lower() for name in step_names), \
-            "Build job should include distribution check"
+        assert any("build" in name.lower() for name in step_names), "Build job should include build step"
+        assert any(
+            "twine" in name.lower() or "check" in name.lower() for name in step_names
+        ), "Build job should include distribution check"
 
     def test_submit_pypi_workflow_triggers(self, workflows_dir):
         """Test that submit-pypi.yml has correct triggers."""
@@ -101,10 +102,8 @@ class TestPyPIWorkflows:
         assert "cleanup" in jobs, "python-app.yml should have cleanup job"
 
         cleanup_job = jobs["cleanup"]
-        assert cleanup_job.get("if") == "always()", \
-            "Cleanup should always run"
-        assert "needs" in cleanup_job, \
-            "Cleanup should depend on other jobs"
+        assert cleanup_job.get("if") == "always()", "Cleanup should always run"
+        assert "needs" in cleanup_job, "Cleanup should depend on other jobs"
 
     def test_python_app_workflow_has_test_pypi(self, workflows_dir):
         """Test that python-app.yml has Test PyPI deployment."""
@@ -119,8 +118,7 @@ class TestPyPIWorkflows:
         deploy_job = jobs["deploy"]
         step_names = [step.get("name", "") for step in deploy_job["steps"]]
 
-        assert any("test pypi" in name.lower() for name in step_names), \
-            "Deploy job should include Test PyPI upload"
+        assert any("test pypi" in name.lower() for name in step_names), "Deploy job should include Test PyPI upload"
 
     def test_workflows_use_modern_actions(self, workflows_dir):
         """Test that workflows use modern action versions."""
@@ -131,19 +129,16 @@ class TestPyPIWorkflows:
 
         # checkout: require v4+
         m = re.search(r"actions/checkout@v(\d+)", content)
-        assert m and int(m.group(1)) >= 4, \
-            "Should use recent checkout action (v4+)"
+        assert m and int(m.group(1)) >= 4, "Should use recent checkout action (v4+)"
 
         # setup-python: require v5+
         assert (
-            "actions/setup-python@v6" in content
-            or "actions/setup-python@v5" in content
+            "actions/setup-python@v6" in content or "actions/setup-python@v5" in content
         ), "Should use recent setup-python action"
 
         # upload-artifact: require v4+
         assert (
-            "actions/upload-artifact@v5" in content
-            or "actions/upload-artifact@v4" in content
+            "actions/upload-artifact@v5" in content or "actions/upload-artifact@v4" in content
         ), "Should use recent upload-artifact action"
 
     def test_submit_pypi_has_package_verification(self, workflows_dir):
@@ -157,8 +152,7 @@ class TestPyPIWorkflows:
         step_names = [step.get("name", "") for step in build_steps]
 
         assert any(
-            "verify" in name.lower() or "check" in name.lower()
-            for name in step_names
+            "verify" in name.lower() or "check" in name.lower() for name in step_names
         ), "Build job should verify package contents"
 
     def test_cleanup_job_prevents_failures(self, workflows_dir):
@@ -187,10 +181,8 @@ class TestWorkflowDocumentation:
         with open(readme_file, "r", encoding="utf-8") as f:
             content = f.read()
 
-        assert "submit-pypi" in content.lower(), \
-            "README should document submit-pypi workflow"
-        assert "pypi" in content.lower(), \
-            "README should mention PyPI"
+        assert "submit-pypi" in content.lower(), "README should document submit-pypi workflow"
+        assert "pypi" in content.lower(), "README should mention PyPI"
 
     def test_readme_documents_usage(self, workflows_dir):
         """Test that README.md provides usage examples."""
@@ -199,11 +191,5 @@ class TestWorkflowDocumentation:
         with open(readme_file, "r", encoding="utf-8") as f:
             content = f.read()
 
-        assert (
-            "tag" in content.lower()
-            or "version" in content.lower()
-        ), "README should explain how to trigger PyPI uploads"
-        assert (
-            "secret" in content.lower()
-            or "token" in content.lower()
-        ), "README should mention required secrets"
+        assert "tag" in content.lower() or "version" in content.lower(), "README should explain how to trigger PyPI uploads"
+        assert "secret" in content.lower() or "token" in content.lower(), "README should mention required secrets"

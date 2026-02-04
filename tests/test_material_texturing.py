@@ -108,6 +108,7 @@ sys.modules.setdefault("controlnet_aux", controlnet_aux_stub)
 # heavy ML dependencies during test setup
 try:
     from transformation_portal.pipelines.lux_render_pipeline import apply_material_response_finishing  # noqa: E402
+
     IMPORT_SUCCESS = True
 except (ImportError, RuntimeError, TypeError) as exc:
     # Catch metaclass conflicts (diffusers 0.36.0 + torch 2.10.0 incompatibility)

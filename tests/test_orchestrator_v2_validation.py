@@ -10,13 +10,14 @@ This test suite validates:
 Coverage target: Issue #1 from PBR Implementation Audit
 """
 
-import pytest
-from pathlib import Path
-import tempfile
 import shutil
+import tempfile
+from pathlib import Path
 
-from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+import pytest
+
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
+from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
 
 @pytest.fixture
@@ -32,11 +33,7 @@ class TestV2ValidationFailFast:
 
     def test_v2_enabled_script_missing_raises_error(self, temp_output):
         """Test fail-fast when V2 enabled but script missing."""
-        config = EnhanceConfig(
-            enable_v2=True,
-            v2_preset="default",
-            depth_device="cpu"
-        )
+        config = EnhanceConfig(enable_v2=True, v2_preset="default", depth_device="cpu")
 
         # Should raise FileNotFoundError during initialization
         with pytest.raises(FileNotFoundError) as exc_info:
@@ -50,11 +47,7 @@ class TestV2ValidationFailFast:
 
     def test_v2_disabled_no_error_when_script_missing(self, temp_output):
         """Test V2 disabled allows initialization without script."""
-        config = EnhanceConfig(
-            enable_v2=False,
-            v2_preset="default",  # Ignored when enable_v2=False
-            depth_device="cpu"
-        )
+        config = EnhanceConfig(enable_v2=False, v2_preset="default", depth_device="cpu")  # Ignored when enable_v2=False
 
         # Should succeed even without V2 script
         orchestrator = EnhanceOrchestrator(config=config, output_root=temp_output)
@@ -64,11 +57,7 @@ class TestV2ValidationFailFast:
 
     def test_v2_preset_none_no_error_when_script_missing(self, temp_output):
         """Test v2_preset=None allows initialization without script."""
-        config = EnhanceConfig(
-            enable_v2=True,
-            v2_preset=None,  # None = skip V2
-            depth_device="cpu"
-        )
+        config = EnhanceConfig(enable_v2=True, v2_preset=None, depth_device="cpu")  # None = skip V2
 
         # Should succeed even without V2 script
         orchestrator = EnhanceOrchestrator(config=config, output_root=temp_output)
@@ -78,11 +67,7 @@ class TestV2ValidationFailFast:
 
     def test_v2_disabled_overrides_preset(self, temp_output):
         """Test enable_v2=False overrides v2_preset."""
-        config = EnhanceConfig(
-            enable_v2=False,
-            v2_preset="premium",  # Should be ignored
-            depth_device="cpu"
-        )
+        config = EnhanceConfig(enable_v2=False, v2_preset="premium", depth_device="cpu")  # Should be ignored
 
         # Should succeed - enable_v2 takes precedence
         orchestrator = EnhanceOrchestrator(config=config, output_root=temp_output)
@@ -104,12 +89,7 @@ class TestV2ConfigCombinations:
 
     def test_pbr_only_config_no_v2_required(self, temp_output):
         """Test PBR-only config doesn't require V2 script."""
-        config = EnhanceConfig(
-            enable_v2=False,
-            generate_pbr=True,
-            pbr_normal_strength=1.5,
-            depth_device="cpu"
-        )
+        config = EnhanceConfig(enable_v2=False, generate_pbr=True, pbr_normal_strength=1.5, depth_device="cpu")
 
         # Should succeed
         orchestrator = EnhanceOrchestrator(config=config, output_root=temp_output)

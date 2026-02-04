@@ -64,9 +64,7 @@ class WorkflowParser:
 
     def parse_all_workflows(self) -> List[WorkflowBug]:
         """Parse all workflow files in the directory."""
-        workflow_files = list(self.workflow_dir.glob("*.yml")) + list(
-            self.workflow_dir.glob("*.yaml")
-        )
+        workflow_files = list(self.workflow_dir.glob("*.yml")) + list(self.workflow_dir.glob("*.yaml"))
 
         for workflow_file in workflow_files:
             # print(f"Parsing {workflow_file.name}...") # Silence logs for cleaner CI output
@@ -88,11 +86,7 @@ class WorkflowParser:
                 self.bugs.append(
                     WorkflowBug(
                         str(workflow_file),
-                        (
-                            getattr(e, "problem_mark", None).line + 1
-                            if hasattr(e, "problem_mark")
-                            else None
-                        ),
+                        (getattr(e, "problem_mark", None).line + 1 if hasattr(e, "problem_mark") else None),
                         "error",
                         f"YAML syntax error: {e}",
                     )
@@ -108,39 +102,23 @@ class WorkflowParser:
             self._check_openai_models(workflow_file, workflow, lines)
 
         except Exception as e:
-            self.bugs.append(
-                WorkflowBug(
-                    str(workflow_file), None, "error", f"Failed to parse file: {e}"
-                )
-            )
+            self.bugs.append(WorkflowBug(str(workflow_file), None, "error", f"Failed to parse file: {e}"))
 
-    def _validate_workflow_structure(
-        self, workflow_file: Path, workflow: Dict, _lines: List[str]
-    ):
+    def _validate_workflow_structure(self, workflow_file: Path, workflow: Dict, _lines: List[str]):
         """Validate basic workflow structure."""
         if not workflow:
-            self.bugs.append(
-                WorkflowBug(str(workflow_file), None, "error", "Empty workflow file")
-            )
+            self.bugs.append(WorkflowBug(str(workflow_file), None, "error", "Empty workflow file"))
             return
 
         # Check for required fields
         # Note: YAML parsers interpret 'on:' as boolean True
         if "on" not in workflow and True not in workflow:
-            self.bugs.append(
-                WorkflowBug(
-                    str(workflow_file), None, "error", "Missing 'on' trigger definition"
-                )
-            )
+            self.bugs.append(WorkflowBug(str(workflow_file), None, "error", "Missing 'on' trigger definition"))
 
         if "jobs" not in workflow:
-            self.bugs.append(
-                WorkflowBug(str(workflow_file), None, "error", "Missing 'jobs' section")
-            )
+            self.bugs.append(WorkflowBug(str(workflow_file), None, "error", "Missing 'jobs' section"))
 
-    def _check_step_references(
-        self, workflow_file: Path, workflow: Dict, lines: List[str]
-    ):
+    def _check_step_references(self, workflow_file: Path, workflow: Dict, lines: List[str]):
         """Check for missing step IDs when outputs are referenced."""
         if "jobs" not in workflow:
             return
@@ -174,9 +152,7 @@ class WorkflowParser:
 
                 for ref_id in references:
                     if ref_id not in step_ids:
-                        line_num = self._find_line_number(
-                            lines, f"steps.{ref_id}.outputs"
-                        )
+                        line_num = self._find_line_number(lines, f"steps.{ref_id}.outputs")
                         self.bugs.append(
                             WorkflowBug(
                                 str(workflow_file),
@@ -187,9 +163,7 @@ class WorkflowParser:
                             )
                         )
 
-    def _check_shell_scripts(
-        self, workflow_file: Path, workflow: Dict, lines: List[str]
-    ):
+    def _check_shell_scripts(self, workflow_file: Path, workflow: Dict, lines: List[str]):
         """Check for common shell script bugs in run commands."""
         if "jobs" not in workflow:
             return
@@ -209,9 +183,7 @@ class WorkflowParser:
                 # Check for unclosed conditionals
                 self._check_conditionals(workflow_file, job_name, run_script, lines)
 
-    def _check_conditionals(
-        self, workflow_file: Path, job_name: str, script: str, lines: List[str]
-    ):
+    def _check_conditionals(self, workflow_file: Path, job_name: str, script: str, lines: List[str]):
         """Check for unclosed if/fi statements."""
         if_count = 0
         fi_count = 0
@@ -268,9 +240,7 @@ class WorkflowParser:
                         )
                     )
 
-    def _check_matrix_usage(
-        self, workflow_file: Path, workflow: Dict, lines: List[str]
-    ):
+    def _check_matrix_usage(self, workflow_file: Path, workflow: Dict, lines: List[str]):
         """Check for inefficient or incorrect matrix usage."""
         if "jobs" not in workflow:
             return
@@ -298,10 +268,7 @@ class WorkflowParser:
                 if isinstance(tasks, list) and isinstance(devices, list):
                     # Check if lint+gpu is excluded
                     lint_gpu_excluded = (
-                        any(
-                            exc.get("task") == "lint" and exc.get("device") == "gpu"
-                            for exc in exclusions
-                        )
+                        any(exc.get("task") == "lint" and exc.get("device") == "gpu" for exc in exclusions)
                         if exclusions
                         else False
                     )
@@ -326,9 +293,7 @@ class WorkflowParser:
                 return idx
         return None
 
-    def _check_openai_models(
-        self, workflow_file: Path, workflow: Dict, lines: List[str]
-    ):
+    def _check_openai_models(self, workflow_file: Path, workflow: Dict, lines: List[str]):
         """Check for invalid or deprecated OpenAI model names."""
         valid_models = {
             "gpt-4",
@@ -366,9 +331,7 @@ class WorkflowParser:
                     # Check if it looks like a GPT model but isn't valid
                     if model.startswith("gpt-") and model not in valid_models:
                         # Check if it's a date-stamped version
-                        is_versioned = any(
-                            model.startswith(vp) for vp in valid_prefixes
-                        )
+                        is_versioned = any(model.startswith(vp) for vp in valid_prefixes)
 
                         if not is_versioned:
                             line_num = self._find_line_number(lines, model)
@@ -388,12 +351,8 @@ def render_github_annotations(bugs: List[WorkflowBug]) -> None:
         # Map severity to GitHub annotation levels
         # info -> notice, warning -> warning, error -> error
         level = "notice" if bug.severity == "info" else bug.severity
-        
-        print(
-            f"::{level} file={bug.file_path},line={bug.line_number or 1},"
-            f"title=Workflow Issue::"
-            f"{bug.message}"
-        )
+
+        print(f"::{level} file={bug.file_path},line={bug.line_number or 1}," f"title=Workflow Issue::" f"{bug.message}")
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -415,7 +374,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
 def main():
     """Main entry point."""
     args = parse_args()
-    
+
     # Locate workflow directory relative to root
     workflow_dir = args.root / ".github" / "workflows"
 
@@ -461,7 +420,7 @@ def main():
 
     # Summary
     error_count = sum(1 for b in bugs if b.severity == "error")
-    
+
     return 1 if error_count > 0 else 0
 
 

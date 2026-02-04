@@ -91,6 +91,5 @@ def test_cognitive_material_response_pipeline() -> None:
 
     assert 0.0 <= result["luxury_index"] <= 1.0
     assert result["future_alignment"] >= 0.5
-    assert (result["emotional_resonance"]["comfort"] >=
-            result["emotional_resonance"]["focus"])
+    assert result["emotional_resonance"]["comfort"] >= result["emotional_resonance"]["focus"]
     assert result["recommendations"]

@@ -39,23 +39,6 @@ Example - Async pipeline:
     ...             print(f"Processed: {result.data.path}")
 """
 
-from .checkpoint import (
-    Checkpoint,
-    CheckpointManager,
-    checkpoint,
-)
-from .progress import (
-    MultiProgress,
-    ProgressBar,
-    ProgressTracker,
-    create_progress,
-)
-from .streaming import (
-    StreamingProcessor,
-    batch_stream,
-    stream_results,
-)
-
 # Async pipeline components
 from .async_pipeline import (
     AsyncBatchProcessor,
@@ -72,6 +55,8 @@ from .async_pipeline import (
     WorkItem,
     run_async_pipeline,
 )
+from .checkpoint import Checkpoint, CheckpointManager, checkpoint
+from .progress import MultiProgress, ProgressBar, ProgressTracker, create_progress
 
 # Concrete pipeline stages
 from .stages import (
@@ -85,6 +70,7 @@ from .stages import (
     ResizeStage,
     create_luxury_pipeline_stages,
 )
+from .streaming import StreamingProcessor, batch_stream, stream_results
 
 __all__ = [
     # Progress tracking

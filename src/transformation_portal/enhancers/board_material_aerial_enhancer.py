@@ -101,9 +101,7 @@ def relabel_safe(
         elif verbose and mode != "none":
             print(f"Warning: missing assignments for {missing}")
         for lbl in missing:
-            assignments[lbl] = MaterialRule(
-                name="unknown", texture="", blend=0.5, score_fn=lambda x: 0.5
-            )
+            assignments[lbl] = MaterialRule(name="unknown", texture="", blend=0.5, score_fn=lambda x: 0.5)
     return relabel(assignments, labels)
 
 
@@ -116,11 +114,7 @@ def build_material_rules(textures: dict[str, str]) -> List[MaterialRule]:
     rules = []
     for name, path in textures.items():
         blend = 0.5 + 0.1 * (hash(name) % 5) / 5.0  # dummy blend
-        rules.append(
-            MaterialRule(
-                name=name, texture=str(path), blend=blend, score_fn=lambda x, b=blend: b
-            )
-        )
+        rules.append(MaterialRule(name=name, texture=str(path), blend=blend, score_fn=lambda x, b=blend: b))
     return rules
 
 
@@ -168,9 +162,7 @@ def load_palette_assignments(in_path: Path) -> dict[int, MaterialRule]:
 # ==========================
 
 
-def auto_assign_materials_by_stats(
-    labels: np.ndarray, img: np.ndarray, tex_map: dict
-) -> dict[int, MaterialRule]:
+def auto_assign_materials_by_stats(labels: np.ndarray, img: np.ndarray, tex_map: dict) -> dict[int, MaterialRule]:
     stats = compute_cluster_stats(labels, img.reshape(-1, img.shape[-1]))
     rules = build_material_rules(tex_map)
     assignments = {}
@@ -194,9 +186,7 @@ def enhance_aerial(
     pixels = image.reshape(-1, c).astype(np.float32)
 
     labels = _kmeans(pixels, k=k, seed=42)
-    assignments = auto_assign_materials_by_stats(
-        labels, image, textures or DEFAULT_TEXTURES
-    )
+    assignments = auto_assign_materials_by_stats(labels, image, textures or DEFAULT_TEXTURES)
     labels = relabel(assignments, labels)
 
     output = np.zeros_like(pixels)

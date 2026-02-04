@@ -82,9 +82,7 @@ class GoldenRatioAnalyzer:
 
         logger.info(f"GoldenRatioAnalyzer initialized (tolerance={tolerance})")
 
-    def analyze(
-        self, image: Union[str, np.ndarray, Image.Image], detect_features: bool = True
-    ) -> GoldenRatioAnalysis:
+    def analyze(self, image: Union[str, np.ndarray, Image.Image], detect_features: bool = True) -> GoldenRatioAnalysis:
         """Analyze image composition using golden ratio.
 
         Args:
@@ -114,9 +112,7 @@ class GoldenRatioAnalyzer:
         score = self._calculate_score(alignments, len(feature_positions))
 
         # Generate recommendations
-        recommendations = self._generate_recommendations(
-            score, alignments, grid_points, w, h
-        )
+        recommendations = self._generate_recommendations(score, alignments, grid_points, w, h)
 
         return GoldenRatioAnalysis(
             score=score,
@@ -126,9 +122,7 @@ class GoldenRatioAnalyzer:
             recommendations=recommendations,
         )
 
-    def _generate_grid(
-        self, width: int, height: int, include_phi_reciprocal: bool = True
-    ) -> np.ndarray:
+    def _generate_grid(self, width: int, height: int, include_phi_reciprocal: bool = True) -> np.ndarray:
         """Generate golden ratio grid points.
 
         Creates intersection points at golden ratio divisions:
@@ -193,9 +187,7 @@ class GoldenRatioAnalyzer:
         gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
 
         # Detect corners (architectural features)
-        corners = cv2.goodFeaturesToTrack(
-            gray, maxCorners=100, qualityLevel=0.01, minDistance=30
-        )
+        corners = cv2.goodFeaturesToTrack(gray, maxCorners=100, qualityLevel=0.01, minDistance=30)
 
         feature_positions = []
 
@@ -259,9 +251,7 @@ class GoldenRatioAnalyzer:
 
         for feat_x, feat_y in features:
             # Find closest grid point
-            distances = np.sqrt(
-                (grid_points[:, 0] - feat_x) ** 2 + (grid_points[:, 1] - feat_y) ** 2
-            )
+            distances = np.sqrt((grid_points[:, 0] - feat_x) ** 2 + (grid_points[:, 1] - feat_y) ** 2)
 
             closest_idx = np.argmin(distances)
             closest_distance = distances[closest_idx]
@@ -334,19 +324,14 @@ class GoldenRatioAnalyzer:
         recommendations = []
 
         if score >= 0.8:
-            recommendations.append(
-                "Excellent golden ratio composition! "
-                "Key features align well with golden divisions."
-            )
+            recommendations.append("Excellent golden ratio composition! " "Key features align well with golden divisions.")
         elif score >= 0.6:
             recommendations.append(
-                "Good composition with some golden ratio alignment. "
-                "Consider minor adjustments for optimal balance."
+                "Good composition with some golden ratio alignment. " "Consider minor adjustments for optimal balance."
             )
         else:
             recommendations.append(
-                "Composition could benefit from golden ratio principles. "
-                "Consider repositioning key elements."
+                "Composition could benefit from golden ratio principles. " "Consider repositioning key elements."
             )
 
         # Identify poorly aligned features
@@ -359,9 +344,7 @@ class GoldenRatioAnalyzer:
             )
 
         # Find empty grid points (opportunities)
-        used_points = set(
-            a["closest_grid_point"] for a in alignments if a["is_aligned"]
-        )
+        used_points = set(a["closest_grid_point"] for a in alignments if a["is_aligned"])
         phi_reciprocal = 1 / PHI
 
         key_points = [
@@ -374,10 +357,7 @@ class GoldenRatioAnalyzer:
         empty_key_points = [
             p
             for p in key_points
-            if not any(
-                np.sqrt((p[0] - up[0]) ** 2 + (p[1] - up[1]) ** 2) < width * 0.05
-                for up in used_points
-            )
+            if not any(np.sqrt((p[0] - up[0]) ** 2 + (p[1] - up[1]) ** 2) < width * 0.05 for up in used_points)
         ]
 
         if empty_key_points:
@@ -438,11 +418,7 @@ class GoldenRatioAnalyzer:
             for feat_x, feat_y in analysis.feature_positions:
                 # Color based on alignment
                 alignment = next(
-                    (
-                        a
-                        for a in analysis.alignments
-                        if a["feature_position"] == (feat_x, feat_y)
-                    ),
+                    (a for a in analysis.alignments if a["feature_position"] == (feat_x, feat_y)),
                     None,
                 )
 

@@ -131,8 +131,9 @@ def test_agent_has_troubleshooting_section():
     agent_file = Path(__file__).parents[1] / ".github" / "agents" / "transformation-portal-specialist.md"
     content = agent_file.read_text()
 
-    assert "troubleshoot" in content.lower() or "issue" in content.lower(), \
-        "Agent should include troubleshooting or issue guidance"
+    assert (
+        "troubleshoot" in content.lower() or "issue" in content.lower()
+    ), "Agent should include troubleshooting or issue guidance"
 
 
 def test_agent_readme_exists():
@@ -146,8 +147,9 @@ def test_agent_readme_references_specialist():
     readme_file = Path(__file__).parents[1] / ".github" / "agents" / "README.md"
     content = readme_file.read_text()
 
-    assert "transformation-portal-specialist" in content.lower() or "specialist" in content.lower(), \
-        "README should reference the specialist agent"
+    assert (
+        "transformation-portal-specialist" in content.lower() or "specialist" in content.lower()
+    ), "README should reference the specialist agent"
 
 
 def test_custom_agent_guide_exists():
@@ -162,8 +164,7 @@ def test_custom_agent_guide_has_usage_examples():
     content = guide_file.read_text()
 
     # Should have example prompts using @ notation
-    assert "@transformation-portal-specialist" in content, \
-        "Guide should include example prompts using @ notation"
+    assert "@transformation-portal-specialist" in content, "Guide should include example prompts using @ notation"
 
     # Should have multiple examples
     example_count = content.count("@transformation-portal-specialist")
@@ -177,8 +178,7 @@ def test_agent_file_not_too_large():
 
     # Agent files should typically be under 50KB
     max_size = 50 * 1024  # 50KB
-    assert size_bytes < max_size, \
-        f"Agent file is {size_bytes} bytes, should be under {max_size} bytes for performance"
+    assert size_bytes < max_size, f"Agent file is {size_bytes} bytes, should be under {max_size} bytes for performance"
 
 
 def test_agent_file_has_reasonable_line_length():
@@ -190,5 +190,4 @@ def test_agent_file_has_reasonable_line_length():
     long_lines = [i for i, line in enumerate(lines, 1) if len(line) > 200 and not line.strip().startswith("http")]
 
     # Allow up to 10% of lines to be long (for tables, etc.)
-    assert len(long_lines) < len(lines) * 0.1, \
-        f"Too many long lines ({len(long_lines)}), check formatting"
+    assert len(long_lines) < len(lines) * 0.1, f"Too many long lines ({len(long_lines)}), check formatting"

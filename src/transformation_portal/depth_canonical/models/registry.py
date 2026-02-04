@@ -5,9 +5,9 @@ Phase 2: Full model loading with lazy initialization and caching.
 """
 
 import logging
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
-from ..config import ModelVariant, DeviceType
+from ..config import DeviceType, ModelVariant
 
 logger = logging.getLogger(__name__)
 
@@ -15,11 +15,7 @@ logger = logging.getLogger(__name__)
 class DepthEstimationModel:
     """Abstract interface for depth estimation models."""
 
-    def estimate(
-        self,
-        image: Any,
-        output_size: Optional[tuple] = None
-    ) -> Dict[str, Any]:
+    def estimate(self, image: Any, output_size: Optional[tuple] = None) -> Dict[str, Any]:
         """Estimate depth from image.
 
         Args:
@@ -69,10 +65,7 @@ class ModelRegistry:
         }
 
     def get_model(
-        self,
-        variant: ModelVariant,
-        device: Optional[DeviceType] = None,
-        dtype: str = "float32"
+        self, variant: ModelVariant, device: Optional[DeviceType] = None, dtype: str = "float32"
     ) -> DepthEstimationModel:
         """Get or load a depth estimation model.
 
@@ -89,10 +82,7 @@ class ModelRegistry:
             ImportError: If required dependencies not available
         """
         if variant not in self._supported_variants:
-            raise ValueError(
-                f"Unsupported model variant: {variant}. "
-                f"Supported: {self._supported_variants}"
-            )
+            raise ValueError(f"Unsupported model variant: {variant}. " f"Supported: {self._supported_variants}")
 
         # Auto-detect device if not specified
         if device is None:
@@ -131,9 +121,10 @@ class ModelRegistry:
             import torch
 
             # Check for Apple Neural Engine via CoreML
-            if hasattr(torch, 'backends') and torch.backends.mps.is_available():
+            if hasattr(torch, "backends") and torch.backends.mps.is_available():
                 try:
                     import coremltools  # noqa: F401
+
                     # CoreML available, prefer for best performance
                     return DeviceType.COREML
                 except ImportError:
@@ -150,12 +141,7 @@ class ModelRegistry:
         # CPU fallback
         return DeviceType.CPU
 
-    def _load_model(
-        self,
-        variant: ModelVariant,
-        device: DeviceType,
-        dtype: str
-    ) -> DepthEstimationModel:
+    def _load_model(self, variant: ModelVariant, device: DeviceType, dtype: str) -> DepthEstimationModel:
         """Load a depth estimation model based on variant.
 
         Args:
@@ -170,29 +156,16 @@ class ModelRegistry:
             ImportError: If required dependencies not available
         """
         # DA3 models (same as DA2 - V3 uses V2 models)
-        if variant in {
-            ModelVariant.DA3_LARGE,
-            ModelVariant.DA3_BASE,
-            ModelVariant.DA3_SMALL
-        }:
+        if variant in {ModelVariant.DA3_LARGE, ModelVariant.DA3_BASE, ModelVariant.DA3_SMALL}:
             return self._load_da3_model(variant, device, dtype)
 
         # DA2 models
-        if variant in {
-            ModelVariant.DA2_LARGE,
-            ModelVariant.DA2_BASE,
-            ModelVariant.DA2_SMALL
-        }:
+        if variant in {ModelVariant.DA2_LARGE, ModelVariant.DA2_BASE, ModelVariant.DA2_SMALL}:
             return self._load_da2_model(variant, device, dtype)
 
         raise ValueError(f"Unknown variant: {variant}")
 
-    def _load_da3_model(
-        self,
-        variant: ModelVariant,
-        device: DeviceType,
-        dtype: str
-    ) -> DepthEstimationModel:
+    def _load_da3_model(self, variant: ModelVariant, device: DeviceType, dtype: str) -> DepthEstimationModel:
         """Load Depth Anything V3 model (uses V2 models).
 
         Args:
@@ -216,18 +189,9 @@ class ModelRegistry:
         if not model_id:
             raise ValueError(f"No model ID mapping for {variant}")
 
-        return DA3ModelWrapper(
-            model_id=model_id,
-            device=device,
-            dtype=dtype
-        )
+        return DA3ModelWrapper(model_id=model_id, device=device, dtype=dtype)
 
-    def _load_da2_model(
-        self,
-        variant: ModelVariant,
-        device: DeviceType,
-        dtype: str
-    ) -> DepthEstimationModel:
+    def _load_da2_model(self, variant: ModelVariant, device: DeviceType, dtype: str) -> DepthEstimationModel:
         """Load Depth Anything V2 model.
 
         Args:
@@ -251,11 +215,7 @@ class ModelRegistry:
         if not model_id:
             raise ValueError(f"No model ID mapping for {variant}")
 
-        return DA2ModelWrapper(
-            model_id=model_id,
-            device=device,
-            dtype=dtype
-        )
+        return DA2ModelWrapper(model_id=model_id, device=device, dtype=dtype)
 
     def is_variant_supported(self, variant: ModelVariant) -> bool:
         """Check if a model variant is supported.

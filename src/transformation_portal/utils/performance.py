@@ -80,9 +80,7 @@ def profile_memory(func: F) -> F:
         mem_after = memory_usage()[0]
         mem_delta = mem_after - mem_before
 
-        logger.info(
-            f"{func.__name__} memory: {mem_delta:+.1f}MB " f"(peak: {mem_after:.1f}MB)"
-        )
+        logger.info(f"{func.__name__} memory: {mem_delta:+.1f}MB " f"(peak: {mem_after:.1f}MB)")
         return result
 
     return cast(F, wrapper)
@@ -120,10 +118,7 @@ def cache_result(maxsize: int = 128, typed: bool = False) -> Callable[[F], F]:
 
             # Log if this was a cache hit
             if info_after.hits > info_before.hits:
-                logger.debug(
-                    f"{func.__name__} cache hit "
-                    f"(hits: {info_after.hits}, misses: {info_after.misses})"
-                )
+                logger.debug(f"{func.__name__} cache hit " f"(hits: {info_after.hits}, misses: {info_after.misses})")
 
             return result
 
@@ -171,9 +166,7 @@ def retry_on_failure(
                     return func(*args, **kwargs)
                 except exceptions as e:
                     if attempt == max_attempts:
-                        logger.error(
-                            f"{func.__name__} failed after {max_attempts} attempts: {e}"
-                        )
+                        logger.error(f"{func.__name__} failed after {max_attempts} attempts: {e}")
                         raise
 
                     logger.warning(
@@ -189,9 +182,7 @@ def retry_on_failure(
     return decorator
 
 
-def make_batch_processor(
-    func: F, batch_size: Optional[int] = None
-) -> Callable[[list, Any], list]:
+def make_batch_processor(func: F, batch_size: Optional[int] = None) -> Callable[[list, Any], list]:
     """Create a batch-processing version of a single-item function.
 
     This function returns a new function that processes a list of items in batches,
@@ -226,9 +217,7 @@ def make_batch_processor(
         results = []
         for i in range(0, len(items), batch_size):
             batch = items[i : i + batch_size]
-            logger.debug(
-                f"Processing batch {i//batch_size + 1} " f"({len(batch)} items)"
-            )
+            logger.debug(f"Processing batch {i//batch_size + 1} " f"({len(batch)} items)")
             batch_results = [func(item, *args, **kwargs) for item in batch]
             results.extend(batch_results)
         return results

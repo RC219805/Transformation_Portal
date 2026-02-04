@@ -105,10 +105,8 @@ except ImportError:
 
 # Optional: PerceptualQualityAssessor for advanced quality metrics
 try:
-    from ...enhancements.perceptual_quality_assessment import (
-        PerceptualQualityAssessor,
-        QualityReport as PerceptualQualityReport,
-    )
+    from ...enhancements.perceptual_quality_assessment import PerceptualQualityAssessor
+    from ...enhancements.perceptual_quality_assessment import QualityReport as PerceptualQualityReport
 
     HAS_PERCEPTUAL_ASSESSOR = True
 except ImportError:
@@ -118,11 +116,7 @@ except ImportError:
 
 # Optional: QualityFeedbackBridge for unified quality assessment
 try:
-    from .quality_feedback_bridge import (
-        QualityFeedbackBridge,
-        UnifiedQualityMetrics,
-        create_rag_indexing_callback,
-    )
+    from .quality_feedback_bridge import QualityFeedbackBridge, UnifiedQualityMetrics, create_rag_indexing_callback
 
     HAS_QUALITY_BRIDGE = True
 except ImportError:
@@ -233,9 +227,7 @@ class MaterialResponseConfig:
     enabled: bool = True
     strength: float = 0.7
     texture_boost: float = 0.25
-    surface_types: List[str] = field(
-        default_factory=lambda: ["wood", "metal", "glass", "stone", "fabric"]
-    )
+    surface_types: List[str] = field(default_factory=lambda: ["wood", "metal", "glass", "stone", "fabric"])
     preserve_highlights: bool = True
     micro_contrast: float = 0.15
 
@@ -285,16 +277,12 @@ class QualityFeedbackConfig:
     enabled: bool = True
     min_quality_threshold: float = 0.75
     max_iterations: int = 3
-    metrics: List[str] = field(
-        default_factory=lambda: ["sharpness", "contrast", "colorfulness", "exposure"]
-    )
+    metrics: List[str] = field(default_factory=lambda: ["sharpness", "contrast", "colorfulness", "exposure"])
     auto_adjust: bool = True
     # LPIPS integration settings
     use_lpips: bool = False  # Enable LPIPS perceptual scoring (requires torch/lpips)
     lpips_network: str = "alex"  # Network for LPIPS ('alex', 'vgg', 'squeeze')
-    perceptual_percentile_target: float = (
-        95.0  # Target percentile for perceptual quality
-    )
+    perceptual_percentile_target: float = 95.0  # Target percentile for perceptual quality
     material_fidelity_target: float = 0.98  # 98% material fidelity target
     # Hybrid mode settings
     hybrid_mode: bool = True  # Compute both LPIPS and heuristic metrics simultaneously
@@ -327,15 +315,11 @@ class PipelineConfig:
     quality_level: QualityLevel = QualityLevel.HIGH
     depth: DepthConfig = field(default_factory=DepthConfig)
     tone_mapping: ToneMappingConfig = field(default_factory=ToneMappingConfig)
-    material_response: MaterialResponseConfig = field(
-        default_factory=MaterialResponseConfig
-    )
+    material_response: MaterialResponseConfig = field(default_factory=MaterialResponseConfig)
     color_grading: ColorGradingConfig = field(default_factory=ColorGradingConfig)
     ai_enhancement: AIEnhancementConfig = field(default_factory=AIEnhancementConfig)
     upscaling: UpscalingConfig = field(default_factory=UpscalingConfig)
-    quality_feedback: QualityFeedbackConfig = field(
-        default_factory=QualityFeedbackConfig
-    )
+    quality_feedback: QualityFeedbackConfig = field(default_factory=QualityFeedbackConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
 
 
@@ -430,20 +414,14 @@ class GPUMemoryManager:
 
                 stats["allocated_gb"] = torch.cuda.memory_allocated() / 1e9
                 stats["reserved_gb"] = torch.cuda.memory_reserved() / 1e9
-                stats["total_gb"] = (
-                    torch.cuda.get_device_properties(0).total_memory / 1e9
-                )
-                stats["usage_percent"] = (
-                    stats["allocated_gb"] / stats["total_gb"]
-                ) * 100
+                stats["total_gb"] = torch.cuda.get_device_properties(0).total_memory / 1e9
+                stats["usage_percent"] = (stats["allocated_gb"] / stats["total_gb"]) * 100
             elif self.device == DeviceType.MPS:
                 import torch
 
                 stats["allocated_gb"] = torch.mps.current_allocated_memory() / 1e9
                 stats["total_gb"] = 16.0  # Conservative estimate for Apple Silicon
-                stats["usage_percent"] = (
-                    stats["allocated_gb"] / stats["total_gb"]
-                ) * 100
+                stats["usage_percent"] = (stats["allocated_gb"] / stats["total_gb"]) * 100
         except Exception as e:
             logger.debug(f"Failed to get memory stats: {e}")
         return stats
@@ -482,8 +460,7 @@ class GPUMemoryManager:
         stats = self.get_memory_stats()
         if stats:
             logger.info(
-                f"  GPU Memory: {stats['allocated_gb']:.2f}GB / "
-                f"{stats['total_gb']:.2f}GB ({stats['usage_percent']:.1f}%)"
+                f"  GPU Memory: {stats['allocated_gb']:.2f}GB / " f"{stats['total_gb']:.2f}GB ({stats['usage_percent']:.1f}%)"
             )
 
 
@@ -534,9 +511,7 @@ class QualityAssessor:
 
         if self._perceptual_assessor is None:
             try:
-                self._perceptual_assessor = PerceptualQualityAssessor(
-                    use_lpips_package=True
-                )
+                self._perceptual_assessor = PerceptualQualityAssessor(use_lpips_package=True)
                 logger.info("Initialized LPIPS-based perceptual quality assessor")
             except Exception as e:
                 logger.warning(f"Failed to initialize perceptual assessor: {e}")
@@ -610,12 +585,8 @@ class QualityAssessor:
 
         try:
             # Convert numpy arrays to PIL Images for the assessor
-            enhanced_pil = Image.fromarray(
-                (np.clip(enhanced, 0, 1) * 255).astype(np.uint8), mode="RGB"
-            )
-            reference_pil = Image.fromarray(
-                (np.clip(reference, 0, 1) * 255).astype(np.uint8), mode="RGB"
-            )
+            enhanced_pil = Image.fromarray((np.clip(enhanced, 0, 1) * 255).astype(np.uint8), mode="RGB")
+            reference_pil = Image.fromarray((np.clip(reference, 0, 1) * 255).astype(np.uint8), mode="RGB")
 
             # Run perceptual assessment
             report = assessor.assess(
@@ -666,10 +637,7 @@ class QualityAssessor:
 
         # Warn about performance for large images
         if h * w > 1_000_000:  # ~1MP
-            logger.warning(
-                "Large image without scipy: convolution will be slow. "
-                "Install scipy for better performance."
-            )
+            logger.warning("Large image without scipy: convolution will be slow. " "Install scipy for better performance.")
 
         # Pad image
         padded = np.pad(image, ((pad_h, pad_h), (pad_w, pad_w)), mode="reflect")
@@ -764,10 +732,7 @@ class QualityAssessor:
 
         # Warn about performance for large images
         if h * w > 1_000_000:  # ~1MP
-            logger.warning(
-                "Large image without scipy: smoothing will be slow. "
-                "Install scipy for better performance."
-            )
+            logger.warning("Large image without scipy: smoothing will be slow. " "Install scipy for better performance.")
 
         padded = np.pad(image, pad, mode="reflect")
         result = np.zeros_like(image)
@@ -832,9 +797,7 @@ class QualityAssessor:
         # Poor exposure -> adjust exposure
         if metrics.exposure_balance < 0.5:
             # Determine direction from luminance
-            adjustments["exposure_adjust"] = (
-                0.1 if metrics.exposure_balance < 0.4 else -0.1
-            )
+            adjustments["exposure_adjust"] = 0.1 if metrics.exposure_balance < 0.4 else -0.1
 
         # High noise -> increase denoising
         if metrics.noise_level > 0.3:
@@ -1046,9 +1009,7 @@ def apply_color_grading(
                     graded = lut_result
                     logger.debug(f"Applied LUT: {Path(lut_path).name} @ {strength:.0%}")
                 else:
-                    logger.warning(
-                        f"Failed to apply LUT: {Path(lut_path).name} (strength={strength:.0%})"
-                    )
+                    logger.warning(f"Failed to apply LUT: {Path(lut_path).name} (strength={strength:.0%})")
 
     # Apply temperature shift (RGB multipliers)
     r_mult, g_mult, b_mult = config.temperature_shift
@@ -1059,12 +1020,8 @@ def apply_color_grading(
     # Apply saturation adjustment
     if config.saturation != 1.0:
         # Convert to HSV-like representation
-        lum = (
-            0.2126 * graded[..., 0] + 0.7152 * graded[..., 1] + 0.0722 * graded[..., 2]
-        )
-        graded = lum[..., np.newaxis] + config.saturation * (
-            graded - lum[..., np.newaxis]
-        )
+        lum = 0.2126 * graded[..., 0] + 0.7152 * graded[..., 1] + 0.0722 * graded[..., 2]
+        graded = lum[..., np.newaxis] + config.saturation * (graded - lum[..., np.newaxis])
 
     # Apply vibrance (saturation that targets less saturated colors)
     if config.vibrance != 1.0:
@@ -1110,13 +1067,9 @@ def _load_cube_lut(lut_path: Union[str, Path]) -> Optional[np.ndarray]:
                             continue
 
         if lut_size > 0 and len(lut_data) == lut_size**3:
-            return np.array(lut_data, dtype=np.float32).reshape(
-                lut_size, lut_size, lut_size, 3
-            )
+            return np.array(lut_data, dtype=np.float32).reshape(lut_size, lut_size, lut_size, 3)
         else:
-            logger.warning(
-                f"Invalid LUT data: size={lut_size}, expected {lut_size**3} entries, got {len(lut_data)}"
-            )
+            logger.warning(f"Invalid LUT data: size={lut_size}, expected {lut_size**3} entries, got {len(lut_data)}")
             return None
 
     except Exception as e:
@@ -1227,9 +1180,7 @@ def apply_upscaling(
 
     # Check if upscaling is needed
     if current_w >= target_w and current_h >= target_h:
-        logger.info(
-            f"Image already at or above target resolution ({current_w}x{current_h})"
-        )
+        logger.info(f"Image already at or above target resolution ({current_w}x{current_h})")
         return image
 
     # Calculate scale to fit within target while maintaining aspect ratio
@@ -1243,9 +1194,7 @@ def apply_upscaling(
     # Apply upscaling method
     if config.method == "esrgan":
         # Real-ESRGAN upscaling (requires optional dependencies)
-        logger.warning(
-            "ESRGAN upscaling requires optional ML dependencies. Using Lanczos fallback."
-        )
+        logger.warning("ESRGAN upscaling requires optional ML dependencies. Using Lanczos fallback.")
         upscaled = image.resize((new_w, new_h), Image.Resampling.LANCZOS)
     else:
         # Default Lanczos
@@ -1253,9 +1202,7 @@ def apply_upscaling(
 
     # Optional sharpening after upscale
     if config.preserve_sharpness:
-        upscaled = upscaled.filter(
-            ImageFilter.UnsharpMask(radius=1.2, percent=50, threshold=0)
-        )
+        upscaled = upscaled.filter(ImageFilter.UnsharpMask(radius=1.2, percent=50, threshold=0))
 
     logger.info(f"Upscaled from {current_w}x{current_h} to {new_w}x{new_h}")
 
@@ -1444,13 +1391,8 @@ class Rendering4KPipeline:
         self._quality_bridge: Optional[QualityFeedbackBridge] = None
         if HAS_QUALITY_BRIDGE and config.quality_feedback.use_lpips:
             rag_callback = None
-            if (
-                config.quality_feedback.rag_indexing_enabled
-                and config.quality_feedback.rag_index_path
-            ):
-                rag_callback = create_rag_indexing_callback(
-                    config.quality_feedback.rag_index_path
-                )
+            if config.quality_feedback.rag_indexing_enabled and config.quality_feedback.rag_index_path:
+                rag_callback = create_rag_indexing_callback(config.quality_feedback.rag_index_path)
             self._quality_bridge = QualityFeedbackBridge(
                 hybrid_mode=config.quality_feedback.hybrid_mode,
                 lpips_network=config.quality_feedback.lpips_network,
@@ -1520,10 +1462,7 @@ class Rendering4KPipeline:
             FileNotFoundError: If config file does not exist
         """
         if not HAS_YAML or yaml is None:
-            raise ImportError(
-                "PyYAML is required for loading YAML configs. "
-                "Install with: pip install pyyaml"
-            )
+            raise ImportError("PyYAML is required for loading YAML configs. " "Install with: pip install pyyaml")
 
         config_path = Path(config_path)
         if not config_path.exists():
@@ -1545,17 +1484,11 @@ class Rendering4KPipeline:
 
         # Parse tone mapping config with ToneMappingMethod enum conversion
         tone_mapping_data = data.get("tone_mapping", {})
-        if "method" in tone_mapping_data and isinstance(
-            tone_mapping_data["method"], str
-        ):
+        if "method" in tone_mapping_data and isinstance(tone_mapping_data["method"], str):
             try:
-                tone_mapping_data["method"] = ToneMappingMethod(
-                    tone_mapping_data["method"]
-                )
+                tone_mapping_data["method"] = ToneMappingMethod(tone_mapping_data["method"])
             except ValueError:
-                logger.warning(
-                    f"Invalid tone_mapping method '{tone_mapping_data['method']}', using 'agx'"
-                )
+                logger.warning(f"Invalid tone_mapping method '{tone_mapping_data['method']}', using 'agx'")
                 tone_mapping_data["method"] = ToneMappingMethod.AGX
         tone_mapping = ToneMappingConfig(**tone_mapping_data)
 
@@ -1572,9 +1505,7 @@ class Rendering4KPipeline:
         try:
             quality_level = QualityLevel(quality_level_value)
         except ValueError:
-            logger.warning(
-                f"Invalid quality_level '{quality_level_value}', using 'high'"
-            )
+            logger.warning(f"Invalid quality_level '{quality_level_value}', using 'high'")
             quality_level = QualityLevel.HIGH
 
         return PipelineConfig(
@@ -1662,9 +1593,7 @@ class Rendering4KPipeline:
         depth_map = None
         if self.config.depth.enabled:
             depth_map = self._estimate_depth(image_np, input_path)
-            logger.info(
-                f"  Depth range: [{depth_map.min():.3f}, {depth_map.max():.3f}]"
-            )
+            logger.info(f"  Depth range: [{depth_map.min():.3f}, {depth_map.max():.3f}]")
         else:
             logger.info("  Skipped (disabled)")
         stage_metrics.append(
@@ -1696,9 +1625,7 @@ class Rendering4KPipeline:
         stage_start = time.time()
         logger.info("[4/9] Material Response")
         if self.config.material_response.enabled:
-            processed = apply_material_response(
-                processed, depth_map, self.config.material_response
-            )
+            processed = apply_material_response(processed, depth_map, self.config.material_response)
             logger.info(f"  Strength: {self.config.material_response.strength}")
         else:
             logger.info("  Skipped (disabled)")
@@ -1805,27 +1732,18 @@ class Rendering4KPipeline:
                     colorfulness=unified_metrics.heuristic.colorfulness,
                     exposure_balance=unified_metrics.heuristic.exposure_balance,
                     noise_level=unified_metrics.heuristic.noise_level,
-                    overall_score=unified_metrics.hybrid_score
-                    / 100.0,  # Normalize to 0-1
+                    overall_score=unified_metrics.hybrid_score / 100.0,  # Normalize to 0-1
                     lpips_score=unified_metrics.perceptual.lpips_score,
                     lpips_percentile=unified_metrics.perceptual.lpips_percentile,
                     material_fidelity=unified_metrics.material_fidelity.overall_fidelity,
                     perceptual_quality=unified_metrics.perceptual_composite,
                 )
                 logger.info(f"  Hybrid Score: {unified_metrics.hybrid_score:.1f}/100")
-                logger.info(
-                    f"  Perceptual: {unified_metrics.perceptual_composite:.1f}/100"
-                )
-                logger.info(
-                    f"  Heuristic: {unified_metrics.heuristic_composite:.1f}/100"
-                )
+                logger.info(f"  Perceptual: {unified_metrics.perceptual_composite:.1f}/100")
+                logger.info(f"  Heuristic: {unified_metrics.heuristic_composite:.1f}/100")
                 if unified_metrics.lpips_available:
-                    logger.info(
-                        f"  LPIPS: {unified_metrics.perceptual.lpips_score:.4f}"
-                    )
-                    logger.info(
-                        f"  Material Fidelity: {unified_metrics.material_fidelity.overall_fidelity:.1%}"
-                    )
+                    logger.info(f"  LPIPS: {unified_metrics.perceptual.lpips_score:.4f}")
+                    logger.info(f"  Material Fidelity: {unified_metrics.material_fidelity.overall_fidelity:.1%}")
                 logger.info(f"  {unified_metrics.targets_summary}")
             else:
                 # Fallback to heuristic-only QualityAssessor
@@ -1912,17 +1830,11 @@ class Rendering4KPipeline:
                 "base": "depth-anything/Depth-Anything-V2-Base",
                 "large": "depth-anything/Depth-Anything-V2-Large",
             }
-            model_id = model_map.get(
-                self.config.depth.model_variant, model_map["small"]
-            )
+            model_id = model_map.get(self.config.depth.model_variant, model_map["small"])
             device_id = 0 if self.device != DeviceType.CPU else -1
 
-            logger.info(
-                f"Loading Depth Anything V2 ({self.config.depth.model_variant})..."
-            )
-            self._depth_model = hf_pipeline(
-                "depth-estimation", model=model_id, device=device_id
-            )
+            logger.info(f"Loading Depth Anything V2 ({self.config.depth.model_variant})...")
+            self._depth_model = hf_pipeline("depth-estimation", model=model_id, device=device_id)
             logger.info("✓ Depth Anything V2 loaded")
         except Exception as e:
             logger.warning(f"Depth Anything V2 unavailable: {e}. Using fallback.")
@@ -1964,9 +1876,7 @@ class Rendering4KPipeline:
                 result = depth_model(image_pil)
                 # Validate result structure
                 if "depth" not in result:
-                    logger.warning(
-                        "Depth model returned unexpected format, using fallback"
-                    )
+                    logger.warning("Depth model returned unexpected format, using fallback")
                     depth_map = estimate_depth_simple(image)
                 else:
                     depth_map = np.array(result["depth"]).astype(np.float32)
@@ -2008,12 +1918,8 @@ class Rendering4KPipeline:
             return self._controlnet_pipe
 
         try:
-            from diffusers import (
-                ControlNetModel,
-                StableDiffusionControlNetImg2ImgPipeline,
-                UniPCMultistepScheduler,
-            )
             import torch
+            from diffusers import ControlNetModel, StableDiffusionControlNetImg2ImgPipeline, UniPCMultistepScheduler
 
             logger.info("Loading ControlNet pipeline...")
             controlnets = []
@@ -2040,21 +1946,15 @@ class Rendering4KPipeline:
                 self._controlnet_initialized = True
                 return None
 
-            self._controlnet_pipe = (
-                StableDiffusionControlNetImg2ImgPipeline.from_pretrained(  # nosec B615
-                    "runwayml/stable-diffusion-v1-5",
-                    controlnet=controlnets if len(controlnets) > 1 else controlnets[0],
-                    torch_dtype=dtype,
-                    safety_checker=None,
-                )
+            self._controlnet_pipe = StableDiffusionControlNetImg2ImgPipeline.from_pretrained(  # nosec B615
+                "runwayml/stable-diffusion-v1-5",
+                controlnet=controlnets if len(controlnets) > 1 else controlnets[0],
+                torch_dtype=dtype,
+                safety_checker=None,
             )
-            self._controlnet_pipe.scheduler = UniPCMultistepScheduler.from_config(
-                self._controlnet_pipe.scheduler.config
-            )
+            self._controlnet_pipe.scheduler = UniPCMultistepScheduler.from_config(self._controlnet_pipe.scheduler.config)
 
-            device_str = {"cuda": "cuda", "mps": "mps", "cpu": "cpu"}.get(
-                self.device.value, "cpu"
-            )
+            device_str = {"cuda": "cuda", "mps": "mps", "cpu": "cpu"}.get(self.device.value, "cpu")
             self._controlnet_pipe.to(device_str)
 
             if self.device == DeviceType.CUDA:
@@ -2113,17 +2013,13 @@ class Rendering4KPipeline:
 
             # Use CPU generator for MPS as PyTorch's Generator doesn't support MPS directly
             device_for_gen = "cpu" if self.device == DeviceType.MPS else pipe.device
-            generator = torch.Generator(device=device_for_gen).manual_seed(
-                self.config.ai_enhancement.seed
-            )
+            generator = torch.Generator(device=device_for_gen).manual_seed(self.config.ai_enhancement.seed)
 
             result = pipe(
                 prompt=self.config.ai_enhancement.prompt,
                 negative_prompt=self.config.ai_enhancement.negative_prompt,
                 image=image,
-                control_image=(
-                    control_images if len(control_images) > 1 else control_images[0]
-                ),
+                control_image=(control_images if len(control_images) > 1 else control_images[0]),
                 num_inference_steps=self.config.ai_enhancement.num_steps,
                 guidance_scale=self.config.ai_enhancement.guidance_scale,
                 strength=self.config.ai_enhancement.strength,
@@ -2192,17 +2088,12 @@ class Rendering4KPipeline:
             if unified_metrics is not None:
                 report["unified_metrics"] = unified_metrics.to_dict()
             with open(report_path, "w") as f:
-                json.dump(
-                    report, f, indent=2, ensure_ascii=False, default=_json_default
-                )
+                json.dump(report, f, indent=2, ensure_ascii=False, default=_json_default)
             outputs["quality_report"] = report_path
             logger.info(f"  Quality Report: {report_path.name}")
 
         # Save unified metrics as separate RAG document if enabled
-        if (
-            unified_metrics is not None
-            and self.config.quality_feedback.rag_indexing_enabled
-        ):
+        if unified_metrics is not None and self.config.quality_feedback.rag_indexing_enabled:
             rag_path = output_dir / f"{stem}_unified_quality.json"
             with open(rag_path, "w") as f:
                 json.dump(
@@ -2257,9 +2148,7 @@ class Rendering4KPipeline:
                         self._depth_cache.clear()
 
                 if show_progress and not HAS_TQDM:
-                    logger.info(
-                        f"Processing {i+1}/{len(input_paths)}: {Path(path).name}"
-                    )
+                    logger.info(f"Processing {i+1}/{len(input_paths)}: {Path(path).name}")
                 result = self.process(path, output_dir)
                 results.append(result)
 
@@ -2305,9 +2194,7 @@ class Rendering4KPipeline:
         logger.info(f"Total time: {total_time / 1000:.1f}s")
         logger.info(f"Average time per image: {avg_time:.0f}ms")
         logger.info(f"Average quality score: {avg_quality:.2%}")
-        logger.info(
-            f"Throughput: {len(results) / (total_time / 3600000):.0f} images/hour"
-        )
+        logger.info(f"Throughput: {len(results) / (total_time / 3600000):.0f} images/hour")
         logger.info("=" * 60)
 
     def clear_cache(self):
@@ -2370,12 +2257,8 @@ Examples:
     parser.add_argument("--config", type=Path, help="Custom YAML config file")
 
     # Processing options
-    parser.add_argument(
-        "--no-depth", action="store_true", help="Disable depth estimation"
-    )
-    parser.add_argument(
-        "--no-upscale", action="store_true", help="Disable 4K upscaling"
-    )
+    parser.add_argument("--no-depth", action="store_true", help="Disable depth estimation")
+    parser.add_argument("--no-upscale", action="store_true", help="Disable 4K upscaling")
     parser.add_argument(
         "--no-quality-feedback",
         action="store_true",
@@ -2384,9 +2267,7 @@ Examples:
 
     # Utility
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
-    parser.add_argument(
-        "--dry-run", action="store_true", help="Show config without processing"
-    )
+    parser.add_argument("--dry-run", action="store_true", help="Show config without processing")
 
     args = parser.parse_args()
 

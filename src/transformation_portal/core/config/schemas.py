@@ -6,7 +6,7 @@ Defines Pydantic models for type-safe configuration validation.
 
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union, Literal
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, validator
 
@@ -25,6 +25,7 @@ class PrecisionType(str, Enum):
 
 class DeviceConfig(BaseModel):
     """Hardware acceleration configuration."""
+
     device: DeviceType = Field(default=DeviceType.CUDA, description="Compute device")
     precision: PrecisionType = Field(default=PrecisionType.FP16, description="Calculation precision")
     gpu_id: int = Field(default=0, ge=0, description="CUDA device index")
@@ -39,6 +40,7 @@ class DeviceConfig(BaseModel):
 
 class PathsConfig(BaseModel):
     """FileSystem paths configuration."""
+
     input_dir: Path = Field(..., description="Source directory for processing")
     output_dir: Path = Field(..., description="Destination directory")
     models_dir: Path = Field(default=Path("models"), description="Model weights cache")
@@ -50,6 +52,7 @@ class PathsConfig(BaseModel):
 
 class PerformanceConfig(BaseModel):
     """Runtime performance tuning."""
+
     batch_size: int = Field(default=1, ge=1, description="Processing batch size")
     num_workers: int = Field(default=4, ge=0, description="DataLoader workers")
     tile_size: int = Field(default=512, ge=256, description="Tiled processing size (0 for full image)")
@@ -59,6 +62,7 @@ class PerformanceConfig(BaseModel):
 
 class OutputConfig(BaseModel):
     """Output format settings."""
+
     format: Literal["jpg", "png", "tiff", "exr"] = "jpg"
     quality: int = Field(default=95, ge=1, le=100, description="JPEG/Compression quality")
     preserve_metadata: bool = True
@@ -68,6 +72,7 @@ class OutputConfig(BaseModel):
 
 class ValidationConfig(BaseModel):
     """Quality Gate settings."""
+
     enabled: bool = True
     min_resolution: int = 1024
     max_resolution: int = 8192
@@ -80,6 +85,7 @@ class ValidationConfig(BaseModel):
 
 class ConfigSchema(BaseModel):
     """Root configuration object."""
+
     version: str = "1.0.0"
     mode: Literal["render", "process", "analyze"] = "render"
 
@@ -93,4 +99,4 @@ class ConfigSchema(BaseModel):
     pipeline_params: Dict[str, Any] = Field(default_factory=dict)
 
     class Config:
-        extra = "ignore" # Ignore unknown fields to allow forward compatibility
+        extra = "ignore"  # Ignore unknown fields to allow forward compatibility

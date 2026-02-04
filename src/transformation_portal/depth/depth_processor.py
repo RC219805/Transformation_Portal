@@ -36,11 +36,7 @@ class DepthProcessor:
         >>> depth_map = processor.estimate_depth(image)
     """
 
-    def __init__(
-        self,
-        device: str = 'cpu',
-        config_path: Optional[Union[str, Path]] = None
-    ):
+    def __init__(self, device: str = "cpu", config_path: Optional[Union[str, Path]] = None):
         """
         Initialize depth processor.
 
@@ -88,7 +84,7 @@ class DepthProcessor:
                 "zone_tone_mapping": {"enabled": False},
                 "atmospheric_effects": {"enabled": False},
                 "depth_guided_filters": {"enabled": False},
-            }
+            },
         }
 
     def estimate_depth(self, image: Union[Image.Image, np.ndarray]) -> np.ndarray:
@@ -105,8 +101,8 @@ class DepthProcessor:
         # Convert PIL Image to numpy if needed
         if isinstance(image, Image.Image):
             # Convert to RGB if needed
-            if image.mode != 'RGB':
-                image = image.convert('RGB')
+            if image.mode != "RGB":
+                image = image.convert("RGB")
             img_array = np.array(image).astype(np.float32) / 255.0
         else:
             img_array = image
@@ -117,17 +113,12 @@ class DepthProcessor:
 
         # Use pipeline's depth model
         depth_result = self._pipeline.cache.get_or_compute(
-            img_array,
-            lambda: self._pipeline.depth_model.estimate_depth(img_array)
+            img_array, lambda: self._pipeline.depth_model.estimate_depth(img_array)
         )
 
         return depth_result["depth"]
 
-    def process(
-        self,
-        image: Union[Image.Image, np.ndarray],
-        return_depth: bool = False
-    ) -> Union[np.ndarray, tuple]:
+    def process(self, image: Union[Image.Image, np.ndarray], return_depth: bool = False) -> Union[np.ndarray, tuple]:
         """
         Process image with depth-aware enhancements (if configured).
 

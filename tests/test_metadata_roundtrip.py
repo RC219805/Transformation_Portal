@@ -8,16 +8,19 @@ These tests prevent silent corruption bugs by verifying that:
 5. Missing optional fields are handled correctly
 6. Extra fields are handled according to policy
 """
+
 from __future__ import annotations
+
 import pytest
+
 from src.transformation_portal.lux_depth_v3.manifest import (
-    InputMetadata,
-    DepthMetadata,
-    V2Metadata,
-    TimingMetadata,
-    ReproMetadata,
-    ConfigFingerprint,
     CombinedManifest,
+    ConfigFingerprint,
+    DepthMetadata,
+    InputMetadata,
+    ReproMetadata,
+    TimingMetadata,
+    V2Metadata,
 )
 
 
@@ -83,13 +86,13 @@ class TestInputMetadataRoundtrip:
         assert metadata.schema_version == "1.0"
 
         data = metadata.to_dict()
-        assert data['schema_version'] == "1.0"
+        assert data["schema_version"] == "1.0"
 
     def test_from_dict_handles_missing_schema_version(self):
         """Verify backward compatibility: missing schema_version defaults to 1.0."""
         data = {
-            'image_path': '/test.jpg',
-            'image_sha256': 'hash123',
+            "image_path": "/test.jpg",
+            "image_sha256": "hash123",
         }
 
         metadata = InputMetadata.from_dict(data)
@@ -98,8 +101,8 @@ class TestInputMetadataRoundtrip:
     def test_from_dict_rejects_unsupported_schema_version(self):
         """Verify forward compatibility: reject unsupported schema versions."""
         data = {
-            'schema_version': '2.0',
-            'image_path': '/test.jpg',
+            "schema_version": "2.0",
+            "image_path": "/test.jpg",
         }
 
         with pytest.raises(ValueError, match="Unsupported InputMetadata schema version: 2.0"):
@@ -108,8 +111,8 @@ class TestInputMetadataRoundtrip:
     def test_from_dict_handles_list_dimensions(self):
         """Verify list-to-tuple conversion for image_dimensions."""
         data = {
-            'image_path': '/test.jpg',
-            'image_dimensions': [1920, 1080],  # List instead of tuple
+            "image_path": "/test.jpg",
+            "image_dimensions": [1920, 1080],  # List instead of tuple
         }
 
         metadata = InputMetadata.from_dict(data)
@@ -119,8 +122,8 @@ class TestInputMetadataRoundtrip:
     def test_from_dict_handles_none_dimensions(self):
         """Verify None dimensions are preserved."""
         data = {
-            'image_path': '/test.jpg',
-            'image_dimensions': None,
+            "image_path": "/test.jpg",
+            "image_dimensions": None,
         }
 
         metadata = InputMetadata.from_dict(data)
@@ -392,7 +395,7 @@ class TestMetadataEdgeCases:
     def test_input_metadata_from_dict_missing_required_field(self):
         """Verify from_dict raises error when required field is missing."""
         data = {
-            'image_sha256': 'hash123',
+            "image_sha256": "hash123",
             # Missing 'image_path'
         }
 

@@ -10,11 +10,11 @@ Makes intelligent routing decisions based on:
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Dict, Any
-import logging
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -70,11 +70,7 @@ class DevicePolicy:
             Device string ("cuda", "mps", "cpu")
         """
         # Depth estimation: prefer CoreML on Apple Silicon
-        if (
-            "depth" in stage_name.lower()
-            and self.has_coreml
-            and self.prefer_coreml_depth
-        ):
+        if "depth" in stage_name.lower() and self.has_coreml and self.prefer_coreml_depth:
             return "coreml"
 
         # General GPU preference
@@ -277,21 +273,18 @@ class PolicyEngine:
         try:
             import torch
 
-            device_policy.has_cuda = (
-                torch.cuda.is_available() if hasattr(torch, "cuda") else False
-            )
+            device_policy.has_cuda = torch.cuda.is_available() if hasattr(torch, "cuda") else False
             device_policy.has_mps = (
-                hasattr(torch, "backends")
-                and hasattr(torch.backends, "mps")
-                and torch.backends.mps.is_available()
+                hasattr(torch, "backends") and hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
             )
         except (ImportError, AttributeError):
             pass
 
         # Check for CoreML
         try:
-            import coremltools  # noqa: F401
             import platform
+
+            import coremltools  # noqa: F401
 
             device_policy.has_coreml = platform.system() == "Darwin"
         except ImportError:
@@ -301,9 +294,7 @@ class PolicyEngine:
         try:
             import psutil
 
-            device_policy.available_memory_gb = psutil.virtual_memory().available / (
-                1024**3
-            )
+            device_policy.available_memory_gb = psutil.virtual_memory().available / (1024**3)
         except ImportError:
             pass
 

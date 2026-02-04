@@ -11,21 +11,15 @@ Node Categories:
 - Validation: Quality validation, metrics
 """
 
-import logging
 import json
+import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
 
 # Import the Paradigm Shift components
-from transformation_portal.atmosphere import (
-    SkyGANGenerator,
-    LocationPresets,
-    SkyBlender,
-    SkyParameters,
-    AtmosphericParameters
-)
+from transformation_portal.atmosphere import AtmosphericParameters, LocationPresets, SkyBlender, SkyGANGenerator, SkyParameters
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +60,7 @@ class BaseNode:
 
     def execute(self, **kwargs) -> Tuple[Any, ...]:
         raise NotImplementedError
-    
+
     def _to_numpy(self, image: Any) -> np.ndarray:
         """Helper to ensure image is numpy array (H,W,3)."""
         if isinstance(image, torch.Tensor):
@@ -126,10 +120,10 @@ class FluxEnhancementNode(BaseNode):
         from transformation_portal.diffusion import FLUXPipeline
 
         logger.info(f"Executing FLUX enhancement (variant={variant}, strength={strength})")
-        
+
         # Convert input
         img_np = self._to_numpy(image)
-        
+
         pipeline = FLUXPipeline(variant=variant)
         seed_value = None if seed == -1 else seed
 
@@ -149,7 +143,7 @@ class FluxEnhancementNode(BaseNode):
 @CustomNodeRegistry.register
 class SkyGANNode(BaseNode):
     """SkyGAN atmospheric rendering node.
-    
+
     INTELLIGENT UPDATE:
     Now supports Physics Guardrails via SkyBlender.smart_render().
     Returns the analysis report to the user.
@@ -164,9 +158,7 @@ class SkyGANNode(BaseNode):
                 "image": ("IMAGE",),
                 "location": (["montecito", "santa_barbara", "hope_ranch", "riviera"],),
                 "season": (["spring", "summer", "fall", "winter"],),
-                "time_of_day": (
-                    ["sunrise", "morning", "midday", "golden_hour", "sunset", "twilight"],
-                ),
+                "time_of_day": (["sunrise", "morning", "midday", "golden_hour", "sunset", "twilight"],),
                 "cloud_coverage": ("FLOAT", {"default": 0.3, "min": 0.0, "max": 1.0}),
                 # THE BRAIN: New Controls for Physics Engine
                 "auto_correct": ("BOOLEAN", {"default": True, "label": "Auto-Fix Shadows"}),
@@ -182,7 +174,7 @@ class SkyGANNode(BaseNode):
     @classmethod
     def RETURN_TYPES(cls):
         # Returns: Enhanced Image, Sky Mask (Alpha), Analysis Report (String)
-        return ("IMAGE", "IMAGE", "STRING") 
+        return ("IMAGE", "IMAGE", "STRING")
 
     def execute(
         self,
@@ -197,32 +189,35 @@ class SkyGANNode(BaseNode):
         sun_elevation: float = -1.0,
         turbidity: float = -1.0,
     ) -> Tuple[Any, Any, str]:
-        
+
         logger.info(f"Executing SkyGAN Smart Render (Auto-Correct: {auto_correct})")
 
         # 1. Prepare Data
         img_np = self._to_numpy(image)
-        
+
         # Data Layer: Get presets
         presets = LocationPresets()
         location_preset = presets.get_atmospheric_parameters(location, season)
         time_params = presets.get_sky_parameters(
-            location=location, 
-            season=season, 
-            time_of_day=17.5 # approximate fallback
+            location=location,
+            season=season,
+            time_of_day=17.5,  # approximate fallback
             # Note: In real impl, map 'time_of_day' string to float hour
         )
-        
+
         # Apply Overrides
-        if sun_azimuth >= 0: time_params.sun_azimuth = sun_azimuth
-        if sun_elevation >= 0: time_params.sun_elevation = sun_elevation
-        if turbidity >= 0: location_preset.turbidity = turbidity
+        if sun_azimuth >= 0:
+            time_params.sun_azimuth = sun_azimuth
+        if sun_elevation >= 0:
+            time_params.sun_elevation = sun_elevation
+        if turbidity >= 0:
+            location_preset.turbidity = turbidity
         time_params.cloud_coverage = cloud_coverage
 
         # 2. Execute The Paradigm Shift
         # We use the intelligent 'smart_render' which performs shadow analysis
         blender = SkyBlender()
-        
+
         # Note: smart_render returns (image, CorrectionSuggestion)
         # It handles the sky generation internally now
         try:
@@ -231,7 +226,7 @@ class SkyGANNode(BaseNode):
                 sky_params=time_params,
                 atmo_params=location_preset,
                 auto_correct=auto_correct,
-                strict_physics=strict_physics
+                strict_physics=strict_physics,
             )
         except ValueError as e:
             # Catch PhysicsViolationError from strict mode
@@ -241,22 +236,18 @@ class SkyGANNode(BaseNode):
         # Since smart_render composes the final image, we re-run the fast segmentation
         # if the user needs the mask separately.
         mask_np = blender._segment_sky(img_np)
-        
+
         # 4. Format Output
         report = f"CONFIDENCE: {suggestion.confidence:.2f}\n"
         report += f"ANALYSIS: {suggestion.message}"
-        
-        return (
-            self._to_tensor(enhanced_np),
-            self._to_tensor(mask_np),
-            report
-        )
+
+        return (self._to_tensor(enhanced_np), self._to_tensor(mask_np), report)
 
 
 @CustomNodeRegistry.register
 class SceneAnalysisNode(BaseNode):
     """Scene analysis node using VLM."""
-    
+
     CATEGORY = "Transformation Portal/Analysis"
 
     @classmethod
@@ -270,16 +261,17 @@ class SceneAnalysisNode(BaseNode):
 
     @classmethod
     def RETURN_TYPES(cls):
-        return ("STRING",) # Returning JSON string is safest for ComfyUI
+        return ("STRING",)  # Returning JSON string is safest for ComfyUI
 
     def execute(self, image: Any, detailed: bool) -> Tuple[str]:
         from transformation_portal.vlm import SceneAnalyzer
-        
+
         img_np = self._to_numpy(image)
         analyzer = SceneAnalyzer()
         analysis = analyzer.analyze_scene(img_np, detailed=detailed)
-        
+
         return (json.dumps(analysis, indent=2),)
+
 
 # ... (MaterialSegmentationNode, NeuroaestheticsNode, QualityValidationNode would follow similar patterns using _to_numpy/_to_tensor)
 

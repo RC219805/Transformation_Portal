@@ -13,8 +13,13 @@ from .documentation import documents
 
 
 def load_module() -> ModuleType:
-    module_path = Path(__file__).resolve().parent.parent / "src" / "transformation_portal" / \
-                       "processors" / "luxury_video_master_grader.py"
+    module_path = (
+        Path(__file__).resolve().parent.parent
+        / "src"
+        / "transformation_portal"
+        / "processors"
+        / "luxury_video_master_grader.py"
+    )
     spec = importlib.util.spec_from_file_location("luxury_video_master_grader", module_path)
     module = importlib.util.module_from_spec(spec)
     assert spec and spec.loader  # for mypy
@@ -235,12 +240,8 @@ def test_build_filter_graph_blends_post_eq_when_lut_strength_lt_one(tmp_path):
     blend_match = re.search(r"^\[(v\d+)\]\[(v\d+)\]blend=all_expr", blend_node)
     assert blend_match, "Failed to parse blend node"
 
-    assert (
-        blend_match.group(1) == pre_lut_label
-    ), "Blend should use the post-EQ label as the base input"
-    assert (
-        blend_match.group(1) != pre_eq_label
-    ), "Blend should not use the pre-EQ label as the base input"
+    assert blend_match.group(1) == pre_lut_label, "Blend should use the post-EQ label as the base input"
+    assert blend_match.group(1) != pre_eq_label, "Blend should not use the pre-EQ label as the base input"
 
 
 def make_tone_args(**overrides):

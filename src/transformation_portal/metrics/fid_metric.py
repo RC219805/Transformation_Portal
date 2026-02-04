@@ -27,7 +27,7 @@ from PIL import Image
 from scipy import linalg
 
 try:
-    from torchvision.models import inception_v3, Inception_V3_Weights
+    from torchvision.models import Inception_V3_Weights, inception_v3
 
     INCEPTION_AVAILABLE = True
 except ImportError:
@@ -70,9 +70,7 @@ class FIDMetric:
             ImportError: If torchvision not available
         """
         if not INCEPTION_AVAILABLE:
-            raise ImportError(
-                "torchvision required for FID. " "Install with: pip install torchvision"
-            )
+            raise ImportError("torchvision required for FID. " "Install with: pip install torchvision")
 
         self.device = device or self._detect_device()
         self.dims = dims
@@ -80,9 +78,7 @@ class FIDMetric:
         logger.info(f"Initializing FID metric on {self.device}")
 
         # Load Inception-v3
-        self.model = inception_v3(
-            weights=Inception_V3_Weights.IMAGENET1K_V1, transform_input=False
-        ).to(self.device)
+        self.model = inception_v3(weights=Inception_V3_Weights.IMAGENET1K_V1, transform_input=False).to(self.device)
 
         self.model.eval()
 
@@ -132,9 +128,7 @@ class FIDMetric:
 
         return fid
 
-    def _extract_features(
-        self, images: List[Union[str, Path, Image.Image, np.ndarray]], batch_size: int
-    ) -> np.ndarray:
+    def _extract_features(self, images: List[Union[str, Path, Image.Image, np.ndarray]], batch_size: int) -> np.ndarray:
         """Extract Inception features for images.
 
         Args:
@@ -165,9 +159,7 @@ class FIDMetric:
 
         return features
 
-    def _prepare_image(
-        self, image: Union[str, Path, Image.Image, np.ndarray]
-    ) -> torch.Tensor:
+    def _prepare_image(self, image: Union[str, Path, Image.Image, np.ndarray]) -> torch.Tensor:
         """Prepare image for Inception.
 
         Args:
@@ -202,9 +194,7 @@ class FIDMetric:
 
         return tensor.to(self.device)
 
-    def _calculate_statistics(
-        self, features: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    def _calculate_statistics(self, features: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Calculate mean and covariance of features.
 
         Args:
@@ -258,9 +248,7 @@ class FIDMetric:
             covmean = covmean.real
 
         # Calculate FID
-        fid = (
-            diff.dot(diff) + np.trace(sigma1) + np.trace(sigma2) - 2 * np.trace(covmean)
-        )
+        fid = diff.dot(diff) + np.trace(sigma1) + np.trace(sigma2) - 2 * np.trace(covmean)
 
         return float(fid)
 

@@ -79,15 +79,9 @@ def apply_atmospheric_haze_jit(
             # Apply atmospheric scattering: I = I₀ * T + A * (1 - T)
             haze_contrib = 1.0 - transmission
 
-            result[i, j, 0] = (
-                image[i, j, 0] * transmission + haze_color_r * haze_contrib
-            )
-            result[i, j, 1] = (
-                image[i, j, 1] * transmission + haze_color_g * haze_contrib
-            )
-            result[i, j, 2] = (
-                image[i, j, 2] * transmission + haze_color_b * haze_contrib
-            )
+            result[i, j, 0] = image[i, j, 0] * transmission + haze_color_r * haze_contrib
+            result[i, j, 1] = image[i, j, 1] * transmission + haze_color_g * haze_contrib
+            result[i, j, 2] = image[i, j, 2] * transmission + haze_color_b * haze_contrib
 
             # Clip result
             for k in range(c):
@@ -141,9 +135,7 @@ def apply_aerial_desaturation_jit(
 
             # Blend between grayscale and color
             for k in range(c):
-                result[i, j, k] = (
-                    luminance * (1.0 - desat_factor) + image[i, j, k] * desat_factor
-                )
+                result[i, j, k] = luminance * (1.0 - desat_factor) + image[i, j, k] * desat_factor
 
     return result
 
@@ -181,15 +173,9 @@ def apply_color_shift_jit(
             shift_amt = d * shift_strength
 
             # Apply color shift
-            result[i, j, 0] = (
-                image[i, j, 0] * (1.0 - shift_amt) + shift_color_r * shift_amt
-            )
-            result[i, j, 1] = (
-                image[i, j, 1] * (1.0 - shift_amt) + shift_color_g * shift_amt
-            )
-            result[i, j, 2] = (
-                image[i, j, 2] * (1.0 - shift_amt) + shift_color_b * shift_amt
-            )
+            result[i, j, 0] = image[i, j, 0] * (1.0 - shift_amt) + shift_color_r * shift_amt
+            result[i, j, 1] = image[i, j, 1] * (1.0 - shift_amt) + shift_color_g * shift_amt
+            result[i, j, 2] = image[i, j, 2] * (1.0 - shift_amt) + shift_color_b * shift_amt
 
             # Clip result
             for k in range(c):
@@ -249,9 +235,7 @@ def apply_tone_curve_jit(
                 weight = idx_float - idx_low
 
                 # Interpolate
-                result[i, j, k] = (
-                    curve_lut[idx_low] * (1.0 - weight) + curve_lut[idx_high] * weight
-                )
+                result[i, j, k] = curve_lut[idx_low] * (1.0 - weight) + curve_lut[idx_high] * weight
 
     return result
 
@@ -372,9 +356,7 @@ def bilateral_filter_pixel_jit(
             range_dist_sq = range_dist * range_dist
 
             # Compute bilateral weight
-            weight = np.exp(
-                spatial_coeff * spatial_dist_sq + range_coeff * range_dist_sq
-            )
+            weight = np.exp(spatial_coeff * spatial_dist_sq + range_coeff * range_dist_sq)
 
             weighted_sum += neighbor_val * weight
             weight_sum += weight

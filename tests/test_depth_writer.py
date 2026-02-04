@@ -2,15 +2,17 @@
 
 Validates atomic write, precision, and readback logic.
 """
-import pytest
-import numpy as np
+
 from pathlib import Path
 
+import numpy as np
+import pytest
+
 from transformation_portal.lux_depth_v3.depth_writer import (
+    HAS_CV2,
+    DepthWriteStats,
     atomic_write_depth_u16_png_with_stats,
     read_depth_u16_png,
-    HAS_CV2,
-    DepthWriteStats
 )
 
 # Skip all tests if opencv-python not installed
@@ -27,9 +29,7 @@ class TestDepthWriter:
         output_path = tmp_path / "depth.png"
 
         # Write
-        path, verification_path, stats = atomic_write_depth_u16_png_with_stats(
-            output_path, original, debug_verify=True
-        )
+        path, verification_path, stats = atomic_write_depth_u16_png_with_stats(output_path, original, debug_verify=True)
 
         assert path.exists()
         assert stats.shape == (100, 100)
@@ -116,10 +116,7 @@ class TestDepthWriter:
         """Verify 16-bit precision is preserved."""
         # Create depth map with specific values that should be representable in u16
         # Use values like 0.5, 0.25, 0.75 which have exact binary representations
-        depth_map = np.array([
-            [0.0, 0.25, 0.5, 0.75, 1.0],
-            [0.1, 0.2, 0.3, 0.4, 0.6]
-        ], dtype=np.float32)
+        depth_map = np.array([[0.0, 0.25, 0.5, 0.75, 1.0], [0.1, 0.2, 0.3, 0.4, 0.6]], dtype=np.float32)
 
         output_path = tmp_path / "precision.png"
         path, _, _ = atomic_write_depth_u16_png_with_stats(output_path, depth_map)
@@ -137,9 +134,7 @@ class TestDepthWriter:
         output_path = tmp_path / "verified.png"
 
         # Should complete without error when verification enabled
-        path, verification_path, stats = atomic_write_depth_u16_png_with_stats(
-            output_path, depth_map, debug_verify=True
-        )
+        path, verification_path, stats = atomic_write_depth_u16_png_with_stats(output_path, depth_map, debug_verify=True)
 
         assert path.exists()
         # verification_path is currently always None (reserved for future use)
@@ -217,31 +212,29 @@ class TestDepthWriteStats:
         _, _, stats = atomic_write_depth_u16_png_with_stats(output_path, depth_map)
 
         # Should have _asdict method
-        assert hasattr(stats, '_asdict')
+        assert hasattr(stats, "_asdict")
         assert callable(stats._asdict)
 
         # Should return dict
         stats_dict = stats._asdict()
         assert isinstance(stats_dict, dict)
-        assert 'min' in stats_dict
-        assert 'max' in stats_dict
-        assert 'mean' in stats_dict
-        assert 'std' in stats_dict
-        assert 'shape' in stats_dict
-        assert 'dtype' in stats_dict
-        assert 'method' in stats_dict
+        assert "min" in stats_dict
+        assert "max" in stats_dict
+        assert "mean" in stats_dict
+        assert "std" in stats_dict
+        assert "shape" in stats_dict
+        assert "dtype" in stats_dict
+        assert "method" in stats_dict
 
     def test_stats_includes_method(self, tmp_path):
         """Verify stats includes method field."""
         depth_map = np.random.rand(10, 10).astype(np.float32)
         output_path = tmp_path / "method_test.png"
 
-        _, _, stats = atomic_write_depth_u16_png_with_stats(
-            output_path, depth_map, method="u16"
-        )
+        _, _, stats = atomic_write_depth_u16_png_with_stats(output_path, depth_map, method="u16")
 
         assert stats.method == "u16"
-        assert stats._asdict()['method'] == "u16"
+        assert stats._asdict()["method"] == "u16"
 
     def test_method_normalization(self, tmp_path):
         """Verify legacy/config method values are normalized to u16."""
@@ -251,9 +244,7 @@ class TestDepthWriteStats:
         for legacy_method in ["none", "", None]:
             output_path = tmp_path / f"norm_{legacy_method or 'None'}.png"
 
-            _, _, stats = atomic_write_depth_u16_png_with_stats(
-                output_path, depth_map, method=legacy_method
-            )
+            _, _, stats = atomic_write_depth_u16_png_with_stats(output_path, depth_map, method=legacy_method)
 
             # Should normalize to "u16"
             assert stats.method == "u16"
@@ -266,14 +257,10 @@ class TestDepthWriteStats:
 
         # "none" is now normalized, so test with truly invalid methods
         with pytest.raises(ValueError, match="Unsupported depth quantization method"):
-            atomic_write_depth_u16_png_with_stats(
-                output_path, depth_map, method="u8"
-            )
+            atomic_write_depth_u16_png_with_stats(output_path, depth_map, method="u8")
 
         with pytest.raises(ValueError, match="Unsupported depth quantization method"):
-            atomic_write_depth_u16_png_with_stats(
-                output_path, depth_map, method="float32"
-            )
+            atomic_write_depth_u16_png_with_stats(output_path, depth_map, method="float32")
 
     def test_stats_is_frozen(self, tmp_path):
         """Verify DepthWriteStats is immutable (frozen dataclass)."""

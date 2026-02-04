@@ -5,13 +5,16 @@ Analyzes raw image tensors to determine optimal export formats.
 detects HDR content, transparency, and frequency detail.
 """
 
-import numpy as np
 from dataclasses import dataclass
-from typing import Union, Tuple
+from typing import Tuple, Union
+
+import numpy as np
+
 
 @dataclass
 class ImageStats:
     """Statistical profile of an image tensor."""
+
     min_val: float
     max_val: float
     mean_val: float
@@ -20,13 +23,11 @@ class ImageStats:
     bit_depth_hint: int  # 8, 16, or 32
     dynamic_range_stops: float
 
-def compute_image_stats(
-    image: np.ndarray, 
-    sample_stride: int = 10
-) -> ImageStats:
+
+def compute_image_stats(image: np.ndarray, sample_stride: int = 10) -> ImageStats:
     """
     Analyze image content to derive storage requirements.
-    
+
     Args:
         image: Numpy array (H, W, C) or (C, H, W).
         sample_stride: Stride for faster statistics on massive images.
@@ -40,7 +41,7 @@ def compute_image_stats(
 
     # Subsample for speed
     sample = img_view[::sample_stride, ::sample_stride, :]
-    
+
     # 1. Check Transparency
     has_alpha = False
     if sample.shape[-1] == 4:
@@ -55,10 +56,10 @@ def compute_image_stats(
     min_v = float(sample.min())
     max_v = float(sample.max())
     mean_v = float(sample.mean())
-    
+
     is_hdr = False
     bit_depth = 8
-    
+
     if image.dtype == np.float32 or image.dtype == np.float16:
         # If values exceed 1.0, it's definitely HDR
         if max_v > 1.0:
@@ -66,10 +67,10 @@ def compute_image_stats(
             bit_depth = 32
         # If values are very precise/small, suggests linear data
         elif max_v <= 1.0 and image.dtype == np.float32:
-            bit_depth = 16 # Suggest 16-bit for precision
+            bit_depth = 16  # Suggest 16-bit for precision
     elif image.dtype == np.uint16:
         bit_depth = 16
-    
+
     # Estimate stops (log2 dynamic range)
     # Avoid log(0)
     safe_min = max(min_v, 1e-6)
@@ -82,5 +83,5 @@ def compute_image_stats(
         has_alpha=has_alpha,
         is_hdr=is_hdr,
         bit_depth_hint=bit_depth,
-        dynamic_range_stops=stops
+        dynamic_range_stops=stops,
     )

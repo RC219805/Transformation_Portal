@@ -24,9 +24,7 @@ try:
     MATPLOTLIB_AVAILABLE = True
 except ImportError:
     MATPLOTLIB_AVAILABLE = False
-    logging.warning(
-        "matplotlib not available. Visualization features will be disabled."
-    )
+    logging.warning("matplotlib not available. Visualization features will be disabled.")
 
 try:
     import cv2
@@ -34,9 +32,7 @@ try:
     CV2_AVAILABLE = True
 except ImportError:
     CV2_AVAILABLE = False
-    logging.warning(
-        "cv2 (opencv-python) not available. Some depth processing features will be limited."
-    )
+    logging.warning("cv2 (opencv-python) not available. Some depth processing features will be limited.")
 
 logger = logging.getLogger(__name__)
 
@@ -128,9 +124,7 @@ def compute_depth_edges(
 
     elif method == "canny":
         if not CV2_AVAILABLE:
-            logger.warning(
-                "cv2 not available, falling back to sobel for edge detection"
-            )
+            logger.warning("cv2 not available, falling back to sobel for edge detection")
             grad_x = sobel(depth, axis=1)
             grad_y = sobel(depth, axis=0)
             edges = np.sqrt(grad_x**2 + grad_y**2)
@@ -146,9 +140,7 @@ def compute_depth_edges(
 
     elif method == "laplacian":
         if not CV2_AVAILABLE:
-            logger.warning(
-                "cv2 not available, falling back to sobel for edge detection"
-            )
+            logger.warning("cv2 not available, falling back to sobel for edge detection")
             grad_x = sobel(depth, axis=1)
             grad_y = sobel(depth, axis=0)
             edges = np.sqrt(grad_x**2 + grad_y**2)
@@ -264,9 +256,7 @@ def smooth_depth(
         sigma_color = edge_preserve * 255
         sigma_space = sigma
 
-        smoothed = cv2.bilateralFilter(
-            depth_uint8, d=d, sigmaColor=sigma_color, sigmaSpace=sigma_space
-        )
+        smoothed = cv2.bilateralFilter(depth_uint8, d=d, sigmaColor=sigma_color, sigmaSpace=sigma_space)
 
         return smoothed.astype(np.float32) / 255.0
 
@@ -371,9 +361,7 @@ def depth_statistics(depth: np.ndarray) -> dict:
         {
             "gradient_mean": float(grad_magnitude.mean()),
             "gradient_max": float(grad_magnitude.max()),
-            "edge_density": float(
-                (grad_magnitude > grad_magnitude.mean()).sum() / grad_magnitude.size
-            ),
+            "edge_density": float((grad_magnitude > grad_magnitude.mean()).sum() / grad_magnitude.size),
         }
     )
 
@@ -407,9 +395,7 @@ def align_depth_to_image(
             target_shape[0] / depth.shape[0],
             target_shape[1] / depth.shape[1],
         )
-        order = (
-            1 if interpolation == "bilinear" else 3 if interpolation == "bicubic" else 0
-        )
+        order = 1 if interpolation == "bilinear" else 3 if interpolation == "bicubic" else 0
         return zoom(depth, zoom_factors, order=order)
 
     interp_map = {
@@ -446,9 +432,7 @@ def inpaint_depth_holes(
         Inpainted depth map
     """
     if not CV2_AVAILABLE:
-        logger.warning(
-            "cv2 not available, returning depth with holes filled with mean value"
-        )
+        logger.warning("cv2 not available, returning depth with holes filled with mean value")
         # Simple fallback: fill holes with mean of valid values
         if mask is None:
             mask = (depth == 0) | np.isnan(depth)
@@ -470,13 +454,9 @@ def inpaint_depth_holes(
 
     # Inpaint
     if method == "telea":
-        inpainted = cv2.inpaint(
-            depth_uint8, mask, inpaintRadius=3, flags=cv2.INPAINT_TELEA
-        )
+        inpainted = cv2.inpaint(depth_uint8, mask, inpaintRadius=3, flags=cv2.INPAINT_TELEA)
     elif method == "ns":
-        inpainted = cv2.inpaint(
-            depth_uint8, mask, inpaintRadius=3, flags=cv2.INPAINT_NS
-        )
+        inpainted = cv2.inpaint(depth_uint8, mask, inpaintRadius=3, flags=cv2.INPAINT_NS)
     else:
         raise ValueError(f"Unknown inpainting method: {method}")
 

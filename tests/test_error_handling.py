@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """Tests for error handling utilities."""
+
 import pytest
 
 # Use proper package imports (assumes package is installed or PYTHONPATH is set)
@@ -51,10 +52,7 @@ class TestFileValidation:
         jpg_file.write_text("fake image")
 
         # Valid extension
-        validated = validate_file_path(
-            jpg_file,
-            extensions=['.jpg', '.png']
-        )
+        validated = validate_file_path(jpg_file, extensions=[".jpg", ".png"])
         assert validated.exists()
 
         # Invalid extension
@@ -62,7 +60,7 @@ class TestFileValidation:
         txt_file.write_text("text")
 
         with pytest.raises(FileValidationError, match="Invalid file extension"):
-            validate_file_path(txt_file, extensions=['.jpg', '.png'])
+            validate_file_path(txt_file, extensions=[".jpg", ".png"])
 
     def test_validate_invalid_path(self):
         """Test validation of invalid path."""
@@ -116,19 +114,19 @@ class TestDependencyChecking:
     def test_check_available_dependency(self):
         """Test checking for available module."""
         # sys should always be available
-        result = check_dependency('sys')
+        result = check_dependency("sys")
         assert result is True
 
     def test_check_missing_dependency(self):
         """Test checking for missing module."""
         with pytest.raises(DependencyError, match="not installed"):
-            check_dependency('nonexistent_module_xyz123')
+            check_dependency("nonexistent_module_xyz123")
 
     def test_check_dependency_with_version(self):
         """Test version checking (if packaging available)."""
         try:
             # Try to check Python version
-            result = check_dependency('sys', min_version='3.0.0')
+            result = check_dependency("sys", min_version="3.0.0")
             assert result is True
         except DependencyError:
             # OK if packaging not available or version too old
@@ -140,6 +138,7 @@ class TestSafeExecute:
 
     def test_safe_execute_success(self):
         """Test successful execution."""
+
         def successful_func(x):
             return x * 2
 
@@ -148,18 +147,16 @@ class TestSafeExecute:
 
     def test_safe_execute_with_exception(self):
         """Test execution with exception returns default."""
+
         def failing_func():
             raise ValueError("test error")
 
-        result = safe_execute(
-            failing_func,
-            default=42,
-            log_errors=False  # Suppress logging in test
-        )
+        result = safe_execute(failing_func, default=42, log_errors=False)  # Suppress logging in test
         assert result == 42
 
     def test_safe_execute_with_kwargs(self):
         """Test execution with keyword arguments."""
+
         def func_with_kwargs(a, b=10):
             return a + b
 
@@ -202,31 +199,25 @@ class TestBatchErrorHandling:
     def test_batch_all_success(self):
         """Test batch processing with all successes."""
         items = [1, 2, 3, 4, 5]
-        results = batch_with_error_handling(
-            items,
-            lambda x: x * 2,
-            skip_errors=True
-        )
+        results = batch_with_error_handling(items, lambda x: x * 2, skip_errors=True)
         assert results == [2, 4, 6, 8, 10]
 
     def test_batch_skip_errors(self):
         """Test batch processing skips errors."""
+
         def process_func(x):
             if x == 3:
                 raise ValueError("bad value")
             return x * 2
 
         items = [1, 2, 3, 4, 5]
-        results = batch_with_error_handling(
-            items,
-            process_func,
-            skip_errors=True
-        )
+        results = batch_with_error_handling(items, process_func, skip_errors=True)
         # Should skip item 3
         assert results == [2, 4, 8, 10]
 
     def test_batch_dont_skip_errors(self):
         """Test batch processing fails on error."""
+
         def process_func(x):
             if x == 3:
                 raise ValueError("bad value")
@@ -234,14 +225,11 @@ class TestBatchErrorHandling:
 
         items = [1, 2, 3, 4, 5]
         with pytest.raises(ProcessingError):
-            batch_with_error_handling(
-                items,
-                process_func,
-                skip_errors=False
-            )
+            batch_with_error_handling(items, process_func, skip_errors=False)
 
     def test_batch_error_limit(self):
         """Test batch processing respects error limit."""
+
         def process_func(x):
             if x in [2, 3, 4]:
                 raise ValueError("bad value")
@@ -250,10 +238,7 @@ class TestBatchErrorHandling:
         items = [1, 2, 3, 4, 5]
         with pytest.raises(ProcessingError, match="Error limit"):
             batch_with_error_handling(
-                items,
-                process_func,
-                skip_errors=True,
-                error_limit=2  # Should fail when hitting 3rd error
+                items, process_func, skip_errors=True, error_limit=2  # Should fail when hitting 3rd error
             )
 
 
@@ -278,7 +263,7 @@ class TestErrorSummary:
             ValueError("1"),
             ValueError("2"),
             IOError("3"),  # Note: In Python 3, IOError is an alias for OSError
-            TypeError("4")
+            TypeError("4"),
         ]
         summary = get_error_summary(errors)
         assert "Total errors: 4" in summary

@@ -44,10 +44,7 @@ from PIL import Image
 
 # Optional: RAG-based quality feedback and 4K pipeline integration
 try:
-    from .pipelines.quality_feedback_bridge import (
-        QualityFeedbackBridge,
-        QualityTargets,
-    )
+    from .pipelines.quality_feedback_bridge import QualityFeedbackBridge, QualityTargets
 
     HAS_QUALITY_BRIDGE = True
 except ImportError:
@@ -146,19 +143,14 @@ class BatchResult:
         ]
 
         if self.successful_count > 0:
-            avg_time = (
-                sum(r.total_time for r in self.results if r.success)
-                / self.successful_count
-            )
+            avg_time = sum(r.total_time for r in self.results if r.success) / self.successful_count
             lines.append(f"Average time per image: {avg_time:.2f}s")
 
         if self.failed_count > 0:
             lines.append("\nFailed images:")
             for result in self.results:
                 if not result.success:
-                    lines.append(
-                        f"  - {result.input_path.name}: {result.error_message}"
-                    )
+                    lines.append(f"  - {result.input_path.name}: {result.error_message}")
 
         lines.append("=" * 70)
         return "\n".join(lines)
@@ -243,12 +235,8 @@ class UnifiedPipeline:
         try:
             # Create quality targets from recipe config
             targets = QualityTargets(
-                perceptual_percentile_target=quality_config.get(
-                    "perceptual_percentile_target", 95.0
-                ),
-                material_fidelity_target=quality_config.get(
-                    "material_fidelity_target", 0.98
-                ),
+                perceptual_percentile_target=quality_config.get("perceptual_percentile_target", 95.0),
+                material_fidelity_target=quality_config.get("material_fidelity_target", 0.98),
             )
 
             # Initialize the bridge
@@ -256,14 +244,8 @@ class UnifiedPipeline:
                 targets=targets,
                 hybrid_mode=quality_config.get("hybrid_mode", True),
                 lpips_network=quality_config.get("lpips_network", "alex"),
-                enable_material_fidelity=quality_config.get(
-                    "enable_material_fidelity", True
-                ),
-                rag_callback=(
-                    self._create_rag_callback()
-                    if quality_config.get("rag_indexing_enabled", False)
-                    else None
-                ),
+                enable_material_fidelity=quality_config.get("enable_material_fidelity", True),
+                rag_callback=(self._create_rag_callback() if quality_config.get("rag_indexing_enabled", False) else None),
             )
             log.info("RAG-based quality feedback bridge initialized")
 
@@ -287,9 +269,7 @@ class UnifiedPipeline:
             # Append document to RAG index file (JSON Lines format)
             with open(output_path, "a") as f:
                 f.write(json.dumps(document) + "\n")
-            log.debug(
-                f"Indexed quality document to RAG: {document.get('image_id', 'unknown')}"
-            )
+            log.debug(f"Indexed quality document to RAG: {document.get('image_id', 'unknown')}")
 
         return rag_callback
 
@@ -354,10 +334,7 @@ class UnifiedPipeline:
 
         # Always add quality assessment at the end if quality feedback is enabled
         quality_config = self.recipe.get("quality_feedback", {})
-        if (
-            quality_config.get("enabled", True)
-            and "quality_assessment" not in stage_order
-        ):
+        if quality_config.get("enabled", True) and "quality_assessment" not in stage_order:
             stages.append(
                 PipelineStage(
                     name="quality_assessment",
@@ -433,9 +410,7 @@ class UnifiedPipeline:
                 try:
                     if stage.name == "quality_assessment":
                         # Quality assessment is handled separately at the end
-                        quality_result = self._apply_quality_assessment(
-                            image, original_image, input_path, stage.config
-                        )
+                        quality_result = self._apply_quality_assessment(image, original_image, input_path, stage.config)
                         if quality_result:
                             result.quality_metrics = quality_result.get("metrics")
                             result.rag_document = quality_result.get("rag_document")
@@ -444,9 +419,7 @@ class UnifiedPipeline:
 
                     result.stages_executed.append(stage.name)
                     result.stage_times[stage.name] = time.time() - stage_start
-                    log.info(
-                        f"  ✓ {stage.display_name}: {result.stage_times[stage.name]:.2f}s"
-                    )
+                    log.info(f"  ✓ {stage.display_name}: {result.stage_times[stage.name]:.2f}s")
 
                 except Exception as e:
                     result.stage_times[stage.name] = time.time() - stage_start
@@ -624,9 +597,7 @@ class UnifiedPipeline:
             log.warning(f"Unknown stage: {stage.name}")
             return image
 
-    def _apply_upscaling_4k(
-        self, image: Image.Image, config: Dict[str, Any]
-    ) -> Image.Image:
+    def _apply_upscaling_4k(self, image: Image.Image, config: Dict[str, Any]) -> Image.Image:
         """Apply 4K upscaling using the Rendering4KPipeline if available.
 
         Args:
@@ -658,10 +629,7 @@ class UnifiedPipeline:
 
         # Use Rendering4KPipeline for high-quality upscaling
         try:
-            from .pipelines.rendering_4k_pipeline import (
-                apply_upscaling,
-                UpscalingConfig,
-            )
+            from .pipelines.rendering_4k_pipeline import UpscalingConfig, apply_upscaling
 
             upscale_config = UpscalingConfig(
                 enabled=True,
@@ -717,12 +685,8 @@ class UnifiedPipeline:
             # Log quality summary
             log.info(f"    Hybrid Score: {unified_metrics.hybrid_score:.1f}/100")
             if unified_metrics.lpips_available:
-                log.info(
-                    f"    Perceptual: {unified_metrics.perceptual_composite:.1f}/100"
-                )
-                log.info(
-                    f"    Material Fidelity: {unified_metrics.material_fidelity.overall_fidelity:.1%}"
-                )
+                log.info(f"    Perceptual: {unified_metrics.perceptual_composite:.1f}/100")
+                log.info(f"    Material Fidelity: {unified_metrics.material_fidelity.overall_fidelity:.1%}")
             log.info(f"    {unified_metrics.targets_summary}")
 
             return {
@@ -742,9 +706,7 @@ class UnifiedPipeline:
             log.warning(f"    Quality assessment failed: {e}")
             return self._compute_basic_quality_metrics(image)
 
-    def _compute_basic_quality_metrics(
-        self, image: Image.Image
-    ) -> Optional[Dict[str, Any]]:
+    def _compute_basic_quality_metrics(self, image: Image.Image) -> Optional[Dict[str, Any]]:
         """Compute basic quality metrics without RAG bridge.
 
         Args:
@@ -780,11 +742,7 @@ class UnifiedPipeline:
             rg, yb = r - g, 0.5 * (r + g) - b
             colorfulness = float(
                 np.clip(
-                    (
-                        np.sqrt(np.std(rg) ** 2 + np.std(yb) ** 2)
-                        + 0.3 * np.sqrt(np.mean(rg) ** 2 + np.mean(yb) ** 2)
-                    )
-                    * 2,
+                    (np.sqrt(np.std(rg) ** 2 + np.std(yb) ** 2) + 0.3 * np.sqrt(np.mean(rg) ** 2 + np.mean(yb) ** 2)) * 2,
                     0,
                     1,
                 )
@@ -808,9 +766,7 @@ class UnifiedPipeline:
             log.warning(f"    Basic quality metrics failed: {e}")
             return None
 
-    def _apply_depth_estimation(
-        self, image: Image.Image, config: Dict[str, Any]
-    ) -> Image.Image:
+    def _apply_depth_estimation(self, image: Image.Image, config: Dict[str, Any]) -> Image.Image:
         """Apply depth-aware processing."""
         try:
             # Try to use depth estimation if available
@@ -837,17 +793,13 @@ class UnifiedPipeline:
             log.warning(f"    Depth estimation failed: {e}, continuing without depth")
             return image
 
-    def _apply_ai_enhancement(
-        self, image: Image.Image, config: Dict[str, Any]
-    ) -> Image.Image:
+    def _apply_ai_enhancement(self, image: Image.Image, config: Dict[str, Any]) -> Image.Image:
         """Apply AI enhancement (SDXL/ControlNet)."""
         # AI enhancement stage (placeholder for heavy ML integration)
         log.info("    AI enhancement stage (integration pending)")
         return image
 
-    def _apply_material_response(
-        self, image: Image.Image, config: Dict[str, Any]
-    ) -> Image.Image:
+    def _apply_material_response(self, image: Image.Image, config: Dict[str, Any]) -> Image.Image:
         """Apply Material Response processing."""
         from .processors.material_response.engine import MaterialResponseEngine
 
@@ -856,9 +808,7 @@ class UnifiedPipeline:
 
         return self._material_engine.apply(image)
 
-    def _apply_color_grading(
-        self, image: Image.Image, config: Dict[str, Any]
-    ) -> Image.Image:
+    def _apply_color_grading(self, image: Image.Image, config: Dict[str, Any]) -> Image.Image:
         """Apply color grading with LUT."""
         arr = np.array(image).astype(np.float32) / 255.0
 
@@ -877,10 +827,7 @@ class UnifiedPipeline:
         saturation = config.get("saturation", 1.0)
         if abs(saturation - 1.0) > 0.001:
             luminance = 0.299 * arr[..., 0] + 0.587 * arr[..., 1] + 0.114 * arr[..., 2]
-            arr = (
-                luminance[..., np.newaxis]
-                + (arr - luminance[..., np.newaxis]) * saturation
-            )
+            arr = luminance[..., np.newaxis] + (arr - luminance[..., np.newaxis]) * saturation
 
         # Apply warmth
         warmth = config.get("warmth", 0.0)
@@ -898,9 +845,7 @@ class UnifiedPipeline:
         arr = np.clip(arr, 0.0, 1.0)
         return Image.fromarray((arr * 255).astype(np.uint8), "RGB")
 
-    def _apply_photo_finishing(
-        self, image: Image.Image, config: Dict[str, Any]
-    ) -> Image.Image:
+    def _apply_photo_finishing(self, image: Image.Image, config: Dict[str, Any]) -> Image.Image:
         """Apply photo finishing (ACES, bloom, vignette, grain)."""
         from scipy.ndimage import gaussian_filter
 
@@ -919,9 +864,7 @@ class UnifiedPipeline:
 
             lum = 0.2126 * arr[..., 0] + 0.7152 * arr[..., 1] + 0.0722 * arr[..., 2]
             mask = (lum > threshold).astype(np.float32)
-            glow = np.stack(
-                [gaussian_filter(arr[..., i] * mask, 9) for i in range(3)], axis=-1
-            )
+            glow = np.stack([gaussian_filter(arr[..., i] * mask, 9) for i in range(3)], axis=-1)
             arr = np.clip(arr + intensity * glow, 0.0, 1.0)
 
         # Vignette
@@ -946,9 +889,7 @@ class UnifiedPipeline:
 
         return Image.fromarray((arr * 255).astype(np.uint8), "RGB")
 
-    def _apply_branding(
-        self, image: Image.Image, config: Dict[str, Any]
-    ) -> Image.Image:
+    def _apply_branding(self, image: Image.Image, config: Dict[str, Any]) -> Image.Image:
         """Apply branding overlay (logo/text)."""
         if not config.get("enabled", False):
             return image
@@ -973,9 +914,7 @@ class UnifiedPipeline:
             x = margin
             y = height_px - th - margin
             pad = 14
-            draw.rectangle(
-                [x - pad, y - pad, x + tw + pad, y + th + pad], fill=(0, 0, 0, 160)
-            )
+            draw.rectangle([x - pad, y - pad, x + tw + pad, y + th + pad], fill=(0, 0, 0, 160))
             draw.text((x, y), text, fill=(255, 255, 255, 230), font=font)
 
         # Logo overlay

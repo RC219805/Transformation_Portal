@@ -230,9 +230,7 @@ class DepthCache:
         # Convert to bytes
         if image.dtype != np.uint8:
             # Normalize to 0-255 for consistent hashing
-            image_norm = (
-                (image - image.min()) / (image.max() - image.min() + 1e-8) * 255
-            )
+            image_norm = (image - image.min()) / (image.max() - image.min() + 1e-8) * 255
             image_bytes = image_norm.astype(np.uint8).tobytes()
         else:
             image_bytes = image.tobytes()
@@ -277,7 +275,7 @@ class DepthCache:
         except Exception as e:
             logger.warning(f"Failed to save disk cache: {e}")
 
-    def _validate_disk_entry(self, cache_file: Path, expected_type: str = 'depth') -> bool:
+    def _validate_disk_entry(self, cache_file: Path, expected_type: str = "depth") -> bool:
         """
         Validate disk-cached depth entry.
 
@@ -331,8 +329,8 @@ class DepthCache:
                 return False
 
             # Check for expected keys based on type
-            if expected_type == 'depth':
-                required_keys = ['depth']
+            if expected_type == "depth":
+                required_keys = ["depth"]
                 if not any(key in result for key in required_keys):
                     logger.warning(
                         f"Validation failed: missing required keys in {cache_file}. "
@@ -412,9 +410,7 @@ class DepthCache:
 
         if self.enable_disk_cache:
             disk_size = len(list(self.cache_dir.glob("*.pkl")))
-            disk_size_mb = sum(
-                f.stat().st_size for f in self.cache_dir.glob("*.pkl")
-            ) / (1024 * 1024)
+            disk_size_mb = sum(f.stat().st_size for f in self.cache_dir.glob("*.pkl")) / (1024 * 1024)
 
             stats.update(
                 {

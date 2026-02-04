@@ -1,4 +1,5 @@
 """Tests for :mod:`material_response_optimizer`."""
+
 # pylint: disable=redefined-outer-name  # pytest fixtures
 
 from __future__ import annotations
@@ -155,9 +156,7 @@ def material_blueprint(test_report_json: Path) -> dict:
 
 
 def test_pool_requires_targeted_luminance(blueprint: dict) -> None:
-    pool_entry = next(
-        target for target in blueprint["luminance_strategy"]["targets"] if target["scene"] == "pool"
-    )
+    pool_entry = next(target for target in blueprint["luminance_strategy"]["targets"] if target["scene"] == "pool")
     assert pytest.approx(pool_entry["current"], rel=1e-3) == 0.23
     assert pool_entry["target"] <= 0.32
     assert "specular_pool_reflections" in pool_entry["focus_areas"]

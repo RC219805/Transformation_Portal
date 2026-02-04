@@ -1,0 +1,5 @@
+# Formatting-only commits to ignore in git blame
+# Configure locally with: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# chore(format): black+isort baseline (no logic changes)
+d35d12479ee23f7af99da964d55f684e5e4108aa

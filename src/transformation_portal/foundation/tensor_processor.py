@@ -12,10 +12,10 @@ Key Features:
 - Custom SIMD-optimized kernels for common operations
 """
 
-from dataclasses import dataclass
-from typing import Optional, Tuple, Union, List, Callable
-from enum import Enum
 import logging
+from dataclasses import dataclass
+from enum import Enum
+from typing import Callable, List, Optional, Tuple, Union
 
 import torch
 import torch.nn.functional as F
@@ -96,9 +96,7 @@ class TensorProcessor:
         self._setup_precision()
         self._compile_cache = {}
 
-        logger.info(
-            f"Initialized TensorProcessor on {self.device} with {self.config.precision.value}"
-        )
+        logger.info(f"Initialized TensorProcessor on {self.device} with {self.config.precision.value}")
 
     def _setup_precision(self):
         """Setup precision and mixed precision training."""
@@ -148,21 +146,15 @@ class TensorProcessor:
 
         return tensor
 
-    def zeros(
-        self, shape: Tuple[int, ...], dtype: Optional[torch.dtype] = None
-    ) -> Tensor:
+    def zeros(self, shape: Tuple[int, ...], dtype: Optional[torch.dtype] = None) -> Tensor:
         """Allocate zero-initialized tensor."""
         return self.allocate(shape, dtype, fill_value=0.0)
 
-    def ones(
-        self, shape: Tuple[int, ...], dtype: Optional[torch.dtype] = None
-    ) -> Tensor:
+    def ones(self, shape: Tuple[int, ...], dtype: Optional[torch.dtype] = None) -> Tensor:
         """Allocate one-initialized tensor."""
         return self.allocate(shape, dtype, fill_value=1.0)
 
-    def randn(
-        self, shape: Tuple[int, ...], dtype: Optional[torch.dtype] = None
-    ) -> Tensor:
+    def randn(self, shape: Tuple[int, ...], dtype: Optional[torch.dtype] = None) -> Tensor:
         """Allocate random normal tensor."""
         dtype = dtype or self._get_dtype()
         tensor = torch.randn(shape, dtype=dtype, device=self.device)
@@ -193,9 +185,7 @@ class TensorProcessor:
 
         return result
 
-    def to_precision(
-        self, tensor: Tensor, precision: Optional[PrecisionMode] = None
-    ) -> Tensor:
+    def to_precision(self, tensor: Tensor, precision: Optional[PrecisionMode] = None) -> Tensor:
         """
         Convert tensor to target precision.
 
@@ -389,9 +379,7 @@ class TensorProcessor:
 
         return F.pad(tensor, padding, mode=mode, value=value)
 
-    def gradient_checkpoint(
-        self, function: Callable, *inputs: Tensor, use_reentrant: bool = True
-    ) -> Tensor:
+    def gradient_checkpoint(self, function: Callable, *inputs: Tensor, use_reentrant: bool = True) -> Tensor:
         """
         Apply gradient checkpointing to save memory during backprop.
 
@@ -404,9 +392,7 @@ class TensorProcessor:
             Function output
         """
         if self.config.enable_grad_checkpointing and torch.is_grad_enabled():
-            return torch.utils.checkpoint.checkpoint(
-                function, *inputs, use_reentrant=use_reentrant
-            )
+            return torch.utils.checkpoint.checkpoint(function, *inputs, use_reentrant=use_reentrant)
         else:
             return function(*inputs)
 
@@ -434,9 +420,7 @@ class TensorProcessor:
             # No-op context
             return nullcontext()
 
-    def compile_function(
-        self, function: Callable, mode: Optional[str] = None, dynamic: bool = False
-    ) -> Callable:
+    def compile_function(self, function: Callable, mode: Optional[str] = None, dynamic: bool = False) -> Callable:
         """
         Compile function with torch.compile for optimization.
 
@@ -510,9 +494,7 @@ class TensorProcessor:
         if self.device.type == "cuda":
             stats["allocated"] = torch.cuda.memory_allocated(self.device) / (1024**3)
             stats["reserved"] = torch.cuda.memory_reserved(self.device) / (1024**3)
-            stats["max_allocated"] = torch.cuda.max_memory_allocated(self.device) / (
-                1024**3
-            )
+            stats["max_allocated"] = torch.cuda.max_memory_allocated(self.device) / (1024**3)
         elif self.device.type == "mps":
             # MPS memory stats (limited support)
             stats["device"] = "mps"

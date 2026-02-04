@@ -92,29 +92,17 @@ class ColorSpace:
         # Compare individual attributes with ``None`` treated as "unknown".
         self_primaries = _normalise_tuple(self.primaries)
         other_primaries = _normalise_tuple(other.primaries)
-        if (
-            self_primaries is not None
-            and other_primaries is not None
-            and self_primaries != other_primaries
-        ):
+        if self_primaries is not None and other_primaries is not None and self_primaries != other_primaries:
             return False
 
         self_transfer = _normalise_token(self.transfer_function)
         other_transfer = _normalise_token(other.transfer_function)
-        if (
-            self_transfer is not None
-            and other_transfer is not None
-            and self_transfer != other_transfer
-        ):
+        if self_transfer is not None and other_transfer is not None and self_transfer != other_transfer:
             return False
 
         self_matrix = _normalise_token(self.matrix_coefficients)
         other_matrix = _normalise_token(other.matrix_coefficients)
-        if (
-            self_matrix is not None
-            and other_matrix is not None
-            and self_matrix != other_matrix
-        ):
+        if self_matrix is not None and other_matrix is not None and self_matrix != other_matrix:
             return False
 
         return True

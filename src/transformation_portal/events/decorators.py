@@ -45,9 +45,7 @@ def event(event_type: str, include_result: bool = False):
                 event_data["duration"] = time.time() - start_time
 
                 # Create and store event
-                evt = Event(
-                    id=event_id, type=event_type, timestamp=start_time, data=event_data
-                )
+                evt = Event(id=event_id, type=event_type, timestamp=start_time, data=event_data)
                 get_global_store().append(evt)
 
                 return result

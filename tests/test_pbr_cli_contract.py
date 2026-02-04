@@ -12,10 +12,11 @@ Uses Typer's CliRunner for isolated testing.
 
 import json
 from pathlib import Path
-import pytest
+
 import numpy as np
-from typer.testing import CliRunner
+import pytest
 from PIL import Image
+from typer.testing import CliRunner
 
 from transformation_portal.lux_depth_v3.pbr_cli import app
 
@@ -72,12 +73,9 @@ class TestCLIExitCodes:
 
     def test_success_exit_code(self, sample_depth_npy, output_dir):
         """Successful processing returns exit code 0."""
-        result = runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--output", str(output_dir),
-            "--preset", "draft"
-        ])
+        result = runner.invoke(
+            app, ["generate", "--depth", str(sample_depth_npy), "--output", str(output_dir), "--preset", "draft"]
+        )
         assert result.exit_code == 0
 
     def test_missing_input_error(self):
@@ -90,35 +88,34 @@ class TestCLIExitCodes:
 
     def test_nonexistent_file_error(self, output_dir):
         """Nonexistent file returns exit code 1."""
-        result = runner.invoke(app, [
-            "generate",
-            "--depth", "/nonexistent/file.npy",
-            "--output", str(output_dir)
-        ])
+        result = runner.invoke(app, ["generate", "--depth", "/nonexistent/file.npy", "--output", str(output_dir)])
         assert result.exit_code == 1
         output = result.stdout + str(result.exception) if result.exception else result.stdout
         assert "not found" in output.lower() or result.exit_code == 1
 
     def test_invalid_preset_error(self, sample_depth_npy, output_dir):
         """Invalid preset returns exit code 1."""
-        result = runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--output", str(output_dir),
-            "--preset", "invalid_preset"
-        ])
+        result = runner.invoke(
+            app, ["generate", "--depth", str(sample_depth_npy), "--output", str(output_dir), "--preset", "invalid_preset"]
+        )
         assert result.exit_code == 1
         output = result.stdout + str(result.exception) if result.exception else result.stdout
         assert "Unknown preset" in output or "Error" in output or result.exit_code == 1
 
     def test_both_depth_and_depth_dir_error(self, sample_depth_npy, sample_depth_batch, output_dir):
         """Specifying both --depth and --depth-dir returns exit code 1."""
-        result = runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--depth-dir", str(sample_depth_batch),
-            "--output", str(output_dir)
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(sample_depth_npy),
+                "--depth-dir",
+                str(sample_depth_batch),
+                "--output",
+                str(output_dir),
+            ],
+        )
         assert result.exit_code == 1
         output = result.stdout + str(result.exception) if result.exception else result.stdout
         assert "Cannot specify both" in output or result.exit_code == 1
@@ -129,12 +126,9 @@ class TestCLIOutputFiles:
 
     def test_single_file_creates_pbr_maps(self, sample_depth_npy, output_dir):
         """Single file mode creates all PBR maps."""
-        result = runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--output", str(output_dir),
-            "--preset", "draft"
-        ])
+        result = runner.invoke(
+            app, ["generate", "--depth", str(sample_depth_npy), "--output", str(output_dir), "--preset", "draft"]
+        )
 
         assert result.exit_code == 0
 
@@ -146,12 +140,9 @@ class TestCLIOutputFiles:
 
     def test_batch_creates_multiple_outputs(self, sample_depth_batch, output_dir):
         """Batch mode creates outputs for all depth files."""
-        result = runner.invoke(app, [
-            "generate",
-            "--depth-dir", str(sample_depth_batch),
-            "--output", str(output_dir),
-            "--preset", "draft"
-        ])
+        result = runner.invoke(
+            app, ["generate", "--depth-dir", str(sample_depth_batch), "--output", str(output_dir), "--preset", "draft"]
+        )
 
         assert result.exit_code == 0
 
@@ -164,25 +155,29 @@ class TestCLIOutputFiles:
         output_dir = tmp_path / "new_output"
         assert not output_dir.exists()
 
-        result = runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--output", str(output_dir),
-            "--preset", "draft"
-        ])
+        result = runner.invoke(
+            app, ["generate", "--depth", str(sample_depth_npy), "--output", str(output_dir), "--preset", "draft"]
+        )
 
         assert result.exit_code == 0
         assert output_dir.exists()
 
     def test_custom_base_name(self, sample_depth_npy, output_dir):
         """Custom base name is used for output files."""
-        result = runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--output", str(output_dir),
-            "--base-name", "custom_name",
-            "--preset", "draft"
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(sample_depth_npy),
+                "--output",
+                str(output_dir),
+                "--base-name",
+                "custom_name",
+                "--preset",
+                "draft",
+            ],
+        )
 
         assert result.exit_code == 0
         assert (output_dir / "custom_name_normal.png").exists()
@@ -211,12 +206,9 @@ class TestCLIPresets:
         presets = ["premium", "standard", "draft", "wood", "metal", "glass", "stone", "fabric"]
 
         for preset in presets:
-            result = runner.invoke(app, [
-                "generate",
-                "--depth", str(sample_depth_npy),
-                "--output", str(output_dir),
-                "--preset", preset
-            ])
+            result = runner.invoke(
+                app, ["generate", "--depth", str(sample_depth_npy), "--output", str(output_dir), "--preset", preset]
+            )
             assert result.exit_code == 0, f"Preset '{preset}' failed"
 
 
@@ -225,13 +217,20 @@ class TestCLIParameterOverrides:
 
     def test_parameter_overrides_applied(self, sample_depth_npy, output_dir):
         """Parameter overrides work correctly."""
-        result = runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--output", str(output_dir),
-            "--normal-strength", "2.0",
-            "--ao-strength", "1.5"
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(sample_depth_npy),
+                "--output",
+                str(output_dir),
+                "--normal-strength",
+                "2.0",
+                "--ao-strength",
+                "1.5",
+            ],
+        )
 
         assert result.exit_code == 0
         assert "override" in result.stdout.lower() or result.exit_code == 0
@@ -244,12 +243,9 @@ class TestCLIBatchBehavior:
         """Batch mode continues processing after errors by default."""
         # This test would need a way to inject an error mid-batch
         # For now, we verify successful batch completes
-        result = runner.invoke(app, [
-            "generate",
-            "--depth-dir", str(sample_depth_batch),
-            "--output", str(output_dir),
-            "--preset", "draft"
-        ])
+        result = runner.invoke(
+            app, ["generate", "--depth-dir", str(sample_depth_batch), "--output", str(output_dir), "--preset", "draft"]
+        )
         assert result.exit_code == 0
 
     def test_batch_pattern_filtering(self, tmp_path, output_dir):
@@ -261,13 +257,20 @@ class TestCLIBatchBehavior:
         (batch_dir / "good_depth.npy").write_bytes(np.random.rand(10, 10).astype(np.float32).tobytes())
         (batch_dir / "other.npy").write_bytes(np.random.rand(10, 10).astype(np.float32).tobytes())
 
-        result = runner.invoke(app, [
-            "generate",
-            "--depth-dir", str(batch_dir),
-            "--output", str(output_dir),
-            "--pattern", "*_depth.npy",
-            "--preset", "draft"
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth-dir",
+                str(batch_dir),
+                "--output",
+                str(output_dir),
+                "--pattern",
+                "*_depth.npy",
+                "--preset",
+                "draft",
+            ],
+        )
 
         # Should only process files matching pattern
         # This is a safety check
@@ -279,13 +282,9 @@ class TestCLISafetyGuardrails:
 
     def test_dry_run_no_output(self, sample_depth_npy, output_dir):
         """--dry-run doesn't create output files."""
-        result = runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--output", str(output_dir),
-            "--preset", "draft",
-            "--dry-run"
-        ])
+        result = runner.invoke(
+            app, ["generate", "--depth", str(sample_depth_npy), "--output", str(output_dir), "--preset", "draft", "--dry-run"]
+        )
 
         assert result.exit_code == 0
         # No output files should exist
@@ -294,13 +293,20 @@ class TestCLISafetyGuardrails:
 
     def test_max_files_limit(self, sample_depth_batch, output_dir):
         """--max-files limits batch processing."""
-        result = runner.invoke(app, [
-            "generate",
-            "--depth-dir", str(sample_depth_batch),
-            "--output", str(output_dir),
-            "--preset", "draft",
-            "--max-files", "2"
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth-dir",
+                str(sample_depth_batch),
+                "--output",
+                str(output_dir),
+                "--preset",
+                "draft",
+                "--max-files",
+                "2",
+            ],
+        )
 
         assert result.exit_code == 0
         # Should only process 2 files max
@@ -309,20 +315,13 @@ class TestCLISafetyGuardrails:
 
     def test_verbose_flag(self, sample_depth_npy, output_dir):
         """--verbose increases logging output."""
-        result_normal = runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--output", str(output_dir),
-            "--preset", "draft"
-        ])
+        result_normal = runner.invoke(
+            app, ["generate", "--depth", str(sample_depth_npy), "--output", str(output_dir), "--preset", "draft"]
+        )
 
-        result_verbose = runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--output", str(output_dir),
-            "--preset", "draft",
-            "--verbose"
-        ])
+        result_verbose = runner.invoke(
+            app, ["generate", "--depth", str(sample_depth_npy), "--output", str(output_dir), "--preset", "draft", "--verbose"]
+        )
 
         # Verbose mode should produce more output
         # This is hard to assert without implementation details
@@ -330,13 +329,9 @@ class TestCLISafetyGuardrails:
 
     def test_quiet_flag(self, sample_depth_npy, output_dir):
         """--quiet suppresses non-error output."""
-        result = runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--output", str(output_dir),
-            "--preset", "draft",
-            "--quiet"
-        ])
+        result = runner.invoke(
+            app, ["generate", "--depth", str(sample_depth_npy), "--output", str(output_dir), "--preset", "draft", "--quiet"]
+        )
 
         assert result.exit_code == 0
         # Quiet mode should produce minimal output
@@ -348,13 +343,9 @@ class TestCLIJSONOutput:
 
     def test_json_output_valid(self, sample_depth_npy, output_dir):
         """--json produces valid JSON output."""
-        result = runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--output", str(output_dir),
-            "--preset", "draft",
-            "--json"
-        ])
+        result = runner.invoke(
+            app, ["generate", "--depth", str(sample_depth_npy), "--output", str(output_dir), "--preset", "draft", "--json"]
+        )
 
         assert result.exit_code == 0
 
@@ -367,12 +358,7 @@ class TestCLIJSONOutput:
 
     def test_json_error_format(self, output_dir):
         """JSON output on error is also valid."""
-        result = runner.invoke(app, [
-            "generate",
-            "--depth", "/nonexistent/file.npy",
-            "--output", str(output_dir),
-            "--json"
-        ])
+        result = runner.invoke(app, ["generate", "--depth", "/nonexistent/file.npy", "--output", str(output_dir), "--json"])
 
         assert result.exit_code == 1
 
@@ -390,13 +376,20 @@ class TestCLIManifest:
         """--manifest creates manifest file."""
         manifest_path = tmp_path / "manifest.json"
 
-        result = runner.invoke(app, [
-            "generate",
-            "--depth", str(sample_depth_npy),
-            "--output", str(output_dir),
-            "--preset", "draft",
-            "--manifest", str(manifest_path)
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "generate",
+                "--depth",
+                str(sample_depth_npy),
+                "--output",
+                str(output_dir),
+                "--preset",
+                "draft",
+                "--manifest",
+                str(manifest_path),
+            ],
+        )
 
         assert result.exit_code == 0
         assert manifest_path.exists()

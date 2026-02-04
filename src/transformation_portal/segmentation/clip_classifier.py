@@ -17,12 +17,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
-from PIL import Image
 import torch
 import torch.nn.functional as F
+from PIL import Image
 
 try:
-    from transformers import CLIPProcessor, CLIPModel
+    from transformers import CLIPModel, CLIPProcessor
 
     CLIP_AVAILABLE = True
 except ImportError:
@@ -183,9 +183,7 @@ class CLIPClassifier:
         pil_image = self._load_image(image)
 
         # Prepare inputs
-        inputs = self.processor(
-            text=categories, images=pil_image, return_tensors="pt", padding=True
-        ).to(self.device)
+        inputs = self.processor(text=categories, images=pil_image, return_tensors="pt", padding=True).to(self.device)
 
         # Get predictions
         with torch.no_grad():
@@ -242,9 +240,7 @@ class CLIPClassifier:
                     "probabilities": probs,
                     "top_category": top_category,
                     "confidence": float(confidence),
-                    "all_categories": {
-                        cat: float(prob) for cat, prob in zip(categories, probs)
-                    },
+                    "all_categories": {cat: float(prob) for cat, prob in zip(categories, probs)},
                 }
             )
 
@@ -270,9 +266,7 @@ class CLIPClassifier:
 
         return {material: float(prob) for material, prob in zip(materials, probs)}
 
-    def classify_room_type(
-        self, image: Union[str, Path, Image.Image, np.ndarray]
-    ) -> Dict[str, float]:
+    def classify_room_type(self, image: Union[str, Path, Image.Image, np.ndarray]) -> Dict[str, float]:
         """Classify room type.
 
         Args:
@@ -285,9 +279,7 @@ class CLIPClassifier:
 
         return {room: float(prob) for room, prob in zip(self.ROOM_CATEGORIES, probs)}
 
-    def classify_style(
-        self, image: Union[str, Path, Image.Image, np.ndarray]
-    ) -> Dict[str, float]:
+    def classify_style(self, image: Union[str, Path, Image.Image, np.ndarray]) -> Dict[str, float]:
         """Classify architectural style.
 
         Args:
@@ -315,9 +307,7 @@ class CLIPClassifier:
         probs = self.classify_image(image, self.FEATURE_CATEGORIES)
 
         detected_features = [
-            (feature, float(prob))
-            for feature, prob in zip(self.FEATURE_CATEGORIES, probs)
-            if prob >= threshold
+            (feature, float(prob)) for feature, prob in zip(self.FEATURE_CATEGORIES, probs) if prob >= threshold
         ]
 
         # Sort by probability
@@ -350,9 +340,7 @@ class CLIPClassifier:
 
         # Find segments where target material confidence exceeds threshold
         matching_indices = [
-            result["mask_index"]
-            for result in results
-            if result["probabilities"][0] >= threshold  # Index 0 is target material
+            result["mask_index"] for result in results if result["probabilities"][0] >= threshold  # Index 0 is target material
         ]
 
         return matching_indices
@@ -433,9 +421,7 @@ class CLIPClassifier:
 
         return result.astype(np.uint8)
 
-    def _load_image(
-        self, image: Union[str, Path, Image.Image, np.ndarray]
-    ) -> Image.Image:
+    def _load_image(self, image: Union[str, Path, Image.Image, np.ndarray]) -> Image.Image:
         """Load image as PIL Image.
 
         Args:
@@ -453,9 +439,7 @@ class CLIPClassifier:
         else:
             raise ValueError(f"Unsupported image type: {type(image)}")
 
-    def _load_image_np(
-        self, image: Union[str, Path, Image.Image, np.ndarray]
-    ) -> np.ndarray:
+    def _load_image_np(self, image: Union[str, Path, Image.Image, np.ndarray]) -> np.ndarray:
         """Load image as numpy array.
 
         Args:

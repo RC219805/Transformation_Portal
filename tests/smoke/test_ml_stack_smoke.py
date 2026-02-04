@@ -21,6 +21,7 @@ import pytest
 # Check if ML packages are available for import
 try:
     import torch
+
     TORCH_AVAILABLE = True
 except (ImportError, RuntimeError, TypeError):
     TORCH_AVAILABLE = False
@@ -28,6 +29,7 @@ except (ImportError, RuntimeError, TypeError):
 
 try:
     import torchvision
+
     TORCHVISION_AVAILABLE = True
 except (ImportError, RuntimeError, TypeError):
     TORCHVISION_AVAILABLE = False
@@ -35,6 +37,7 @@ except (ImportError, RuntimeError, TypeError):
 
 try:
     import timm
+
     TIMM_AVAILABLE = True
 except (ImportError, RuntimeError, TypeError):
     TIMM_AVAILABLE = False
@@ -42,6 +45,7 @@ except (ImportError, RuntimeError, TypeError):
 
 try:
     import diffusers
+
     DIFFUSERS_AVAILABLE = True
 except (ImportError, RuntimeError, TypeError):
     DIFFUSERS_AVAILABLE = False
@@ -49,6 +53,7 @@ except (ImportError, RuntimeError, TypeError):
 
 try:
     import transformers
+
     TRANSFORMERS_AVAILABLE = True
 except (ImportError, RuntimeError, TypeError):
     TRANSFORMERS_AVAILABLE = False
@@ -56,6 +61,7 @@ except (ImportError, RuntimeError, TypeError):
 
 try:
     import sklearn
+
     SKLEARN_AVAILABLE = True
 except (ImportError, RuntimeError, TypeError):
     SKLEARN_AVAILABLE = False
@@ -107,20 +113,22 @@ def test_pytorch_mps_device_availability():
 def test_torchvision_transforms():
     """Test torchvision transforms work with torchvision 0.25.0."""
     torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
-    from torchvision import transforms
-    from PIL import Image
     import numpy as np
+    from PIL import Image
+    from torchvision import transforms
 
     # Create a dummy image
     img_array = np.random.randint(0, 255, (256, 256, 3), dtype=np.uint8)
     img = Image.fromarray(img_array)
 
     # Test basic transforms
-    transform = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    ])
+    transform = transforms.Compose(
+        [
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ]
+    )
 
     tensor = transform(img)
     assert tensor.shape == (3, 224, 224)
@@ -131,8 +139,8 @@ def test_torchvision_transforms():
 @pytest.mark.skipif(not SKLEARN_AVAILABLE, reason="scikit-learn not installed")
 def test_scikit_learn_basic_classifier():
     """Test scikit-learn basic classifier with scikit-learn 1.8.0."""
-    from sklearn.ensemble import RandomForestClassifier
     from sklearn.datasets import make_classification
+    from sklearn.ensemble import RandomForestClassifier
     from sklearn.model_selection import train_test_split
 
     # Generate dummy data
@@ -155,7 +163,7 @@ def test_scikit_learn_basic_classifier():
 
 @pytest.mark.ml
 @pytest.mark.skipif(not TIMM_AVAILABLE, reason="timm not installed")
-@patch('timm.create_model')
+@patch("timm.create_model")
 def test_timm_model_interface(mock_create_model):
     """Test timm model creation interface with timm 1.0.24."""
     import timm
@@ -166,16 +174,16 @@ def test_timm_model_interface(mock_create_model):
     mock_create_model.return_value = mock_model
 
     # Test model creation interface (mocked)
-    model = timm.create_model('resnet18', pretrained=False)
+    model = timm.create_model("resnet18", pretrained=False)
     assert model is not None
 
     # Verify the mock was called correctly
-    mock_create_model.assert_called_once_with('resnet18', pretrained=False)
+    mock_create_model.assert_called_once_with("resnet18", pretrained=False)
 
 
 @pytest.mark.ml
 @pytest.mark.skipif(not DIFFUSERS_AVAILABLE, reason="diffusers not installed")
-@patch('diffusers.DiffusionPipeline.from_pretrained')
+@patch("diffusers.DiffusionPipeline.from_pretrained")
 def test_diffusers_pipeline_interface(mock_from_pretrained):
     """Test diffusers pipeline interface with diffusers 0.36.0."""
     import torch
@@ -187,9 +195,7 @@ def test_diffusers_pipeline_interface(mock_from_pretrained):
 
     # Test pipeline creation interface (mocked)
     pipeline = DiffusionPipeline.from_pretrained(
-        "runwayml/stable-diffusion-v1-5",
-        torch_dtype=torch.float32,
-        use_safetensors=True
+        "runwayml/stable-diffusion-v1-5", torch_dtype=torch.float32, use_safetensors=True
     )
     assert pipeline is not None
 
@@ -203,12 +209,12 @@ def test_diffusers_pipeline_interface(mock_from_pretrained):
 
 @pytest.mark.ml
 @pytest.mark.skipif(not TRANSFORMERS_AVAILABLE, reason="transformers not installed")
-@patch('transformers.AutoTokenizer.from_pretrained')
-@patch('transformers.AutoModel.from_pretrained')
+@patch("transformers.AutoTokenizer.from_pretrained")
+@patch("transformers.AutoModel.from_pretrained")
 def test_transformers_model_interface(mock_model_from_pretrained, mock_tokenizer_from_pretrained):
     """Test transformers model interface with transformers 4.57.6."""
     torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
-    from transformers import AutoTokenizer, AutoModel
+    from transformers import AutoModel, AutoTokenizer
 
     # Mock tokenizer and model to avoid downloading
     mock_tokenizer = MagicMock()
@@ -270,6 +276,7 @@ def test_ml_stack_imports():
     # Check sklearn (if available)
     if SKLEARN_AVAILABLE:
         import sklearn
+
         sklearn_version = get_version("scikit-learn")
         assert sklearn_version is not None, "scikit-learn not installed"
         assert sklearn_version >= "1.8.0", f"scikit-learn version {sklearn_version} < 1.8.0"
@@ -277,6 +284,7 @@ def test_ml_stack_imports():
     # Check diffusers (if available)
     if DIFFUSERS_AVAILABLE:
         import diffusers
+
         diffusers_version = get_version("diffusers")
         assert diffusers_version is not None, "diffusers not installed"
         assert diffusers_version >= "0.36.0", f"diffusers version {diffusers_version} < 0.36.0"
@@ -284,6 +292,7 @@ def test_ml_stack_imports():
     # Check transformers (if available)
     if TRANSFORMERS_AVAILABLE:
         import transformers
+
         transformers_version = get_version("transformers")
         assert transformers_version is not None, "transformers not installed"
         assert transformers_version >= "4.57.0", f"transformers version {transformers_version} < 4.57.0"
@@ -291,11 +300,13 @@ def test_ml_stack_imports():
     # Check torchvision (if available)
     if TORCHVISION_AVAILABLE:
         import torchvision
+
         torchvision_version = get_version("torchvision")
         assert torchvision_version is not None, "torchvision not installed"
 
     # Check timm (if available)
     if TIMM_AVAILABLE:
         import timm
+
         timm_version = get_version("timm")
         assert timm_version is not None, "timm not installed"

@@ -13,12 +13,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import cv2
 import numpy as np
 from PIL import Image
-import cv2
 
-from transformation_portal.segmentation.sam_segmenter import SAMSegmenter
 from transformation_portal.segmentation.clip_classifier import CLIPClassifier
+from transformation_portal.segmentation.sam_segmenter import SAMSegmenter
 
 logger = logging.getLogger(__name__)
 
@@ -176,9 +176,7 @@ class MaterialSegmenter:
 
         # Step 1: Generate segments with SAM
         logger.info("Generating segments with SAM...")
-        sam_masks = self.sam.segment_automatic(
-            image, min_area=min_segment_area, max_masks=max_segments
-        )
+        sam_masks = self.sam.segment_automatic(image, min_area=min_segment_area, max_masks=max_segments)
         logger.info(f"Generated {len(sam_masks)} segments")
 
         # Step 2: Classify segments with CLIP
@@ -220,15 +218,12 @@ class MaterialSegmenter:
             material_segments.append(segment)
 
         logger.info(
-            f"Created {len(material_segments)} material segments "
-            f"(filtered by confidence >= {confidence_threshold})"
+            f"Created {len(material_segments)} material segments " f"(filtered by confidence >= {confidence_threshold})"
         )
 
         return material_segments
 
-    def get_material_masks(
-        self, segments: List[MaterialSegment], material: str
-    ) -> List[np.ndarray]:
+    def get_material_masks(self, segments: List[MaterialSegment], material: str) -> List[np.ndarray]:
         """Get all masks for a specific material.
 
         Args:
@@ -238,9 +233,7 @@ class MaterialSegmenter:
         Returns:
             List of boolean masks for specified material
         """
-        return [
-            seg.mask for seg in segments if seg.material.lower() == material.lower()
-        ]
+        return [seg.mask for seg in segments if seg.material.lower() == material.lower()]
 
     def create_material_map(
         self, image_shape: Tuple[int, int], segments: List[MaterialSegment]
@@ -273,9 +266,7 @@ class MaterialSegmenter:
 
         return material_map, id_to_material
 
-    def get_enhancement_recommendations(
-        self, segments: List[MaterialSegment]
-    ) -> Dict[str, Any]:
+    def get_enhancement_recommendations(self, segments: List[MaterialSegment]) -> Dict[str, Any]:
         """Get region-specific enhancement recommendations.
 
         Args:
@@ -299,9 +290,7 @@ class MaterialSegmenter:
             material_areas[mat] += segment.area
 
         # Sort by area coverage
-        sorted_materials = sorted(
-            material_areas.items(), key=lambda x: x[1], reverse=True
-        )
+        sorted_materials = sorted(material_areas.items(), key=lambda x: x[1], reverse=True)
 
         recommendations["materials_detected"] = [
             {
@@ -315,18 +304,14 @@ class MaterialSegmenter:
         # Get enhancement strategies for each material
         for material, _ in sorted_materials:
             if material in self.MATERIAL_ENHANCEMENT:
-                recommendations["region_enhancements"][material] = (
-                    self.MATERIAL_ENHANCEMENT[material]
-                )
+                recommendations["region_enhancements"][material] = self.MATERIAL_ENHANCEMENT[material]
 
         # Determine overall strategy based on dominant materials
         if sorted_materials:
             dominant_material = sorted_materials[0][0]
             recommendations["overall_strategy"] = {
                 "dominant_material": dominant_material,
-                "suggested_processing": self.MATERIAL_ENHANCEMENT.get(
-                    dominant_material, {}
-                ),
+                "suggested_processing": self.MATERIAL_ENHANCEMENT.get(dominant_material, {}),
                 "preserve_material_boundaries": True,
             }
 
@@ -360,9 +345,7 @@ class MaterialSegmenter:
         # Assign consistent color to each material
         unique_materials = sorted(set(seg.material for seg in segments))
         np.random.seed(42)  # Consistent colors
-        material_colors = {
-            mat: np.random.randint(0, 255, size=3) for mat in unique_materials
-        }
+        material_colors = {mat: np.random.randint(0, 255, size=3) for mat in unique_materials}
 
         # Apply colored masks
         for segment in segments:
@@ -484,6 +467,4 @@ class MaterialSegmenter:
         }
 
     def __repr__(self) -> str:
-        return (
-            f"MaterialSegmenter(\n" f"  SAM: {self.sam}\n" f"  CLIP: {self.clip}\n" f")"
-        )
+        return f"MaterialSegmenter(\n" f"  SAM: {self.sam}\n" f"  CLIP: {self.clip}\n" f")"

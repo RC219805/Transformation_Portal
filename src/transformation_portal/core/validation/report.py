@@ -6,13 +6,14 @@ reproduced or debugged later.
 """
 
 import json
-import subprocess
-import platform
-import torch
 import logging
-from dataclasses import dataclass, field, asdict
+import platform
+import subprocess
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
+
+import torch
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ class GitInfo:
     commit_hash: str
     branch: str
     is_dirty: bool
-    
+
     @classmethod
     def capture(cls) -> "GitInfo":
         try:
@@ -41,7 +42,7 @@ class DeviceInfo:
     pytorch_version: str
     cuda_version: Optional[str]
     gpu_name: Optional[str]
-    
+
     @classmethod
     def capture(cls) -> "DeviceInfo":
         gpu = torch.cuda.get_device_name(0) if torch.cuda.is_available() else None
@@ -51,13 +52,14 @@ class DeviceInfo:
             python_version=platform.python_version(),
             pytorch_version=torch.__version__,
             cuda_version=cuda,
-            gpu_name=gpu
+            gpu_name=gpu,
         )
 
 
 @dataclass
 class ModelInfo:
     """Details about neural models used."""
+
     name: str
     variant: str
     checksum: Optional[str] = None
@@ -67,24 +69,24 @@ class ModelInfo:
 @dataclass
 class ProcessingReport:
     """The Master Report for a single execution."""
-    
+
     # Metadata
     job_id: str
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
     duration_seconds: float = 0.0
-    
+
     # Context
     git: GitInfo = field(default_factory=GitInfo.capture)
     device: DeviceInfo = field(default_factory=DeviceInfo.capture)
-    
+
     # Execution
     parameters: Dict[str, Any] = field(default_factory=dict)
     models_used: List[ModelInfo] = field(default_factory=list)
-    
+
     # Results
     metrics: Dict[str, float] = field(default_factory=dict)
     output_files: List[str] = field(default_factory=list)
-    
+
     def save(self, path: str):
         """Save report to JSON."""
         with open(path, "w") as f:

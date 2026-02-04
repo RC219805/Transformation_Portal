@@ -3,17 +3,14 @@
 These tests validate the depth model protocol interface and the
 backend registry system.
 """
-import pytest
-from typing import Iterator, List, Optional
+
 from pathlib import Path
+from typing import Iterator, List, Optional
 
 import numpy as np
+import pytest
 
-from transformation_portal.lux_depth_v3.contracts import (
-    DepthArtifact,
-    DepthProvenance,
-    LicenseTier,
-)
+from transformation_portal.lux_depth_v3.contracts import DepthArtifact, DepthProvenance, LicenseTier
 from transformation_portal.lux_depth_v3.protocols import (
     BackendCapability,
     BackendInfo,
@@ -36,10 +33,12 @@ class MockCommercialBackend:
             model_id="mock/commercial-v1",
             role=BackendRole.PRODUCTION,
             license_tier=LicenseTier.COMMERCIAL,
-            capabilities=frozenset({
-                BackendCapability.RELATIVE_DEPTH,
-                BackendCapability.BATCH_INFERENCE,
-            }),
+            capabilities=frozenset(
+                {
+                    BackendCapability.RELATIVE_DEPTH,
+                    BackendCapability.BATCH_INFERENCE,
+                }
+            ),
             description="Test backend for commercial use",
         )
 
@@ -77,11 +76,13 @@ class MockResearchBackend:
             model_id="mock/research-v1",
             role=BackendRole.AUDIT,
             license_tier=LicenseTier.NON_COMMERCIAL,
-            capabilities=frozenset({
-                BackendCapability.RELATIVE_DEPTH,
-                BackendCapability.METRIC_DEPTH,
-                BackendCapability.CONFIDENCE_MAP,
-            }),
+            capabilities=frozenset(
+                {
+                    BackendCapability.RELATIVE_DEPTH,
+                    BackendCapability.METRIC_DEPTH,
+                    BackendCapability.CONFIDENCE_MAP,
+                }
+            ),
             description="Test backend for research (non-commercial)",
         )
 
@@ -120,10 +121,12 @@ class MockVideoBackend:
             model_id="mock/video-v1",
             role=BackendRole.VIDEO,
             license_tier=LicenseTier.COMMERCIAL,
-            capabilities=frozenset({
-                BackendCapability.RELATIVE_DEPTH,
-                BackendCapability.VIDEO_STREAMING,
-            }),
+            capabilities=frozenset(
+                {
+                    BackendCapability.RELATIVE_DEPTH,
+                    BackendCapability.VIDEO_STREAMING,
+                }
+            ),
             description="Test backend for video processing",
         )
 
@@ -197,10 +200,12 @@ class TestBackendInfo:
             model_id="test",
             role=BackendRole.PRODUCTION,
             license_tier=LicenseTier.COMMERCIAL,
-            capabilities=frozenset({
-                BackendCapability.RELATIVE_DEPTH,
-                BackendCapability.BATCH_INFERENCE,
-            }),
+            capabilities=frozenset(
+                {
+                    BackendCapability.RELATIVE_DEPTH,
+                    BackendCapability.BATCH_INFERENCE,
+                }
+            ),
         )
         assert info.supports(BackendCapability.RELATIVE_DEPTH)
         assert info.supports(BackendCapability.BATCH_INFERENCE)
@@ -378,10 +383,7 @@ class TestMockBackends:
         backend = MockCommercialBackend()
         backend.load()
 
-        images = [
-            np.random.randint(0, 255, (64, 64, 3), dtype=np.uint8)
-            for _ in range(3)
-        ]
+        images = [np.random.randint(0, 255, (64, 64, 3), dtype=np.uint8) for _ in range(3)]
         artifacts = backend.predict_batch(images)
 
         assert len(artifacts) == 3

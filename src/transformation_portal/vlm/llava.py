@@ -17,23 +17,17 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
-import torch
 import numpy as np
+import torch
 from PIL import Image
 
 try:
-    from transformers import (
-        AutoProcessor,
-        LlavaForConditionalGeneration,
-        BitsAndBytesConfig,
-    )
+    from transformers import AutoProcessor, BitsAndBytesConfig, LlavaForConditionalGeneration
 
     LLAVA_AVAILABLE = True
 except ImportError:
     LLAVA_AVAILABLE = False
-    logging.warning(
-        "LLaVA dependencies not available. Install with: pip install transformers>=4.35"
-    )
+    logging.warning("LLaVA dependencies not available. Install with: pip install transformers>=4.35")
 
 
 logger = logging.getLogger(__name__)
@@ -101,8 +95,7 @@ Focus on luxury architectural materials."""
         """
         if not LLAVA_AVAILABLE:
             raise ImportError(
-                "LLaVA requires transformers>=4.35. "
-                "Install with: pip install transformers>=4.35 accelerate bitsandbytes"
+                "LLaVA requires transformers>=4.35. " "Install with: pip install transformers>=4.35 accelerate bitsandbytes"
             )
 
         self.model_id = model_id
@@ -130,9 +123,7 @@ Focus on luxury architectural materials."""
         try:
             # Load processor
             # Production deployments should pin specific model revisions
-            self.processor = AutoProcessor.from_pretrained(  # nosec B615
-                self.model_id, cache_dir=self.cache_dir
-            )
+            self.processor = AutoProcessor.from_pretrained(self.model_id, cache_dir=self.cache_dir)  # nosec B615
 
             # Configure quantization for memory efficiency
             model_kwargs = {"cache_dir": self.cache_dir}
@@ -148,14 +139,10 @@ Focus on luxury architectural materials."""
                 model_kwargs["quantization_config"] = quantization_config
                 model_kwargs["device_map"] = "auto"
             else:
-                model_kwargs["torch_dtype"] = (
-                    torch.float16 if self.device != "cpu" else torch.float32
-                )
+                model_kwargs["torch_dtype"] = torch.float16 if self.device != "cpu" else torch.float32
 
             # Load model
-            self.model = LlavaForConditionalGeneration.from_pretrained(  # nosec B615
-                self.model_id, **model_kwargs
-            )
+            self.model = LlavaForConditionalGeneration.from_pretrained(self.model_id, **model_kwargs)  # nosec B615
 
             # Move to device if not using device_map
             if "device_map" not in model_kwargs:
@@ -215,13 +202,9 @@ Focus on luxury architectural materials."""
         ]
 
         # Process inputs
-        prompt_text = self.processor.apply_chat_template(
-            conversation, add_generation_prompt=True
-        )
+        prompt_text = self.processor.apply_chat_template(conversation, add_generation_prompt=True)
 
-        inputs = self.processor(
-            images=pil_image, text=prompt_text, return_tensors="pt"
-        ).to(self.device)
+        inputs = self.processor(images=pil_image, text=prompt_text, return_tensors="pt").to(self.device)
 
         # Generate response
         with torch.inference_mode():
@@ -234,9 +217,9 @@ Focus on luxury architectural materials."""
             )
 
         # Decode output
-        generated_text = self.processor.batch_decode(
-            output_ids, skip_special_tokens=True, clean_up_tokenization_spaces=True
-        )[0]
+        generated_text = self.processor.batch_decode(output_ids, skip_special_tokens=True, clean_up_tokenization_spaces=True)[
+            0
+        ]
 
         # Extract assistant response (after prompt)
         # LLaVA output includes the full conversation, extract just the response
@@ -278,9 +261,7 @@ Focus on luxury architectural materials."""
 
         return {"assessment": assessment, "prompt": prompt, "model": self.model_id}
 
-    def validate_materials(
-        self, image: Union[str, Path, Image.Image, np.ndarray]
-    ) -> Dict[str, Any]:
+    def validate_materials(self, image: Union[str, Path, Image.Image, np.ndarray]) -> Dict[str, Any]:
         """Validate material realism and consistency.
 
         Args:
@@ -289,9 +270,7 @@ Focus on luxury architectural materials."""
         Returns:
             Dictionary with material validation results
         """
-        validation = self.analyze_image(
-            image, prompt=self.MATERIAL_VALIDATION_PROMPT, temperature=0.1
-        )
+        validation = self.analyze_image(image, prompt=self.MATERIAL_VALIDATION_PROMPT, temperature=0.1)
 
         return {
             "validation": validation,
@@ -341,9 +320,7 @@ Based on these analyses, the enhancement appears to have modified the image's ch
 
         return comparison
 
-    def _load_image(
-        self, image: Union[str, Path, Image.Image, np.ndarray]
-    ) -> Image.Image:
+    def _load_image(self, image: Union[str, Path, Image.Image, np.ndarray]) -> Image.Image:
         """Load image from various input formats.
 
         Args:
@@ -362,7 +339,4 @@ Based on these analyses, the enhancement appears to have modified the image's ch
             raise ValueError(f"Unsupported image type: {type(image)}")
 
     def __repr__(self) -> str:
-        return (
-            f"LLaVAProcessor(model='{self.model_id}', "
-            f"device='{self.device}', quantization={self.quantization})"
-        )
+        return f"LLaVAProcessor(model='{self.model_id}', " f"device='{self.device}', quantization={self.quantization})"

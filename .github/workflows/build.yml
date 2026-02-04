@@ -73,16 +73,24 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-lint-
 
-      - name: Lint with minimal dependencies
+      - name: Install lint dependencies
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
           python -m pip install flake8 pylint
           python -m pip install -r requirements-lint.txt
-
           echo "Disk space after dependency install:"
           df -h
 
+      - name: Black (formatting)
+        run: black --check --diff --line-length=127 src/ tests/
+
+      - name: isort (imports)
+        run: isort --check-only --diff --profile=black --line-length=127 src/ tests/
+
+      - name: Lint with flake8 and pylint
+        run: |
+          set -euo pipefail
           echo "Running flake8..."
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 

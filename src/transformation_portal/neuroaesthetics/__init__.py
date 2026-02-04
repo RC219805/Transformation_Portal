@@ -27,12 +27,10 @@ Based on research:
 - 82%+ ML prediction accuracy for aesthetic preference
 """
 
-from transformation_portal.neuroaesthetics.golden_ratio import GoldenRatioAnalyzer
 from transformation_portal.neuroaesthetics.color_harmony import ColorHarmonyAnalyzer
-from transformation_portal.neuroaesthetics.spatial_frequency import (
-    SpatialFrequencyAnalyzer,
-)
 from transformation_portal.neuroaesthetics.emotional_optimizer import EmotionalOptimizer
+from transformation_portal.neuroaesthetics.golden_ratio import GoldenRatioAnalyzer
+from transformation_portal.neuroaesthetics.spatial_frequency import SpatialFrequencyAnalyzer
 
 __all__ = [
     "GoldenRatioAnalyzer",

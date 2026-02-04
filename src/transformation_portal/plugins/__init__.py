@@ -23,13 +23,7 @@ Example:
     >>> depth_map = depth_model.execute(image)
 """
 
-from .decorators import (
-    cached_execution,
-    deprecated_plugin,
-    measure_performance,
-    plugin,
-    requires_version,
-)
+from .decorators import cached_execution, deprecated_plugin, measure_performance, plugin, requires_version
 from .interface import (
     DepthModelPlugin,
     EnhancerPlugin,
@@ -41,28 +35,10 @@ from .interface import (
     PluginValidationError,
     ProcessorPlugin,
 )
-from .loader import (
-    LoadedPlugin,
-    PluginLoader,
-    PluginManifest,
-    get_global_loader,
-)
-from .manager import (
-    ExecutionResult,
-    PluginContext,
-    PluginManager,
-    PluginState,
-    get_global_manager,
-)
+from .loader import LoadedPlugin, PluginLoader, PluginManifest, get_global_loader
+from .manager import ExecutionResult, PluginContext, PluginManager, PluginState, get_global_manager
 from .registry import PluginRegistry, get_global_registry
-from .validator import (
-    PluginValidator,
-    ValidationIssue,
-    ValidationResult,
-    ValidationSeverity,
-    quick_validate,
-    validate_plugin,
-)
+from .validator import PluginValidator, ValidationIssue, ValidationResult, ValidationSeverity, quick_validate, validate_plugin
 
 __all__ = [
     # Core interfaces

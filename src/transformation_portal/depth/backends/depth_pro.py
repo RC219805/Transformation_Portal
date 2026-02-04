@@ -186,11 +186,7 @@ class DepthProBackend:
         # Convert image to format expected by DepthProStage
         if isinstance(image, np.ndarray):
             image_array = image
-            image_pil = Image.fromarray(
-                (image * 255).astype(np.uint8)
-                if image.max() <= 1.0
-                else image.astype(np.uint8)
-            )
+            image_pil = Image.fromarray((image * 255).astype(np.uint8) if image.max() <= 1.0 else image.astype(np.uint8))
         else:
             image_pil = image.convert("RGB")
             image_array = np.array(image_pil)
@@ -208,10 +204,7 @@ class DepthProBackend:
         result = self._stage.compute(context)
 
         if result.status != StageStatus.COMPLETED:
-            raise RuntimeError(
-                f"Depth Pro inference failed: {result.error}\n"
-                f"Traceback:\n{result.error_traceback}"
-            )
+            raise RuntimeError(f"Depth Pro inference failed: {result.error}\n" f"Traceback:\n{result.error_traceback}")
 
         # Extract depth and metadata
         depth_map = result.artifacts.get("depth_map")
@@ -287,14 +280,10 @@ class DepthProBackend:
             )
 
         if not getattr(self._config, "non_commercial_ok", False):
-            raise LicenseRestrictionError(
-                "Depth Pro requires non_commercial_ok=True in config."
-            )
+            raise LicenseRestrictionError("Depth Pro requires non_commercial_ok=True in config.")
 
         if not getattr(self._config, "accept_apple_depth_pro_research_license", False):
-            raise LicenseRestrictionError(
-                "Depth Pro requires accept_apple_depth_pro_research_license=True in config."
-            )
+            raise LicenseRestrictionError("Depth Pro requires accept_apple_depth_pro_research_license=True in config.")
 
         logger.debug("Runtime license validation passed for depth_pro")
 

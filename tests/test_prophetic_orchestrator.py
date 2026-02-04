@@ -5,12 +5,7 @@ import pytest
 pytestmark = pytest.mark.skip(reason="prophetic_orchestrator is deprecated and in archive")
 
 try:
-    from archive.deprecated.prophetic_orchestrator import (
-        CausalityEngine,
-        PropheticOrchestrator,
-        TemporalAntibody,
-        WeakPoint,
-    )
+    from archive.deprecated.prophetic_orchestrator import CausalityEngine, PropheticOrchestrator, TemporalAntibody, WeakPoint
 except ImportError:
     pass
 

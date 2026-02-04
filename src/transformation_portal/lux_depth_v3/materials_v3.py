@@ -2,14 +2,19 @@
 
 Handles material segmentation, refinement planning, and pixel operations.
 """
+
 from __future__ import annotations
+
 import logging
+from typing import Any, Dict, Optional
+
 import numpy as np
-from typing import Dict, Any, Optional
+
 from .materials_v3_response import generate_response_plan
 from .pixel_ops_executor import apply_pixel_ops
 
 logger = logging.getLogger(__name__)
+
 
 class MaterialsV3Engine:
     def __init__(self, config):
@@ -25,34 +30,34 @@ class MaterialsV3Engine:
             "coverage_px": coverage_px,
             "coverage_ratio": coverage_px / total_px,
             "mean_conf": mean_conf,
-            "edge_conf": 0.0  # Placeholder, would be computed by edge extraction
+            "edge_conf": 0.0,  # Placeholder, would be computed by edge extraction
         }
 
-    def process(self, image: np.ndarray, segmentation_result: Dict[str, Any], depth_map: Optional[np.ndarray] = None) -> Dict[str, Any]:
+    def process(
+        self, image: np.ndarray, segmentation_result: Dict[str, Any], depth_map: Optional[np.ndarray] = None
+    ) -> Dict[str, Any]:
         """Main entry point."""
-        if not self.config.enabled: return {}
+        if not self.config.enabled:
+            return {}
 
         # 1. Stats
-        materials = (
-            segmentation_result.get("materials")
-            or segmentation_result.get("material_masks")
-            or {}
-        )
+        materials = segmentation_result.get("materials") or segmentation_result.get("material_masks") or {}
         segmentation_result = {"materials": materials}
 
         per_class_stats = {}
-        for mat_key, mask in segmentation_result.get('materials', {}).items():
+        for mat_key, mask in segmentation_result.get("materials", {}).items():
             stats = self._compute_mask_stats(mask)
             per_class_stats[mat_key] = stats
             # Attach mask for edge signal computation (PR-4C)
-            per_class_stats[mat_key]['mask'] = mask
+            per_class_stats[mat_key]["mask"] = mask
 
         # 2. Plan (Schema v3.1)
         response_plan = generate_response_plan(per_class_stats, image, self.config)
 
         # Clean up
         for mat_key in per_class_stats:
-            if 'mask' in per_class_stats[mat_key]: del per_class_stats[mat_key]['mask']
+            if "mask" in per_class_stats[mat_key]:
+                del per_class_stats[mat_key]["mask"]
 
         # 3. Execution (Pixel Ops)
         _, pixel_ops = apply_pixel_ops(image, segmentation_result, response_plan, self.config)
@@ -60,7 +65,7 @@ class MaterialsV3Engine:
         return {
             "materials_v3_response_plan": response_plan,
             "materials_v3_pixel_ops": pixel_ops,
-            "materials_v3_metadata": {"version": "3.1"}
+            "materials_v3_metadata": {"version": "3.1"},
         }
 
     def apply_glass_response_if_enabled(self, image, segmentation_result, response_plan):

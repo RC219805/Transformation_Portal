@@ -3,20 +3,22 @@
 Verifies that all critical modules and types can be imported without errors.
 These are stub implementations that will be fully developed later.
 """
-import pytest
+
 import sys
 from pathlib import Path
+
+import pytest
 
 
 def test_import_config():
     """Test that config module imports successfully."""
     from transformation_portal.lux_depth_v3.config import (
         DA3Config,
-        ModelVariant,
-        Preset,
-        EnhanceConfig,
-        PostprocessingConfig,
         DeviceConfig,
+        EnhanceConfig,
+        ModelVariant,
+        PostprocessingConfig,
+        Preset,
     )
 
     # Verify enums have expected values
@@ -37,11 +39,8 @@ def test_import_config():
 
 def test_import_inference():
     """Test that inference module imports successfully."""
-    from transformation_portal.lux_depth_v3.inference import (
-        DA3InferenceEngine,
-        DepthResult,
-    )
     from transformation_portal.lux_depth_v3.config import DA3Config
+    from transformation_portal.lux_depth_v3.inference import DA3InferenceEngine, DepthResult
 
     # Verify basic instantiation works
     config = DA3Config()
@@ -62,10 +61,7 @@ def test_import_input_manager():
 
 def test_import_depth_writer():
     """Test that depth_writer module imports successfully."""
-    from transformation_portal.lux_depth_v3.depth_writer import (
-        atomic_write_depth_u16_png_with_stats,
-        read_depth_u16_png,
-    )
+    from transformation_portal.lux_depth_v3.depth_writer import atomic_write_depth_u16_png_with_stats, read_depth_u16_png
 
     # Functions should exist and be callable
     assert callable(atomic_write_depth_u16_png_with_stats)
@@ -74,10 +70,7 @@ def test_import_depth_writer():
 
 def test_import_v2_runner():
     """Test that v2_runner module imports successfully."""
-    from transformation_portal.lux_depth_v3.v2_runner import (
-        V2Runner,
-        find_v2_report,
-    )
+    from transformation_portal.lux_depth_v3.v2_runner import V2Runner, find_v2_report
 
     # Verify basic instantiation works
     runner = V2Runner()
@@ -93,9 +86,9 @@ def test_import_security():
         HashMode,
         sanitize_file_stem,
         sanitize_path_component_nonlossy,
+        validate_depth_fallback,
         validate_device_spec,
         validate_quantization_method,
-        validate_depth_fallback,
     )
 
     # Verify enum has expected values
@@ -118,17 +111,17 @@ def test_import_security():
 def test_import_manifest():
     """Test that manifest module imports successfully."""
     from transformation_portal.lux_depth_v3.manifest import (
+        BatchManifest,
         CombinedManifest,
         ConfigFingerprint,
-        InputMetadata,
         DepthMetadata,
-        V2Metadata,
-        TimingMetadata,
+        InputMetadata,
         ReproMetadata,
-        BatchManifest,
+        TimingMetadata,
+        V2Metadata,
+        capture_environment,
         compute_file_sha256,
         get_git_revision,
-        capture_environment,
     )
 
     # Verify basic instantiation works
@@ -157,30 +150,25 @@ def test_import_manifest():
 
 def test_import_batch_stats():
     """Test that batch_stats module imports successfully."""
-    from transformation_portal.lux_depth_v3.batch_stats import (
-        compute_batch_runtime_stats,
-    )
+    from transformation_portal.lux_depth_v3.batch_stats import compute_batch_runtime_stats
 
     # Test basic functionality
     stats = compute_batch_runtime_stats([1.0, 2.0, 3.0])
-    assert stats['count'] == 3
-    assert stats['total'] == 6.0
-    assert stats['mean'] == 2.0
-    assert stats['min'] == 1.0
-    assert stats['max'] == 3.0
-    assert stats['median'] == 2.0
+    assert stats["count"] == 3
+    assert stats["total"] == 6.0
+    assert stats["mean"] == 2.0
+    assert stats["min"] == 1.0
+    assert stats["max"] == 3.0
+    assert stats["median"] == 2.0
 
     # Test empty list
     empty_stats = compute_batch_runtime_stats([])
-    assert empty_stats['count'] == 0
+    assert empty_stats["count"] == 0
 
 
 def test_import_preprocessing():
     """Test that preprocessing module imports successfully."""
-    from transformation_portal.lux_depth_v3.preprocessing import (
-        normalize_exif_orientation,
-        validate_depth_image_alignment,
-    )
+    from transformation_portal.lux_depth_v3.preprocessing import normalize_exif_orientation, validate_depth_image_alignment
 
     # Functions should exist and be callable
     assert callable(normalize_exif_orientation)
@@ -189,10 +177,7 @@ def test_import_preprocessing():
 
 def test_import_orchestrator():
     """Test that orchestrator module imports successfully."""
-    from transformation_portal.lux_depth_v3.orchestrator import (
-        EnhanceOrchestrator,
-        make_output_key,
-    )
+    from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator, make_output_key
 
     # Verify classes and functions exist
     assert EnhanceOrchestrator is not None
@@ -201,10 +186,8 @@ def test_import_orchestrator():
 
 def test_import_postprocessing():
     """Test that postprocessing module imports successfully."""
-    from transformation_portal.lux_depth_v3.postprocessing import (
-        Postprocessor,
-    )
     from transformation_portal.lux_depth_v3.config import PostprocessingConfig
+    from transformation_portal.lux_depth_v3.postprocessing import Postprocessor
 
     # Verify basic instantiation works
     config = PostprocessingConfig()
@@ -216,18 +199,18 @@ def test_import_postprocessing():
 def test_all_imports_together():
     """Test that all modules can be imported together without conflicts."""
     from transformation_portal.lux_depth_v3 import (
+        batch_stats,
+        config,
+        depth_writer,
+        inference,
+        input_manager,
+        manifest,
         orchestrator,
         postprocessing,
+        preprocessing,
+        security,
+        v2_runner,
     )
-    from transformation_portal.lux_depth_v3 import config
-    from transformation_portal.lux_depth_v3 import inference
-    from transformation_portal.lux_depth_v3 import input_manager
-    from transformation_portal.lux_depth_v3 import depth_writer
-    from transformation_portal.lux_depth_v3 import v2_runner
-    from transformation_portal.lux_depth_v3 import security
-    from transformation_portal.lux_depth_v3 import manifest
-    from transformation_portal.lux_depth_v3 import batch_stats
-    from transformation_portal.lux_depth_v3 import preprocessing
 
     # All modules should be importable
     assert orchestrator is not None
@@ -259,19 +242,20 @@ if __name__ == "__main__":
 def test_da3_inference_engine_basic():
     """Test that DA3InferenceEngine can be instantiated and has expected attributes."""
     import numpy as np
-    from transformation_portal.lux_depth_v3.inference import DA3InferenceEngine
+
     from transformation_portal.lux_depth_v3.config import DA3Config
+    from transformation_portal.lux_depth_v3.inference import DA3InferenceEngine
 
     config = DA3Config()
     engine = DA3InferenceEngine(config=config)
 
     # Should have expected attributes
-    assert hasattr(engine, 'config')
-    assert hasattr(engine, 'backend')
-    assert hasattr(engine, 'device')
-    assert hasattr(engine, 'predict')
-    assert hasattr(engine, 'infer')
-    assert hasattr(engine, 'infer_from_path')
+    assert hasattr(engine, "config")
+    assert hasattr(engine, "backend")
+    assert hasattr(engine, "device")
+    assert hasattr(engine, "predict")
+    assert hasattr(engine, "infer")
+    assert hasattr(engine, "infer_from_path")
 
     # Config should be stored
     assert engine.config is config
@@ -279,12 +263,11 @@ def test_da3_inference_engine_basic():
 
 def test_depth_writer_opencv_dependency():
     """Test that depth_writer properly handles opencv-python dependency."""
-    import numpy as np
     from pathlib import Path
-    from transformation_portal.lux_depth_v3.depth_writer import (
-        atomic_write_depth_u16_png_with_stats,
-        HAS_CV2
-    )
+
+    import numpy as np
+
+    from transformation_portal.lux_depth_v3.depth_writer import HAS_CV2, atomic_write_depth_u16_png_with_stats
 
     depth_map = np.zeros((64, 64), dtype=np.float32)
     output_path = Path("/tmp/test_depth.png")
@@ -293,24 +276,18 @@ def test_depth_writer_opencv_dependency():
         # If opencv not installed, should raise clear ImportError
         with pytest.raises(ImportError, match="opencv-python required"):
             atomic_write_depth_u16_png_with_stats(
-                output_path=output_path,
-                depth_map=depth_map,
-                method="u16",
-                debug_verify=False
+                output_path=output_path, depth_map=depth_map, method="u16", debug_verify=False
             )
     else:
         # If opencv installed, should work (detailed tests in test_depth_writer.py)
         # Just verify it doesn't raise ImportError
         try:
             path, _, stats = atomic_write_depth_u16_png_with_stats(
-                output_path=output_path,
-                depth_map=depth_map,
-                method="u16",
-                debug_verify=False
+                output_path=output_path, depth_map=depth_map, method="u16", debug_verify=False
             )
             assert path.exists()
             assert stats.shape == (64, 64)
-            assert hasattr(stats, '_asdict')  # Orchestrator compatibility
+            assert hasattr(stats, "_asdict")  # Orchestrator compatibility
         finally:
             # Cleanup
             if output_path.exists():
@@ -320,6 +297,7 @@ def test_depth_writer_opencv_dependency():
 def test_v2_runner_fails_intentionally():
     """Test that V2Runner.run() raises FileNotFoundError when legacy script missing."""
     from pathlib import Path
+
     from transformation_portal.lux_depth_v3.v2_runner import V2Runner
 
     runner = V2Runner()
@@ -334,7 +312,7 @@ def test_v2_runner_fails_intentionally():
             device="cpu",
             upscaler_backend="default",
             log_file=Path("/tmp/v2.log"),
-            timeout=300.0
+            timeout=300.0,
         )
 
 
@@ -345,22 +323,23 @@ def test_postprocessor_config_has_required_fields():
     config = PostprocessingConfig()
 
     # These fields are accessed by postprocessing.py - must not raise AttributeError
-    assert hasattr(config, 'apply_metric_scaling')
-    assert hasattr(config, 'scale_factor')
-    assert hasattr(config, 'apply_median_filter')
-    assert hasattr(config, 'median_kernel_size')
-    assert hasattr(config, 'apply_bilateral_filter')
-    assert hasattr(config, 'bilateral_sigma_color')
-    assert hasattr(config, 'bilateral_sigma_space')
-    assert hasattr(config, 'preserve_edges')
-    assert hasattr(config, 'edge_threshold')
-    assert hasattr(config, 'fusion_mode')
-    assert hasattr(config, 'refinement')
+    assert hasattr(config, "apply_metric_scaling")
+    assert hasattr(config, "scale_factor")
+    assert hasattr(config, "apply_median_filter")
+    assert hasattr(config, "median_kernel_size")
+    assert hasattr(config, "apply_bilateral_filter")
+    assert hasattr(config, "bilateral_sigma_color")
+    assert hasattr(config, "bilateral_sigma_space")
+    assert hasattr(config, "preserve_edges")
+    assert hasattr(config, "edge_threshold")
+    assert hasattr(config, "fusion_mode")
+    assert hasattr(config, "refinement")
 
 
 def test_depth_result_has_depth_alias():
     """Test that DepthResult.depth property works (orchestrator uses .depth, not .depth_map)."""
     import numpy as np
+
     from transformation_portal.lux_depth_v3.inference import DepthResult
 
     depth_map = np.zeros((64, 64), dtype=np.float32)

@@ -12,6 +12,7 @@ F = TypeVar("F", bound=Callable[..., object])
 
 def documents(note: str) -> Callable[[F], F]:
     """Annotate a test with the documentation note it enforces."""
+
     def decorator(func: F) -> F:
         @wraps(func)
         def _noop(*args, **kwargs):
@@ -103,6 +104,7 @@ __all__ = ["documents", "demonstrates", "valid_until"]
 # Example usage (for tests)
 # -----------------------
 if __name__ == "__main__":  # quick local sanity checks
+
     @documents("Ensures that the widget renders correctly.")
     @demonstrates(["rendering", "accessibility"])
     @valid_until("2026-12-31", reason="API will change after v2.0")

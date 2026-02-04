@@ -374,9 +374,7 @@ class ArchitecturalStylePresets:
         """
         if name not in cls.PRESETS:
             available = list(cls.PRESETS.keys())
-            raise ValueError(
-                f"Preset '{name}' not found. Available presets: {available}"
-            )
+            raise ValueError(f"Preset '{name}' not found. Available presets: {available}")
 
         preset = cls.PRESETS[name]
 
@@ -393,9 +391,7 @@ class ArchitecturalStylePresets:
         }
 
     @classmethod
-    def list_presets(
-        cls, category: Optional[str] = None, tags: Optional[List[str]] = None
-    ) -> List[str]:
+    def list_presets(cls, category: Optional[str] = None, tags: Optional[List[str]] = None) -> List[str]:
         """List available presets, optionally filtered.
 
         Args:

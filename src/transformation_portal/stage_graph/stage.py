@@ -10,15 +10,15 @@ A Stage represents a discrete, cacheable unit of work with:
 
 from __future__ import annotations
 
+import hashlib
+import json
+import logging
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-import hashlib
-import json
-import time
-import logging
 
 import numpy as np
 
@@ -231,9 +231,7 @@ class Stage(ABC):
                 error_traceback=traceback.format_exc(),
             )
 
-    def _load_from_cache(
-        self, cache_key: str, cache_dir: Path
-    ) -> Optional[StageResult]:
+    def _load_from_cache(self, cache_key: str, cache_dir: Path) -> Optional[StageResult]:
         """Load result from cache."""
         cache_path = cache_dir / f"{cache_key}.json"
         if not cache_path.exists():

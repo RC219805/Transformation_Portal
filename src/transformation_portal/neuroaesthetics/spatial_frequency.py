@@ -102,9 +102,7 @@ class SpatialFrequencyAnalyzer:
         spectrum = self._compute_spectrum(image_gray)
 
         # Calculate frequency band energies
-        lsf_energy, msf_energy, hsf_energy = self._calculate_band_energies(
-            spectrum, viewing_distance_factor
-        )
+        lsf_energy, msf_energy, hsf_energy = self._calculate_band_energies(spectrum, viewing_distance_factor)
 
         # Normalize energies
         total_energy = lsf_energy + msf_energy + hsf_energy
@@ -116,19 +114,13 @@ class SpatialFrequencyAnalyzer:
         balance_score = self._calculate_balance_score(lsf_norm, msf_norm, hsf_norm)
 
         # Identify dominant frequencies
-        dominant_frequencies = self._identify_dominant_frequencies(
-            lsf_norm, msf_norm, hsf_norm
-        )
+        dominant_frequencies = self._identify_dominant_frequencies(lsf_norm, msf_norm, hsf_norm)
 
         # Calculate visual comfort score
-        visual_comfort_score = self._calculate_comfort_score(
-            lsf_norm, msf_norm, hsf_norm, balance_score
-        )
+        visual_comfort_score = self._calculate_comfort_score(lsf_norm, msf_norm, hsf_norm, balance_score)
 
         # Generate recommendations
-        recommendations = self._generate_recommendations(
-            lsf_norm, msf_norm, hsf_norm, visual_comfort_score
-        )
+        recommendations = self._generate_recommendations(lsf_norm, msf_norm, hsf_norm, visual_comfort_score)
 
         return SpatialFrequencyAnalysis(
             lsf_energy=lsf_norm,
@@ -158,9 +150,7 @@ class SpatialFrequencyAnalyzer:
 
         return spectrum
 
-    def _calculate_band_energies(
-        self, spectrum: np.ndarray, viewing_distance_factor: float
-    ) -> Tuple[float, float, float]:
+    def _calculate_band_energies(self, spectrum: np.ndarray, viewing_distance_factor: float) -> Tuple[float, float, float]:
         """Calculate energy in each frequency band.
 
         Args:
@@ -221,9 +211,7 @@ class SpatialFrequencyAnalyzer:
 
         return max(0.0, min(1.0, balance_score))
 
-    def _identify_dominant_frequencies(
-        self, lsf: float, msf: float, hsf: float
-    ) -> List[str]:
+    def _identify_dominant_frequencies(self, lsf: float, msf: float, hsf: float) -> List[str]:
         """Identify dominant frequency bands.
 
         Args:
@@ -248,9 +236,7 @@ class SpatialFrequencyAnalyzer:
 
         return dominant if dominant else [bands[0][0]]
 
-    def _calculate_comfort_score(
-        self, lsf: float, msf: float, hsf: float, balance_score: float
-    ) -> float:
+    def _calculate_comfort_score(self, lsf: float, msf: float, hsf: float, balance_score: float) -> float:
         """Calculate visual comfort score.
 
         Args:
@@ -277,9 +263,7 @@ class SpatialFrequencyAnalyzer:
 
         return max(0.0, min(1.0, comfort))
 
-    def _generate_recommendations(
-        self, lsf: float, msf: float, hsf: float, comfort_score: float
-    ) -> List[str]:
+    def _generate_recommendations(self, lsf: float, msf: float, hsf: float, comfort_score: float) -> List[str]:
         """Generate optimization recommendations.
 
         Args:
@@ -294,31 +278,24 @@ class SpatialFrequencyAnalyzer:
         recommendations = []
 
         if comfort_score >= 0.8:
-            recommendations.append(
-                "Excellent spatial frequency balance - optimal visual comfort."
-            )
+            recommendations.append("Excellent spatial frequency balance - optimal visual comfort.")
             return recommendations
 
         # LSF issues
         if lsf < 0.35:
             recommendations.append(
-                "Increase low-frequency content (overall structure). "
-                "Consider slight blur or reduce excessive detail."
+                "Increase low-frequency content (overall structure). " "Consider slight blur or reduce excessive detail."
             )
 
         # HSF issues
         if hsf > 0.25:
             recommendations.append(
-                "Reduce high-frequency content to prevent visual fatigue. "
-                "Apply subtle smoothing or reduce sharpening."
+                "Reduce high-frequency content to prevent visual fatigue. " "Apply subtle smoothing or reduce sharpening."
             )
 
         # MSF issues
         if msf < 0.25:
-            recommendations.append(
-                "Enhance mid-frequency content (medium details). "
-                "Increase local contrast or clarity."
-            )
+            recommendations.append("Enhance mid-frequency content (medium details). " "Increase local contrast or clarity.")
 
         # Balance issues
         if abs(lsf - hsf) < 0.1 and lsf < 0.4:
@@ -357,11 +334,7 @@ class SpatialFrequencyAnalyzer:
         spectrum_log = np.log1p(spectrum)
 
         # Normalize to [0, 255]
-        spectrum_vis = (
-            (spectrum_log - spectrum_log.min())
-            / (spectrum_log.max() - spectrum_log.min())
-            * 255
-        )
+        spectrum_vis = (spectrum_log - spectrum_log.min()) / (spectrum_log.max() - spectrum_log.min()) * 255
         spectrum_vis = spectrum_vis.astype(np.uint8)
 
         # Convert to RGB for colormap
@@ -400,9 +373,7 @@ class SpatialFrequencyAnalyzer:
 
         return spectrum_colored
 
-    def _load_image_gray(
-        self, image: Union[str, np.ndarray, Image.Image]
-    ) -> np.ndarray:
+    def _load_image_gray(self, image: Union[str, np.ndarray, Image.Image]) -> np.ndarray:
         """Load image as grayscale numpy array."""
         if isinstance(image, np.ndarray):
             if image.ndim == 3:

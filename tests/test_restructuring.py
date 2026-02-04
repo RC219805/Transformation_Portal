@@ -11,10 +11,11 @@ def test_depth_module_import():
     """Test that depth module can be imported from new location."""
     try:
         from transformation_portal.depth import __version__
+
         assert __version__ is not None
     except ImportError as e:
         # Allow missing dependencies for depth module
-        if 'tqdm' not in str(e) and 'torch' not in str(e) and 'PIL' not in str(e):
+        if "tqdm" not in str(e) and "torch" not in str(e) and "PIL" not in str(e):
             raise
 
 

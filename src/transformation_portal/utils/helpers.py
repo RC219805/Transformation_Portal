@@ -66,9 +66,7 @@ def demonstrates(
 # -------------------------
 
 
-def valid_until(
-    expiration: str, reason: str = "expired"
-) -> Callable[[Callable], Callable]:
+def valid_until(expiration: str, reason: str = "expired") -> Callable[[Callable], Callable]:
     """Ensure the decorated function can only be executed until a given ISO date."""
     expiration_date = date.fromisoformat(expiration)
 
@@ -77,9 +75,7 @@ def valid_until(
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             today = date.today()
             if today > expiration_date:
-                raise AssertionError(
-                    f"Function {func.__name__} is no longer valid: {reason}"
-                )
+                raise AssertionError(f"Function {func.__name__} is no longer valid: {reason}")
             return func(*args, **kwargs)
 
         wrapper.__doc__ = f"Valid until {expiration} — {reason}"

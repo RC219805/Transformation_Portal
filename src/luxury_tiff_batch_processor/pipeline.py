@@ -19,6 +19,7 @@ ensure_output_path
 resize_long_edge_array
     Resize images while maintaining aspect ratio.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -30,12 +31,7 @@ import numpy as np
 from PIL import Image
 
 from .adjustments import AdjustmentSettings, apply_adjustments
-from .io_utils import (
-    ProcessingContext,
-    float_to_dtype_array,
-    image_to_float,
-    save_image,
-)
+from .io_utils import ProcessingContext, float_to_dtype_array, image_to_float, save_image
 from .profiles import DEFAULT_PROFILE_NAME, PROCESSING_PROFILES, ProcessingProfile
 
 
@@ -54,9 +50,7 @@ LOGGER = logging.getLogger("luxury_tiff_batch_processor")
 WORKER_LOGGER = LOGGER.getChild("worker")
 
 
-def _tqdm_progress(
-    iterable: Iterable[object], *, total: Optional[int], description: Optional[str]
-) -> Iterable[object]:
+def _tqdm_progress(iterable: Iterable[object], *, total: Optional[int], description: Optional[str]) -> Iterable[object]:
     """Wrap *iterable* with :mod:`tqdm` if available."""
 
     if _tqdm is None:  # pragma: no cover - defensive fallback
@@ -81,9 +75,7 @@ def _wrap_with_progress(
 
     helper = _PROGRESS_WRAPPER
     if helper is None:
-        LOGGER.debug(
-            "Progress helper not available; install tqdm for progress reporting."
-        )
+        LOGGER.debug("Progress helper not available; install tqdm for progress reporting.")
         return iterable
 
     try:
@@ -147,9 +139,7 @@ def ensure_output_path(
         try:
             relative = source.relative_to(input_root)
         except ValueError as exc:
-            raise ValueError(
-                f"Source path {source} is not within input root {input_root}"
-            ) from exc
+            raise ValueError(f"Source path {source} is not within input root {input_root}") from exc
     else:
         # Use only the filename, not the full path
         relative = Path(source.name)
@@ -161,9 +151,7 @@ def ensure_output_path(
     try:
         destination.relative_to(output_root)
     except ValueError as exc:
-        raise ValueError(
-            f"Attempted path traversal: {destination} is outside output root {output_root}"
-        ) from exc
+        raise ValueError(f"Attempted path traversal: {destination} is outside output root {output_root}") from exc
 
     if create:
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -175,9 +163,7 @@ def ensure_output_path(
     try:
         final_path.relative_to(output_root)
     except ValueError as exc:
-        raise ValueError(
-            f"Final path {final_path} is outside output root {output_root}"
-        ) from exc
+        raise ValueError(f"Final path {final_path} is outside output root {output_root}") from exc
 
     return final_path
 
@@ -259,9 +245,7 @@ def resize_long_edge_array(arr: np.ndarray, target: int) -> np.ndarray:
     return resize_array(arr, new_width, new_height)
 
 
-def _coerce_resize_target(
-    resize_long_edge: Optional[int], resize_target: Optional[int]
-) -> Optional[int]:
+def _coerce_resize_target(resize_long_edge: Optional[int], resize_target: Optional[int]) -> Optional[int]:
     """Normalise legacy ``resize_target`` parameter usages."""
 
     if resize_long_edge is None:

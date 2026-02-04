@@ -9,11 +9,12 @@ Design:
 - Enforces multiple-of-14 dimensions for Depth Anything V3
 - Preserves original dimensions for post-processing
 """
+
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Union, Tuple, Optional
+from typing import Optional, Tuple, Union
 
 import numpy as np
 from PIL import Image
@@ -56,10 +57,7 @@ def validate_image_format(image_path: Union[str, Path]) -> Path:
     # Check extension
     ext = image_path.suffix.lower()
     if ext not in SUPPORTED_EXTENSIONS:
-        raise ValueError(
-            f"Unsupported image format: {ext}. "
-            f"Supported: {', '.join(sorted(SUPPORTED_EXTENSIONS))}"
-        )
+        raise ValueError(f"Unsupported image format: {ext}. " f"Supported: {', '.join(sorted(SUPPORTED_EXTENSIONS))}")
 
     # Verify image integrity
     try:
@@ -72,16 +70,13 @@ def validate_image_format(image_path: Union[str, Path]) -> Path:
         img.load()  # Force load pixel data
 
     except Exception as e:
-        raise ValueError(
-            f"Image file corrupt or invalid: {image_path}"
-        ) from e
+        raise ValueError(f"Image file corrupt or invalid: {image_path}") from e
 
     return image_path
 
 
 def preprocess_image(
-    image: Union[np.ndarray, Path, str],
-    target_size: Optional[int] = None
+    image: Union[np.ndarray, Path, str], target_size: Optional[int] = None
 ) -> Tuple[np.ndarray, Tuple[int, int]]:
     """Preprocess image for depth inference.
 
@@ -115,39 +110,34 @@ def preprocess_image(
         # Convert numpy array to PIL for consistent processing
         if image.ndim == 2:
             # Grayscale
-            pil_img = Image.fromarray(image, mode='L')
+            pil_img = Image.fromarray(image, mode="L")
         elif image.ndim == 3 and image.shape[2] == 3:
             # RGB
             if image.dtype == np.uint8:
-                pil_img = Image.fromarray(image, mode='RGB')
+                pil_img = Image.fromarray(image, mode="RGB")
             elif image.dtype == np.float32 or image.dtype == np.float64:
                 # Convert float [0, 1] to uint8 for PIL
                 image_uint8 = (np.clip(image, 0, 1) * 255).astype(np.uint8)
-                pil_img = Image.fromarray(image_uint8, mode='RGB')
+                pil_img = Image.fromarray(image_uint8, mode="RGB")
             else:
                 raise ValueError(f"Unsupported array dtype: {image.dtype}")
         elif image.ndim == 3 and image.shape[2] == 4:
             # RGBA - drop alpha channel
             if image.dtype == np.uint8:
-                pil_img = Image.fromarray(image, mode='RGBA')
+                pil_img = Image.fromarray(image, mode="RGBA")
             else:
                 image_uint8 = (np.clip(image, 0, 1) * 255).astype(np.uint8)
-                pil_img = Image.fromarray(image_uint8, mode='RGBA')
+                pil_img = Image.fromarray(image_uint8, mode="RGBA")
         else:
-            raise ValueError(
-                f"Unsupported array shape: {image.shape}. "
-                f"Expected (H, W), (H, W, 3), or (H, W, 4)"
-            )
+            raise ValueError(f"Unsupported array shape: {image.shape}. " f"Expected (H, W), (H, W, 3), or (H, W, 4)")
     else:
-        raise TypeError(
-            f"Image must be np.ndarray, Path, or str. Got: {type(image)}"
-        )
+        raise TypeError(f"Image must be np.ndarray, Path, or str. Got: {type(image)}")
 
     # Save original dimensions
     original_h, original_w = pil_img.size[1], pil_img.size[0]  # PIL uses (W, H)
 
     # Convert to RGB (handles grayscale, RGBA)
-    pil_img = pil_img.convert('RGB')
+    pil_img = pil_img.convert("RGB")
 
     # Optional resize to target size (long edge)
     if target_size is not None:
@@ -186,10 +176,7 @@ def _resize_keep_aspect(pil_img: Image.Image, target_size: int) -> Image.Image:
     return pil_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
 
-def _enforce_dimension_multiple(
-    img_array: np.ndarray,
-    multiple: int
-) -> np.ndarray:
+def _enforce_dimension_multiple(img_array: np.ndarray, multiple: int) -> np.ndarray:
     """Enforce that image dimensions are multiples of a given value.
 
     Rounds down to nearest multiple, ensuring minimum of `multiple`.
@@ -211,20 +198,19 @@ def _enforce_dimension_multiple(
     if (new_h, new_w) != (h, w):
         # Convert back to PIL for quality resize
         img_uint8 = (img_array * 255).astype(np.uint8)
-        pil_img = Image.fromarray(img_uint8, mode='RGB')
+        pil_img = Image.fromarray(img_uint8, mode="RGB")
         pil_img = pil_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
         # Convert back to float32
         img_array = np.array(pil_img, dtype=np.float32) / 255.0
 
-        logger.debug(
-            f"Enforced dimension multiple: ({h}, {w}) → ({new_h}, {new_w})"
-        )
+        logger.debug(f"Enforced dimension multiple: ({h}, {w}) → ({new_h}, {new_w})")
 
     return img_array
 
 
 # Keep legacy stubs for backward compatibility (not yet used by V3 orchestrator)
+
 
 def normalize_exif_orientation(input_path: Path, output_path: Path):
     """Normalize EXIF orientation by rotating image to upright position.
@@ -244,10 +230,7 @@ def normalize_exif_orientation(input_path: Path, output_path: Path):
     )
 
 
-def validate_depth_image_alignment(
-    image_path: Path,
-    depth_path: Path
-) -> bool:
+def validate_depth_image_alignment(image_path: Path, depth_path: Path) -> bool:
     """Validate that depth map and image have matching dimensions.
 
     STUB: Not implemented. Not required for V3 depth inference.

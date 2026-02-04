@@ -1,8 +1,8 @@
 """Model registry and interfaces for depth estimation."""
 
-from .registry import ModelRegistry, DepthEstimationModel
 from .da2_wrapper import DA2ModelWrapper
 from .da3_wrapper import DA3ModelWrapper
+from .registry import DepthEstimationModel, ModelRegistry
 
 __all__ = [
     "ModelRegistry",

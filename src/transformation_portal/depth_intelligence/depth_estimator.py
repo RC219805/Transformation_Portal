@@ -5,22 +5,18 @@ Integrates Depth Anything V2 with Phase 1 substrate and Phase 2 baseline,
 providing depth estimation optimized for architectural imagery.
 """
 
-from dataclasses import dataclass
-from typing import Optional, Dict, Any, Tuple
-from pathlib import Path
 import logging
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, Optional, Tuple
 
-import torch
-from torch import Tensor
 import numpy as np
+import torch
 from PIL import Image
+from torch import Tensor
 
 # Import existing depth infrastructure
-from ..depth.models.depth_anything_v2 import (
-    DepthAnythingV2Model,
-    ModelVariant,
-    ModelBackend,
-)
+from ..depth.models.depth_anything_v2 import DepthAnythingV2Model, ModelBackend, ModelVariant
 
 logger = logging.getLogger(__name__)
 
@@ -129,10 +125,7 @@ class DepthEstimator:
         self.model = None
         self._initialize_model()
 
-        logger.info(
-            f"Initialized DepthEstimator with {self.config.variant.value}, "
-            f"backend={self.config.backend.value}"
-        )
+        logger.info(f"Initialized DepthEstimator with {self.config.variant.value}, " f"backend={self.config.backend.value}")
 
     def _auto_detect_backend(self) -> ModelBackend:
         """Auto-detect optimal backend."""
@@ -233,9 +226,7 @@ class DepthEstimator:
 
         return depth_map
 
-    def estimate_batch(
-        self, images: list[Tensor], return_confidence: bool = False
-    ) -> list[DepthMap]:
+    def estimate_batch(self, images: list[Tensor], return_confidence: bool = False) -> list[DepthMap]:
         """
         Estimate depth for batch of images.
 
@@ -266,9 +257,7 @@ class DepthEstimator:
         padding = kernel_size // 2
 
         # Unfold to get local patches
-        depth_unfold = torch.nn.functional.unfold(
-            depth.unsqueeze(0).unsqueeze(0), kernel_size=kernel_size, padding=padding
-        )
+        depth_unfold = torch.nn.functional.unfold(depth.unsqueeze(0).unsqueeze(0), kernel_size=kernel_size, padding=padding)
 
         # Compute variance per patch
         variance = depth_unfold.var(dim=1)
@@ -325,7 +314,4 @@ class DepthEstimator:
         }
 
     def __repr__(self) -> str:
-        return (
-            f"DepthEstimator(variant={self.config.variant.value}, "
-            f"backend={self.config.backend.value})"
-        )
+        return f"DepthEstimator(variant={self.config.variant.value}, " f"backend={self.config.backend.value})"

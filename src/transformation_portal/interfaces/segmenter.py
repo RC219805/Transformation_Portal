@@ -7,6 +7,7 @@ Base contract for material and semantic segmentation operations.
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Dict, List, Optional
+
 import numpy as np
 
 
@@ -146,9 +147,7 @@ class SemanticSegmenter(Segmenter):
     """
 
     @abstractmethod
-    def segment_semantic(
-        self, image: np.ndarray, categories: Optional[List[str]] = None, **kwargs
-    ) -> Dict[str, np.ndarray]:
+    def segment_semantic(self, image: np.ndarray, categories: Optional[List[str]] = None, **kwargs) -> Dict[str, np.ndarray]:
         """
         Segment image by semantic categories.
 

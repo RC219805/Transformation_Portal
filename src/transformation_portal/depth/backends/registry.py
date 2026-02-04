@@ -103,10 +103,7 @@ class DepthBackendRegistry:
         backend_cls = self._backends.get(backend_name)
         if backend_cls is None:
             available = ", ".join(sorted(self._backends.keys())) or "(none)"
-            raise ValueError(
-                f"Unknown depth backend: '{backend_name}'. "
-                f"Available backends: {available}"
-            )
+            raise ValueError(f"Unknown depth backend: '{backend_name}'. " f"Available backends: {available}")
 
         # Layer 2: License enforcement at factory level
         self._validate_license(backend_name, backend_cls, config)
@@ -137,9 +134,7 @@ class DepthBackendRegistry:
             return  # Commercial backends have no restrictions
 
         if config is None:
-            raise LicenseRestrictionError(
-                f"Backend '{backend_name}' requires EnhanceConfig for license validation."
-            )
+            raise LicenseRestrictionError(f"Backend '{backend_name}' requires EnhanceConfig for license validation.")
 
         # Check non_commercial_ok flag
         if not getattr(config, "non_commercial_ok", False):
@@ -170,10 +165,7 @@ class DepthBackendRegistry:
                     "  )"
                 )
 
-        logger.info(
-            f"License validation passed for '{backend_name}' "
-            f"(non_commercial_ok={config.non_commercial_ok})"
-        )
+        logger.info(f"License validation passed for '{backend_name}' " f"(non_commercial_ok={config.non_commercial_ok})")
 
 
 # Global registry instance for convenience

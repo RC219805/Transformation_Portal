@@ -11,11 +11,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Any, Dict, List, Optional
 
-from .interface import (
-    PluginInterface,
-    PluginMetadata,
-    PluginType,
-)
+from .interface import PluginInterface, PluginMetadata, PluginType
 
 logger = logging.getLogger(__name__)
 
@@ -82,9 +78,7 @@ class PluginManifest:
         with open(path, "rb") as f:
             data = tomllib.load(f)
 
-        plugin_data = (
-            data.get("tool", {}).get("transformation_portal", {}).get("plugin")
-        )
+        plugin_data = data.get("tool", {}).get("transformation_portal", {}).get("plugin")
         if plugin_data:
             return cls.from_dict(plugin_data)
         return None
@@ -288,9 +282,7 @@ class PluginLoader:
 
         return discovered
 
-    def _load_from_manifest(
-        self, package_dir: Path, manifest: PluginManifest
-    ) -> Optional[LoadedPlugin]:
+    def _load_from_manifest(self, package_dir: Path, manifest: PluginManifest) -> Optional[LoadedPlugin]:
         """Load a plugin from its manifest.
 
         Args:
@@ -319,9 +311,7 @@ class PluginLoader:
         )
 
         if not metadata.is_compatible(portal_version):
-            errors.append(
-                f"Plugin {manifest.name} is not compatible with portal version {portal_version}"
-            )
+            errors.append(f"Plugin {manifest.name} is not compatible with portal version {portal_version}")
 
         # Parse entry point (format: "module:ClassName" or "module.submodule:ClassName")
         try:
@@ -428,11 +418,7 @@ class PluginLoader:
             import inspect
 
             for name, obj in inspect.getmembers(module, inspect.isclass):
-                if (
-                    issubclass(obj, PluginInterface)
-                    and obj is not PluginInterface
-                    and not inspect.isabstract(obj)
-                ):
+                if issubclass(obj, PluginInterface) and obj is not PluginInterface and not inspect.isabstract(obj):
 
                     try:
                         plugin_instance = obj()
@@ -462,9 +448,7 @@ class PluginLoader:
                         logger.info(f"Loaded plugin from file: {manifest.name}")
 
                     except Exception as e:
-                        logger.warning(
-                            f"Failed to instantiate {name} from {file_path}: {e}"
-                        )
+                        logger.warning(f"Failed to instantiate {name} from {file_path}: {e}")
 
         except Exception as e:
             logger.error(f"Failed to load plugins from {file_path}: {e}")
@@ -603,9 +587,7 @@ class PluginLoader:
             for loaded in self._loaded_plugins.values():
                 if loaded.manifest and loaded.manifest.plugin_type == plugin_type.value:
                     result.append(loaded)
-                elif (
-                    loaded.plugin and loaded.plugin.metadata.plugin_type == plugin_type
-                ):
+                elif loaded.plugin and loaded.plugin.metadata.plugin_type == plugin_type:
                     result.append(loaded)
 
         return result

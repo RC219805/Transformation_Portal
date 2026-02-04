@@ -167,9 +167,7 @@ class EventReplayer:
                         # Re-raise system exceptions to allow proper shutdown
                         raise
                     except Exception as e:
-                        logger.exception(
-                            f"Handler failed for event {event.id} (type: {event.type})"
-                        )
+                        logger.exception(f"Handler failed for event {event.id} (type: {event.type})")
                         results.append(
                             {
                                 "event_id": event.id,
@@ -179,15 +177,11 @@ class EventReplayer:
                             }
                         )
                 elif not skip_unregistered:
-                    raise ValueError(
-                        f"No handler registered for event type: {event.type}"
-                    )
+                    raise ValueError(f"No handler registered for event type: {event.type}")
 
         return results
 
-    def replay_correlation(
-        self, correlation_id: str, on_event: Optional[Callable[[Event], Any]] = None
-    ) -> List[Any]:
+    def replay_correlation(self, correlation_id: str, on_event: Optional[Callable[[Event], Any]] = None) -> List[Any]:
         """Replay all events with a specific correlation ID.
 
         Args:

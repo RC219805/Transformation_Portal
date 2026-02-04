@@ -110,9 +110,7 @@ def _check_perceptual_assessor_available() -> bool:
             src_dir = Path(__file__).parent.parent.parent.parent / "src"
             if str(src_dir) not in sys.path:
                 sys.path.insert(0, str(src_dir))
-            from enhancements.perceptual_quality_assessment import (
-                PerceptualQualityAssessor,
-            )  # noqa: F401
+            from enhancements.perceptual_quality_assessment import PerceptualQualityAssessor  # noqa: F401
 
             _PERCEPTUAL_ASSESSOR_AVAILABLE = True
         except ImportError as e:
@@ -239,9 +237,7 @@ class UnifiedQualityMetrics:
     perceptual: PerceptualMetrics = field(default_factory=PerceptualMetrics)
 
     # Material-specific fidelity
-    material_fidelity: MaterialFidelityMetrics = field(
-        default_factory=MaterialFidelityMetrics
-    )
+    material_fidelity: MaterialFidelityMetrics = field(default_factory=MaterialFidelityMetrics)
 
     # Composite scores
     perceptual_composite: float = 0.0  # 0-100+ primary score
@@ -342,10 +338,7 @@ class QualityFeedbackBridge:
         self._lpips_checked = False
         self._lpips_available = False
 
-        logger.info(
-            f"Initialized QualityFeedbackBridge "
-            f"(hybrid_mode={hybrid_mode}, network={lpips_network})"
-        )
+        logger.info(f"Initialized QualityFeedbackBridge " f"(hybrid_mode={hybrid_mode}, network={lpips_network})")
 
     def _ensure_perceptual_assessor(self) -> bool:
         """
@@ -369,9 +362,7 @@ class QualityFeedbackBridge:
             return False
 
         if not _check_perceptual_assessor_available():
-            logger.info(
-                "PerceptualQualityAssessor not available, using heuristic-only mode"
-            )
+            logger.info("PerceptualQualityAssessor not available, using heuristic-only mode")
             self._lpips_available = False
             return False
 
@@ -384,13 +375,9 @@ class QualityFeedbackBridge:
             src_dir = Path(__file__).parent.parent.parent.parent / "src"
             if str(src_dir) not in sys.path:
                 sys.path.insert(0, str(src_dir))
-            from enhancements.perceptual_quality_assessment import (
-                PerceptualQualityAssessor,
-            )
+            from enhancements.perceptual_quality_assessment import PerceptualQualityAssessor
 
-            self._perceptual_assessor = PerceptualQualityAssessor(
-                use_lpips_package=_check_lpips_available()
-            )
+            self._perceptual_assessor = PerceptualQualityAssessor(use_lpips_package=_check_lpips_available())
             self._lpips_available = True
             logger.info("LPIPS-based perceptual assessor initialized successfully")
             return True
@@ -440,9 +427,7 @@ class QualityFeedbackBridge:
 
         if metrics.lpips_available and original_np is not None:
             try:
-                perceptual_result = self._compute_perceptual_metrics(
-                    enhanced_np, original_np
-                )
+                perceptual_result = self._compute_perceptual_metrics(enhanced_np, original_np)
                 metrics.perceptual = perceptual_result["perceptual"]
                 metrics.material_fidelity = perceptual_result["material_fidelity"]
                 metrics.perceptual_composite = metrics.perceptual.composite_score
@@ -456,11 +441,7 @@ class QualityFeedbackBridge:
         if self.hybrid_mode:
             metrics.hybrid_score = self._compute_hybrid_score(metrics)
         else:
-            metrics.hybrid_score = (
-                metrics.perceptual_composite
-                if metrics.lpips_available
-                else metrics.heuristic_composite
-            )
+            metrics.hybrid_score = metrics.perceptual_composite if metrics.lpips_available else metrics.heuristic_composite
 
         # Check targets
         metrics.targets_met = self._check_targets(metrics)
@@ -479,9 +460,7 @@ class QualityFeedbackBridge:
 
         return metrics
 
-    def _to_numpy(
-        self, image: Union[np.ndarray, Image.Image, None]
-    ) -> Optional[np.ndarray]:
+    def _to_numpy(self, image: Union[np.ndarray, Image.Image, None]) -> Optional[np.ndarray]:
         """Convert image to numpy array [0, 1] float32."""
         if image is None:
             return None
@@ -644,12 +623,8 @@ class QualityFeedbackBridge:
             }
 
         # Convert to PIL for assessor
-        enhanced_pil = Image.fromarray(
-            (np.clip(enhanced, 0, 1) * 255).astype(np.uint8), mode="RGB"
-        )
-        original_pil = Image.fromarray(
-            (np.clip(original, 0, 1) * 255).astype(np.uint8), mode="RGB"
-        )
+        enhanced_pil = Image.fromarray((np.clip(enhanced, 0, 1) * 255).astype(np.uint8), mode="RGB")
+        original_pil = Image.fromarray((np.clip(original, 0, 1) * 255).astype(np.uint8), mode="RGB")
 
         # Run assessment
         report = self._perceptual_assessor.assess(
@@ -693,47 +668,26 @@ class QualityFeedbackBridge:
         perceptual_weight = 0.7
         heuristic_weight = 0.3
 
-        return (
-            perceptual_weight * metrics.perceptual_composite
-            + heuristic_weight * metrics.heuristic_composite
-        )
+        return perceptual_weight * metrics.perceptual_composite + heuristic_weight * metrics.heuristic_composite
 
     def _check_targets(self, metrics: UnifiedQualityMetrics) -> Dict[str, bool]:
         """Check which quality targets are met."""
         targets_met = {}
 
         # Heuristic targets
-        targets_met["heuristic_sharpness"] = (
-            metrics.heuristic.sharpness >= self.targets.sharpness_target
-        )
-        targets_met["heuristic_contrast"] = (
-            metrics.heuristic.contrast >= self.targets.contrast_target
-        )
-        targets_met["heuristic_colorfulness"] = (
-            metrics.heuristic.colorfulness >= self.targets.colorfulness_target
-        )
-        targets_met["heuristic_exposure"] = (
-            metrics.heuristic.exposure_balance >= self.targets.exposure_target
-        )
+        targets_met["heuristic_sharpness"] = metrics.heuristic.sharpness >= self.targets.sharpness_target
+        targets_met["heuristic_contrast"] = metrics.heuristic.contrast >= self.targets.contrast_target
+        targets_met["heuristic_colorfulness"] = metrics.heuristic.colorfulness >= self.targets.colorfulness_target
+        targets_met["heuristic_exposure"] = metrics.heuristic.exposure_balance >= self.targets.exposure_target
 
         # Perceptual targets (if available)
         if metrics.lpips_available:
-            targets_met["perceptual_95th"] = (
-                metrics.perceptual.lpips_percentile
-                >= self.targets.perceptual_percentile_target
-            )
-            targets_met["lpips_excellent"] = (
-                metrics.perceptual.lpips_score <= self.targets.lpips_threshold_excellent
-            )
-            targets_met["ssim"] = (
-                metrics.perceptual.ssim_score >= self.targets.ssim_target
-            )
+            targets_met["perceptual_95th"] = metrics.perceptual.lpips_percentile >= self.targets.perceptual_percentile_target
+            targets_met["lpips_excellent"] = metrics.perceptual.lpips_score <= self.targets.lpips_threshold_excellent
+            targets_met["ssim"] = metrics.perceptual.ssim_score >= self.targets.ssim_target
 
             # Material fidelity target
-            targets_met["material_98pct"] = (
-                metrics.material_fidelity.overall_fidelity
-                >= self.targets.material_fidelity_target
-            )
+            targets_met["material_98pct"] = metrics.material_fidelity.overall_fidelity >= self.targets.material_fidelity_target
 
         return targets_met
 

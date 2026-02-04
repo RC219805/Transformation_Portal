@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 # Add agents directory to path
-agents_path = Path(__file__).parent.parent / '.github' / 'agents'
+agents_path = Path(__file__).parent.parent / ".github" / "agents"
 sys.path.insert(0, str(agents_path))
 
 from rag_system.citation import CitationGenerator  # noqa: E402
@@ -43,20 +43,16 @@ def temp_repo():
         tmp_path = Path(tmpdir)
 
         # Create sample structure
-        (tmp_path / 'docs').mkdir()
-        (tmp_path / 'src').mkdir()
-        (tmp_path / 'tests').mkdir()
+        (tmp_path / "docs").mkdir()
+        (tmp_path / "src").mkdir()
+        (tmp_path / "tests").mkdir()
 
         # Create sample files
-        (tmp_path / 'docs' / 'readme.md').write_text(
-            "# Test Repository\n\nThis is a test repository for RAG system."
+        (tmp_path / "docs" / "readme.md").write_text("# Test Repository\n\nThis is a test repository for RAG system.")
+        (tmp_path / "src" / "main.py").write_text(
+            'def hello_world():\n    """Print hello world."""\n    print(\'Hello, World!\')'
         )
-        (tmp_path / 'src' / 'main.py').write_text(
-            "def hello_world():\n    \"\"\"Print hello world.\"\"\"\n    print('Hello, World!')"
-        )
-        (tmp_path / 'tests' / 'test_main.py').write_text(
-            "def test_hello():\n    assert True"
-        )
+        (tmp_path / "tests" / "test_main.py").write_text("def test_hello():\n    assert True")
 
         yield tmp_path
 
@@ -74,53 +70,52 @@ class TestConfiguration:
     def test_config_loads_defaults(self):
         """Test that config loads with defaults."""
         config = Config()
-        assert config.get('indexer.chunk_size_tokens') == 750
-        assert config.get('retriever.bm25_weight') == 0.7
-        assert config.get('citation.max_results') == 5
+        assert config.get("indexer.chunk_size_tokens") == 750
+        assert config.get("retriever.bm25_weight") == 0.7
+        assert config.get("citation.max_results") == 5
 
     def test_config_get_section(self):
         """Test getting entire section."""
         config = Config()
-        indexer_config = config.get_section('indexer')
+        indexer_config = config.get_section("indexer")
 
         assert isinstance(indexer_config, dict)
-        assert 'chunk_size_tokens' in indexer_config
-        assert 'overlap_tokens' in indexer_config
+        assert "chunk_size_tokens" in indexer_config
+        assert "overlap_tokens" in indexer_config
 
     def test_config_set_value(self):
         """Test setting config value at runtime."""
         config = Config()
-        config.set('indexer.chunk_size_tokens', 1000)
+        config.set("indexer.chunk_size_tokens", 1000)
 
-        assert config.get('indexer.chunk_size_tokens') == 1000
+        assert config.get("indexer.chunk_size_tokens") == 1000
 
     def test_config_env_override(self, monkeypatch):
         """Test environment variable override."""
-        monkeypatch.setenv('RAG_INDEXER_CACHE_ENABLED', 'false')
+        monkeypatch.setenv("RAG_INDEXER_CACHE_ENABLED", "false")
         reset_config()
 
         config = get_config()
-        assert config.get('indexer.cache_enabled') is False
+        assert config.get("indexer.cache_enabled") is False
 
     def test_config_env_override_types(self, monkeypatch):
         """Test environment variable override with different types."""
         # Boolean
-        monkeypatch.setenv('RAG_INDEXER_CACHE_ENABLED', 'true')
+        monkeypatch.setenv("RAG_INDEXER_CACHE_ENABLED", "true")
         # Float
-        monkeypatch.setenv('RAG_RETRIEVER_BM25_WEIGHT', '0.9')
+        monkeypatch.setenv("RAG_RETRIEVER_BM25_WEIGHT", "0.9")
         # Integer
-        monkeypatch.setenv('RAG_CITATION_MAX_RESULTS', '10')
+        monkeypatch.setenv("RAG_CITATION_MAX_RESULTS", "10")
         # String
-        monkeypatch.setenv('RAG_INDEXER_CACHE_DIR', '.custom_cache')
-        
+        monkeypatch.setenv("RAG_INDEXER_CACHE_DIR", ".custom_cache")
+
         reset_config()
         config = get_config()
-        
-        assert config.get('indexer.cache_enabled') is True
-        assert config.get('retriever.bm25_weight') == 0.9
-        assert config.get('citation.max_results') == 10
-        assert config.get('indexer.cache_dir') == '.custom_cache'
 
+        assert config.get("indexer.cache_enabled") is True
+        assert config.get("retriever.bm25_weight") == 0.9
+        assert config.get("citation.max_results") == 10
+        assert config.get("indexer.cache_dir") == ".custom_cache"
 
 
 class TestPersistentCaching:
@@ -178,14 +173,14 @@ class TestLogging:
 
     def test_logger_creation(self):
         """Test logger can be created."""
-        logger = get_logger('test_logger')
+        logger = get_logger("test_logger")
 
         assert logger is not None
-        assert logger.name == 'test_logger'
+        assert logger.name == "test_logger"
 
     def test_logger_has_handlers(self):
         """Test logger has console handler."""
-        logger = get_logger('test_logger2')
+        logger = get_logger("test_logger2")
 
         assert len(logger.handlers) > 0
 
@@ -204,7 +199,7 @@ class TestVectorSearch:
         results = retriever.retrieve("hello world", top_k=3)
 
         assert len(results) > 0
-        assert all(r.retrieval_method in ('bm25', 'hybrid') for r in results)
+        assert all(r.retrieval_method in ("bm25", "hybrid") for r in results)
 
     def test_retriever_with_vectors_if_available(self, temp_repo):
         """Test retriever with vector search if sentence-transformers available."""
@@ -221,7 +216,7 @@ class TestVectorSearch:
 
             assert len(results) > 0
             # With vector search, we might get hybrid or vector results
-            assert all(r.retrieval_method in ('bm25', 'vector', 'hybrid') for r in results)
+            assert all(r.retrieval_method in ("bm25", "vector", "hybrid") for r in results)
 
         except ImportError:
             pytest.skip("sentence-transformers not installed")
@@ -289,10 +284,10 @@ class TestFullPipeline:
         assert all(c.file_path for c in citations)
 
         # 5. Format citations
-        formatted = citation_gen.format_citations(citations, format_type='markdown')
+        formatted = citation_gen.format_citations(citations, format_type="markdown")
 
-        assert '##' in formatted
-        assert 'Confidence' in formatted
+        assert "##" in formatted
+        assert "Confidence" in formatted
 
     def test_pipeline_with_filtering(self, repo_root):
         """Test pipeline with chunk type filtering."""
@@ -303,13 +298,9 @@ class TestFullPipeline:
         retriever.index(chunks)
 
         # Filter only code chunks
-        results = retriever.retrieve(
-            "function definition",
-            top_k=5,
-            chunk_type_filter=['code']
-        )
+        results = retriever.retrieve("function definition", top_k=5, chunk_type_filter=["code"])
 
-        assert all(r.metadata.get('entity_type') in ('function', 'class', None) for r in results)
+        assert all(r.metadata.get("entity_type") in ("function", "class", None) for r in results)
 
     def test_pipeline_error_handling(self):
         """Test error handling in pipeline."""
@@ -326,10 +317,10 @@ class TestFullPipeline:
 
         stats = indexer.get_statistics()
 
-        assert stats['total_chunks'] == len(chunks)
-        assert 'by_type' in stats
-        assert 'by_language' in stats
-        assert stats['total_chars'] > 0
+        assert stats["total_chunks"] == len(chunks)
+        assert "by_type" in stats
+        assert "by_language" in stats
+        assert stats["total_chars"] > 0
 
 
 class TestExceptionHandling:
@@ -340,7 +331,7 @@ class TestExceptionHandling:
         # Trying to index a non-existent directory should raise an error
         # But our current implementation just logs warnings
         # This is more of a design test
-        indexer = RepositoryIndexer('/non/existent/path', use_cache=False)
+        indexer = RepositoryIndexer("/non/existent/path", use_cache=False)
 
         try:
             chunks = indexer.index_repository()
@@ -423,5 +414,5 @@ class TestPerformance:
         assert time2 <= time1 * 2  # Allow some variance
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

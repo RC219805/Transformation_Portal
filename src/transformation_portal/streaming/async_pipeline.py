@@ -95,9 +95,7 @@ class PipelineMetrics:
     def update_throughput(self) -> None:
         """Calculate current throughput."""
         if self.total_processing_time > 0:
-            self.throughput_items_per_sec = (
-                self.items_processed / self.total_processing_time
-            )
+            self.throughput_items_per_sec = self.items_processed / self.total_processing_time
 
 
 @dataclass
@@ -222,9 +220,7 @@ class BackpressureQueue(Generic[T]):
             "items_put": self._items_put,
             "items_got": self._items_got,
             "backpressured": self._backpressured,
-            "avg_wait_time": (
-                self._total_wait_time / self._items_got if self._items_got > 0 else 0.0
-            ),
+            "avg_wait_time": (self._total_wait_time / self._items_got if self._items_got > 0 else 0.0),
         }
 
     async def put(self, item: T, timeout: Optional[float] = None) -> None:
@@ -391,11 +387,7 @@ class AsyncStage(ABC, Generic[InputT, OutputT]):
             "items_processed": self._items_processed,
             "items_failed": self._items_failed,
             "total_time": self._total_time,
-            "avg_time": (
-                self._total_time / self._items_processed
-                if self._items_processed > 0
-                else 0.0
-            ),
+            "avg_time": (self._total_time / self._items_processed if self._items_processed > 0 else 0.0),
         }
 
     async def startup(self) -> None:
@@ -435,9 +427,7 @@ class AsyncStage(ABC, Generic[InputT, OutputT]):
         async with self._semaphore:
             try:
                 if self.timeout is not None:
-                    result = await asyncio.wait_for(
-                        self.process(item), timeout=self.timeout
-                    )
+                    result = await asyncio.wait_for(self.process(item), timeout=self.timeout)
                 else:
                     result = await self.process(item)
 
@@ -537,12 +527,8 @@ class WorkerPool:
 
     async def startup(self) -> None:
         """Initialize worker pools."""
-        self._cpu_pool = ThreadPoolExecutor(
-            max_workers=self._cpu_workers, thread_name_prefix="cpu_worker"
-        )
-        self._io_pool = ThreadPoolExecutor(
-            max_workers=self._io_workers, thread_name_prefix="io_worker"
-        )
+        self._cpu_pool = ThreadPoolExecutor(max_workers=self._cpu_workers, thread_name_prefix="cpu_worker")
+        self._io_pool = ThreadPoolExecutor(max_workers=self._io_workers, thread_name_prefix="io_worker")
 
         if self._use_process_pool:
             self._process_pool = ProcessPoolExecutor(max_workers=self._process_workers)
@@ -687,13 +673,10 @@ class StreamingImageLoader:
         """
         # Lazy import for optional dependencies
         try:
-            from PIL import Image
             import numpy as np
+            from PIL import Image
         except ImportError as e:
-            raise ImportError(
-                "PIL and numpy required for image loading. "
-                "Install with: pip install Pillow numpy"
-            ) from e
+            raise ImportError("PIL and numpy required for image loading. " "Install with: pip install Pillow numpy") from e
 
         with Image.open(path) as img:
             # Get metadata
@@ -743,8 +726,8 @@ class StreamingImageLoader:
             await self.startup()
 
         # Create prefetch queue
-        prefetch_queue: BackpressureQueue[Tuple[Path, asyncio.Task]] = (
-            BackpressureQueue(maxsize=self._prefetch_size, name="prefetch")
+        prefetch_queue: BackpressureQueue[Tuple[Path, asyncio.Task]] = BackpressureQueue(
+            maxsize=self._prefetch_size, name="prefetch"
         )
 
         async def prefetch_producer():
@@ -762,9 +745,7 @@ class StreamingImageLoader:
 
             while items_remaining > 0:
                 try:
-                    path, task = await asyncio.wait_for(
-                        prefetch_queue.get(), timeout=1.0
-                    )
+                    path, task = await asyncio.wait_for(prefetch_queue.get(), timeout=1.0)
                 except asyncio.TimeoutError:
                     if prefetch_queue.is_empty and producer_task.done():
                         break
@@ -887,10 +868,7 @@ class AsyncPipeline:
             await stage.startup()
 
         # Create queues between stages
-        self._queues = [
-            BackpressureQueue(maxsize=self._max_queue_size, name=f"queue_{i}")
-            for i in range(len(self._stages))
-        ]
+        self._queues = [BackpressureQueue(maxsize=self._max_queue_size, name=f"queue_{i}") for i in range(len(self._stages))]
 
         self._active = True
         self._shutdown_event.clear()
@@ -942,9 +920,7 @@ class AsyncPipeline:
         work_item.data = current_data
         return work_item
 
-    async def process_batch(
-        self, items: Sequence[Any], max_concurrent: int = 4
-    ) -> AsyncIterator[WorkItem]:
+    async def process_batch(self, items: Sequence[Any], max_concurrent: int = 4) -> AsyncIterator[WorkItem]:
         """Process batch of items with concurrent execution.
 
         Args:
@@ -979,9 +955,7 @@ class AsyncPipeline:
         self._metrics.total_processing_time = time.time() - start_time
         self._metrics.update_throughput()
 
-    async def process_streaming(
-        self, items: AsyncIterator[Any]
-    ) -> AsyncIterator[WorkItem]:
+    async def process_streaming(self, items: AsyncIterator[Any]) -> AsyncIterator[WorkItem]:
         """Process items from async iterator (true streaming).
 
         This method processes items as they arrive, maintaining
@@ -1063,21 +1037,15 @@ class AsyncBatchProcessor:
     async def startup(self) -> None:
         """Initialize processor resources."""
         # Create shared worker pool
-        self._worker_pool = WorkerPool(
-            cpu_workers=4, io_workers=self._prefetch_size * 2
-        )
+        self._worker_pool = WorkerPool(cpu_workers=4, io_workers=self._prefetch_size * 2)
         await self._worker_pool.startup()
 
         # Create image loader
-        self._loader = StreamingImageLoader(
-            prefetch_size=self._prefetch_size, worker_pool=self._worker_pool
-        )
+        self._loader = StreamingImageLoader(prefetch_size=self._prefetch_size, worker_pool=self._worker_pool)
         await self._loader.startup()
 
         # Create pipeline
-        self._pipeline = AsyncPipeline(
-            max_queue_size=self._max_queue_size, worker_pool=self._worker_pool
-        )
+        self._pipeline = AsyncPipeline(max_queue_size=self._max_queue_size, worker_pool=self._worker_pool)
         for stage in self._stages:
             self._pipeline.add_stage(stage)
         await self._pipeline.startup()
@@ -1110,9 +1078,7 @@ class AsyncBatchProcessor:
         if not self._pipeline:
             await self.startup()
 
-        async for result in self._pipeline.process_batch(
-            list(paths), max_concurrent=self._max_concurrent
-        ):
+        async for result in self._pipeline.process_batch(list(paths), max_concurrent=self._max_concurrent):
             yield result
 
     async def process_directory(

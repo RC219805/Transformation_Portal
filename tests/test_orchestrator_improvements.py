@@ -9,26 +9,28 @@ Tests cover the 7 reliability and correctness improvements:
 6. Accurate batch execution timestamps
 7. Defensive check for output existence
 """
-import pytest
+
 import hashlib
 import json
-import time
-import tempfile
 import os
+import tempfile
+import time
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
 
-from transformation_portal.lux_depth_v3.orchestrator import make_output_key
-from transformation_portal.lux_depth_v3.manifest import (
-    CombinedManifest,
-    BatchManifest,
-    ConfigFingerprint,
-    InputMetadata,
-    DepthMetadata,
-    V2Metadata,
-    TimingMetadata,
-)
+import pytest
+
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
+from transformation_portal.lux_depth_v3.manifest import (
+    BatchManifest,
+    CombinedManifest,
+    ConfigFingerprint,
+    DepthMetadata,
+    InputMetadata,
+    TimingMetadata,
+    V2Metadata,
+)
+from transformation_portal.lux_depth_v3.orchestrator import make_output_key
 from transformation_portal.lux_depth_v3.security import HashMode
 
 
@@ -411,7 +413,7 @@ class TestHashModeIfManifestExistsBaselineHash:
             # Mock compute_file_sha256 to return a predictable hash
             expected_hash = "abc123def456"
 
-            with patch('transformation_portal.lux_depth_v3.orchestrator.compute_file_sha256') as mock_hash:
+            with patch("transformation_portal.lux_depth_v3.orchestrator.compute_file_sha256") as mock_hash:
                 mock_hash.return_value = expected_hash
 
                 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
@@ -420,28 +422,22 @@ class TestHashModeIfManifestExistsBaselineHash:
                 config = EnhanceConfig(hash_mode=HashMode.IF_MANIFEST_EXISTS)
 
                 # Create orchestrator (mocking dependencies)
-                with patch('transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine'):
-                    with patch('transformation_portal.lux_depth_v3.orchestrator.Postprocessor'):
-                        with patch('transformation_portal.lux_depth_v3.orchestrator.V2Runner'):
+                with patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine"):
+                    with patch("transformation_portal.lux_depth_v3.orchestrator.Postprocessor"):
+                        with patch("transformation_portal.lux_depth_v3.orchestrator.V2Runner"):
                             orchestrator = EnhanceOrchestrator(config, tmpdir / "output", verify_outputs=False)
 
                             # First run: no manifest exists
                             # for_manifest_write=True should compute hash (establishing baseline)
                             hash_for_write = orchestrator._compute_or_skip_hash(
-                                test_image,
-                                manifest_exists=False,
-                                saved_hash=None,
-                                for_manifest_write=True
+                                test_image, manifest_exists=False, saved_hash=None, for_manifest_write=True
                             )
 
                             assert hash_for_write == expected_hash, "First run with for_manifest_write=True must compute hash"
 
                             # Comparison call (for skip check) on first run should NOT compute hash
                             hash_for_compare = orchestrator._compute_or_skip_hash(
-                                test_image,
-                                manifest_exists=False,
-                                saved_hash=None,
-                                for_manifest_write=False
+                                test_image, manifest_exists=False, saved_hash=None, for_manifest_write=False
                             )
 
                             assert hash_for_compare is None, "First run with for_manifest_write=False should skip hash"
@@ -449,10 +445,7 @@ class TestHashModeIfManifestExistsBaselineHash:
                             # Second run: manifest exists with saved hash
                             # for_manifest_write=False should now compute hash for comparison
                             hash_for_compare_2nd = orchestrator._compute_or_skip_hash(
-                                test_image,
-                                manifest_exists=True,
-                                saved_hash=expected_hash,
-                                for_manifest_write=False
+                                test_image, manifest_exists=True, saved_hash=expected_hash, for_manifest_write=False
                             )
 
                             assert hash_for_compare_2nd == expected_hash, "Second run should compute hash for comparison"
@@ -477,16 +470,17 @@ class TestCachedDepthNoDoubleNormalization:
             float_depth_npy = tmpdir / "depth.npy"
 
             # Test Case 1: Reader returns uint16 (should normalize)
-            with patch('transformation_portal.lux_depth_v3.depth_writer.read_depth_u16_png') as mock_read:
+            with patch("transformation_portal.lux_depth_v3.depth_writer.read_depth_u16_png") as mock_read:
                 # Simulate reader returning uint16 values
                 mock_read.return_value = np.array([[0, 32767, 65535]], dtype=np.uint16)
 
                 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
                 config = EnhanceConfig()
 
-                with patch('transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine'):
-                    with patch('transformation_portal.lux_depth_v3.orchestrator.Postprocessor'):
-                        with patch('transformation_portal.lux_depth_v3.orchestrator.V2Runner'):
+                with patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine"):
+                    with patch("transformation_portal.lux_depth_v3.orchestrator.Postprocessor"):
+                        with patch("transformation_portal.lux_depth_v3.orchestrator.V2Runner"):
                             orchestrator = EnhanceOrchestrator(config, tmpdir / "output", verify_outputs=False)
 
                             # Create the PNG file so exists() returns True
@@ -500,22 +494,24 @@ class TestCachedDepthNoDoubleNormalization:
                             assert np.allclose(result, [0.0, 0.5, 1.0], atol=0.01), f"Expected [0, 0.5, 1], got {result}"
 
             # Test Case 2: Reader returns pre-normalized float32 (should NOT double-normalize)
-            with patch('transformation_portal.lux_depth_v3.depth_writer.read_depth_u16_png') as mock_read:
+            with patch("transformation_portal.lux_depth_v3.depth_writer.read_depth_u16_png") as mock_read:
                 # Simulate reader returning already normalized float32 values
                 mock_read.return_value = np.array([[0.0, 0.5, 1.0]], dtype=np.float32)
 
                 config = EnhanceConfig()
 
-                with patch('transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine'):
-                    with patch('transformation_portal.lux_depth_v3.orchestrator.Postprocessor'):
-                        with patch('transformation_portal.lux_depth_v3.orchestrator.V2Runner'):
+                with patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine"):
+                    with patch("transformation_portal.lux_depth_v3.orchestrator.Postprocessor"):
+                        with patch("transformation_portal.lux_depth_v3.orchestrator.V2Runner"):
                             orchestrator = EnhanceOrchestrator(config, tmpdir / "output", verify_outputs=False)
 
                             result = orchestrator._load_cached_depth(depth_png, float_depth_npy)
 
                             assert result is not None, "Should load depth data"
                             # Values should remain in [0, 1] range (not crushed to near-zero)
-                            assert result[0, 1] > 0.4 and result[0, 1] < 0.6, f"Expected ~0.5, got {result[0, 1]} (double normalization bug)"
+                            assert (
+                                result[0, 1] > 0.4 and result[0, 1] < 0.6
+                            ), f"Expected ~0.5, got {result[0, 1]} (double normalization bug)"
                             assert result[0, 2] > 0.9, f"Expected ~1.0, got {result[0, 2]} (double normalization bug)"
 
 
@@ -565,9 +561,9 @@ class TestV2SkipIndependentOfGeneratePBR:
             # Test with generate_pbr=False
             config_no_pbr = EnhanceConfig(generate_pbr=False, v2_preset="default")
 
-            with patch('transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine'):
-                with patch('transformation_portal.lux_depth_v3.orchestrator.Postprocessor'):
-                    with patch('transformation_portal.lux_depth_v3.orchestrator.V2Runner'):
+            with patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine"):
+                with patch("transformation_portal.lux_depth_v3.orchestrator.Postprocessor"):
+                    with patch("transformation_portal.lux_depth_v3.orchestrator.V2Runner"):
                         from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
                         orchestrator = EnhanceOrchestrator(config_no_pbr, tmpdir / "output", verify_outputs=False)
@@ -575,12 +571,7 @@ class TestV2SkipIndependentOfGeneratePBR:
                         # V2 should be skippable even without PBR enabled
                         # (V2 outputs are valid, config matches)
                         image_input = ImageInput(test_image)
-                        skip = orchestrator.should_skip_v2(
-                            v2_report,
-                            manifest_path,
-                            image_input,
-                            depth_was_skipped=True
-                        )
+                        skip = orchestrator.should_skip_v2(v2_report, manifest_path, image_input, depth_was_skipped=True)
 
                         # Fix verification: should evaluate V2 independently
                         # V2 outputs exist and config matches, so should skip
@@ -591,10 +582,7 @@ class TestV2SkipIndependentOfGeneratePBR:
                         orchestrator_changed = EnhanceOrchestrator(config_changed, tmpdir / "output", verify_outputs=False)
 
                         skip_changed = orchestrator_changed.should_skip_v2(
-                            v2_report,
-                            manifest_path,
-                            image_input,
-                            depth_was_skipped=True
+                            v2_report, manifest_path, image_input, depth_was_skipped=True
                         )
 
                         assert skip_changed is False, "Changed V2 config should invalidate skip"
