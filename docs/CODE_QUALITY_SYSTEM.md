@@ -1,6 +1,6 @@
 > ⚠️ **DEPRECATED**
 >
-> This document has been superseded by [CODE_QUALITY_STANDARDS.md](docs/CODE_QUALITY_STANDARDS.md).
+> This document has been superseded by [CODE_QUALITY_STANDARDS.md](CODE_QUALITY_STANDARDS.md).
 > Please use that document instead. This file will be removed on 2026-03-06.
 
 # Code Quality Control System
