@@ -231,7 +231,6 @@ jobs:
           name: coverage-core-py${{ matrix.python-version }}
           path: |
             .coverage.core-py${{ matrix.python-version }}
-            coverage.xml
             htmlcov/
 
   test-ml:
@@ -319,7 +318,6 @@ jobs:
           name: coverage-ml-py3.11
           path: |
             .coverage.ml-py3.11
-            coverage.xml
 
   coverage-gate:
     name: Coverage Quality Gate
@@ -349,7 +347,7 @@ jobs:
       - name: List downloaded artifacts
         run: |
           echo "Downloaded coverage files:"
-          ls -la .coverage.* coverage.xml 2>/dev/null || echo "Warning: Expected coverage files not found"
+          ls -la .coverage.* 2>/dev/null || echo "ERROR: Expected .coverage files not found"
 
       - name: Combine coverage data
         run: |
