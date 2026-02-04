@@ -6,8 +6,30 @@ permissions:
 on:
   push:
     branches: [main]
+    # No path filters on main - always run full suite for protected branch
   pull_request:
     branches: [main]
+    paths:
+      # Source code changes
+      - 'src/**'
+      - 'scripts/**'
+      # Tests (always run to validate changes)
+      - 'tests/**'
+      - 'conftest.py'
+      # Dependencies and configuration
+      - 'pyproject.toml'
+      - 'setup.py'
+      - 'requirements*.txt'
+      - 'requirements/**'
+      # Workflow changes (validate CI modifications)
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      # Makefile and core config
+      - 'Makefile'
+      - 'mypy.ini'
+      - '.pylintrc'
+  workflow_dispatch:
+    # Manual trigger always runs full suite
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -32,6 +54,19 @@ env:
   HF_HUB_DISABLE_PROGRESS_BARS: "1"
 
 jobs:
+  # Info job - logs when workflow is skipped due to path filters
+  check-skip:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Check if workflow should skip
+        id: check
+        run: |
+          echo "This workflow runs for code, tests, config, and workflow changes"
+          echo "Documentation-only changes use docs.yml workflow instead"
+          echo "Event: ${{ github.event_name }}"
+          echo "Files changed: see PR diff"
+
   lint:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
