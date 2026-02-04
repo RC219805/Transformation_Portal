@@ -8,7 +8,6 @@ import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-import numpy as np
 import pytest
 from PIL import Image
 
@@ -69,28 +68,18 @@ class TestEnhanceBatch:
     """Test enhance_batch method and its integration with runtime stats."""
 
     @pytest.fixture
-    def temp_workspace(self, tmp_path):
-        """Create temporary workspace with test images."""
-        input_dir = tmp_path / "input"
-        input_dir.mkdir()
-
-        output_dir = tmp_path / "output"
-        output_dir.mkdir()
-
-        # Create test images
+    def batch_temp_workspace(self, temp_workspace, deterministic_rng):
+        """Create temporary workspace with test images (uses shared fixtures)."""
+        # Create test images using shared fixtures
         for i in range(3):
-            img_path = input_dir / f"test_{i}.jpg"
-            # Create a simple RGB image
-            img_array = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
+            img_path = temp_workspace["input_dir"] / f"test_{i}.jpg"
+            img_array = (deterministic_rng.random((100, 100, 3)) * 255).astype("uint8")
             img = Image.fromarray(img_array, mode="RGB")
             img.save(img_path)
 
-        return {
-            "input_dir": input_dir,
-            "output_dir": output_dir,
-        }
+        return temp_workspace
 
-    def test_enhance_batch_extracts_runtimes_correctly(self, temp_workspace):
+    def test_enhance_batch_extracts_runtimes_correctly(self, batch_temp_workspace):
         """CRITICAL: Test that enhance_batch correctly extracts runtime_s from results.
 
         This test catches the bug where results (List[Dict]) were passed directly
@@ -100,6 +89,8 @@ class TestEnhanceBatch:
             model_variant=ModelVariant.METRIC_LARGE,
             enable_v2=False,  # Skip V2 for faster test
         )
+
+        import numpy as np
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
@@ -115,9 +106,7 @@ class TestEnhanceBatch:
                 patch.object(orchestrator, "postprocessor") as mock_postprocessor,
                 patch("transformation_portal.lux_depth_v3.preprocessing.validate_image_format") as mock_validate,
                 patch("transformation_portal.lux_depth_v3.preprocessing.preprocess_image") as mock_preprocess,
-                patch(
-                    "transformation_portal.lux_depth_v3.orchestrator." "atomic_write_depth_u16_png_with_stats"
-                ) as mock_write,
+                patch("transformation_portal.lux_depth_v3.orchestrator.atomic_write_depth_u16_png_with_stats") as mock_write,
             ):
 
                 # Setup mocks
@@ -152,7 +141,7 @@ class TestEnhanceBatch:
 
                 # Run batch processing
                 try:
-                    results = orchestrator.enhance_batch(temp_workspace["input_dir"])
+                    results = orchestrator.enhance_batch(batch_temp_workspace["input_dir"])
 
                     # Verify results structure
                     assert isinstance(results, list)
@@ -197,12 +186,14 @@ class TestEnhanceBatch:
                     # Other errors are acceptable for this focused test
                     return
 
-    def test_enhance_batch_handles_partial_failure(self, temp_workspace):
+    def test_enhance_batch_handles_partial_failure(self, batch_temp_workspace):
         """Test that batch processing handles partial failures gracefully."""
         config = EnhanceConfig(
             model_variant=ModelVariant.METRIC_LARGE,
             enable_v2=False,
         )
+
+        import numpy as np
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
@@ -233,7 +224,7 @@ class TestEnhanceBatch:
                 }
 
             with patch.object(orchestrator, "enhance_image", side_effect=mock_enhance_image):
-                results = orchestrator.enhance_batch(temp_workspace["input_dir"])
+                results = orchestrator.enhance_batch(batch_temp_workspace["input_dir"])
 
                 # Should have 3 results (one for each image)
                 assert len(results) == 3
@@ -254,12 +245,14 @@ class TestEnhanceBatch:
                 for failure in failures:
                     assert "error" in failure
 
-    def test_batch_manifest_structure(self, temp_workspace):
+    def test_batch_manifest_structure(self, batch_temp_workspace):
         """Test that batch manifest has correct structure."""
         config = EnhanceConfig(
             model_variant=ModelVariant.METRIC_LARGE,
             enable_v2=False,
         )
+
+        import numpy as np
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
@@ -280,7 +273,7 @@ class TestEnhanceBatch:
                 }
 
             with patch.object(orchestrator, "enhance_image", side_effect=mock_enhance_image):
-                orchestrator.enhance_batch(temp_workspace["input_dir"])
+                orchestrator.enhance_batch(batch_temp_workspace["input_dir"])
 
                 # Check batch manifest was created
                 manifests_dir = tmpdir_path / "manifests"

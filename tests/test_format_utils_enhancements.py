@@ -8,6 +8,8 @@ Test coverage for new features:
 Run with: pytest tests/test_format_utils_enhancements.py -v
 """
 
+# pylint: disable=redefined-outer-name  # pytest fixtures use other fixtures as params
+
 import numpy as np
 import pytest
 from PIL import Image
@@ -42,34 +44,28 @@ except ImportError:
 
 
 @pytest.fixture
-def temp_dir(tmp_path):
-    """Create temporary directory for test files."""
-    return tmp_path
-
-
-@pytest.fixture
-def sample_jpg(temp_dir):
-    """Create a sample JPEG file."""
+def sample_jpg(temp_workspace):
+    """Create a sample JPEG file (uses shared temp_workspace)."""
     img = Image.new("RGB", (100, 100), color="red")
-    path = temp_dir / "sample.jpg"
+    path = temp_workspace["root"] / "sample.jpg"
     img.save(path, quality=90)
     return path
 
 
 @pytest.fixture
-def sample_png(temp_dir):
-    """Create a sample PNG file."""
+def sample_png(temp_workspace):
+    """Create a sample PNG file (uses shared temp_workspace)."""
     img = Image.new("RGBA", (100, 100), color=(0, 255, 0, 128))
-    path = temp_dir / "sample.png"
+    path = temp_workspace["root"] / "sample.png"
     img.save(path)
     return path
 
 
 @pytest.fixture
-def sample_tiff_8bit(temp_dir):
-    """Create a sample 8-bit TIFF file."""
+def sample_tiff_8bit(temp_workspace):
+    """Create a sample 8-bit TIFF file (uses shared temp_workspace)."""
     img = Image.new("RGB", (100, 100), color="blue")
-    path = temp_dir / "sample.tif"
+    path = temp_workspace["root"] / "sample.tif"
     img.save(path)
     return path
 
