@@ -170,6 +170,10 @@ class TestPyPIWorkflows:
         for workflow_name in workflows_to_check:
             workflow_file = workflows_dir / workflow_name
 
+            # Skip if workflow has been disabled/removed (CI-001 consolidation)
+            if not workflow_file.exists():
+                continue
+
             with open(workflow_file, "r", encoding="utf-8") as f:
                 content = f.read()
 
