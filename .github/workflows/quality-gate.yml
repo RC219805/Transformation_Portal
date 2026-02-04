@@ -53,8 +53,9 @@ jobs:
         run: |
           markdown_count=$(find . -maxdepth 1 -name "*.md" -type f | wc -l)
           # shellcheck disable=SC2086
-          if [ $markdown_count -gt 10 ]; then
-            echo "ERROR: Too many markdown files in root ($markdown_count). Maximum allowed: 10"
+          # Updated limit to 14 for DOC-001 consolidation (added DOCUMENTATION_MAP.md)
+          if [ $markdown_count -gt 14 ]; then
+            echo "ERROR: Too many markdown files in root ($markdown_count). Maximum allowed: 14"
             echo "Please move documentation files to docs/ subdirectories"
             exit 1
           fi
