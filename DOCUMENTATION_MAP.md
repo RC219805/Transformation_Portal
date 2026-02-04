@@ -25,6 +25,7 @@
 | Topic | Canonical Document | Status |
 |-------|-------------------|--------|
 | **Architecture Overview** | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | ✅ Stable |
+| **API Reference** | [docs/api/](docs/api/) | ✅ Stable (Sphinx) |
 | **Code Quality Standards** | [docs/CODE_QUALITY_STANDARDS.md](docs/CODE_QUALITY_STANDARDS.md) | ✅ Stable |
 | **Testing Guidelines** | [docs/development/TESTING_GUIDE.md](docs/development/TESTING_GUIDE.md) | 🔄 In Progress |
 | **Custom Agents** | [docs/CUSTOM_AGENT_GUIDE.md](docs/CUSTOM_AGENT_GUIDE.md) | ✅ Stable |
@@ -143,7 +144,7 @@ The following docs are **deprecated** and will be removed:
 ### Deprecation Template:
 ```markdown
 > ⚠️ **DEPRECATED**
-> 
+>
 > This document has been superseded by [CANONICAL_DOC.md](path/to/canonical.md).
 > Please use that document instead. This file will be removed on YYYY-MM-DD.
 ```

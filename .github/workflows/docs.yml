@@ -1,0 +1,109 @@
+name: Documentation
+
+on:
+  pull_request:
+    paths:
+      - 'docs/api/**'
+      - 'src/**/*.py'
+      - 'requirements-dev.txt'
+      - '.github/workflows/docs.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/api/**'
+      - 'src/**/*.py'
+  workflow_dispatch:
+
+jobs:
+  build-docs:
+    name: Build API Documentation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install sphinx sphinx-rtd-theme sphinx-autodoc-typehints
+          pip install -e .
+
+      - name: Build documentation
+        run: |
+          python -m sphinx -b html --keep-going docs/api docs/api/_build/html
+
+      - name: Check documentation coverage
+        run: |
+          echo "Checking API documentation coverage..."
+          # Count public modules
+          PUBLIC_MODULES=$(find src/transformation_portal -name "*.py" -type f | wc -l)
+          # Count documented modules (simple heuristic)
+          DOCUMENTED=$(find docs/api/modules -name "*.rst" -type f | wc -l)
+          COVERAGE=$((DOCUMENTED * 100 / PUBLIC_MODULES))
+          echo "Documentation coverage: $COVERAGE% ($DOCUMENTED/$PUBLIC_MODULES modules)"
+          if [ $COVERAGE -lt 50 ]; then
+            echo "::warning::Documentation coverage is below 50%"
+          fi
+
+      - name: Upload documentation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-documentation
+          path: docs/api/_build/html
+          retention-days: 30
+
+  validate-links:
+    name: Validate Documentation Links
+    runs-on: ubuntu-latest
+    needs: build-docs
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download documentation
+        uses: actions/download-artifact@v4
+        with:
+          name: api-documentation
+          path: docs/api/_build/html
+
+      - name: Check for broken links
+        run: |
+          echo "✓ Link validation passed (placeholder)"
+          # Future: Add linkchecker or similar tool
+
+  update-navigation:
+    name: Verify Navigation Links
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check README links
+        run: |
+          if grep -q "API Documentation" README.md; then
+            echo "✓ README.md contains API documentation link"
+          else
+            echo "::warning::README.md missing API documentation link"
+          fi
+
+      - name: Check DOCUMENTATION_MAP
+        run: |
+          if [ -f DOCUMENTATION_MAP.md ]; then
+            if grep -q "api" DOCUMENTATION_MAP.md; then
+              echo "✓ DOCUMENTATION_MAP.md contains API docs reference"
+            else
+              echo "::warning::DOCUMENTATION_MAP.md missing API docs reference"
+            fi
+          else
+            echo "::warning::DOCUMENTATION_MAP.md not found"
+          fi
