@@ -14,7 +14,8 @@ Compatible with: v2.0.0 Golden Path
 
 Example
 -------
-::
+
+.. code-block:: python
 
     from transformation_portal.lux_depth_v3.protocols import DepthModel, BackendRole
 
