@@ -13,6 +13,7 @@ import pytest
 try:
     from hypothesis import given
     from hypothesis import strategies as st
+
     from transformation_portal.lux_depth_v3.config import EnhanceConfig
 
     HYPOTHESIS_AVAILABLE = True
