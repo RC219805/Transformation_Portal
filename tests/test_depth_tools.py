@@ -7,10 +7,8 @@ Tests for depth_tools.py batch processing and error handling
 
 # pylint: disable=redefined-outer-name  # pytest fixtures
 
-import tempfile
 from pathlib import Path
 
-import numpy as np
 import pytest
 from PIL import Image
 
@@ -19,42 +17,28 @@ from src.transformation_portal.pipelines.depth_tools import BatchOptions, main, 
 
 
 @pytest.fixture
-def temp_dirs():
-    """Create temporary directories for testing"""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        images_dir = Path(tmpdir) / "images"
-        depths_dir = Path(tmpdir) / "depths"
-        out_dir = Path(tmpdir) / "output"
+def temp_dirs(temp_workspace):
+    """Create depth-specific temporary directories (uses shared temp_workspace)."""
+    images_dir = temp_workspace["root"] / "images"
+    depths_dir = temp_workspace["root"] / "depths"
 
-        images_dir.mkdir()
-        depths_dir.mkdir()
-        out_dir.mkdir()
+    images_dir.mkdir()
+    depths_dir.mkdir()
 
-        yield {
-            "images": str(images_dir),
-            "depths": str(depths_dir),
-            "output": str(out_dir),
-        }
+    return {
+        "images": str(images_dir),
+        "depths": str(depths_dir),
+        "output": str(temp_workspace["output_dir"]),
+    }
 
 
-@pytest.fixture
-def sample_image():
-    """Create a sample RGB image as numpy array"""
-    return np.random.rand(100, 100, 3).astype(np.float32)
-
-
-@pytest.fixture
-def sample_depth():
-    """Create a sample depth map as numpy array"""
-    return np.random.rand(100, 100).astype(np.float32) * 65535
-
-
-def create_test_files(temp_dirs, num_images=3, create_depth_for_all=True):
+def create_test_files(temp_dirs, deterministic_rng, num_images=3, create_depth_for_all=True):
     """
     Helper to create test image and depth files
 
     Args:
         temp_dirs: fixture with directory paths
+        deterministic_rng: RNG fixture for reproducibility
         num_images: number of test images to create
         create_depth_for_all: if False, skip creating depth for last image
 
@@ -66,16 +50,16 @@ def create_test_files(temp_dirs, num_images=3, create_depth_for_all=True):
         base = f"test_image_{i:03d}"
         bases.append(base)
 
-        # Create source image
-        img_arr = np.random.rand(100, 100, 3) * 255
-        img = Image.fromarray(img_arr.astype(np.uint8))
+        # Create source image using deterministic RNG
+        img_arr = (deterministic_rng.random((100, 100, 3)) * 255).astype("uint8")
+        img = Image.fromarray(img_arr)
         img_path = Path(temp_dirs["images"]) / f"{base}.png"
         img.save(img_path)
 
         # Create depth map (skip last one if requested)
         if create_depth_for_all or i < num_images - 1:
-            depth_arr = np.random.rand(100, 100) * 65535
-            depth = Image.fromarray(depth_arr.astype(np.uint16))
+            depth_arr = (deterministic_rng.random((100, 100)) * 65535).astype("uint16")
+            depth = Image.fromarray(depth_arr, mode="I;16")
             depth_path = Path(temp_dirs["depths"]) / f"{base}_depth16.png"
             depth.save(depth_path)
 
@@ -85,9 +69,9 @@ def create_test_files(temp_dirs, num_images=3, create_depth_for_all=True):
 class TestBatchProcessing:
     """Test batch processing functionality"""
 
-    def test_successful_batch_processing(self, temp_dirs):
+    def test_successful_batch_processing(self, temp_dirs, deterministic_rng):
         """Test that batch processing completes successfully with all valid files"""
-        create_test_files(temp_dirs, num_images=3)
+        create_test_files(temp_dirs, deterministic_rng, num_images=3)
 
         opts = BatchOptions(
             images_root=temp_dirs["images"],
@@ -105,13 +89,13 @@ class TestBatchProcessing:
         output_files = list(Path(temp_dirs["output"]).glob("*_depthhaze.*"))
         assert len(output_files) == 3, "Expected 3 output files"
 
-    def test_batch_with_missing_images(self, temp_dirs):
+    def test_batch_with_missing_images(self, temp_dirs, deterministic_rng):
         """Test that batch handles missing source images gracefully"""
         # Create only depth maps, no source images
         for i in range(2):
             base = f"test_image_{i:03d}"
-            depth_arr = np.random.rand(100, 100) * 65535
-            depth = Image.fromarray(depth_arr.astype(np.uint16))
+            depth_arr = (deterministic_rng.random((100, 100)) * 65535).astype("uint16")
+            depth = Image.fromarray(depth_arr, mode="I;16")
             depth_path = Path(temp_dirs["depths"]) / f"{base}_depth16.png"
             depth.save(depth_path)
 
@@ -133,14 +117,14 @@ class TestBatchProcessing:
         output_files = list(Path(temp_dirs["output"]).glob("*"))
         assert len(output_files) == 0, "Expected no output files"
 
-    def test_partial_failure_scenario(self, temp_dirs):
+    def test_partial_failure_scenario(self, temp_dirs, deterministic_rng):
         """Test batch with some successes and some failures"""
         # Create 2 valid files
-        create_test_files(temp_dirs, num_images=2)
+        create_test_files(temp_dirs, deterministic_rng, num_images=2)
 
         # Create a depth map without corresponding image
-        depth_arr = np.random.rand(100, 100) * 65535
-        depth = Image.fromarray(depth_arr.astype(np.uint16))
+        depth_arr = (deterministic_rng.random((100, 100)) * 65535).astype("uint16")
+        depth = Image.fromarray(depth_arr, mode="I;16")
         depth_path = Path(temp_dirs["depths"]) / "missing_source_depth16.png"
         depth.save(depth_path)
 
@@ -165,9 +149,9 @@ class TestBatchProcessing:
 class TestExitCodes:
     """Test exit code behavior with different error scenarios"""
 
-    def test_main_success_no_errors(self, temp_dirs):
+    def test_main_success_no_errors(self, temp_dirs, deterministic_rng):
         """Test main returns 0 when all files process successfully"""
-        create_test_files(temp_dirs, num_images=2)
+        create_test_files(temp_dirs, deterministic_rng, num_images=2)
 
         argv = [
             "haze",
@@ -179,11 +163,11 @@ class TestExitCodes:
         exit_code = main(argv)
         assert exit_code == 0, "Expected exit code 0 for successful batch"
 
-    def test_main_strict_mode_with_errors(self, temp_dirs):
+    def test_main_strict_mode_with_errors(self, temp_dirs, deterministic_rng):
         """Test main returns 1 in strict mode (default) with errors"""
         # Create depth without corresponding image
-        depth_arr = np.random.rand(100, 100) * 65535
-        depth = Image.fromarray(depth_arr.astype(np.uint16))
+        depth_arr = (deterministic_rng.random((100, 100)) * 65535).astype("uint16")
+        depth = Image.fromarray(depth_arr, mode="I;16")
         depth_path = Path(temp_dirs["depths"]) / "test_depth16.png"
         depth.save(depth_path)
 
@@ -197,14 +181,14 @@ class TestExitCodes:
         exit_code = main(argv)
         assert exit_code == 1, "Expected exit code 1 for errors in strict mode"
 
-    def test_main_partial_success_mode_with_some_success(self, temp_dirs):
+    def test_main_partial_success_mode_with_some_success(self, temp_dirs, deterministic_rng):
         """Test main returns 0 in partial success mode when at least one file succeeds"""
         # Create 2 valid files
-        create_test_files(temp_dirs, num_images=2)
+        create_test_files(temp_dirs, deterministic_rng, num_images=2)
 
         # Create a depth map without corresponding image
-        depth_arr = np.random.rand(100, 100) * 65535
-        depth = Image.fromarray(depth_arr.astype(np.uint16))
+        depth_arr = (deterministic_rng.random((100, 100)) * 65535).astype("uint16")
+        depth = Image.fromarray(depth_arr, mode="I;16")
         depth_path = Path(temp_dirs["depths"]) / "missing_depth16.png"
         depth.save(depth_path)
 
@@ -219,12 +203,12 @@ class TestExitCodes:
         exit_code = main(argv)
         assert exit_code == 0, "Expected exit code 0 in partial success mode with some successes"
 
-    def test_main_partial_success_mode_all_failures(self, temp_dirs):
+    def test_main_partial_success_mode_all_failures(self, temp_dirs, deterministic_rng):
         """Test main returns 1 in partial success mode when all files fail"""
         # Create only depth maps, no source images
         for i in range(2):
-            depth_arr = np.random.rand(100, 100) * 65535
-            depth = Image.fromarray(depth_arr.astype(np.uint16))
+            depth_arr = (deterministic_rng.random((100, 100)) * 65535).astype("uint16")
+            depth = Image.fromarray(depth_arr, mode="I;16")
             depth_path = Path(temp_dirs["depths"]) / f"test_{i}_depth16.png"
             depth.save(depth_path)
 
@@ -239,7 +223,7 @@ class TestExitCodes:
         exit_code = main(argv)
         assert exit_code == 1, "Expected exit code 1 even in partial success mode when all files fail"
 
-    def test_main_no_depth_maps_found(self, temp_dirs):
+    def test_main_no_depth_maps_found(self, temp_dirs, deterministic_rng):
         """Test main raises SystemExit when no depth maps are found"""
         argv = [
             "haze",
@@ -284,7 +268,7 @@ class TestBatchOptions:
 class TestCLIParsing:
     """Test CLI argument parsing"""
 
-    def test_cli_help_includes_allow_partial_success(self, temp_dirs):
+    def test_cli_help_includes_allow_partial_success(self, temp_dirs, deterministic_rng):
         """Test that --allow-partial-success flag appears in help"""
         argv = ["haze", "--help"]
 
@@ -294,9 +278,9 @@ class TestCLIParsing:
         # Help exits with code 0
         assert exc_info.value.code == 0
 
-    def test_cli_allow_partial_success_flag(self, temp_dirs):
+    def test_cli_allow_partial_success_flag(self, temp_dirs, deterministic_rng):
         """Test that --allow-partial-success flag is parsed correctly"""
-        create_test_files(temp_dirs, num_images=1)
+        create_test_files(temp_dirs, deterministic_rng, num_images=1)
 
         argv = [
             "clarity",
@@ -313,9 +297,9 @@ class TestCLIParsing:
 class TestMultiprocessing:
     """Test multiprocessing functionality"""
 
-    def test_batch_with_multiple_workers(self, temp_dirs):
+    def test_batch_with_multiple_workers(self, temp_dirs, deterministic_rng):
         """Test that batch processing works with multiple workers"""
-        create_test_files(temp_dirs, num_images=4)
+        create_test_files(temp_dirs, deterministic_rng, num_images=4)
 
         opts = BatchOptions(
             images_root=temp_dirs["images"],
