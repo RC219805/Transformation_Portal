@@ -32,8 +32,8 @@ def test_expand_env_vars_with_traversal(caplog):
         result = _expand_env_vars('${TEST_VAR}/passwd')
         assert result == '../../../etc/passwd'
         
-        # No warning should be logged since it's only 3 levels
-        assert len(caplog.records) == 0
+        # Verify no excessive traversal warning (only 3 levels)
+        assert 'excessive parent traversal' not in caplog.text.lower()
     finally:
         del os.environ['TEST_VAR']
 

@@ -177,7 +177,7 @@ class UnifiedDepthConfig:
         security_data = data.get('security', {})
         
         # Parse nested PBR config if present
-        pbr_data = processing_data.pop('pbr', {}) if 'pbr' in processing_data else {}
+        pbr_data = processing_data.pop('pbr', {})
         
         # Build config objects
         model_config = ModelConfig(**model_data) if model_data else ModelConfig()
