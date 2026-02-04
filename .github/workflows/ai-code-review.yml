@@ -7,6 +7,12 @@ on:
       - main
       - develop
 
+# Concurrency control: Cancel outdated runs on new pushes to the same PR
+# This reduces CI minutes and API costs by only reviewing the latest code
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   pull-requests: write
