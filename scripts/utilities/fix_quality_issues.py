@@ -4,16 +4,23 @@ Comprehensive quality fix script for Transformation Portal.
 Addresses all linting issues automatically where possible.
 """
 
+import shlex
 import subprocess
 import sys
 from pathlib import Path
 
 def run_command(cmd, description):
-    """Run a command and report results."""
+    """Run a command and report results.
+
+    Security Note: Uses shlex.split() instead of shell=True to prevent
+    command injection vulnerabilities (SEC-001). This safely parses the
+    command string into a list of arguments without invoking a shell.
+    """
     print(f"\n{'='*60}")
     print(f"{description}")
     print(f"{'='*60}")
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=False)
+    # SEC-001: Use shlex.split() instead of shell=True to prevent command injection
+    result = subprocess.run(shlex.split(cmd), capture_output=True, text=True, check=False)
     if result.stdout:
         print(result.stdout)
     if result.stderr and result.returncode != 0:
