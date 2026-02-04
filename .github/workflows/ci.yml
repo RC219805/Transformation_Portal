@@ -225,10 +225,22 @@ jobs:
           if [ -f .coverage ]; then
             mv .coverage .coverage.core-py${{ matrix.python-version }}
             echo "Coverage file renamed successfully"
+            ls -la .coverage.core-py${{ matrix.python-version }}
           else
             echo "ERROR: .coverage file not found!"
             ls -la .coverage* || echo "No coverage files found"
             exit 1
+          fi
+
+      - name: Verify coverage file before upload
+        if: matrix.python-version == '3.12'
+        run: |
+          echo "Files in current directory before upload:"
+          ls -la .coverage* || echo "No .coverage files found"
+          if [ -f .coverage.core-py${{ matrix.python-version }} ]; then
+            echo "✓ .coverage.core-py${{ matrix.python-version }} exists ($(stat -f%z .coverage.core-py${{ matrix.python-version }} 2>/dev/null || stat -c%s .coverage.core-py${{ matrix.python-version }}) bytes)"
+          else
+            echo "✗ .coverage.core-py${{ matrix.python-version }} NOT FOUND"
           fi
 
       - name: Upload coverage reports
@@ -321,10 +333,21 @@ jobs:
           if [ -f .coverage ]; then
             mv .coverage .coverage.ml-py3.11
             echo "Coverage file renamed successfully"
+            ls -la .coverage.ml-py3.11
           else
             echo "ERROR: .coverage file not found!"
             ls -la .coverage* || echo "No coverage files found"
             exit 1
+          fi
+
+      - name: Verify coverage file before upload
+        run: |
+          echo "Files in current directory before upload:"
+          ls -la .coverage* || echo "No .coverage files found"
+          if [ -f .coverage.ml-py3.11 ]; then
+            echo "✓ .coverage.ml-py3.11 exists ($(stat -f%z .coverage.ml-py3.11 2>/dev/null || stat -c%s .coverage.ml-py3.11) bytes)"
+          else
+            echo "✗ .coverage.ml-py3.11 NOT FOUND"
           fi
 
       - name: Upload coverage reports
