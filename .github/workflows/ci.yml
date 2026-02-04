@@ -248,6 +248,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-core-py${{ matrix.python-version }}
+          include-hidden-files: true
           path: |
             .coverage.core-py${{ matrix.python-version }}
             htmlcov/
@@ -354,6 +355,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-ml-py3.11
+          include-hidden-files: true
           path: |
             .coverage.ml-py3.11
 
@@ -385,7 +387,7 @@ jobs:
       - name: List downloaded artifacts
         run: |
           echo "Downloaded coverage files:"
-          ls -la .coverage.* 2>/dev/null || echo "ERROR: Expected .coverage files not found"
+          ls -la .coverage .coverage.* 2>/dev/null || echo "ERROR: Expected coverage files not found"
 
       - name: Combine coverage data
         run: |
