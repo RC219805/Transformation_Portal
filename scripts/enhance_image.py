@@ -146,7 +146,7 @@ Status:
     return parser.parse_args()
 
 
-def configure_logging(verbose: bool, quiet: bool, log_file: Path | None):
+def configure_logging(verbose: bool, quiet: bool, log_file: Path | None) -> None:
     """Configure logging output.
     
     Args:
