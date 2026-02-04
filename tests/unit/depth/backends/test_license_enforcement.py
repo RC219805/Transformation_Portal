@@ -9,12 +9,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from transformation_portal.depth.backends import (
-    DepthBackendRegistry,
-    DepthResult,
-    LicenseRestrictionError,
-    LicenseType,
-)
+from transformation_portal.depth.backends import DepthBackendRegistry, DepthResult, LicenseRestrictionError, LicenseType
 
 
 class MockEnhanceConfig:

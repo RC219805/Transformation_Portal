@@ -32,11 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-from .async_pipeline import (
-    AsyncStage,
-    DeviceType,
-    WorkerPool,
-)
+from .async_pipeline import AsyncStage, DeviceType, WorkerPool
 
 
 @dataclass

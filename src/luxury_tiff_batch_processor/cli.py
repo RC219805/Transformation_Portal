@@ -17,13 +17,7 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
     yaml = None
 
 from .adjustments import LUXURY_PRESETS, AdjustmentSettings
-from .pipeline import (
-    _process_image_worker,
-    _wrap_with_progress,
-    collect_images,
-    ensure_output_path,
-    process_single_image,
-)
+from .pipeline import _process_image_worker, _wrap_with_progress, collect_images, ensure_output_path, process_single_image
 from .profiles import DEFAULT_PROFILE_NAME, PROCESSING_PROFILES
 
 LOGGER = logging.getLogger("luxury_tiff_batch_processor")

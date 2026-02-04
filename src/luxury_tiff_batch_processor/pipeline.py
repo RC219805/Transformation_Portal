@@ -31,12 +31,7 @@ import numpy as np
 from PIL import Image
 
 from .adjustments import AdjustmentSettings, apply_adjustments
-from .io_utils import (
-    ProcessingContext,
-    float_to_dtype_array,
-    image_to_float,
-    save_image,
-)
+from .io_utils import ProcessingContext, float_to_dtype_array, image_to_float, save_image
 from .profiles import DEFAULT_PROFILE_NAME, PROCESSING_PROFILES, ProcessingProfile
 
 

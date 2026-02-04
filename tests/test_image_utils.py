@@ -11,13 +11,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from transformation_portal.utils.image_utils import (
-    load_image,
-    load_image_rgb,
-    np_to_pil,
-    pil_to_np,
-    save_image,
-)
+from transformation_portal.utils.image_utils import load_image, load_image_rgb, np_to_pil, pil_to_np, save_image
 
 
 def test_load_image():

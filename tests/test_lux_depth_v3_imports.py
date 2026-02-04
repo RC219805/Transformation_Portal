@@ -40,10 +40,7 @@ def test_import_config():
 def test_import_inference():
     """Test that inference module imports successfully."""
     from transformation_portal.lux_depth_v3.config import DA3Config
-    from transformation_portal.lux_depth_v3.inference import (
-        DA3InferenceEngine,
-        DepthResult,
-    )
+    from transformation_portal.lux_depth_v3.inference import DA3InferenceEngine, DepthResult
 
     # Verify basic instantiation works
     config = DA3Config()
@@ -64,10 +61,7 @@ def test_import_input_manager():
 
 def test_import_depth_writer():
     """Test that depth_writer module imports successfully."""
-    from transformation_portal.lux_depth_v3.depth_writer import (
-        atomic_write_depth_u16_png_with_stats,
-        read_depth_u16_png,
-    )
+    from transformation_portal.lux_depth_v3.depth_writer import atomic_write_depth_u16_png_with_stats, read_depth_u16_png
 
     # Functions should exist and be callable
     assert callable(atomic_write_depth_u16_png_with_stats)
@@ -76,10 +70,7 @@ def test_import_depth_writer():
 
 def test_import_v2_runner():
     """Test that v2_runner module imports successfully."""
-    from transformation_portal.lux_depth_v3.v2_runner import (
-        V2Runner,
-        find_v2_report,
-    )
+    from transformation_portal.lux_depth_v3.v2_runner import V2Runner, find_v2_report
 
     # Verify basic instantiation works
     runner = V2Runner()
@@ -159,9 +150,7 @@ def test_import_manifest():
 
 def test_import_batch_stats():
     """Test that batch_stats module imports successfully."""
-    from transformation_portal.lux_depth_v3.batch_stats import (
-        compute_batch_runtime_stats,
-    )
+    from transformation_portal.lux_depth_v3.batch_stats import compute_batch_runtime_stats
 
     # Test basic functionality
     stats = compute_batch_runtime_stats([1.0, 2.0, 3.0])
@@ -179,10 +168,7 @@ def test_import_batch_stats():
 
 def test_import_preprocessing():
     """Test that preprocessing module imports successfully."""
-    from transformation_portal.lux_depth_v3.preprocessing import (
-        normalize_exif_orientation,
-        validate_depth_image_alignment,
-    )
+    from transformation_portal.lux_depth_v3.preprocessing import normalize_exif_orientation, validate_depth_image_alignment
 
     # Functions should exist and be callable
     assert callable(normalize_exif_orientation)
@@ -191,10 +177,7 @@ def test_import_preprocessing():
 
 def test_import_orchestrator():
     """Test that orchestrator module imports successfully."""
-    from transformation_portal.lux_depth_v3.orchestrator import (
-        EnhanceOrchestrator,
-        make_output_key,
-    )
+    from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator, make_output_key
 
     # Verify classes and functions exist
     assert EnhanceOrchestrator is not None
@@ -204,9 +187,7 @@ def test_import_orchestrator():
 def test_import_postprocessing():
     """Test that postprocessing module imports successfully."""
     from transformation_portal.lux_depth_v3.config import PostprocessingConfig
-    from transformation_portal.lux_depth_v3.postprocessing import (
-        Postprocessor,
-    )
+    from transformation_portal.lux_depth_v3.postprocessing import Postprocessor
 
     # Verify basic instantiation works
     config = PostprocessingConfig()

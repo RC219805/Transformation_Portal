@@ -110,9 +110,7 @@ def _check_perceptual_assessor_available() -> bool:
             src_dir = Path(__file__).parent.parent.parent.parent / "src"
             if str(src_dir) not in sys.path:
                 sys.path.insert(0, str(src_dir))
-            from enhancements.perceptual_quality_assessment import (  # noqa: F401
-                PerceptualQualityAssessor,
-            )
+            from enhancements.perceptual_quality_assessment import PerceptualQualityAssessor  # noqa: F401
 
             _PERCEPTUAL_ASSESSOR_AVAILABLE = True
         except ImportError as e:
@@ -377,9 +375,7 @@ class QualityFeedbackBridge:
             src_dir = Path(__file__).parent.parent.parent.parent / "src"
             if str(src_dir) not in sys.path:
                 sys.path.insert(0, str(src_dir))
-            from enhancements.perceptual_quality_assessment import (
-                PerceptualQualityAssessor,
-            )
+            from enhancements.perceptual_quality_assessment import PerceptualQualityAssessor
 
             self._perceptual_assessor = PerceptualQualityAssessor(use_lpips_package=_check_lpips_available())
             self._lpips_available = True

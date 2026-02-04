@@ -27,14 +27,7 @@ Example:
 """
 
 from .engine import MaterialMask, MaterialResponseConfig, MaterialResponseEngine
-from .profiles import (
-    PROFILES,
-    MaterialProfile,
-    get_all_profiles,
-    get_profile,
-    get_profile_info,
-    list_profiles,
-)
+from .profiles import PROFILES, MaterialProfile, get_all_profiles, get_profile, get_profile_info, list_profiles
 
 __all__ = [
     # Engine

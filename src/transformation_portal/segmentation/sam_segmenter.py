@@ -22,11 +22,7 @@ import torch
 from PIL import Image
 
 try:
-    from segment_anything import (
-        SamAutomaticMaskGenerator,
-        SamPredictor,
-        sam_model_registry,
-    )
+    from segment_anything import SamAutomaticMaskGenerator, SamPredictor, sam_model_registry
 
     SAM_AVAILABLE = True
 except ImportError:

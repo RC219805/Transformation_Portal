@@ -1,14 +1,6 @@
 import numpy as np
 from PIL import Image
-from your_module import (
-    ClusterStats,
-    MaterialRule,
-    _cluster_stats,
-    _kmeans,
-    _soft_mask,
-    assign_materials,
-    enhance_aerial,
-)
+from your_module import ClusterStats, MaterialRule, _cluster_stats, _kmeans, _soft_mask, assign_materials, enhance_aerial
 
 # --------------------------
 # Helpers for tests

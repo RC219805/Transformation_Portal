@@ -11,15 +11,7 @@ import logging
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    Optional,
-    Protocol,
-    runtime_checkable,
-)
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from lux_depth_v2.hardening.policy import HardeningPolicy

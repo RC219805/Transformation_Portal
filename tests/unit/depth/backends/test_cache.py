@@ -5,10 +5,7 @@ import json
 import numpy as np
 import pytest
 
-from transformation_portal.depth.backends import (
-    DepthCacheWriter,
-    DepthResult,
-)
+from transformation_portal.depth.backends import DepthCacheWriter, DepthResult
 
 
 @pytest.mark.unit

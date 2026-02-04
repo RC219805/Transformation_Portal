@@ -9,13 +9,7 @@ The contracts enforce:
 - Type safety with strict validation
 """
 
-from .depth_artifact import (
-    CameraIntrinsics,
-    DepthArtifact,
-    DepthArtifactWriter,
-    DepthProvenance,
-    LicenseTier,
-)
+from .depth_artifact import CameraIntrinsics, DepthArtifact, DepthArtifactWriter, DepthProvenance, LicenseTier
 
 __all__ = [
     "DepthArtifact",

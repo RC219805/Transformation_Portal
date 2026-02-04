@@ -11,12 +11,7 @@ import pytest
 agents_path = Path(__file__).parent.parent / ".github" / "agents"
 sys.path.insert(0, str(agents_path))
 
-from rag_system.classifier import (  # noqa: E402
-    ArtifactClassifier,
-    ArtifactType,
-    PipelineType,
-    ProcessingMetadata,
-)
+from rag_system.classifier import ArtifactClassifier, ArtifactType, PipelineType, ProcessingMetadata  # noqa: E402
 
 
 @pytest.fixture

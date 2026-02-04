@@ -15,11 +15,7 @@ import pytest
 from PIL import Image
 
 # Import from the module location
-from src.transformation_portal.pipelines.depth_tools import (
-    BatchOptions,
-    main,
-    process_batch,
-)
+from src.transformation_portal.pipelines.depth_tools import BatchOptions, main, process_batch
 
 
 @pytest.fixture

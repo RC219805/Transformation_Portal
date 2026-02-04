@@ -25,16 +25,7 @@ import logging
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import (
-    Callable,
-    Dict,
-    Iterator,
-    List,
-    Optional,
-    Protocol,
-    Type,
-    runtime_checkable,
-)
+from typing import Callable, Dict, Iterator, List, Optional, Protocol, Type, runtime_checkable
 
 import numpy as np
 

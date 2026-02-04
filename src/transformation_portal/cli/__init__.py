@@ -471,11 +471,7 @@ def pipeline_validate_recipe(
         raise typer.Exit(code=1)
 
     try:
-        from transformation_portal.config_loader import (
-            get_recipe_info,
-            load_recipe,
-            validate_recipe,
-        )
+        from transformation_portal.config_loader import get_recipe_info, load_recipe, validate_recipe
 
         # Load the recipe
         recipe = load_recipe(recipe_path, expand_env=False, resolve_paths=False)

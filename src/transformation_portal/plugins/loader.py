@@ -11,11 +11,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Any, Dict, List, Optional
 
-from .interface import (
-    PluginInterface,
-    PluginMetadata,
-    PluginType,
-)
+from .interface import PluginInterface, PluginMetadata, PluginType
 
 logger = logging.getLogger(__name__)
 

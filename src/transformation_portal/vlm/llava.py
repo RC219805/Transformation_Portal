@@ -22,11 +22,7 @@ import torch
 from PIL import Image
 
 try:
-    from transformers import (
-        AutoProcessor,
-        BitsAndBytesConfig,
-        LlavaForConditionalGeneration,
-    )
+    from transformers import AutoProcessor, BitsAndBytesConfig, LlavaForConditionalGeneration
 
     LLAVA_AVAILABLE = True
 except ImportError:

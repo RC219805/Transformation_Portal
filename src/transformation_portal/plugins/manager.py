@@ -8,11 +8,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Any, Dict, Iterator, List, Optional
 
-from .interface import (
-    PluginInitializationError,
-    PluginInterface,
-    PluginType,
-)
+from .interface import PluginInitializationError, PluginInterface, PluginType
 from .loader import LoadedPlugin, PluginLoader, get_global_loader
 from .registry import PluginRegistry, get_global_registry
 

@@ -270,10 +270,7 @@ class FLUXPipeline:
             model availability. This implementation provides the framework
             and falls back to standard enhancement with control-informed prompting.
         """
-        from transformation_portal.diffusion.flux_controlnet import (
-            FLUX_CONTROLNET_AVAILABLE,
-            FLUXControlNet,
-        )
+        from transformation_portal.diffusion.flux_controlnet import FLUX_CONTROLNET_AVAILABLE, FLUXControlNet
 
         # Load and prepare input image
         pil_image = self._load_image(image)

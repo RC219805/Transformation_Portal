@@ -44,10 +44,7 @@ from PIL import Image
 
 # Optional: RAG-based quality feedback and 4K pipeline integration
 try:
-    from .pipelines.quality_feedback_bridge import (
-        QualityFeedbackBridge,
-        QualityTargets,
-    )
+    from .pipelines.quality_feedback_bridge import QualityFeedbackBridge, QualityTargets
 
     HAS_QUALITY_BRIDGE = True
 except ImportError:
@@ -632,10 +629,7 @@ class UnifiedPipeline:
 
         # Use Rendering4KPipeline for high-quality upscaling
         try:
-            from .pipelines.rendering_4k_pipeline import (
-                UpscalingConfig,
-                apply_upscaling,
-            )
+            from .pipelines.rendering_4k_pipeline import UpscalingConfig, apply_upscaling
 
             upscale_config = UpscalingConfig(
                 enabled=True,

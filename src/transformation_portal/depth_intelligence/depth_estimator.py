@@ -16,11 +16,7 @@ from PIL import Image
 from torch import Tensor
 
 # Import existing depth infrastructure
-from ..depth.models.depth_anything_v2 import (
-    DepthAnythingV2Model,
-    ModelBackend,
-    ModelVariant,
-)
+from ..depth.models.depth_anything_v2 import DepthAnythingV2Model, ModelBackend, ModelVariant
 
 logger = logging.getLogger(__name__)
 

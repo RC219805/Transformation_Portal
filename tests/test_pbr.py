@@ -6,10 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from transformation_portal.lux_depth_v3.pbr import (
-    PBRConfig,
-    generate_pbr_maps,
-)
+from transformation_portal.lux_depth_v3.pbr import PBRConfig, generate_pbr_maps
 from transformation_portal.lux_depth_v3.pbr_writer import write_pbr_maps
 
 

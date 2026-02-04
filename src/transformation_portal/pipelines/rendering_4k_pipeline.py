@@ -105,9 +105,7 @@ except ImportError:
 
 # Optional: PerceptualQualityAssessor for advanced quality metrics
 try:
-    from ...enhancements.perceptual_quality_assessment import (
-        PerceptualQualityAssessor,
-    )
+    from ...enhancements.perceptual_quality_assessment import PerceptualQualityAssessor
     from ...enhancements.perceptual_quality_assessment import QualityReport as PerceptualQualityReport
 
     HAS_PERCEPTUAL_ASSESSOR = True
@@ -118,11 +116,7 @@ except ImportError:
 
 # Optional: QualityFeedbackBridge for unified quality assessment
 try:
-    from .quality_feedback_bridge import (
-        QualityFeedbackBridge,
-        UnifiedQualityMetrics,
-        create_rag_indexing_callback,
-    )
+    from .quality_feedback_bridge import QualityFeedbackBridge, UnifiedQualityMetrics, create_rag_indexing_callback
 
     HAS_QUALITY_BRIDGE = True
 except ImportError:
@@ -1925,11 +1919,7 @@ class Rendering4KPipeline:
 
         try:
             import torch
-            from diffusers import (
-                ControlNetModel,
-                StableDiffusionControlNetImg2ImgPipeline,
-                UniPCMultistepScheduler,
-            )
+            from diffusers import ControlNetModel, StableDiffusionControlNetImg2ImgPipeline, UniPCMultistepScheduler
 
             logger.info("Loading ControlNet pipeline...")
             controlnets = []

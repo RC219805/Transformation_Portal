@@ -11,10 +11,7 @@ from datetime import date
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Union
 
-from transformation_portal.analyzers.codebase_philosophy_auditor import (
-    CodebasePhilosophyAuditor,
-    Violation,
-)
+from transformation_portal.analyzers.codebase_philosophy_auditor import CodebasePhilosophyAuditor, Violation
 
 
 @dataclass

@@ -27,23 +27,10 @@ v3.0 Contract Example:
 """
 
 # Configuration
-from .config import (
-    DA3Config,
-    DeviceConfig,
-    EnhanceConfig,
-    ModelVariant,
-    PostprocessingConfig,
-    Preset,
-)
+from .config import DA3Config, DeviceConfig, EnhanceConfig, ModelVariant, PostprocessingConfig, Preset
 
 # v3.0 Contracts (Universal Depth Currency)
-from .contracts import (
-    CameraIntrinsics,
-    DepthArtifact,
-    DepthArtifactWriter,
-    DepthProvenance,
-    LicenseTier,
-)
+from .contracts import CameraIntrinsics, DepthArtifact, DepthArtifactWriter, DepthProvenance, LicenseTier
 from .inference import DA3InferenceEngine, DepthResult
 
 # Orchestration
@@ -71,13 +58,7 @@ from .pbr_processor import PBRProcessor
 from .postprocessing import Postprocessor
 
 # v3.0 Protocols (Depth Model Interface)
-from .protocols import (
-    BackendCapability,
-    BackendInfo,
-    BackendRole,
-    DepthModel,
-    DepthModelRegistry,
-)
+from .protocols import BackendCapability, BackendInfo, BackendRole, DepthModel, DepthModelRegistry
 
 __all__ = [
     # Orchestration

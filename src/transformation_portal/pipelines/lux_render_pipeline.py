@@ -80,10 +80,7 @@ from torch import Generator
 
 # SDXL (optional). Imported lazily only if used.
 try:
-    from diffusers import (
-        StableDiffusionXLControlNetPipeline,
-        StableDiffusionXLImg2ImgPipeline,
-    )
+    from diffusers import StableDiffusionXLControlNetPipeline, StableDiffusionXLImg2ImgPipeline
 except ImportError:
     StableDiffusionXLControlNetPipeline = None
     StableDiffusionXLImg2ImgPipeline = None
@@ -100,12 +97,7 @@ from transformation_portal.pipelines.dimension_validation import (
 from transformation_portal.pipelines.dimension_validation import validate_sd_dimensions as _validate_sd_dimensions
 
 # Import common image utilities
-from transformation_portal.utils.image_utils import (
-    load_image,
-    np_to_pil,
-    pil_to_np,
-    save_image,
-)
+from transformation_portal.utils.image_utils import load_image, np_to_pil, pil_to_np, save_image
 
 # Optional Real-ESRGAN status (already set during import attempt above)
 # Keep backward compatibility with existing code that checks _HAS_REALESRGAN

@@ -315,9 +315,7 @@ class IPAdapterStyleTransfer:
         Returns:
             Styled image
         """
-        from transformation_portal.style_transfer.style_presets import (
-            ArchitecturalStylePresets,
-        )
+        from transformation_portal.style_transfer.style_presets import ArchitecturalStylePresets
 
         logger.info(f"Applying preset style: {preset}")
 

@@ -684,9 +684,7 @@ class UnifiedLuxuryPipeline:
         # Lazy load depth pipeline
         if self._depth_pipeline is None:
             try:
-                from transformation_portal.depth.pipeline import (
-                    ArchitecturalDepthPipeline,
-                )
+                from transformation_portal.depth.pipeline import ArchitecturalDepthPipeline
 
                 model_size = params.get("depth_model_size", "small")
                 config_map = {

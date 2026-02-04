@@ -183,10 +183,7 @@ def validate_recipe(
         raise typer.Exit(code=1)
 
     try:
-        from transformation_portal.config_loader import (
-            get_recipe_info,
-            load_recipe,
-        )
+        from transformation_portal.config_loader import get_recipe_info, load_recipe
         from transformation_portal.config_loader import validate_recipe as validate
 
         # Load the recipe
@@ -245,10 +242,7 @@ def info():
 
     # Check pipeline availability
     try:
-        from transformation_portal.pipeline_unified import (
-            HAS_4K_PIPELINE,
-            HAS_QUALITY_BRIDGE,
-        )
+        from transformation_portal.pipeline_unified import HAS_4K_PIPELINE, HAS_QUALITY_BRIDGE
 
         typer.echo("\nPipeline Features:")
         typer.echo(f"  {'✅' if HAS_QUALITY_BRIDGE else '⚠️ '} RAG Quality Feedback")

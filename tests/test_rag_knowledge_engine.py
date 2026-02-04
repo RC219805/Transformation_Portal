@@ -11,9 +11,7 @@ import pytest
 agents_path = Path(__file__).parent.parent / ".github" / "agents"
 sys.path.insert(0, str(agents_path))
 
-from rag_system.knowledge_engine import (  # noqa: E402
-    KnowledgeIntegrationEngine,
-)
+from rag_system.knowledge_engine import KnowledgeIntegrationEngine  # noqa: E402
 
 
 @pytest.fixture

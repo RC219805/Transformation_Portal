@@ -8,13 +8,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Type
 
-from .interface import (
-    DepthModelPlugin,
-    EnhancerPlugin,
-    PluginInterface,
-    PluginType,
-    ProcessorPlugin,
-)
+from .interface import DepthModelPlugin, EnhancerPlugin, PluginInterface, PluginType, ProcessorPlugin
 from .loader import LoadedPlugin, PluginManifest
 
 logger = logging.getLogger(__name__)

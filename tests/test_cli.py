@@ -14,12 +14,7 @@ class TestCLIImport:
 
     def test_cli_module_imports(self):
         """Test that CLI module can be imported."""
-        from transformation_portal.cli import (
-            analyze_cli,
-            main,
-            process_cli,
-            render_cli,
-        )
+        from transformation_portal.cli import analyze_cli, main, process_cli, render_cli
 
         # Verify functions are callable
         assert callable(render_cli)
@@ -29,12 +24,7 @@ class TestCLIImport:
 
     def test_cli_apps_exist(self):
         """Test that CLI apps are defined."""
-        from transformation_portal.cli import (
-            analyze_app,
-            app,
-            process_app,
-            render_app,
-        )
+        from transformation_portal.cli import analyze_app, app, process_app, render_app
 
         # Verify apps are typer instances
         assert app is not None

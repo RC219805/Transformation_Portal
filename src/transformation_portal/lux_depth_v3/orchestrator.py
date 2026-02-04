@@ -63,11 +63,7 @@ from .manifest import (
 from .pbr import generate_pbr_maps
 from .pbr_writer import write_pbr_maps
 from .postprocessing import Postprocessor
-from .security import (
-    HashMode,
-    sanitize_file_stem,
-    sanitize_path_component_nonlossy,
-)
+from .security import HashMode, sanitize_file_stem, sanitize_path_component_nonlossy
 from .v2_runner import V2Runner, find_v2_report
 
 logger = logging.getLogger(__name__)

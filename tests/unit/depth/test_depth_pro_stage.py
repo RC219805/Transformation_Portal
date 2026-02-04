@@ -8,10 +8,7 @@ import pytest
 from PIL import Image
 
 from transformation_portal.stage_graph.stage import StageContext, StageStatus
-from transformation_portal.stage_graph.stages.depth_pro import (
-    CheckpointValidationError,
-    DepthProStage,
-)
+from transformation_portal.stage_graph.stages.depth_pro import CheckpointValidationError, DepthProStage
 
 
 @pytest.mark.unit

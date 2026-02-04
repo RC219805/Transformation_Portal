@@ -7,12 +7,7 @@ import pytest
 pytestmark = pytest.mark.skip(reason="holographic_node is deprecated and in archive")
 
 try:
-    from archive.deprecated.holographic_node import (
-        EntanglementField,
-        GlobalSystemState,
-        HolographicNode,
-        Superposition,
-    )
+    from archive.deprecated.holographic_node import EntanglementField, GlobalSystemState, HolographicNode, Superposition
 except ImportError:
     pass
 

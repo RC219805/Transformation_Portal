@@ -19,10 +19,7 @@ from typing import Dict, Optional, Tuple
 
 import numpy as np
 
-from transformation_portal.atmosphere.atmospheric_model import (
-    AtmosphericParameters,
-    MarineLayerParameters,
-)
+from transformation_portal.atmosphere.atmospheric_model import AtmosphericParameters, MarineLayerParameters
 from transformation_portal.atmosphere.skygan_generator import SkyParameters
 
 logger = logging.getLogger(__name__)

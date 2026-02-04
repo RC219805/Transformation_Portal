@@ -305,9 +305,7 @@ class DepthAnythingV2Model:
 
     def _download_onnx_model(self) -> Path:
         """Download ONNX model from HuggingFace Hub."""
-        from huggingface_hub import (  # pylint: disable=import-outside-toplevel
-            hf_hub_download,
-        )
+        from huggingface_hub import hf_hub_download  # pylint: disable=import-outside-toplevel
 
         # Depth Anything V2 ONNX models are available from various sources
         onnx_repo = "onnx/Depth-Anything-V2"
@@ -351,9 +349,7 @@ class DepthAnythingV2Model:
 
     def _download_coreml_model(self) -> Path:
         """Download CoreML model from HuggingFace Hub."""
-        from huggingface_hub import (  # pylint: disable=import-outside-toplevel
-            hf_hub_download,
-        )
+        from huggingface_hub import hf_hub_download  # pylint: disable=import-outside-toplevel
 
         # Map variant to CoreML repo
         coreml_variant = {

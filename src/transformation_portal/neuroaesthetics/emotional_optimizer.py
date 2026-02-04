@@ -32,18 +32,9 @@ from typing import Any, Dict, List, Tuple, Union
 import numpy as np
 from PIL import Image
 
-from transformation_portal.neuroaesthetics.color_harmony import (
-    ColorHarmonyAnalyzer,
-    HarmonyAnalysis,
-)
-from transformation_portal.neuroaesthetics.golden_ratio import (
-    GoldenRatioAnalysis,
-    GoldenRatioAnalyzer,
-)
-from transformation_portal.neuroaesthetics.spatial_frequency import (
-    SpatialFrequencyAnalysis,
-    SpatialFrequencyAnalyzer,
-)
+from transformation_portal.neuroaesthetics.color_harmony import ColorHarmonyAnalyzer, HarmonyAnalysis
+from transformation_portal.neuroaesthetics.golden_ratio import GoldenRatioAnalysis, GoldenRatioAnalyzer
+from transformation_portal.neuroaesthetics.spatial_frequency import SpatialFrequencyAnalysis, SpatialFrequencyAnalyzer
 
 logger = logging.getLogger(__name__)
 

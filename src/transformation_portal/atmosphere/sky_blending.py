@@ -19,15 +19,8 @@ from typing import Optional, Tuple, Union
 import cv2
 import numpy as np
 
-from transformation_portal.atmosphere.atmospheric_model import (
-    AtmosphericModel,
-    AtmosphericParameters,
-    MarineLayerParameters,
-)
-from transformation_portal.atmosphere.skygan_generator import (
-    SkyGANGenerator,
-    SkyParameters,
-)
+from transformation_portal.atmosphere.atmospheric_model import AtmosphericModel, AtmosphericParameters, MarineLayerParameters
+from transformation_portal.atmosphere.skygan_generator import SkyGANGenerator, SkyParameters
 
 logger = logging.getLogger(__name__)
 
