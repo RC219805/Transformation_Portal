@@ -35,9 +35,22 @@
 ### Implementation
 
 **Actions Taken:**
-1. Renamed `python-app.yml` to `python-app.yml.disabled`
+1. Moved `python-app.yml` to `.github/workflows-disabled/python-app.yml` (out of active workflows directory to prevent scanner/parser interference)
 2. Updated branch protection to ensure only build.yml is required
 3. Documented removal in this ADR
+
+**Test PyPI Publish Decision:**
+
+The removed `python-app.yml` included automatic Test PyPI publishing on pushes to main. This behavior has been **intentionally removed** for the following reasons:
+
+1. Test PyPI publishes should be **manual and deliberate** (via `workflow_dispatch` or release tags)
+2. Automatic publishes on every main push create noise and version number exhaustion
+3. Release validation should happen through explicit release workflow, not automatic publishes
+
+**If automatic Test PyPI publishes are needed in the future**, add a dedicated `publish-testpypi.yml` workflow with:
+- Trigger: `workflow_dispatch` only (manual)
+- Target: Test PyPI with `TEST_PYPI_API_TOKEN`
+- Concurrency control to prevent overlapping publishes
 
 **CI Impact:**
 - Before: 2 workflow runs per PR (build + python-app)
@@ -51,14 +64,16 @@ ls .github/workflows/*.yml
 
 # Confirm build.yml is required check
 gh api repos/:owner/:repo/branches/main/protection/required_status_checks
+
+# Confirm disabled workflow is isolated
+ls .github/workflows-disabled/
 ```
 
 ### Rollback Plan
 
 If issues arise:
 ```bash
-cd .github/workflows
-mv python-app.yml.disabled python-app.yml
+mv .github/workflows-disabled/python-app.yml .github/workflows/python-app.yml
 git commit -m "Rollback: Re-enable python-app.yml"
 ```
 
