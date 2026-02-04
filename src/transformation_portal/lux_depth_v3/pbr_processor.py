@@ -3,8 +3,10 @@
 This module provides a clean, standalone API for PBR map generation
 that doesn't require the full EnhanceOrchestrator pipeline.
 
-Usage:
-    # From cached depth
+Usage
+-----
+From cached depth::
+
     from transformation_portal.lux_depth_v3 import PBRProcessor, get_preset
 
     config = get_preset("premium").to_pbr_config()
@@ -15,7 +17,8 @@ Usage:
         base_name="scene1"
     )
 
-    # From depth array
+From depth array::
+
     processor = PBRProcessor(config=config, output_dir="output/pbr/")
     maps = processor.from_depth(depth_array, save=True, base_name="scene1")
 """

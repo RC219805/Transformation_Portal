@@ -2,21 +2,28 @@
 
 This module defines the protocol (interface) that all depth model backends
 must implement. This enables:
+
 - Hot-swappable backends without changing downstream code
 - License-aware routing
 - Consistent provenance tracking
 - Circuit breaker patterns for fallback
 
 Protocol Version: 1.0.0
+
 Compatible with: v2.0.0 Golden Path
 
-Example:
-    >>> from transformation_portal.lux_depth_v3.protocols import DepthModel, BackendRole
-    >>> class MyDepthBackend(DepthModel):
-    ...     def load(self, device: str, weights_path: Optional[Path]) -> None:
-    ...         ...
-    ...     def predict(self, image: np.ndarray) -> DepthArtifact:
-    ...         ...
+Example
+-------
+::
+
+    from transformation_portal.lux_depth_v3.protocols import DepthModel, BackendRole
+
+    class MyDepthBackend(DepthModel):
+        def load(self, device: str, weights_path: Optional[Path]) -> None:
+            ...
+
+        def predict(self, image: np.ndarray) -> DepthArtifact:
+            ...
 """
 
 from __future__ import annotations
@@ -109,11 +116,14 @@ class DepthModel(Protocol):
     3. **info**: Backend metadata for routing decisions
 
     Optional methods:
+
     - **stream_video()**: Temporal-consistent video inference
     - **predict_batch()**: Batch inference for throughput
 
-    Example Implementation:
-        ```python
+    Example Implementation
+    ----------------------
+    ::
+
         class DA3ProductionBackend:
             @property
             def info(self) -> BackendInfo:
@@ -134,7 +144,6 @@ class DepthModel(Protocol):
 
             def predict(self, image: np.ndarray) -> DepthArtifact:
                 # Run inference and return DepthArtifact...
-        ```
     """
 
     @property
