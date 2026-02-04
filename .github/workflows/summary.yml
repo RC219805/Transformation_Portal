@@ -9,8 +9,9 @@ on:
 
 # Concurrency control: Cancel outdated runs on new events for the same issue/PR
 # This reduces CI minutes and API costs by only processing the latest state
+# Uses github.event.number which works across all event types (issues, PRs, comments, reviews)
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.event.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
