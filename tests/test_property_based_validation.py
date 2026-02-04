@@ -13,15 +13,16 @@ import pytest
 try:
     from hypothesis import given
     from hypothesis import strategies as st
+    from transformation_portal.lux_depth_v3.config import EnhanceConfig
 
     HYPOTHESIS_AVAILABLE = True
 except ImportError:
     HYPOTHESIS_AVAILABLE = False
     pytestmark = pytest.mark.skip("Hypothesis not installed")
-
-
-if HYPOTHESIS_AVAILABLE:
-    from transformation_portal.lux_depth_v3.config import EnhanceConfig
+    # Define dummy for pylint
+    given = None  # type: ignore
+    st = None  # type: ignore
+    EnhanceConfig = None  # type: ignore
 
 
 # =============================================================================
