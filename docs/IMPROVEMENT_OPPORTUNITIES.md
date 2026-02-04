@@ -1,7 +1,7 @@
 # Transformation Portal: Improvement Opportunities
 
-**Document Version:** 1.0.0  
-**Date:** February 2026  
+**Document Version:** 1.0.0
+**Date:** February 2026
 **Status:** Active Recommendations
 
 This document identifies improvement opportunities across all sectors of the Transformation Portal repository, with risk/reward analysis for each recommendation.
@@ -49,7 +49,8 @@ result = subprocess.run(["flake8", file_path], capture_output=True, text=True, c
 
 | Aspect | Assessment |
 |--------|------------|
-| **Risk Level** | Critical |
+| **Issue Severity** | Critical |
+| **Implementation Risk** | Low |
 | **Effort** | Low (15 minutes) |
 | **Reward** | Eliminates command injection vulnerability |
 | **Breaking Change** | No |
@@ -58,7 +59,7 @@ result = subprocess.run(["flake8", file_path], capture_output=True, text=True, c
 
 ### SEC-002: Implement Input Validation for Config Loader [HIGH]
 
-**Location:** `src/transformation_portal/config_loader.py:29`
+**Location:** `src/transformation_portal/config_loader.py:_expand_env_vars`
 
 **Issue:** Environment variable expansion uses `${VAR_NAME}` pattern without output sanitization. While this is low-risk for internal config files, malicious config files could potentially inject values.
 
@@ -76,7 +77,8 @@ def _expand_env_vars(value: str) -> str:
 
 | Aspect | Assessment |
 |--------|------------|
-| **Risk Level** | High |
+| **Issue Severity** | High |
+| **Implementation Risk** | Low |
 | **Effort** | Medium (1-2 hours) |
 | **Reward** | Defense-in-depth for config loading |
 | **Breaking Change** | No |
@@ -98,7 +100,8 @@ def verify_dependency_integrity():
 
 | Aspect | Assessment |
 |--------|------------|
-| **Risk Level** | Low |
+| **Issue Severity** | Medium |
+| **Implementation Risk** | Low |
 | **Effort** | Medium (2-4 hours) |
 | **Reward** | Supply chain attack protection |
 | **Breaking Change** | No |
@@ -150,7 +153,8 @@ def mock_config():
 
 | Aspect | Assessment |
 |--------|------------|
-| **Risk Level** | None |
+| **Issue Severity** | Low |
+| **Implementation Risk** | Low |
 | **Effort** | Medium (4-6 hours) |
 | **Reward** | Reduced test duplication, consistent test behavior |
 | **Breaking Change** | No |
@@ -163,12 +167,12 @@ def mock_config():
 
 | Module | Path | Lines of Code | Test Status |
 |--------|------|---------------|-------------|
-| enhancers/ | `src/transformation_portal/enhancers/` | ~500 | ❌ No tests |
+| enhancers/ | `src/transformation_portal/enhancers/` | ~500 | ⚠️ Partial (aerial/board enhancers tested) |
 | rendering/ | `src/transformation_portal/rendering/` | ~800 | ⚠️ Partial |
 | comfyui/ | `src/transformation_portal/comfyui/` | ~300 | ❌ No tests |
-| scene_types.py | `src/transformation_portal/` | ~100 | ❌ No tests |
-| config_loader.py | `src/transformation_portal/` | ~150 | ❌ No tests |
-| pipeline_unified.py | `src/transformation_portal/` | ~200 | ❌ No tests |
+| scene_types.py | `src/transformation_portal/` | 185 | ❌ No tests |
+| config_loader.py | `src/transformation_portal/` | 385 | ❌ No tests |
+| pipeline_unified.py | `src/transformation_portal/` | 1,077 | ❌ No tests |
 
 **Recommendation:** Prioritize tests by usage frequency:
 1. `config_loader.py` - Core functionality, high usage
@@ -178,7 +182,8 @@ def mock_config():
 
 | Aspect | Assessment |
 |--------|------------|
-| **Risk Level** | None |
+| **Issue Severity** | Medium |
+| **Implementation Risk** | Low |
 | **Effort** | High (8-16 hours) |
 | **Reward** | 15-20% coverage increase, regression protection |
 | **Breaking Change** | No |
@@ -191,7 +196,7 @@ def mock_config():
 
 **Issue:** 29 tests are disabled by default, requiring `TP_RUN_HF_MODEL_TESTS=1`. While appropriate for CI, local development misses these tests.
 
-**Recommendation:** 
+**Recommendation:**
 1. Add `make test-integration` target to Makefile
 2. Document integration test requirements clearly
 3. Add CI job for weekly integration tests with real models
@@ -205,7 +210,8 @@ test-integration:
 
 | Aspect | Assessment |
 |--------|------------|
-| **Risk Level** | None |
+| **Issue Severity** | Low |
+| **Implementation Risk** | Low |
 | **Effort** | Low (1 hour) |
 | **Reward** | Better integration test visibility |
 | **Breaking Change** | No |
@@ -236,7 +242,8 @@ def test_normalize_roundtrip(value):
 
 | Aspect | Assessment |
 |--------|------------|
-| **Risk Level** | None |
+| **Issue Severity** | Low |
+| **Implementation Risk** | Low |
 | **Effort** | Medium (4-8 hours) |
 | **Reward** | Edge case detection, mathematical correctness |
 | **Breaking Change** | No |
@@ -261,7 +268,8 @@ def test_depth_estimation_golden(golden_fixtures):
 
 | Aspect | Assessment |
 |--------|------------|
-| **Risk Level** | Low |
+| **Issue Severity** | Low |
+| **Implementation Risk** | Low |
 | **Effort** | Medium (4-6 hours) |
 | **Reward** | Detect visual/numerical regressions |
 | **Breaking Change** | No |
@@ -287,7 +295,8 @@ cProfile.run('process_with_preset("draft")', 'draft_profile.stats')
 
 | Aspect | Assessment |
 |--------|------------|
-| **Risk Level** | Low |
+| **Issue Severity** | Low |
+| **Implementation Risk** | Low |
 | **Effort** | Medium (2-4 hours to diagnose) |
 | **Reward** | Improved UX for draft previews |
 | **Breaking Change** | No |
@@ -319,7 +328,8 @@ def from_yaml(cls, path: Path) -> "CanonicalConfig":
 
 | Aspect | Assessment |
 |--------|------------|
-| **Risk Level** | Low |
+| **Issue Severity** | Low |
+| **Implementation Risk** | Low |
 | **Effort** | Medium (2-4 hours) |
 | **Reward** | Better developer experience, pipeline portability |
 | **Breaking Change** | No (additive) |
@@ -348,7 +358,8 @@ def estimate_depth_batch(images: List[np.ndarray], batch_size: int = 8) -> List[
 
 | Aspect | Assessment |
 |--------|------------|
-| **Risk Level** | Medium (numerical precision) |
+| **Issue Severity** | Medium |
+| **Implementation Risk** | Medium (numerical precision) |
 | **Effort** | High (8-12 hours) |
 | **Reward** | 2-3x throughput for batch processing |
 | **Breaking Change** | No (new API) |
@@ -373,7 +384,8 @@ except ImportError:
 
 | Aspect | Assessment |
 |--------|------------|
-| **Risk Level** | Low |
+| **Issue Severity** | Low |
+| **Implementation Risk** | Low |
 | **Effort** | Low (1 hour) |
 | **Reward** | 5x faster hashing for skip detection |
 | **Breaking Change** | Optional (add xxhash to base dependencies) |
@@ -399,7 +411,8 @@ def get_model():
 
 | Aspect | Assessment |
 |--------|------------|
-| **Risk Level** | Low |
+| **Issue Severity** | Low |
+| **Implementation Risk** | Low |
 | **Effort** | Medium (2-4 hours) |
 | **Reward** | Faster CLI startup, reduced memory for unused features |
 | **Breaking Change** | No |
@@ -418,7 +431,7 @@ def get_model():
 - Multiple `QUALITY_CONTROL_*.md` variants
 - Historical session logs mixed with active docs
 
-**Recommendation:** 
+**Recommendation:**
 1. Archive session logs to `docs/archive/sessions/`
 2. Merge duplicate pipeline docs into single canonical versions
 3. Create clear documentation hierarchy:
@@ -433,7 +446,8 @@ def get_model():
 
 | Aspect | Assessment |
 |--------|------------|
-| **Risk Level** | Low |
+| **Issue Severity** | Low |
+| **Implementation Risk** | Medium (link breakage) |
 | **Effort** | High (8-16 hours) |
 | **Reward** | Better developer experience, easier maintenance |
 | **Breaking Change** | Documentation links may break |
@@ -455,7 +469,8 @@ sphinx-apidoc -o docs/api/reference src/transformation_portal
 
 | Aspect | Assessment |
 |--------|------------|
-| **Risk Level** | None |
+| **Issue Severity** | Low |
+| **Implementation Risk** | Low |
 | **Effort** | Medium (4-6 hours) |
 | **Reward** | Programmatic usage becomes accessible |
 | **Breaking Change** | No |
@@ -482,15 +497,15 @@ def enhance_batch(
     parallel: bool = True,
 ) -> BatchResult:
     """Enhance a batch of images with depth-aware processing.
-    
+
     Args:
         inputs: List of input image paths.
         output_dir: Directory for output files.
         parallel: Enable parallel processing (default: True).
-        
+
     Returns:
         BatchResult with success/failure counts and timing metrics.
-        
+
     Raises:
         ValidationError: If inputs are invalid or inaccessible.
         ResourceError: If insufficient memory or disk space.
@@ -499,7 +514,8 @@ def enhance_batch(
 
 | Aspect | Assessment |
 |--------|------------|
-| **Risk Level** | None |
+| **Issue Severity** | Low |
+| **Implementation Risk** | Low |
 | **Effort** | Medium (2-4 hours) |
 | **Reward** | IDE support, API clarity |
 | **Breaking Change** | No |
@@ -520,7 +536,8 @@ def enhance_batch(
 
 | Aspect | Assessment |
 |--------|------------|
-| **Risk Level** | None |
+| **Issue Severity** | Low |
+| **Implementation Risk** | Low |
 | **Effort** | Low (1-2 hours) |
 | **Reward** | Better onboarding experience |
 | **Breaking Change** | No |
@@ -551,7 +568,8 @@ def enhance_batch(
 
 | Aspect | Assessment |
 |--------|------------|
-| **Risk Level** | Medium (workflow migration) |
+| **Issue Severity** | Medium |
+| **Implementation Risk** | Medium (workflow migration) |
 | **Effort** | High (8-16 hours) |
 | **Reward** | Faster CI, easier maintenance, cost reduction |
 | **Breaking Change** | Branch protection rules may need updating |
@@ -577,7 +595,8 @@ def enhance_batch(
 
 | Aspect | Assessment |
 |--------|------------|
-| **Risk Level** | None |
+| **Issue Severity** | Low |
+| **Implementation Risk** | Low |
 | **Effort** | Low (30 minutes) |
 | **Reward** | 2-5 minute reduction per run |
 | **Breaking Change** | No |
@@ -599,7 +618,8 @@ concurrency:
 
 | Aspect | Assessment |
 |--------|------------|
-| **Risk Level** | None |
+| **Issue Severity** | Low |
+| **Implementation Risk** | Low |
 | **Effort** | Low (15 minutes) |
 | **Reward** | Reduced CI minutes, faster feedback |
 | **Breaking Change** | No |
@@ -619,35 +639,36 @@ concurrency:
 @classmethod
 def from_yaml(cls, path: Path) -> "CanonicalConfig":
     """Load canonical configuration from YAML file.
-    
+
     Args:
         path: Path to YAML configuration file.
-        
+
     Returns:
         Populated CanonicalConfig instance.
-        
+
     Raises:
         ConfigurationError: If YAML is invalid or missing required fields.
     """
     import yaml
     from transformation_portal.utils.security import validate_filepath
-    
+
     validate_filepath(path)
     with open(path) as f:
         data = yaml.safe_load(f)
-    
+
     # Validate required fields
     required = ["model", "preset"]
     for field in required:
         if field not in data:
             raise ConfigurationError(f"Missing required field: {field}")
-    
+
     return cls(**data)
 ```
 
 | Aspect | Assessment |
 |--------|------------|
-| **Risk Level** | Low |
+| **Issue Severity** | Low |
+| **Implementation Risk** | Low |
 | **Effort** | Medium (2-4 hours) |
 | **Reward** | Declarative configuration, better tooling support |
 | **Breaking Change** | No (additive) |
@@ -687,12 +708,13 @@ def from_yaml(cls, path: Path) -> "CanonicalConfig":
 
 ## Risk/Reward Summary
 
+**Note:** "Issue Severity" reflects the risk of *not* addressing the recommendation. "Implementation Risk" reflects the risk of *making* the change.
+
 ```
-Risk Distribution:
+Implementation Risk Distribution:
 ┌─────────────────────────────────────────────────────────────┐
-│ None       ████████████████████ 14 recommendations (67%)    │
-│ Low        █████████ 5 recommendations (24%)                │
-│ Medium     ██ 2 recommendations (9%)                        │
+│ Low        ███████████████████████ 19 recommendations (90%) │
+│ Medium     ██ 2 recommendations (10%)                       │
 │ High       0 recommendations (0%)                           │
 └─────────────────────────────────────────────────────────────┘
 
