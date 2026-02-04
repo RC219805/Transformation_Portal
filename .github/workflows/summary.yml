@@ -7,6 +7,12 @@ on:
   issues:
     types: [opened, edited]
 
+# Concurrency control: Cancel outdated runs on new events for the same issue/PR
+# This reduces CI minutes and API costs by only processing the latest state
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   summarize:
     runs-on: ubuntu-latest

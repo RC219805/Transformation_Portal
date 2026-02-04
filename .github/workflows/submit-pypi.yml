@@ -12,6 +12,13 @@ on:
         default: false
         type: boolean
 
+# Concurrency control: Prevent multiple simultaneous releases
+# Only one release should be processed at a time to avoid conflicts
+# Note: cancel-in-progress is false for release workflows to ensure completion
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     name: Build distribution packages
