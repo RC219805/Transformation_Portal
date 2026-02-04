@@ -91,6 +91,7 @@ class TestEnhanceBatch:
         )
 
         import numpy as np
+
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
 
@@ -142,7 +143,7 @@ class TestEnhanceBatch:
 
                 # Run batch processing
                 try:
-                    results = orchestrator.enhance_batch(batch_batch_temp_workspace["input_dir"])
+                    results = orchestrator.enhance_batch(temp_workspace["input_dir"])
 
                     # Verify results structure
                     assert isinstance(results, list)
@@ -195,6 +196,7 @@ class TestEnhanceBatch:
         )
 
         import numpy as np
+
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
 
@@ -253,6 +255,7 @@ class TestEnhanceBatch:
         )
 
         import numpy as np
+
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
 

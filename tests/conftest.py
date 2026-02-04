@@ -29,7 +29,6 @@ import numpy as np
 import pytest
 from PIL import Image
 
-
 # =============================================================================
 # TIER 1: Pure Fixtures (no IO, no heavy deps)
 # =============================================================================
@@ -163,16 +162,23 @@ def sample_yaml_config(temp_workspace, sample_config_dict) -> Path:
 @pytest.fixture
 def transformers_offline():
     """Set environment for offline transformers testing."""
-    old_val = os.environ.get("TRANSFORMERS_OFFLINE")
+    old_transformers = os.environ.get("TRANSFORMERS_OFFLINE")
+    old_hf = os.environ.get("HF_HUB_OFFLINE")
+
     os.environ["TRANSFORMERS_OFFLINE"] = "1"
     os.environ["HF_HUB_OFFLINE"] = "1"
+
     yield
-    if old_val is None:
+
+    if old_transformers is None:
         os.environ.pop("TRANSFORMERS_OFFLINE", None)
+    else:
+        os.environ["TRANSFORMERS_OFFLINE"] = old_transformers
+
+    if old_hf is None:
         os.environ.pop("HF_HUB_OFFLINE", None)
     else:
-        os.environ["TRANSFORMERS_OFFLINE"] = old_val
-        os.environ["HF_HUB_OFFLINE"] = old_val
+        os.environ["HF_HUB_OFFLINE"] = old_hf
 
 
 @pytest.fixture
