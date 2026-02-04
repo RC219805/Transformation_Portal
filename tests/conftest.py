@@ -102,7 +102,7 @@ def temp_workspace(tmp_path: Path) -> dict[str, Path]:
 
 
 @pytest.fixture
-def sample_rgb_image(deterministic_rng) -> np.ndarray:
+def sample_rgb_image(deterministic_rng) -> np.ndarray:  # pylint: disable=redefined-outer-name
     """Create small deterministic RGB image (100x100x3, uint8)."""
     arr = (deterministic_rng.random((100, 100, 3)) * 255).astype(np.uint8)
     return arr
