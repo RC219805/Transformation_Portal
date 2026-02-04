@@ -76,3 +76,15 @@ __all__ = [
     "get_lux_render_pipeline",
     "get_material_response",
 ]
+
+# Expose submodules for Sphinx autodoc
+# This allows `transformation_portal.config_loader` to be imported
+from . import config_loader
+from . import scene_types
+from . import cli
+from . import lux_depth_v3
+from . import metrics
+from . import enhancers
+from . import rendering
+from . import interfaces
+from . import utils
