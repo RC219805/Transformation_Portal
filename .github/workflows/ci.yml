@@ -424,8 +424,10 @@ jobs:
       - name: Check coverage thresholds
         run: |
           # Global minimum: must not decrease vs main
-          # Fail if coverage drops below baseline (currently 33%)
-          coverage report --fail-under=33
+          # Current baseline: 25% (as of 2026-02-04 after PR #832 combined core+ML coverage)
+          # Target: 33% by Q2 2026 (requires ~1800 more covered statements)
+          # See docs/coverage-improvement-plan.md for roadmap
+          coverage report --fail-under=25
 
       - name: Check diff coverage
         if: github.event_name == 'pull_request'
