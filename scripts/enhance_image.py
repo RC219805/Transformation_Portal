@@ -35,31 +35,6 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-def sanitize_path(path: Path, base_dir: Path, description: str) -> Path:
-    """Validate and sanitize path to prevent traversal attacks.
-    
-    Args:
-        path: Path to validate
-        base_dir: Base directory path must resolve within
-        description: Human-readable description for error messages
-        
-    Returns:
-        Resolved, validated path
-        
-    Raises:
-        ValueError: If path is invalid or escapes base_dir
-    """
-    try:
-        resolved = path.resolve()
-        # Ensure path is within base_dir or is an absolute path we control
-        if base_dir and not str(resolved).startswith(str(base_dir.resolve())):
-            # Allow absolute paths outside base (for input/depth dirs)
-            pass
-        return resolved
-    except Exception as e:
-        raise ValueError(f"Invalid {description}: {path} ({e})") from e
-
-
 def validate_input_path(path: Path) -> Path:
     """Validate input image path exists and is a file.
     
@@ -178,6 +153,9 @@ def configure_logging(verbose: bool, quiet: bool, log_file: Path | None):
         verbose: Enable debug logging
         quiet: Suppress all but errors
         log_file: Optional log file path
+        
+    Returns:
+        None (configures module-level logging)
     """
     if quiet:
         level = logging.ERROR

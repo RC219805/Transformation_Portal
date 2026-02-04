@@ -198,7 +198,7 @@ def main(
     enable_apple_license = _parse_bool_flag(accept_apple_depth_pro_research_license)
 
     # Parse V2 preset (convert "none" string to None for skipping V2)
-    v2_preset_value = None if v2_preset and v2_preset.lower() == "none" else v2_preset
+    v2_preset_value = None if v2_preset.lower() == "none" else v2_preset
 
     # Validate input directory
     if not input_dir.exists():
