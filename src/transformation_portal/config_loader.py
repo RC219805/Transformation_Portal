@@ -70,8 +70,8 @@ def _expand_env_vars(value: str) -> str:
             test_path = Path(expanded)
             
             # Check for excessive parent directory traversal
-            # More than 5 levels of "../" is suspicious
-            parent_count = str(expanded).count('..')
+            # Count '../' patterns (not just '..')
+            parent_count = expanded.count('../')
             if parent_count > 5:
                 logger.warning(
                     f"Config path contains excessive parent traversal (..): {expanded}"

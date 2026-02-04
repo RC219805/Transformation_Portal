@@ -21,24 +21,37 @@ def test_expand_env_vars_basic():
         del os.environ['TEST_VAR']
 
 
-def test_expand_env_vars_with_traversal():
+def test_expand_env_vars_with_traversal(caplog):
     """Test that path traversal in env vars is logged but not blocked."""
+    import logging
+    caplog.set_level(logging.WARNING)
+    
     os.environ['TEST_VAR'] = '../../../etc'
     try:
-        # Should expand but log warning
+        # Should expand
         result = _expand_env_vars('${TEST_VAR}/passwd')
         assert result == '../../../etc/passwd'
+        
+        # No warning should be logged since it's only 3 levels
+        assert len(caplog.records) == 0
     finally:
         del os.environ['TEST_VAR']
 
 
-def test_expand_env_vars_excessive_traversal():
+def test_expand_env_vars_excessive_traversal(caplog):
     """Test that excessive parent directory traversal is detected."""
+    import logging
+    caplog.set_level(logging.WARNING)
+    
     os.environ['TEST_VAR'] = '../../../../../../../../../../etc'
     try:
         # Should expand but log warning (>5 levels)
         result = _expand_env_vars('${TEST_VAR}/passwd')
         assert '../' in result
+        
+        # Verify warning was logged
+        assert len(caplog.records) > 0
+        assert 'excessive parent traversal' in caplog.text.lower()
     finally:
         del os.environ['TEST_VAR']
 
