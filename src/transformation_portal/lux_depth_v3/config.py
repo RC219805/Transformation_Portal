@@ -9,6 +9,13 @@ from enum import Enum
 from typing import Optional, Any
 from .security import HashMode
 
+# Check xxhash availability for default hasher selection
+try:
+    import xxhash
+    _XXHASH_AVAILABLE = True
+except ImportError:
+    _XXHASH_AVAILABLE = False
+
 
 class ModelVariant(Enum):
     """Depth Anything V3 model variants.
@@ -177,7 +184,7 @@ class EnhanceConfig:
     use_coreml_backend: bool = False  # CoreML ANE for Apple Silicon (5x depth inference, requires conversion)
     enable_pbr_gpu_batching: bool = False  # GPU-accelerated PBR map batching (30% speedup, opt-in)
     use_msgpack_manifests: bool = False  # MessagePack binary format (60% smaller, 3x faster, less readable)
-    use_xxhash: bool = False  # xxHash for output keys (5x faster than SHA-1, opt-in)
+    use_xxhash: bool = field(default_factory=lambda: _XXHASH_AVAILABLE)  # xxHash for output keys (5x faster than SHA-1, auto-enabled when available)
 
     # Float depth saving for high-precision PBR
     save_float_depth: bool = False
