@@ -48,7 +48,7 @@ def _expand_env_vars(value: str) -> str:
         >>> os.environ['HOME'] = '/home/user'
         >>> _expand_env_vars('${HOME}/config')
         '/home/user/config'
-    
+
     Note:
         This provides defense-in-depth validation for config files.
         Actual strict path validation should use validate_filepath
@@ -60,15 +60,17 @@ def _expand_env_vars(value: str) -> str:
         return os.environ.get(var_name, match.group(0))
 
     expanded = _ENV_VAR_PATTERN.sub(replace_var, value)
-    
+
     # Validate expanded values that look like paths
     # This provides defense-in-depth against malicious config files
-    if expanded != value and (os.path.sep in expanded or expanded.startswith(('.', '/'))):
+    if expanded != value and (
+        os.path.sep in expanded or "/" in expanded or expanded.startswith((".", "/"))
+    ):
         # Path-like expansion detected - check for suspicious patterns
         try:
             # Attempt to create a Path object to validate structure
             test_path = Path(expanded)
-            
+
             # Check for excessive parent directory traversal
             # Count '..' components in the path parts for cross-platform detection
             parent_count = sum(1 for part in test_path.parts if part == '..')
@@ -76,7 +78,7 @@ def _expand_env_vars(value: str) -> str:
                 logger.warning(
                     f"Config path contains excessive parent traversal (..): {expanded}"
                 )
-            
+
             # Verify path doesn't try to escape to sensitive system directories
             # when resolved (if it exists)
             if test_path.exists():
@@ -88,12 +90,12 @@ def _expand_env_vars(value: str) -> str:
                     logger.warning(
                         f"Config path resolves to sensitive system directory: {resolved}"
                     )
-                    
+
         except (OSError, RuntimeError, ValueError) as e:
             # Invalid path structure - log but don't block
             # The actual validation should happen when the path is used
             logger.debug(f"Config path validation warning for '{expanded}': {e}")
-    
+
     return expanded
 
 
