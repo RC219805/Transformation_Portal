@@ -286,38 +286,49 @@ class TestEnhanceBatch:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
 
-            orchestrator = EnhanceOrchestrator(
-                config=config,
-                output_root=tmpdir_path,
-            )
+            # Mock backend initialization BEFORE creating orchestrator
+            with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry") as mock_registry_class:
+                # Setup mock registry
+                mock_backend = Mock()
+                mock_backend.ensure_available.return_value = None
+                mock_backend.name = "da3"
+                
+                mock_registry = Mock()
+                mock_registry.get_backend.return_value = mock_backend
+                mock_registry_class.return_value = mock_registry
 
-            # Mock enhance_image to return controlled results
-            def mock_enhance_image(image_input, input_root=None):
-                return {
-                    "status": "ok",
-                    "image": str(image_input.path),
-                    "depth_path": "depth.png",
-                    "manifest": "manifest.json",
-                    "runtime_s": 2.5,
-                }
+                orchestrator = EnhanceOrchestrator(
+                    config=config,
+                    output_root=tmpdir_path,
+                )
 
-            with patch.object(orchestrator, "enhance_image", side_effect=mock_enhance_image):
-                orchestrator.enhance_batch(batch_temp_workspace["input_dir"])
+                # Mock enhance_image to return controlled results
+                def mock_enhance_image(image_input, input_root=None):
+                    return {
+                        "status": "ok",
+                        "image": str(image_input.path),
+                        "depth_path": "depth.png",
+                        "manifest": "manifest.json",
+                        "runtime_s": 2.5,
+                    }
 
-                # Check batch manifest was created
-                manifests_dir = tmpdir_path / "manifests"
-                if manifests_dir.exists():
-                    batch_manifests = list(manifests_dir.glob("batch_*.json"))
-                    if batch_manifests:
-                        import json
+                with patch.object(orchestrator, "enhance_image", side_effect=mock_enhance_image):
+                    orchestrator.enhance_batch(batch_temp_workspace["input_dir"])
 
-                        with open(batch_manifests[0]) as f:
-                            manifest = json.load(f)
+                    # Check batch manifest was created
+                    manifests_dir = tmpdir_path / "manifests"
+                    if manifests_dir.exists():
+                        batch_manifests = list(manifests_dir.glob("batch_*.json"))
+                        if batch_manifests:
+                            import json
 
-                        # Verify required fields
-                        assert "batch_id" in manifest
-                        assert "start_time" in manifest
-                        assert "end_time" in manifest
+                            with open(batch_manifests[0]) as f:
+                                manifest = json.load(f)
+
+                            # Verify required fields
+                            assert "batch_id" in manifest
+                            assert "start_time" in manifest
+                            assert "end_time" in manifest
                         assert "config" in manifest
                         assert "results" in manifest
                         assert "stats" in manifest
