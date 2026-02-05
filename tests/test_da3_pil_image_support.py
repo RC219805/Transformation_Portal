@@ -42,6 +42,12 @@ def _create_test_numpy_image(h: int = 64, w: int = 64, dtype=np.uint8) -> np.nda
         raise ValueError(f"Unsupported dtype: {dtype}")
 
 
+def _create_mock_depth(h: int = 64, w: int = 64) -> np.ndarray:
+    """Create a mock depth map with deterministic values."""
+    rng = np.random.default_rng(42)
+    return rng.random((h, w)).astype(np.float32)
+
+
 class TestPILImageSupport:
     """Test PIL.Image input support for DA3InferenceEngine."""
 
@@ -55,7 +61,7 @@ class TestPILImageSupport:
         engine = DA3InferenceEngine(config="cpu")
 
         # Create a mock depth result
-        mock_depth = np.random.rand(64, 64).astype(np.float32)
+        mock_depth = _create_mock_depth(64, 64)
         mock_result = {
             "depth": mock_depth,
             "depth_raw": mock_depth,
@@ -87,7 +93,7 @@ class TestPILImageSupport:
         engine = DA3InferenceEngine(config="cpu")
 
         # Create a mock depth result
-        mock_depth = np.random.rand(64, 64).astype(np.float32)
+        mock_depth = _create_mock_depth(64, 64)
         mock_result = {
             "depth": mock_depth,
             "depth_raw": mock_depth,
@@ -118,7 +124,7 @@ class TestPILImageSupport:
 
         engine = DA3InferenceEngine(config="cpu")
 
-        mock_depth = np.random.rand(64, 64).astype(np.float32)
+        mock_depth = _create_mock_depth(64, 64)
         mock_result = {
             "depth": mock_depth,
             "depth_raw": mock_depth,
@@ -149,7 +155,7 @@ class TestPILImageSupport:
 
         engine = DA3InferenceEngine(config="cpu")
 
-        mock_depth = np.random.rand(64, 64).astype(np.float32)
+        mock_depth = _create_mock_depth(64, 64)
         mock_result = {
             "depth": mock_depth,
             "depth_raw": mock_depth,
@@ -180,7 +186,7 @@ class TestPILImageSupport:
 
         engine = DA3InferenceEngine(config="cpu")
 
-        mock_depth = np.random.rand(64, 64).astype(np.float32)
+        mock_depth = _create_mock_depth(64, 64)
         mock_result = {
             "depth": mock_depth,
             "depth_raw": mock_depth,
@@ -212,7 +218,7 @@ class TestNumpyArrayBackwardCompatibility:
 
         engine = DA3InferenceEngine(config="cpu")
 
-        mock_depth = np.random.rand(64, 64).astype(np.float32)
+        mock_depth = _create_mock_depth(64, 64)
         mock_result = {
             "depth": mock_depth,
             "depth_raw": mock_depth,
@@ -238,7 +244,7 @@ class TestNumpyArrayBackwardCompatibility:
 
         engine = DA3InferenceEngine(config="cpu")
 
-        mock_depth = np.random.rand(64, 64).astype(np.float32)
+        mock_depth = _create_mock_depth(64, 64)
         mock_result = {
             "depth": mock_depth,
             "depth_raw": mock_depth,
@@ -307,7 +313,7 @@ class TestCoreMLPathNormalization:
         from transformation_portal.lux_depth_v3.inference import ModelBackend
         engine.backend = ModelBackend.COREML
 
-        mock_depth = np.random.rand(64, 64).astype(np.float32)
+        mock_depth = _create_mock_depth(64, 64)
         mock_result = {
             "depth": mock_depth,
             "depth_raw": mock_depth,
