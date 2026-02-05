@@ -44,16 +44,17 @@ class TestV2ValidationFailFast:
                 return False
             return original_exists(self)
 
+        # Apply mock BEFORE orchestrator construction
         with patch("pathlib.Path.exists", mock_exists):
             # Should raise FileNotFoundError during initialization
             with pytest.raises(FileNotFoundError) as exc_info:
                 EnhanceOrchestrator(config=config, output_root=temp_output)
 
-            # Verify error message is helpful
-            error_msg = str(exc_info.value)
-            assert "scripts/enhance_image.py" in error_msg
-            assert "enable_v2=False" in error_msg or "v2_preset=None" in error_msg
-            assert "PBR-only" in error_msg
+        # Verify error message is helpful (check after context exits)
+        error_msg = str(exc_info.value)
+        assert "scripts/enhance_image.py" in error_msg
+        assert "enable_v2=False" in error_msg or "v2_preset=None" in error_msg
+        assert "PBR-only" in error_msg
 
     def test_v2_disabled_no_error_when_script_missing(self, temp_output):
         """Test V2 disabled allows initialization without script."""
@@ -104,7 +105,7 @@ class TestV2ConfigCombinations:
             with pytest.raises(FileNotFoundError) as exc_info:
                 EnhanceOrchestrator(config=config, output_root=temp_output)
 
-            assert "enhance_image.py" in str(exc_info.value)
+        assert "enhance_image.py" in str(exc_info.value)
 
     def test_pbr_only_config_no_v2_required(self, temp_output):
         """Test PBR-only config doesn't require V2 script."""
@@ -135,17 +136,17 @@ class TestV2ErrorMessages:
             with pytest.raises(FileNotFoundError) as exc_info:
                 EnhanceOrchestrator(config=config, output_root=temp_output)
 
-            error_msg = str(exc_info.value)
+        error_msg = str(exc_info.value)
 
-            # Should mention expected script location
-            assert "scripts/enhance_image.py" in error_msg
+        # Should mention expected script location
+        assert "scripts/enhance_image.py" in error_msg
 
-            # Should provide at least 2 solutions
-            solution_count = 0
-            if "enable_v2=False" in error_msg or "Set enable_v2=False" in error_msg:
-                solution_count += 1
-            if "v2_preset=None" in error_msg or "Set v2_preset=None" in error_msg:
-                solution_count += 1
+        # Should provide at least 2 solutions
+        solution_count = 0
+        if "enable_v2=False" in error_msg or "Set enable_v2=False" in error_msg:
+            solution_count += 1
+        if "v2_preset=None" in error_msg or "Set v2_preset=None" in error_msg:
+            solution_count += 1
         if "Create" in error_msg or "create" in error_msg:
             solution_count += 1
 
