@@ -44,7 +44,8 @@
 |-------|-------------------|--------|
 | **Pipeline Overview** | [docs/pipeline/README.md](docs/pipeline/README.md) | 🔄 Needs Update |
 | **PBR Processing** | [docs/PBR_PROCESSOR_QUICKSTART.md](docs/PBR_PROCESSOR_QUICKSTART.md) | ✅ Stable |
-| **Lux Depth V3** | [docs/LUX_DEPTH_V3_CLI_GUIDE.md](docs/LUX_DEPTH_V3_CLI_GUIDE.md) | ✅ Stable |
+| **Lux Depth V3 CLI** | [docs/LUX_DEPTH_V3_CLI_GUIDE.md](docs/LUX_DEPTH_V3_CLI_GUIDE.md) | ✅ Stable |
+| **Lux Depth V3 Troubleshooting** | [docs/LUX_DEPTH_V3_TROUBLESHOOTING.md](docs/LUX_DEPTH_V3_TROUBLESHOOTING.md) | ✅ Stable |
 | **Elite Pipeline** | [docs/ELITE_PIPELINE_GUIDE.md](docs/ELITE_PIPELINE_GUIDE.md) | ✅ Stable |
 
 ### Quick References

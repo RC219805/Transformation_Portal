@@ -411,16 +411,17 @@ class DA3InferenceEngine:
             self.device = "mps"
             self._load_pytorch_model()
 
-    def predict(self, image: Union[np.ndarray, Path, str, "ImageInput"]) -> DepthResult:
+    def predict(self, image: Union[np.ndarray, "Image.Image", Path, str, "ImageInput"]) -> DepthResult:
         """Run depth inference on an image (main API).
 
         Accepts multiple input types for flexibility:
-        - np.ndarray: Direct numpy array
+        - np.ndarray: Direct numpy array (HxWx3/HxWx4/HxW, uint8/uint16/float32/float64)
+        - PIL.Image.Image: PIL Image object (any mode)
         - Path/str: File path (delegates to infer_from_path)
         - ImageInput: Path wrapper from input_manager
 
         Args:
-            image: Input image (numpy array, path, or ImageInput)
+            image: Input image (numpy array, PIL Image, path, or ImageInput)
 
         Returns:
             DepthResult with depth map and metadata
@@ -441,41 +442,120 @@ class DA3InferenceEngine:
         if isinstance(image, (Path, str)):
             return self.infer_from_path(Path(image))
 
-        # Handle numpy array (main path)
-        if isinstance(image, np.ndarray):
+        # Handle PIL Image or numpy array
+        if isinstance(image, (np.ndarray, Image.Image)):
             return self.infer(image)
 
-        raise TypeError(f"Expected np.ndarray, Path, str, or ImageInput, got {type(image)}")
+        raise TypeError(f"Expected np.ndarray, PIL.Image, Path, str, or ImageInput, got {type(image)}")
 
-    def infer(self, image: np.ndarray) -> DepthResult:
+    def infer(self, image: Union[np.ndarray, "Image.Image"]) -> DepthResult:
         """Run depth inference on an image.
 
+        Accepts multiple input types for flexibility:
+        - np.ndarray: Direct numpy array (HxWx3/HxWx4/HxW, uint8/uint16/float32/float64)
+        - PIL.Image.Image: PIL Image object (any mode)
+
         Args:
-            image: Input image as numpy array (HxWx3)
+            image: Input image as numpy array or PIL Image
 
         Returns:
             DepthResult with depth map and metadata
+
+        Raises:
+            TypeError: If image type is not supported
+            ValueError: If array shape/dtype is invalid
         """
         # Lazy load model on first inference
         if not self._model_loaded:
             self._load_model()
 
-        # Convert numpy to PIL if needed
-        if isinstance(image, np.ndarray):
-            original_image = image.copy()
-            if image.dtype in (np.float32, np.float64):
-                pil_image = Image.fromarray((image * 255).astype(np.uint8))
+        # Normalize input to canonical uint8 RGB numpy + PIL Image
+        if isinstance(image, Image.Image):
+            # PIL Image input: convert to RGB (drop alpha, convert grayscale/palette)
+            pil_image = image.convert("RGB")
+            # Canonical original_image: uint8 RGB numpy
+            original_image = np.array(pil_image, dtype=np.uint8)
+
+        elif isinstance(image, np.ndarray):
+            # Validate shape
+            if image.ndim == 2:
+                # Grayscale HxW → RGB HxWx3
+                if image.dtype == np.uint8:
+                    gray = image
+                elif image.dtype in (np.float32, np.float64):
+                    gray = np.clip(image, 0, 1) * 255
+                    gray = gray.astype(np.uint8)
+                elif image.dtype == np.uint16:
+                    gray = (image / 256).astype(np.uint8)  # Scale 16-bit → 8-bit
+                else:
+                    raise ValueError(f"Unsupported grayscale dtype: {image.dtype}")
+
+                # Convert grayscale to RGB by repeating channel
+                rgb_uint8 = np.stack([gray, gray, gray], axis=-1)
+                pil_image = Image.fromarray(rgb_uint8, mode="RGB")
+                original_image = rgb_uint8
+
+            elif image.ndim == 3:
+                h, w, c = image.shape
+
+                if c == 3:
+                    # RGB
+                    if image.dtype == np.uint8:
+                        rgb_uint8 = image.copy()
+                    elif image.dtype in (np.float32, np.float64):
+                        # Clip and scale float [0,1] → uint8 [0,255]
+                        rgb_float = np.clip(image, 0, 1)
+                        rgb_uint8 = (rgb_float * 255).astype(np.uint8)
+                    elif image.dtype == np.uint16:
+                        # Scale 16-bit → 8-bit
+                        rgb_uint8 = (image / 256).astype(np.uint8)
+                    else:
+                        raise ValueError(f"Unsupported RGB dtype: {image.dtype}")
+
+                    pil_image = Image.fromarray(rgb_uint8, mode="RGB")
+                    original_image = rgb_uint8
+
+                elif c == 4:
+                    # RGBA → RGB (drop alpha channel explicitly)
+                    if image.dtype == np.uint8:
+                        rgba = image
+                    elif image.dtype in (np.float32, np.float64):
+                        rgba_float = np.clip(image, 0, 1)
+                        rgba = (rgba_float * 255).astype(np.uint8)
+                    elif image.dtype == np.uint16:
+                        rgba = (image / 256).astype(np.uint8)
+                    else:
+                        raise ValueError(f"Unsupported RGBA dtype: {image.dtype}")
+
+                    # Drop alpha channel
+                    rgb_uint8 = rgba[:, :, :3]
+                    pil_image = Image.fromarray(rgb_uint8, mode="RGB")
+                    original_image = rgb_uint8
+
+                else:
+                    raise ValueError(
+                        f"Expected 3 or 4 channels, got {c}. " f"Supported: HxWx3 (RGB), HxWx4 (RGBA), HxW (grayscale)"
+                    )
+
             else:
-                pil_image = Image.fromarray(image)
+                raise ValueError(
+                    f"Expected 2D (grayscale) or 3D (RGB/RGBA) array, got shape {image.shape}. "
+                    f"Batched inputs not supported—process images one at a time."
+                )
+
         else:
-            raise TypeError(f"Expected numpy array, got {type(image)}")
+            raise TypeError(f"Expected numpy array or PIL.Image, got {type(image)}")
 
         # Run inference based on backend
         start_time = time.time()
 
         if self.backend == ModelBackend.COREML:
-            result = self._estimate_depth_coreml(image)
+            # CoreML expects numpy float32 [0,1]
+            # Convert canonical uint8 → float32 for CoreML
+            image_float32 = original_image.astype(np.float32) / 255.0
+            result = self._estimate_depth_coreml(image_float32)
         else:
+            # PyTorch path: pass PIL Image (DA3 and transformers both accept PIL)
             result = self._estimate_depth_pytorch(pil_image)
 
         inference_time_ms = (time.time() - start_time) * 1000
@@ -494,9 +574,10 @@ class DA3InferenceEngine:
             result["metadata"]["using_fallback"] = True
             result["metadata"]["fallback_model"] = self._fallback_model_id
 
+        # CRITICAL: original_image is now ALWAYS uint8 RGB regardless of input type
         return DepthResult(
             depth_map=result["depth"],
-            original_image=original_image,
+            original_image=original_image,  # Canonical uint8 RGB numpy
             metadata=result["metadata"],
         )
 
@@ -528,8 +609,25 @@ class DA3InferenceEngine:
         if not TORCH_AVAILABLE:
             raise ImportError("torch required for PyTorch inference")
 
-        # Run inference using pipeline
-        if hasattr(self.model, "__call__"):
+        # Check if this is a DA3 model (custom API)
+        try:
+            from depth_anything_3.api import DepthAnything3
+
+            is_da3_model = isinstance(self.model, DepthAnything3)
+        except ImportError:
+            is_da3_model = False
+
+        if is_da3_model:
+            # DA3 models use inference() method with list of images
+            prediction = self.model.inference([image])
+            # DA3 returns Prediction object with .depth attribute (1, H, W)
+            depth_raw = prediction.depth[0]  # Remove batch dimension
+
+            # Convert to numpy if needed
+            if isinstance(depth_raw, torch.Tensor):
+                depth_raw = depth_raw.cpu().numpy()
+        elif hasattr(self.model, "__call__"):
+            # Transformers pipeline models
             prediction = self.model(image)
             depth_raw = prediction["depth"]
 

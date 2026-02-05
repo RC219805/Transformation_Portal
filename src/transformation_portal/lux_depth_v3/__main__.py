@@ -4,6 +4,7 @@
 APEX command variants for the lux_depth_v3 pipeline supporting:
 - Commercial-safe APEX mode (default)
 - Research-only APEX+ variants (explicit opt-in)
+- PBR-only workflows (skip V2 enhancement)
 
 Usage:
     # Commercial-safe APEX (default, no research opt-ins)
@@ -22,6 +23,16 @@ Usage:
         --emit-report "on" \\
         --emit-run-card "on" \\
         --overwrite
+
+    # PBR-only workflow (skip V2 enhancement)
+    lux-depth-v3 \\
+        --input-dir "./input_images" \\
+        --output-dir "./output/lux_depth_v3_pbr_only" \\
+        --quality-tier "apex" \\
+        --enable-v2 "off" \\
+        --pbr "on" \\
+        --depth-device "mps" \\
+        --emit-master16 "on"
 
     # Research-only: Depth Anything V3.1 (explicit opt-in)
     lux-depth-v3 \\
@@ -61,23 +72,29 @@ Usage:
         --emit-run-card "on" \\
         --overwrite
 
-    # PBR-only workflow (skip V2 enhancement)
-    lux-depth-v3 \\
-        --input-dir "./input_images" \\
-        --output-dir "./output/lux_depth_v3_pbr_only" \\
-        --quality-tier "apex" \\
-        --enable-v2 "off" \\
-        --pbr "on" \\
-        --depth-device "mps"
-
     # Module invocation (if console script not on PATH)
     python -m transformation_portal.lux_depth_v3 [args]
 
-Notes:
-    - --quality-tier: standard | premium | apex (quality level)
-    - --preset: named preset like "default", "depth-anything-v3.1-research-m4", etc.
-    - --enable-v2: on | off (control V2 enhancement stage, default: on)
-    - --v2-preset: preset name or "none" to skip V2 (default: "default")
+Key Concepts:
+    - V2 Enhancement: Optional AI-powered refinement stage (enabled by default)
+      * Use --enable-v2 "off" to skip V2 entirely (PBR-only workflows)
+      * Use --v2-preset "none" to skip V2 preset while keeping validation
+    
+    - Quality vs Preset:
+      * --quality-tier: Controls output quality (standard|premium|apex) - use for most workflows
+      * --preset: Named configuration for specialized scenarios - overrides quality-tier
+    
+    - PBR-Only Workflows:
+      * Add --enable-v2 "off" to skip V2 enhancement validation and execution
+      * Faster processing, still produces high-quality depth and PBR maps
+    
+    - Research Models:
+      * Require explicit license acknowledgement (--non-commercial-ok "true")
+      * Depth Pro also requires --accept-apple-depth-pro-research-license "true"
+
+Troubleshooting:
+    - "Script not found" error: Add --enable-v2 "off" to disable V2 enhancement
+    - See docs/LUX_DEPTH_V3_TROUBLESHOOTING.md for complete troubleshooting guide
 """
 
 import logging
@@ -134,9 +151,15 @@ def main(
     ),
     # Preset and Quality
     preset: str = typer.Option(
-        "premium", "--preset", help="Pipeline preset (premium, depth-anything-v3.1-research-m4, default, etc.)"
+        "premium",
+        "--preset",
+        help="Named pipeline configuration (premium, depth-anything-v3.1-research-m4, etc.). Optional - use --quality-tier for most workflows.",
     ),
-    quality_tier: str = typer.Option("standard", "--quality-tier", help="Quality tier: standard, premium, or apex"),
+    quality_tier: str = typer.Option(
+        "standard",
+        "--quality-tier",
+        help="Output quality level: standard (fast/draft), premium (balanced), or apex (maximum quality). Controls processing resolution and features.",
+    ),
     # Depth Backend Configuration
     depth_backend: Optional[str] = typer.Option(
         None, "--depth-backend", help="Depth backend: depth_anything_v3 (default), depth_pro (research-only)"
@@ -148,9 +171,15 @@ def main(
     # Caching
     cache_depth: str = typer.Option("off", "--cache-depth", help="Enable content-addressable depth cache: on/off"),
     # V2 Enhancement Stage
-    enable_v2: str = typer.Option("on", "--enable-v2", help="Enable V2 enhancement stage: on/off (default: on)"),
+    enable_v2: str = typer.Option(
+        "on",
+        "--enable-v2",
+        help="Enable V2 AI-powered enhancement stage: on/off (default: on). Set to 'off' for PBR-only workflows or when enhancement script is unavailable.",
+    ),
     v2_preset: Optional[str] = typer.Option(
-        "default", "--v2-preset", help="V2 enhancement preset (use 'none' to skip V2, default: default)"
+        "default",
+        "--v2-preset",
+        help="V2 enhancement preset name or 'none' to skip enhancement (default: default). Only used when --enable-v2 is on.",
     ),
     # Emit Options (Deliverables)
     emit_master16: str = typer.Option("off", "--emit-master16", help="Emit master 16-bit output: on/off"),
