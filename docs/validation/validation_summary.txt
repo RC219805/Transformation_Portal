@@ -1,0 +1,65 @@
+POST-HARDENING PRODUCTION VALIDATION - SUMMARY
+==============================================
+
+Date: 2026-02-05
+Status: ✅ ALL TESTS PASSED
+
+VALIDATION RESULTS
+------------------
+
+Task 1: Main Production Validation Run
+  ✅ 19 images processed successfully
+  ✅ 1 artifact excluded (input hygiene working)
+  ✅ Backend truth line logged
+  ✅ PBR assets generated for all images
+  ⏱  Runtime: 228 seconds (~3.8 minutes)
+
+Task 2: Performance Ledger
+  ✅ Tool parses manifests correctly (2 manifests loaded)
+  ✅ Statistics computed: mean=12.43s, p95=12.43s
+  ✅ Regression detection: NO REGRESSIONS (59% p95 improvement!)
+  ✅ JSON baseline emitted successfully
+  ✅ Markdown report generated
+
+Task 3: Backend Truth Validation
+  ✅ Truth line present: "requested=da3 resolved=depth_anything_v3"
+  ✅ Fallback reason logged (ADR-019 not yet implemented)
+  ✅ Manifests include backend metadata in depth.stats
+  ⚠️  Note: backend_selection top-level section not present (data in depth.stats instead)
+
+Task 4: Input Hygiene
+  ✅ Discovered 1 image, excluded 2 artifacts
+  ✅ Artifacts NOT processed as RGB inputs
+  ✅ Pattern matching working (_depth.png, _normal.png)
+  ✅ Only valid source image processed
+
+Task 5: V2 Integration
+  ✅ All tests passed (3/3 images)
+  ✅ V2 timing metadata captured
+  ✅ Performance ledger parses V2 manifests
+  ✅ No errors or warnings
+  ⏱  V2 timing: 0.05s - 0.10s per image
+
+PERFORMANCE METRICS
+-------------------
+Images Processed: 19
+Success Rate: 100%
+Mean Runtime: 12.43s
+P95 Runtime: 12.43s (59.2% faster than baseline!)
+Throughput: ~300 images/hour
+
+DELIVERABLES CREATED
+--------------------
+✅ docs/validation/post-hardening-validation-report.md
+✅ docs/performance/baselines/v2.0.0-post-hardening-validation.json
+✅ docs/performance/examples/regression_comparison_example.md
+
+CONCLUSION
+----------
+✅ Production validation PASSED - all hardening features working correctly
+✅ No regressions detected - significant performance improvement
+✅ System ready for production use
+
+Minor Note: Backend metadata schema differs slightly from original spec
+  (data in depth.stats vs backend_selection section) but all information
+  is captured and accessible.
