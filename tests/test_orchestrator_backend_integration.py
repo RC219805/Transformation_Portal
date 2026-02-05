@@ -11,6 +11,9 @@ from transformation_portal.lux_depth_v3.config import EnhanceConfig
 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 from transformation_portal.depth.backends.protocol import LicenseRestrictionError
 
+# Mark all tests as ML tier - they test backend registry behavior with real backends
+pytestmark = pytest.mark.ml
+
 
 def test_orchestrator_uses_registry(tmp_path):
     """Orchestrator uses DepthBackendRegistry."""
