@@ -411,16 +411,17 @@ class DA3InferenceEngine:
             self.device = "mps"
             self._load_pytorch_model()
 
-    def predict(self, image: Union[np.ndarray, Path, str, "ImageInput"]) -> DepthResult:
+    def predict(self, image: Union[np.ndarray, "Image.Image", Path, str, "ImageInput"]) -> DepthResult:
         """Run depth inference on an image (main API).
 
         Accepts multiple input types for flexibility:
-        - np.ndarray: Direct numpy array
+        - np.ndarray: Direct numpy array (HxWx3, uint8 or float32)
+        - PIL.Image.Image: PIL Image object
         - Path/str: File path (delegates to infer_from_path)
         - ImageInput: Path wrapper from input_manager
 
         Args:
-            image: Input image (numpy array, path, or ImageInput)
+            image: Input image (numpy array, PIL Image, path, or ImageInput)
 
         Returns:
             DepthResult with depth map and metadata
@@ -441,17 +442,25 @@ class DA3InferenceEngine:
         if isinstance(image, (Path, str)):
             return self.infer_from_path(Path(image))
 
+        # Handle PIL.Image
+        if isinstance(image, Image.Image):
+            return self.infer(image)
+
         # Handle numpy array (main path)
         if isinstance(image, np.ndarray):
             return self.infer(image)
 
-        raise TypeError(f"Expected np.ndarray, Path, str, or ImageInput, got {type(image)}")
+        raise TypeError(f"Expected np.ndarray, PIL.Image, Path, str, or ImageInput, got {type(image)}")
 
-    def infer(self, image: np.ndarray) -> DepthResult:
+    def infer(self, image: Union[np.ndarray, "Image.Image"]) -> DepthResult:
         """Run depth inference on an image.
 
+        Accepts multiple input types for flexibility:
+        - np.ndarray: Direct numpy array (HxWx3, uint8 or float32)
+        - PIL.Image.Image: PIL Image object
+
         Args:
-            image: Input image as numpy array (HxWx3)
+            image: Input image as numpy array (HxWx3) or PIL Image
 
         Returns:
             DepthResult with depth map and metadata
@@ -460,21 +469,26 @@ class DA3InferenceEngine:
         if not self._model_loaded:
             self._load_model()
 
-        # Convert numpy to PIL if needed
-        if isinstance(image, np.ndarray):
+        # Normalize input to numpy array and PIL Image
+        if isinstance(image, Image.Image):
+            # PIL Image input: convert to numpy for storage, keep PIL for inference
+            pil_image = image.convert("RGB")
+            original_image = np.array(pil_image)
+        elif isinstance(image, np.ndarray):
             original_image = image.copy()
             if image.dtype in (np.float32, np.float64):
                 pil_image = Image.fromarray((image * 255).astype(np.uint8))
             else:
                 pil_image = Image.fromarray(image)
         else:
-            raise TypeError(f"Expected numpy array, got {type(image)}")
+            raise TypeError(f"Expected numpy array or PIL.Image, got {type(image)}")
 
         # Run inference based on backend
         start_time = time.time()
 
         if self.backend == ModelBackend.COREML:
-            result = self._estimate_depth_coreml(image)
+            # CoreML expects numpy array
+            result = self._estimate_depth_coreml(original_image)
         else:
             result = self._estimate_depth_pytorch(pil_image)
 
