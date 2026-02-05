@@ -12,6 +12,9 @@ from transformation_portal.depth.backends.da3 import DA3Backend
 from transformation_portal.depth.backends.protocol import DepthResult, LicenseType
 from transformation_portal.depth.backends.registry import DepthBackendRegistry
 
+# Mark all tests in this module as ML tier (require torch + transformers)
+pytestmark = pytest.mark.ml
+
 
 def test_da3_backend_implements_protocol():
     """DA3Backend implements DepthBackend protocol."""
