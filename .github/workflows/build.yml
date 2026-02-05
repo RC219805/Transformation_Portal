@@ -26,6 +26,8 @@ on:
       # Workflow changes (validate CI modifications)
       - '.github/workflows/**'
       - '.github/actions/**'
+      # AI/Copilot instructions (governance-critical)
+      - '.github/copilot-instructions.md'
       # Makefile and core config
       - 'Makefile'
       - 'mypy.ini'
