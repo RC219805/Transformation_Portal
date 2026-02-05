@@ -1,4 +1,5 @@
 """Executor for Materials V3 pixel operations."""
+
 from __future__ import annotations
 
 import time
@@ -74,9 +75,7 @@ def apply_pixel_ops(
             continue
 
         implemented_ops = [
-            op_name
-            for op_name in recommended_ops
-            if (op_def := ops_for_material.get(op_name)) and op_def.implemented
+            op_name for op_name in recommended_ops if (op_def := ops_for_material.get(op_name)) and op_def.implemented
         ]
         if not implemented_ops:
             telemetry["blocked"].append(

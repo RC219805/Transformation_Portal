@@ -26,8 +26,8 @@ import torch
 from PIL import Image
 
 try:
-    from transformers import CLIPVisionModelWithProjection, CLIPImageProcessor
     from diffusers import FluxPipeline
+    from transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
 
     IPADAPTER_AVAILABLE = True
 except ImportError:
@@ -102,14 +102,10 @@ class IPAdapterStyleTransfer:
             self.CLIP_VISION_MODEL, torch_dtype=torch_dtype
         ).to(self.device)
 
-        self.image_processor = CLIPImageProcessor.from_pretrained(  # nosec B615
-            self.CLIP_VISION_MODEL
-        )
+        self.image_processor = CLIPImageProcessor.from_pretrained(self.CLIP_VISION_MODEL)  # nosec B615
 
         # Load FLUX pipeline
-        self.flux_pipe = FluxPipeline.from_pretrained(
-            self.FLUX_MODEL, torch_dtype=torch_dtype
-        )
+        self.flux_pipe = FluxPipeline.from_pretrained(self.FLUX_MODEL, torch_dtype=torch_dtype)
 
         if enable_cpu_offload and self.device == "cuda":
             self.flux_pipe.enable_model_cpu_offload()
@@ -126,9 +122,7 @@ class IPAdapterStyleTransfer:
             return "mps"
         return "cpu"
 
-    def encode_reference_image(
-        self, image: Union[str, Path, Image.Image, np.ndarray]
-    ) -> torch.Tensor:
+    def encode_reference_image(self, image: Union[str, Path, Image.Image, np.ndarray]) -> torch.Tensor:
         """Encode reference image to style features.
 
         Args:
@@ -141,9 +135,7 @@ class IPAdapterStyleTransfer:
         pil_image = self._load_image(image)
 
         # Preprocess for CLIP
-        inputs = self.image_processor(images=pil_image, return_tensors="pt").to(
-            self.device
-        )
+        inputs = self.image_processor(images=pil_image, return_tensors="pt").to(self.device)
 
         # Encode
         with torch.inference_mode():
@@ -189,10 +181,7 @@ class IPAdapterStyleTransfer:
 
         # Generate prompt if not provided
         if prompt is None:
-            prompt = (
-                "professional architectural photography, high quality, "
-                "natural lighting, photorealistic"
-            )
+            prompt = "professional architectural photography, high quality, " "natural lighting, photorealistic"
 
         # Prepare for diffusion
         generator = None
@@ -258,9 +247,7 @@ class IPAdapterStyleTransfer:
             ...     ]
             ... )
         """
-        logger.info(
-            f"Multi-reference style transfer ({len(style_references)} references)"
-        )
+        logger.info(f"Multi-reference style transfer ({len(style_references)} references)")
 
         # Encode all reference images
         encoded_styles = []
@@ -276,9 +263,7 @@ class IPAdapterStyleTransfer:
         weights = weights / weights.sum()
 
         # Blend style features
-        _blended_style = sum(  # noqa: F841
-            style * weight for style, weight in zip(encoded_styles, weights)
-        )
+        _blended_style = sum(style * weight for style, weight in zip(encoded_styles, weights))  # noqa: F841
 
         logger.info("Style features blended")
 
@@ -330,9 +315,7 @@ class IPAdapterStyleTransfer:
         Returns:
             Styled image
         """
-        from transformation_portal.style_transfer.style_presets import (
-            ArchitecturalStylePresets,
-        )
+        from transformation_portal.style_transfer.style_presets import ArchitecturalStylePresets
 
         logger.info(f"Applying preset style: {preset}")
 
@@ -380,9 +363,7 @@ class IPAdapterStyleTransfer:
         weights = weights / weights.sum()
 
         # Average with weights
-        averaged_style = sum(
-            style * weight for style, weight in zip(encoded_styles, weights)
-        )
+        averaged_style = sum(style * weight for style, weight in zip(encoded_styles, weights))
 
         logger.info("Style extraction complete")
 
@@ -407,9 +388,7 @@ class IPAdapterStyleTransfer:
         features2 = self.encode_reference_image(image2)
 
         # Compute cosine similarity
-        similarity = torch.nn.functional.cosine_similarity(
-            features1, features2, dim=-1
-        ).item()
+        similarity = torch.nn.functional.cosine_similarity(features1, features2, dim=-1).item()
 
         # Normalize to 0-1
         similarity = (similarity + 1) / 2
@@ -449,9 +428,7 @@ class IPAdapterStyleTransfer:
 
         for alpha in alphas:
             # Interpolate style features
-            _interpolated_style = (
-                1 - alpha
-            ) * features1 + alpha * features2  # noqa: F841
+            _interpolated_style = (1 - alpha) * features1 + alpha * features2  # noqa: F841
 
             # Apply interpolated style
             # (Simplified - full implementation would inject interpolated_style)
@@ -467,9 +444,7 @@ class IPAdapterStyleTransfer:
 
         return interpolated_images
 
-    def _load_image(
-        self, image: Union[str, Path, Image.Image, np.ndarray]
-    ) -> Image.Image:
+    def _load_image(self, image: Union[str, Path, Image.Image, np.ndarray]) -> Image.Image:
         """Load image as PIL Image."""
         if isinstance(image, Image.Image):
             return image.convert("RGB")
@@ -481,10 +456,7 @@ class IPAdapterStyleTransfer:
             raise ValueError(f"Unsupported image type: {type(image)}")
 
     def __repr__(self) -> str:
-        return (
-            f"IPAdapterStyleTransfer(device='{self.device}', "
-            f"dtype={self.torch_dtype})"
-        )
+        return f"IPAdapterStyleTransfer(device='{self.device}', " f"dtype={self.torch_dtype})"
 
 
 # Export

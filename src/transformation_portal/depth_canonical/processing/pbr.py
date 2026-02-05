@@ -21,18 +21,19 @@ class PBRConfig:
 
     All parameters are frozen to ensure immutability and cache-ability.
     """
+
     # Normal map parameters
     normal_strength: float = 1.0  # Gradient multiplier (higher = more pronounced)
-    normal_blur_radius: int = 0   # Pre-blur depth before gradient (0 = disabled)
+    normal_blur_radius: int = 0  # Pre-blur depth before gradient (0 = disabled)
 
     # Roughness map parameters
     roughness_strength: float = 1.0  # Detail multiplier
-    roughness_blur_radius: int = 3   # Smoothing kernel size
+    roughness_blur_radius: int = 3  # Smoothing kernel size
 
     # Ambient Occlusion parameters
-    ao_strength: float = 1.0         # Darkness multiplier
-    ao_blur_radius: int = 5          # Occlusion spread
-    ao_bias: float = 0.5             # Brightness offset (0.0-1.0)
+    ao_strength: float = 1.0  # Darkness multiplier
+    ao_blur_radius: int = 5  # Occlusion spread
+    ao_bias: float = 0.5  # Brightness offset (0.0-1.0)
 
 
 def _box_blur_gray(img: np.ndarray, radius: int) -> np.ndarray:
@@ -53,7 +54,7 @@ def _box_blur_gray(img: np.ndarray, radius: int) -> np.ndarray:
     # Use scipy's uniform_filter for box blur (mean filter)
     # kernel_size = 2 * radius + 1
     kernel_size = 2 * radius + 1
-    return ndimage.uniform_filter(img, size=kernel_size, mode='reflect')
+    return ndimage.uniform_filter(img, size=kernel_size, mode="reflect")
 
 
 def _sobel(depth: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -69,8 +70,8 @@ def _sobel(depth: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     sobel_x = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=np.float32)
     sobel_y = np.array([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=np.float32)
 
-    grad_x = ndimage.convolve(depth, sobel_x, mode='reflect')
-    grad_y = ndimage.convolve(depth, sobel_y, mode='reflect')
+    grad_x = ndimage.convolve(depth, sobel_x, mode="reflect")
+    grad_y = ndimage.convolve(depth, sobel_y, mode="reflect")
 
     return grad_x, grad_y
 
@@ -85,13 +86,10 @@ def _laplacian(depth: np.ndarray) -> np.ndarray:
         Laplacian response, same shape as input
     """
     laplacian_kernel = np.array([[0, 1, 0], [1, -4, 1], [0, 1, 0]], dtype=np.float32)
-    return ndimage.convolve(depth, laplacian_kernel, mode='reflect')
+    return ndimage.convolve(depth, laplacian_kernel, mode="reflect")
 
 
-def generate_pbr_maps(
-    depth: np.ndarray,
-    config: PBRConfig = PBRConfig()
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def generate_pbr_maps(depth: np.ndarray, config: PBRConfig = PBRConfig()) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Generate PBR maps from depth data.
 
     Args:
@@ -145,11 +143,9 @@ def generate_pbr_maps(
     grad_y_scaled = grad_y * config.normal_strength
 
     # Build normal vectors: N = (-dx, -dy, 1)
-    normals = np.stack([
-        -grad_x_scaled,   # X component
-        -grad_y_scaled,   # Y component
-        np.ones_like(grad_x)  # Z component (up)
-    ], axis=-1)
+    normals = np.stack(
+        [-grad_x_scaled, -grad_y_scaled, np.ones_like(grad_x)], axis=-1  # X component  # Y component  # Z component (up)
+    )
 
     # Normalize to unit length
     norm = np.linalg.norm(normals, axis=-1, keepdims=True)

@@ -11,22 +11,9 @@ Example:
     ...     return "old"
 """
 
-from .decorators import (
-    deprecated,
-    moved_to,
-    renamed_class,
-    renamed_function,
-    renamed_module,
-)
-from .shims import (
-    LegacyAPIShim,
-    create_compatibility_wrapper,
-)
-from .version import (
-    Version,
-    check_version_compatibility,
-    require_version,
-)
+from .decorators import deprecated, moved_to, renamed_class, renamed_function, renamed_module
+from .shims import LegacyAPIShim, create_compatibility_wrapper
+from .version import Version, check_version_compatibility, require_version
 
 __all__ = [
     "deprecated",

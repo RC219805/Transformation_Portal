@@ -3,11 +3,18 @@
 STUB IMPLEMENTATION - Critical types to enable package imports.
 Full implementation pending.
 """
+
 from __future__ import annotations
+
+# Check xxhash availability for default hasher selection
+import importlib.util
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional, Any
+from typing import Any, Optional
+
 from .security import HashMode
+
+_XXHASH_AVAILABLE = importlib.util.find_spec("xxhash") is not None
 
 
 class ModelVariant(Enum):
@@ -20,25 +27,39 @@ class ModelVariant(Enum):
 
     ⚠️  LICENSE: DA3NESTED-GIANT-LARGE-1.1 is CC BY-NC 4.0 (non-commercial use only).
     """
-    METRIC_LARGE = type('ModelVariantValue', (), {
-        'name': 'depth-anything-v3-metric-large',
-        'display_name': 'Depth Anything V3 Metric Large (DA3 Nested Giant)',
-        'huggingface_id': 'depth-anything/DA3NESTED-GIANT-LARGE-1.1',
-    })()
-    METRIC_BASE = type('ModelVariantValue', (), {
-        'name': 'depth-anything-v3-metric-base',
-        'display_name': 'Depth Anything V3 Metric Base',
-        'huggingface_id': 'depth-anything/Depth-Anything-V3-Metric-Base-hf',
-    })()
-    METRIC_SMALL = type('ModelVariantValue', (), {
-        'name': 'depth-anything-v3-metric-small',
-        'display_name': 'Depth Anything V3 Metric Small',
-        'huggingface_id': 'depth-anything/Depth-Anything-V3-Metric-Small-hf',
-    })()
+
+    METRIC_LARGE = type(
+        "ModelVariantValue",
+        (),
+        {
+            "name": "depth-anything-v3-metric-large",
+            "display_name": "Depth Anything V3 Metric Large (DA3 Nested Giant)",
+            "huggingface_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
+        },
+    )()
+    METRIC_BASE = type(
+        "ModelVariantValue",
+        (),
+        {
+            "name": "depth-anything-v3-metric-base",
+            "display_name": "Depth Anything V3 Metric Base",
+            "huggingface_id": "depth-anything/Depth-Anything-V3-Metric-Base-hf",
+        },
+    )()
+    METRIC_SMALL = type(
+        "ModelVariantValue",
+        (),
+        {
+            "name": "depth-anything-v3-metric-small",
+            "display_name": "Depth Anything V3 Metric Small",
+            "huggingface_id": "depth-anything/Depth-Anything-V3-Metric-Small-hf",
+        },
+    )()
 
 
 class Preset(Enum):
     """Pipeline presets for different use cases."""
+
     ARCHITECTURAL_INTERIOR = "architectural_interior"
     ARCHITECTURAL_EXTERIOR = "architectural_exterior"
     LUXURY_ESTATE = "luxury_estate"
@@ -48,6 +69,7 @@ class Preset(Enum):
 @dataclass
 class DeviceConfig:
     """Device configuration for inference."""
+
     device: str = "cpu"
     dtype: str = "float32"
     use_fp16: bool = True  # Enable FP16 for MPS/CUDA (1.3-1.5x speedup, 2x memory reduction)
@@ -57,6 +79,7 @@ class DeviceConfig:
 @dataclass
 class PostprocessingConfig:
     """Postprocessing configuration for depth maps."""
+
     apply_metric_scaling: bool = True
     scale_factor: float = 1.0
     apply_median_filter: bool = False
@@ -73,6 +96,7 @@ class PostprocessingConfig:
 @dataclass
 class DA3Config:
     """Depth Anything V3 configuration."""
+
     model_variant: ModelVariant = ModelVariant.METRIC_LARGE
     device: DeviceConfig = field(default_factory=DeviceConfig)
     postprocessing: PostprocessingConfig = field(default_factory=PostprocessingConfig)
@@ -99,7 +123,7 @@ class DA3Config:
                     bilateral_sigma_space=5.0,
                     preserve_edges=True,
                     edge_threshold=0.05,
-                )
+                ),
             )
         elif preset == Preset.ARCHITECTURAL_EXTERIOR:
             return cls(
@@ -109,7 +133,7 @@ class DA3Config:
                     scale_factor=1.0,
                     preserve_edges=True,
                     edge_threshold=0.1,
-                )
+                ),
             )
         elif preset == Preset.LUXURY_ESTATE:
             return cls(
@@ -122,7 +146,7 @@ class DA3Config:
                     bilateral_sigma_space=7.0,
                     preserve_edges=True,
                     edge_threshold=0.03,
-                )
+                ),
             )
         else:  # DEFAULT
             return cls()
@@ -131,6 +155,7 @@ class DA3Config:
 @dataclass
 class EnhanceConfig:
     """Configuration for the enhancement orchestrator."""
+
     # Depth configuration
     model_variant: Optional[ModelVariant] = None
     preset: Optional[Preset] = None
@@ -177,7 +202,8 @@ class EnhanceConfig:
     use_coreml_backend: bool = False  # CoreML ANE for Apple Silicon (5x depth inference, requires conversion)
     enable_pbr_gpu_batching: bool = False  # GPU-accelerated PBR map batching (30% speedup, opt-in)
     use_msgpack_manifests: bool = False  # MessagePack binary format (60% smaller, 3x faster, less readable)
-    use_xxhash: bool = False  # xxHash for output keys (5x faster than SHA-1, opt-in)
+    # xxHash for output keys (5x faster than SHA-1, auto-enabled when available)
+    use_xxhash: bool = field(default_factory=lambda: _XXHASH_AVAILABLE)
 
     # Float depth saving for high-precision PBR
     save_float_depth: bool = False
@@ -215,6 +241,7 @@ class EnhanceConfig:
             PBRConfig instance with parameters from this config
         """
         from .pbr import PBRConfig
+
         return PBRConfig(
             normal_strength=self.pbr_normal_strength,
             normal_blur_radius=self.pbr_normal_blur_radius,

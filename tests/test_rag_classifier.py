@@ -8,15 +8,10 @@ from pathlib import Path
 import pytest
 
 # Add agents directory to path
-agents_path = Path(__file__).parent.parent / '.github' / 'agents'
+agents_path = Path(__file__).parent.parent / ".github" / "agents"
 sys.path.insert(0, str(agents_path))
 
-from rag_system.classifier import (  # noqa: E402
-    ArtifactClassifier,
-    ArtifactType,
-    PipelineType,
-    ProcessingMetadata,
-)
+from rag_system.classifier import ArtifactClassifier, ArtifactType, PipelineType, ProcessingMetadata  # noqa: E402
 
 
 @pytest.fixture
@@ -109,7 +104,7 @@ class TestMetadataExtraction:
 
     def test_extract_from_json_content(self, classifier):
         """Test extraction from JSON content."""
-        json_content = '''
+        json_content = """
         {
             "parameters": {"quality": "high", "denoise": 0.5},
             "processing_time": 45.2,
@@ -117,7 +112,7 @@ class TestMetadataExtraction:
             "gpu_utilization": 85.3,
             "success": true
         }
-        '''
+        """
         metadata = classifier.extract_metadata(
             "metrics.json",
             ArtifactType.METRIC,
@@ -177,9 +172,9 @@ class TestTagGeneration:
             metadata,
             "output/depth_map.png",
         )
-        assert 'depth_map' in tags
-        assert 'depth_pipeline' in tags
-        assert 'success' in tags
+        assert "depth_map" in tags
+        assert "depth_pipeline" in tags
+        assert "success" in tags
 
     def test_generate_resolution_tags(self, classifier):
         """Test resolution tag generation."""
@@ -193,8 +188,8 @@ class TestTagGeneration:
             metadata,
             "output/render.png",
         )
-        assert 'resolution:3840x2160' in tags
-        assert '4k_plus' in tags
+        assert "resolution:3840x2160" in tags
+        assert "4k_plus" in tags
 
     def test_generate_performance_tags(self, classifier):
         """Test performance tag generation."""
@@ -209,7 +204,7 @@ class TestTagGeneration:
             metadata,
             "output/fast.png",
         )
-        assert 'fast_processing' in tags
+        assert "fast_processing" in tags
 
         # Slow processing
         metadata.processing_time = 15.0
@@ -218,7 +213,7 @@ class TestTagGeneration:
             metadata,
             "output/slow.png",
         )
-        assert 'slow_processing' in tags
+        assert "slow_processing" in tags
 
     def test_generate_error_tags(self, classifier):
         """Test error tag generation."""
@@ -233,8 +228,8 @@ class TestTagGeneration:
             metadata,
             "error.log",
         )
-        assert 'has_error' in tags
-        assert 'error_type:ValueError' in tags
+        assert "has_error" in tags
+        assert "error_type:ValueError" in tags
 
 
 class TestArtifactHierarchy:
@@ -290,39 +285,30 @@ class TestArtifactSearch:
         classifier.add_artifact("color_grade_001.jpg")
         classifier.add_artifact("depth_map_002.png")
 
-        results = classifier.search_by_tags({'depth_map'}, require_all=False)
+        results = classifier.search_by_tags({"depth_map"}, require_all=False)
         assert len(results) >= 2
-        assert all('depth_map' in r.tags for r in results)
+        assert all("depth_map" in r.tags for r in results)
 
     def test_search_by_multiple_tags_any(self, classifier):
         """Test search by multiple tags (any match)."""
         classifier.add_artifact("depth_pipeline/depth_map_4k.png")
         classifier.add_artifact("lux_render/output.jpg")
 
-        results = classifier.search_by_tags(
-            {'depth_pipeline', 'lux_render'},
-            require_all=False
-        )
+        results = classifier.search_by_tags({"depth_pipeline", "lux_render"}, require_all=False)
         assert len(results) >= 2
 
     def test_search_by_multiple_tags_all(self, classifier):
         """Test search by multiple tags (all required)."""
         # Add artifact with both tags
         metadata_content = '{"success": true, "processing_time": 0.5}'
-        classifier.add_artifact(
-            "depth_pipeline/depth_map_1920x1080.png",
-            content=metadata_content
-        )
+        classifier.add_artifact("depth_pipeline/depth_map_1920x1080.png", content=metadata_content)
 
-        results = classifier.search_by_tags(
-            {'depth_map', 'full_hd'},
-            require_all=True
-        )
+        results = classifier.search_by_tags({"depth_map", "full_hd"}, require_all=True)
 
         # Should find artifacts that have both tags
         for result in results:
-            assert 'depth_map' in result.tags
-            assert 'full_hd' in result.tags or 'hd' in result.tags
+            assert "depth_map" in result.tags
+            assert "full_hd" in result.tags or "hd" in result.tags
 
 
 class TestStatistics:
@@ -337,11 +323,11 @@ class TestStatistics:
 
         stats = classifier.get_statistics()
 
-        assert stats['total_artifacts'] >= 3
-        assert 'by_type' in stats
-        assert 'by_pipeline' in stats
-        assert isinstance(stats['success_rate'], float)
-        assert isinstance(stats['avg_processing_time'], float)
+        assert stats["total_artifacts"] >= 3
+        assert "by_type" in stats
+        assert "by_pipeline" in stats
+        assert isinstance(stats["success_rate"], float)
+        assert isinstance(stats["avg_processing_time"], float)
 
     def test_statistics_with_errors(self, classifier):
         """Test statistics with error artifacts."""
@@ -349,7 +335,7 @@ class TestStatistics:
         classifier.add_artifact("error.log", content=log_content)
 
         stats = classifier.get_statistics()
-        assert stats['artifacts_with_errors'] >= 1
+        assert stats["artifacts_with_errors"] >= 1
 
 
 class TestExport:
@@ -368,14 +354,15 @@ class TestExport:
 
         # Verify JSON structure
         import json
+
         with open(output_file) as f:
             data = json.load(f)
 
-        assert 'artifacts' in data
-        assert 'statistics' in data
-        assert 'export_time' in data
-        assert len(data['artifacts']) >= 2
+        assert "artifacts" in data
+        assert "statistics" in data
+        assert "export_time" in data
+        assert len(data["artifacts"]) >= 2
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

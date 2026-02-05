@@ -13,12 +13,14 @@ Architecture:
 - Graceful fallback to PyTorch if conversion fails
 - Thread-safe concurrent inference (ANE supports multiple contexts)
 """
+
 from __future__ import annotations
-from pathlib import Path
-from typing import Optional, Dict, Any
+
 import logging
 import platform
 import time
+from pathlib import Path
+from typing import Any, Dict, Optional
 
 import numpy as np
 
@@ -27,6 +29,7 @@ logger = logging.getLogger(__name__)
 # Lazy imports to avoid dependency errors
 try:
     import coremltools as ct
+
     COREML_AVAILABLE = True
 except ImportError:
     COREML_AVAILABLE = False
@@ -34,6 +37,7 @@ except ImportError:
 
 try:
     import torch
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -41,6 +45,7 @@ except ImportError:
 
 try:
     from transformers import pipeline as hf_pipeline
+
     TRANSFORMERS_AVAILABLE = True
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
@@ -58,12 +63,7 @@ class CoreMLDepthEstimator:
         >>> depth = estimator.predict(image)  # ~80ms on M4
     """
 
-    def __init__(
-        self,
-        model_id: str,
-        cache_dir: Optional[Path] = None,
-        force_reconvert: bool = False
-    ):
+    def __init__(self, model_id: str, cache_dir: Optional[Path] = None, force_reconvert: bool = False):
         """Initialize CoreML depth estimator.
 
         Args:
@@ -177,7 +177,7 @@ class CoreMLDepthEstimator:
             inputs=[ct.TensorType(name="input", shape=(1, 3, 1024, 1024))],
             outputs=[ct.TensorType(name="depth")],
             compute_precision=ct.precision.FLOAT16,  # FP16 for ANE
-            compute_units=ct.ComputeUnit.ALL,        # Use ANE when possible
+            compute_units=ct.ComputeUnit.ALL,  # Use ANE when possible
             minimum_deployment_target=ct.target.macOS14,  # M4 support
         )
 
@@ -219,7 +219,7 @@ class CoreMLDepthEstimator:
         if depth.ndim == 4:
             depth = depth[0, 0]  # BCHW → HW
         elif depth.ndim == 3:
-            depth = depth[0]     # CHW → HW
+            depth = depth[0]  # CHW → HW
 
         return depth
 
@@ -240,7 +240,7 @@ def should_use_coreml(config: Any, force: bool = False) -> bool:
         True if CoreML should be used
     """
     # User must opt-in
-    if not getattr(config, 'use_coreml', False) and not force:
+    if not getattr(config, "use_coreml", False) and not force:
         return False
 
     # Only on macOS with Apple Silicon

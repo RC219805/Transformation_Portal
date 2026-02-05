@@ -3,12 +3,15 @@
 Separates decision logic from execution.
 Computes objective edge signals to gate ML refinement.
 """
+
+from typing import Any, Dict
+
 import numpy as np
 import scipy.ndimage
-from typing import Dict, Any
 
 from .pixel_ops_decider import decide_pixel_ops
 from .pixel_ops_registry import OP_REGISTRY
+
 
 def compute_edge_signals(mask_np: np.ndarray, rgb_np: np.ndarray) -> Dict[str, float]:
     """Computes objective boundary metrics using image gradients."""
@@ -37,15 +40,14 @@ def compute_edge_signals(mask_np: np.ndarray, rgb_np: np.ndarray) -> Dict[str, f
     grad_mag = np.hypot(sx, sy)
 
     max_grad = np.max(grad_mag)
-    if max_grad > 0: grad_mag /= max_grad
+    if max_grad > 0:
+        grad_mag /= max_grad
 
     # 3. Compute Alignment (Mean gradient magnitude at boundary)
     alignment_score = float(np.mean(grad_mag[boundary_mask]))
 
-    return {
-        "boundary_pixels": boundary_pixels_count,
-        "edge_alignment": round(alignment_score, 4)
-    }
+    return {"boundary_pixels": boundary_pixels_count, "edge_alignment": round(alignment_score, 4)}
+
 
 def _decide_refinement(material_key: str, stats: Dict, edge_signals: Dict, config: Any) -> Dict[str, Any]:
     """Decision Block A: EfficientSAM Refinement Gate."""
@@ -53,36 +55,38 @@ def _decide_refinement(material_key: str, stats: Dict, edge_signals: Dict, confi
 
     # Eligibility
     is_canary = material_key in canary_set
-    sufficient_coverage = stats['coverage_px'] >= config.min_coverage_px
-    sufficient_conf = stats['mean_conf'] >= config.min_mean_conf
+    sufficient_coverage = stats["coverage_px"] >= config.min_coverage_px
+    sufficient_conf = stats["mean_conf"] >= config.min_mean_conf
 
     # PR-4C Safety Gates
-    sufficient_boundary = edge_signals['boundary_pixels'] >= 250
-    has_edge_support = edge_signals['edge_alignment'] >= 0.10
+    sufficient_boundary = edge_signals["boundary_pixels"] >= 250
+    has_edge_support = edge_signals["edge_alignment"] >= 0.10
 
-    eligible = (is_canary and sufficient_coverage and sufficient_conf and sufficient_boundary and has_edge_support)
+    eligible = is_canary and sufficient_coverage and sufficient_conf and sufficient_boundary and has_edge_support
 
     # Recommendation
     ambiguity_threshold = 0.90
-    should_refine = eligible and (stats['mean_conf'] < ambiguity_threshold)
+    should_refine = eligible and (stats["mean_conf"] < ambiguity_threshold)
 
     reason = "eligible_candidate"
-    if not is_canary: reason = "not_in_canary_set"
-    elif not sufficient_coverage: reason = "insufficient_coverage"
-    elif not sufficient_boundary: reason = "insufficient_boundary_pixels"
-    elif not has_edge_support: reason = "poor_edge_alignment"
-    elif stats['mean_conf'] >= ambiguity_threshold: reason = "confidence_already_high"
+    if not is_canary:
+        reason = "not_in_canary_set"
+    elif not sufficient_coverage:
+        reason = "insufficient_coverage"
+    elif not sufficient_boundary:
+        reason = "insufficient_boundary_pixels"
+    elif not has_edge_support:
+        reason = "poor_edge_alignment"
+    elif stats["mean_conf"] >= ambiguity_threshold:
+        reason = "confidence_already_high"
 
-    return {
-        "should_refine_edges": should_refine,
-        "eligible": eligible,
-        "reason": reason,
-        "strategy": "canary"
-    }
+    return {"should_refine_edges": should_refine, "eligible": eligible, "reason": reason, "strategy": "canary"}
+
 
 def _decide_pixel_ops(material_key: str, stats: Dict, config: Any) -> Dict[str, Any]:
     """Decision Block B: Pixel Ops Gate."""
     return decide_pixel_ops(material_key, stats, config, registry=OP_REGISTRY)
+
 
 def generate_response_plan(per_class_stats: Dict[str, Any], rgb_image: np.ndarray, config: Any) -> Dict[str, Any]:
     """Generates Schema v3.1 Response Plan."""
@@ -90,34 +94,43 @@ def generate_response_plan(per_class_stats: Dict[str, Any], rgb_image: np.ndarra
         "version": "v3.1",
         "config_summary": {"strategy": str(config.refinement_strategy), "min_coverage": config.min_coverage_px},
         "per_class": {},
-        "summary": {"present_classes": [], "eligible_for_pixel_ops": [], "eligible_for_refinement": [], "skipped_reasons_histogram": {}}
+        "summary": {
+            "present_classes": [],
+            "eligible_for_pixel_ops": [],
+            "eligible_for_refinement": [],
+            "skipped_reasons_histogram": {},
+        },
     }
 
     histogram = {}
     for mat_key, stats in per_class_stats.items():
-        if not stats.get('present', False): continue
+        if not stats.get("present", False):
+            continue
         plan["summary"]["present_classes"].append(mat_key)
 
         edge_signals = {"boundary_pixels": 0, "edge_alignment": 0.0}
-        if 'mask' in stats: edge_signals = compute_edge_signals(stats['mask'], rgb_image)
+        if "mask" in stats:
+            edge_signals = compute_edge_signals(stats["mask"], rgb_image)
 
         refinement = _decide_refinement(mat_key, stats, edge_signals, config)
         pixel_ops = _decide_pixel_ops(mat_key, stats, config)
 
-        if refinement['eligible']: plan["summary"]["eligible_for_refinement"].append(mat_key)
-        if pixel_ops['eligible']: plan["summary"]["eligible_for_pixel_ops"].append(mat_key)
+        if refinement["eligible"]:
+            plan["summary"]["eligible_for_refinement"].append(mat_key)
+        if pixel_ops["eligible"]:
+            plan["summary"]["eligible_for_pixel_ops"].append(mat_key)
 
-        r_reason = pixel_ops['reason']
+        r_reason = pixel_ops["reason"]
         histogram[r_reason] = histogram.get(r_reason, 0) + 1
 
         plan["per_class"][mat_key] = {
             "present": True,
-            "coverage_px": stats['coverage_px'],
-            "mean_conf": stats['mean_conf'],
-            "edge_conf": stats.get('edge_conf', 0.0),
+            "coverage_px": stats["coverage_px"],
+            "mean_conf": stats["mean_conf"],
+            "edge_conf": stats.get("edge_conf", 0.0),
             "refinement": refinement,
             "pixel_ops": pixel_ops,
-            "edge_signals": edge_signals
+            "edge_signals": edge_signals,
         }
 
     plan["summary"]["skipped_reasons_histogram"] = histogram

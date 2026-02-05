@@ -3,6 +3,7 @@
 These tests validate the core depth artifact contract that serves as
 universal currency across all pipeline stages.
 """
+
 import json
 import tempfile
 from pathlib import Path

@@ -152,9 +152,7 @@ class ProgressBar:
         ...         pbar.update(1)
     """
 
-    def __init__(
-        self, total: Optional[int] = None, description: str = "", width: int = 50
-    ):
+    def __init__(self, total: Optional[int] = None, description: str = "", width: int = 50):
         """Initialize progress bar.
 
         Args:
@@ -271,14 +269,10 @@ class MultiProgress:
             Dictionary mapping task IDs to ProgressState
         """
         with self._lock:
-            return {
-                task_id: tracker.get_state() for task_id, tracker in self.tasks.items()
-            }
+            return {task_id: tracker.get_state() for task_id, tracker in self.tasks.items()}
 
 
-def create_progress(
-    total: Optional[int] = None, description: str = "", use_rich: bool = True
-) -> ProgressTracker:
+def create_progress(total: Optional[int] = None, description: str = "", use_rich: bool = True) -> ProgressTracker:
     """Create a progress tracker (with optional rich formatting).
 
     Args:

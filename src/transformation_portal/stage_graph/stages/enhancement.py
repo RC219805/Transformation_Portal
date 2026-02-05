@@ -10,8 +10,8 @@ Applies material-aware enhancements including:
 
 from __future__ import annotations
 
-from typing import Dict
 import hashlib
+from typing import Dict
 
 import numpy as np
 
@@ -175,18 +175,14 @@ class EnhancementStage(Stage):
 
         # Apply material-specific enhancements
         if material_masks and self.material_strength > 0:
-            enhanced = self._apply_material_enhancements(
-                enhanced, material_masks, self.material_strength
-            )
+            enhanced = self._apply_material_enhancements(enhanced, material_masks, self.material_strength)
 
         # Convert back to uint8
         enhanced = np.clip(enhanced * 255, 0, 255).astype(np.uint8)
 
         return enhanced
 
-    def _apply_tone_mapping(
-        self, image: np.ndarray, depth_map: np.ndarray | None
-    ) -> np.ndarray:
+    def _apply_tone_mapping(self, image: np.ndarray, depth_map: np.ndarray | None) -> np.ndarray:
         """Apply depth-aware tone mapping."""
         if depth_map is None or self.enhancement_strength == 0:
             return image

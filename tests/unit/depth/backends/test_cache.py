@@ -1,13 +1,11 @@
 """Unit tests for enhanced depth cache (npz + json sidecar)."""
 
 import json
-import pytest
-import numpy as np
 
-from transformation_portal.depth.backends import (
-    DepthResult,
-    DepthCacheWriter,
-)
+import numpy as np
+import pytest
+
+from transformation_portal.depth.backends import DepthCacheWriter, DepthResult
 
 
 @pytest.mark.unit

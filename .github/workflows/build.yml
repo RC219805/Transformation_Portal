@@ -6,8 +6,32 @@ permissions:
 on:
   push:
     branches: [main]
+    # No path filters on main - always run full suite for protected branch
   pull_request:
     branches: [main]
+    paths:
+      # Source code changes
+      - 'src/**'
+      - 'scripts/**'
+      # Tests (always run to validate changes)
+      - 'tests/**'
+      - 'conftest.py'
+      # Runtime configuration (presets, recipes, etc.)
+      - 'config/**'
+      # Dependencies and configuration
+      - 'pyproject.toml'
+      - 'setup.py'
+      - 'requirements*.txt'
+      - 'requirements/**'
+      # Workflow changes (validate CI modifications)
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      # Makefile and core config
+      - 'Makefile'
+      - 'mypy.ini'
+      - '.pylintrc'
+  workflow_dispatch:
+    # Manual trigger always runs full suite
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -32,6 +56,24 @@ env:
   HF_HUB_DISABLE_PROGRESS_BARS: "1"
 
 jobs:
+  # Info job - explains path-based triggering
+  check-skip:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Log workflow trigger reason
+        id: check
+        run: |
+          echo "✅ This workflow triggered because PR includes path-filtered changes"
+          echo ""
+          echo "Paths that trigger build.yml:"
+          echo "  - src/**, scripts/**, tests/**"
+          echo "  - config/** (presets, recipes, runtime data)"
+          echo "  - requirements, workflows, Makefile"
+          echo ""
+          echo "Note: API documentation-only changes trigger docs.yml instead"
+          echo "Note: On main branch, full suite always runs (no filters)"
+
   lint:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -54,7 +96,6 @@ jobs:
           sudo apt-get autoremove -y || true
           sudo apt-get autoclean -y || true
           docker system prune -af --volumes || true
-          rm -rf ~/.cache/pip || true
           echo "Disk usage after cleanup:"
           df -h
 
@@ -66,17 +107,32 @@ jobs:
         with:
           python-version: "3.12" # latest for linting
 
-      - name: Lint with minimal dependencies
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-lint-${{ hashFiles('requirements-lint.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-lint-
+
+      - name: Install lint dependencies
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install --no-cache-dir flake8 pylint
-          python -m pip install --no-cache-dir -r requirements-lint.txt
-          pip cache purge || true
-
+          python -m pip install flake8 pylint
+          python -m pip install -r requirements-lint.txt
           echo "Disk space after dependency install:"
           df -h
 
+      - name: Black (formatting)
+        run: black --check --diff --line-length=127 src/ tests/
+
+      - name: isort (imports)
+        run: isort --check-only --diff --profile=black --line-length=127 src/ tests/
+
+      - name: Lint with flake8 and pylint
+        run: |
+          set -euo pipefail
           echo "Running flake8..."
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 
@@ -160,7 +216,6 @@ jobs:
           sudo apt-get autoremove -y || true
           sudo apt-get autoclean -y || true
           docker system prune -af --volumes || true
-          rm -rf ~/.cache/pip || true
           echo "Disk usage after cleanup:"
           df -h
 
@@ -170,14 +225,21 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ matrix.test-type }}-${{ hashFiles('requirements-ci.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ matrix.test-type }}-
+            ${{ runner.os }}-pip-
+
       - name: Install core dependencies
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip wheel
-          python -m pip install --no-cache-dir pytest pytest-cov
-          python -m pip install --no-cache-dir -r requirements-ci.txt
-          pip cache purge || true
-          rm -rf /tmp/pip-* || true
+          python -m pip install pytest pytest-cov
+          python -m pip install -r requirements-ci.txt
           echo "Disk space after core install:"
           df -h
 

@@ -90,15 +90,10 @@ class EdgeDepthEstimator(DepthModelPlugin):
             self._config = config
 
         self._initialized = True
-        logger.info(
-            f"EdgeDepthEstimator initialized: "
-            f"threshold={self._edge_threshold}, blur={self._blur_radius}"
-        )
+        logger.info(f"EdgeDepthEstimator initialized: " f"threshold={self._edge_threshold}, blur={self._blur_radius}")
 
     @measure_performance
-    def estimate_depth(
-        self, image: Union[Image.Image, np.ndarray], **kwargs
-    ) -> np.ndarray:
+    def estimate_depth(self, image: Union[Image.Image, np.ndarray], **kwargs) -> np.ndarray:
         """Estimate depth from image using edge detection.
 
         Args:
@@ -238,18 +233,14 @@ class GradientDepthEstimator(DepthModelPlugin):
         """
         if config:
             self._sobel_size = config.get("sobel_size", self._sobel_size)
-            self._smooth_iterations = config.get(
-                "smooth_iterations", self._smooth_iterations
-            )
+            self._smooth_iterations = config.get("smooth_iterations", self._smooth_iterations)
             self._config = config
 
         self._initialized = True
         logger.info("GradientDepthEstimator initialized")
 
     @measure_performance
-    def estimate_depth(
-        self, image: Union[Image.Image, np.ndarray], **kwargs
-    ) -> np.ndarray:
+    def estimate_depth(self, image: Union[Image.Image, np.ndarray], **kwargs) -> np.ndarray:
         """Estimate depth using gradient analysis.
 
         Args:
@@ -351,14 +342,9 @@ class PlaceholderDepthModel(DepthModelPlugin):
             self._config = config
 
         self._initialized = True
-        logger.warning(
-            "Using PlaceholderDepthModel - this should be replaced "
-            "with a proper depth estimation model"
-        )
+        logger.warning("Using PlaceholderDepthModel - this should be replaced " "with a proper depth estimation model")
 
-    def estimate_depth(
-        self, image: Union[Image.Image, np.ndarray], **kwargs
-    ) -> np.ndarray:
+    def estimate_depth(self, image: Union[Image.Image, np.ndarray], **kwargs) -> np.ndarray:
         """Return uniform depth map.
 
         Args:

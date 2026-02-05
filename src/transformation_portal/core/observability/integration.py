@@ -5,15 +5,16 @@ Provides unified configuration for logging and metrics collection.
 Supports structured JSON logging for production and pretty printing for development.
 """
 
+import json
 import logging
 import sys
-import json
-from typing import Optional, Dict, Any, Union
 from datetime import datetime
+from typing import Any, Dict, Optional, Union
 
 # Optional Rich integration for pretty console logs
 try:
     from rich.logging import RichHandler
+
     RICH_AVAILABLE = True
 except ImportError:
     RICH_AVAILABLE = False
@@ -21,7 +22,7 @@ except ImportError:
 
 class JsonFormatter(logging.Formatter):
     """Format logs as newline-delimited JSON."""
-    
+
     def format(self, record: logging.LogRecord) -> str:
         log_obj = {
             "timestamp": datetime.utcfromtimestamp(record.created).isoformat(),
@@ -32,23 +33,19 @@ class JsonFormatter(logging.Formatter):
             "func": record.funcName,
             "line": record.lineno,
         }
-        
+
         # Merge extra context if available
         if hasattr(record, "context"):
             log_obj.update(record.context)
-            
+
         # Handle exceptions
         if record.exc_info:
             log_obj["exception"] = self.formatException(record.exc_info)
-            
+
         return json.dumps(log_obj)
 
 
-def setup_logging(
-    level: str = "INFO",
-    json_format: bool = False,
-    log_file: Optional[str] = None
-) -> None:
+def setup_logging(level: str = "INFO", json_format: bool = False, log_file: Optional[str] = None) -> None:
     """
     Configure the root logger.
 
@@ -59,7 +56,7 @@ def setup_logging(
     """
     root_logger = logging.getLogger()
     root_logger.setLevel(level.upper())
-    
+
     # Remove existing handlers to avoid duplicates
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
@@ -70,28 +67,21 @@ def setup_logging(
         console_handler.setFormatter(JsonFormatter())
     elif RICH_AVAILABLE:
         # "World-Class" Developer Experience
-        console_handler = RichHandler(
-            rich_tracebacks=True,
-            show_time=True,
-            show_path=False,
-            markup=True
-        )
+        console_handler = RichHandler(rich_tracebacks=True, show_time=True, show_path=False, markup=True)
     else:
         # Fallback
         console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setFormatter(
-            logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-        )
-        
+        console_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+
     root_logger.addHandler(console_handler)
 
     # 2. File Handler (Optional)
     if log_file:
         file_handler = logging.FileHandler(log_file)
         # File logs are always JSON or detailed text for debugging
-        file_handler.setFormatter(JsonFormatter() if json_format else logging.Formatter(
-            "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-        ))
+        file_handler.setFormatter(
+            JsonFormatter() if json_format else logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+        )
         root_logger.addHandler(file_handler)
 
 
@@ -102,6 +92,7 @@ def create_logger(name: str) -> logging.Logger:
 
 class MetricsRegistry:
     """Simple singleton for tracking application metrics."""
+
     _metrics: Dict[str, Union[int, float]] = {}
 
     @classmethod

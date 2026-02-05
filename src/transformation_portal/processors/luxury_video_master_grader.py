@@ -80,12 +80,7 @@ PRESETS: Dict[str, GradePreset] = {
     "signature_estate": GradePreset(
         name="Signature Estate",
         description="Flagship Kodak 2393 emulation with gentle highlight roll-off, soft denoise and warm mid-tones.",
-        lut=REPO_ROOT
-        / "assets"
-        / "luts"
-        / "film_emulation"
-        / "Kodak"
-        / "Kodak_2393_D55.cube",
+        lut=REPO_ROOT / "assets" / "luts" / "film_emulation" / "Kodak" / "Kodak_2393_D55.cube",
         lut_strength=0.85,
         denoise="soft",
         contrast=1.06,
@@ -105,12 +100,7 @@ PRESETS: Dict[str, GradePreset] = {
     "golden_hour_courtyard": GradePreset(
         name="Golden Hour Courtyard",
         description="Sunset warmth inspired by Montecito golden light with richer saturation and restrained grain.",
-        lut=REPO_ROOT
-        / "assets"
-        / "luts"
-        / "location_aesthetic"
-        / "California"
-        / "Montecito_Golden_Hour_HDR.cube",
+        lut=REPO_ROOT / "assets" / "luts" / "location_aesthetic" / "California" / "Montecito_Golden_Hour_HDR.cube",
         lut_strength=0.9,
         denoise="soft",
         contrast=1.04,
@@ -129,12 +119,7 @@ PRESETS: Dict[str, GradePreset] = {
     "interior_neutral_luxe": GradePreset(
         name="Interior Neutral Luxe",
         description="Clean, neutral interior pass with FilmConvert Nitrate base, elevated clarity and no added grain.",
-        lut=REPO_ROOT
-        / "assets"
-        / "luts"
-        / "film_emulation"
-        / "FilmConvert"
-        / "FilmConvert_Nitrate_LuxuryRE.cube",
+        lut=REPO_ROOT / "assets" / "luts" / "film_emulation" / "FilmConvert" / "FilmConvert_Nitrate_LuxuryRE.cube",
         lut_strength=0.8,
         denoise="medium",
         contrast=1.03,
@@ -206,9 +191,7 @@ def ensure_tools_available() -> None:
     """Verify FFmpeg tools are available on PATH, exit with error if not."""
     for tool in ("ffmpeg", "ffprobe"):
         if not shutil_which(tool):
-            raise SystemExit(
-                f"Required dependency '{tool}' was not found on PATH. Install FFmpeg to continue."
-            )
+            raise SystemExit(f"Required dependency '{tool}' was not found on PATH. Install FFmpeg to continue.")
 
 
 @lru_cache(maxsize=32)
@@ -264,9 +247,7 @@ def summarize_probe(data: Dict[str, object]) -> str:
     if video:
         w = video.get("width")
         h = video.get("height")
-        fps = describe_frame_rates(
-            video.get("avg_frame_rate"), video.get("r_frame_rate")
-        )
+        fps = describe_frame_rates(video.get("avg_frame_rate"), video.get("r_frame_rate"))
         codec = video.get("codec_name")
         pix_fmt = video.get("pix_fmt")
 
@@ -349,9 +330,7 @@ def get_color_space_tag(stream: Dict[str, object]) -> Optional[str]:
     return value
 
 
-def plan_tone_mapping(
-    args: argparse.Namespace, probe: Dict[str, object]
-) -> ToneMapPlan:
+def plan_tone_mapping(args: argparse.Namespace, probe: Dict[str, object]) -> ToneMapPlan:
     """Determine whether tone mapping should run for this clip."""
 
     method = (args.tone_map or "auto").lower()
@@ -359,9 +338,7 @@ def plan_tone_mapping(
     tone_map_desat = args.tone_map_desat
 
     if method == "off":
-        return ToneMapPlan(
-            enabled=False, note="Tone mapping disabled by user preference."
-        )
+        return ToneMapPlan(enabled=False, note="Tone mapping disabled by user preference.")
 
     video = extract_video_stream(probe)
     transfer = (video.get("color_trc") or "").lower()
@@ -494,10 +471,7 @@ def assess_frame_rate(
         normalized, fraction = normalize_frame_rate(user_target)
         return FrameRatePlan(
             target=normalized,
-            note=(
-                f"Frame-rate override requested; conforming output to {normalized}"
-                f" ({float(fraction):.3f}fps)."
-            ),
+            note=(f"Frame-rate override requested; conforming output to {normalized}" f" ({float(fraction):.3f}fps)."),
         )
 
     avg_fraction = parse_ffprobe_fraction(video.get("avg_frame_rate"))
@@ -543,10 +517,7 @@ def assess_frame_rate(
 
     return FrameRatePlan(
         target=None,
-        note=(
-            f"Source frame rate {format_fraction(base)} ({float(base):.3f}fps) within tolerance; "
-            "preserving timing."
-        ),
+        note=(f"Source frame rate {format_fraction(base)} ({float(base):.3f}fps) within tolerance; " "preserving timing."),
     )
 
 
@@ -643,16 +614,12 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     warmth = float(config.get("warmth", 0.0))
     cool = float(config.get("cool", 0.0))
     post_color_label = post_eq_label
-    if not math.isclose(warmth, 0.0, abs_tol=1e-4) or not math.isclose(
-        cool, 0.0, abs_tol=1e-4
-    ):
+    if not math.isclose(warmth, 0.0, abs_tol=1e-4) or not math.isclose(cool, 0.0, abs_tol=1e-4):
         new_label = next_label()
         # Clamp values to [-0.5, 0.5] to stay within tasteful limits.
         warmth_c = clamp(warmth, -0.5, 0.5)
         cool_c = clamp(cool, -0.5, 0.5)
-        nodes.append(
-            f"[{current}]colorbalance=rm={warmth_c:.4f}:gm=0.0000:bm={cool_c:.4f}[{new_label}]"
-        )
+        nodes.append(f"[{current}]colorbalance=rm={warmth_c:.4f}:gm=0.0000:bm={cool_c:.4f}[{new_label}]")
         current = new_label
         post_color_label = current
     else:
@@ -720,9 +687,7 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
         )
 
         blur_label = next_label()
-        nodes.append(
-            f"[{highlight_label}]gblur=sigma={radius:.2f}:steps=2[{blur_label}]"
-        )
+        nodes.append(f"[{highlight_label}]gblur=sigma={radius:.2f}:steps=2[{blur_label}]")
 
         tint_label = next_label()
         nodes.append(
@@ -731,9 +696,7 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
         )
 
         blend_label = next_label()
-        nodes.append(
-            f"[{base_label}][{tint_label}]blend=all_expr='A+({intensity:.3f}*B)'[{blend_label}]"
-        )
+        nodes.append(f"[{base_label}][{tint_label}]blend=all_expr='A+({intensity:.3f}*B)'[{blend_label}]")
         current = blend_label
 
     target_fps = config.get("target_fps")
@@ -866,9 +829,7 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("input_video", type=Path, help="Source video to be mastered.")
-    parser.add_argument(
-        "output_video", type=Path, help="Destination path for the master grade."
-    )
+    parser.add_argument("output_video", type=Path, help="Destination path for the master grade.")
     parser.add_argument(
         "--preset",
         choices=sorted(PRESETS.keys()),
@@ -896,17 +857,11 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         help="Override denoise strength.",
     )
     parser.add_argument("--contrast", type=float, help="Override contrast multiplier.")
-    parser.add_argument(
-        "--saturation", type=float, help="Override saturation multiplier."
-    )
+    parser.add_argument("--saturation", type=float, help="Override saturation multiplier.")
     parser.add_argument("--gamma", type=float, help="Override gamma adjustment.")
     parser.add_argument("--brightness", type=float, help="Override brightness offset.")
-    parser.add_argument(
-        "--warmth", type=float, help="Override warm mid-tone tint (red channel)."
-    )
-    parser.add_argument(
-        "--cool", type=float, help="Override cool mid-tone tint (blue channel)."
-    )
+    parser.add_argument("--warmth", type=float, help="Override warm mid-tone tint (red channel).")
+    parser.add_argument("--cool", type=float, help="Override cool mid-tone tint (blue channel).")
     parser.add_argument(
         "--sharpen",
         choices=list(UNSHARP_PRESETS) + ["of"],
@@ -954,9 +909,7 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         type=float,
         help="Luminance threshold (0-1) before highlights feed the halation pass.",
     )
-    parser.add_argument(
-        "--video-codec", default="prores_ks", help="Video mezzanine codec to use."
-    )
+    parser.add_argument("--video-codec", default="prores_ks", help="Video mezzanine codec to use.")
     parser.add_argument(
         "--prores-profile",
         type=int,
@@ -970,9 +923,7 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         default="copy",
         help="Audio codec to use (pcm_s24le for master-grade PCM).",
     )
-    parser.add_argument(
-        "--audio-bitrate", help="Override audio bitrate when transcoding audio."
-    )
+    parser.add_argument("--audio-bitrate", help="Override audio bitrate when transcoding audio.")
     parser.add_argument("--threads", type=int, help="Limit ffmpeg worker threads.")
     parser.add_argument(
         "--preview-frames",

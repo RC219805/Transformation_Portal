@@ -124,9 +124,7 @@ class ColorHarmonyAnalyzer:
 
         logger.info(f"ColorHarmonyAnalyzer initialized (n_colors={num_colors})")
 
-    def analyze(
-        self, image: Union[str, np.ndarray, Image.Image], sample_fraction: float = 0.1
-    ) -> HarmonyAnalysis:
+    def analyze(self, image: Union[str, np.ndarray, Image.Image], sample_fraction: float = 0.1) -> HarmonyAnalysis:
         """Analyze color harmony of image.
 
         Args:
@@ -152,17 +150,13 @@ class ColorHarmonyAnalyzer:
         temperature = self._calculate_temperature(palette)
 
         # Generate emotional profile
-        emotional_profile = self._generate_emotional_profile(
-            palette, harmony_type, temperature
-        )
+        emotional_profile = self._generate_emotional_profile(palette, harmony_type, temperature)
 
         # Identify disharmony factors
         disharmony_factors = self._identify_disharmony(palette)
 
         # Generate recommendations
-        recommendations = self._generate_recommendations(
-            harmony_score, harmony_type, temperature, disharmony_factors
-        )
+        recommendations = self._generate_recommendations(harmony_score, harmony_type, temperature, disharmony_factors)
 
         return HarmonyAnalysis(
             harmony_score=harmony_score,
@@ -174,9 +168,7 @@ class ColorHarmonyAnalyzer:
             disharmony_factors=disharmony_factors,
         )
 
-    def _extract_palette(
-        self, image: np.ndarray, sample_fraction: float
-    ) -> ColorPalette:
+    def _extract_palette(self, image: np.ndarray, sample_fraction: float) -> ColorPalette:
         """Extract dominant color palette using K-means.
 
         Args:
@@ -319,12 +311,8 @@ class ColorHarmonyAnalyzer:
             return HarmonyType.TRIADIC
 
         # Check for warm/cool
-        warm_count = sum(
-            any(start <= h <= end for start, end in self.WARM_HUE_RANGES) for h in hues
-        )
-        cool_count = sum(
-            any(start <= h <= end for start, end in self.COOL_HUE_RANGES) for h in hues
-        )
+        warm_count = sum(any(start <= h <= end for start, end in self.WARM_HUE_RANGES) for h in hues)
+        cool_count = sum(any(start <= h <= end for start, end in self.COOL_HUE_RANGES) for h in hues)
 
         if warm_count > cool_count * 2:
             return HarmonyType.WARM
@@ -333,9 +321,7 @@ class ColorHarmonyAnalyzer:
 
         return HarmonyType.NEUTRAL
 
-    def _calculate_harmony_score(
-        self, palette: ColorPalette, harmony_type: HarmonyType
-    ) -> float:
+    def _calculate_harmony_score(self, palette: ColorPalette, harmony_type: HarmonyType) -> float:
         """Calculate overall harmony score.
 
         Args:
@@ -479,10 +465,7 @@ class ColorHarmonyAnalyzer:
             issues.append("Extreme lightness contrast may be jarring")
 
         # Check for muddy colors (low saturation + mid lightness)
-        muddy_count = sum(
-            (s < 20 and 30 < lightness < 70)
-            for s, lightness in zip(palette.saturations, palette.lightnesses)
-        )
+        muddy_count = sum((s < 20 and 30 < lightness < 70) for s, lightness in zip(palette.saturations, palette.lightnesses))
         if muddy_count > len(palette.colors_rgb) // 2:
             issues.append("Many muddy/dull colors detected")
 
@@ -523,15 +506,11 @@ class ColorHarmonyAnalyzer:
         recommendations = []
 
         if harmony_score >= 0.8:
-            recommendations.append(
-                "Excellent color harmony! Palette activates positive neural responses."
-            )
+            recommendations.append("Excellent color harmony! Palette activates positive neural responses.")
         elif harmony_score >= 0.6:
             recommendations.append("Good color harmony with room for optimization.")
         else:
-            recommendations.append(
-                "Color palette could benefit from harmonization to improve emotional resonance."
-            )
+            recommendations.append("Color palette could benefit from harmonization to improve emotional resonance.")
 
         # Temperature-specific recommendations
         if abs(temperature) < 0.2:
@@ -543,8 +522,7 @@ class ColorHarmonyAnalyzer:
         # Harmony type recommendations
         if harmony_type == HarmonyType.NEUTRAL:
             recommendations.append(
-                "No clear harmony pattern detected. Consider unifying palette "
-                "using analogous or complementary scheme."
+                "No clear harmony pattern detected. Consider unifying palette " "using analogous or complementary scheme."
             )
 
         # Address specific disharmony factors

@@ -3,16 +3,18 @@
 Tests image validation, format conversion, dimension enforcement,
 and normalization for depth inference.
 """
+
+from pathlib import Path
+
 import numpy as np
 import pytest
-from pathlib import Path
 from PIL import Image
 
 from transformation_portal.lux_depth_v3.preprocessing import (
-    validate_image_format,
-    preprocess_image,
     DIMENSION_MULTIPLE,
     SUPPORTED_EXTENSIONS,
+    preprocess_image,
+    validate_image_format,
 )
 
 
@@ -23,7 +25,7 @@ class TestValidateImageFormat:
         """Test that valid image passes validation."""
         # Create valid PNG
         img_path = tmp_path / "test.png"
-        img = Image.new('RGB', (64, 64), color='red')
+        img = Image.new("RGB", (64, 64), color="red")
         img.save(img_path)
 
         result = validate_image_format(img_path)
@@ -57,7 +59,7 @@ class TestValidateImageFormat:
     def test_all_supported_extensions(self, tmp_path, ext):
         """Test that all supported extensions are accepted."""
         img_path = tmp_path / f"test{ext}"
-        img = Image.new('RGB', (32, 32))
+        img = Image.new("RGB", (32, 32))
         img.save(img_path)
 
         result = validate_image_format(img_path)
@@ -72,7 +74,7 @@ class TestPreprocessImage:
         """Test conversion from uint8 RGB to float32 [0, 1]."""
         # Create uint8 RGB image
         img_path = tmp_path / "rgb.png"
-        img = Image.new('RGB', (100, 100), color=(128, 128, 128))
+        img = Image.new("RGB", (100, 100), color=(128, 128, 128))
         img.save(img_path)
 
         result, original_shape = preprocess_image(img_path)
@@ -90,7 +92,7 @@ class TestPreprocessImage:
     def test_grayscale_converted_to_rgb(self, tmp_path):
         """Test that grayscale images are converted to 3-channel RGB."""
         img_path = tmp_path / "gray.png"
-        img = Image.new('L', (50, 50), color=100)
+        img = Image.new("L", (50, 50), color=100)
         img.save(img_path)
 
         result, original_shape = preprocess_image(img_path)
@@ -105,7 +107,7 @@ class TestPreprocessImage:
     def test_rgba_converted_to_rgb(self, tmp_path):
         """Test that RGBA images drop alpha channel."""
         img_path = tmp_path / "rgba.png"
-        img = Image.new('RGBA', (50, 50), color=(255, 0, 0, 128))
+        img = Image.new("RGBA", (50, 50), color=(255, 0, 0, 128))
         img.save(img_path)
 
         result, original_shape = preprocess_image(img_path)
@@ -117,10 +119,10 @@ class TestPreprocessImage:
         """Test that dimensions are enforced to multiples of 14."""
         # Create image with non-compliant dimensions
         test_cases = [
-            ((100, 100), (98, 98)),   # 100 → 98 (7×14)
-            ((50, 70), (42, 70)),     # 50 → 42 (3×14), 70 → 70 (5×14)
-            ((15, 15), (14, 14)),     # 15 → 14 (1×14)
-            ((7, 7), (14, 14)),       # 7 → 14 (minimum)
+            ((100, 100), (98, 98)),  # 100 → 98 (7×14)
+            ((50, 70), (42, 70)),  # 50 → 42 (3×14), 70 → 70 (5×14)
+            ((15, 15), (14, 14)),  # 15 → 14 (1×14)
+            ((7, 7), (14, 14)),  # 7 → 14 (minimum)
         ]
 
         for input_size, expected_size in test_cases:
@@ -140,7 +142,7 @@ class TestPreprocessImage:
         """Test that original shape is returned correctly."""
         # Create image
         img_path = tmp_path / "test.png"
-        img = Image.new('RGB', (120, 80))  # W=120, H=80
+        img = Image.new("RGB", (120, 80))  # W=120, H=80
         img.save(img_path)
 
         result, original_shape = preprocess_image(img_path)
@@ -151,7 +153,7 @@ class TestPreprocessImage:
     def test_target_size_resizes_long_edge(self, tmp_path):
         """Test that target_size resizes long edge while maintaining aspect."""
         img_path = tmp_path / "test.png"
-        img = Image.new('RGB', (200, 100))  # W=200 (long), H=100
+        img = Image.new("RGB", (200, 100))  # W=200 (long), H=100
         img.save(img_path)
 
         result, original_shape = preprocess_image(img_path, target_size=112)
@@ -226,17 +228,20 @@ class TestPreprocessImage:
 class TestDimensionEnforcement:
     """Test dimension enforcement edge cases."""
 
-    @pytest.mark.parametrize("input_dim,expected_dim", [
-        (14, 14),    # Already compliant
-        (28, 28),    # Already compliant
-        (42, 42),    # Already compliant
-        (15, 14),    # Round down
-        (27, 14),    # Round down
-        (29, 28),    # Round down
-        (100, 98),   # Round down
-        (1, 14),     # Clamp to minimum
-        (7, 14),     # Clamp to minimum
-    ])
+    @pytest.mark.parametrize(
+        "input_dim,expected_dim",
+        [
+            (14, 14),  # Already compliant
+            (28, 28),  # Already compliant
+            (42, 42),  # Already compliant
+            (15, 14),  # Round down
+            (27, 14),  # Round down
+            (29, 28),  # Round down
+            (100, 98),  # Round down
+            (1, 14),  # Clamp to minimum
+            (7, 14),  # Clamp to minimum
+        ],
+    )
     def test_dimension_rounding(self, input_dim, expected_dim):
         """Test dimension rounding behavior."""
         img_array = np.random.rand(input_dim, input_dim, 3).astype(np.float32)
@@ -257,7 +262,7 @@ class TestEndToEnd:
         """Test complete preprocessing pipeline from file."""
         # Create test image
         img_path = tmp_path / "test.jpg"
-        img = Image.new('RGB', (100, 75), color=(200, 100, 50))
+        img = Image.new("RGB", (100, 75), color=(200, 100, 50))
         img.save(img_path)
 
         # Preprocess

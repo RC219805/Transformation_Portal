@@ -65,9 +65,7 @@ class MultiReferenceBlender:
             return "mps"
         return "cpu"
 
-    def weighted_blend(
-        self, features_weights: List[Tuple[torch.Tensor, float]], normalize: bool = True
-    ) -> torch.Tensor:
+    def weighted_blend(self, features_weights: List[Tuple[torch.Tensor, float]], normalize: bool = True) -> torch.Tensor:
         """Blend features using weighted average.
 
         Args:
@@ -85,9 +83,7 @@ class MultiReferenceBlender:
         weights = weights / weights.sum()
 
         # Weighted sum
-        blended = sum(
-            features * weight for features, weight in zip(features_list, weights)
-        )
+        blended = sum(features * weight for features, weight in zip(features_list, weights))
 
         # Normalize if requested
         if normalize:
@@ -97,9 +93,7 @@ class MultiReferenceBlender:
 
         return blended
 
-    def max_blend(
-        self, features_list: List[torch.Tensor], normalize: bool = True
-    ) -> torch.Tensor:
+    def max_blend(self, features_list: List[torch.Tensor], normalize: bool = True) -> torch.Tensor:
         """Blend features using element-wise maximum.
 
         Emphasizes strongest features from each reference.
@@ -123,9 +117,7 @@ class MultiReferenceBlender:
 
         return blended
 
-    def min_blend(
-        self, features_list: List[torch.Tensor], normalize: bool = True
-    ) -> torch.Tensor:
+    def min_blend(self, features_list: List[torch.Tensor], normalize: bool = True) -> torch.Tensor:
         """Blend features using element-wise minimum.
 
         Emphasizes common features across references.
@@ -149,9 +141,7 @@ class MultiReferenceBlender:
 
         return blended
 
-    def average_blend(
-        self, features_list: List[torch.Tensor], normalize: bool = True
-    ) -> torch.Tensor:
+    def average_blend(self, features_list: List[torch.Tensor], normalize: bool = True) -> torch.Tensor:
         """Blend features using simple average.
 
         Args:
@@ -233,14 +223,10 @@ class MultiReferenceBlender:
             ... )
         """
         # Blend within each group
-        group_blends = [
-            self.weighted_blend(group, normalize=False) for group in feature_groups
-        ]
+        group_blends = [self.weighted_blend(group, normalize=False) for group in feature_groups]
 
         # Blend groups
-        blended = self.weighted_blend(
-            list(zip(group_blends, group_weights)), normalize=normalize
-        )
+        blended = self.weighted_blend(list(zip(group_blends, group_weights)), normalize=normalize)
 
         logger.info(f"Hierarchical blend of {len(feature_groups)} groups")
 
@@ -269,19 +255,14 @@ class MultiReferenceBlender:
         """
         # Compute similarities to target
         similarities = torch.stack(
-            [
-                torch.nn.functional.cosine_similarity(features, target_features, dim=-1)
-                for features in features_list
-            ]
+            [torch.nn.functional.cosine_similarity(features, target_features, dim=-1) for features in features_list]
         )
 
         # Apply softmax to get weights
         weights = torch.nn.functional.softmax(similarities / temperature, dim=0)
 
         # Weighted blend
-        blended = sum(
-            features * weight for features, weight in zip(features_list, weights)
-        )
+        blended = sum(features * weight for features, weight in zip(features_list, weights))
 
         # Normalize if requested
         if normalize:
@@ -343,9 +324,7 @@ class MultiReferenceBlender:
         # Create interpolations to each variation
         for variation in variations[: num_samples - 1]:
             # Sample at midpoint
-            interpolated = self.interpolate_blend(
-                base_features, variation, alpha=0.5, normalize=True
-            )
+            interpolated = self.interpolate_blend(base_features, variation, alpha=0.5, normalize=True)
             palette.append(interpolated)
 
         logger.info(f"Created style palette with {len(palette)} samples")
@@ -379,24 +358,17 @@ class MultiReferenceBlender:
             weights = weights / weights.sum()
 
             # Blend
-            blended = sum(
-                features * weight for features, weight in zip(features_list, weights)
-            )
+            blended = sum(features * weight for features, weight in zip(features_list, weights))
             blended = blended / blended.norm(dim=-1, keepdim=True)
 
             # Compute similarity
-            similarity = torch.nn.functional.cosine_similarity(
-                blended, target_features, dim=-1
-            ).item()
+            similarity = torch.nn.functional.cosine_similarity(blended, target_features, dim=-1).item()
 
             if similarity > best_similarity:
                 best_similarity = similarity
                 best_weights = weights.cpu().numpy().tolist()
 
-        logger.info(
-            f"Optimal blend found (similarity={best_similarity:.3f}): "
-            f"weights={best_weights}"
-        )
+        logger.info(f"Optimal blend found (similarity={best_similarity:.3f}): " f"weights={best_weights}")
 
         return best_weights, best_similarity
 

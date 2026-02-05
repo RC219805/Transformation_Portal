@@ -228,7 +228,4 @@ class LPIPSMetric:
         return tensor.to(self.device)
 
     def __repr__(self) -> str:
-        return (
-            f"LPIPSMetric(network='{self.network}', "
-            f"device='{self.device}', spatial={self.spatial})"
-        )
+        return f"LPIPSMetric(network='{self.network}', " f"device='{self.device}', spatial={self.spatial})"

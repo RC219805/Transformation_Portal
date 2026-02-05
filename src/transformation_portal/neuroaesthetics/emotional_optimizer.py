@@ -32,18 +32,9 @@ from typing import Any, Dict, List, Tuple, Union
 import numpy as np
 from PIL import Image
 
-from transformation_portal.neuroaesthetics.golden_ratio import (
-    GoldenRatioAnalyzer,
-    GoldenRatioAnalysis,
-)
-from transformation_portal.neuroaesthetics.color_harmony import (
-    ColorHarmonyAnalyzer,
-    HarmonyAnalysis,
-)
-from transformation_portal.neuroaesthetics.spatial_frequency import (
-    SpatialFrequencyAnalyzer,
-    SpatialFrequencyAnalysis,
-)
+from transformation_portal.neuroaesthetics.color_harmony import ColorHarmonyAnalyzer, HarmonyAnalysis
+from transformation_portal.neuroaesthetics.golden_ratio import GoldenRatioAnalysis, GoldenRatioAnalyzer
+from transformation_portal.neuroaesthetics.spatial_frequency import SpatialFrequencyAnalysis, SpatialFrequencyAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -268,11 +259,7 @@ class EmotionalOptimizer:
             scores["luxury"] = max(scores.get("luxury", 0), 0.75)
 
         # Overall quality affects luxury and aspiration
-        overall = (
-            golden_ratio.score
-            + color_harmony.harmony_score
-            + spatial_frequency.visual_comfort_score
-        ) / 3
+        overall = (golden_ratio.score + color_harmony.harmony_score + spatial_frequency.visual_comfort_score) / 3
 
         if overall > 0.8:
             scores["luxury"] = max(scores.get("luxury", 0), 0.85)
@@ -407,9 +394,7 @@ class EmotionalOptimizer:
 
         return strategy
 
-    def _identify_gaps(
-        self, profile: EmotionalProfile, requirements: Dict
-    ) -> List[Dict[str, Any]]:
+    def _identify_gaps(self, profile: EmotionalProfile, requirements: Dict) -> List[Dict[str, Any]]:
         """Identify gaps between current state and requirements.
 
         Args:
@@ -429,40 +414,31 @@ class EmotionalOptimizer:
                         "aspect": "composition",
                         "current": profile.golden_ratio_analysis.score,
                         "target": requirements["golden_ratio_min"],
-                        "gap": requirements["golden_ratio_min"]
-                        - profile.golden_ratio_analysis.score,
+                        "gap": requirements["golden_ratio_min"] - profile.golden_ratio_analysis.score,
                     }
                 )
 
         # Check color harmony
         if "color_harmony_min" in requirements:
-            if (
-                profile.color_harmony_analysis.harmony_score
-                < requirements["color_harmony_min"]
-            ):
+            if profile.color_harmony_analysis.harmony_score < requirements["color_harmony_min"]:
                 gaps.append(
                     {
                         "aspect": "color_harmony",
                         "current": profile.color_harmony_analysis.harmony_score,
                         "target": requirements["color_harmony_min"],
-                        "gap": requirements["color_harmony_min"]
-                        - profile.color_harmony_analysis.harmony_score,
+                        "gap": requirements["color_harmony_min"] - profile.color_harmony_analysis.harmony_score,
                     }
                 )
 
         # Check visual comfort
         if "visual_comfort_min" in requirements:
-            if (
-                profile.spatial_frequency_analysis.visual_comfort_score
-                < requirements["visual_comfort_min"]
-            ):
+            if profile.spatial_frequency_analysis.visual_comfort_score < requirements["visual_comfort_min"]:
                 gaps.append(
                     {
                         "aspect": "visual_comfort",
                         "current": profile.spatial_frequency_analysis.visual_comfort_score,
                         "target": requirements["visual_comfort_min"],
-                        "gap": requirements["visual_comfort_min"]
-                        - profile.spatial_frequency_analysis.visual_comfort_score,
+                        "gap": requirements["visual_comfort_min"] - profile.spatial_frequency_analysis.visual_comfort_score,
                     }
                 )
 
@@ -486,8 +462,7 @@ class EmotionalOptimizer:
         for gap in gaps:
             if gap["aspect"] == "composition":
                 adjustments.append(
-                    f"Crop or reframe to improve golden ratio score from "
-                    f"{gap['current']:.2f} to {gap['target']:.2f}"
+                    f"Crop or reframe to improve golden ratio score from " f"{gap['current']:.2f} to {gap['target']:.2f}"
                 )
 
             elif gap["aspect"] == "color_harmony":
@@ -500,8 +475,7 @@ class EmotionalOptimizer:
 
             elif gap["aspect"] == "visual_comfort":
                 adjustments.append(
-                    "Optimize spatial frequency balance: "
-                    "reduce high-frequency noise, enhance structural clarity"
+                    "Optimize spatial frequency balance: " "reduce high-frequency noise, enhance structural clarity"
                 )
 
         return adjustments
@@ -525,9 +499,7 @@ class EmotionalOptimizer:
 
         # Temperature adjustments
         if "temperature" in requirements:
-            params["temperature_shift"] = (
-                requirements["temperature"] * 10
-            )  # Scale for processing
+            params["temperature_shift"] = requirements["temperature"] * 10  # Scale for processing
 
         # Saturation adjustments
         if "avg_saturation_max" in requirements:
@@ -541,10 +513,7 @@ class EmotionalOptimizer:
             params["sharpness"] = 0.7  # Increase detail
 
         # Smoothing for visual comfort
-        if (
-            "visual_comfort_min" in requirements
-            and requirements["visual_comfort_min"] > 0.8
-        ):
+        if "visual_comfort_min" in requirements and requirements["visual_comfort_min"] > 0.8:
             params["smoothing"] = 0.3  # Gentle smoothing
 
         return params

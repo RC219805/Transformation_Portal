@@ -8,13 +8,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Type
 
-from .interface import (
-    DepthModelPlugin,
-    EnhancerPlugin,
-    PluginInterface,
-    PluginType,
-    ProcessorPlugin,
-)
+from .interface import DepthModelPlugin, EnhancerPlugin, PluginInterface, PluginType, ProcessorPlugin
 from .loader import LoadedPlugin, PluginManifest
 
 logger = logging.getLogger(__name__)
@@ -65,9 +59,7 @@ class ValidationResult:
         elif issue.severity == ValidationSeverity.WARNING:
             self.warnings_count += 1
 
-    def get_issues_by_severity(
-        self, severity: ValidationSeverity
-    ) -> List[ValidationIssue]:
+    def get_issues_by_severity(self, severity: ValidationSeverity) -> List[ValidationIssue]:
         """Get issues filtered by severity."""
         return [i for i in self.issues if i.severity == severity]
 
@@ -123,9 +115,7 @@ class PluginValidator:
         self._strict_mode = strict_mode
         self._custom_validators = custom_validators or []
 
-    def validate(
-        self, plugin: PluginInterface, manifest: Optional[PluginManifest] = None
-    ) -> ValidationResult:
+    def validate(self, plugin: PluginInterface, manifest: Optional[PluginManifest] = None) -> ValidationResult:
         """Validate a plugin comprehensively.
 
         Args:
@@ -136,9 +126,7 @@ class PluginValidator:
             ValidationResult with all issues found
         """
         result = ValidationResult(
-            plugin_name=(
-                plugin.metadata.name if hasattr(plugin, "metadata") else "unknown"
-            ),
+            plugin_name=(plugin.metadata.name if hasattr(plugin, "metadata") else "unknown"),
             is_valid=True,
         )
 
@@ -189,9 +177,7 @@ class PluginValidator:
         """
         if not loaded_plugin.plugin:
             result = ValidationResult(
-                plugin_name=(
-                    loaded_plugin.manifest.name if loaded_plugin.manifest else "unknown"
-                ),
+                plugin_name=(loaded_plugin.manifest.name if loaded_plugin.manifest else "unknown"),
                 is_valid=False,
             )
             result.add_issue(
@@ -206,9 +192,7 @@ class PluginValidator:
 
         return self.validate(loaded_plugin.plugin, loaded_plugin.manifest)
 
-    def _validate_metadata(
-        self, plugin: PluginInterface, result: ValidationResult
-    ) -> None:
+    def _validate_metadata(self, plugin: PluginInterface, result: ValidationResult) -> None:
         """Validate plugin metadata."""
         if not hasattr(plugin, "metadata"):
             result.add_issue(
@@ -271,9 +255,7 @@ class PluginValidator:
                 )
             )
 
-    def _validate_interface_compliance(
-        self, plugin: PluginInterface, result: ValidationResult
-    ) -> None:
+    def _validate_interface_compliance(self, plugin: PluginInterface, result: ValidationResult) -> None:
         """Validate plugin implements required interface."""
         # Check it's a proper PluginInterface subclass
         if not isinstance(plugin, PluginInterface):
@@ -321,9 +303,7 @@ class PluginValidator:
                             )
                         )
 
-    def _validate_method_signatures(
-        self, plugin: PluginInterface, result: ValidationResult
-    ) -> None:
+    def _validate_method_signatures(self, plugin: PluginInterface, result: ValidationResult) -> None:
         """Validate method signatures match expected patterns."""
         # Check initialize accepts config
         if hasattr(plugin, "initialize"):
@@ -356,9 +336,7 @@ class PluginValidator:
                     )
                 )
 
-    def _validate_manifest(
-        self, manifest: PluginManifest, result: ValidationResult
-    ) -> None:
+    def _validate_manifest(self, manifest: PluginManifest, result: ValidationResult) -> None:
         """Validate plugin manifest."""
         # Check entry point format
         if not manifest.entry_point:
@@ -392,9 +370,7 @@ class PluginValidator:
                 )
             )
 
-    def _validate_dependencies(
-        self, dependencies: List[str], result: ValidationResult
-    ) -> None:
+    def _validate_dependencies(self, dependencies: List[str], result: ValidationResult) -> None:
         """Validate plugin dependencies are available."""
         for dep in dependencies:
             # Parse dependency string
@@ -431,13 +407,12 @@ class PluginValidator:
             if version_spec:
                 self._check_version_constraint(package_name, version_spec, result)
 
-    def _check_version_constraint(
-        self, package_name: str, version_spec: str, result: ValidationResult
-    ) -> None:
+    def _check_version_constraint(self, package_name: str, version_spec: str, result: ValidationResult) -> None:
         """Check if installed package version meets constraint."""
         try:
-            from packaging import version as pkg_version
             import importlib.metadata
+
+            from packaging import version as pkg_version
 
             installed_version = importlib.metadata.version(package_name)
 
@@ -468,8 +443,7 @@ class PluginValidator:
                     result.add_issue(
                         ValidationIssue(
                             code="VERSION_MISMATCH",
-                            message=f"Package {package_name} version {installed_version} "
-                            f"does not satisfy {version_spec}",
+                            message=f"Package {package_name} version {installed_version} " f"does not satisfy {version_spec}",
                             severity=ValidationSeverity.ERROR,
                         )
                     )
@@ -477,9 +451,7 @@ class PluginValidator:
         except Exception as e:
             logger.debug(f"Could not check version for {package_name}: {e}")
 
-    def _validate_version_compatibility(
-        self, plugin: PluginInterface, result: ValidationResult
-    ) -> None:
+    def _validate_version_compatibility(self, plugin: PluginInterface, result: ValidationResult) -> None:
         """Validate plugin is compatible with current portal version."""
         from transformation_portal import __version__ as portal_version
 
@@ -500,9 +472,7 @@ class PluginValidator:
                     )
                 )
 
-    def _validate_initialization(
-        self, plugin: PluginInterface, result: ValidationResult
-    ) -> None:
+    def _validate_initialization(self, plugin: PluginInterface, result: ValidationResult) -> None:
         """Validate plugin initialization behavior."""
         # Check internal state
         if hasattr(plugin, "_initialized") and plugin._initialized:

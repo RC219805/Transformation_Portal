@@ -66,16 +66,28 @@ def _make_engine(config: DA3Config | None = None) -> DA3InferenceEngine:
     return DA3InferenceEngine(config)
 
 
-def _rand_image(h: int, w: int, dtype: np.dtype = np.float32) -> np.ndarray:
+def _rand_image(h: int, w: int, dtype: np.dtype = np.float32, rng=None) -> np.ndarray:
     """Create a random RGB test image."""
+    if rng is None:
+        rng = np.random.default_rng()
+
     if dtype == np.uint8:
-        return np.random.randint(0, 256, (h, w, 3), dtype=np.uint8)
-    return np.random.rand(h, w, 3).astype(np.float32)
+        # Generator API (default_rng) or module fallback
+        if hasattr(rng, "integers"):
+            return rng.integers(0, 256, (h, w, 3), dtype=np.uint8)
+        # Module / RandomState fallback
+        return rng.randint(0, 256, (h, w, 3), dtype=np.uint8)
+
+    # Float32 path
+    if hasattr(rng, "random"):
+        return rng.random((h, w, 3)).astype(np.float32)
+    return rng.rand(h, w, 3).astype(np.float32)
 
 
 # -----------------------------------------------------------------------------
 # Real-model integration tests (opt-in)
 # -----------------------------------------------------------------------------
+
 
 @skip_hf
 @skip_offline
@@ -263,6 +275,7 @@ def test_da3_infer_from_path_roundtrip(tmp_path: Path):
 # -----------------------------------------------------------------------------
 # Lightweight, non-network tests (always run in ML tier)
 # -----------------------------------------------------------------------------
+
 
 def test_da3_commercial_use_flag():
     """Test commercial_use initialization parameter (no model load)."""

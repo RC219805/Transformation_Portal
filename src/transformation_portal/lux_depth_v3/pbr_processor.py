@@ -3,8 +3,10 @@
 This module provides a clean, standalone API for PBR map generation
 that doesn't require the full EnhanceOrchestrator pipeline.
 
-Usage:
-    # From cached depth
+Usage
+-----
+From cached depth::
+
     from transformation_portal.lux_depth_v3 import PBRProcessor, get_preset
 
     config = get_preset("premium").to_pbr_config()
@@ -15,15 +17,16 @@ Usage:
         base_name="scene1"
     )
 
-    # From depth array
+From depth array::
+
     processor = PBRProcessor(config=config, output_dir="output/pbr/")
     maps = processor.from_depth(depth_array, save=True, base_name="scene1")
 """
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional
-import logging
 
 import numpy as np
 
@@ -51,12 +54,7 @@ class PBRProcessor:
     config: PBRConfig
     output_dir: Optional[Path] = None
 
-    def from_depth(
-        self,
-        depth: np.ndarray,
-        save: bool = True,
-        base_name: Optional[str] = None
-    ) -> Dict[str, np.ndarray]:
+    def from_depth(self, depth: np.ndarray, save: bool = True, base_name: Optional[str] = None) -> Dict[str, np.ndarray]:
         """Generate PBR maps from depth array.
 
         Args:
@@ -94,13 +92,7 @@ class PBRProcessor:
         return maps
 
     @classmethod
-    def from_cached_depth(
-        cls,
-        depth_path: Path,
-        config: PBRConfig,
-        output_dir: Path,
-        base_name: str
-    ) -> Dict[str, Path]:
+    def from_cached_depth(cls, depth_path: Path, config: PBRConfig, output_dir: Path, base_name: str) -> Dict[str, Path]:
         """Generate PBR from cached depth file (PNG or NPY).
 
         Standalone entry point for PBR-only workflows without
@@ -136,13 +128,14 @@ class PBRProcessor:
             raise FileNotFoundError(f"Depth file not found: {depth_path}")
 
         # Load depth - prefer .npy (float precision) over .png (16-bit quantized)
-        npy_path = depth_path.with_suffix('.npy')
+        npy_path = depth_path.with_suffix(".npy")
         if npy_path.exists():
             logger.info(f"Loading float depth from: {npy_path}")
             depth = np.load(str(npy_path))
         else:
             logger.info(f"Loading quantized depth from: {depth_path}")
             from .depth_writer import read_depth_u16_png
+
             depth_raw = read_depth_u16_png(depth_path)
 
             # Robust normalization - check dtype

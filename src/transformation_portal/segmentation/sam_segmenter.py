@@ -18,22 +18,17 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import cv2
 import numpy as np
-from PIL import Image
 import torch
+from PIL import Image
 
 try:
-    from segment_anything import (
-        SamAutomaticMaskGenerator,
-        SamPredictor,
-        sam_model_registry,
-    )
+    from segment_anything import SamAutomaticMaskGenerator, SamPredictor, sam_model_registry
 
     SAM_AVAILABLE = True
 except ImportError:
     SAM_AVAILABLE = False
     logging.warning(
-        "SAM not available. Install with: "
-        "pip install git+https://github.com/facebookresearch/segment-anything.git"
+        "SAM not available. Install with: " "pip install git+https://github.com/facebookresearch/segment-anything.git"
     )
 
 
@@ -96,8 +91,7 @@ class SAMSegmenter:
         """
         if not SAM_AVAILABLE:
             raise ImportError(
-                "SAM required. Install with: "
-                "pip install git+https://github.com/facebookresearch/segment-anything.git"
+                "SAM required. Install with: " "pip install git+https://github.com/facebookresearch/segment-anything.git"
             )
 
         self.model_type = model_type
@@ -278,9 +272,7 @@ class SAMSegmenter:
         self.predictor.set_image(image_np)
 
         # Predict mask
-        masks, scores, logits = self.predictor.predict(
-            box=np.array(box), multimask_output=False
-        )
+        masks, scores, logits = self.predictor.predict(box=np.array(box), multimask_output=False)
 
         return masks[0]
 
@@ -327,9 +319,7 @@ class SAMSegmenter:
         sorted_masks = sorted(masks, key=lambda x: x["area"], reverse=True)
         return sorted_masks[:n]
 
-    def merge_masks(
-        self, masks: List[np.ndarray], image_shape: Optional[Tuple[int, int]] = None
-    ) -> np.ndarray:
+    def merge_masks(self, masks: List[np.ndarray], image_shape: Optional[Tuple[int, int]] = None) -> np.ndarray:
         """Merge multiple masks into single mask.
 
         Args:
@@ -381,9 +371,7 @@ class SAMSegmenter:
             "avg_stability": np.mean([m["stability_score"] for m in masks]),
         }
 
-    def _load_image_rgb(
-        self, image: Union[str, Path, Image.Image, np.ndarray]
-    ) -> np.ndarray:
+    def _load_image_rgb(self, image: Union[str, Path, Image.Image, np.ndarray]) -> np.ndarray:
         """Load image as RGB numpy array.
 
         Args:

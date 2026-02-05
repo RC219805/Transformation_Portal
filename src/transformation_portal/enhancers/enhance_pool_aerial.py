@@ -3,8 +3,6 @@
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw
-
 from board_material_aerial_enhancer import (
     DEFAULT_TEXTURES,
     _assign_full_image,
@@ -15,6 +13,7 @@ from board_material_aerial_enhancer import (
     build_material_rules,
     enhance_aerial,
 )
+from PIL import Image, ImageDraw
 
 # Input and output paths
 input_path = Path("input_images/RC_002RC-office750Picacho_Pool 2.tif")
@@ -138,12 +137,8 @@ with open(report_path, "w") as f:
         stat = next(s for s in stats if s.label == label)
         coverage = (stat.count / labels.size) * 100
         total_assigned += coverage
-        rgb = (
-            f"({stat.mean_rgb[0]:.2f}, {stat.mean_rgb[1]:.2f}, {stat.mean_rgb[2]:.2f})"
-        )
-        hsv = (
-            f"({stat.mean_hsv[0]:.2f}, {stat.mean_hsv[1]:.2f}, {stat.mean_hsv[2]:.2f})"
-        )
+        rgb = f"({stat.mean_rgb[0]:.2f}, {stat.mean_rgb[1]:.2f}, {stat.mean_rgb[2]:.2f})"
+        hsv = f"({stat.mean_hsv[0]:.2f}, {stat.mean_hsv[1]:.2f}, {stat.mean_hsv[2]:.2f})"
         f.write(f"| **{rule.name.title()}** | {coverage:.1f}% | {rgb} | {hsv} |\n")
 
     unassigned = 100 - total_assigned
@@ -173,28 +168,16 @@ with open(report_path, "w") as f:
 
     f.write("\n## Pool Area Specific Notes\n\n")
     f.write("This enhancement focuses on the pool and surrounding hardscape:\n\n")
-    f.write(
-        "- **Pool Deck**: Likely identified as stone or roof material (Bokara/Ipe pavers)\n"
-    )
-    f.write(
-        "- **Pool Water**: May be assigned to equitone or screens (blue-grey tones)\n"
-    )
-    f.write(
-        "- **Landscaping**: Vegetation typically unassigned or low-confidence clusters\n"
-    )
+    f.write("- **Pool Deck**: Likely identified as stone or roof material (Bokara/Ipe pavers)\n")
+    f.write("- **Pool Water**: May be assigned to equitone or screens (blue-grey tones)\n")
+    f.write("- **Landscaping**: Vegetation typically unassigned or low-confidence clusters\n")
     f.write("- **Structures**: Plaster walls, bronze details, shade elements\n\n")
 
     f.write("## Recommendations\n\n")
-    f.write(
-        "- For more pool-specific material detection, consider increasing `k` to 10-12 clusters\n"
-    )
+    f.write("- For more pool-specific material detection, consider increasing `k` to 10-12 clusters\n")
     f.write("- Water reflections may benefit from custom water material rule\n")
-    f.write(
-        "- Deck materials could use higher blend strength (0.7-0.8) for stronger effect\n"
-    )
-    f.write(
-        "- Consider masking vegetation areas before processing for cleaner results\n"
-    )
+    f.write("- Deck materials could use higher blend strength (0.7-0.8) for stronger effect\n")
+    f.write("- Consider masking vegetation areas before processing for cleaner results\n")
 
 print(f"\n✓ Report saved: {report_path}")
 print(f"\n{'=' * 60}")

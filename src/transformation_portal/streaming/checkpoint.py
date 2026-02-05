@@ -285,9 +285,7 @@ def checkpoint(
 
                     # Save checkpoint at intervals
                     if iteration % checkpoint_interval == 0:
-                        checkpoint_obj = manager.create_checkpoint(
-                            progress=progress, state=state
-                        )
+                        checkpoint_obj = manager.create_checkpoint(progress=progress, state=state)
                         manager.save(checkpoint_obj)
 
                     iteration += 1
@@ -300,9 +298,7 @@ def checkpoint(
     return decorator
 
 
-def resume_from_checkpoint(
-    operation_id: str, checkpoint_dir: Optional[Path] = None
-) -> Optional[Dict[str, Any]]:
+def resume_from_checkpoint(operation_id: str, checkpoint_dir: Optional[Path] = None) -> Optional[Dict[str, Any]]:
     """Resume operation from last checkpoint.
 
     Args:

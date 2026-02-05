@@ -4,16 +4,16 @@ Image Loader for Perceptual Baseline Calibration
 Handles loading, preprocessing, and metadata extraction for source images.
 """
 
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Optional, List, Dict, Any, Union
-from enum import Enum
 import logging
+from dataclasses import dataclass
+from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
 
-import torch
-from torch import Tensor
-from PIL import Image
 import numpy as np
+import torch
+from PIL import Image
+from torch import Tensor
 
 logger = logging.getLogger(__name__)
 
@@ -93,9 +93,7 @@ class ImageLoader:
 
         logger.info(f"Initialized ImageLoader with target_size={target_size}")
 
-    def load(
-        self, image_path: Union[str, Path], image_type: Optional[ImageType] = None
-    ) -> tuple[Tensor, ImageMetadata]:
+    def load(self, image_path: Union[str, Path], image_type: Optional[ImageType] = None) -> tuple[Tensor, ImageMetadata]:
         """
         Load image with metadata extraction.
 
@@ -174,9 +172,7 @@ class ImageLoader:
 
         return tensors, metadatas
 
-    def _extract_metadata(
-        self, pil_image: Image.Image, path: Path, image_type: Optional[ImageType]
-    ) -> ImageMetadata:
+    def _extract_metadata(self, pil_image: Image.Image, path: Path, image_type: Optional[ImageType]) -> ImageMetadata:
         """Extract metadata from PIL image."""
         # Convert to numpy for statistics
         np_image = np.array(pil_image).astype(np.float32)
@@ -283,9 +279,7 @@ class ImageLoader:
 
         return thumbnail
 
-    def save_tensor(
-        self, tensor: Tensor, output_path: Union[str, Path], denormalize: bool = True
-    ):
+    def save_tensor(self, tensor: Tensor, output_path: Union[str, Path], denormalize: bool = True):
         """
         Save tensor as image.
 

@@ -1,15 +1,16 @@
 """Tests for depth_canonical configuration module."""
 
 import pytest
+
 from transformation_portal.depth_canonical.config import (
-    UnifiedDepthConfig,
-    ModelConfig,
-    ProcessingConfig,
-    PBRConfig,
-    IOConfig,
-    SecurityConfig,
     DeviceType,
+    IOConfig,
+    ModelConfig,
     ModelVariant,
+    PBRConfig,
+    ProcessingConfig,
+    SecurityConfig,
+    UnifiedDepthConfig,
 )
 
 
@@ -148,13 +149,8 @@ def test_unified_depth_config_defaults():
 
 def test_unified_depth_config_custom_subconfigs():
     """Test UnifiedDepthConfig accepts custom sub-configurations."""
-    model_config = ModelConfig(
-        variant=ModelVariant.DA3_BASE,
-        device=DeviceType.CUDA
-    )
-    processing_config = ProcessingConfig(
-        pbr=PBRConfig(enabled=True, normal_strength=1.5)
-    )
+    model_config = ModelConfig(variant=ModelVariant.DA3_BASE, device=DeviceType.CUDA)
+    processing_config = ProcessingConfig(pbr=PBRConfig(enabled=True, normal_strength=1.5))
     io_config = IOConfig(cache_size=256)
     security_config = SecurityConfig(max_image_size=4096)
 

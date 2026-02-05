@@ -6,18 +6,19 @@ Validates:
 - Operations use atomic rename (os.replace)
 - No file descriptor leaks
 """
-import pytest
+
 import os
 
+import pytest
+from PIL import Image  # pylint: disable=possibly-used-before-assignment
+
 from transformation_portal.lux_depth_v3.io_atomic import (
+    HAS_PIL,
     atomic_temp_file,
     atomic_write_bytes,
     atomic_write_pil_png,
     atomic_write_with_fd,
-    HAS_PIL,
 )
-
-from PIL import Image  # pylint: disable=possibly-used-before-assignment
 
 
 class TestAtomicTempFile:
@@ -155,8 +156,7 @@ class TestAtomicWriteBytes:
         stat_info = output_path.stat()
         # Check that group or others have read permission
         # 0o044 = group read (0o040) | others read (0o004)
-        assert stat_info.st_mode & 0o044 != 0, \
-            f"File has restrictive permissions: {oct(stat_info.st_mode)}"
+        assert stat_info.st_mode & 0o044 != 0, f"File has restrictive permissions: {oct(stat_info.st_mode)}"
 
 
 @pytest.mark.skipif(not HAS_PIL, reason="Pillow not installed")
@@ -168,7 +168,7 @@ class TestAtomicWritePilPng:
         output_path = tmp_path / "image.png"
 
         # Create test image
-        img = Image.new('RGB', (100, 100), color='red')
+        img = Image.new("RGB", (100, 100), color="red")
 
         result_path = atomic_write_pil_png(output_path, img)
 
@@ -178,7 +178,7 @@ class TestAtomicWritePilPng:
         # Verify can read back
         loaded = Image.open(output_path)
         assert loaded.size == (100, 100)
-        assert loaded.mode == 'RGB'
+        assert loaded.mode == "RGB"
 
         # No temp files
         temp_files = list(tmp_path.glob(".tmp_*"))
@@ -187,29 +187,29 @@ class TestAtomicWritePilPng:
     def test_grayscale_image(self, tmp_path):
         """Should handle grayscale images."""
         output_path = tmp_path / "gray.png"
-        img = Image.new('L', (50, 50), color=128)
+        img = Image.new("L", (50, 50), color=128)
 
         atomic_write_pil_png(output_path, img)
 
         loaded = Image.open(output_path)
-        assert loaded.mode == 'L'
+        assert loaded.mode == "L"
         assert loaded.size == (50, 50)
 
     def test_rgba_image(self, tmp_path):
         """Should handle RGBA images with transparency."""
         output_path = tmp_path / "rgba.png"
-        img = Image.new('RGBA', (64, 64), color=(255, 0, 0, 128))
+        img = Image.new("RGBA", (64, 64), color=(255, 0, 0, 128))
 
         atomic_write_pil_png(output_path, img)
 
         loaded = Image.open(output_path)
-        assert loaded.mode == 'RGBA'
+        assert loaded.mode == "RGBA"
         assert loaded.size == (64, 64)
 
     def test_optimization_flag(self, tmp_path):
         """Should respect optimize flag."""
         output_path = tmp_path / "optimized.png"
-        img = Image.new('RGB', (100, 100), color='blue')
+        img = Image.new("RGB", (100, 100), color="blue")
 
         # With optimization
         atomic_write_pil_png(output_path, img, optimize=True)
@@ -226,7 +226,7 @@ class TestAtomicWritePilPng:
     def test_custom_save_kwargs(self, tmp_path):
         """Should pass through custom save kwargs."""
         output_path = tmp_path / "custom.png"
-        img = Image.new('RGB', (100, 100), color='green')
+        img = Image.new("RGB", (100, 100), color="green")
 
         # Pass compression level
         atomic_write_pil_png(output_path, img, compress_level=9)
@@ -245,7 +245,7 @@ class TestAtomicWriteWithFD:
 
         def writer_func(fd, temp_path):
             # Write using FD
-            with os.fdopen(fd, 'w') as f:
+            with os.fdopen(fd, "w") as f:
                 f.write("Written via FD")
 
         result_path = atomic_write_with_fd(output_path, writer_func)
@@ -263,7 +263,7 @@ class TestAtomicWriteWithFD:
         output_path = tmp_path / "binary.dat"
 
         def writer_func(fd, temp_path):
-            with os.fdopen(fd, 'wb') as f:
+            with os.fdopen(fd, "wb") as f:
                 f.write(b"binary data")
 
         atomic_write_with_fd(output_path, writer_func)
@@ -381,6 +381,7 @@ class TestNoFDLeaks:
         # Get current FD count (rough check)
         # On POSIX, we can check /proc/self/fd or use resource limits
         import resource
+
         soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
 
         # Write many times

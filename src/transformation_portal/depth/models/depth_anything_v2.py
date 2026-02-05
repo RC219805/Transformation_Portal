@@ -38,9 +38,7 @@ try:
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
     DepthEstimationPipeline = Any  # type: ignore
-    logging.warning(
-        "transformers not available, install with: pip install transformers"
-    )
+    logging.warning("transformers not available, install with: pip install transformers")
 
 try:
     import coremltools as ct
@@ -57,9 +55,7 @@ try:
 except ImportError:
     SKIMAGE_AVAILABLE = False
     resize = None  # type: ignore
-    logging.warning(
-        "scikit-image not available, install with: pip install scikit-image"
-    )
+    logging.warning("scikit-image not available, install with: pip install scikit-image")
 
 try:
     import onnxruntime as ort
@@ -171,7 +167,7 @@ class DepthAnythingV2Model:
         # Prefer CoreML on Apple Silicon for best performance
         if TORCH_AVAILABLE and COREML_AVAILABLE:
             try:
-                if hasattr(torch, 'backends') and torch.backends.mps.is_available():
+                if hasattr(torch, "backends") and torch.backends.mps.is_available():
                     return ModelBackend.COREML
             except AttributeError:
                 pass
@@ -179,7 +175,7 @@ class DepthAnythingV2Model:
         # Fallback to PyTorch with MPS acceleration
         if TORCH_AVAILABLE:
             try:
-                if hasattr(torch, 'backends') and torch.backends.mps.is_available():
+                if hasattr(torch, "backends") and torch.backends.mps.is_available():
                     return ModelBackend.PYTORCH_MPS
             except AttributeError:
                 pass
@@ -217,14 +213,9 @@ class DepthAnythingV2Model:
     def _load_pytorch_model(self) -> None:
         """Load PyTorch model using transformers."""
         if not TORCH_AVAILABLE:
-            raise ImportError(
-                "torch required for PyTorch backend. " "Install with: pip install torch"
-            )
+            raise ImportError("torch required for PyTorch backend. " "Install with: pip install torch")
         if not TRANSFORMERS_AVAILABLE:
-            raise ImportError(
-                "transformers required for PyTorch backend. "
-                "Install with: pip install transformers"
-            )
+            raise ImportError("transformers required for PyTorch backend. " "Install with: pip install transformers")
 
         try:
             # Use transformers pipeline for simplicity
@@ -268,10 +259,7 @@ class DepthAnythingV2Model:
         load or produce incorrect results.
         """
         if not ONNX_AVAILABLE:
-            raise ImportError(
-                "onnxruntime required for ONNX backend. "
-                "Install with: pip install onnxruntime"
-            )
+            raise ImportError("onnxruntime required for ONNX backend. " "Install with: pip install onnxruntime")
 
         # Check if local model exists
         if self.model_path and self.model_path.exists():
@@ -283,19 +271,13 @@ class DepthAnythingV2Model:
         try:
             # Configure session options for optimal performance
             sess_options = ort.SessionOptions()
-            sess_options.graph_optimization_level = (
-                ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-            )
+            sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
             # Select execution providers based on available hardware
             providers = self._get_onnx_providers()
 
-            self.model = ort.InferenceSession(
-                str(model_path), sess_options=sess_options, providers=providers
-            )
-            logger.info(
-                "Loaded ONNX model: %s with providers: %s", model_path, providers
-            )
+            self.model = ort.InferenceSession(str(model_path), sess_options=sess_options, providers=providers)
+            logger.info("Loaded ONNX model: %s with providers: %s", model_path, providers)
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Failed to load ONNX model: %s", e)
             logger.info("Falling back to PyTorch CPU backend")
@@ -323,9 +305,7 @@ class DepthAnythingV2Model:
 
     def _download_onnx_model(self) -> Path:
         """Download ONNX model from HuggingFace Hub."""
-        from huggingface_hub import (  # pylint: disable=import-outside-toplevel
-            hf_hub_download,
-        )
+        from huggingface_hub import hf_hub_download  # pylint: disable=import-outside-toplevel
 
         # Depth Anything V2 ONNX models are available from various sources
         onnx_repo = "onnx/Depth-Anything-V2"
@@ -334,10 +314,7 @@ class DepthAnythingV2Model:
         onnx_filename = ONNX_MODEL_FILENAMES.get(self.variant)
 
         if not onnx_filename:
-            raise ValueError(
-                f"ONNX model not available for variant {self.variant}. "
-                "Use SMALL, BASE, or LARGE."
-            )
+            raise ValueError(f"ONNX model not available for variant {self.variant}. " "Use SMALL, BASE, or LARGE.")
 
         # Production deployments should pin specific model revisions
         model_path = hf_hub_download(  # nosec B615
@@ -351,10 +328,7 @@ class DepthAnythingV2Model:
     def _load_coreml_model(self) -> None:
         """Load CoreML model for Apple Neural Engine."""
         if not COREML_AVAILABLE:
-            raise ImportError(
-                "coremltools required for CoreML backend. "
-                "Install with: pip install coremltools"
-            )
+            raise ImportError("coremltools required for CoreML backend. " "Install with: pip install coremltools")
 
         # Check if local model exists
         if self.model_path and self.model_path.exists():
@@ -375,9 +349,7 @@ class DepthAnythingV2Model:
 
     def _download_coreml_model(self) -> Path:
         """Download CoreML model from HuggingFace Hub."""
-        from huggingface_hub import (  # pylint: disable=import-outside-toplevel
-            hf_hub_download,
-        )
+        from huggingface_hub import hf_hub_download  # pylint: disable=import-outside-toplevel
 
         # Map variant to CoreML repo
         coreml_variant = {
@@ -386,10 +358,7 @@ class DepthAnythingV2Model:
         }.get(self.variant)
 
         if not coreml_variant:
-            raise ValueError(
-                f"CoreML model not available for variant {self.variant}. "
-                "Use SMALL or BASE."
-            )
+            raise ValueError(f"CoreML model not available for variant {self.variant}. " "Use SMALL or BASE.")
 
         # Download model package
         # Production deployments should pin specific model revisions
@@ -441,9 +410,7 @@ class DepthAnythingV2Model:
         # Resize output if requested
         if output_size is not None:
             if not SKIMAGE_AVAILABLE:
-                raise ImportError(
-                    "scikit-image is required for resizing. Install with: pip install scikit-image"
-                )
+                raise ImportError("scikit-image is required for resizing. Install with: pip install scikit-image")
 
             result["depth"] = resize(
                 result["depth"],
@@ -550,12 +517,7 @@ class DepthAnythingV2Model:
         # Prepare input - resize and normalize
         # Default input size for Depth Anything V2 is 518x518
         target_size = (518, 518)
-        if (
-            input_shape
-            and len(input_shape) == 4
-            and input_shape[2] is not None
-            and input_shape[3] is not None
-        ):
+        if input_shape and len(input_shape) == 4 and input_shape[2] is not None and input_shape[3] is not None:
             target_size = (input_shape[2], input_shape[3])
 
         image_resized = image.resize(target_size, Image.Resampling.BILINEAR)
@@ -626,10 +588,7 @@ class DepthAnythingV2Model:
 
     def __repr__(self) -> str:
         return (
-            "DepthAnythingV2Model("
-            f"variant={self.variant.name}, "
-            f"backend={self.backend.name}, "
-            f"device={self.device})"
+            "DepthAnythingV2Model(" f"variant={self.variant.name}, " f"backend={self.backend.name}, " f"device={self.device})"
         )
 
 
@@ -662,22 +621,15 @@ def safe_depth_estimation(
             else:
                 image_pil = image
 
-            image_pil.thumbnail(
-                (fallback_size, fallback_size), Image.Resampling.LANCZOS
-            )
+            image_pil.thumbnail((fallback_size, fallback_size), Image.Resampling.LANCZOS)
 
             # Retry with smaller size
             result = model.estimate_depth(image_pil)
 
             # Upscale depth map to original size
-            original_size = (
-                image.shape[:2] if isinstance(image, np.ndarray) else image.size[::-1]
-            )
+            original_size = image.shape[:2] if isinstance(image, np.ndarray) else image.size[::-1]
             if not SKIMAGE_AVAILABLE:
-                raise ImportError(
-                    "scikit-image is required for resizing. "
-                    "Install with: pip install scikit-image"
-                ) from None
+                raise ImportError("scikit-image is required for resizing. " "Install with: pip install scikit-image") from None
 
             result["depth"] = resize(
                 result["depth"],

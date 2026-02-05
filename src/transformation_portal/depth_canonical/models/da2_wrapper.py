@@ -5,8 +5,8 @@ Provides unified interface for DA2 models with multi-backend support.
 
 import logging
 import time
-from typing import Any, Dict, Optional, Union, Tuple
 from pathlib import Path
+from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 from PIL import Image
@@ -34,12 +34,7 @@ class DA2ModelWrapper:
         >>> depth_map = result['depth']
     """
 
-    def __init__(
-        self,
-        model_id: str,
-        device: DeviceType,
-        dtype: str = "float32"
-    ):
+    def __init__(self, model_id: str, device: DeviceType, dtype: str = "float32"):
         """Initialize DA2 model wrapper.
 
         Args:
@@ -75,27 +70,16 @@ class DA2ModelWrapper:
 
             # Load via transformers pipeline
             self._pipeline = hf_pipeline(
-                task="depth-estimation",
-                model=self.model_id,
-                device=device_str if device_str != "mps" else 0
+                task="depth-estimation", model=self.model_id, device=device_str if device_str != "mps" else 0
             )
 
-            logger.info(
-                "Loaded DA2 model: %s on device: %s",
-                self.model_id,
-                device_str
-            )
+            logger.info("Loaded DA2 model: %s on device: %s", self.model_id, device_str)
 
         except ImportError as e:
-            raise ImportError(
-                "transformers required for DA2 models. "
-                "Install with: pip install transformers torch"
-            ) from e
+            raise ImportError("transformers required for DA2 models. " "Install with: pip install transformers torch") from e
 
     def estimate(
-        self,
-        image: Union[np.ndarray, Image.Image, str, Path],
-        output_size: Optional[Tuple[int, int]] = None
+        self, image: Union[np.ndarray, Image.Image, str, Path], output_size: Optional[Tuple[int, int]] = None
     ) -> Dict[str, Any]:
         """Estimate depth from image.
 
@@ -143,13 +127,8 @@ class DA2ModelWrapper:
         # Resize if requested
         if output_size is not None:
             from skimage.transform import resize
-            depth_normalized = resize(
-                depth_normalized,
-                output_size,
-                order=1,
-                preserve_range=True,
-                anti_aliasing=True
-            )
+
+            depth_normalized = resize(depth_normalized, output_size, order=1, preserve_range=True, anti_aliasing=True)
 
         inference_time = time.time() - start_time
 
@@ -161,5 +140,5 @@ class DA2ModelWrapper:
                 "device": self.device.value,
                 "inference_time_ms": inference_time * 1000,
                 "shape": depth_normalized.shape,
-            }
+            },
         }

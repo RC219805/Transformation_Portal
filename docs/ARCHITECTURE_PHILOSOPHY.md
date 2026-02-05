@@ -1,8 +1,13 @@
+> ⚠️ **DEPRECATED**
+>
+> This document has been merged into [ARCHITECTURE.md](ARCHITECTURE.md).
+> Please use that document instead. This file will be removed on 2026-03-06.
+
 # Temporal Architecture Philosophy
 
 **Transformation Portal - Space-Time Unified Architecture**
 
-Version: 1.0.0  
+Version: 1.0.0
 Last Updated: 2025-11-08
 
 ---

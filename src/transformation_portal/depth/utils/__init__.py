@@ -13,12 +13,7 @@ from .depth_utils import (
     smooth_depth,
     visualize_depth,
 )
-from .image_utils import (
-    compute_image_hash,
-    load_image,
-    resize_image,
-    save_image,
-)
+from .image_utils import compute_image_hash, load_image, resize_image, save_image
 
 __all__ = [
     "DepthCache",

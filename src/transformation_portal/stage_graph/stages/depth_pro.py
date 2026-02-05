@@ -24,6 +24,7 @@ from ..stage import Stage, StageContext, StageResult, StageStatus
 # Try importing torch, fail gracefully if not available
 try:
     import torch
+
     TORCH_AVAILABLE = True
 except (ImportError, TypeError):
     TORCH_AVAILABLE = False
@@ -32,6 +33,7 @@ except (ImportError, TypeError):
 # Try importing depth_pro, fail gracefully if not available
 try:
     import depth_pro
+
     DEPTH_PRO_AVAILABLE = True
 except (ImportError, TypeError):
     # TypeError can occur in test environments with mocking
@@ -123,18 +125,14 @@ class DepthProStage(Stage):
         # Validate depth_pro is available
         if not DEPTH_PRO_AVAILABLE:
             return self._fail_result(
-                "depth_pro package not installed. "
-                "Install with: pip install depth-pro",
-                duration_ms=(time.time() - start_time) * 1000
+                "depth_pro package not installed. " "Install with: pip install depth-pro",
+                duration_ms=(time.time() - start_time) * 1000,
             )
 
         # Get input image
         image = context.get_artifact("image")
         if image is None:
-            return self._fail_result(
-                "Missing 'image' artifact in context",
-                duration_ms=(time.time() - start_time) * 1000
-            )
+            return self._fail_result("Missing 'image' artifact in context", duration_ms=(time.time() - start_time) * 1000)
 
         # Validate checkpoint
         if not self.checkpoint_path.exists():
@@ -143,7 +141,7 @@ class DepthProStage(Stage):
                 f"Download with:\n"
                 f"  mkdir -p {self.checkpoint_path.parent}\n"
                 f"  curl -L {self.CHECKPOINT_URL} -o {self.checkpoint_path}",
-                duration_ms=(time.time() - start_time) * 1000
+                duration_ms=(time.time() - start_time) * 1000,
             )
 
         try:
@@ -156,12 +154,7 @@ class DepthProStage(Stage):
 
             # Generate outputs
             output_dir = context.get_artifact("output_dir")
-            artifacts = self._generate_outputs(
-                image=image,
-                depth=depth,
-                output_dir=output_dir,
-                inference_sec=inference_sec
-            )
+            artifacts = self._generate_outputs(image=image, depth=depth, output_dir=output_dir, inference_sec=inference_sec)
 
             duration_ms = (time.time() - start_time) * 1000
 
@@ -175,11 +168,12 @@ class DepthProStage(Stage):
                     "device": str(self.device),
                     "checkpoint": str(self.checkpoint_path),
                     "inference_sec": inference_sec,
-                }
+                },
             )
 
         except Exception as e:
             import traceback
+
             duration_ms = (time.time() - start_time) * 1000
 
             return StageResult(
@@ -230,17 +224,14 @@ class DepthProStage(Stage):
             transform_repr = repr(self._transform)[:100]
             transform_hash = hashlib.sha256(transform_repr.encode()).hexdigest()[:8]
 
-        return (
-            f"depthpro_{ckpt_hash}_{pkg_ver}_{transform_hash}_"
-            f"{image_hash}_{self.device}"
-        )
+        return f"depthpro_{ckpt_hash}_{pkg_ver}_{transform_hash}_" f"{image_hash}_{self.device}"
 
     def _auto_detect_device(self) -> str:
         """Auto-detect optimal device (prefer MPS for Apple Silicon)."""
         if not TORCH_AVAILABLE or torch is None:
             return "cpu"
         try:
-            if hasattr(torch, 'backends') and torch.backends.mps.is_available():
+            if hasattr(torch, "backends") and torch.backends.mps.is_available():
                 return "mps"
             elif torch.cuda.is_available():
                 return "cuda"
@@ -272,9 +263,7 @@ class DepthProStage(Stage):
             else:
                 self.logger.warning(error_msg)
         else:
-            self.logger.info(
-                f"Checkpoint validation passed: {actual_hash[:16]}..."
-            )
+            self.logger.info(f"Checkpoint validation passed: {actual_hash[:16]}...")
 
     def _load_model(self):
         """Lazy load Depth Pro model and transforms.
@@ -297,10 +286,7 @@ class DepthProStage(Stage):
 
         self.logger.info("Depth Pro model loaded successfully")
 
-    def _run_inference(
-        self,
-        image: Any
-    ) -> Tuple[np.ndarray, float]:
+    def _run_inference(self, image: Any) -> Tuple[np.ndarray, float]:
         """Run Depth Pro inference.
 
         Returns:
@@ -342,11 +328,7 @@ class DepthProStage(Stage):
         return depth, inference_sec
 
     def _generate_outputs(
-        self,
-        image: Any,
-        depth: np.ndarray,
-        output_dir: Optional[Path],
-        inference_sec: float
+        self, image: Any, depth: np.ndarray, output_dir: Optional[Path], inference_sec: float
     ) -> Dict[str, Any]:
         """Generate output artifacts (npy, png, provenance).
 
@@ -358,10 +340,7 @@ class DepthProStage(Stage):
         """
         artifacts = {
             "depth_map": depth,
-            "depth_provenance": self._generate_provenance(
-                depth=depth,
-                inference_sec=inference_sec
-            )
+            "depth_provenance": self._generate_provenance(depth=depth, inference_sec=inference_sec),
         }
 
         # Save to disk if output_dir provided
@@ -387,11 +366,7 @@ class DepthProStage(Stage):
 
         return artifacts
 
-    def _generate_provenance(
-        self,
-        depth: np.ndarray,
-        inference_sec: float
-    ) -> Dict[str, Any]:
+    def _generate_provenance(self, depth: np.ndarray, inference_sec: float) -> Dict[str, Any]:
         """Generate audit-quality provenance metadata."""
         return {
             "status": "ok",
@@ -419,7 +394,7 @@ class DepthProStage(Stage):
                 "platform": platform.platform(),
                 "torch": torch.__version__ if TORCH_AVAILABLE and torch else "not_available",
                 "depth_pro_pkg": self._get_package_version(),
-            }
+            },
         }
 
     def _compute_depth_stats(self, depth: np.ndarray) -> Dict[str, Any]:
@@ -429,12 +404,7 @@ class DepthProStage(Stage):
         finite_pct = float(finite.mean() * 100.0)
 
         if not finite.any():
-            return {
-                "finite_pct": finite_pct,
-                "min": None,
-                "median": None,
-                "p95": None
-            }
+            return {"finite_pct": finite_pct, "min": None, "median": None, "p95": None}
 
         vals = d[finite]
         return {

@@ -132,9 +132,9 @@ class AtmosphericModel:
         for i, color in enumerate(["red", "green", "blue"]):
             channel_transmission = transmission ** self.RAYLEIGH_COEFFICIENTS[color]
 
-            atmospheric[:, :, 2 - i] = atmospheric[
-                :, :, 2 - i
-            ] * channel_transmission + atmo_color[2 - i] * (1 - channel_transmission)
+            atmospheric[:, :, 2 - i] = atmospheric[:, :, 2 - i] * channel_transmission + atmo_color[2 - i] * (
+                1 - channel_transmission
+            )
 
         # Desaturate with distance
         desaturation = 1.0 - (1.0 - transmission) * 0.3
@@ -147,9 +147,7 @@ class AtmosphericModel:
 
         return atmospheric
 
-    def _calculate_transmission(
-        self, distance: np.ndarray, params: AtmosphericParameters
-    ) -> np.ndarray:
+    def _calculate_transmission(self, distance: np.ndarray, params: AtmosphericParameters) -> np.ndarray:
         """Calculate atmospheric transmission using Beer-Lambert law.
 
         Args:
@@ -185,10 +183,7 @@ class AtmosphericModel:
         # Add marine influence (slightly greenish-blue)
         if params.marine_influence > 0:
             marine_tint = np.array([0.3, 0.65, 0.85])
-            base_color = (
-                base_color * (1 - params.marine_influence * 0.3)
-                + marine_tint * params.marine_influence * 0.3
-            )
+            base_color = base_color * (1 - params.marine_influence * 0.3) + marine_tint * params.marine_influence * 0.3
 
         # Haze makes atmosphere whiter
         haze_color = np.array([0.9, 0.9, 0.85])  # Slightly warm white
@@ -244,17 +239,13 @@ class AtmosphericModel:
         fogged = image.astype(np.float32) / 255.0
 
         for i in range(3):
-            fogged[:, :, i] = (
-                fogged[:, :, i] * (1 - fog_density) + fog_color[i] * fog_density
-            )
+            fogged[:, :, i] = fogged[:, :, i] * (1 - fog_density) + fog_color[i] * fog_density
 
         fogged = (fogged * 255).clip(0, 255).astype(np.uint8)
 
         return fogged
 
-    def calculate_sundowner_clarity(
-        self, base_visibility: float, sundowner_active: bool = False
-    ) -> float:
+    def calculate_sundowner_clarity(self, base_visibility: float, sundowner_active: bool = False) -> float:
         """Calculate visibility during Sundowner wind conditions.
 
         Sundowner winds cause exceptional atmospheric clarity
@@ -272,9 +263,7 @@ class AtmosphericModel:
             return base_visibility * 1.4
         return base_visibility
 
-    def get_seasonal_atmospheric_profile(
-        self, season: str, location: str = "santa_barbara"
-    ) -> AtmosphericParameters:
+    def get_seasonal_atmospheric_profile(self, season: str, location: str = "santa_barbara") -> AtmosphericParameters:
         """Get seasonal atmospheric parameters.
 
         Args:

@@ -1,8 +1,9 @@
 """Tests for ModelRegistry."""
 
 import pytest
+
+from transformation_portal.depth_canonical.config import DeviceType, ModelVariant
 from transformation_portal.depth_canonical.models import ModelRegistry
-from transformation_portal.depth_canonical.config import ModelVariant, DeviceType
 
 
 def test_model_registry_initialization():
@@ -38,10 +39,7 @@ def test_model_registry_get_model_returns_model():
     registry = ModelRegistry()
 
     # Get a model (will download if needed)
-    model = registry.get_model(
-        variant=ModelVariant.DA3_SMALL,  # Use small for faster testing
-        device=DeviceType.CPU
-    )
+    model = registry.get_model(variant=ModelVariant.DA3_SMALL, device=DeviceType.CPU)  # Use small for faster testing
 
     # Phase 2: should return a model instance
     assert model is not None
@@ -54,15 +52,9 @@ def test_model_registry_caches_models():
     registry = ModelRegistry()
 
     # Load model twice
-    model1 = registry.get_model(
-        variant=ModelVariant.DA3_SMALL,
-        device=DeviceType.CPU
-    )
+    model1 = registry.get_model(variant=ModelVariant.DA3_SMALL, device=DeviceType.CPU)
 
-    model2 = registry.get_model(
-        variant=ModelVariant.DA3_SMALL,
-        device=DeviceType.CPU
-    )
+    model2 = registry.get_model(variant=ModelVariant.DA3_SMALL, device=DeviceType.CPU)
 
     # Should be same instance
     assert model1 is model2

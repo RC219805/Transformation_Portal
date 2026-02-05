@@ -6,6 +6,12 @@ on:
   push:
     branches: [ main ]
 
+# Concurrency control: Cancel outdated runs on new pushes to the same branch/PR
+# This reduces CI minutes and speeds up feedback on the latest code
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read  # Workflow only checks formatting; does not push commits
   pull-requests: read
@@ -47,8 +53,9 @@ jobs:
         run: |
           markdown_count=$(find . -maxdepth 1 -name "*.md" -type f | wc -l)
           # shellcheck disable=SC2086
-          if [ $markdown_count -gt 10 ]; then
-            echo "ERROR: Too many markdown files in root ($markdown_count). Maximum allowed: 10"
+          # Updated limit to 14 for DOC-001 consolidation (added DOCUMENTATION_MAP.md)
+          if [ $markdown_count -gt 14 ]; then
+            echo "ERROR: Too many markdown files in root ($markdown_count). Maximum allowed: 14"
             echo "Please move documentation files to docs/ subdirectories"
             exit 1
           fi

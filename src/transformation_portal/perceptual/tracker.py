@@ -5,11 +5,11 @@ Tracks enhancement trajectories over time to measure improvements
 beyond photorealistic baselines.
 """
 
-from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Any
-from pathlib import Path
-import logging
 import json
+import logging
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
@@ -68,8 +68,7 @@ class EnhancementTrajectory:
 
         recent_points = self.points[-5:]  # Look at last 5 points
         return all(
-            recent_points[i].overall_quality <= recent_points[i + 1].overall_quality
-            for i in range(len(recent_points) - 1)
+            recent_points[i].overall_quality <= recent_points[i + 1].overall_quality for i in range(len(recent_points) - 1)
         )
 
 
@@ -91,9 +90,7 @@ class EnhancementTracker:
         self.trajectories: Dict[str, EnhancementTrajectory] = {}
         self.baseline_established = False
 
-        logger.info(
-            f"Initialized EnhancementTracker (target: {target_quality_multiplier}x baseline)"
-        )
+        logger.info(f"Initialized EnhancementTracker (target: {target_quality_multiplier}x baseline)")
 
     def establish_baseline(self, results: List[AnalysisResult]):
         """
@@ -120,10 +117,7 @@ class EnhancementTracker:
                 step=0,
                 timestamp=result.timestamp,
                 overall_quality=baseline_quality,
-                metric_scores={
-                    metric.value: score.normalized_score
-                    for metric, score in result.quality_scores.items()
-                },
+                metric_scores={metric.value: score.normalized_score for metric, score in result.quality_scores.items()},
                 description="Baseline (original image)",
             )
             trajectory.add_point(baseline_point)
@@ -133,9 +127,7 @@ class EnhancementTracker:
         self.baseline_established = True
         logger.info(f"Baseline established for {len(self.trajectories)} images")
 
-    def track_enhancement(
-        self, result: AnalysisResult, step: int, description: str = ""
-    ):
+    def track_enhancement(self, result: AnalysisResult, step: int, description: str = ""):
         """
         Track enhancement step.
 
@@ -145,9 +137,7 @@ class EnhancementTracker:
             description: Description of enhancement applied
         """
         if not self.baseline_established:
-            raise RuntimeError(
-                "Baseline not established. Call establish_baseline() first."
-            )
+            raise RuntimeError("Baseline not established. Call establish_baseline() first.")
 
         image_name = result.image_path.stem
 
@@ -164,10 +154,7 @@ class EnhancementTracker:
             step=step,
             timestamp=result.timestamp,
             overall_quality=result.overall_quality,
-            metric_scores={
-                metric.value: score.normalized_score
-                for metric, score in result.quality_scores.items()
-            },
+            metric_scores={metric.value: score.normalized_score for metric, score in result.quality_scores.items()},
             description=description,
         )
 
@@ -205,9 +192,7 @@ class EnhancementTracker:
             "min_improvement": np.min(improvements),
             "max_improvement": np.max(improvements),
             "avg_progress": np.mean(progresses),
-            "images_improving": sum(
-                1 for t in self.trajectories.values() if t.is_improving()
-            ),
+            "images_improving": sum(1 for t in self.trajectories.values() if t.is_improving()),
             "images_at_target": sum(1 for p in progresses if p >= 1.0),
         }
 
@@ -227,8 +212,7 @@ class EnhancementTracker:
             from matplotlib import pyplot as plt
         except ImportError as e:
             raise ImportError(
-                "matplotlib not available. "
-                "Install with: pip install matplotlib or pip install -e '.[ml]'"
+                "matplotlib not available. " "Install with: pip install matplotlib or pip install -e '.[ml]'"
             ) from e
 
         _, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
@@ -242,9 +226,7 @@ class EnhancementTracker:
 
             # Add target line
             if trajectory.target_quality:
-                ax1.axhline(
-                    y=trajectory.target_quality, linestyle="--", alpha=0.3, color="gray"
-                )
+                ax1.axhline(y=trajectory.target_quality, linestyle="--", alpha=0.3, color="gray")
 
         ax1.set_xlabel("Enhancement Step")
         ax1.set_ylabel("Overall Quality")
@@ -255,10 +237,7 @@ class EnhancementTracker:
         # Plot 2: Improvement from baseline
         for name, trajectory in self.trajectories.items():
             steps = [p.step for p in trajectory.points]
-            improvements = [
-                p.overall_quality - trajectory.baseline_quality
-                for p in trajectory.points
-            ]
+            improvements = [p.overall_quality - trajectory.baseline_quality for p in trajectory.points]
 
             ax2.plot(steps, improvements, marker="o", label=name, linewidth=2)
 
@@ -282,9 +261,7 @@ class EnhancementTracker:
         else:
             plt.close()
 
-    def plot_metric_breakdown(
-        self, image_name: str, output_path: Optional[Path] = None, show: bool = False
-    ):
+    def plot_metric_breakdown(self, image_name: str, output_path: Optional[Path] = None, show: bool = False):
         """
         Plot metric breakdown for specific image.
 
@@ -302,8 +279,7 @@ class EnhancementTracker:
             from matplotlib import pyplot as plt
         except ImportError as e:
             raise ImportError(
-                "matplotlib not available. "
-                "Install with: pip install matplotlib or pip install -e '.[ml]'"
+                "matplotlib not available. " "Install with: pip install matplotlib or pip install -e '.[ml]'"
             ) from e
 
         # Get all metric types
@@ -353,9 +329,7 @@ class EnhancementTracker:
             data["trajectories"][name] = {
                 "baseline_quality": trajectory.baseline_quality,
                 "target_quality": trajectory.target_quality,
-                "current_quality": (
-                    trajectory.points[-1].overall_quality if trajectory.points else 0
-                ),
+                "current_quality": (trajectory.points[-1].overall_quality if trajectory.points else 0),
                 "improvement": trajectory.get_improvement(),
                 "progress": trajectory.get_progress(),
                 "points": [
@@ -415,11 +389,7 @@ class EnhancementTracker:
         for name, trajectory in sorted(self.trajectories.items()):
             improvement = trajectory.get_improvement()
             progress = trajectory.get_progress()
-            status = (
-                "✓ At target"
-                if progress >= 1.0
-                else "↑ Improving" if trajectory.is_improving() else "→ Stable"
-            )
+            status = "✓ At target" if progress >= 1.0 else "↑ Improving" if trajectory.is_improving() else "→ Stable"
 
             lines.extend(
                 [

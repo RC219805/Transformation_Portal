@@ -7,11 +7,12 @@ strict directory confinement.
 
 import os
 from pathlib import Path
-from typing import Union, List
+from typing import List, Union
+
 
 class PathValidator:
     """Validates filesystem paths against security policies."""
-    
+
     def __init__(self, allowed_roots: List[Union[str, Path]]):
         self.allowed_roots = [Path(p).resolve() for p in allowed_roots]
 
@@ -21,7 +22,7 @@ class PathValidator:
             target = Path(path).resolve()
             # On Windows, resolve() might handle different drive letters
             # strict=False allows checking non-existent paths (for outputs)
-            
+
             for root in self.allowed_roots:
                 # Check if target is inside root
                 # Python 3.9+ has is_relative_to
@@ -39,28 +40,27 @@ class PathValidator:
         except Exception:
             return False
 
-def safe_resolve_path(
-    path: Union[str, Path], 
-    allowed_root: Union[str, Path] = os.getcwd()
-) -> Path:
+
+def safe_resolve_path(path: Union[str, Path], allowed_root: Union[str, Path] = os.getcwd()) -> Path:
     """
     Resolve a path and ensure it sits within the allowed root.
-    
+
     Raises:
         ValidationError: If path attempts traversal out of root.
     """
     from .validation import ValidationError
-    
+
     root = Path(allowed_root).resolve()
     target = Path(path).resolve()
-    
+
     # Check traversal
     try:
         target.relative_to(root)
     except ValueError:
         raise ValidationError(f"Path traversal detected: {path} is outside {root}")
-        
+
     return target
+
 
 def is_safe_path(path: Union[str, Path]) -> bool:
     """Quick check if path is safe (relative to CWD)."""

@@ -2,38 +2,38 @@
 
 This module defines the protocol (interface) that all depth model backends
 must implement. This enables:
+
 - Hot-swappable backends without changing downstream code
 - License-aware routing
 - Consistent provenance tracking
 - Circuit breaker patterns for fallback
 
 Protocol Version: 1.0.0
+
 Compatible with: v2.0.0 Golden Path
 
-Example:
-    >>> from transformation_portal.lux_depth_v3.protocols import DepthModel, BackendRole
-    >>> class MyDepthBackend(DepthModel):
-    ...     def load(self, device: str, weights_path: Optional[Path]) -> None:
-    ...         ...
-    ...     def predict(self, image: np.ndarray) -> DepthArtifact:
-    ...         ...
+Example
+-------
+
+.. code-block:: python
+
+    from transformation_portal.lux_depth_v3.protocols import DepthModel, BackendRole
+
+    class MyDepthBackend(DepthModel):
+        def load(self, device: str, weights_path: Optional[Path]) -> None:
+            ...
+
+        def predict(self, image: np.ndarray) -> DepthArtifact:
+            ...
 """
+
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import (
-    Callable,
-    Dict,
-    Iterator,
-    List,
-    Optional,
-    Protocol,
-    Type,
-    runtime_checkable,
-)
+from typing import Callable, Dict, Iterator, List, Optional, Protocol, Type, runtime_checkable
 
 import numpy as np
 
@@ -91,9 +91,7 @@ class BackendInfo:
     model_id: str
     role: BackendRole
     license_tier: LicenseTier
-    capabilities: frozenset[BackendCapability] = field(
-        default_factory=lambda: frozenset({BackendCapability.RELATIVE_DEPTH})
-    )
+    capabilities: frozenset[BackendCapability] = field(default_factory=lambda: frozenset({BackendCapability.RELATIVE_DEPTH}))
     min_version: Optional[str] = None
     checkpoint_size_mb: Optional[float] = None
     description: str = ""
@@ -119,11 +117,14 @@ class DepthModel(Protocol):
     3. **info**: Backend metadata for routing decisions
 
     Optional methods:
+
     - **stream_video()**: Temporal-consistent video inference
     - **predict_batch()**: Batch inference for throughput
 
-    Example Implementation:
-        ```python
+    Example Implementation
+    ----------------------
+    ::
+
         class DA3ProductionBackend:
             @property
             def info(self) -> BackendInfo:
@@ -144,7 +145,6 @@ class DepthModel(Protocol):
 
             def predict(self, image: np.ndarray) -> DepthArtifact:
                 # Run inference and return DepthArtifact...
-        ```
     """
 
     @property
@@ -290,14 +290,12 @@ class DepthModelRegistry:
         instance = backend_class()
         required_attrs = ("load", "predict")
         missing_or_invalid = [
-            attr
-            for attr in required_attrs
-            if not hasattr(instance, attr) or not callable(getattr(instance, attr, None))
+            attr for attr in required_attrs if not hasattr(instance, attr) or not callable(getattr(instance, attr, None))
         ]
         # Check for info property separately (can be property or method)
         if not hasattr(instance, "info"):
             missing_or_invalid.append("info")
-        
+
         if missing_or_invalid:
             raise TypeError(
                 f"{backend_class.__name__} does not implement DepthModel protocol "
@@ -371,8 +369,7 @@ class DepthModelRegistry:
 
             if commercial_only and not instance.info.is_commercial_safe():
                 raise ValueError(
-                    f"Backend '{name}' requires non-commercial license "
-                    f"(tier: {instance.info.license_tier.value})"
+                    f"Backend '{name}' requires non-commercial license " f"(tier: {instance.info.license_tier.value})"
                 )
 
             if use_cache:
@@ -383,9 +380,7 @@ class DepthModelRegistry:
         if role is not None:
             candidates = self.list_backends(role=role, commercial_only=commercial_only)
             if not candidates:
-                raise KeyError(
-                    f"No backend found for role={role.name}, commercial_only={commercial_only}"
-                )
+                raise KeyError(f"No backend found for role={role.name}, commercial_only={commercial_only}")
 
             # Return first matching (priority order determined by registration)
             for info in candidates:

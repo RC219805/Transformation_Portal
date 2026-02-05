@@ -64,9 +64,7 @@ class Pipeline(ABC):
         pass
 
     @abstractmethod
-    def execute(
-        self, input_path: Path, output_path: Optional[Path] = None, **kwargs
-    ) -> Dict[str, Any]:
+    def execute(self, input_path: Path, output_path: Optional[Path] = None, **kwargs) -> Dict[str, Any]:
         """
         Execute complete pipeline on input file.
 

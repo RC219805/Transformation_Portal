@@ -9,9 +9,9 @@ Available built-in plugins:
 - EdgeDepthEstimator: Edge-based depth estimation (demo)
 """
 
-from .processors import GaussianBlurProcessor
-from .enhancers import ContrastEnhancer, SharpenEnhancer
 from .depth_models import EdgeDepthEstimator
+from .enhancers import ContrastEnhancer, SharpenEnhancer
+from .processors import GaussianBlurProcessor
 
 __all__ = [
     "GaussianBlurProcessor",

@@ -12,13 +12,13 @@ Key Features:
 - Allocation tracking and profiling
 """
 
-from dataclasses import dataclass
-from enum import Enum
-from typing import Optional, Dict, Any, List, Tuple
 import logging
 import time
-from collections import defaultdict, OrderedDict
 import weakref
+from collections import OrderedDict, defaultdict
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 from torch import Tensor
@@ -157,9 +157,7 @@ class MemoryPool:
             "total_tensors": sum(len(v) for v in self.available.values()),
             "allocated_mb": self.allocated_bytes / (1024 * 1024),
             "capacity_mb": self.size_bytes / (1024 * 1024),
-            "utilization": (
-                self.allocated_bytes / self.size_bytes if self.size_bytes > 0 else 0
-            ),
+            "utilization": (self.allocated_bytes / self.size_bytes if self.size_bytes > 0 else 0),
         }
 
 
@@ -201,9 +199,7 @@ class MemoryManager:
         # Weak references to tracked tensors
         self.tracked_tensors = weakref.WeakValueDictionary()
 
-        logger.info(
-            f"Initialized MemoryManager with strategy={self.config.strategy.value}"
-        )
+        logger.info(f"Initialized MemoryManager with strategy={self.config.strategy.value}")
 
     def _init_pools(self):
         """Initialize memory pools for different tensor sizes."""
@@ -313,9 +309,7 @@ class MemoryManager:
         # For unified memory, it's more efficient to allocate a single
         # large tensor and split it
         batch_shape = (batch_size,) + shape
-        batch_tensor = self.allocate(
-            batch_shape, dtype, tag=f"{tag}_batch" if tag else None
-        )
+        batch_tensor = self.allocate(batch_shape, dtype, tag=f"{tag}_batch" if tag else None)
 
         # Split into individual tensors
         tensors = list(torch.split(batch_tensor, 1, dim=0))
@@ -338,11 +332,9 @@ class MemoryManager:
         if self.device.type == "cuda":
             stats.update(
                 {
-                    "allocated_gb": torch.cuda.memory_allocated(self.device)
-                    / (1024**3),
+                    "allocated_gb": torch.cuda.memory_allocated(self.device) / (1024**3),
                     "reserved_gb": torch.cuda.memory_reserved(self.device) / (1024**3),
-                    "max_allocated_gb": torch.cuda.max_memory_allocated(self.device)
-                    / (1024**3),
+                    "max_allocated_gb": torch.cuda.max_memory_allocated(self.device) / (1024**3),
                     "cached_gb": torch.cuda.memory_reserved(self.device) / (1024**3),
                 }
             )
@@ -364,10 +356,7 @@ class MemoryManager:
         if self.config.enable_profiling:
             stats["allocations"] = {
                 "active_count": len(self.allocations),
-                "total_allocated_mb": sum(
-                    a.size_bytes for a in self.allocations.values()
-                )
-                / (1024**2),
+                "total_allocated_mb": sum(a.size_bytes for a in self.allocations.values()) / (1024**2),
                 "by_tag": dict(self.allocation_stats),
             }
 
@@ -410,16 +399,12 @@ class MemoryManager:
 
         # If above high watermark, aggressive cleanup
         if usage_ratio > self.config.high_watermark:
-            logger.info(
-                f"Memory pressure high ({usage_ratio:.1%}), performing aggressive cleanup"
-            )
+            logger.info(f"Memory pressure high ({usage_ratio:.1%}), performing aggressive cleanup")
             self._aggressive_cleanup()
 
         # If above low watermark but below high, moderate cleanup
         elif usage_ratio > self.config.low_watermark:
-            logger.debug(
-                f"Memory pressure moderate ({usage_ratio:.1%}), performing moderate cleanup"
-            )
+            logger.debug(f"Memory pressure moderate ({usage_ratio:.1%}), performing moderate cleanup")
             self._moderate_cleanup()
 
         self.last_gc_time = current_time
@@ -431,9 +416,7 @@ class MemoryManager:
         max_bytes = self.config.max_memory_gb * 1024**3
 
         if projected_usage > max_bytes * self.config.high_watermark:
-            logger.warning(
-                "Memory pressure detected, running optimization before allocation"
-            )
+            logger.warning("Memory pressure detected, running optimization before allocation")
             self.optimize_memory()
 
     def _get_memory_usage(self) -> int:
@@ -539,12 +522,8 @@ class MemoryManager:
                 )
 
         if "allocations" in stats:
-            lines.append(
-                f"\nActive Allocations: {stats['allocations']['active_count']}"
-            )
-            lines.append(
-                f"Total Allocated: {stats['allocations']['total_allocated_mb']:.1f} MB"
-            )
+            lines.append(f"\nActive Allocations: {stats['allocations']['active_count']}")
+            lines.append(f"Total Allocated: {stats['allocations']['total_allocated_mb']:.1f} MB")
 
         lines.append("=" * 70)
         return "\n".join(lines)

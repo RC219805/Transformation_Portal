@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 # Add agents directory to path for imports  # noqa: E402
-agents_path = Path(__file__).parent.parent / '.github' / 'agents'
+agents_path = Path(__file__).parent.parent / ".github" / "agents"
 sys.path.insert(0, str(agents_path))
 
 from rag_system.citation import CitationGenerator  # noqa: E402
@@ -35,31 +35,31 @@ def sample_chunks():
     """Create sample document chunks for testing."""
     return [
         DocumentChunk(
-            content="def process_image(img):\n    \"\"\"Process an image\"\"\"\n    return img",
+            content='def process_image(img):\n    """Process an image"""\n    return img',
             file_path="src/processor.py",
             start_line=1,
             end_line=3,
-            chunk_type='code',
-            language='python',
-            metadata={'function_name': 'process_image', 'entity_type': 'function'}
+            chunk_type="code",
+            language="python",
+            metadata={"function_name": "process_image", "entity_type": "function"},
         ),
         DocumentChunk(
             content="# Depth Pipeline\n\nProcessing depth information for images.",
             file_path="docs/depth.md",
             start_line=1,
             end_line=3,
-            chunk_type='doc',
-            language='markdown',
-            metadata={'title': 'Depth Pipeline', 'document_type': 'guide'}
+            chunk_type="doc",
+            language="markdown",
+            metadata={"title": "Depth Pipeline", "document_type": "guide"},
         ),
         DocumentChunk(
             content="def test_processor():\n    assert process_image(img) is not None",
             file_path="tests/test_processor.py",
             start_line=1,
             end_line=2,
-            chunk_type='test',
-            language='python',
-            metadata={'function_name': 'test_processor', 'entity_type': 'function'}
+            chunk_type="test",
+            language="python",
+            metadata={"function_name": "test_processor", "entity_type": "function"},
         ),
     ]
 
@@ -84,7 +84,7 @@ class TestIndexer:
 
         # Should have different chunk types
         chunk_types = {c.chunk_type for c in chunks}
-        assert 'doc' in chunk_types or 'code' in chunk_types
+        assert "doc" in chunk_types or "code" in chunk_types
 
     def test_indexer_statistics(self, repo_root):
         """Test indexer provides statistics."""
@@ -92,10 +92,10 @@ class TestIndexer:
         chunks = indexer.index_repository()
         stats = indexer.get_statistics()
 
-        assert 'total_chunks' in stats
-        assert 'by_type' in stats
-        assert 'by_language' in stats
-        assert stats['total_chunks'] == len(chunks)
+        assert "total_chunks" in stats
+        assert "by_type" in stats
+        assert "by_language" in stats
+        assert stats["total_chunks"] == len(chunks)
 
     def test_chunk_has_metadata(self, repo_root):
         """Test chunks have proper metadata."""
@@ -107,7 +107,7 @@ class TestIndexer:
             assert chunk.file_path
             assert chunk.start_line > 0
             assert chunk.end_line >= chunk.start_line
-            assert chunk.chunk_type in ('doc', 'code', 'test', 'agent', 'config')
+            assert chunk.chunk_type in ("doc", "code", "test", "agent", "config")
 
 
 class TestBM25Retriever:
@@ -159,8 +159,8 @@ class TestHybridRetriever:
         results = retriever.retrieve("process image", top_k=2)
 
         assert len(results) <= 2
-        assert all(hasattr(r, 'content') for r in results)
-        assert all(hasattr(r, 'score') for r in results)
+        assert all(hasattr(r, "content") for r in results)
+        assert all(hasattr(r, "score") for r in results)
 
     def test_retriever_filtering(self, sample_chunks):
         """Test retriever can filter by type and path."""
@@ -168,16 +168,16 @@ class TestHybridRetriever:
         retriever.index(sample_chunks)
 
         # Filter by type
-        results = retriever.retrieve("process", top_k=5, chunk_type_filter=['code'])
+        results = retriever.retrieve("process", top_k=5, chunk_type_filter=["code"])
 
         if results:
-            assert all(r.file_path.endswith('.py') for r in results)
+            assert all(r.file_path.endswith(".py") for r in results)
 
         # Filter by file path
-        results = retriever.retrieve("process", top_k=5, file_path_filter=r'test_')
+        results = retriever.retrieve("process", top_k=5, file_path_filter=r"test_")
 
         if results:
-            assert all('test_' in r.file_path for r in results)
+            assert all("test_" in r.file_path for r in results)
 
 
 class TestReranker:
@@ -200,11 +200,11 @@ class TestReranker:
         reranked = reranker.rerank(results, "image processing", top_k=2)
 
         assert len(reranked) <= len(results)
-        assert all(hasattr(r, 'metadata') for r in reranked)
+        assert all(hasattr(r, "metadata") for r in reranked)
 
         # Should have rerank_boost in metadata
         if reranked:
-            assert 'rerank_boost' in reranked[0].metadata
+            assert "rerank_boost" in reranked[0].metadata
 
 
 class TestCitationGenerator:
@@ -244,14 +244,14 @@ class TestCitationGenerator:
         citations = gen.generate_citations(results, max_citations=1)
 
         # Test different formats
-        markdown = gen.format_citations(citations, format_type='markdown')
-        assert '##' in markdown or len(citations) == 0
+        markdown = gen.format_citations(citations, format_type="markdown")
+        assert "##" in markdown or len(citations) == 0
 
-        text = gen.format_citations(citations, format_type='text')
-        assert 'CITATIONS' in text or len(citations) == 0
+        text = gen.format_citations(citations, format_type="text")
+        assert "CITATIONS" in text or len(citations) == 0
 
-        json_str = gen.format_citations(citations, format_type='json')
-        assert 'citations' in json_str
+        json_str = gen.format_citations(citations, format_type="json")
+        assert "citations" in json_str
 
 
 class TestPromptTemplates:
@@ -259,10 +259,7 @@ class TestPromptTemplates:
 
     def test_feature_implementation_template(self):
         """Test feature implementation template generation."""
-        template = PromptTemplates.feature_implementation(
-            "Add new feature X",
-            context="Some context"
-        )
+        template = PromptTemplates.feature_implementation("Add new feature X", context="Some context")
 
         assert "Feature Description" in template
         assert "Add new feature X" in template
@@ -272,10 +269,7 @@ class TestPromptTemplates:
 
     def test_bug_triage_template(self):
         """Test bug triage template generation."""
-        template = PromptTemplates.bug_triage(
-            "ImportError: No module named X",
-            reproduction_steps="Run python script.py"
-        )
+        template = PromptTemplates.bug_triage("ImportError: No module named X", reproduction_steps="Run python script.py")
 
         assert "Error Log" in template
         assert "ImportError" in template
@@ -284,10 +278,7 @@ class TestPromptTemplates:
 
     def test_ci_change_template(self):
         """Test CI change template generation."""
-        template = PromptTemplates.ci_change(
-            "build.yml",
-            "Add Python 3.12 to matrix"
-        )
+        template = PromptTemplates.ci_change("build.yml", "Add Python 3.12 to matrix")
 
         assert "Workflow Name" in template
         assert "build.yml" in template
@@ -297,9 +288,7 @@ class TestPromptTemplates:
     def test_add_few_shot_examples(self):
         """Test adding few-shot examples to templates."""
         base_template = "# Base Template\n\nContent here"
-        examples = [
-            {'input': 'example input', 'output': 'example output'}
-        ]
+        examples = [{"input": "example input", "output": "example output"}]
 
         enhanced = PromptTemplates.add_few_shot_examples(base_template, examples)
 
@@ -316,24 +305,24 @@ class TestFewShotExamples:
         examples = FewShotExamples.get_feature_examples()
 
         assert len(examples) > 0
-        assert all('input' in ex for ex in examples)
-        assert all('output' in ex for ex in examples)
+        assert all("input" in ex for ex in examples)
+        assert all("output" in ex for ex in examples)
 
     def test_get_bug_triage_examples(self):
         """Test getting bug triage examples."""
         examples = FewShotExamples.get_bug_triage_examples()
 
         assert len(examples) > 0
-        assert all('input' in ex for ex in examples)
-        assert all('output' in ex for ex in examples)
+        assert all("input" in ex for ex in examples)
+        assert all("output" in ex for ex in examples)
 
     def test_get_ci_change_examples(self):
         """Test getting CI change examples."""
         examples = FewShotExamples.get_ci_change_examples()
 
         assert len(examples) > 0
-        assert all('input' in ex for ex in examples)
-        assert all('output' in ex for ex in examples)
+        assert all("input" in ex for ex in examples)
+        assert all("output" in ex for ex in examples)
 
 
 class TestResponseSchema:
@@ -341,7 +330,7 @@ class TestResponseSchema:
 
     def test_valid_schema(self):
         """Test valid response schema."""
-        valid_json = '''
+        valid_json = """
         {
           "summary": "Add feature X",
           "files": [
@@ -351,18 +340,18 @@ class TestResponseSchema:
           "explanation": "Detailed explanation",
           "confidence": 0.85
         }
-        '''
+        """
 
         assert validate_response_schema(valid_json)
 
     def test_invalid_schema_missing_field(self):
         """Test invalid schema with missing field."""
-        invalid_json = '''
+        invalid_json = """
         {
           "summary": "Add feature X",
           "files": []
         }
-        '''
+        """
 
         assert not validate_response_schema(invalid_json)
 
@@ -370,13 +359,7 @@ class TestResponseSchema:
         """Test CodeModificationResponse dataclass."""
         response = CodeModificationResponse(
             summary="Test summary",
-            files=[
-                FileModification(
-                    path="test.py",
-                    patch="dif",
-                    description="Test change"
-                )
-            ],
+            files=[FileModification(path="test.py", patch="dif", description="Test change")],
             tests=["test.py"],
             explanation="Test explanation",
             confidence=0.9,
@@ -393,5 +376,5 @@ class TestResponseSchema:
         assert parsed.confidence == 0.9
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

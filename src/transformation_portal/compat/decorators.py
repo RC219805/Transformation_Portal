@@ -40,9 +40,7 @@ def deprecated(
 
         # Update docstring for Sphinx/IDE support
         doc = wrapper.__doc__ or ""
-        wrapper.__doc__ = (
-            f".. warning:: DEPRECATED\n   {message}\n\n{doc}"
-        )
+        wrapper.__doc__ = f".. warning:: DEPRECATED\n   {message}\n\n{doc}"
         return wrapper  # type: ignore
 
     return decorator
@@ -60,7 +58,7 @@ def renamed_function(new_name: str) -> Callable[[T], T]:
 
 def renamed_class(new_name: str) -> Callable[[C], C]:
     """Indicate a class has been renamed."""
-    
+
     def decorator(cls: C) -> C:
         # Hook __init__ to warn on instantiation
         original_init = cls.__init__
@@ -74,7 +72,7 @@ def renamed_class(new_name: str) -> Callable[[C], C]:
             )
             original_init(self, *args, **kwargs)
 
-        cls.__init__ = new_init # type: ignore
+        cls.__init__ = new_init  # type: ignore
         return cls
 
     return decorator

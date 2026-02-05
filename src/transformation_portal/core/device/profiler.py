@@ -4,12 +4,13 @@ Performance Profiler.
 Context manager for measuring execution time and VRAM spikes.
 """
 
-import time
-import torch
 import logging
+import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Optional
-from contextlib import contextmanager
+
+import torch
 
 from .memory import MemoryManager
 
@@ -27,7 +28,7 @@ class ProfileResult:
 class PerformanceProfiler:
     """
     Context manager for profiling code blocks.
-    
+
     Example:
         with PerformanceProfiler("Inference") as p:
             model(input)
@@ -45,7 +46,7 @@ class PerformanceProfiler:
         if torch.cuda.is_available():
             torch.cuda.synchronize()
             self._start_vram = torch.cuda.memory_allocated()
-            
+
         self._start_time = time.time()
         return self
 
@@ -58,14 +59,10 @@ class PerformanceProfiler:
             vram_delta = None
 
         duration = time.time() - self._start_time
-        
-        self.last_result = ProfileResult(
-            name=self.name,
-            duration_seconds=duration,
-            vram_used_gb=vram_delta
-        )
-        
+
+        self.last_result = ProfileResult(name=self.name, duration_seconds=duration, vram_used_gb=vram_delta)
+
         logger.debug(
-            f"Profile [{self.name}]: {duration:.3f}s" 
+            f"Profile [{self.name}]: {duration:.3f}s"
             + (f", VRAM Delta: {vram_delta:+.2f}GB" if vram_delta is not None else "")
         )

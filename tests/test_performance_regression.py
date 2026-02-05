@@ -8,45 +8,45 @@ Validates performance claims and prevents regressions:
 Tests are marked with @pytest.mark.benchmark to run separately from unit tests.
 CI skips these tests - run manually for performance validation.
 """
+
 import hashlib
-import time
 import tempfile
+import time
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
+
 import numpy as np
 import pytest
 from PIL import Image
 
 from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
 from transformation_portal.lux_depth_v3.depth_cache import DepthCache
-from transformation_portal.lux_depth_v3.input_manager import ImageInput
-from transformation_portal.lux_depth_v3.manifest import compute_file_sha256, CombinedManifest, InputMetadata
-from transformation_portal.lux_depth_v3.orchestrator import _load_manifest_cached
 from transformation_portal.lux_depth_v3.inference import DepthResult
-
+from transformation_portal.lux_depth_v3.input_manager import ImageInput
+from transformation_portal.lux_depth_v3.manifest import CombinedManifest, InputMetadata, compute_file_sha256
+from transformation_portal.lux_depth_v3.orchestrator import _load_manifest_cached
 
 # ============================================================================
 # Shared Test Fixtures and Helpers
 # ============================================================================
 
+
 @pytest.fixture
 def mock_depth_result():
     """Create a realistic mock DepthResult with proper array shapes."""
+
     def _create(height=512, width=512):
         depth_map = np.random.rand(height, width).astype(np.float32)
         original_image = np.random.rand(height, width, 3).astype(np.float32)
-        return DepthResult(
-            depth_map=depth_map,
-            original_image=original_image,
-            metadata={"model": "mock", "backend": "test"}
-        )
+        return DepthResult(depth_map=depth_map, original_image=original_image, metadata={"model": "mock", "backend": "test"})
+
     return _create
 
 
 @pytest.fixture
 def mock_inference_engine(mock_depth_result):
     """Mock DA3InferenceEngine with proper DepthResult return values."""
-    with patch('transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine') as mock_engine_class:
+    with patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine") as mock_engine_class:
         mock_instance = MagicMock()
         # Return properly shaped DepthResult
         mock_instance.predict.return_value = mock_depth_result()
@@ -57,7 +57,7 @@ def mock_inference_engine(mock_depth_result):
 @pytest.fixture
 def mock_postprocessor():
     """Mock Postprocessor that passes through results unchanged."""
-    with patch('transformation_portal.lux_depth_v3.orchestrator.Postprocessor') as mock_proc_class:
+    with patch("transformation_portal.lux_depth_v3.orchestrator.Postprocessor") as mock_proc_class:
         mock_instance = MagicMock()
         # Pass through the result unchanged
         mock_instance.process.side_effect = lambda result: result
@@ -76,10 +76,7 @@ class TestPhase1Performance:
         # Create a manifest
         manifest = CombinedManifest(
             input=InputMetadata(
-                image_path="test.jpg",
-                image_sha256="abc123",
-                image_size_bytes=1000,
-                image_dimensions=[100, 100]
+                image_path="test.jpg", image_sha256="abc123", image_size_bytes=1000, image_dimensions=[100, 100]
             )
         )
         manifest.write(manifest_path)
@@ -117,9 +114,9 @@ class TestPhase1Performance:
         # Create a large test file (50MB)
         test_file = tmp_path / "large_test.bin"
         chunk_size_mb = 10
-        with open(test_file, 'wb') as f:
+        with open(test_file, "wb") as f:
             for _ in range(5):  # 5 * 10MB = 50MB
-                f.write(b'X' * (chunk_size_mb * 1024 * 1024))
+                f.write(b"X" * (chunk_size_mb * 1024 * 1024))
 
         # Method 1: Full file load (simulated - don't actually allocate)
         # Expected: 50MB in memory
@@ -141,7 +138,7 @@ class TestPhase1Performance:
         )
 
         # Verify correctness: hash should match
-        with open(test_file, 'rb') as f:
+        with open(test_file, "rb") as f:
             expected_hash = hashlib.sha256(f.read()).hexdigest()
         assert hash_result == expected_hash
 
@@ -153,10 +150,7 @@ class TestPhase1Performance:
         manifest_path = tmp_path / "test_manifest.json"
         manifest = CombinedManifest(
             input=InputMetadata(
-                image_path="test.jpg",
-                image_sha256="abc123",
-                image_size_bytes=1000,
-                image_dimensions=[100, 100]
+                image_path="test.jpg", image_sha256="abc123", image_size_bytes=1000, image_dimensions=[100, 100]
             )
         )
         manifest.write(manifest_path)
@@ -176,8 +170,7 @@ class TestPhase1Performance:
 
         # Cache hits should be < 1ms each (1000 hits in < 1 second)
         assert cache_hit_time < 1.0, (
-            f"Cache hits too slow: {cache_hit_time:.3f}s for 1000 hits "
-            f"({cache_hit_time*1000:.3f}ms per hit)"
+            f"Cache hits too slow: {cache_hit_time:.3f}s for 1000 hits " f"({cache_hit_time*1000:.3f}ms per hit)"
         )
         print(f"✓ Manifest cache hit performance: {cache_hit_time*1000:.3f}ms per 1000 hits")
 
@@ -200,7 +193,7 @@ class TestPhase2Performance:
         for i in range(20):
             img_path = tmp_path / "input" / f"test_{i}.jpg"
             img_path.parent.mkdir(parents=True, exist_ok=True)
-            img = Image.new('RGB', (512, 512), color=(i*10, i*10, i*10))
+            img = Image.new("RGB", (512, 512), color=(i * 10, i * 10, i * 10))
             img.save(img_path, quality=95)
             test_images.append(ImageInput(img_path))
 
@@ -210,8 +203,10 @@ class TestPhase2Performance:
             return mock_depth_result()
 
         # Test sequential processing
-        with patch('transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine') as mock_engine_class, \
-             patch('transformation_portal.lux_depth_v3.orchestrator.Postprocessor') as mock_proc_class:
+        with (
+            patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine") as mock_engine_class,
+            patch("transformation_portal.lux_depth_v3.orchestrator.Postprocessor") as mock_proc_class,
+        ):
 
             mock_engine = MagicMock()
             mock_engine.predict.side_effect = mock_predict_with_delay
@@ -225,7 +220,7 @@ class TestPhase2Performance:
                 model_variant=ModelVariant.METRIC_SMALL,
                 enable_parallel_processing=False,
                 enable_v2=False,
-                enable_depth_cache=False
+                enable_depth_cache=False,
             )
             orch_seq = EnhanceOrchestrator(config_seq, tmp_path / "output_seq")
 
@@ -234,8 +229,10 @@ class TestPhase2Performance:
             seq_time = time.time() - start_seq
 
         # Test parallel processing with fresh mocks
-        with patch('transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine') as mock_engine_class, \
-             patch('transformation_portal.lux_depth_v3.orchestrator.Postprocessor') as mock_proc_class:
+        with (
+            patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine") as mock_engine_class,
+            patch("transformation_portal.lux_depth_v3.orchestrator.Postprocessor") as mock_proc_class,
+        ):
 
             mock_engine = MagicMock()
             mock_engine.predict.side_effect = mock_predict_with_delay
@@ -250,7 +247,7 @@ class TestPhase2Performance:
                 enable_parallel_processing=True,
                 max_parallel_workers=4,
                 enable_v2=False,
-                enable_depth_cache=False
+                enable_depth_cache=False,
             )
             orch_par = EnhanceOrchestrator(config_par, tmp_path / "output_par")
 
@@ -267,8 +264,10 @@ class TestPhase2Performance:
 
         # With mocks, we can't guarantee speedup, just verify parallel path works
         # Real speedup requires actual GPU inference
-        print(f"✓ Parallel batch processing completed: {speedup:.2f}x speedup "
-              f"(sequential={seq_time:.2f}s, parallel={par_time:.2f}s)")
+        print(
+            f"✓ Parallel batch processing completed: {speedup:.2f}x speedup "
+            f"(sequential={seq_time:.2f}s, parallel={par_time:.2f}s)"
+        )
         print(f"  Note: Actual speedup requires real GPU inference, not mocks")
 
     @pytest.mark.benchmark
@@ -299,8 +298,7 @@ class TestPhase2Performance:
         # Note: Actual speedup varies widely based on filesystem (tmpfs vs. disk),
         # system load, and OS caching. 2x is conservative but validates caching works.
         assert speedup >= 2.0, (
-            f"Cache hit speedup {speedup:.2f}x < 2.0x minimum "
-            f"(miss={miss_time*1000:.2f}ms, hit={hit_time*1000:.2f}ms)"
+            f"Cache hit speedup {speedup:.2f}x < 2.0x minimum " f"(miss={miss_time*1000:.2f}ms, hit={hit_time*1000:.2f}ms)"
         )
         print(f"✓ Depth cache speedup: {speedup:.1f}x")
 
@@ -314,16 +312,12 @@ class TestPhase2Performance:
         for i in range(2):
             img_path = tmp_path / "input" / f"test_{i}.jpg"
             img_path.parent.mkdir(parents=True, exist_ok=True)
-            img = Image.new('RGB', (512, 512), color=(i*100, i*100, i*100))
+            img = Image.new("RGB", (512, 512), color=(i * 100, i * 100, i * 100))
             img.save(img_path, quality=95)
             test_images.append(ImageInput(img_path))
 
         # Benchmark with parallel enabled (should auto-fallback)
-        config = EnhanceConfig(
-            model_variant=ModelVariant.METRIC_SMALL,
-            enable_parallel_processing=True,
-            enable_v2=False
-        )
+        config = EnhanceConfig(model_variant=ModelVariant.METRIC_SMALL, enable_parallel_processing=True, enable_v2=False)
         orch = EnhanceOrchestrator(config, tmp_path / "output")
 
         start = time.time()
@@ -357,7 +351,7 @@ class TestPhase2Performance:
         depths = [np.random.rand(512, 512).astype(np.float32) for _ in range(50)]
 
         # Track _cache_size_gb() calls to verify lazy checking
-        with patch.object(cache, '_cache_size_gb', wraps=cache._cache_size_gb) as mock_size:
+        with patch.object(cache, "_cache_size_gb", wraps=cache._cache_size_gb) as mock_size:
             start = time.time()
             for i, depth in enumerate(depths):
                 cache.store(f"test_{i}", "config_456", depth)
@@ -366,8 +360,7 @@ class TestPhase2Performance:
             # Verify lazy checking: should call _cache_size_gb() ~5 times (50 / SIZE_CHECK_INTERVAL)
             # Allow some tolerance for threshold-based checks
             assert mock_size.call_count <= 10, (
-                f"Too many _cache_size_gb() calls: {mock_size.call_count} > 10 "
-                f"(lazy checking may not be working)"
+                f"Too many _cache_size_gb() calls: {mock_size.call_count} > 10 " f"(lazy checking may not be working)"
             )
             print(f"  _cache_size_gb() called {mock_size.call_count} times (lazy checking verified)")
 
@@ -376,8 +369,7 @@ class TestPhase2Performance:
         # Performance target: < 3ms per store on average (includes numpy I/O)
         # Without the fix, this would be ~5-10ms due to full cache scanning
         assert avg_time_ms < 3.0, (
-            f"Cache store too slow: {avg_time_ms:.3f}ms/store > 3.0ms target "
-            f"(possible regression in lazy size checking)"
+            f"Cache store too slow: {avg_time_ms:.3f}ms/store > 3.0ms target " f"(possible regression in lazy size checking)"
         )
 
         print(f"✓ Cache store scalability: {avg_time_ms:.3f}ms per store (with 100 existing entries)")
@@ -403,9 +395,9 @@ class TestPhase2Performance:
         cache2 = DepthCache(cache_dir, max_size_gb=10.0)
 
         # Verify: new instance should initialize _approximate_size_gb from existing files
-        assert cache2._approximate_size_gb > 0.0, (
-            "Cache initialization bug: _approximate_size_gb should be seeded from existing files"
-        )
+        assert (
+            cache2._approximate_size_gb > 0.0
+        ), "Cache initialization bug: _approximate_size_gb should be seeded from existing files"
 
         # Should be reasonably close to actual size (within 10% tolerance)
         size_diff_ratio = abs(cache2._approximate_size_gb - actual_size) / actual_size
@@ -439,15 +431,12 @@ class TestPhase2Performance:
         # The two depths should be approximately the same size, so ratio should be ~1.0
         size_ratio = size_after_second / size_after_first
         assert 0.8 < size_ratio < 1.2, (
-            f"Overwrite handling bug: size increased by {size_ratio:.2f}x "
-            f"(expected ~1.0x, may be double-counting)"
+            f"Overwrite handling bug: size increased by {size_ratio:.2f}x " f"(expected ~1.0x, may be double-counting)"
         )
 
         # Verify actual file count: should have 1 file, not 2
         cache_files = list(cache.cache_dir.glob("*.npy"))
-        assert len(cache_files) == 1, (
-            f"Expected 1 cache file after overwrite, found {len(cache_files)}"
-        )
+        assert len(cache_files) == 1, f"Expected 1 cache file after overwrite, found {len(cache_files)}"
 
         print(f"✓ Overwrite handling: size ratio {size_ratio:.2f}x (no double-counting)")
 
@@ -474,9 +463,7 @@ class TestPhase2Performance:
 
         # Verify cache has 50 entries
         cache_files = list(cache.cache_dir.glob("*.npy"))
-        assert len(cache_files) == 50, (
-            f"Thread safety issue: expected 50 cache files, found {len(cache_files)}"
-        )
+        assert len(cache_files) == 50, f"Thread safety issue: expected 50 cache files, found {len(cache_files)}"
 
         # Verify _approximate_size_gb is reasonable (should be > 0 and < max)
         assert 0.0 < cache._approximate_size_gb < cache.max_size_gb, (
@@ -485,9 +472,7 @@ class TestPhase2Performance:
         )
 
         # Verify _store_count is correct
-        assert cache._store_count == 50, (
-            f"Thread safety issue: _store_count={cache._store_count} (expected 50)"
-        )
+        assert cache._store_count == 50, f"Thread safety issue: _store_count={cache._store_count} (expected 50)"
 
         print(f"✓ Thread safety: 50 concurrent stores completed successfully")
         print(f"  Final state: {len(cache_files)} files, {cache._approximate_size_gb:.4f}GB, {cache._store_count} stores")
@@ -499,7 +484,7 @@ class TestPhase3Performance:
     @pytest.mark.benchmark
     def test_pbr_batching_speedup(self, tmp_path):
         """Phase 3: PBR batching achieves 30% speedup."""
-        from transformation_portal.lux_depth_v3.pbr import generate_pbr_maps, PBRConfig
+        from transformation_portal.lux_depth_v3.pbr import PBRConfig, generate_pbr_maps
 
         # Create 10 test depths
         depths = [np.random.rand(512, 512).astype(np.float32) for _ in range(10)]
@@ -516,10 +501,7 @@ class TestPhase3Performance:
         per_image_time = seq_time / 10
 
         # Verify: PBR generation is fast enough (< 500ms per 512x512 image)
-        assert per_image_time < 0.5, (
-            f"PBR generation too slow: {per_image_time*1000:.0f}ms per image "
-            f"(expected < 500ms)"
-        )
+        assert per_image_time < 0.5, f"PBR generation too slow: {per_image_time*1000:.0f}ms per image " f"(expected < 500ms)"
         print(f"✓ PBR generation baseline: {per_image_time*1000:.0f}ms per image")
 
     @pytest.mark.benchmark
@@ -529,7 +511,7 @@ class TestPhase3Performance:
 
         # Create single test image
         img_path = tmp_path / "test.jpg"
-        img = Image.new('RGB', (512, 512), color=(128, 128, 128))
+        img = Image.new("RGB", (512, 512), color=(128, 128, 128))
         img.save(img_path, quality=95)
 
         config = EnhanceConfig(
@@ -537,7 +519,7 @@ class TestPhase3Performance:
             enable_parallel_processing=True,
             enable_manifest_cache=True,
             enable_depth_cache=True,
-            enable_v2=False
+            enable_v2=False,
         )
         orch = EnhanceOrchestrator(config, tmp_path / "output")
 
@@ -547,10 +529,9 @@ class TestPhase3Performance:
 
         # Verify: single image completes in reasonable time (< 2 seconds with mocks)
         assert total_time < 2.0, (
-            f"Single image processing too slow: {total_time:.2f}s "
-            f"(optimizations may have added overhead)"
+            f"Single image processing too slow: {total_time:.2f}s " f"(optimizations may have added overhead)"
         )
-        assert result['status'] == 'ok'
+        assert result["status"] == "ok"
         print(f"✓ Single image processing: {total_time:.3f}s (no regression)")
 
 
@@ -561,7 +542,7 @@ class TestPerformanceBaselines:
     def test_file_io_baseline(self, tmp_path):
         """Establish baseline for file I/O operations."""
         test_file = tmp_path / "io_test.bin"
-        data = b'X' * (10 * 1024 * 1024)  # 10MB
+        data = b"X" * (10 * 1024 * 1024)  # 10MB
 
         # Write baseline
         start_write = time.time()
@@ -588,7 +569,7 @@ class TestPerformanceBaselines:
         create_time = (time.time() - start) / 10
 
         # Array save/load
-        with tempfile.NamedTemporaryFile(suffix='.npy', delete=False) as tmp:
+        with tempfile.NamedTemporaryFile(suffix=".npy", delete=False) as tmp:
             tmp_path = Path(tmp.name)
 
         start_save = time.time()
@@ -601,8 +582,10 @@ class TestPerformanceBaselines:
 
         tmp_path.unlink()
 
-        print(f"✓ NumPy baseline: create={create_time*1000:.0f}ms, "
-              f"save={save_time*1000:.0f}ms, load={load_time*1000:.0f}ms (1024x1024)")
+        print(
+            f"✓ NumPy baseline: create={create_time*1000:.0f}ms, "
+            f"save={save_time*1000:.0f}ms, load={load_time*1000:.0f}ms (1024x1024)"
+        )
 
 
 if __name__ == "__main__":

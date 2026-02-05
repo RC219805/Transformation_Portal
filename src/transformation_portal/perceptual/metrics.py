@@ -10,17 +10,17 @@ Implements various perceptual and statistical quality metrics:
 - SSIM: Structural Similarity Index
 """
 
-from dataclasses import dataclass
-from enum import Enum
-from typing import Optional, Dict, Any
 import logging
 import os
+from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
+from typing import Any, Dict, Optional
 
-import torch
-from torch import Tensor
-import torch.nn.functional as F
 import numpy as np
+import torch
+import torch.nn.functional as F
+from torch import Tensor
 
 logger = logging.getLogger(__name__)
 
@@ -77,9 +77,7 @@ class QualityMetrics:
         self.substrate = substrate
         self.cache_models = cache_models
         device = substrate.get_device()
-        self.device = (
-            device if isinstance(device, torch.device) else torch.device(device)
-        )
+        self.device = device if isinstance(device, torch.device) else torch.device(device)
 
         # Model cache
         self._lpips_model = None
@@ -93,9 +91,7 @@ class QualityMetrics:
             return tensor.to(self.device)
         return tensor
 
-    def compute_all(
-        self, image: Tensor, reference: Optional[Tensor] = None
-    ) -> Dict[MetricType, PerceptualScore]:
+    def compute_all(self, image: Tensor, reference: Optional[Tensor] = None) -> Dict[MetricType, PerceptualScore]:
         """
         Compute all available metrics.
 
@@ -121,9 +117,7 @@ class QualityMetrics:
 
         return scores
 
-    def compute_lpips(
-        self, image: Tensor, reference: Tensor, network: str = "alex"
-    ) -> PerceptualScore:
+    def compute_lpips(self, image: Tensor, reference: Tensor, network: str = "alex") -> PerceptualScore:
         """
         Compute LPIPS (Learned Perceptual Image Patch Similarity).
 
@@ -175,9 +169,7 @@ class QualityMetrics:
             metadata={"network": network},
         )
 
-    def compute_psnr(
-        self, image: Tensor, reference: Tensor, max_value: float = 1.0
-    ) -> PerceptualScore:
+    def compute_psnr(self, image: Tensor, reference: Tensor, max_value: float = 1.0) -> PerceptualScore:
         """
         Compute PSNR (Peak Signal-to-Noise Ratio).
 
@@ -315,19 +307,10 @@ class QualityMetrics:
             # Since these are not bundled with this repo (and CI/offline environments
             # should not download them), treat BRISQUE as "optional" and fall back
             # to a lightweight sharpness proxy unless explicit file paths are provided.
-            model_path = os.environ.get("TP_BRISQUE_MODEL_PATH") or os.environ.get(
-                "BRISQUE_MODEL_PATH"
-            )
-            range_path = os.environ.get("TP_BRISQUE_RANGE_PATH") or os.environ.get(
-                "BRISQUE_RANGE_PATH"
-            )
+            model_path = os.environ.get("TP_BRISQUE_MODEL_PATH") or os.environ.get("BRISQUE_MODEL_PATH")
+            range_path = os.environ.get("TP_BRISQUE_RANGE_PATH") or os.environ.get("BRISQUE_RANGE_PATH")
 
-            if (
-                not model_path
-                or not range_path
-                or not Path(model_path).exists()
-                or not Path(range_path).exists()
-            ):
+            if not model_path or not range_path or not Path(model_path).exists() or not Path(range_path).exists():
                 raise FileNotFoundError(
                     "BRISQUE model/range files not configured. Set TP_BRISQUE_MODEL_PATH and "
                     "TP_BRISQUE_RANGE_PATH (or BRISQUE_MODEL_PATH/BRISQUE_RANGE_PATH)."
@@ -389,12 +372,7 @@ class QualityMetrics:
         """Create Gaussian window for SSIM."""
         # Create 1D Gaussian
         sigma = 1.5
-        gauss = torch.Tensor(
-            [
-                np.exp(-((x - window_size // 2) ** 2) / (2 * sigma**2))
-                for x in range(window_size)
-            ]
-        )
+        gauss = torch.Tensor([np.exp(-((x - window_size // 2) ** 2) / (2 * sigma**2)) for x in range(window_size)])
         gauss = gauss / gauss.sum()
 
         # Create 2D window
@@ -430,29 +408,12 @@ class QualityMetrics:
         mu1_mu2 = mu1 * mu2
 
         # Compute variances
-        sigma1_sq = (
-            F.conv2d(
-                img1 * img1, window, padding=window_size // 2, groups=img1.shape[1]
-            )
-            - mu1_sq
-        )
-        sigma2_sq = (
-            F.conv2d(
-                img2 * img2, window, padding=window_size // 2, groups=img2.shape[1]
-            )
-            - mu2_sq
-        )
-        sigma12 = (
-            F.conv2d(
-                img1 * img2, window, padding=window_size // 2, groups=img1.shape[1]
-            )
-            - mu1_mu2
-        )
+        sigma1_sq = F.conv2d(img1 * img1, window, padding=window_size // 2, groups=img1.shape[1]) - mu1_sq
+        sigma2_sq = F.conv2d(img2 * img2, window, padding=window_size // 2, groups=img2.shape[1]) - mu2_sq
+        sigma12 = F.conv2d(img1 * img2, window, padding=window_size // 2, groups=img1.shape[1]) - mu1_mu2
 
         # Compute SSIM
-        ssim_map = ((2 * mu1_mu2 + c1) * (2 * sigma12 + c2)) / (
-            (mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2)
-        )
+        ssim_map = ((2 * mu1_mu2 + c1) * (2 * sigma12 + c2)) / ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2))
 
         return ssim_map.mean()
 

@@ -6,6 +6,7 @@ Base contract for depth estimation and surface property estimation.
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Tuple
+
 import numpy as np
 
 
@@ -30,9 +31,7 @@ class DepthEstimator(ABC):
     """
 
     @abstractmethod
-    def estimate_depth(
-        self, image: np.ndarray, normalize: bool = True, **kwargs
-    ) -> np.ndarray:
+    def estimate_depth(self, image: np.ndarray, normalize: bool = True, **kwargs) -> np.ndarray:
         """
         Estimate depth map from RGB image.
 
@@ -156,9 +155,7 @@ class UnifiedEstimator(DepthEstimator, NormalEstimator):
     """
 
     @abstractmethod
-    def estimate_geometry(
-        self, image: np.ndarray, **kwargs
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    def estimate_geometry(self, image: np.ndarray, **kwargs) -> Tuple[np.ndarray, np.ndarray]:
         """
         Jointly estimate depth and normals.
 

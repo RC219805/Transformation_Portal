@@ -68,9 +68,7 @@ class ValidationResult:
         if issue.severity == ValidationSeverity.ERROR:
             self.is_valid = False
 
-    def add_error(
-        self, code: str, message: str, suggestion: Optional[str] = None, **details
-    ) -> None:
+    def add_error(self, code: str, message: str, suggestion: Optional[str] = None, **details) -> None:
         """Add an error issue."""
         self.add_issue(
             ValidationIssue(
@@ -82,9 +80,7 @@ class ValidationResult:
             )
         )
 
-    def add_warning(
-        self, code: str, message: str, suggestion: Optional[str] = None, **details
-    ) -> None:
+    def add_warning(self, code: str, message: str, suggestion: Optional[str] = None, **details) -> None:
         """Add a warning issue."""
         self.add_issue(
             ValidationIssue(
@@ -110,10 +106,7 @@ class ValidationResult:
         """Raise exception if validation failed."""
         if not self.is_valid:
             error_messages = [str(e) for e in self.errors]
-            raise ImageValidationError(
-                f"Validation failed with {len(self.errors)} error(s):\n"
-                + "\n".join(error_messages)
-            )
+            raise ImageValidationError(f"Validation failed with {len(self.errors)} error(s):\n" + "\n".join(error_messages))
 
 
 class ImageValidationError(ProcessingError):
@@ -211,8 +204,7 @@ class ImageValidator:
         else:
             result.add_error(
                 "INVALID_INPUT_TYPE",
-                f"{context_prefix}Expected file path, PIL Image, or numpy array, "
-                f"got {type(image_input).__name__}",
+                f"{context_prefix}Expected file path, PIL Image, or numpy array, " f"got {type(image_input).__name__}",
             )
 
         return result
@@ -247,8 +239,7 @@ class ImageValidator:
         if file_size_mb > self.max_file_size_mb:
             result.add_error(
                 "FILE_TOO_LARGE",
-                f"{prefix}File size ({file_size_mb:.1f} MB) exceeds "
-                f"maximum ({self.max_file_size_mb} MB)",
+                f"{prefix}File size ({file_size_mb:.1f} MB) exceeds " f"maximum ({self.max_file_size_mb} MB)",
                 suggestion="Reduce image resolution or use compression",
                 file_size_mb=file_size_mb,
             )
@@ -258,8 +249,7 @@ class ImageValidator:
         if file_size_mb > self.max_file_size_mb * 0.8:
             result.add_warning(
                 "FILE_SIZE_WARNING",
-                f"{prefix}File is large ({file_size_mb:.1f} MB), "
-                "processing may be slow",
+                f"{prefix}File is large ({file_size_mb:.1f} MB), " "processing may be slow",
             )
 
         # Try to open the image
@@ -377,8 +367,7 @@ class ImageValidator:
         if megapixels > 50:
             result.add_warning(
                 "VERY_HIGH_RESOLUTION",
-                f"{prefix}Very high resolution ({megapixels:.1f} MP), "
-                "processing may be slow",
+                f"{prefix}Very high resolution ({megapixels:.1f} MP), " "processing may be slow",
             )
 
     def _validate_numpy_array(
@@ -450,8 +439,7 @@ class ImageValidator:
             if arr_min < -0.1 or arr_max > 1.1:
                 result.add_warning(
                     "FLOAT_RANGE_WARNING",
-                    f"{prefix}Float array values outside [0, 1] range "
-                    f"(min={arr_min:.2f}, max={arr_max:.2f})",
+                    f"{prefix}Float array values outside [0, 1] range " f"(min={arr_min:.2f}, max={arr_max:.2f})",
                     suggestion="Normalize values to [0, 1] range",
                 )
         elif array.dtype not in (np.uint8, np.uint16):
@@ -546,9 +534,7 @@ class BatchValidator:
 # Convenience functions
 
 
-def validate_image(
-    image_input: Union[str, Path, Image.Image, np.ndarray], **kwargs
-) -> ValidationResult:
+def validate_image(image_input: Union[str, Path, Image.Image, np.ndarray], **kwargs) -> ValidationResult:
     """Validate an image with default settings.
 
     Args:
@@ -589,9 +575,7 @@ def validate_image_strict(
     return validator.validate(image_input)
 
 
-def require_valid_image(
-    image_input: Union[str, Path, Image.Image, np.ndarray], **kwargs
-) -> None:
+def require_valid_image(image_input: Union[str, Path, Image.Image, np.ndarray], **kwargs) -> None:
     """Validate an image and raise exception if invalid.
 
     Args:
@@ -605,9 +589,7 @@ def require_valid_image(
     result.raise_if_invalid()
 
 
-def is_valid_image(
-    image_input: Union[str, Path, Image.Image, np.ndarray], **kwargs
-) -> bool:
+def is_valid_image(image_input: Union[str, Path, Image.Image, np.ndarray], **kwargs) -> bool:
     """Quick check if an image is valid.
 
     Args:

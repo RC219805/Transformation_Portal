@@ -7,18 +7,18 @@ into a unified interface for optimal tensor processing on Apple Silicon M4 Max.
 This is the primary entry point for Phase 1 foundation capabilities.
 """
 
-from typing import Optional, Dict, Any
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
+from typing import Any, Dict, Optional
 
 import torch
 from torch import Tensor
 
-from .device_manager import DeviceManager, DeviceInfo
-from .tensor_processor import TensorProcessor, TensorConfig, PrecisionMode
-from .memory_manager import MemoryManager, MemoryConfig, AllocationStrategy
-from .hardware_abstraction import HardwareAbstraction, BackendType
+from .device_manager import DeviceInfo, DeviceManager
+from .hardware_abstraction import BackendType, HardwareAbstraction
+from .memory_manager import AllocationStrategy, MemoryConfig, MemoryManager
 from .performance_monitor import PerformanceMonitor
+from .tensor_processor import PrecisionMode, TensorConfig, TensorProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -168,9 +168,7 @@ class ComputationalSubstrate:
         )
 
         # Initialize performance monitor
-        self.performance_monitor = PerformanceMonitor(
-            device=self.device, enable_memory_tracking=self.config.enable_profiling
-        )
+        self.performance_monitor = PerformanceMonitor(device=self.device, enable_memory_tracking=self.config.enable_profiling)
 
         if not self.config.enable_profiling:
             self.performance_monitor.disable()
@@ -197,16 +195,12 @@ class ComputationalSubstrate:
         # Test tensor allocation
         test_tensor = self.allocate_tensor((100, 100), dtype=torch.float32)
         if test_tensor.device != self.device:
-            raise AssertionError(
-                f"Tensor not on correct device: tensor={test_tensor.device} expected={self.device}"
-            )
+            raise AssertionError(f"Tensor not on correct device: tensor={test_tensor.device} expected={self.device}")
 
         # Test computation
         result = test_tensor * 2.0
         if result.device != self.device:
-            raise AssertionError(
-                f"Computation moved tensor: tensor={result.device} expected={self.device}"
-            )
+            raise AssertionError(f"Computation moved tensor: tensor={result.device} expected={self.device}")
 
         # Clean up
         del test_tensor, result
@@ -252,9 +246,7 @@ class ComputationalSubstrate:
 
             return tensor
 
-    def process_batch(
-        self, tensors: list, operation, batch_size: Optional[int] = None
-    ) -> list:
+    def process_batch(self, tensors: list, operation, batch_size: Optional[int] = None) -> list:
         """
         Process batch of tensors with optimal batching.
 

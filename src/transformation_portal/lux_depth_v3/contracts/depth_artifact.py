@@ -18,6 +18,7 @@ Example:
     ...     )
     ... )
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -149,9 +150,7 @@ class DepthProvenance:
     preset: Optional[str] = None
     device: str = "cpu"
     runtime_version: str = "3.0.0"
-    timestamp_utc: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp_utc: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     request_id: Optional[str] = None
     downgrade_events: Tuple[str, ...] = field(default_factory=tuple)
 
@@ -235,9 +234,7 @@ class DepthArtifact:
                 "depth_map dtype is %s, converting to float32",
                 self.depth_map.dtype,
             )
-            object.__setattr__(
-                self, "depth_map", self.depth_map.astype(np.float32)
-            )
+            object.__setattr__(self, "depth_map", self.depth_map.astype(np.float32))
 
         # Optional arrays validation
         if self.metric_map_m is not None:
@@ -245,8 +242,7 @@ class DepthArtifact:
                 raise TypeError("metric_map_m must be a numpy array")
             if self.metric_map_m.shape != self.depth_map.shape:
                 raise ValueError(
-                    f"metric_map_m shape {self.metric_map_m.shape} "
-                    f"must match depth_map shape {self.depth_map.shape}"
+                    f"metric_map_m shape {self.metric_map_m.shape} " f"must match depth_map shape {self.depth_map.shape}"
                 )
 
         if self.confidence is not None:
@@ -254,8 +250,7 @@ class DepthArtifact:
                 raise TypeError("confidence must be a numpy array")
             if self.confidence.shape != self.depth_map.shape:
                 raise ValueError(
-                    f"confidence shape {self.confidence.shape} "
-                    f"must match depth_map shape {self.depth_map.shape}"
+                    f"confidence shape {self.confidence.shape} " f"must match depth_map shape {self.depth_map.shape}"
                 )
 
         # Provenance validation

@@ -1,10 +1,13 @@
 """Materials V3 Taxonomy definitions."""
+
 from enum import Enum
+
 
 class RefinementStrategy(Enum):
     CANARY = "canary"
     ALL = "all"
     NONE = "none"
+
 
 # Expanded Metadata (PR-4C)
 DEFAULT_MATERIAL_METADATA = {

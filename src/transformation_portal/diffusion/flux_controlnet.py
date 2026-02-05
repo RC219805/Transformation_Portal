@@ -76,8 +76,7 @@ class FLUXControlNet:
         """
         if not FLUX_CONTROLNET_AVAILABLE:
             raise ImportError(
-                "FLUX ControlNet requires latest diffusers. "
-                "Install with: pip install diffusers>=0.30.0 controlnet-aux"
+                "FLUX ControlNet requires latest diffusers. " "Install with: pip install diffusers>=0.30.0 controlnet-aux"
             )
 
         self.control_types = control_types
@@ -91,9 +90,7 @@ class FLUXControlNet:
         if "canny" in control_types:
             self.processors["canny"] = CannyDetector()
         if "depth" in control_types:
-            self.processors["depth"] = MidasDetector.from_pretrained(  # nosec B615
-                "lllyasviel/Annotators"
-            )
+            self.processors["depth"] = MidasDetector.from_pretrained("lllyasviel/Annotators")  # nosec B615
 
         logger.info("FLUX ControlNet initialized")
 
@@ -133,9 +130,7 @@ class FLUXControlNet:
         else:
             raise ValueError(f"Unsupported control type: {control_type}")
 
-    def _generate_canny(
-        self, image: Image.Image, low_threshold: int = 100, high_threshold: int = 200
-    ) -> Image.Image:
+    def _generate_canny(self, image: Image.Image, low_threshold: int = 100, high_threshold: int = 200) -> Image.Image:
         """Generate Canny edge map.
 
         Args:
@@ -148,9 +143,7 @@ class FLUXControlNet:
         """
         if "canny" in self.processors:
             # Use ControlNet aux processor
-            canny_image = self.processors["canny"](
-                image, low_threshold=low_threshold, high_threshold=high_threshold
-            )
+            canny_image = self.processors["canny"](image, low_threshold=low_threshold, high_threshold=high_threshold)
         else:
             # Fallback to OpenCV
             image_np = np.array(image)
@@ -240,9 +233,7 @@ class FLUXControlNet:
         control_images = {}
         for control_type in self.control_types:
             logger.info(f"Generating {control_type} control image")
-            control_images[control_type] = self.generate_control_image(
-                pil_image, control_type
-            )
+            control_images[control_type] = self.generate_control_image(pil_image, control_type)
 
         # NOTE: Actual FLUX ControlNet pipeline would go here
         # This is a framework for when official FLUX ControlNet models are released
@@ -259,9 +250,7 @@ class FLUXControlNet:
 
         return result
 
-    def create_multi_controlnet_config(
-        self, control_scales: Optional[Dict[str, float]] = None
-    ) -> Dict[str, any]:
+    def create_multi_controlnet_config(self, control_scales: Optional[Dict[str, float]] = None) -> Dict[str, any]:
         """Create configuration for multi-ControlNet composition.
 
         Multi-ControlNet achieves 96.7% structural accuracy by combining:
@@ -341,9 +330,7 @@ class FLUXControlNet:
 
         return grid
 
-    def _create_image_grid(
-        self, images: List[Image.Image], labels: List[str]
-    ) -> Image.Image:
+    def _create_image_grid(self, images: List[Image.Image], labels: List[str]) -> Image.Image:
         """Create grid of images with labels.
 
         Args:
@@ -391,9 +378,7 @@ class FLUXControlNet:
 
         return grid
 
-    def _load_image(
-        self, image: Union[str, Path, Image.Image, np.ndarray]
-    ) -> Image.Image:
+    def _load_image(self, image: Union[str, Path, Image.Image, np.ndarray]) -> Image.Image:
         """Load image as PIL Image."""
         if isinstance(image, Image.Image):
             return image.convert("RGB")

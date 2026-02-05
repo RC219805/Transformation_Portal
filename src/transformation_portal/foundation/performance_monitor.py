@@ -13,13 +13,13 @@ Key Features:
 - Export metrics for analysis
 """
 
-import time
 import functools
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any, Callable
-from collections import defaultdict
-from enum import Enum
 import logging
+import time
+from collections import defaultdict
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional
 
 import torch
 
@@ -136,9 +136,7 @@ class MetricsCollector:
         if len(self.metrics) > self.max_metrics:
             self.metrics = self.metrics[-self.max_metrics :]
 
-    def record_operation(
-        self, operation_name: str, execution_time: float, memory_mb: float = 0.0
-    ):
+    def record_operation(self, operation_name: str, execution_time: float, memory_mb: float = 0.0):
         """
         Record operation execution metrics.
 
@@ -248,9 +246,7 @@ class PerformanceMonitor:
     with automatic metric collection.
     """
 
-    def __init__(
-        self, device: Optional[torch.device] = None, enable_memory_tracking: bool = True
-    ):
+    def __init__(self, device: Optional[torch.device] = None, enable_memory_tracking: bool = True):
         """
         Initialize performance monitor.
 
@@ -388,9 +384,7 @@ class PerformanceMonitor:
         )
 
         logger.info(
-            f"Benchmark {operation_name}: "
-            f"{stats['avg_time_ms']:.3f}ms avg, "
-            f"{stats['throughput_per_sec']:.1f} ops/sec"
+            f"Benchmark {operation_name}: " f"{stats['avg_time_ms']:.3f}ms avg, " f"{stats['throughput_per_sec']:.1f} ops/sec"
         )
 
         return stats
@@ -523,6 +517,4 @@ class _ProfileContext:
         memory_after = self.monitor._get_memory_usage()
         memory_delta = memory_after - self.memory_before
 
-        self.monitor.collector.record_operation(
-            self.context_name, elapsed, memory_delta
-        )
+        self.monitor.collector.record_operation(self.context_name, elapsed, memory_delta)

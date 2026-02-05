@@ -10,13 +10,15 @@ This test suite validates:
 Coverage target: Issue #1 from PBR Implementation Audit
 """
 
-import pytest
-from pathlib import Path
-import tempfile
 import shutil
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
 
-from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+import pytest
+
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
+from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
 
 @pytest.fixture
@@ -32,17 +34,23 @@ class TestV2ValidationFailFast:
 
     def test_v2_enabled_script_missing_raises_error(self, temp_output):
         """Test fail-fast when V2 enabled but script missing."""
-        config = EnhanceConfig(
-            enable_v2=True,
-            v2_preset="default",
-            depth_device="cpu"
-        )
+        config = EnhanceConfig(enable_v2=True, v2_preset="default", depth_device="cpu")
 
-        # Should raise FileNotFoundError during initialization
-        with pytest.raises(FileNotFoundError) as exc_info:
-            EnhanceOrchestrator(config=config, output_root=temp_output)
+        # Simulate missing script (since scripts/enhance_image.py now exists)
+        original_exists = Path.exists
 
-        # Verify error message is helpful
+        def mock_exists(self):
+            if "enhance_image.py" in str(self):
+                return False
+            return original_exists(self)
+
+        # Apply mock BEFORE orchestrator construction
+        with patch("pathlib.Path.exists", mock_exists):
+            # Should raise FileNotFoundError during initialization
+            with pytest.raises(FileNotFoundError) as exc_info:
+                EnhanceOrchestrator(config=config, output_root=temp_output)
+
+        # Verify error message is helpful (check after context exits)
         error_msg = str(exc_info.value)
         assert "scripts/enhance_image.py" in error_msg
         assert "enable_v2=False" in error_msg or "v2_preset=None" in error_msg
@@ -50,11 +58,7 @@ class TestV2ValidationFailFast:
 
     def test_v2_disabled_no_error_when_script_missing(self, temp_output):
         """Test V2 disabled allows initialization without script."""
-        config = EnhanceConfig(
-            enable_v2=False,
-            v2_preset="default",  # Ignored when enable_v2=False
-            depth_device="cpu"
-        )
+        config = EnhanceConfig(enable_v2=False, v2_preset="default", depth_device="cpu")  # Ignored when enable_v2=False
 
         # Should succeed even without V2 script
         orchestrator = EnhanceOrchestrator(config=config, output_root=temp_output)
@@ -64,11 +68,7 @@ class TestV2ValidationFailFast:
 
     def test_v2_preset_none_no_error_when_script_missing(self, temp_output):
         """Test v2_preset=None allows initialization without script."""
-        config = EnhanceConfig(
-            enable_v2=True,
-            v2_preset=None,  # None = skip V2
-            depth_device="cpu"
-        )
+        config = EnhanceConfig(enable_v2=True, v2_preset=None, depth_device="cpu")  # None = skip V2
 
         # Should succeed even without V2 script
         orchestrator = EnhanceOrchestrator(config=config, output_root=temp_output)
@@ -78,11 +78,7 @@ class TestV2ValidationFailFast:
 
     def test_v2_disabled_overrides_preset(self, temp_output):
         """Test enable_v2=False overrides v2_preset."""
-        config = EnhanceConfig(
-            enable_v2=False,
-            v2_preset="premium",  # Should be ignored
-            depth_device="cpu"
-        )
+        config = EnhanceConfig(enable_v2=False, v2_preset="premium", depth_device="cpu")  # Should be ignored
 
         # Should succeed - enable_v2 takes precedence
         orchestrator = EnhanceOrchestrator(config=config, output_root=temp_output)
@@ -96,20 +92,24 @@ class TestV2ConfigCombinations:
         """Test default config expects V2 script to exist."""
         config = EnhanceConfig()  # Defaults: enable_v2=True, v2_preset="default"
 
-        # Should fail with helpful error
-        with pytest.raises(FileNotFoundError) as exc_info:
-            EnhanceOrchestrator(config=config, output_root=temp_output)
+        # Simulate missing script
+        original_exists = Path.exists
+
+        def mock_exists(self):
+            if "enhance_image.py" in str(self):
+                return False
+            return original_exists(self)
+
+        with patch("pathlib.Path.exists", mock_exists):
+            # Should fail with helpful error
+            with pytest.raises(FileNotFoundError) as exc_info:
+                EnhanceOrchestrator(config=config, output_root=temp_output)
 
         assert "enhance_image.py" in str(exc_info.value)
 
     def test_pbr_only_config_no_v2_required(self, temp_output):
         """Test PBR-only config doesn't require V2 script."""
-        config = EnhanceConfig(
-            enable_v2=False,
-            generate_pbr=True,
-            pbr_normal_strength=1.5,
-            depth_device="cpu"
-        )
+        config = EnhanceConfig(enable_v2=False, generate_pbr=True, pbr_normal_strength=1.5, depth_device="cpu")
 
         # Should succeed
         orchestrator = EnhanceOrchestrator(config=config, output_root=temp_output)
@@ -124,8 +124,17 @@ class TestV2ErrorMessages:
         """Test error message provides actionable solutions."""
         config = EnhanceConfig(enable_v2=True, v2_preset="default")
 
-        with pytest.raises(FileNotFoundError) as exc_info:
-            EnhanceOrchestrator(config=config, output_root=temp_output)
+        # Simulate missing script
+        original_exists = Path.exists
+
+        def mock_exists(self):
+            if "enhance_image.py" in str(self):
+                return False
+            return original_exists(self)
+
+        with patch("pathlib.Path.exists", mock_exists):
+            with pytest.raises(FileNotFoundError) as exc_info:
+                EnhanceOrchestrator(config=config, output_root=temp_output)
 
         error_msg = str(exc_info.value)
 
@@ -147,8 +156,17 @@ class TestV2ErrorMessages:
         """Test error message mentions PBR-only workflow option."""
         config = EnhanceConfig(enable_v2=True, v2_preset="default")
 
-        with pytest.raises(FileNotFoundError) as exc_info:
-            EnhanceOrchestrator(config=config, output_root=temp_output)
+        # Simulate missing script
+        original_exists = Path.exists
+
+        def mock_exists(self):
+            if "enhance_image.py" in str(self):
+                return False
+            return original_exists(self)
+
+        with patch("pathlib.Path.exists", mock_exists):
+            with pytest.raises(FileNotFoundError) as exc_info:
+                EnhanceOrchestrator(config=config, output_root=temp_output)
 
         error_msg = str(exc_info.value).lower()
         assert "pbr" in error_msg or "workflow" in error_msg

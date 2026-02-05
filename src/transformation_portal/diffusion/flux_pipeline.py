@@ -21,19 +21,16 @@ from PIL import Image
 
 try:
     from diffusers import (  # noqa: F401
-        FluxPipeline,
-        FluxControlNetPipeline,
-        FluxControlNetModel,
         FlowMatchEulerDiscreteScheduler,
+        FluxControlNetModel,
+        FluxControlNetPipeline,
+        FluxPipeline,
     )
 
     FLUX_AVAILABLE = True
 except ImportError:
     FLUX_AVAILABLE = False
-    logging.warning(
-        "FLUX not available. Install with: "
-        "pip install diffusers>=0.30.0 transformers>=4.38.0 accelerate"
-    )
+    logging.warning("FLUX not available. Install with: " "pip install diffusers>=0.30.0 transformers>=4.38.0 accelerate")
 
 
 logger = logging.getLogger(__name__)
@@ -64,8 +61,7 @@ class FLUXPipeline:
 
     # Default architectural prompts
     DEFAULT_ARCHITECTURAL_PROMPT = (
-        "professional architectural photography, high detail, sharp focus, "
-        "natural lighting, 8k resolution, photorealistic"
+        "professional architectural photography, high detail, sharp focus, " "natural lighting, 8k resolution, photorealistic"
     )
 
     DEFAULT_NEGATIVE_PROMPT = (
@@ -98,14 +94,11 @@ class FLUXPipeline:
         """
         if not FLUX_AVAILABLE:
             raise ImportError(
-                "FLUX requires diffusers>=0.30.0. "
-                "Install with: pip install diffusers>=0.30.0 transformers>=4.38.0"
+                "FLUX requires diffusers>=0.30.0. " "Install with: pip install diffusers>=0.30.0 transformers>=4.38.0"
             )
 
         if variant not in self.VARIANTS:
-            raise ValueError(
-                f"Invalid variant: {variant}. Choose from {list(self.VARIANTS.keys())}"
-            )
+            raise ValueError(f"Invalid variant: {variant}. Choose from {list(self.VARIANTS.keys())}")
 
         self.variant = variant
         self.model_id = self.VARIANTS[variant]
@@ -115,9 +108,7 @@ class FLUXPipeline:
         logger.info(f"Initializing FLUX.1-{variant} on {self.device}")
 
         # Load pipeline
-        self.pipe = FluxPipeline.from_pretrained(  # nosec B615
-            self.model_id, torch_dtype=torch_dtype, cache_dir=cache_dir
-        )
+        self.pipe = FluxPipeline.from_pretrained(self.model_id, torch_dtype=torch_dtype, cache_dir=cache_dir)  # nosec B615
 
         # Optimize for memory/speed
         if enable_cpu_offload and self.device == "cuda":
@@ -131,9 +122,7 @@ class FLUXPipeline:
             logger.info("Enabled attention slicing")
 
         # Configure scheduler for fast generation
-        self.pipe.scheduler = FlowMatchEulerDiscreteScheduler.from_config(
-            self.pipe.scheduler.config
-        )
+        self.pipe.scheduler = FlowMatchEulerDiscreteScheduler.from_config(self.pipe.scheduler.config)
 
         logger.info("FLUX pipeline initialized successfully")
 
@@ -281,20 +270,14 @@ class FLUXPipeline:
             model availability. This implementation provides the framework
             and falls back to standard enhancement with control-informed prompting.
         """
-        from transformation_portal.diffusion.flux_controlnet import (
-            FLUXControlNet,
-            FLUX_CONTROLNET_AVAILABLE,
-        )
+        from transformation_portal.diffusion.flux_controlnet import FLUX_CONTROLNET_AVAILABLE, FLUXControlNet
 
         # Load and prepare input image
         pil_image = self._load_image(image)
 
         # Initialize FLUXControlNet for control image generation
         if not FLUX_CONTROLNET_AVAILABLE:
-            logger.warning(
-                "FLUXControlNet dependencies not available. "
-                "Falling back to standard enhancement."
-            )
+            logger.warning("FLUXControlNet dependencies not available. " "Falling back to standard enhancement.")
             return self.enhance(
                 image=pil_image,
                 prompt=prompt,
@@ -315,29 +298,22 @@ class FLUXPipeline:
         # Note: control_img is prepared for future FluxControlNetPipeline integration
         if control_image is None:
             logger.info(f"Generating {controlnet_type} control image")
-            control_img = controlnet.generate_control_image(
-                pil_image, controlnet_type, **kwargs
-            )
+            control_img = controlnet.generate_control_image(pil_image, controlnet_type, **kwargs)
         else:
             control_img = self._load_image(control_image)
 
         # Log control image generation for debugging/validation
-        logger.debug(
-            f"Control image prepared: {control_img.size}, mode={control_img.mode}"
-        )
+        logger.debug(f"Control image prepared: {control_img.size}, mode={control_img.mode}")
 
         # Use defaults if prompt not provided
         if prompt is None:
             prompt = self.DEFAULT_ARCHITECTURAL_PROMPT
 
         # Build structure-aware prompt enhancement
-        structure_prompt = self._build_controlnet_prompt(
-            prompt, controlnet_type, controlnet_conditioning_scale
-        )
+        structure_prompt = self._build_controlnet_prompt(prompt, controlnet_type, controlnet_conditioning_scale)
 
         logger.info(
-            f"Enhancing with {controlnet_type} ControlNet "
-            f"(scale={controlnet_conditioning_scale}, strength={strength})"
+            f"Enhancing with {controlnet_type} ControlNet " f"(scale={controlnet_conditioning_scale}, strength={strength})"
         )
 
         # NOTE: When official FLUX ControlNet models are released, this will use
@@ -370,9 +346,7 @@ class FLUXPipeline:
 
         return enhanced_image
 
-    def _build_controlnet_prompt(
-        self, prompt: str, controlnet_type: str, conditioning_scale: float
-    ) -> str:
+    def _build_controlnet_prompt(self, prompt: str, controlnet_type: str, conditioning_scale: float) -> str:
         """Build structure-aware prompt for ControlNet enhancement.
 
         Args:
@@ -390,9 +364,7 @@ class FLUXPipeline:
             "normal": "preserve surface geometry, maintain material details",
         }
 
-        structure_emphasis = structure_keywords.get(
-            controlnet_type, "preserve structure"
-        )
+        structure_emphasis = structure_keywords.get(controlnet_type, "preserve structure")
 
         # Scale the structural emphasis based on conditioning scale
         if conditioning_scale >= 0.8:
@@ -407,9 +379,7 @@ class FLUXPipeline:
 
         return enhanced_prompt
 
-    def _load_image(
-        self, image: Union[str, Path, Image.Image, np.ndarray]
-    ) -> Image.Image:
+    def _load_image(self, image: Union[str, Path, Image.Image, np.ndarray]) -> Image.Image:
         """Load image as PIL Image.
 
         Args:
@@ -456,7 +426,4 @@ class FLUXPipeline:
         return requirements
 
     def __repr__(self) -> str:
-        return (
-            f"FLUXPipeline(variant='{self.variant}', "
-            f"device='{self.device}', dtype={self.torch_dtype})"
-        )
+        return f"FLUXPipeline(variant='{self.variant}', " f"device='{self.device}', dtype={self.torch_dtype})"

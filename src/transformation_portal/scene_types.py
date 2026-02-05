@@ -112,9 +112,7 @@ def normalize_scene_type(raw_input: str) -> str:
 
     # Not found
     valid_types = ", ".join(SCENE_TYPES.keys())
-    raise ValueError(
-        f"Unknown scene type: '{raw_input}'. " f"Valid types: {valid_types}"
-    )
+    raise ValueError(f"Unknown scene type: '{raw_input}'. " f"Valid types: {valid_types}")
 
 
 def validate_scene_type(scene_type: str) -> bool:

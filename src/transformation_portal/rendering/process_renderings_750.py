@@ -52,9 +52,7 @@ def _require_module(module_name: str):
     """Return the imported module, raising a helpful error when missing."""
 
     if importlib.util.find_spec(module_name) is None:
-        raise ModuleNotFoundError(
-            f"The optional dependency '{module_name}' is required to convert that asset."
-        )
+        raise ModuleNotFoundError(f"The optional dependency '{module_name}' is required to convert that asset.")
     return importlib.import_module(module_name)
 
 
@@ -70,10 +68,7 @@ def _convert_exr_to_jpg(exr_path: Path, jpg_path: Path) -> None:
     height = data_window.max.y - data_window.min.y + 1
 
     pixel_type = Imath.PixelType(Imath.PixelType.FLOAT)
-    channels = [
-        np.frombuffer(exr_file.channel(channel, pixel_type), dtype=np.float32)
-        for channel in ("R", "G", "B")
-    ]
+    channels = [np.frombuffer(exr_file.channel(channel, pixel_type), dtype=np.float32) for channel in ("R", "G", "B")]
     exr_file.close()
 
     rgb = [channel.reshape(height, width) for channel in channels]
@@ -112,10 +107,7 @@ def convert_renderings_to_jpeg(input_dir: Path, output_dir: Path | None = None) 
 
         if suffix in SUPPORTED_IMAGE_SUFFIXES:
             copied_destination = output_dir / path.name
-            if (
-                copied_destination.exists()
-                and copied_destination.stat().st_mtime >= path.stat().st_mtime
-            ):
+            if copied_destination.exists() and copied_destination.stat().st_mtime >= path.stat().st_mtime:
                 continue
             shutil.copy2(path, copied_destination)
             continue
@@ -182,9 +174,7 @@ def _apply_shadow_lift(arr: np.ndarray, strength: float) -> np.ndarray:
     return np.power(arr, 1.0 / (1.0 + strength))
 
 
-def _apply_split_tone(
-    arr: np.ndarray, *, highlight_cool: float, shadow_warm: float
-) -> None:
+def _apply_split_tone(arr: np.ndarray, *, highlight_cool: float, shadow_warm: float) -> None:
     if highlight_cool <= 0 and shadow_warm <= 0:
         return
 
@@ -216,12 +206,7 @@ def _apply_contact_shadows(arr: np.ndarray, strength: float, radius: int) -> np.
 
     lum = _luminance(arr)
     pil_lum = Image.fromarray((np.clip(lum, 0.0, 1.0) * 255).astype(np.uint8))
-    blurred = (
-        np.asarray(
-            pil_lum.filter(ImageFilter.GaussianBlur(radius=radius)), dtype=np.float32
-        )
-        / 255.0
-    )
+    blurred = np.asarray(pil_lum.filter(ImageFilter.GaussianBlur(radius=radius)), dtype=np.float32) / 255.0
     ao = np.clip(blurred - lum, 0.0, 1.0)[..., None]
     arr *= 1.0 - strength * ao
     return arr
@@ -251,9 +236,7 @@ def _apply_clarity(pil_img: Image.Image, amount: float) -> Image.Image:
     if amount <= 0:
         return pil_img
     percent = int(150 * amount)
-    return pil_img.filter(
-        ImageFilter.UnsharpMask(radius=2, percent=percent, threshold=3)
-    )
+    return pil_img.filter(ImageFilter.UnsharpMask(radius=2, percent=percent, threshold=3))
 
 
 def _apply_sharpness(pil_img: Image.Image, factor: float) -> Image.Image:
@@ -355,9 +338,7 @@ def _match_recipe(path: Path) -> RenderRecipe:
 # ---------------------------------------------------------------------------
 
 
-def process_render(
-    path: Path, output_path: Path, recipe: RenderRecipe | None = None
-) -> None:
+def process_render(path: Path, output_path: Path, recipe: RenderRecipe | None = None) -> None:
     if recipe is None:
         recipe = _match_recipe(path)
     arr = _load_rgb(path)
@@ -365,9 +346,7 @@ def process_render(
     arr = _apply_highlight_compression(arr, recipe.highlight_compression)
     arr = _apply_shadow_lift(arr, recipe.shadow_lift)
     _apply_temperature(arr, recipe.temperature_shift)
-    _apply_split_tone(
-        arr, highlight_cool=recipe.highlight_cool, shadow_warm=recipe.shadow_warm
-    )
+    _apply_split_tone(arr, highlight_cool=recipe.highlight_cool, shadow_warm=recipe.shadow_warm)
     _apply_contact_shadows(arr, recipe.contact_shadow, recipe.contact_radius)
     arr = _apply_haze(arr, recipe.haze)
 
@@ -385,9 +364,7 @@ def process_directory(input_dir: Path, output_dir: Path) -> None:
     normalized_input = ensure_supported_renderings(input_dir)
 
     for path in sorted(normalized_input.glob("*")):
-        if path.suffix.lower() not in (
-            SUPPORTED_IMAGE_SUFFIXES | CONVERTIBLE_IMAGE_SUFFIXES
-        ):
+        if path.suffix.lower() not in (SUPPORTED_IMAGE_SUFFIXES | CONVERTIBLE_IMAGE_SUFFIXES):
             continue
         try:
             recipe = _match_recipe(path)
@@ -400,9 +377,7 @@ def process_directory(input_dir: Path, output_dir: Path) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Process the 750px rendering review set"
-    )
+    parser = argparse.ArgumentParser(description="Process the 750px rendering review set")
     parser.add_argument(
         "--input",
         type=Path,

@@ -186,9 +186,7 @@ def is_luxury_format(path: Union[str, Path]) -> bool:
     return ext in LUXURY_IMAGE_EXTENSIONS
 
 
-def validate_format(
-    path: Union[str, Path], allowed_types: str = "image", raise_error: bool = True
-) -> bool:
+def validate_format(path: Union[str, Path], allowed_types: str = "image", raise_error: bool = True) -> bool:
     """Validate that a file format is supported.
 
     Args:
@@ -212,9 +210,7 @@ def validate_format(
         False
     """
     if allowed_types not in {"image", "video", "both"}:
-        raise ValueError(
-            f"allowed_types must be 'image', 'video', or 'both', got '{allowed_types}'"
-        )
+        raise ValueError(f"allowed_types must be 'image', 'video', or 'both', got '{allowed_types}'")
 
     path_obj = Path(path) if isinstance(path, str) else path
     ext = normalize_extension(path_obj)
@@ -328,9 +324,7 @@ def get_format_info(path: Union[str, Path]) -> Dict[str, Union[str, bool, List[s
     }
 
 
-def suggest_output_format(
-    input_path: Union[str, Path], preserve_quality: bool = True
-) -> str:
+def suggest_output_format(input_path: Union[str, Path], preserve_quality: bool = True) -> str:
     """Suggest an appropriate output format based on input format.
 
     Note: This function is designed for image formats only. Video formats

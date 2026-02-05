@@ -9,8 +9,8 @@ This module provides VLM capabilities for:
 """
 
 from transformation_portal.vlm.llava import LLaVAProcessor
-from transformation_portal.vlm.scene_analyzer import SceneAnalyzer
 from transformation_portal.vlm.quality_validator import QualityValidator
+from transformation_portal.vlm.scene_analyzer import SceneAnalyzer
 
 __all__ = [
     "LLaVAProcessor",

@@ -345,6 +345,27 @@ make ci
 
 ---
 
+## Documentation
+
+**📖 Start with:** [DOCUMENTATION_MAP.md](DOCUMENTATION_MAP.md)
+
+The Documentation Map is your single source of truth for finding guides, references, and technical documentation.
+
+### Essential Docs
+- **[DOCUMENTATION_MAP.md](DOCUMENTATION_MAP.md)** - Complete documentation index
+- **[API Documentation](docs/api/)** - Full API reference (Sphinx)
+- **[SETUP_GUIDE.md](docs/SETUP_GUIDE.md)** - Detailed installation
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - How to contribute
+
+### Quick Links
+- **API Reference:** [docs/api/](docs/api/)
+- **Pipelines:** [docs/pipeline/](docs/pipeline/)
+- **CI/CD:** [docs/ci/](docs/ci/)
+- **Troubleshooting:** [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
+
+---
+
 ## License
 
 Professional use permitted with attribution.

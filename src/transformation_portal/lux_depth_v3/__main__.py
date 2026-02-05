@@ -6,13 +6,13 @@ APEX command variants for the lux_depth_v3 pipeline supporting:
 - Research-only APEX+ variants (explicit opt-in)
 
 Usage:
-    # Commercial-safe APEX (default)
+    # Commercial-safe APEX (default, no research opt-ins)
     lux-depth-v3 \\
         --input-dir "./input_images" \\
         --output-dir "./output/lux_depth_v3_apex" \\
-        --preset "premium" \\
         --quality-tier "apex" \\
         --depth-backend "depth_anything_v3" \\
+        --depth-device "mps" \\
         --materials-v3 "on" \\
         --pbr "on" \\
         --cache-depth "on" \\
@@ -23,34 +23,65 @@ Usage:
         --emit-run-card "on" \\
         --overwrite
 
-    # Research-only: Depth Anything V3.1 (CC BY-NC 4.0)
+    # Research-only: Depth Anything V3.1 (explicit opt-in)
     lux-depth-v3 \\
         --input-dir "./input_images" \\
         --output-dir "./output/lux_depth_v3_apex_da31" \\
-        --preset "depth-anything-v3.1-research-m4" \\
         --quality-tier "apex" \\
+        --preset "depth-anything-v3.1-research-m4" \\
         --non-commercial-ok "true" \\
         --depth-device "mps" \\
         --materials-v3 "on" \\
-        --pbr "on"
+        --pbr "on" \\
+        --cache-depth "on" \\
+        --emit-master16 "on" \\
+        --emit-upscaled16 "on" \\
+        --emit-marketing "on" \\
+        --emit-report "on" \\
+        --emit-run-card "on" \\
+        --overwrite
 
-    # Research-only: Apple Depth Pro (AMLR)
+    # Research-only: Apple Depth Pro (explicit opt-in)
     lux-depth-v3 \\
         --input-dir "./input_images" \\
         --output-dir "./output/lux_depth_v3_apex_depthpro" \\
-        --preset "premium" \\
         --quality-tier "apex" \\
+        --preset "apple-depth-pro-research" \\
         --depth-backend "depth_pro" \\
         --non-commercial-ok "true" \\
         --accept-apple-depth-pro-research-license "true" \\
+        --depth-device "mps" \\
+        --materials-v3 "on" \\
+        --pbr "on" \\
+        --cache-depth "on" \\
+        --emit-master16 "on" \\
+        --emit-upscaled16 "on" \\
+        --emit-marketing "on" \\
+        --emit-report "on" \\
+        --emit-run-card "on" \\
+        --overwrite
+
+    # PBR-only workflow (skip V2 enhancement)
+    lux-depth-v3 \\
+        --input-dir "./input_images" \\
+        --output-dir "./output/lux_depth_v3_pbr_only" \\
+        --quality-tier "apex" \\
+        --enable-v2 "off" \\
+        --pbr "on" \\
         --depth-device "mps"
 
     # Module invocation (if console script not on PATH)
     python -m transformation_portal.lux_depth_v3 [args]
+
+Notes:
+    - --quality-tier: standard | premium | apex (quality level)
+    - --preset: named preset like "default", "depth-anything-v3.1-research-m4", etc.
+    - --enable-v2: on | off (control V2 enhancement stage, default: on)
+    - --v2-preset: preset name or "none" to skip V2 (default: "default")
 """
 
-import sys
 import logging
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -91,139 +122,56 @@ def _configure_logging(verbose: bool = False, quiet: bool = False, log_level: Op
     else:
         level = logging.INFO
 
-    logging.basicConfig(
-        level=level,
-        format='%(levelname)s: %(message)s',
-        force=True
-    )
+    logging.basicConfig(level=level, format="%(levelname)s: %(message)s", force=True)
 
 
 @app.command()
 def main(
     # I/O Paths
-    input_dir: Path = typer.Option(
-        ...,
-        "--input-dir",
-        help="Input directory containing images to process"
-    ),
+    input_dir: Path = typer.Option(..., "--input-dir", help="Input directory containing images to process"),
     output_dir: Path = typer.Option(
-        ...,
-        "--output-dir",
-        help="Output directory for all artifacts (depth, PBR, enhanced images, manifests)"
+        ..., "--output-dir", help="Output directory for all artifacts (depth, PBR, enhanced images, manifests)"
     ),
-
     # Preset and Quality
     preset: str = typer.Option(
-        "premium",
-        "--preset",
-        help="Pipeline preset (premium, depth-anything-v3.1-research-m4, default, etc.)"
+        "premium", "--preset", help="Pipeline preset (premium, depth-anything-v3.1-research-m4, default, etc.)"
     ),
-    quality_tier: str = typer.Option(
-        "standard",
-        "--quality-tier",
-        help="Quality tier: standard, premium, or apex"
-    ),
-
+    quality_tier: str = typer.Option("standard", "--quality-tier", help="Quality tier: standard, premium, or apex"),
     # Depth Backend Configuration
     depth_backend: Optional[str] = typer.Option(
-        None,
-        "--depth-backend",
-        help="Depth backend: depth_anything_v3 (default), depth_pro (research-only)"
+        None, "--depth-backend", help="Depth backend: depth_anything_v3 (default), depth_pro (research-only)"
     ),
-    depth_device: str = typer.Option(
-        "cpu",
-        "--depth-device",
-        help="Device for depth inference: cpu, cuda, mps"
-    ),
-
+    depth_device: str = typer.Option("cpu", "--depth-device", help="Device for depth inference: cpu, cuda, mps"),
     # Materials V3 and PBR
-    materials_v3: str = typer.Option(
-        "off",
-        "--materials-v3",
-        help="Enable Materials V3 surface-aware finishing: on/off"
-    ),
-    pbr: str = typer.Option(
-        "off",
-        "--pbr",
-        help="Enable PBR map generation (normal, roughness, AO): on/off"
-    ),
-
+    materials_v3: str = typer.Option("off", "--materials-v3", help="Enable Materials V3 surface-aware finishing: on/off"),
+    pbr: str = typer.Option("off", "--pbr", help="Enable PBR map generation (normal, roughness, AO): on/off"),
     # Caching
-    cache_depth: str = typer.Option(
-        "off",
-        "--cache-depth",
-        help="Enable content-addressable depth cache: on/off"
+    cache_depth: str = typer.Option("off", "--cache-depth", help="Enable content-addressable depth cache: on/off"),
+    # V2 Enhancement Stage
+    enable_v2: str = typer.Option("on", "--enable-v2", help="Enable V2 enhancement stage: on/off (default: on)"),
+    v2_preset: Optional[str] = typer.Option(
+        "default", "--v2-preset", help="V2 enhancement preset (use 'none' to skip V2, default: default)"
     ),
-
     # Emit Options (Deliverables)
-    emit_master16: str = typer.Option(
-        "off",
-        "--emit-master16",
-        help="Emit master 16-bit output: on/off"
-    ),
-    emit_upscaled16: str = typer.Option(
-        "off",
-        "--emit-upscaled16",
-        help="Emit upscaled 16-bit output: on/off"
-    ),
-    emit_marketing: str = typer.Option(
-        "off",
-        "--emit-marketing",
-        help="Emit marketing-ready output: on/off"
-    ),
-    emit_report: str = typer.Option(
-        "on",
-        "--emit-report",
-        help="Emit processing report: on/off"
-    ),
-    emit_run_card: str = typer.Option(
-        "on",
-        "--emit-run-card",
-        help="Emit run card for reproducibility: on/off"
-    ),
-
+    emit_master16: str = typer.Option("off", "--emit-master16", help="Emit master 16-bit output: on/off"),
+    emit_upscaled16: str = typer.Option("off", "--emit-upscaled16", help="Emit upscaled 16-bit output: on/off"),
+    emit_marketing: str = typer.Option("off", "--emit-marketing", help="Emit marketing-ready output: on/off"),
+    emit_report: str = typer.Option("on", "--emit-report", help="Emit processing report: on/off"),
+    emit_run_card: str = typer.Option("on", "--emit-run-card", help="Emit run card for reproducibility: on/off"),
     # License and Research Acknowledgements
     non_commercial_ok: str = typer.Option(
-        "false",
-        "--non-commercial-ok",
-        help="Acknowledge non-commercial license restrictions (CC BY-NC 4.0): true/false"
+        "false", "--non-commercial-ok", help="Acknowledge non-commercial license restrictions (CC BY-NC 4.0): true/false"
     ),
     accept_apple_depth_pro_research_license: str = typer.Option(
-        "false",
-        "--accept-apple-depth-pro-research-license",
-        help="Accept Apple Depth Pro research license (AMLR): true/false"
+        "false", "--accept-apple-depth-pro-research-license", help="Accept Apple Depth Pro research license (AMLR): true/false"
     ),
-
     # Processing Flags
-    overwrite: bool = typer.Option(
-        False,
-        "--overwrite",
-        help="Force reprocessing even if outputs exist"
-    ),
-    force_depth: bool = typer.Option(
-        False,
-        "--force-depth",
-        help="Force depth recomputation (ignore cache)"
-    ),
-
+    overwrite: bool = typer.Option(False, "--overwrite", help="Force reprocessing even if outputs exist"),
+    force_depth: bool = typer.Option(False, "--force-depth", help="Force depth recomputation (ignore cache)"),
     # Logging
-    verbose: bool = typer.Option(
-        False,
-        "--verbose",
-        "-v",
-        help="Enable verbose logging"
-    ),
-    quiet: bool = typer.Option(
-        False,
-        "--quiet",
-        "-q",
-        help="Suppress all output except errors"
-    ),
-    log_level: Optional[str] = typer.Option(
-        None,
-        "--log-level",
-        help="Set log level: DEBUG, INFO, WARNING, ERROR"
-    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose logging"),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress all output except errors"),
+    log_level: Optional[str] = typer.Option(None, "--log-level", help="Set log level: DEBUG, INFO, WARNING, ERROR"),
 ):
     """Process images through the Lux Depth V3 pipeline with APEX quality tier support.
 
@@ -240,6 +188,7 @@ def main(
     enable_materials_v3 = _parse_bool_flag(materials_v3)
     enable_pbr = _parse_bool_flag(pbr)
     enable_cache_depth = _parse_bool_flag(cache_depth)
+    enable_v2_bool = _parse_bool_flag(enable_v2)
     enable_emit_master16 = _parse_bool_flag(emit_master16)
     enable_emit_upscaled16 = _parse_bool_flag(emit_upscaled16)
     enable_emit_marketing = _parse_bool_flag(emit_marketing)
@@ -247,6 +196,9 @@ def main(
     enable_emit_run_card = _parse_bool_flag(emit_run_card)
     enable_non_commercial = _parse_bool_flag(non_commercial_ok)
     enable_apple_license = _parse_bool_flag(accept_apple_depth_pro_research_license)
+
+    # Parse V2 preset (convert "none" string to None for skipping V2)
+    v2_preset_value = None if (v2_preset and v2_preset.lower() == "none") else v2_preset
 
     # Validate input directory
     if not input_dir.exists():
@@ -308,6 +260,8 @@ def main(
         accept_apple_depth_pro_research_license=enable_apple_license,
         force_depth=force_depth or overwrite,
         enable_depth_cache=enable_cache_depth,
+        enable_v2=enable_v2_bool,
+        v2_preset=v2_preset_value,
         generate_pbr=enable_pbr,
         quality_tier=quality_tier,
         enable_materials_v3=enable_materials_v3,
@@ -359,6 +313,7 @@ def main(
         logger.error(f"Pipeline failed: {e}")
         if verbose:
             import traceback
+
             traceback.print_exc()
         raise typer.Exit(code=1)
 

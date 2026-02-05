@@ -5,13 +5,16 @@ Multi-backend support following V2 architecture patterns:
 - CoreML (ANE optimization if V3 models exist)
 - Auto-detection of optimal backend for hardware
 """
+
 from __future__ import annotations
+
+import logging
+import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Dict, Any, Union, TYPE_CHECKING
-import logging
-import time
+from typing import TYPE_CHECKING, Any, Dict, Optional, Union
+
 import numpy as np
 from PIL import Image
 
@@ -22,6 +25,7 @@ if TYPE_CHECKING:
 
 try:
     import torch
+
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -31,6 +35,7 @@ except ImportError:
 try:
     from transformers import pipeline
     from transformers.pipelines.depth_estimation import DepthEstimationPipeline
+
     TRANSFORMERS_AVAILABLE = True
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
@@ -39,6 +44,7 @@ except ImportError:
 
 try:
     import coremltools as ct
+
     COREML_AVAILABLE = True
 except ImportError:
     COREML_AVAILABLE = False
@@ -50,6 +56,7 @@ logger = logging.getLogger(__name__)
 
 class ModelBackend(Enum):
     """Supported inference backends."""
+
     PYTORCH_CPU = "pytorch_cpu"
     PYTORCH_MPS = "pytorch_mps"
     PYTORCH_CUDA = "pytorch_cuda"
@@ -59,6 +66,7 @@ class ModelBackend(Enum):
 @dataclass
 class DepthResult:
     """Result from depth inference."""
+
     depth_map: np.ndarray
     original_image: np.ndarray
     metadata: Dict[str, Any]
@@ -87,10 +95,7 @@ class DA3InferenceEngine:
     """
 
     def __init__(
-        self,
-        config: Union[DA3Config, str] = "cpu",
-        commercial_use: bool = True,
-        validate_license_strict: bool = False
+        self, config: Union[DA3Config, str] = "cpu", commercial_use: bool = True, validate_license_strict: bool = False
     ):
         """Initialize inference engine.
 
@@ -111,6 +116,7 @@ class DA3InferenceEngine:
         # Support simple string device for convenience
         if isinstance(config, str):
             from .config import DeviceConfig
+
             device_str = config
             device_config = DeviceConfig(device=device_str)
             config = DA3Config(device=device_config)
@@ -132,7 +138,6 @@ class DA3InferenceEngine:
         self._requested_model_id: Optional[str] = None
         self._resolved_model_id: Optional[str] = None
 
-
         logger.info(
             "Initialized DA3InferenceEngine (variant=%s, backend=%s, device=%s)",
             config.model_variant.name,
@@ -145,7 +150,7 @@ class DA3InferenceEngine:
         device_spec = self.config.device.device.lower()
 
         # Phase 3: Check if CoreML is explicitly requested via config
-        use_coreml = getattr(self.config.device, 'use_coreml', False)
+        use_coreml = getattr(self.config.device, "use_coreml", False)
         if use_coreml and self._should_use_coreml():
             logger.info("CoreML backend enabled via config (5x speedup on Apple Silicon)")
             return ModelBackend.COREML
@@ -173,9 +178,7 @@ class DA3InferenceEngine:
         if TORCH_AVAILABLE:
             return ModelBackend.PYTORCH_CPU
 
-        raise RuntimeError(
-            "No backend available. Install torch with: pip install torch"
-        )
+        raise RuntimeError("No backend available. Install torch with: pip install torch")
 
     def _should_use_coreml(self) -> bool:
         """Check if CoreML should be used based on hardware and dependencies."""
@@ -233,14 +236,9 @@ class DA3InferenceEngine:
         Falls back to V2 metric models if V3 models are not found.
         """
         if not TORCH_AVAILABLE:
-            raise ImportError(
-                "torch required for PyTorch backend. Install with: pip install torch"
-            )
+            raise ImportError("torch required for PyTorch backend. Install with: pip install torch")
         if not TRANSFORMERS_AVAILABLE:
-            raise ImportError(
-                "transformers required for PyTorch backend. "
-                "Install with: pip install transformers"
-            )
+            raise ImportError("transformers required for PyTorch backend. " "Install with: pip install transformers")
 
         # Get HuggingFace model ID from config
         model_id = self.config.model_variant.value.huggingface_id
@@ -266,7 +264,7 @@ class DA3InferenceEngine:
             device_arg = self.device if self.device != "mps" else 0
 
             # Determine dtype for FP16 optimization
-            use_fp16 = getattr(self.config.device, 'use_fp16', True)
+            use_fp16 = getattr(self.config.device, "use_fp16", True)
             torch_dtype = None
             if use_fp16 and self.device in ("mps", "cuda"):
                 torch_dtype = torch.float16
@@ -281,7 +279,7 @@ class DA3InferenceEngine:
             )
 
             # Additional FP16 optimization for MPS
-            if use_fp16 and self.device == "mps" and hasattr(self.model.model, 'half'):
+            if use_fp16 and self.device == "mps" and hasattr(self.model.model, "half"):
                 self.model.model = self.model.model.half()
                 logger.debug("Applied half precision to model for MPS backend")
 
@@ -291,16 +289,12 @@ class DA3InferenceEngine:
             # Try fallback to V2 metric model
             fallback_model = v3_to_v2_fallback.get(model_id)
             if fallback_model:
-                logger.warning(
-                    "V3 model %s not available, falling back to V2: %s",
-                    model_id,
-                    fallback_model
-                )
+                logger.warning("V3 model %s not available, falling back to V2: %s", model_id, fallback_model)
                 try:
                     device_arg = self.device if self.device != "mps" else 0
 
                     # Determine dtype for FP16 optimization
-                    use_fp16 = getattr(self.config.device, 'use_fp16', True)
+                    use_fp16 = getattr(self.config.device, "use_fp16", True)
                     torch_dtype = None
                     if use_fp16 and self.device in ("mps", "cuda"):
                         torch_dtype = torch.float16
@@ -313,7 +307,7 @@ class DA3InferenceEngine:
                     )
 
                     # Additional FP16 optimization for MPS
-                    if use_fp16 and self.device == "mps" and hasattr(self.model.model, 'half'):
+                    if use_fp16 and self.device == "mps" and hasattr(self.model.model, "half"):
                         self.model.model = self.model.model.half()
 
                     logger.info("Loaded fallback V2 model: %s", fallback_model)
@@ -326,9 +320,7 @@ class DA3InferenceEngine:
                     logger.error("Fallback model also failed: %s", fallback_error)
 
             logger.error("Failed to load PyTorch model: %s", e)
-            raise RuntimeError(
-                f"Failed to load model {model_id} (and fallback): {e}"
-            ) from e
+            raise RuntimeError(f"Failed to load model {model_id} (and fallback): {e}") from e
 
     def _is_da3_model(self, model_id: str) -> bool:
         """Check if model ID is a DA3 Nested model."""
@@ -397,10 +389,7 @@ class DA3InferenceEngine:
         Provides 5x inference speedup on Apple Silicon (400ms → 80ms on M4).
         """
         if not COREML_AVAILABLE:
-            raise ImportError(
-                "coremltools required for CoreML backend. "
-                "Install with: pip install coremltools"
-            )
+            raise ImportError("coremltools required for CoreML backend. " "Install with: pip install coremltools")
 
         from .coreml_backend import CoreMLDepthEstimator
 
@@ -442,6 +431,7 @@ class DA3InferenceEngine:
         # Handle ImageInput (path wrapper)
         try:
             from .input_manager import ImageInput
+
             if isinstance(image, ImageInput):
                 return self.infer_from_path(image.path)
         except (ImportError, AttributeError):
@@ -455,9 +445,7 @@ class DA3InferenceEngine:
         if isinstance(image, np.ndarray):
             return self.infer(image)
 
-        raise TypeError(
-            f"Expected np.ndarray, Path, str, or ImageInput, got {type(image)}"
-        )
+        raise TypeError(f"Expected np.ndarray, Path, str, or ImageInput, got {type(image)}")
 
     def infer(self, image: np.ndarray) -> DepthResult:
         """Run depth inference on an image.

@@ -19,11 +19,11 @@ See Also:
     - SECURITY.md
 """
 
-from pathlib import Path
-from typing import List, Optional
 import os
 import signal
 from contextlib import contextmanager
+from pathlib import Path
+from typing import List, Optional
 
 
 class SecurityError(Exception):
@@ -96,32 +96,23 @@ def validate_filepath(
 
     # Validate within allowed directories
     if not any(resolved.is_relative_to(d.resolve()) for d in allowed_dirs):
-        raise SecurityError(
-            f"Path {filepath} outside allowed directories: {allowed_dirs}"
-        )
+        raise SecurityError(f"Path {filepath} outside allowed directories: {allowed_dirs}")
 
     # Check file size (if file exists)
     if must_exist and max_file_size and resolved.is_file():
         file_size = resolved.stat().st_size
         if file_size > max_file_size:
-            raise SecurityError(
-                f"File {filepath} exceeds size limit: "
-                f"{file_size} > {max_file_size} bytes"
-            )
+            raise SecurityError(f"File {filepath} exceeds size limit: " f"{file_size} > {max_file_size} bytes")
 
     # Check extension
     if allowed_extensions:
         if resolved.suffix.lower() not in [ext.lower() for ext in allowed_extensions]:
-            raise SecurityError(
-                f"File extension {resolved.suffix} not in whitelist: {allowed_extensions}"
-            )
+            raise SecurityError(f"File extension {resolved.suffix} not in whitelist: {allowed_extensions}")
 
     return resolved
 
 
-def validate_image_path(
-    filepath: Path, allowed_dirs: List[Path], max_size: int = MAX_IMAGE_SIZE
-) -> Path:
+def validate_image_path(filepath: Path, allowed_dirs: List[Path], max_size: int = MAX_IMAGE_SIZE) -> Path:
     """
     Validate image file path.
 
@@ -146,9 +137,7 @@ def validate_image_path(
     )
 
 
-def validate_video_path(
-    filepath: Path, allowed_dirs: List[Path], max_size: int = MAX_VIDEO_SIZE
-) -> Path:
+def validate_video_path(filepath: Path, allowed_dirs: List[Path], max_size: int = MAX_VIDEO_SIZE) -> Path:
     """
     Validate video file path.
 
@@ -171,9 +160,7 @@ def validate_video_path(
     )
 
 
-def validate_config_path(
-    filepath: Path, allowed_dirs: List[Path], max_size: int = MAX_CONFIG_SIZE
-) -> Path:
+def validate_config_path(filepath: Path, allowed_dirs: List[Path], max_size: int = MAX_CONFIG_SIZE) -> Path:
     """
     Validate configuration file path.
 
@@ -244,9 +231,7 @@ def sanitize_filename(filename: str, max_length: int = 255) -> str:
 DANGEROUS_SHELL_CHARS = set(";&|`$()<>")
 
 
-def build_safe_command(
-    executable: str, args: List[str], dangerous_chars: Optional[set] = None
-) -> List[str]:
+def build_safe_command(executable: str, args: List[str], dangerous_chars: Optional[set] = None) -> List[str]:
     """
     Build safe command argument list for subprocess.
 
@@ -282,9 +267,7 @@ def build_safe_command(
     # Validate all arguments
     for arg in args:
         if any(char in str(arg) for char in dangerous_chars):
-            raise SecurityError(
-                f"Argument '{arg}' contains dangerous characters: {dangerous_chars}"
-            )
+            raise SecurityError(f"Argument '{arg}' contains dangerous characters: {dangerous_chars}")
 
     # Build command list
     return [executable] + [str(arg) for arg in args]
@@ -344,8 +327,7 @@ def build_ffmpeg_command(
         for filter_str in filters:
             if any(char in filter_str for char in DANGEROUS_SHELL_CHARS):
                 raise SecurityError(
-                    f"Filter contains dangerous characters: {filter_str}\n"
-                    f"Dangerous characters: {DANGEROUS_SHELL_CHARS}"
+                    f"Filter contains dangerous characters: {filter_str}\n" f"Dangerous characters: {DANGEROUS_SHELL_CHARS}"
                 )
 
     # Build command list
@@ -434,8 +416,7 @@ def timeout(seconds: int):
     """
     if not hasattr(signal, "SIGALRM"):
         raise NotImplementedError(
-            "timeout() requires signal.SIGALRM (Unix-only). "
-            "Use multiprocessing or threading-based timeout on Windows."
+            "timeout() requires signal.SIGALRM (Unix-only). " "Use multiprocessing or threading-based timeout on Windows."
         )
 
     def timeout_handler(signum, frame):

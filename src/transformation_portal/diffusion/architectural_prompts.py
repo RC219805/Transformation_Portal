@@ -338,9 +338,7 @@ class ArchitecturalPromptBuilder:
 
         return prompt
 
-    def build_negative_prompt(
-        self, custom_negatives: Optional[List[str]] = None
-    ) -> str:
+    def build_negative_prompt(self, custom_negatives: Optional[List[str]] = None) -> str:
         """Build negative prompt.
 
         Args:
@@ -413,9 +411,7 @@ class ArchitecturalPromptBuilder:
 
         return {"prompt": prompt, "negative_prompt": negative_prompt}
 
-    def build_progressive_prompts(
-        self, base_prompt: str, num_variations: int = 3
-    ) -> List[str]:
+    def build_progressive_prompts(self, base_prompt: str, num_variations: int = 3) -> List[str]:
         """Generate progressive prompt variations.
 
         Creates variations with increasing detail levels for

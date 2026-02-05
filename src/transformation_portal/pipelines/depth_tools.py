@@ -238,23 +238,17 @@ def retry_on_io_error(
 # ----- validators -----
 
 
-def validate_color(
-    color: Tuple[float, float, float], name: str = "color"
-) -> Tuple[float, float, float]:
+def validate_color(color: Tuple[float, float, float], name: str = "color") -> Tuple[float, float, float]:
     if len(color) != 3:
         raise ValueError(f"{name} must have 3 components, got {len(color)}")
     # allow 0..255 or 0..1
     if any(c > 1.0 for c in color):
         if not all(0.0 <= c <= 255.0 for c in color):
-            raise ValueError(
-                f"{name} values must be in 0..1 or 0..255 range, got {color}"
-            )
+            raise ValueError(f"{name} values must be in 0..1 or 0..255 range, got {color}")
         normalized = tuple(float(c) / 255.0 for c in color)
         color = normalized  # type: ignore
     if not all(0.0 <= c <= 1.0 for c in color):
-        raise ValueError(
-            f"{name} must be in 0..1 range after normalization, got {color}"
-        )
+        raise ValueError(f"{name} must be in 0..1 range after normalization, got {color}")
     return color
 
 
@@ -270,9 +264,7 @@ def validate_file_exists(path: str, description: str = "File") -> None:
 # ----- blur/backends -----
 
 
-def gaussian_blur_float(
-    img: np.ndarray, sigma: float, backend: Optional[str] = None
-) -> np.ndarray:
+def gaussian_blur_float(img: np.ndarray, sigma: float, backend: Optional[str] = None) -> np.ndarray:
     """
     Blur an image represented as float32 in [0,1]. Supports grayscale 2D or color 3D arrays.
     backend: 'scipy', 'cv2', 'pil' or None (auto)
@@ -338,11 +330,7 @@ def bilateral_blur_float(
     if (not _CV2_AVAILABLE) or sigma_spatial <= 0.5:
         return gaussian_blur_float(img, sigma_spatial)
 
-    d = (
-        diameter
-        if diameter is not None
-        else max(1, int(2 * math.ceil(3 * sigma_spatial) + 1))
-    )
+    d = diameter if diameter is not None else max(1, int(2 * math.ceil(3 * sigma_spatial) + 1))
     sigma_color = float(max(1.0, sigma_depth * 255.0))
     sigma_space = float(sigma_spatial)
 
@@ -426,9 +414,7 @@ def load_image_rgb(path: str) -> np.ndarray:
 
 
 @retry_on_io_error()
-def save_image_rgb(
-    path: str, rgb01: np.ndarray, fmt: str = "tif", quality: int = 95
-) -> str:
+def save_image_rgb(path: str, rgb01: np.ndarray, fmt: str = "tif", quality: int = 95) -> str:
     path = str(path)
     rgb8 = (np.clip(rgb01, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)
     stem = str(Path(path).with_suffix(""))
@@ -485,12 +471,7 @@ def load_depth_normalized(
     if target_size is not None:
         H, W = target_size
         u8 = (np.clip(norm, 0.0, 1.0) * 255.0).astype(np.uint8)
-        norm = (
-            np.asarray(Image.fromarray(u8).resize((W, H), Image.BILINEAR)).astype(
-                np.float32
-            )
-            / 255.0
-        )
+        norm = np.asarray(Image.fromarray(u8).resize((W, H), Image.BILINEAR)).astype(np.float32) / 255.0
 
     if use_cache:
         _depth_cache.put(cache_key, norm)
@@ -532,10 +513,7 @@ def load_mask(
         elif img.mode == "RGB":
             # convert to L but warn if channels differ
             arr = np.asarray(img)
-            if not (
-                np.allclose(arr[..., 0], arr[..., 1])
-                and np.allclose(arr[..., 1], arr[..., 2])
-            ):
+            if not (np.allclose(arr[..., 0], arr[..., 1]) and np.allclose(arr[..., 1], arr[..., 2])):
                 _log.debug(
                     "RGB mask %s has differing channels, converting to grayscale",
                     mask_path,
@@ -582,11 +560,7 @@ def apply_depth_haze(
     w = np.clip((depth - near) / depth_range, 0.0, 1.0)[..., None]  # HxWx1
 
     H, W = depth.shape[:2]
-    sky = (
-        np.zeros((H, W), dtype=np.float32)
-        if (sky_mask is None or sky_mask.size == 0)
-        else sky_mask.astype(np.float32)
-    )
+    sky = np.zeros((H, W), dtype=np.float32) if (sky_mask is None or sky_mask.size == 0) else sky_mask.astype(np.float32)
     building = (
         np.zeros((H, W), dtype=np.float32)
         if (building_mask is None or building_mask.size == 0)
@@ -595,15 +569,11 @@ def apply_depth_haze(
     sky = sky[..., None]
     building = building[..., None]
 
-    weight_modulated = w * (1.0 - building * BUILDING_HAZE_SUPPRESSION) + sky * (
-        SKY_HAZE_BOOST * (1.0 - w)
-    )
+    weight_modulated = w * (1.0 - building * BUILDING_HAZE_SUPPRESSION) + sky * (SKY_HAZE_BOOST * (1.0 - w))
     weight_modulated = np.clip(weight_modulated, 0.0, 1.0)
 
     haze_rgb = np.array(haze_color, dtype=np.float32)[None, None, :]
-    blended = img * (1 - strength * weight_modulated) + haze_rgb * (
-        strength * weight_modulated
-    )
+    blended = img * (1 - strength * weight_modulated) + haze_rgb * (strength * weight_modulated)
     enhanced = np.clip(0.5 + (blended - 0.5) * mids_gain, 0.0, 1.0)
     return enhanced
 
@@ -626,11 +596,7 @@ def apply_depth_clarity(
     w = np.clip((depth - near) / depth_range, 0.0, 1.0)[..., None]
 
     H, W = depth.shape[:2]
-    sky = (
-        np.zeros((H, W), dtype=np.float32)
-        if (sky_mask is None or sky_mask.size == 0)
-        else sky_mask.astype(np.float32)
-    )
+    sky = np.zeros((H, W), dtype=np.float32) if (sky_mask is None or sky_mask.size == 0) else sky_mask.astype(np.float32)
     building = (
         np.zeros((H, W), dtype=np.float32)
         if (building_mask is None or building_mask.size == 0)
@@ -684,11 +650,7 @@ def apply_depth_dof(
         if (building_mask is None or building_mask.size == 0)
         else building_mask.astype(np.float32)
     )
-    sky = (
-        np.zeros((H, W), dtype=np.float32)
-        if (sky_mask is None or sky_mask.size == 0)
-        else sky_mask.astype(np.float32)
-    )
+    sky = np.zeros((H, W), dtype=np.float32) if (sky_mask is None or sky_mask.size == 0) else sky_mask.astype(np.float32)
     building = building[..., None]
     sky = sky[..., None]
 
@@ -716,14 +678,10 @@ def apply_depth_dof(
 
     w_soft = weight
     w_hard = weight**2.0
-    blended = (1 - w_soft) * blur_near + w_soft * (
-        (1 - w_hard) * blur_near + w_hard * blur_far
-    )
+    blended = (1 - w_soft) * blur_near + w_soft * ((1 - w_hard) * blur_near + w_hard * blur_far)
 
     # protector reduces blur on buildings and slightly reduces extreme sky blur
-    reduce_on_building = (
-        1.0 - BUILDING_BLUR_REDUCTION * building
-    )  # building=1 -> factor ~0.12
+    reduce_on_building = 1.0 - BUILDING_BLUR_REDUCTION * building  # building=1 -> factor ~0.12
     slight_sky_protect = 1.0 - SKY_BLUR_REDUCTION * sky  # sky=1 -> factor ~0.7
     protector = (reduce_on_building * slight_sky_protect)[..., None]
 
@@ -762,19 +720,12 @@ class BatchOptions:
     falloff: float = 1.4
 
 
-def _process_single(
-    dp: str, opts: BatchOptions
-) -> Tuple[str, Optional[str], Optional[str]]:
+def _process_single(dp: str, opts: BatchOptions) -> Tuple[str, Optional[str], Optional[str]]:
     """
     Process a single depth map path (dp). Returns tuple (base, out_path or None, error or None).
     This helper is suitable for running in a child process as long as dependencies are available.
     """
-    base = (
-        os.path.basename(dp)
-        .replace("_depth16.png", "")
-        .replace("_depth16.tif", "")
-        .replace("_depth16.ti", "")
-    )
+    base = os.path.basename(dp).replace("_depth16.png", "").replace("_depth16.tif", "").replace("_depth16.ti", "")
     try:
         # find source image
         src = find_file_for_base(opts.images_root, base, pattern_suffix="*")
@@ -787,23 +738,11 @@ def _process_single(
 
         img = load_image_rgb(src)
         H, W = img.shape[:2]
-        depth = load_depth_normalized(
-            dp, target_size=(H, W), method="percentile", use_cache=True
-        )
+        depth = load_depth_normalized(dp, target_size=(H, W), method="percentile", use_cache=True)
 
-        sky_path = (
-            find_mask_for_base(opts.mask_root, base, "sky") if opts.mask_root else None
-        )
-        building_path = (
-            find_mask_for_base(opts.mask_root, base, "building")
-            if opts.mask_root
-            else None
-        )
-        sky_mask = (
-            load_mask(sky_path, "sky", (H, W), use_cache=True)
-            if sky_path
-            else np.zeros((H, W), dtype=np.float32)
-        )
+        sky_path = find_mask_for_base(opts.mask_root, base, "sky") if opts.mask_root else None
+        building_path = find_mask_for_base(opts.mask_root, base, "building") if opts.mask_root else None
+        sky_mask = load_mask(sky_path, "sky", (H, W), use_cache=True) if sky_path else np.zeros((H, W), dtype=np.float32)
         building_mask = (
             load_mask(building_path, "building", (H, W), use_cache=True)
             if building_path
@@ -861,9 +800,7 @@ def _process_single(
         return base, None, str(exc)
 
 
-def process_batch(
-    opts: BatchOptions, progress: Optional[Callable[[int, int, str], None]] = None
-) -> int:
+def process_batch(opts: BatchOptions, progress: Optional[Callable[[int, int, str], None]] = None) -> int:
     """
     Process a directory of depth maps. If workers > 1, uses ProcessPoolExecutor.
     progress callback signature: (done:int, total:int, message:str)
@@ -889,9 +826,7 @@ def process_batch(
         # Use multiprocessing
         try:
             with ProcessPoolExecutor(max_workers=opts.workers) as ex:
-                futures = {
-                    ex.submit(_process_single, dp, opts): dp for dp in depth_maps
-                }
+                futures = {ex.submit(_process_single, dp, opts): dp for dp in depth_maps}
                 for fut in as_completed(futures):
                     base, out_path, err = fut.result()
                     done += 1
@@ -910,9 +845,7 @@ def process_batch(
                 exc,
             )
             with ThreadPoolExecutor(max_workers=opts.workers) as ex:
-                futures = {
-                    ex.submit(_process_single, dp, opts): dp for dp in depth_maps
-                }
+                futures = {ex.submit(_process_single, dp, opts): dp for dp in depth_maps}
                 for fut in as_completed(futures):
                     base, out_path, err = fut.result()
                     done += 1
@@ -935,16 +868,12 @@ def process_batch(
             if progress:
                 progress(done, total, base)
 
-    _log.info(
-        "Batch complete: %d processed, %d errors", total - len(errors), len(errors)
-    )
+    _log.info("Batch complete: %d processed, %d errors", total - len(errors), len(errors))
 
     # Log comprehensive error summary for debugging
     if errors:
         error_lines = ["\n" + "=" * 80]
-        error_lines.append(
-            f"ERROR SUMMARY: {len(errors)} file(s) failed during batch processing"
-        )
+        error_lines.append(f"ERROR SUMMARY: {len(errors)} file(s) failed during batch processing")
         error_lines.append("=" * 80)
         for idx, (base, err) in enumerate(errors, 1):
             error_lines.append(f"{idx}. {base}:")
@@ -966,12 +895,8 @@ def build_cli() -> argparse.ArgumentParser:
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     def common(p):
-        p.add_argument(
-            "images_root", help="Root of enhanced images (searched recursively)"
-        )
-        p.add_argument(
-            "depths_root", help="Root folder containing *_depth16.* depth maps"
-        )
+        p.add_argument("images_root", help="Root of enhanced images (searched recursively)")
+        p.add_argument("depths_root", help="Root folder containing *_depth16.* depth maps")
         p.add_argument("out_root", help="Output folder")
         p.add_argument(
             "--mask-root",
@@ -985,9 +910,7 @@ def build_cli() -> argparse.ArgumentParser:
             default=None,
             help="Restrict matches to a filename tag (not strictly required)",
         )
-        p.add_argument(
-            "--fmt", type=str, default="tif", help="Output format (tiff/png/jpg)"
-        )
+        p.add_argument("--fmt", type=str, default="tif", help="Output format (tiff/png/jpg)")
         p.add_argument(
             "--workers",
             type=int,
@@ -1090,9 +1013,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             # If all files failed, still return non-zero
             # Note: process_batch raises SystemExit if no depth maps found, so we have at least 1 depth map
             # error_count < total means at least one file succeeded
-            depth_maps = sorted(
-                glob.glob(os.path.join(opts.depths_root, "*_depth16.*"))
-            )
+            depth_maps = sorted(glob.glob(os.path.join(opts.depths_root, "*_depth16.*")))
             total = len(depth_maps)
             if error_count >= total:
                 # All files failed

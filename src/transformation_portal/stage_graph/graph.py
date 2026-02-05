@@ -7,11 +7,11 @@ for a collection of stages.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Set
 
 from .stage import Stage, StageContext, StageResult
 
@@ -110,10 +110,7 @@ class StageGraph:
         # Validate dependencies exist
         for dep in self._dependency_graph[stage.name]:
             if dep not in self.stages:
-                raise ValueError(
-                    f"Stage '{stage.name}' depends on '{dep}', "
-                    f"but '{dep}' is not in graph"
-                )
+                raise ValueError(f"Stage '{stage.name}' depends on '{dep}', " f"but '{dep}' is not in graph")
 
     def get_stage(self, name: str) -> Optional[Stage]:
         """Get stage by name."""

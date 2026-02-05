@@ -19,9 +19,7 @@ try:
     CV2_AVAILABLE = True
 except ImportError:
     CV2_AVAILABLE = False
-    logging.warning(
-        "cv2 (opencv-python) not available. Some depth processing features will be limited."
-    )
+    logging.warning("cv2 (opencv-python) not available. Some depth processing features will be limited.")
 
 from .base import DepthProcessorMixin
 
@@ -82,9 +80,7 @@ class DepthAwareDenoise(DepthProcessorMixin):
         """
         # Validate inputs
         if image.shape[:2] != depth.shape[:2]:
-            raise ValueError(
-                f"Image shape {image.shape[:2]} doesn't match depth shape {depth.shape[:2]}"
-            )
+            raise ValueError(f"Image shape {image.shape[:2]} doesn't match depth shape {depth.shape[:2]}")
 
         # Detect depth edges
         edge_map = self._detect_depth_edges(depth)
@@ -164,9 +160,7 @@ class DepthAwareDenoise(DepthProcessorMixin):
         # Compute adaptive sigma based on depth
         # Closer objects (low depth) get less smoothing
         depth_normalized = (depth - depth.min()) / (depth.max() - depth.min() + 1e-8)
-        _adaptive_sigma = self.sigma_spatial * (
-            0.5 + 0.5 * depth_normalized
-        )  # noqa: F841
+        _adaptive_sigma = self.sigma_spatial * (0.5 + 0.5 * depth_normalized)  # noqa: F841
 
         # Apply bilateral filter
         if CV2_AVAILABLE:
@@ -184,12 +178,8 @@ class DepthAwareDenoise(DepthProcessorMixin):
             )
         else:
             # Fallback: use Gaussian filter (less sophisticated but works)
-            logger.warning(
-                "cv2 not available, using Gaussian filter instead of bilateral"
-            )
-            filtered = gaussian_filter(
-                image_8bit.astype(np.float32), sigma=self.sigma_spatial
-            ).astype(np.uint8)
+            logger.warning("cv2 not available, using Gaussian filter instead of bilateral")
+            filtered = gaussian_filter(image_8bit.astype(np.float32), sigma=self.sigma_spatial).astype(np.uint8)
 
         # Convert back to float
         if image.max() <= 1.0:
@@ -295,12 +285,8 @@ class FastDepthDenoise:
             )
         else:
             # Fallback: use Gaussian filter
-            logger.warning(
-                "cv2 not available, using Gaussian filter instead of non-local means"
-            )
-            denoised = gaussian_filter(image_8bit.astype(np.float32), sigma=3.0).astype(
-                np.uint8
-            )
+            logger.warning("cv2 not available, using Gaussian filter instead of non-local means")
+            denoised = gaussian_filter(image_8bit.astype(np.float32), sigma=3.0).astype(np.uint8)
 
         # Convert back
         if image.max() <= 1.0:

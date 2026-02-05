@@ -12,20 +12,9 @@ Example:
     ...     return process(image_path)
 """
 
-from .decorators import (
-    event,
-    tracked,
-)
-from .replay import (
-    EventReplayer,
-    OperationRegistry,
-    replay_events,
-)
-from .store import (
-    Event,
-    EventStore,
-    get_global_store,
-)
+from .decorators import event, tracked
+from .replay import EventReplayer, OperationRegistry, replay_events
+from .store import Event, EventStore, get_global_store
 
 __all__ = [
     "Event",

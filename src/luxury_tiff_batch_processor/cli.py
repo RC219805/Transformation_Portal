@@ -1,4 +1,5 @@
 """Command-line interface wiring for the luxury TIFF batch processor."""
+
 from __future__ import annotations
 
 import argparse
@@ -16,13 +17,7 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
     yaml = None
 
 from .adjustments import LUXURY_PRESETS, AdjustmentSettings
-from .pipeline import (
-    _process_image_worker,
-    _wrap_with_progress,
-    collect_images,
-    ensure_output_path,
-    process_single_image,
-)
+from .pipeline import _process_image_worker, _wrap_with_progress, collect_images, ensure_output_path, process_single_image
 from .profiles import DEFAULT_PROFILE_NAME, PROCESSING_PROFILES
 
 LOGGER = logging.getLogger("luxury_tiff_batch_processor")
@@ -125,9 +120,7 @@ def _coerce_config_value(
                 return True
             if lowered in {"0", "false", "no", "off"}:
                 return False
-        raise ValueError(
-            f"Invalid boolean for '{key}' in {source}: expected true/false value, got {value!r}"
-        )
+        raise ValueError(f"Invalid boolean for '{key}' in {source}: expected true/false value, got {value!r}")
 
     if isinstance(action, argparse._StoreFalseAction):  # type: ignore[attr-defined]
         if isinstance(value, bool):
@@ -138,9 +131,7 @@ def _coerce_config_value(
                 return True
             if lowered in {"0", "false", "no", "off"}:
                 return False
-        raise ValueError(
-            f"Invalid boolean for '{key}' in {source}: expected true/false value, got {value!r}"
-        )
+        raise ValueError(f"Invalid boolean for '{key}' in {source}: expected true/false value, got {value!r}")
 
     if action.type is not None:
         try:
@@ -151,9 +142,7 @@ def _coerce_config_value(
         converted = value
 
     if action.choices is not None and converted not in action.choices:
-        raise ValueError(
-            f"Invalid value for '{key}' in {source}: {converted!r} (choose from {sorted(action.choices)})"
-        )
+        raise ValueError(f"Invalid value for '{key}' in {source}: {converted!r} (choose from {sorted(action.choices)})")
 
     return converted
 
@@ -272,9 +261,7 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         dest="chroma_denoise",
         help="Chrominance denoising amount (0-1)",
     )
-    parser.add_argument(
-        "--luxury-glow", type=float, default=None, dest="glow", help="Diffusion glow strength (0-1)"
-    )
+    parser.add_argument("--luxury-glow", type=float, default=None, dest="glow", help="Diffusion glow strength (0-1)")
 
     parser.add_argument(
         "--log-level",
@@ -296,13 +283,9 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
             for key, value in normalised_config.items():
                 dest = alias_to_dest.get(key)
                 if dest is None:
-                    raise ValueError(
-                        f"Unknown configuration option '{key}' in {config_probe.config}"
-                    )
+                    raise ValueError(f"Unknown configuration option '{key}' in {config_probe.config}")
                 action = dest_to_action[dest]
-                converted_defaults[dest] = _coerce_config_value(
-                    action, value, source=config_probe.config, key=key
-                )
+                converted_defaults[dest] = _coerce_config_value(action, value, source=config_probe.config, key=key)
 
             parser.set_defaults(**converted_defaults)
         except (OSError, ValueError, RuntimeError) as exc:
@@ -347,13 +330,9 @@ def _ensure_non_overlapping(input_root: Path, output_root: Path) -> None:
     if input_root == output_root:
         raise SystemExit("Output folder must be different from the input folder to avoid self-overwrites.")
     if _contains(input_root, output_root):
-        raise SystemExit(
-            "Output folder cannot be located inside the input folder; choose a sibling or separate directory."
-        )
+        raise SystemExit("Output folder cannot be located inside the input folder; choose a sibling or separate directory.")
     if _contains(output_root, input_root):
-        raise SystemExit(
-            "Input folder cannot be located inside the output folder; choose non-overlapping directories."
-        )
+        raise SystemExit("Input folder cannot be located inside the output folder; choose non-overlapping directories.")
 
 
 def run_pipeline(args: argparse.Namespace) -> int:
@@ -492,10 +471,10 @@ def run_pipeline(args: argparse.Namespace) -> int:
 
 def main(argv: Optional[Iterable[str]] = None) -> None:
     """Entry point for luxury TIFF batch processor CLI.
-    
+
     Args:
         argv: Command-line arguments (defaults to sys.argv if None).
-    
+
     Returns:
         None (exits with appropriate status code).
     """
@@ -503,6 +482,7 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
     processed = run_pipeline(args)
     # Exit with success (0) if any images were processed, error (1) otherwise
     import sys
+
     sys.exit(0 if processed >= 0 else 1)
 
 

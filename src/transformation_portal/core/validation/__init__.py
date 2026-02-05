@@ -4,9 +4,9 @@ Validation and reproducibility tracking.
 Provides comprehensive reporting for all processing runs.
 """
 
-from .report import ProcessingReport, GitInfo, DeviceInfo, ModelInfo
-from .metrics import MetricsComputer, QualityMetrics
 from .comparison import BaselineComparator, ComparisonResult
+from .metrics import MetricsComputer, QualityMetrics
+from .report import DeviceInfo, GitInfo, ModelInfo, ProcessingReport
 
 __all__ = [
     "ProcessingReport",

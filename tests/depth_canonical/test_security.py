@@ -1,13 +1,11 @@
 """Tests for security validation utilities."""
 
-import pytest
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
-from transformation_portal.depth_canonical.security import (
-    validate_path,
-    validate_image_extension,
-)
+import pytest
+
+from transformation_portal.depth_canonical.security import validate_image_extension, validate_path
 
 
 def test_validate_path_accepts_safe_path():

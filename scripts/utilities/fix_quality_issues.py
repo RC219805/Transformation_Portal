@@ -19,8 +19,9 @@ def run_command(cmd, description):
     print(f"\n{'='*60}")
     print(f"{description}")
     print(f"{'='*60}")
-    # SEC-001: Use shlex.split() instead of shell=True to prevent command injection
-    result = subprocess.run(shlex.split(cmd), capture_output=True, text=True, check=False)
+    # Convert string to list for safe subprocess execution (no shell injection risk)
+    cmd_list = shlex.split(cmd) if isinstance(cmd, str) else cmd
+    result = subprocess.run(cmd_list, capture_output=True, text=True, check=False)
     if result.stdout:
         print(result.stdout)
     if result.stderr and result.returncode != 0:

@@ -12,12 +12,12 @@ Key Features:
 - Multi-backend fallback strategies
 """
 
+import logging
 import platform
 import subprocess
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Dict, Any, List, Tuple
-import logging
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 
@@ -235,15 +235,11 @@ class DeviceManager:
             max_buffer_size_gb = available_memory_gb * 0.9
 
             # Recommended batch size based on 128GB unified memory
-            recommended_batch_size = self._calculate_optimal_batch_size(
-                available_memory_gb, gpu_cores
-            )
+            recommended_batch_size = self._calculate_optimal_batch_size(available_memory_gb, gpu_cores)
 
             return DeviceCapabilities(
                 device_type=DeviceType.MPS,
-                device_name=self._detection_cache.get(
-                    "chip_name", "Apple Silicon M4 Max"
-                ),
+                device_name=self._detection_cache.get("chip_name", "Apple Silicon M4 Max"),
                 total_memory_gb=total_memory_gb,
                 available_memory_gb=available_memory_gb,
                 supports_fp16=supports_fp16,
@@ -387,9 +383,7 @@ class DeviceManager:
             logger.debug(f"Could not determine Metal version: {e}")
             return "Metal 3.1"  # Assume latest for M4 Max
 
-    def _calculate_optimal_batch_size(
-        self, available_memory_gb: float, gpu_cores: int
-    ) -> int:
+    def _calculate_optimal_batch_size(self, available_memory_gb: float, gpu_cores: int) -> int:
         """
         Calculate optimal batch size based on available memory and GPU cores.
 
@@ -429,9 +423,7 @@ class DeviceManager:
             torch_version=torch.__version__,
         )
 
-    def _determine_backend_priority(
-        self, device_type: DeviceType, capabilities: DeviceCapabilities
-    ) -> List[DeviceType]:
+    def _determine_backend_priority(self, device_type: DeviceType, capabilities: DeviceCapabilities) -> List[DeviceType]:
         """Determine backend priority order."""
         if device_type == DeviceType.MPS:
             if self.prefer_ane and capabilities.neural_engine_available:
@@ -443,9 +435,7 @@ class DeviceManager:
         else:
             return [DeviceType.CPU]
 
-    def _create_optimization_config(
-        self, capabilities: DeviceCapabilities
-    ) -> Dict[str, Any]:
+    def _create_optimization_config(self, capabilities: DeviceCapabilities) -> Dict[str, Any]:
         """Create optimization configuration based on capabilities."""
         config = {
             "device_type": capabilities.device_type.value,
@@ -502,9 +492,7 @@ class DeviceManager:
         logger.info(f"Efficiency Cores: {cap.efficiency_cores}")
         logger.info(f"GPU Cores: {cap.gpu_cores}")
         logger.info(f"Unified Memory: {cap.unified_memory}")
-        logger.info(
-            f"Neural Engine: {'Available' if cap.neural_engine_available else 'Not Available'}"
-        )
+        logger.info(f"Neural Engine: {'Available' if cap.neural_engine_available else 'Not Available'}")
         logger.info(f"FP16 Support: {cap.supports_fp16}")
         logger.info(f"BF16 Support: {cap.supports_bf16}")
         logger.info(f"Recommended Batch Size: {cap.recommended_batch_size}")

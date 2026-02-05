@@ -17,12 +17,15 @@ Thread Safety:
     - Thread-safe for concurrent reads and writes
     - Protected by threading.Lock for shared state updates
 """
+
 from __future__ import annotations
-from pathlib import Path
-from typing import Optional
-import numpy as np
+
 import logging
 import threading
+from pathlib import Path
+from typing import Optional
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +66,9 @@ class DepthCache:
         self._approximate_size_gb = self._cache_size_gb()
         self._store_count = 0
 
-        logger.debug(f"Depth cache initialized: {self.cache_dir} (max {max_size_gb}GB, current {self._approximate_size_gb:.2f}GB)")
+        logger.debug(
+            f"Depth cache initialized: {self.cache_dir} (max {max_size_gb}GB, current {self._approximate_size_gb:.2f}GB)"
+        )
 
     def get(self, image_sha256: str, config_fingerprint: str) -> Optional[np.ndarray]:
         """Retrieve cached depth map if available.
@@ -126,8 +131,8 @@ class DepthCache:
                 # 1. Every N stores (to recalibrate approximate tracking), OR
                 # 2. Approximate size suggests we might be near the limit
                 needs_size_check = (
-                    self._store_count % self.SIZE_CHECK_INTERVAL == 0 or
-                    self._approximate_size_gb > self.max_size_gb * self.SIZE_CHECK_THRESHOLD
+                    self._store_count % self.SIZE_CHECK_INTERVAL == 0
+                    or self._approximate_size_gb > self.max_size_gb * self.SIZE_CHECK_THRESHOLD
                 )
 
                 if needs_size_check:
@@ -146,7 +151,7 @@ class DepthCache:
             temp_base = self.cache_dir / f"{cache_key}.tmp"
             np.save(str(temp_base), depth)
             # numpy.save created temp_base.npy, rename to final path
-            temp_path = temp_base.with_suffix('.tmp.npy')
+            temp_path = temp_base.with_suffix(".tmp.npy")
             temp_path.replace(cache_path)
 
             logger.debug(f"Cached depth: {cache_key} ({depth.nbytes / 1024:.1f}KB)")
@@ -171,10 +176,7 @@ class DepthCache:
         Removes oldest 20% of files based on access time.
         """
         try:
-            files = sorted(
-                self.cache_dir.glob("*.npy"),
-                key=lambda p: p.stat().st_atime
-            )
+            files = sorted(self.cache_dir.glob("*.npy"), key=lambda p: p.stat().st_atime)
 
             if not files:
                 return
@@ -218,15 +220,15 @@ class DepthCache:
         try:
             files = list(self.cache_dir.glob("*.npy"))
             return {
-                'entry_count': len(files),
-                'size_gb': self._cache_size_gb(),
-                'max_size_gb': self.max_size_gb,
-                'cache_dir': str(self.cache_dir),
+                "entry_count": len(files),
+                "size_gb": self._cache_size_gb(),
+                "max_size_gb": self.max_size_gb,
+                "cache_dir": str(self.cache_dir),
             }
         except Exception:
             return {
-                'entry_count': 0,
-                'size_gb': 0.0,
-                'max_size_gb': self.max_size_gb,
-                'cache_dir': str(self.cache_dir),
+                "entry_count": 0,
+                "size_gb": 0.0,
+                "max_size_gb": self.max_size_gb,
+                "cache_dir": str(self.cache_dir),
             }

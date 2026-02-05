@@ -1,0 +1,28 @@
+name: architectural-interior
+description: "Depth estimation preset optimized for architectural interior photography"
+tier: stable
+
+model:
+  variant: depth-anything-v2-large
+  device: cpu
+
+processing:
+  apply_bilateral: true
+  bilateral_sigma_color: 10.0
+  bilateral_sigma_space: 10.0
+  enable_zone_mapping: false
+  enable_atmospheric: false
+  enable_denoise: false
+
+  pbr:
+    enabled: false
+
+io:
+  cache_enabled: true
+  cache_size: 128
+  output_format: png
+  depth_bit_depth: 16
+
+security:
+  validate_paths: true
+  max_image_size: 8192

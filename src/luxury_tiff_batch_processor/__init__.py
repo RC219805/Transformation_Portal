@@ -61,6 +61,7 @@ Example Usage
         vibrance=0.25,
     )
 """
+
 from __future__ import annotations
 
 import logging
@@ -84,12 +85,7 @@ from .io_utils import (
     image_to_float,
     save_image,
 )
-from .pipeline import (
-    collect_images,
-    ensure_output_path,
-    process_image,
-    process_single_image,
-)
+from .pipeline import collect_images, ensure_output_path, process_image, process_single_image
 from .profiles import DEFAULT_PROFILE_NAME, PROCESSING_PROFILES, ProcessingProfile
 
 LOGGER = logging.getLogger("luxury_tiff_batch_processor")

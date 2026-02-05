@@ -65,18 +65,14 @@ def plugin(
                 instance = cls()
                 get_global_registry().register(instance, replace_existing=True)
             except Exception as e:
-                warnings.warn(
-                    f"Failed to auto-register plugin {name}: {e}", RuntimeWarning
-                )
+                warnings.warn(f"Failed to auto-register plugin {name}: {e}", RuntimeWarning)
 
         return cls
 
     return decorator
 
 
-def requires_version(
-    min_version: Optional[str] = None, max_version: Optional[str] = None
-):
+def requires_version(min_version: Optional[str] = None, max_version: Optional[str] = None):
     """Decorator to enforce Transformation Portal version requirements.
 
     Args:
@@ -100,8 +96,7 @@ def requires_version(
             if min_version:
                 if pkg_version.parse(portal_version) < pkg_version.parse(min_version):
                     raise RuntimeError(
-                        f"Plugin requires Transformation Portal >= {min_version}, "
-                        f"but current version is {portal_version}"
+                        f"Plugin requires Transformation Portal >= {min_version}, " f"but current version is {portal_version}"
                     )
 
             if max_version:
@@ -221,9 +216,7 @@ def measure_performance(func: Callable) -> Callable:
 
         except Exception as e:
             elapsed = time.perf_counter() - start
-            print(
-                f"[Performance] {func.__name__} failed after {elapsed*1000:.2f}ms: {e}"
-            )
+            print(f"[Performance] {func.__name__} failed after {elapsed*1000:.2f}ms: {e}")
             raise
 
     return wrapper

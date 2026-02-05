@@ -3,6 +3,7 @@
 Note: These tests assume the package is installed in development mode.
 Run `pip install -e .` from the repository root before running tests.
 """
+
 import tempfile
 from pathlib import Path
 
@@ -10,13 +11,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from transformation_portal.utils.image_utils import (
-    load_image,
-    load_image_rgb,
-    np_to_pil,
-    pil_to_np,
-    save_image,
-)
+from transformation_portal.utils.image_utils import load_image, load_image_rgb, np_to_pil, pil_to_np, save_image
 
 
 def test_load_image():
@@ -88,7 +83,7 @@ def test_np_to_pil_clipping():
 
     pixel = img.getpixel((0, 0))
     assert pixel[0] == 255  # 2.0 clipped to 1.0 -> 255
-    assert pixel[1] == 0    # -0.5 clipped to 0.0 -> 0
+    assert pixel[1] == 0  # -0.5 clipped to 0.0 -> 0
     assert abs(pixel[2] - 128) <= 1  # 0.5 -> ~128
 
 

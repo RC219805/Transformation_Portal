@@ -18,6 +18,7 @@ Example:
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from pathlib import Path
@@ -25,14 +26,17 @@ from typing import Any, Dict, List, Tuple, Union
 
 import yaml
 
+logger = logging.getLogger(__name__)
+
 # Environment variable pattern: ${VAR_NAME} or $VAR_NAME
 _ENV_VAR_PATTERN = re.compile(r"\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)")
 
 
 def _expand_env_vars(value: str) -> str:
-    """Expand environment variables in a string.
+    """Expand environment variables in a string with path validation.
 
     Supports both ${VAR_NAME} and $VAR_NAME syntax.
+    Validates expanded values that appear to be paths for basic safety checks.
 
     Args:
         value: String potentially containing environment variable references.
@@ -44,13 +48,49 @@ def _expand_env_vars(value: str) -> str:
         >>> os.environ['HOME'] = '/home/user'
         >>> _expand_env_vars('${HOME}/config')
         '/home/user/config'
+
+    Note:
+        This provides defense-in-depth validation for config files.
+        Actual strict path validation should use validate_filepath
+        from transformation_portal.utils.security at the point of use.
     """
 
     def replace_var(match: re.Match) -> str:
         var_name = match.group(1) or match.group(2)
         return os.environ.get(var_name, match.group(0))
 
-    return _ENV_VAR_PATTERN.sub(replace_var, value)
+    expanded = _ENV_VAR_PATTERN.sub(replace_var, value)
+
+    # Validate expanded values that look like paths
+    # This provides defense-in-depth against malicious config files
+    if expanded != value and (os.path.sep in expanded or "/" in expanded or expanded.startswith((".", "/"))):
+        # Path-like expansion detected - check for suspicious patterns
+        try:
+            # Attempt to create a Path object to validate structure
+            test_path = Path(expanded)
+
+            # Check for excessive parent directory traversal
+            # Count '..' components in the path parts for cross-platform detection
+            parent_count = sum(1 for part in test_path.parts if part == "..")
+            if parent_count > 5:
+                logger.warning(f"Config path contains excessive parent traversal (..): {expanded}")
+
+            # Verify path doesn't try to escape to sensitive system directories
+            # when resolved (if it exists)
+            if test_path.exists():
+                resolved = test_path.resolve()
+                # Log if path resolves outside common project directories
+                # This is informational only - actual validation happens at use time
+                sensitive_dirs = {"/etc", "/sys", "/proc", "/dev", "/root"}
+                if any(str(resolved).startswith(d) for d in sensitive_dirs):
+                    logger.warning(f"Config path resolves to sensitive system directory: {resolved}")
+
+        except (OSError, RuntimeError, ValueError) as e:
+            # Invalid path structure - log but don't block
+            # The actual validation should happen when the path is used
+            logger.debug(f"Config path validation warning for '{expanded}': {e}")
+
+    return expanded
 
 
 def _expand_env_vars_recursive(obj: Any) -> Any:
@@ -107,9 +147,7 @@ def _resolve_relative_paths(obj: Any, base_dir: Path) -> Any:
     return obj
 
 
-def load_recipe(
-    path: Union[str, Path], expand_env: bool = True, resolve_paths: bool = True
-) -> Dict[str, Any]:
+def load_recipe(path: Union[str, Path], expand_env: bool = True, resolve_paths: bool = True) -> Dict[str, Any]:
     """Load and parse a YAML recipe file.
 
     Args:
@@ -160,9 +198,7 @@ def load_recipe(
     return recipe
 
 
-def validate_recipe(
-    recipe_dict: Dict[str, Any], strict: bool = False
-) -> Tuple[bool, List[str]]:
+def validate_recipe(recipe_dict: Dict[str, Any], strict: bool = False) -> Tuple[bool, List[str]]:
     """Validate a recipe dictionary against the schema.
 
     Args:
@@ -205,9 +241,7 @@ def validate_recipe(
     stages = recipe_dict.get("stages", [])
     for stage in stages:
         if stage not in valid_stages:
-            errors.append(
-                f"Invalid stage: '{stage}'. Valid stages: {sorted(valid_stages)}"
-            )
+            errors.append(f"Invalid stage: '{stage}'. Valid stages: {sorted(valid_stages)}")
 
     # Validate stage configurations
     stage_configs = {
@@ -261,36 +295,24 @@ def validate_recipe(
                     if field in stage_config:
                         val = stage_config[field]
                         if not isinstance(val, (int, float)):
-                            errors.append(
-                                f"Stage '{stage_name}': '{field}' must be a number"
-                            )
+                            errors.append(f"Stage '{stage_name}': '{field}' must be a number")
                         elif not 0.0 <= val <= 1.0:
-                            errors.append(
-                                f"Stage '{stage_name}': '{field}' must be between 0.0 and 1.0"
-                            )
+                            errors.append(f"Stage '{stage_name}': '{field}' must be between 0.0 and 1.0")
 
             if stage_name == "color_grading":
                 if "lut_strength" in stage_config:
                     val = stage_config["lut_strength"]
                     if not isinstance(val, (int, float)):
-                        errors.append(
-                            f"Stage '{stage_name}': 'lut_strength' must be a number"
-                        )
+                        errors.append(f"Stage '{stage_name}': 'lut_strength' must be a number")
                     elif not 0.0 <= val <= 1.0:
-                        errors.append(
-                            f"Stage '{stage_name}': 'lut_strength' must be between 0.0 and 1.0"
-                        )
+                        errors.append(f"Stage '{stage_name}': 'lut_strength' must be between 0.0 and 1.0")
 
                 if "contrast" in stage_config:
                     val = stage_config["contrast"]
                     if not isinstance(val, (int, float)):
-                        errors.append(
-                            f"Stage '{stage_name}': 'contrast' must be a number"
-                        )
+                        errors.append(f"Stage '{stage_name}': 'contrast' must be a number")
                     elif not 0.5 <= val <= 2.0:
-                        errors.append(
-                            f"Stage '{stage_name}': 'contrast' must be between 0.5 and 2.0"
-                        )
+                        errors.append(f"Stage '{stage_name}': 'contrast' must be between 0.5 and 2.0")
 
     # Validate output configuration
     if "output" in recipe_dict and isinstance(recipe_dict["output"], dict):
@@ -301,9 +323,7 @@ def validate_recipe(
             fmt = output_config["format"].lower()
             output_config["format"] = fmt  # Normalize to lowercase for downstream use
             if fmt not in valid_formats:
-                errors.append(
-                    f"Invalid output format: '{fmt}'. Valid formats: {sorted(valid_formats)}"
-                )
+                errors.append(f"Invalid output format: '{fmt}'. Valid formats: {sorted(valid_formats)}")
 
         if "quality" in output_config:
             quality = output_config["quality"]
@@ -336,8 +356,7 @@ def get_recipe_info(recipe_dict: Dict[str, Any]) -> Dict[str, Any]:
         "has_material_response": "material_response" in stages,
         "has_color_grading": "color_grading" in stages,
         "has_4k_upscaling": "upscaling_4k" in stages,
-        "has_quality_feedback": quality_feedback.get("enabled", False)
-        or "quality_assessment" in stages,
+        "has_quality_feedback": quality_feedback.get("enabled", False) or "quality_assessment" in stages,
         "has_rag_indexing": quality_feedback.get("rag_indexing_enabled", False),
         "output_format": recipe_dict.get("output", {}).get("format", "tiff"),
     }

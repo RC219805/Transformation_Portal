@@ -43,6 +43,7 @@ except ImportError as e:
 
 # ==================== Fixtures ====================
 
+
 @pytest.fixture
 def sample_image():
     """Create a sample RGB image."""
@@ -77,6 +78,7 @@ def temp_image_file(sample_image):
 
 
 # ==================== Test realize_v8_unified ====================
+
 
 class TestRealizeV8Unified:
     """Test base realize_v8_unified functionality."""
@@ -147,6 +149,7 @@ class TestRealizeV8Unified:
 
 
 # ==================== Test VFX Extension ====================
+
 
 class TestVFXExtension:
     """Test VFX extension functionality."""
@@ -328,6 +331,7 @@ class TestVFXExtension:
 
 # ==================== Integration Tests ====================
 
+
 class TestIntegration:
     """Integration tests for complete workflows."""
 
@@ -383,6 +387,7 @@ class TestIntegration:
 
 
 # ==================== Performance Tests ====================
+
 
 class TestPerformance:
     """Performance and timing tests."""

@@ -7,8 +7,8 @@ for material-aware enhancement.
 
 from __future__ import annotations
 
-from typing import Dict
 import hashlib
+from typing import Dict
 
 import numpy as np
 
@@ -163,10 +163,7 @@ class MaterialSegmentationStage(Stage):
             materials["wood"] = wood_mask
 
             # Metal: high value, low saturation
-            metal_mask = (
-                (hsv[:, :, 1] < 0.2)  # Low saturation
-                & (hsv[:, :, 2] > 0.5)  # High value
-            ).astype(np.float32)
+            metal_mask = ((hsv[:, :, 1] < 0.2) & (hsv[:, :, 2] > 0.5)).astype(np.float32)  # Low saturation  # High value
             materials["metal"] = metal_mask
 
             # Glass: use depth if available (closer objects)

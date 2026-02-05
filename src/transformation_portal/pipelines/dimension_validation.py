@@ -3,8 +3,10 @@
 Lightweight utility module with zero ML dependencies.
 Safe to import in any context (tests, CLI, lightweight scripts).
 """
+
 from __future__ import annotations
-from typing import Tuple, Optional
+
+from typing import Optional, Tuple
 
 # Stable Diffusion 1.5 dimension requirements
 SD_DIMENSION_MULTIPLE = 64
@@ -13,10 +15,7 @@ MAX_RECOMMENDED_PIXELS = 1024 * 1024  # 1MP recommended maximum
 
 
 def validate_sd_dimensions(
-    width: int,
-    height: int,
-    auto_correct: bool = True,
-    warn_callback: Optional[callable] = None
+    width: int, height: int, auto_correct: bool = True, warn_callback: Optional[callable] = None
 ) -> Tuple[int, int]:
     """Validate and optionally auto-correct dimensions for Stable Diffusion 1.5 compatibility.
 

@@ -149,11 +149,7 @@ class PluginInterface(ABC):
 
     def __repr__(self) -> str:
         """String representation of plugin."""
-        return (
-            f"<{self.__class__.__name__} "
-            f"name='{self.metadata.name}' "
-            f"version='{self.metadata.version}'>"
-        )
+        return f"<{self.__class__.__name__} " f"name='{self.metadata.name}' " f"version='{self.metadata.version}'>"
 
 
 class DepthModelPlugin(PluginInterface):

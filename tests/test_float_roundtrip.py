@@ -5,15 +5,8 @@ import numpy as np
 from PIL import Image
 
 import luxury_tiff_batch_processor as ltiff
-from luxury_tiff_batch_processor.adjustments import (
-    gaussian_blur,
-    gaussian_kernel_cached,
-)
-from luxury_tiff_batch_processor.io_utils import (
-    float_to_dtype_array,
-    image_to_float,
-    save_image,
-)
+from luxury_tiff_batch_processor.adjustments import gaussian_blur, gaussian_kernel_cached
+from luxury_tiff_batch_processor.io_utils import float_to_dtype_array, image_to_float, save_image
 
 try:
     import tifffile
@@ -23,7 +16,7 @@ except Exception:  # pragma: no cover - optional dependency
 
 def test_float_to_dtype_array_preserves_float_values():
     gradient = np.linspace(0.0, 1.0, 25, dtype=np.float32).reshape(5, 5)
-    rgb = np.stack([gradient, gradient ** 2, np.sqrt(gradient)], axis=-1)
+    rgb = np.stack([gradient, gradient**2, np.sqrt(gradient)], axis=-1)
     result = float_to_dtype_array(rgb, np.float32, None)
     assert result.dtype == np.float32
     assert np.allclose(result, rgb)
@@ -34,7 +27,7 @@ def test_save_image_retains_float_tonal_range(tmp_path):
     x = np.linspace(0.0, 1.0, width, dtype=np.float32)
     y = np.linspace(0.0, 1.0, height, dtype=np.float32)[:, None]
     gradient = (x + y) / 2.0
-    rgb = np.stack([gradient, gradient ** 1.5, np.clip(gradient * 1.2, 0.0, 1.0)], axis=-1)
+    rgb = np.stack([gradient, gradient**1.5, np.clip(gradient * 1.2, 0.0, 1.0)], axis=-1)
 
     float_data = float_to_dtype_array(rgb, np.float32, None)
     output_path = tmp_path / "float_image.tif"
@@ -119,13 +112,13 @@ def _reference_gaussian_blur(arr: np.ndarray, radius: int, sigma: Optional[float
     padded = np.pad(working, ((pad, pad), (0, 0), (0, 0)), mode="reflect")
     vertical = np.empty_like(working, dtype=np.float32)
     for y in range(working.shape[0]):
-        window = padded[y: y + kernel.size]
+        window = padded[y : y + kernel.size]
         vertical[y] = np.tensordot(kernel, window, axes=(0, 0))
 
     padded_h = np.pad(vertical, ((0, 0), (pad, pad), (0, 0)), mode="reflect")
     blurred = np.empty_like(working, dtype=np.float32)
     for x in range(working.shape[1]):
-        window = padded_h[:, x: x + kernel.size]
+        window = padded_h[:, x : x + kernel.size]
         blurred[:, x] = np.tensordot(kernel, window, axes=(0, 1))
 
     if squeeze:

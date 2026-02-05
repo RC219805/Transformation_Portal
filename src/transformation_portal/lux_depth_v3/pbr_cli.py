@@ -26,14 +26,14 @@ Usage:
         --output output/pbr/
 """
 
-import sys
-import json
 import hashlib
-from pathlib import Path
-from typing import Optional
+import json
 import logging
+import sys
 import time
 from dataclasses import asdict, replace
+from pathlib import Path
+from typing import Optional
 
 try:
     import typer
@@ -41,8 +41,8 @@ except ImportError:
     print("Error: typer not installed. Install with: pip install typer", file=sys.stderr)
     sys.exit(1)
 
-from .pbr_presets import get_preset, list_presets
 from .pbr import PBRConfig
+from .pbr_presets import get_preset, list_presets
 from .pbr_processor import PBRProcessor
 
 logger = logging.getLogger(__name__)
@@ -65,11 +65,7 @@ def _configure_logging(verbose: bool = False, quiet: bool = False, log_level: Op
     else:
         level = logging.INFO
 
-    logging.basicConfig(
-        level=level,
-        format='%(levelname)s: %(message)s',
-        force=True
-    )
+    logging.basicConfig(level=level, format="%(levelname)s: %(message)s", force=True)
 
 
 def _compute_config_fingerprint(config: PBRConfig) -> str:
@@ -81,125 +77,47 @@ def _compute_config_fingerprint(config: PBRConfig) -> str:
 
 @app.command()
 def generate(
-    depth: Optional[Path] = typer.Option(
-        None,
-        "--depth",
-        "-d",
-        help="Path to single depth file (.npy or .png)"
-    ),
-    depth_dir: Optional[Path] = typer.Option(
-        None,
-        "--depth-dir",
-        help="Directory containing depth files (batch mode)"
-    ),
-    output: Path = typer.Option(
-        Path("./pbr"),
-        "--output",
-        "-o",
-        help="Output directory for PBR maps"
-    ),
+    depth: Optional[Path] = typer.Option(None, "--depth", "-d", help="Path to single depth file (.npy or .png)"),
+    depth_dir: Optional[Path] = typer.Option(None, "--depth-dir", help="Directory containing depth files (batch mode)"),
+    output: Path = typer.Option(Path("./pbr"), "--output", "-o", help="Output directory for PBR maps"),
     preset: Optional[str] = typer.Option(
-        None,
-        "--preset",
-        "-p",
-        help=f"PBR preset name. Available: {', '.join(list_presets())}"
+        None, "--preset", "-p", help=f"PBR preset name. Available: {', '.join(list_presets())}"
     ),
     base_name: Optional[str] = typer.Option(
-        None,
-        "--base-name",
-        "-n",
-        help="Base name for output files (auto-derived from depth filename if omitted)"
+        None, "--base-name", "-n", help="Base name for output files (auto-derived from depth filename if omitted)"
     ),
     # Custom parameters (override preset)
     normal_strength: Optional[float] = typer.Option(
-        None,
-        "--normal-strength",
-        help="Normal map strength multiplier (overrides preset)"
+        None, "--normal-strength", help="Normal map strength multiplier (overrides preset)"
     ),
     roughness_strength: Optional[float] = typer.Option(
-        None,
-        "--roughness-strength",
-        help="Roughness map strength multiplier (overrides preset)"
+        None, "--roughness-strength", help="Roughness map strength multiplier (overrides preset)"
     ),
     ao_strength: Optional[float] = typer.Option(
-        None,
-        "--ao-strength",
-        help="Ambient occlusion strength multiplier (overrides preset)"
+        None, "--ao-strength", help="Ambient occlusion strength multiplier (overrides preset)"
     ),
-    ao_bias: Optional[float] = typer.Option(
-        None,
-        "--ao-bias",
-        help="AO bias (0.0-1.0, lower=darker) (overrides preset)"
-    ),
+    ao_bias: Optional[float] = typer.Option(None, "--ao-bias", help="AO bias (0.0-1.0, lower=darker) (overrides preset)"),
     # Batch file selection controls
     pattern: str = typer.Option(
-        "*_depth.*",
-        "--pattern",
-        help="Glob pattern for batch depth file selection (default: *_depth.*)"
+        "*_depth.*", "--pattern", help="Glob pattern for batch depth file selection (default: *_depth.*)"
     ),
-    recursive: bool = typer.Option(
-        False,
-        "--recursive",
-        "-r",
-        help="Recursively search for depth files in subdirectories"
-    ),
+    recursive: bool = typer.Option(False, "--recursive", "-r", help="Recursively search for depth files in subdirectories"),
     # Information/listing
-    list_presets_flag: bool = typer.Option(
-        False,
-        "--list-presets",
-        help="List available presets and exit"
-    ),
+    list_presets_flag: bool = typer.Option(False, "--list-presets", help="List available presets and exit"),
     # Logging/verbosity
-    verbose: bool = typer.Option(
-        False,
-        "--verbose",
-        "-v",
-        help="Enable verbose logging (DEBUG level)"
-    ),
-    quiet: bool = typer.Option(
-        False,
-        "--quiet",
-        "-q",
-        help="Suppress non-error output"
-    ),
-    log_level: Optional[str] = typer.Option(
-        None,
-        "--log-level",
-        help="Explicit log level: DEBUG, INFO, WARNING, ERROR"
-    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose logging (DEBUG level)"),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress non-error output"),
+    log_level: Optional[str] = typer.Option(None, "--log-level", help="Explicit log level: DEBUG, INFO, WARNING, ERROR"),
     # Output modes
-    json_output: bool = typer.Option(
-        False,
-        "--json",
-        help="Output results as JSON (for automation/scripting)"
-    ),
-    manifest: Optional[Path] = typer.Option(
-        None,
-        "--manifest",
-        help="Write manifest of generated files to specified path"
-    ),
+    json_output: bool = typer.Option(False, "--json", help="Output results as JSON (for automation/scripting)"),
+    manifest: Optional[Path] = typer.Option(None, "--manifest", help="Write manifest of generated files to specified path"),
     # Safety guardrails
-    dry_run: bool = typer.Option(
-        False,
-        "--dry-run",
-        help="Print what would be processed without actually running"
-    ),
-    fail_fast: bool = typer.Option(
-        False,
-        "--fail-fast",
-        help="Exit on first error (vs. continue on error)"
-    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Print what would be processed without actually running"),
+    fail_fast: bool = typer.Option(False, "--fail-fast", help="Exit on first error (vs. continue on error)"),
     max_files: Optional[int] = typer.Option(
-        None,
-        "--max-files",
-        "--limit",
-        help="Maximum number of files to process (safety limit)"
+        None, "--max-files", "--limit", help="Maximum number of files to process (safety limit)"
     ),
-    overwrite: bool = typer.Option(
-        True,
-        "--overwrite/--no-overwrite",
-        help="Overwrite existing output files"
-    ),
+    overwrite: bool = typer.Option(True, "--overwrite/--no-overwrite", help="Overwrite existing output files"),
 ):
     """Generate PBR maps from cached depth file(s).
 
@@ -251,13 +169,13 @@ def generate(
     # Apply parameter overrides using replace() pattern
     overrides = {}
     if normal_strength is not None:
-        overrides['normal_strength'] = normal_strength
+        overrides["normal_strength"] = normal_strength
     if roughness_strength is not None:
-        overrides['roughness_strength'] = roughness_strength
+        overrides["roughness_strength"] = roughness_strength
     if ao_strength is not None:
-        overrides['ao_strength'] = ao_strength
+        overrides["ao_strength"] = ao_strength
     if ao_bias is not None:
-        overrides['ao_bias'] = ao_bias
+        overrides["ao_bias"] = ao_bias
 
     if overrides:
         config = replace(config, **overrides)
@@ -272,11 +190,7 @@ def generate(
     if depth:
         if not depth.exists():
             if json_output:
-                error_result = {
-                    "status": "error",
-                    "input": str(depth),
-                    "error": f"Depth file not found: {depth}"
-                }
+                error_result = {"status": "error", "input": str(depth), "error": f"Depth file not found: {depth}"}
                 typer.echo(json.dumps(error_result, indent=2))
             else:
                 typer.echo(f"Error: Depth file not found: {depth}", err=True)
@@ -301,7 +215,7 @@ def generate(
                         "status": "error",
                         "input": str(depth),
                         "error": "Output files already exist (use --overwrite to replace)",
-                        "existing_files": [str(f) for f in existing_files]
+                        "existing_files": [str(f) for f in existing_files],
                     }
                     typer.echo(json.dumps(error_result, indent=2))
                 else:
@@ -322,12 +236,7 @@ def generate(
             typer.echo(f"\nProcessing: {depth.name}")
 
         try:
-            paths = PBRProcessor.from_cached_depth(
-                depth_path=depth,
-                config=config,
-                output_dir=output,
-                base_name=base
-            )
+            paths = PBRProcessor.from_cached_depth(depth_path=depth, config=config, output_dir=output, base_name=base)
 
             elapsed = time.time() - start_time
 
@@ -339,7 +248,7 @@ def generate(
                     "files": {k: str(v) for k, v in paths.items()},
                     "preset": preset,
                     "config_fingerprint": config_fingerprint,
-                    "elapsed_seconds": round(elapsed, 3)
+                    "elapsed_seconds": round(elapsed, 3),
                 }
                 typer.echo(json.dumps(result, indent=2))
             else:
@@ -352,11 +261,7 @@ def generate(
 
         except Exception as e:
             if json_output:
-                result = {
-                    "status": "error",
-                    "input": str(depth),
-                    "error": str(e)
-                }
+                result = {"status": "error", "input": str(depth), "error": str(e)}
                 typer.echo(json.dumps(result, indent=2))
             else:
                 typer.echo(f"✗ Error: {e}", err=True)
@@ -422,9 +327,7 @@ def generate(
                     if not quiet:
                         typer.echo(f" ✗ Skipped (files exist, use --overwrite)")
                     error_count += 1
-                    failed_files.append(
-                        (depth_file.name, "Output files already exist (use --overwrite to replace)")
-                    )
+                    failed_files.append((depth_file.name, "Output files already exist (use --overwrite to replace)"))
                     if fail_fast:
                         typer.echo("\n[FAIL FAST] Aborting on first error", err=True)
                         raise typer.Exit(1)
@@ -434,12 +337,7 @@ def generate(
                 if not quiet:
                     typer.echo(f"Processing: {depth_file.name}...", nl=False)
 
-                paths = PBRProcessor.from_cached_depth(
-                    depth_path=depth_file,
-                    config=config,
-                    output_dir=output,
-                    base_name=base
-                )
+                paths = PBRProcessor.from_cached_depth(depth_path=depth_file, config=config, output_dir=output, base_name=base)
 
                 if not quiet:
                     typer.echo(" ✓")
@@ -471,7 +369,7 @@ def generate(
                 "failed_files": [{"file": f, "error": e} for f, e in failed_files],
                 "preset": preset,
                 "config_fingerprint": config_fingerprint,
-                "elapsed_seconds": round(elapsed, 3)
+                "elapsed_seconds": round(elapsed, 3),
             }
             typer.echo(json.dumps(result, indent=2))
         else:
@@ -533,17 +431,13 @@ def _write_manifest(manifest_path: Path, all_paths: list, config_fingerprint: st
     """Write manifest of generated files atomically."""
     from .io_atomic import atomic_write_bytes
 
-    manifest_data = {
-        "config_fingerprint": config_fingerprint,
-        "preset": preset,
-        "generated_files": []
-    }
+    manifest_data = {"config_fingerprint": config_fingerprint, "preset": preset, "generated_files": []}
 
     for paths in all_paths:
         manifest_data["generated_files"].append({k: str(v) for k, v in paths.items()})
 
     # Atomic write to prevent partial files on failure
-    manifest_json = json.dumps(manifest_data, indent=2).encode('utf-8')
+    manifest_json = json.dumps(manifest_data, indent=2).encode("utf-8")
     atomic_write_bytes(manifest_path, manifest_json)
 
     logger.info(f"Wrote manifest to {manifest_path}")

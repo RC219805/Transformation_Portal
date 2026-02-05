@@ -11,10 +11,7 @@ from datetime import date
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Union
 
-from transformation_portal.analyzers.codebase_philosophy_auditor import (
-    CodebasePhilosophyAuditor,
-    Violation,
-)
+from transformation_portal.analyzers.codebase_philosophy_auditor import CodebasePhilosophyAuditor, Violation
 
 
 @dataclass
@@ -69,9 +66,7 @@ def collect_valid_until_records(tests_root: Path) -> List[ValidUntilRecord]:
             continue
 
         for node in ast.walk(tree):
-            if not isinstance(
-                node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
-            ):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 continue
             for decorator in node.decorator_list:
                 record = _valid_until_from_decorator(decorator, path)
@@ -93,11 +88,7 @@ def collect_outdated_valid_until_records(tests_root: Path) -> List[ValidUntilRec
     """Return ``valid_until`` records whose deadlines have passed."""
 
     today = date.today()
-    return [
-        record
-        for record in collect_valid_until_records(tests_root)
-        if record.deadline < today
-    ]
+    return [record for record in collect_valid_until_records(tests_root) if record.deadline < today]
 
 
 def _valid_until_from_decorator(  # pylint: disable=too-many-branches
@@ -127,9 +118,7 @@ def _valid_until_from_decorator(  # pylint: disable=too-many-branches
         raise ValueError(f"Unable to evaluate valid_until deadline in {path}") from exc
 
     if not isinstance(deadline_value, str):
-        raise ValueError(
-            f"valid_until decorator in {path} must use a string ISO date literal"
-        )
+        raise ValueError(f"valid_until decorator in {path} must use a string ISO date literal")
 
     reason_value: Optional[str] = None
     if decorator.keywords:
@@ -139,14 +128,10 @@ def _valid_until_from_decorator(  # pylint: disable=too-many-branches
                 break
 
     if reason_value is None:
-        raise ValueError(
-            f"valid_until decorator in {path} is missing required 'reason' keyword"
-        )
+        raise ValueError(f"valid_until decorator in {path} is missing required 'reason' keyword")
 
     if not isinstance(reason_value, str):
-        raise ValueError(
-            f"valid_until decorator in {path} must use a string reason literal"
-        )
+        raise ValueError(f"valid_until decorator in {path} must use a string reason literal")
 
     deadline = date.fromisoformat(deadline_value)
     return deadline, reason_value
@@ -188,11 +173,7 @@ def _iter_python_files(paths: Iterable[Path]) -> Iterable[Path]:
 
 
 def _format_violation_location(module_path: Path, violation: Violation) -> str:
-    location = (
-        f"{module_path}"
-        if violation.line is None
-        else f"{module_path}:{violation.line}"
-    )
+    location = f"{module_path}" if violation.line is None else f"{module_path}:{violation.line}"
     return f"{location} – {violation.message}"
 
 
@@ -205,11 +186,7 @@ def collect_color_token_report(
     brand_tokens = tokens_data.get("tokens", {}).get("color", {}).get("brand", {})
 
     directory = tokens_path.parent
-    deliverables = [
-        path
-        for path in directory.iterdir()
-        if path.suffix.lower() in {".css", ".js", ".mjs", ".cjs"}
-    ]
+    deliverables = [path for path in directory.iterdir() if path.suffix.lower() in {".css", ".js", ".mjs", ".cjs"}]
 
     usages: List[ColorTokenUsage] = []
     orphans: List[ColorTokenUsage] = []
@@ -270,11 +247,11 @@ def render_dashboard(
     for record in valid_until_records:
         days_remaining = record.days_remaining
         style = "yellow" if days_remaining <= 30 else None
-        
+
         # Highlight expired records in red
         if days_remaining < 0:
             style = "bold red"
-            
+
         table.add_row(
             record.target,
             record.deadline.isoformat(),
@@ -295,9 +272,7 @@ def render_dashboard(
     pv_table.add_column("Count", justify="right")
     pv_table.add_column("Examples")
 
-    for summary in sorted(
-        principle_summaries.values(), key=lambda item: item.count, reverse=True
-    ):
+    for summary in sorted(principle_summaries.values(), key=lambda item: item.count, reverse=True):
         pv_table.add_row(
             summary.principle,
             str(summary.count),
@@ -341,8 +316,8 @@ def _render_plain_dashboard(
             marker = "!" if record.days_remaining <= 30 else "-"
             # Double bang for expired
             if record.days_remaining < 0:
-                marker = "!!" 
-            
+                marker = "!!"
+
             print(
                 f"{marker} {record.target} – {record.deadline.isoformat()} "
                 f"({record.days_remaining} days) : {record.reason} "
@@ -353,9 +328,7 @@ def _render_plain_dashboard(
 
     print("\n=== Philosophy Violations ===")
     if principle_summaries:
-        for summary in sorted(
-            principle_summaries.values(), key=lambda item: item.count, reverse=True
-        ):
+        for summary in sorted(principle_summaries.values(), key=lambda item: item.count, reverse=True):
             print(f"- {summary.principle}: {summary.count}")
             for example in summary.examples:
                 print(f"    • {example}")
@@ -366,10 +339,7 @@ def _render_plain_dashboard(
     if color_report.tokens:
         for usage in color_report.tokens:
             status = "unused" if usage in color_report.orphans else "used"
-            print(
-                f"- {usage.token} ({usage.hex_value}): "
-                f"{', '.join(usage.used_in) if usage.used_in else status}"
-            )
+            print(f"- {usage.token} ({usage.hex_value}): " f"{', '.join(usage.used_in) if usage.used_in else status}")
     else:
         print("No brand colors found in token file.")
 
@@ -378,7 +348,7 @@ def render_github_annotations(
     valid_until_records: Sequence[ValidUntilRecord],
 ) -> None:
     """Print GitHub Actions workflow commands to annotate the PR."""
-    
+
     # We only annotate expired technical debt for now
     for record in valid_until_records:
         if record.days_remaining < 0:
@@ -390,7 +360,7 @@ def render_github_annotations(
                 f"Reason: {record.reason}"
             )
         elif record.days_remaining <= 7:
-             # Warn for impending expiry
+            # Warn for impending expiry
             print(
                 f"::warning file={record.path},line={record.line},"
                 f"title=Tech Debt Expiring Soon::"
@@ -493,7 +463,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
 
     if args.github_actions:
         render_github_annotations(valid_until_records)
-    
+
     # Always render the text dashboard for console logs
     render_dashboard(valid_until_records, principle_summaries, color_report)
 
