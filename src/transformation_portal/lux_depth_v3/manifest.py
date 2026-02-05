@@ -153,6 +153,62 @@ class ReproMetadata:
 
 
 @dataclass
+class BackendSelectionMetadata:
+    """Backend selection audit trail (added in v2.0.1 per ADR-023).
+
+    Tracks requested vs resolved backend for transparency and debugging.
+
+    Attributes:
+        requested_backend: User-specified backend or None (auto)
+        resolved_backend: Actual backend used
+        resolution_status: "success", "fallback", or "error"
+        resolution_reason: Why fallback occurred (if any)
+        model_id: HuggingFace model ID or checkpoint path
+        device: Resolved device (mps/cuda/cpu)
+        schema_version: Schema version for backward compatibility
+    """
+
+    requested_backend: Optional[str]
+    resolved_backend: str
+    resolution_status: str
+    resolution_reason: Optional[str]
+    model_id: str
+    device: str
+    schema_version: str = "1.0"
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to dictionary."""
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> BackendSelectionMetadata:
+        """Deserialize from dictionary with schema validation.
+
+        Args:
+            data: Dictionary representation
+
+        Returns:
+            BackendSelectionMetadata instance
+
+        Raises:
+            ValueError: If schema_version is unsupported
+        """
+        schema_version = data.get("schema_version", "1.0")
+        if schema_version != "1.0":
+            raise ValueError(f"Unsupported BackendSelectionMetadata schema: {schema_version}")
+
+        return cls(
+            requested_backend=data.get("requested_backend"),
+            resolved_backend=data["resolved_backend"],
+            resolution_status=data["resolution_status"],
+            resolution_reason=data.get("resolution_reason"),
+            model_id=data["model_id"],
+            device=data["device"],
+            schema_version=schema_version,
+        )
+
+
+@dataclass
 class ConfigFingerprint:
     """Configuration fingerprint for caching validation."""
 
@@ -243,6 +299,7 @@ class CombinedManifest:
         environment: Environment capture
         start_time: ISO 8601 formatted pipeline start time (UTC)
         end_time: ISO 8601 formatted pipeline end time (UTC)
+        backend_selection: Backend selection audit trail (v2.0.1+, ADR-023)
     """
 
     input: Optional[InputMetadata] = None
@@ -255,6 +312,7 @@ class CombinedManifest:
     environment: Optional[Dict[str, Any]] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
+    backend_selection: Optional[BackendSelectionMetadata] = None
 
     def save(self, path: Path):
         """Save manifest to JSON file.
@@ -265,7 +323,7 @@ class CombinedManifest:
 
         # Convert dataclasses to dict
         data = {}
-        for field_name in ["input", "depth", "v2", "timing", "pbr_assets", "repro", "config_fingerprint", "environment"]:
+        for field_name in ["input", "depth", "v2", "timing", "pbr_assets", "repro", "config_fingerprint", "environment", "backend_selection"]:
             field_value = getattr(self, field_name)
             if field_value is not None:
                 if field_name in ["pbr_assets", "environment"]:
@@ -311,6 +369,8 @@ class CombinedManifest:
             manifest.pbr_assets = data["pbr_assets"]
         if "environment" in data:
             manifest.environment = data["environment"]
+        if "backend_selection" in data and data["backend_selection"] is not None:
+            manifest.backend_selection = BackendSelectionMetadata.from_dict(data["backend_selection"])
         # Load timestamp fields
         if "start_time" in data:
             manifest.start_time = data["start_time"]
@@ -342,7 +402,7 @@ class CombinedManifest:
 
         # Convert dataclasses to dict (same logic as save)
         data = {}
-        for field_name in ["input", "depth", "v2", "timing", "pbr_assets", "repro", "config_fingerprint", "environment"]:
+        for field_name in ["input", "depth", "v2", "timing", "pbr_assets", "repro", "config_fingerprint", "environment", "backend_selection"]:
             field_value = getattr(self, field_name)
             if field_value is not None:
                 if field_name in ["pbr_assets", "environment"]:

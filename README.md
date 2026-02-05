@@ -345,6 +345,44 @@ make ci
 
 ---
 
+## Performance Monitoring
+
+Transformation Portal includes performance regression detection via the Performance Ledger tool.
+
+### Capture Baseline
+
+```bash
+python tools/performance_ledger.py \
+  --manifests-dir output/prod_run/manifests \
+  --output docs/performance/baselines/v2.1.0-baseline.json \
+  --version "v2.1.0" \
+  --backend "da3" \
+  --quality-tier "standard"
+```
+
+### Compare Against Baseline
+
+```bash
+python tools/performance_ledger.py \
+  --baseline docs/performance/baselines/v2.0.0-post-pr841.json \
+  --compare output/test_run/manifests \
+  --output perf_report.md
+```
+
+Exit codes:
+- `0`: No regressions detected
+- `1`: Regressions detected (blocks merge)
+
+### Regression Thresholds
+
+- **p95 > 10% worse:** Tail latency regression
+- **mean > 15% worse:** Average performance regression  
+- **failure_rate > 0%:** Any new failures
+
+See [Performance Monitoring Guide](docs/performance/README.md) for details.
+
+---
+
 ## Documentation
 
 **📖 Start with:** [DOCUMENTATION_MAP.md](DOCUMENTATION_MAP.md)

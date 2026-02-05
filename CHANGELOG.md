@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Performance Ledger (ADR-023 Phase 2):** Standalone tool for performance regression detection
+  - Parse manifests from batch runs and compute runtime statistics
+  - Compare current runs against versioned baselines
+  - Detect regressions using configurable thresholds (p95 > 10%, mean > 15%, failure_rate > 0%)
+  - Generate markdown reports for human review and JSON for CI integration
+  - Manual baseline governance (no automated updates)
+  - Tool: `tools/performance_ledger.py`
+  - Docs: `docs/performance/README.md`
+
+- **Backend Selection Truth (ADR-023 Phase 3):** Enhanced transparency and debugging
+  - Backend selection metadata in manifests (`backend_selection` field)
+  - Truth-line logging on every batch run (requested vs resolved backend)
+  - Fallback warnings when requested backend unavailable
+  - Backward-compatible manifest schema (old manifests still parse)
+  - Additive-only changes (no enforcement yet, deferred to v2.1.0)
+
 ### Breaking Changes
 - **Drop Python 3.10 Support:** Minimum required Python version is now 3.11
   - Rationale: Align with ecosystem evolution (scikit-learn 1.8.0 dropped 3.10 support)

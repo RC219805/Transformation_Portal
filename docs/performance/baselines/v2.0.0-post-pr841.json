@@ -1,0 +1,28 @@
+{
+  "version": "v2.0.0-post-pr841",
+  "backend": "da3",
+  "quality_tier": "standard",
+  "environment": {
+    "python": "3.11.14",
+    "torch": "2.10.0",
+    "device": "mps",
+    "os": "Darwin-25.2.0-arm64",
+    "cpu": null,
+    "memory_gb": null
+  },
+  "statistics": {
+    "count": 20,
+    "mean_sec": 13.888641405105592,
+    "median_sec": 11.81611168384552,
+    "p90_sec": 22.052010846138014,
+    "p95_sec": 30.433350789546967,
+    "min_sec": 8.202536821365356,
+    "max_sec": 30.826215267181396,
+    "success_rate": 1.0,
+    "total_sec": 277.7728281021118,
+    "overhead_sec": null
+  },
+  "captured_at": "2026-02-05T07:36:30.210608+00:00",
+  "captured_by": "tools/performance_ledger.py v1.0",
+  "notes": null
+}

@@ -49,6 +49,7 @@ from .inference import DA3InferenceEngine
 from .input_discovery import DiscoveryConfig, discover_images
 from .input_manager import ImageInput
 from .manifest import (
+    BackendSelectionMetadata,
     BatchManifest,
     CombinedManifest,
     ConfigFingerprint,
@@ -258,6 +259,44 @@ class EnhanceOrchestrator:
             v2_preset=self.config.v2_preset,
             v2_device=self.config.v2_device,
             v2_upscaler_backend=self.config.v2_upscaler_backend,
+        )
+
+    def _capture_backend_metadata(self) -> BackendSelectionMetadata:
+        """Capture backend selection decision for manifest (ADR-023 Phase 3).
+
+        Tracks requested vs resolved backend for transparency and debugging.
+        Currently only DA3 backend is implemented, so this will always resolve to DA3.
+
+        Returns:
+            BackendSelectionMetadata with selection audit trail
+        """
+        requested = getattr(self.config, "depth_backend", None)
+        resolved = "depth_anything_v3"
+        status = "success"
+        reason = None
+
+        # Check for mismatch (e.g., user requested depth_pro but got DA3)
+        if requested and requested != resolved:
+            status = "fallback"
+            reason = f"Requested '{requested}' not available, using '{resolved}' (ADR-019 not yet implemented)"
+            logger.warning(
+                "Backend fallback: requested=%s resolved=%s reason=%s",
+                requested,
+                resolved,
+                reason,
+            )
+
+        # Extract model ID and device from inference engine
+        model_id = self.config.model_variant.value.huggingface_id
+        device = str(self.inference_engine.device)
+
+        return BackendSelectionMetadata(
+            requested_backend=requested,
+            resolved_backend=resolved,
+            resolution_status=status,
+            resolution_reason=reason,
+            model_id=model_id,
+            device=device,
         )
 
     def _compute_or_skip_hash(
@@ -799,6 +838,8 @@ class EnhanceOrchestrator:
             # Accurate batch execution timestamps (ISO 8601 format)
             start_time=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(pipeline_start_time)),
             end_time=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(pipeline_end_time)),
+            # ADR-023 Phase 3: Backend selection metadata
+            backend_selection=getattr(self, "_backend_metadata", None),
         )
         manifest.write(manifest_path)
 
@@ -1081,6 +1122,20 @@ class EnhanceOrchestrator:
 
         batch_id = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
         logger.info(f"Batch {batch_id}: Scanning {input_dir}")
+
+        # ADR-023 Phase 3: Capture backend selection metadata and log truth line
+        backend_metadata = self._capture_backend_metadata()
+        logger.info(
+            "Backend selection: requested=%s resolved=%s status=%s device=%s model=%s",
+            backend_metadata.requested_backend or "auto",
+            backend_metadata.resolved_backend,
+            backend_metadata.resolution_status,
+            backend_metadata.device,
+            backend_metadata.model_id,
+        )
+
+        # Store backend metadata for use in _write_manifest
+        self._backend_metadata = backend_metadata
 
         # Use input discovery to exclude depth artifacts and derived outputs
         discovery_config = DiscoveryConfig(strict_mode=self.config.strict_inputs)
