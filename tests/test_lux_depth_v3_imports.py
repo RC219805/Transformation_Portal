@@ -294,26 +294,40 @@ def test_depth_writer_opencv_dependency():
                 output_path.unlink()
 
 
-def test_v2_runner_fails_intentionally():
-    """Test that V2Runner.run() raises FileNotFoundError when legacy script missing."""
+def test_v2_runner_fails_when_script_missing():
+    """Test that V2Runner.run() raises FileNotFoundError when script is missing.
+
+    Since scripts/enhance_image.py now exists, we simulate missing script by
+    patching Path.exists() globally for the script check.
+    """
     from pathlib import Path
+    from unittest.mock import patch
 
     from transformation_portal.lux_depth_v3.v2_runner import V2Runner
 
     runner = V2Runner()
 
-    # Should raise FileNotFoundError when scripts/enhance_image.py doesn't exist
-    with pytest.raises(FileNotFoundError, match="V2 enhancement script not found"):
-        runner.run(
-            input_path=Path("/tmp/input.png"),
-            depth_dir=Path("/tmp/depth"),
-            output_dir=Path("/tmp/output"),
-            preset="default",
-            device="cpu",
-            upscaler_backend="default",
-            log_file=Path("/tmp/v2.log"),
-            timeout=300.0,
-        )
+    # Simulate missing script by patching Path.exists globally
+    original_exists = Path.exists
+
+    def mock_exists(self):
+        # Return False only for the V2 script path
+        if "enhance_image.py" in str(self):
+            return False
+        return original_exists(self)
+
+    with patch("pathlib.Path.exists", mock_exists):
+        with pytest.raises(FileNotFoundError, match="V2 enhancement script not found"):
+            runner.run(
+                input_path=Path("/tmp/input.png"),
+                depth_dir=Path("/tmp/depth"),
+                output_dir=Path("/tmp/output"),
+                preset="default",
+                device="cpu",
+                upscaler_backend="default",
+                log_file=Path("/tmp/v2.log"),
+                timeout=300.0,
+            )
 
 
 def test_postprocessor_config_has_required_fields():
