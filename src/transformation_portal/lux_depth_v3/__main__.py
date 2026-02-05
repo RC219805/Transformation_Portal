@@ -151,14 +151,14 @@ def main(
     ),
     # Preset and Quality
     preset: str = typer.Option(
-        "premium", 
-        "--preset", 
-        help="Named pipeline configuration (premium, depth-anything-v3.1-research-m4, etc.). Optional - use --quality-tier for most workflows."
+        "premium",
+        "--preset",
+        help="Named pipeline configuration (premium, depth-anything-v3.1-research-m4, etc.). Optional - use --quality-tier for most workflows.",
     ),
     quality_tier: str = typer.Option(
-        "standard", 
-        "--quality-tier", 
-        help="Output quality level: standard (fast/draft), premium (balanced), or apex (maximum quality). Controls processing resolution and features."
+        "standard",
+        "--quality-tier",
+        help="Output quality level: standard (fast/draft), premium (balanced), or apex (maximum quality). Controls processing resolution and features.",
     ),
     # Depth Backend Configuration
     depth_backend: Optional[str] = typer.Option(
@@ -172,14 +172,14 @@ def main(
     cache_depth: str = typer.Option("off", "--cache-depth", help="Enable content-addressable depth cache: on/off"),
     # V2 Enhancement Stage
     enable_v2: str = typer.Option(
-        "on", 
-        "--enable-v2", 
-        help="Enable V2 AI-powered enhancement stage: on/off (default: on). Set to 'off' for PBR-only workflows or when enhancement script is unavailable."
+        "on",
+        "--enable-v2",
+        help="Enable V2 AI-powered enhancement stage: on/off (default: on). Set to 'off' for PBR-only workflows or when enhancement script is unavailable.",
     ),
     v2_preset: Optional[str] = typer.Option(
-        "default", 
-        "--v2-preset", 
-        help="V2 enhancement preset name or 'none' to skip enhancement (default: default). Only used when --enable-v2 is on."
+        "default",
+        "--v2-preset",
+        help="V2 enhancement preset name or 'none' to skip enhancement (default: default). Only used when --enable-v2 is on.",
     ),
     # Emit Options (Deliverables)
     emit_master16: str = typer.Option("off", "--emit-master16", help="Emit master 16-bit output: on/off"),
