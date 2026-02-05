@@ -202,6 +202,22 @@ def main(
         "--strict-inputs",
         help="Fail if depth artifacts or derived outputs found in input directory (validation mode)",
     ),
+    # Performance Tuning (Forward-Compatible)
+    max_workers: Optional[int] = typer.Option(
+        None,
+        "--max-workers",
+        help="Max CPU/I/O worker threads for parallel processing (default: auto-detect based on CPU count)",
+    ),
+    max_gpu_workers: Optional[int] = typer.Option(
+        None,
+        "--max-gpu-workers",
+        help="Max GPU workers for inference (default: 2 for GPU/MPS, auto for CPU)",
+    ),
+    verify_images: bool = typer.Option(
+        False,
+        "--verify-images",
+        help="Strict image verification via PIL.verify() - useful for CI/ingest validation",
+    ),
     # Logging
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose logging"),
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress all output except errors"),
@@ -316,17 +332,35 @@ def main(
         strict_inputs=strict_inputs,
     )
 
+    # Forward-compatible knobs: apply via setattr for non-breaking config evolution
+    # These are read via getattr in orchestrator, so no config schema changes needed
+    if max_workers is not None:
+        setattr(config, "max_workers", max_workers)
+    
+    if max_gpu_workers is not None:
+        setattr(config, "max_gpu_workers", max_gpu_workers)
+    
+    if verify_images:
+        setattr(config, "verify_images", verify_images)
+
     # Create orchestrator
     logger.info(f"Initializing orchestrator with output dir: {output_dir}")
     orchestrator = EnhanceOrchestrator(config=config, output_root=output_dir)
 
-    # Discover images
+    # Discover images using same hygiene filters as orchestrator
+    from .input_discovery import DiscoveryConfig, discover_images
+    
     logger.info(f"Discovering images in: {input_dir}")
-    image_extensions = [".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp"]
-    image_files = []
-    for ext in image_extensions:
-        image_files.extend(input_dir.glob(f"**/*{ext}"))
-        image_files.extend(input_dir.glob(f"**/*{ext.upper()}"))
+    image_extensions = [".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp", ".bmp"]
+    
+    discovery_config = DiscoveryConfig(strict_mode=strict_inputs)
+    try:
+        image_files = discover_images(input_dir, discovery_config, image_extensions)
+    except ValueError as e:
+        # Strict mode validation failed
+        logger.error(str(e))
+        print(str(e), file=sys.stdout)
+        raise typer.Exit(code=1)
 
     if not image_files:
         error_msg = f"No images found in {input_dir}"

@@ -89,28 +89,69 @@ class Postprocessor:
         compared to scipy implementation.
 
         Args:
-            depth: Depth map to filter (normalized 0-1)
-            image: Reference image (unused in current OpenCV implementation)
+            depth: Depth map to filter (float32)
+            image: Reference image (for RGB-guided joint bilateral when cv2.ximgproc available)
             sigma_color: Color space sigma
             sigma_space: Spatial sigma
 
         Returns:
-            Filtered depth map (normalized 0-1)
+            Filtered depth map (float32, same range as input)
         """
         try:
             import cv2
 
-            # Convert to uint8 for OpenCV processing
-            depth_u8 = (depth * 255).astype(np.uint8)
+            # Determine depth value range for sigmaColor scaling
+            depth_min = float(depth.min())
+            depth_max = float(depth.max())
+            depth_range = depth_max - depth_min
+            
+            # Heuristic: scale sigmaColor based on depth range
+            # - For normalized depth ~[0,1]: use sigma_color as-is
+            # - For metric/unbounded depth: scale proportionally
+            # - For legacy configs with "0-255-ish" values: clamp to reasonable range
+            if depth_range < 2.0:
+                # Normalized depth [0,1] - use sigma_color directly
+                effective_sigma_color = sigma_color
+            elif sigma_color > 100:
+                # Legacy config detected (0-255-ish sigmaColor) - normalize to [0,1] range
+                effective_sigma_color = sigma_color / 255.0 * depth_range
+            else:
+                # Metric/unbounded depth - scale sigmaColor proportionally
+                effective_sigma_color = sigma_color * depth_range
 
-            # Apply bilateral filter
-            # d parameter: diameter of pixel neighborhood (0 = auto-compute from sigmaSpace)
-            filtered = cv2.bilateralFilter(
-                depth_u8, d=int(sigma_space * 2 + 1), sigmaColor=sigma_color * 255, sigmaSpace=sigma_space
-            )
-
-            # Convert back to float32 normalized
-            return filtered.astype(np.float32) / 255.0
+            # Try RGB-guided joint bilateral filter if cv2.ximgproc available (better edges)
+            try:
+                # Ensure image is uint8 RGB for joint bilateral
+                if image.dtype == np.float32:
+                    image_u8 = (np.clip(image, 0, 1) * 255).astype(np.uint8)
+                else:
+                    image_u8 = image.astype(np.uint8)
+                
+                # Convert depth to float32 if needed
+                depth_f32 = depth.astype(np.float32) if depth.dtype != np.float32 else depth
+                
+                # RGB-guided joint bilateral (preserves edges from color image)
+                filtered = cv2.ximgproc.jointBilateralFilter(
+                    image_u8,
+                    depth_f32,
+                    d=int(sigma_space * 2 + 1),
+                    sigmaColor=effective_sigma_color,
+                    sigmaSpace=sigma_space
+                )
+                return filtered
+            
+            except (ImportError, AttributeError):
+                # cv2.ximgproc not available - fall back to standard bilateral
+                depth_f32 = depth.astype(np.float32) if depth.dtype != np.float32 else depth
+                
+                # Apply bilateral filter directly on float32 (no quantization)
+                filtered = cv2.bilateralFilter(
+                    depth_f32,
+                    d=int(sigma_space * 2 + 1),
+                    sigmaColor=effective_sigma_color,
+                    sigmaSpace=sigma_space
+                )
+                return filtered
 
         except ImportError:
             # Fallback to scipy for environments without OpenCV
