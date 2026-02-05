@@ -421,7 +421,7 @@ class TestHashModeIfManifestExistsBaselineHash:
             config = EnhanceConfig(hash_mode=HashMode.IF_MANIFEST_EXISTS)
 
             # Create orchestrator (mocking dependencies)
-            with patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine"):
+            with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"):
                 with patch("transformation_portal.lux_depth_v3.orchestrator.Postprocessor"):
                     with patch("transformation_portal.lux_depth_v3.orchestrator.V2Runner"):
                         orchestrator = EnhanceOrchestrator(config, tmpdir / "output", verify_outputs=False)
@@ -477,7 +477,7 @@ class TestCachedDepthNoDoubleNormalization:
 
             config = EnhanceConfig()
 
-            with patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine"):
+            with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"):
                 with patch("transformation_portal.lux_depth_v3.orchestrator.Postprocessor"):
                     with patch("transformation_portal.lux_depth_v3.orchestrator.V2Runner"):
                         orchestrator = EnhanceOrchestrator(config, tmpdir / "output", verify_outputs=False)
@@ -499,7 +499,7 @@ class TestCachedDepthNoDoubleNormalization:
 
             config = EnhanceConfig()
 
-            with patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine"):
+            with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"):
                 with patch("transformation_portal.lux_depth_v3.orchestrator.Postprocessor"):
                     with patch("transformation_portal.lux_depth_v3.orchestrator.V2Runner"):
                         orchestrator = EnhanceOrchestrator(config, tmpdir / "output", verify_outputs=False)
@@ -560,7 +560,7 @@ class TestV2SkipIndependentOfGeneratePBR:
         # Test with generate_pbr=False
         config_no_pbr = EnhanceConfig(generate_pbr=False, v2_preset="default")
 
-        with patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine"):
+        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"):
             with patch("transformation_portal.lux_depth_v3.orchestrator.Postprocessor"):
                 with patch("transformation_portal.lux_depth_v3.orchestrator.V2Runner"):
                     from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator

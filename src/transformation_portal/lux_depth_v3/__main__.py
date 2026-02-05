@@ -340,8 +340,8 @@ def main(
     try:
         results = orchestrator.enhance_batch(input_dir=input_dir, image_extensions=image_extensions)
 
-        # Summary
-        successful = sum(1 for r in results if r.get("status") == "success")
+        # Summary (Note: orchestrator returns "ok" not "success")
+        successful = sum(1 for r in results if r.get("status") == "ok")
         skipped = sum(1 for r in results if r.get("status") == "skipped")
         failed = sum(1 for r in results if r.get("status") == "error")
 

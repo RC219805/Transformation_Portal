@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 import numpy as np
 from PIL import Image
 
-from .config import DA3Config, ModelVariant
+from .config import DA3Config, ModelVariant  # noqa: F401 - Used in docstring examples
 
 if TYPE_CHECKING:
     from .input_manager import ImageInput
@@ -30,7 +30,6 @@ try:
 except ImportError:
     TORCH_AVAILABLE = False
     torch = None  # type: ignore
-    logging.warning("torch not available, install with: pip install torch")
 
 try:
     from transformers import pipeline
@@ -40,7 +39,6 @@ try:
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
     DepthEstimationPipeline = Any  # type: ignore
-    logging.warning("transformers not available, install with: pip install transformers")
 
 try:
     import coremltools as ct
@@ -48,7 +46,7 @@ try:
     COREML_AVAILABLE = True
 except ImportError:
     COREML_AVAILABLE = False
-    logging.warning("coremltools not available, install with: pip install coremltools")
+    ct = None  # type: ignore
 
 
 logger = logging.getLogger(__name__)

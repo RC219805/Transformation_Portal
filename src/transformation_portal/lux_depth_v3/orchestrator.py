@@ -47,7 +47,6 @@ from .batch_stats import compute_batch_runtime_stats
 from .config import DA3Config, EnhanceConfig, ModelVariant
 from .depth_cache import DepthCache
 from .depth_writer import atomic_write_depth_u16_png_with_stats
-from .inference import DA3InferenceEngine
 from .input_discovery import DiscoveryConfig, discover_images
 from .input_manager import ImageInput
 from .manifest import (
@@ -73,6 +72,78 @@ from .v2_runner import V2Runner, find_v2_report
 # Backend registry for depth estimation
 from ..depth.backends.registry import DepthBackendRegistry
 from ..depth.backends.protocol import LicenseRestrictionError
+
+logger = logging.getLogger(__name__)
+
+
+def _log_dependency_status() -> dict:
+    """Log startup dependency availability report.
+
+    Reports status of optional dependencies with actionable guidance.
+    Makes warnings explicit, not vague.
+
+    Returns:
+        Dictionary with dependency status for testing/debugging
+    """
+    status = {}
+
+    # Check torch
+    try:
+        import torch
+        status['torch'] = True
+        logger.debug(f"torch {torch.__version__} available")
+    except ImportError:
+        status['torch'] = False
+        logger.info("torch not available - ML features disabled. Install: pip install torch")
+
+    # Check transformers
+    try:
+        import transformers
+        status['transformers'] = True
+        logger.debug(f"transformers {transformers.__version__} available")
+    except ImportError:
+        status['transformers'] = False
+        logger.info("transformers not available - depth models disabled. Install: pip install transformers")
+
+    # Check coremltools (optional)
+    try:
+        import coremltools
+        status['coremltools'] = True
+        logger.debug(f"coremltools {coremltools.__version__} available")
+    except ImportError:
+        status['coremltools'] = False
+        logger.debug("coremltools not available (optional). Install: pip install coremltools")
+
+    # Check scikit-image (optional for some features)
+    try:
+        import skimage
+        status['scikit-image'] = True
+        logger.debug(f"scikit-image {skimage.__version__} available")
+    except ImportError:
+        status['scikit-image'] = False
+        logger.debug("scikit-image not available (optional for advanced filtering)")
+
+    # Check numba (optional performance enhancement)
+    try:
+        import numba
+        status['numba'] = True
+        logger.debug(f"numba {numba.__version__} available - performance optimizations enabled")
+    except ImportError:
+        status['numba'] = False
+        logger.debug("numba not available - using NumPy fallback (30-50% slower for some operations)")
+
+    # Check HF_TOKEN for model downloads
+    import os
+    hf_token = os.environ.get('HF_TOKEN')
+    status['hf_token'] = bool(hf_token)
+    if hf_token:
+        logger.debug("HF_TOKEN present - authenticated model downloads enabled")
+    else:
+        logger.debug("HF_TOKEN not set - using unauthenticated downloads (rate limits apply, slower warm starts)")
+        logger.debug("  Set HF_TOKEN for faster downloads: export HF_TOKEN=<your_token>")
+
+    return status
+
 
 logger = logging.getLogger(__name__)
 
@@ -177,6 +248,9 @@ class EnhanceOrchestrator:
             output_root: Base directory to store outputs and manifests
             verify_outputs: Whether to verify cached outputs exist before skipping (default: True)
         """
+        # Log dependency status on first initialization
+        _log_dependency_status()
+
         self.config = config
         self.output_root = Path(output_root)
         self.verify_outputs = verify_outputs
@@ -240,8 +314,17 @@ class EnhanceOrchestrator:
         self.v2_git = git_rev
         self.environment = capture_environment()
 
-        # Phase 2: Parallelization setup
-        self.max_workers = config.max_parallel_workers or max(1, cpu_count() - 1)
+        # Phase 2: Parallelization setup with stage-aware concurrency
+        # MPS/GPU inference: limit to 1-2 workers to avoid memory contention
+        # CPU/I/O operations: use moderate parallelism
+        if config.depth_device in ("mps", "cuda"):
+            # GPU backends: conservative concurrency to avoid VRAM contention
+            self.max_workers = min(2, cpu_count())
+            logger.debug(f"GPU/MPS device detected - limiting workers to {self.max_workers} for VRAM management")
+        else:
+            # CPU backend: moderate parallelism for I/O-bound operations
+            self.max_workers = config.max_parallel_workers or max(1, cpu_count() - 1)
+
         self._use_parallel = config.enable_parallel_processing
         logger.debug(f"Parallel processing: {'enabled' if self._use_parallel else 'disabled'} (workers={self.max_workers})")
 
