@@ -32,7 +32,15 @@ def _ledger_script() -> Path:
     return _repo_root() / "tools" / "performance_ledger.py"
 
 
-def _write_manifest(path: Path, *, identifier: str, duration: float | None, ok: bool, backend: str, error: str | None = None) -> None:
+def _write_manifest(
+    path: Path,
+    *,
+    identifier: str,
+    duration: float | None,
+    ok: bool,
+    backend: str,
+    error: str | None = None,
+) -> None:
     payload: Dict[str, Any] = {
         "identifier": identifier,
         "backend_selection": {
@@ -52,7 +60,15 @@ def _write_manifest(path: Path, *, identifier: str, duration: float | None, ok: 
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
-def _make_manifests(dirpath: Path, *, durations: List[float], backend: str, fail_count: int = 0, fail_duration: float = 1.0, error: str = "TimeoutError: timed out") -> None:
+def _make_manifests(
+    dirpath: Path,
+    *,
+    durations: List[float],
+    backend: str,
+    fail_count: int = 0,
+    fail_duration: float = 1.0,
+    error: str = "TimeoutError: timed out",
+) -> None:
     dirpath.mkdir(parents=True, exist_ok=True)
 
     # successes
@@ -61,7 +77,14 @@ def _make_manifests(dirpath: Path, *, durations: List[float], backend: str, fail
 
     # failures (with timings - failed runs still have durations)
     for j in range(fail_count):
-        _write_manifest(dirpath / f"fail_{j:04d}.json", identifier=f"bad_{j:04d}.jpg", duration=fail_duration, ok=False, backend=backend, error=error)
+        _write_manifest(
+            dirpath / f"fail_{j:04d}.json",
+            identifier=f"bad_{j:04d}.jpg",
+            duration=fail_duration,
+            ok=False,
+            backend=backend,
+            error=error,
+        )
 
 
 def _run_ledger(args: List[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -79,15 +102,24 @@ def test_capture_and_compare_ok(tmp_path: Path) -> None:
     _make_manifests(baseline_dir, durations=[1.0] * 30, backend="da3", fail_count=0)
     _make_manifests(current_dir, durations=[0.95] * 30, backend="da3", fail_count=0)
 
-    # Capture baseline (using --version not --baseline-version)
+    # Capture baseline
     r1 = _run_ledger(
-        ["--manifests-dir", str(baseline_dir), "--output", str(baseline_json), "--version", "test", "--quality-tier", "unit"],
+        [
+            "--manifests-dir",
+            str(baseline_dir),
+            "--output",
+            str(baseline_json),
+            "--version",
+            "test",
+            "--quality-tier",
+            "unit",
+        ],
         cwd=_repo_root(),
     )
     assert r1.returncode == 0, f"capture failed: {r1.stderr}\n{r1.stdout}"
     assert baseline_json.exists()
 
-    # Compare (tool doesn't support --bootstrap-iterations)
+    # Compare
     r2 = _run_ledger(
         [
             "--baseline",
@@ -105,10 +137,10 @@ def test_capture_and_compare_ok(tmp_path: Path) -> None:
     assert report_md.exists()
     assert report_json.exists()
 
-    # Tool's --emit-json writes Baseline schema, not report with status/exit_code
+    # Emit-json contains Baseline schema
     out = json.loads(report_json.read_text(encoding="utf-8"))
-    assert "statistics" in out, "emit-json should contain baseline schema with statistics"
-    assert "environment" in out, "emit-json should contain environment metadata"
+    assert "statistics" in out
+    assert "environment" in out
 
 
 def test_detects_significant_regression(tmp_path: Path) -> None:
@@ -122,10 +154,12 @@ def test_detects_significant_regression(tmp_path: Path) -> None:
     _make_manifests(baseline_dir, durations=[1.0] * 40, backend="da3", fail_count=0)
     _make_manifests(current_dir, durations=[1.35] * 40, backend="da3", fail_count=0)
 
-    r1 = _run_ledger(["--manifests-dir", str(baseline_dir), "--output", str(baseline_json)], cwd=_repo_root())
+    r1 = _run_ledger(
+        ["--manifests-dir", str(baseline_dir), "--output", str(baseline_json)],
+        cwd=_repo_root(),
+    )
     assert r1.returncode == 0, f"capture failed: {r1.stderr}\n{r1.stdout}"
 
-    # Tool doesn't support --bootstrap-iterations or --confidence-level
     r2 = _run_ledger(
         [
             "--baseline",
@@ -141,19 +175,21 @@ def test_detects_significant_regression(tmp_path: Path) -> None:
     )
 
     # Should fail with exit code 1 due to significant regression
-    assert r2.returncode == 1, f"expected regression exit=1, got={r2.returncode}\n{r2.stderr}\n{r2.stdout}"
-    assert report_md.exists(), "Report markdown should be generated even on regression"
+    assert r2.returncode == 1, (
+        f"expected regression exit=1, got={r2.returncode}\n"
+        f"{r2.stderr}\n{r2.stdout}"
+    )
+    assert report_md.exists()
 
-    # emit-json contains current stats in Baseline format (not a report envelope)
-    # Check that it was created and has expected structure
+    # Emit-json contains current stats in Baseline format
     assert report_json.exists()
     out = json.loads(report_json.read_text(encoding="utf-8"))
     assert "statistics" in out
-    assert out["statistics"]["mean_sec"] > 1.3, "Current mean should reflect the 1.35s timings"
+    assert out["statistics"]["mean_sec"] > 1.3
 
 
 def test_backend_mismatch_warning_in_report(tmp_path: Path) -> None:
-    """Test that tool can handle different backends (no exit code 2 check - not implemented)."""
+    """Test that tool can handle different backends."""
     baseline_dir = tmp_path / "baseline_manifests"
     current_dir = tmp_path / "current_manifests"
     baseline_json = tmp_path / "baseline.json"
@@ -163,26 +199,37 @@ def test_backend_mismatch_warning_in_report(tmp_path: Path) -> None:
     _make_manifests(baseline_dir, durations=[1.0] * 10, backend="da3")
     _make_manifests(current_dir, durations=[1.0] * 10, backend="depth_pro")
 
-    r1 = _run_ledger(["--manifests-dir", str(baseline_dir), "--output", str(baseline_json), "--backend", "da3"], cwd=_repo_root())
-    assert r1.returncode == 0
-
-    # Tool doesn't currently enforce backend matching, so this should succeed
-    # (Phase 2+ could add backend validation and exit with code 2)
-    r2 = _run_ledger(
+    r1 = _run_ledger(
         [
-            "--baseline", str(baseline_json),
-            "--compare", str(current_dir),
-            "--output", str(report_md),
-            "--emit-json", str(report_json),
-            "--backend", "depth_pro",
+            "--manifests-dir",
+            str(baseline_dir),
+            "--output",
+            str(baseline_json),
+            "--backend",
+            "da3",
         ],
         cwd=_repo_root(),
     )
-    # Should succeed (no backend mismatch detection currently)
-    assert r2.returncode == 0, f"Tool doesn't enforce backend matching yet: {r2.stderr}\n{r2.stdout}"
-    assert report_md.exists()
+    assert r1.returncode == 0
 
-    # Future: when backend mismatch detection is added, this test can assert exit code 2
+    # Backend mismatch is not enforced by the tool (current contract)
+    r2 = _run_ledger(
+        [
+            "--baseline",
+            str(baseline_json),
+            "--compare",
+            str(current_dir),
+            "--output",
+            str(report_md),
+            "--emit-json",
+            str(report_json),
+            "--backend",
+            "depth_pro",
+        ],
+        cwd=_repo_root(),
+    )
+    assert r2.returncode == 0
+    assert report_md.exists()
 
 
 def test_failure_rate_regression(tmp_path: Path) -> None:
@@ -195,12 +242,20 @@ def test_failure_rate_regression(tmp_path: Path) -> None:
 
     # Create a baseline with no failures, current with high failure rate
     _make_manifests(baseline_dir, durations=[1.0] * 20, backend="da3", fail_count=0)
-    _make_manifests(current_dir, durations=[1.0] * 10, backend="da3", fail_count=10, error="TimeoutError: timed out")
+    _make_manifests(
+        current_dir,
+        durations=[1.0] * 10,
+        backend="da3",
+        fail_count=10,
+        error="TimeoutError: timed out",
+    )
 
-    r1 = _run_ledger(["--manifests-dir", str(baseline_dir), "--output", str(baseline_json)], cwd=_repo_root())
+    r1 = _run_ledger(
+        ["--manifests-dir", str(baseline_dir), "--output", str(baseline_json)],
+        cwd=_repo_root(),
+    )
     assert r1.returncode == 0
 
-    # Tool doesn't support --min-samples flag
     r2 = _run_ledger(
         [
             "--baseline",
@@ -215,11 +270,11 @@ def test_failure_rate_regression(tmp_path: Path) -> None:
         cwd=_repo_root(),
     )
 
-    # Failure rate regression should be detected (baseline: 100% success, current: 50% success)
-    assert r2.returncode == 1, f"expected regression exit=1 due to failure rate, got={r2.returncode}\n{r2.stderr}\n{r2.stdout}"
+    # Failure rate regression detected
+    assert r2.returncode == 1
     assert report_md.exists()
 
-    # Verify the current stats show degraded success rate
+    # Verify degraded success rate
     out = json.loads(report_json.read_text(encoding="utf-8"))
     assert "statistics" in out
-    assert out["statistics"]["success_rate"] < 0.6, "Success rate should be around 50%"
+    assert out["statistics"]["success_rate"] < 0.6
