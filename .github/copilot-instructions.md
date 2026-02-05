@@ -1,4 +1,3 @@
-````markdown
 # Copilot Instructions — Transformation Portal (RC219805)
 
 You are working in a production-grade **Image + Video Processing Transformation Portal**.
@@ -447,5 +446,3 @@ def test_stable_preset_schema_invariants(stable_preset):
 If you must make a risky change (contract/perf), surface the risk clearly in code comments,
 tests, docs, and PR notes.
 
-```
-```
