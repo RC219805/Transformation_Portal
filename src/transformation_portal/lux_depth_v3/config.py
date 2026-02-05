@@ -173,6 +173,7 @@ class EnhanceConfig:
     force_v2: bool = False
     non_commercial_ok: bool = False
     verify_depth_writes: bool = True
+    strict_inputs: bool = False  # Fail if depth artifacts found in input directory (validation mode)
 
     # License acceptance flags (for research-only models)
     accept_apple_depth_pro_research_license: bool = False  # Apple AMLR license for Depth Pro

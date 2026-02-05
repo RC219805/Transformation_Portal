@@ -79,15 +79,15 @@ Key Concepts:
     - V2 Enhancement: Optional AI-powered refinement stage (enabled by default)
       * Use --enable-v2 "off" to skip V2 entirely (PBR-only workflows)
       * Use --v2-preset "none" to skip V2 preset while keeping validation
-    
+
     - Quality vs Preset:
       * --quality-tier: Controls output quality (standard|premium|apex) - use for most workflows
       * --preset: Named configuration for specialized scenarios - overrides quality-tier
-    
+
     - PBR-Only Workflows:
       * Add --enable-v2 "off" to skip V2 enhancement validation and execution
       * Faster processing, still produces high-quality depth and PBR maps
-    
+
     - Research Models:
       * Require explicit license acknowledgement (--non-commercial-ok "true")
       * Depth Pro also requires --accept-apple-depth-pro-research-license "true"
@@ -197,6 +197,11 @@ def main(
     # Processing Flags
     overwrite: bool = typer.Option(False, "--overwrite", help="Force reprocessing even if outputs exist"),
     force_depth: bool = typer.Option(False, "--force-depth", help="Force depth recomputation (ignore cache)"),
+    strict_inputs: bool = typer.Option(
+        False,
+        "--strict-inputs",
+        help="Fail if depth artifacts or derived outputs found in input directory (validation mode)",
+    ),
     # Logging
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose logging"),
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress all output except errors"),
@@ -210,6 +215,15 @@ def main(
     - Materials V3 surface-aware finishing
     - PBR map generation
     - Multiple output formats and deliverables
+
+    Input Discovery:
+    The pipeline automatically excludes derived artifacts from input discovery:
+    - Depth maps (*_depth.png, *_depthpro_depth16.png)
+    - PBR maps (*_normal.png, *_roughness.png, *_ao.png)
+    - Output directories (depth/, pbr/, v2/, manifests/, logs/)
+    - Hidden files/directories (.DS_Store, .cache/)
+
+    Use --strict-inputs to fail on excluded files (validation mode).
     """
     _configure_logging(verbose, quiet, log_level)
 
@@ -299,6 +313,7 @@ def main(
         emit_marketing=enable_emit_marketing,
         emit_report=enable_emit_report,
         emit_run_card=enable_emit_run_card,
+        strict_inputs=strict_inputs,
     )
 
     # Create orchestrator

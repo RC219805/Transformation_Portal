@@ -46,6 +46,7 @@ from .config import DA3Config, EnhanceConfig, ModelVariant
 from .depth_cache import DepthCache
 from .depth_writer import atomic_write_depth_u16_png_with_stats
 from .inference import DA3InferenceEngine
+from .input_discovery import DiscoveryConfig, discover_images
 from .input_manager import ImageInput
 from .manifest import (
     BatchManifest,
@@ -1081,10 +1082,9 @@ class EnhanceOrchestrator:
         batch_id = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
         logger.info(f"Batch {batch_id}: Scanning {input_dir}")
 
-        images = []
-        for ext in image_extensions:
-            images.extend(input_dir.rglob(f"*{ext}"))
-            images.extend(input_dir.rglob(f"*{ext.upper()}"))
+        # Use input discovery to exclude depth artifacts and derived outputs
+        discovery_config = DiscoveryConfig(strict_mode=self.config.strict_inputs)
+        images = discover_images(input_dir, discovery_config, image_extensions)
 
         # Phase 2: Use parallel batch processing if enabled
         image_inputs = [ImageInput(img) for img in sorted(images)]
