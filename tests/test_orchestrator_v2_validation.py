@@ -156,8 +156,17 @@ class TestV2ErrorMessages:
         """Test error message mentions PBR-only workflow option."""
         config = EnhanceConfig(enable_v2=True, v2_preset="default")
 
-        with pytest.raises(FileNotFoundError) as exc_info:
-            EnhanceOrchestrator(config=config, output_root=temp_output)
+        # Simulate missing script
+        original_exists = Path.exists
+
+        def mock_exists(self):
+            if "enhance_image.py" in str(self):
+                return False
+            return original_exists(self)
+
+        with patch("pathlib.Path.exists", mock_exists):
+            with pytest.raises(FileNotFoundError) as exc_info:
+                EnhanceOrchestrator(config=config, output_root=temp_output)
 
         error_msg = str(exc_info.value).lower()
         assert "pbr" in error_msg or "workflow" in error_msg
