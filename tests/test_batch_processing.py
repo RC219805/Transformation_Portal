@@ -95,19 +95,32 @@ class TestEnhanceBatch:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
 
-            orchestrator = EnhanceOrchestrator(
-                config=config,
-                output_root=tmpdir_path,
-            )
-
-            # Mock the depth backend and other heavy components
+            # Mock backend initialization BEFORE creating orchestrator
+            # This prevents ImportError in CI where ML dependencies aren't installed
             with (
-                patch.object(orchestrator, "depth_backend") as mock_backend,
-                patch.object(orchestrator, "postprocessor") as mock_postprocessor,
+                patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry") as mock_registry_class,
                 patch("transformation_portal.lux_depth_v3.preprocessing.validate_image_format") as mock_validate,
                 patch("transformation_portal.lux_depth_v3.preprocessing.preprocess_image") as mock_preprocess,
                 patch("transformation_portal.lux_depth_v3.orchestrator.atomic_write_depth_u16_png_with_stats") as mock_write,
             ):
+                # Setup mock registry to return a mock backend
+                mock_backend = Mock()
+                mock_backend.ensure_available.return_value = None  # Success
+                mock_backend.name = "da3"
+                
+                mock_registry = Mock()
+                mock_registry.get_backend.return_value = mock_backend
+                mock_registry_class.return_value = mock_registry
+
+                # Now create orchestrator (will use mocked registry)
+                orchestrator = EnhanceOrchestrator(
+                    config=config,
+                    output_root=tmpdir_path,
+                )
+
+                # Mock postprocessor
+                mock_postprocessor = Mock()
+                orchestrator.postprocessor = mock_postprocessor
 
                 # Setup mocks
                 mock_validate.side_effect = lambda x: x
