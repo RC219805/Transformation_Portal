@@ -76,3 +76,34 @@ __all__ = [
     "get_lux_render_pipeline",
     "get_material_response",
 ]
+
+# Expose submodules lazily for Sphinx autodoc and type checkers
+# PEP 562: module __getattr__ allows lazy submodule loading
+# This avoids eager importing heavy dependencies (torch, transformers, etc.)
+# while maintaining transformation_portal.submodule access for docs/autocomplete
+import importlib
+from typing import Any
+
+_LAZY_SUBMODULES = {
+    "config_loader",
+    "scene_types",
+    "cli",
+    "lux_depth_v3",
+    "metrics",
+    "enhancers",
+    "rendering",
+    "interfaces",
+    "utils",
+}
+
+
+def __getattr__(name: str) -> Any:
+    """Lazy-load submodules on attribute access."""
+    if name in _LAZY_SUBMODULES:
+        return importlib.import_module(f"{__name__}.{name}")
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__() -> list[str]:
+    """Expose submodules in dir() for autocomplete/introspection."""
+    return sorted(list(globals().keys()) + list(_LAZY_SUBMODULES))

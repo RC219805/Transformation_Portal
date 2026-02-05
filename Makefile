@@ -18,7 +18,7 @@ FAST_TESTS := \
 
 .PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils venv setup clean \
         lint ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs \
-        lock lock-prod lock-ci lock-dev install-core install-ml
+        lock lock-prod lock-ci lock-dev install-core install-ml docs docs-clean
 
 help:
 	@echo "Targets:"
@@ -50,6 +50,10 @@ help:
 	@echo "  lock-prod          Regenerate requirements.lock.txt"
 	@echo "  lock-ci            Regenerate requirements-ci.lock.txt"
 	@echo "  lock-dev           Regenerate requirements-dev.lock.txt"
+	@echo ""
+	@echo "Documentation:"
+	@echo "  docs               Build API documentation with Sphinx"
+	@echo "  docs-clean         Clean generated documentation files"
 
 venv:
 	@if [ ! -x .venv/bin/python ]; then \
@@ -208,3 +212,16 @@ lock-dev:
 	@pip-compile --generate-hashes \
 		-o requirements-dev.lock.txt \
 		requirements-dev.txt
+
+# --- Documentation ---
+
+docs:
+	@echo "Building API documentation with Sphinx..."
+	@"$(PY)" -m pip install -q sphinx sphinx-rtd-theme sphinx-autodoc-typehints
+	@"$(PY)" -m sphinx -b html -W --keep-going docs/api docs/api/_build/html
+	@echo "✓ Documentation built in docs/api/_build/html"
+
+docs-clean:
+	@echo "Cleaning generated documentation..."
+	@rm -rf docs/api/_build docs/api/_templates docs/api/_static
+	@echo "✓ Documentation cleaned"
