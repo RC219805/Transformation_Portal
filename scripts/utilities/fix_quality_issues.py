@@ -10,7 +10,12 @@ import sys
 from pathlib import Path
 
 def run_command(cmd, description):
-    """Run a command and report results."""
+    """Run a command and report results.
+
+    Security Note: Uses shlex.split() instead of shell=True to prevent
+    command injection vulnerabilities (SEC-001). This safely parses the
+    command string into a list of arguments without invoking a shell.
+    """
     print(f"\n{'='*60}")
     print(f"{description}")
     print(f"{'='*60}")
