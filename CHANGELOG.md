@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Backend Registry Integration (ADR-019):** Depth backend orchestration with fallback
+  - DA3Backend adapter wrapping DA3InferenceEngine for unified interface
+  - DepthBackendRegistry integration in orchestrator
+  - Automatic fallback to DA3 when requested backend unavailable
+  - Backend selection metadata captured in manifests
+  - License enforcement for research-only backends (Depth Pro)
+  - CLI flags: `--depth-backend {da3,depth_pro}`
+  - Tests: Unit tests for DA3Backend, integration tests for orchestrator
+  - Docs: README updated with backend selection guide
+  - See: [ADR-019: Backend Registry Integration](docs/architecture/decisions/ADR-019-REVISED-DECISION.md)
+
 - **Performance Ledger (ADR-023 Phase 2):** Standalone tool for performance regression detection
   - Parse manifests from batch runs and compute runtime statistics
   - Compare current runs against versioned baselines

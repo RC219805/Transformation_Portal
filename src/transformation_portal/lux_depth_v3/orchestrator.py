@@ -30,6 +30,8 @@ from multiprocessing import cpu_count
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import numpy as np
+
 # Phase 3: xxHash support (optional dependency)
 try:
     import xxhash
@@ -67,6 +69,10 @@ from .pbr_writer import write_pbr_maps
 from .postprocessing import Postprocessor
 from .security import HashMode, sanitize_file_stem, sanitize_path_component_nonlossy
 from .v2_runner import V2Runner, find_v2_report
+
+# Backend registry for depth estimation
+from ..depth.backends.registry import DepthBackendRegistry
+from ..depth.backends.protocol import LicenseRestrictionError
 
 logger = logging.getLogger(__name__)
 
@@ -203,12 +209,8 @@ class EnhanceOrchestrator:
 
         da3_config.device.device = config.depth_device
 
-        # Initialize Inference Engine
-        self.inference_engine = DA3InferenceEngine(
-            config=da3_config,
-            commercial_use=not config.non_commercial_ok,
-            validate_license_strict=True,
-        )
+        # Initialize Depth Backend via Registry (ADR-019)
+        self._initialize_depth_backend()
 
         # Initialize Postprocessor (FIX: Ensures refine_edges/bilateral settings from preset are applied)
         self.postprocessor = Postprocessor(da3_config.postprocessing)
@@ -250,6 +252,65 @@ class EnhanceOrchestrator:
         if self.depth_cache:
             logger.info(f"Depth cache enabled: {self.depth_cache.cache_dir}")
 
+    def _initialize_depth_backend(self) -> None:
+        """Initialize depth backend using registry (ADR-019).
+
+        Implements backend selection with fallback logic:
+        1. Try requested backend (from config.depth_backend)
+        2. Check availability (checkpoint + dependencies)
+        3. Fallback to DA3 if unavailable
+        4. Record selection decision in metadata
+        """
+        requested = self.config.depth_backend or "da3"
+        registry = DepthBackendRegistry()
+
+        try:
+            # Get backend from registry
+            backend = registry.get_backend(requested, self.config)
+
+            # Check availability
+            try:
+                backend.ensure_available()
+                available = True
+                reason = f"{backend.name} backend ready"
+            except (ImportError, FileNotFoundError) as e:
+                available = False
+                reason = str(e)
+
+            if not available:
+                # Fallback to DA3
+                logger.warning(
+                    f"Backend '{requested}' unavailable: {reason}. Falling back to DA3."
+                )
+                backend = registry.get_backend("da3", self.config)
+                backend.ensure_available()
+                resolved = "da3"
+                status = "fallback"
+            else:
+                resolved = requested
+                status = "success"
+
+            self.depth_backend = backend
+            self._backend_metadata = BackendSelectionMetadata(
+                requested_backend=requested,
+                resolved_backend=resolved,
+                resolution_status=status,
+                resolution_reason=reason,
+                model_id=self.config.model_variant.value.huggingface_id,
+                device=self.config.depth_device,
+            )
+
+            logger.info(
+                f"Depth backend: requested={requested} resolved={resolved} device={self.config.depth_device}"
+            )
+
+        except LicenseRestrictionError as e:
+            logger.error(f"License restriction: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Backend initialization failed: {e}")
+            raise
+
     def compute_config_fingerprint(self) -> ConfigFingerprint:
         return ConfigFingerprint(
             model_variant=self.config.model_variant.value.name,
@@ -262,42 +323,23 @@ class EnhanceOrchestrator:
         )
 
     def _capture_backend_metadata(self) -> BackendSelectionMetadata:
-        """Capture backend selection decision for manifest (ADR-023 Phase 3).
+        """Capture backend selection decision for manifest (ADR-019).
 
         Tracks requested vs resolved backend for transparency and debugging.
-        Currently only DA3 backend is implemented, so this will always resolve to DA3.
+        Uses metadata from _initialize_depth_backend().
 
         Returns:
             BackendSelectionMetadata with selection audit trail
         """
-        requested = getattr(self.config, "depth_backend", None)
-        resolved = "depth_anything_v3"
-        status = "success"
-        reason = None
-
-        # Check for mismatch (e.g., user requested depth_pro but got DA3)
-        if requested and requested != resolved:
-            status = "fallback"
-            reason = f"Requested '{requested}' not available, using '{resolved}' (ADR-019 not yet implemented)"
-            logger.warning(
-                "Backend fallback: requested=%s resolved=%s reason=%s",
-                requested,
-                resolved,
-                reason,
-            )
-
-        # Extract model ID and device from inference engine
-        model_id = self.config.model_variant.value.huggingface_id
-        device = str(self.inference_engine.device)
-
-        return BackendSelectionMetadata(
-            requested_backend=requested,
-            resolved_backend=resolved,
-            resolution_status=status,
-            resolution_reason=reason,
-            model_id=model_id,
-            device=device,
-        )
+        # Return the metadata captured during initialization
+        return getattr(self, "_backend_metadata", BackendSelectionMetadata(
+            requested_backend=None,
+            resolved_backend="da3",
+            resolution_status="success",
+            resolution_reason=None,
+            model_id=self.config.model_variant.value.huggingface_id,
+            device=self.config.depth_device,
+        ))
 
     def _compute_or_skip_hash(
         self,
@@ -540,16 +582,18 @@ class EnhanceOrchestrator:
                 # 1. Inference (using preprocessed numpy array or cached depth)
                 if cached_depth is not None:
                     # Use cached depth - wrap in result-like object
-                    from .inference import DepthResult
+                    from ..depth.backends.protocol import DepthResult
 
-                    result = DepthResult(depth=cached_depth, original_image=preprocessed_array, metadata={"cached": True})
+                    result = DepthResult(depth_map=cached_depth, original_image=preprocessed_array, metadata={"cached": True})
                 else:
-                    # Run inference
-                    result = self.inference_engine.predict(preprocessed_array)
+                    # Run inference via backend
+                    from PIL import Image
+                    pil_image = Image.fromarray(preprocessed_array.astype(np.uint8))
+                    result = self.depth_backend.compute(pil_image)
 
                     # Store in cache if enabled
                     if self.depth_cache and image_sha256:
-                        self.depth_cache.store(image_sha256, config_fp_hash, result.depth)
+                        self.depth_cache.store(image_sha256, config_fp_hash, result.depth_map)
 
                 # 2. Post-Processing (Refinement) - skip for cached depths
                 if cached_depth is None:
@@ -567,8 +611,6 @@ class EnhanceOrchestrator:
 
                 # 3b. Save float depth (.npy) for high-precision PBR if enabled
                 if getattr(self.config, "save_float_depth", False):
-                    import numpy as np
-
                     np.save(str(float_depth_path), result.depth)
                     logger.debug(f"Saved float depth: {float_depth_path}")
 
@@ -839,7 +881,7 @@ class EnhanceOrchestrator:
             start_time=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(pipeline_start_time)),
             end_time=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(pipeline_end_time)),
             # ADR-023 Phase 3: Backend selection metadata
-            backend_selection=getattr(self, "_backend_metadata", None),
+            backend_selection=self._backend_metadata,
         )
         manifest.write(manifest_path)
 

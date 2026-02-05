@@ -12,7 +12,7 @@ Usage:
         --input-dir "./input_images" \\
         --output-dir "./output/lux_depth_v3_apex" \\
         --quality-tier "apex" \\
-        --depth-backend "depth_anything_v3" \\
+        --depth-backend "da3" \\
         --depth-device "mps" \\
         --materials-v3 "on" \\
         --pbr "on" \\
@@ -162,7 +162,7 @@ def main(
     ),
     # Depth Backend Configuration
     depth_backend: Optional[str] = typer.Option(
-        None, "--depth-backend", help="Depth backend: depth_anything_v3 (default), depth_pro (research-only)"
+        None, "--depth-backend", help="Depth backend: da3 (default, commercial), depth_pro (research-only, metric depth)"
     ),
     depth_device: str = typer.Option("cpu", "--depth-device", help="Device for depth inference: cpu, cuda, mps"),
     # Materials V3 and PBR

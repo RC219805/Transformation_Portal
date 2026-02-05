@@ -1,9 +1,9 @@
 # ADR-023: Post-PR #841 Hardening Strategy
 
-**Status:** Approved  
-**Date:** 2026-02-05  
-**Authority:** Transformation Portal Architect  
-**Supersedes:** None  
+**Status:** Approved
+**Date:** 2026-02-05
+**Authority:** Transformation Portal Architect
+**Supersedes:** None
 **Related:** PR #841, ADR-018 (Depth Pro), ADR-019 (Backend Unification)
 
 ---
@@ -297,7 +297,7 @@ class BackendSelectionMetadata:
 class CombinedManifest:
     # ... existing fields ...
     backend_selection: Optional[BackendSelectionMetadata] = None
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Serialize with backend_selection if present."""
         data = asdict(self)
@@ -310,7 +310,7 @@ class CombinedManifest:
 **Changes:**
 ```python
 def _capture_backend_metadata(
-    self, 
+    self,
     requested: Optional[str],
     engine: DA3InferenceEngine
 ) -> BackendSelectionMetadata:
@@ -318,11 +318,11 @@ def _capture_backend_metadata(
     resolved = "depth_anything_v3"  # Current reality
     status = "success"
     reason = None
-    
+
     if requested and requested != resolved:
         status = "fallback"
         reason = f"Requested {requested} not available, using {resolved}"
-    
+
     return BackendSelectionMetadata(
         requested_backend=requested,
         resolved_backend=resolved,
@@ -334,13 +334,13 @@ def _capture_backend_metadata(
 
 def enhance_batch(self, input_dir: Path, ...) -> List[Dict[str, Any]]:
     # ... existing code ...
-    
+
     # NEW: Capture backend selection
     backend_metadata = self._capture_backend_metadata(
         requested=self.config.depth_backend,
         engine=self.engine
     )
-    
+
     # NEW: Log truth line
     logger.info(
         "Backend selection: requested=%s resolved=%s status=%s device=%s",
@@ -349,12 +349,12 @@ def enhance_batch(self, input_dir: Path, ...) -> List[Dict[str, Any]]:
         backend_metadata.resolution_status,
         backend_metadata.device,
     )
-    
+
     if backend_metadata.resolution_status == "fallback":
         logger.warning("Backend fallback: %s", backend_metadata.resolution_reason)
-    
+
     # ... rest of batch processing ...
-    
+
     # NEW: Include in manifest
     manifest.backend_selection = backend_metadata
 ```
@@ -555,12 +555,14 @@ Per expert recommendation:
 
 ## References
 
-### Internal
+### Internal ADRs
 
 - [PR #841: DA3 PIL Support](https://github.com/RC219805/Transformation_Portal/pull/841)
 - [Commit 4761e2e5: Input Hygiene Implementation](https://github.com/RC219805/Transformation_Portal/commit/4761e2e5)
+- [Commit 2cf5fd3a: Phase 2 & 3 Implementation](https://github.com/RC219805/Transformation_Portal/commit/2cf5fd3a)
 - [ADR-018: Depth Pro Integration](ADR-018-depth-pro-integration.md)
 - [ADR-019: Backend Unification (Proposed)](ADR-019-depth-backend-unification.md)
+- [ADR-024: Backend Enforcement Strategy](ADR-024-backend-enforcement-strategy.md)
 - [Agent Governance Policy](../agent_governance.md)
 - [Input Hygiene Documentation](../../input_hygiene.md)
 
@@ -577,3 +579,7 @@ Per expert recommendation:
   - Phase 1 completed (commit 4761e2e5)
   - Phase 2 approved (tooling, no CI gate)
   - Phase 3 approved (manifest + logging, defer enforcement)
+  - Phase 2 & 3 implemented (commit 2cf5fd3a)
+- **2026-02-05:** Enforcement deferral formalized in ADR-024
+  - Backend enforcement deferred to v2.1.0 (ADR-024)
+  - Resolution caps rejected (insufficient evidence)

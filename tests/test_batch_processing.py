@@ -100,9 +100,9 @@ class TestEnhanceBatch:
                 output_root=tmpdir_path,
             )
 
-            # Mock the inference engine and other heavy components
+            # Mock the depth backend and other heavy components
             with (
-                patch.object(orchestrator, "inference_engine") as mock_engine,
+                patch.object(orchestrator, "depth_backend") as mock_backend,
                 patch.object(orchestrator, "postprocessor") as mock_postprocessor,
                 patch("transformation_portal.lux_depth_v3.preprocessing.validate_image_format") as mock_validate,
                 patch("transformation_portal.lux_depth_v3.preprocessing.preprocess_image") as mock_preprocess,
@@ -113,10 +113,15 @@ class TestEnhanceBatch:
                 mock_validate.side_effect = lambda x: x
                 mock_preprocess.return_value = (np.random.rand(100, 100, 3).astype(np.float32), (100, 100))
 
-                # Mock inference result
-                mock_result = Mock()
-                mock_result.depth = np.random.rand(100, 100).astype(np.float32)
-                mock_engine.predict.return_value = mock_result
+                # Mock inference result (DepthResult from backend.compute())
+                from transformation_portal.depth.backends.protocol import DepthResult
+                mock_result = DepthResult(
+                    depth_map=np.random.rand(100, 100).astype(np.float32),
+                    original_image=np.random.rand(100, 100, 3).astype(np.uint8),
+                    metadata={},
+                    backend_id="da3",
+                )
+                mock_backend.compute.return_value = mock_result
                 mock_postprocessor.process.return_value = mock_result
 
                 # Mock depth write stats

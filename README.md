@@ -95,6 +95,69 @@ config = EnhanceConfig(
 
 ---
 
+## Backend Selection
+
+Lux Depth V3 supports multiple depth estimation backends with automatic fallback for robustness.
+
+### Available Backends
+
+| Backend | Model | License | Focal Length | Metric Depth | Checkpoint Required |
+|---------|-------|---------|--------------|--------------|---------------------|
+| `da3` (default) | Depth Anything V3 | MIT | ❌ | ❌ | No (auto-download) |
+| `depth_pro` | Apple Depth Pro | Apple ML Research | ✅ | ✅ | Yes (1.9 GB) |
+
+### Usage
+
+**Default (DA3):**
+```bash
+lux-depth-v3 --input-dir ./input --output-dir ./output
+```
+
+**Depth Pro (requires license acceptance):**
+```bash
+lux-depth-v3 \
+  --input-dir ./input \
+  --output-dir ./output \
+  --depth-backend depth_pro \
+  --accept-apple-depth-pro-research-license true \
+  --non-commercial-ok true
+```
+
+**Python API:**
+```python
+from transformation_portal.lux_depth_v3 import EnhanceConfig
+from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+from pathlib import Path
+
+# Using Depth Pro
+config = EnhanceConfig(
+    depth_backend="depth_pro",
+    depth_pro_checkpoint_path="checkpoints/depth_pro.pt",
+    accept_apple_depth_pro_research_license=True,
+    non_commercial_ok=True,
+    depth_device="cpu",
+    enable_v2=False,
+)
+
+orchestrator = EnhanceOrchestrator(config, Path("./output"))
+```
+
+### Fallback Behavior
+
+If the requested backend is unavailable (missing checkpoint or dependencies), the system automatically falls back to DA3 with a warning logged. This ensures robustness in production environments.
+
+### Backend Metadata
+
+All processing manifests include backend selection metadata:
+- `requested_backend`: User's requested backend
+- `resolved_backend`: Actually used backend
+- `resolution_status`: "success" or "fallback"
+- `resolution_reason`: Explanation if fallback occurred
+
+See [ADR-019: Backend Registry Integration](docs/architecture/decisions/ADR-019-REVISED-DECISION.md) for architectural details.
+
+---
+
 ## Optional Dependencies
 
 ### Depth Pro (Experimental)
@@ -376,7 +439,7 @@ Exit codes:
 ### Regression Thresholds
 
 - **p95 > 10% worse:** Tail latency regression
-- **mean > 15% worse:** Average performance regression  
+- **mean > 15% worse:** Average performance regression
 - **failure_rate > 0%:** Any new failures
 
 See [Performance Monitoring Guide](docs/performance/README.md) for details.
