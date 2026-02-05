@@ -105,7 +105,7 @@ huggingface-hub==0.36.1
     #   timm
     #   tokenizers
     #   transformers
-hypothesis==6.151.4
+hypothesis==6.151.5
     # via -r requirements/dev.in
 idna==3.11
     # via
@@ -420,7 +420,7 @@ torchvision==0.25.0
     #   timm
 tox==4.34.1
     # via -r requirements/ci.in
-tqdm==4.67.3
+tqdm==4.67.2
     # via
     #   -r requirements/base.in
     #   coremltools
