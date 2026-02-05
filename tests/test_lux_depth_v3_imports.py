@@ -308,11 +308,13 @@ def test_v2_runner_fails_when_script_missing():
     runner = V2Runner()
 
     # Simulate missing script by patching Path.exists globally
+    original_exists = Path.exists
+
     def mock_exists(self):
         # Return False only for the V2 script path
         if "enhance_image.py" in str(self):
             return False
-        return Path.exists(self)
+        return original_exists(self)
 
     with patch("pathlib.Path.exists", mock_exists):
         with pytest.raises(FileNotFoundError, match="V2 enhancement script not found"):
