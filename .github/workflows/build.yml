@@ -16,6 +16,8 @@ on:
       # Tests (always run to validate changes)
       - 'tests/**'
       - 'conftest.py'
+      # Runtime configuration (presets, recipes, etc.)
+      - 'config/**'
       # Dependencies and configuration
       - 'pyproject.toml'
       - 'setup.py'
@@ -54,18 +56,23 @@ env:
   HF_HUB_DISABLE_PROGRESS_BARS: "1"
 
 jobs:
-  # Info job - logs when workflow is skipped due to path filters
+  # Info job - explains path-based triggering
   check-skip:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
-      - name: Check if workflow should skip
+      - name: Log workflow trigger reason
         id: check
         run: |
-          echo "This workflow runs for code, tests, config, and workflow changes"
-          echo "Documentation-only changes use docs.yml workflow instead"
-          echo "Event: ${{ github.event_name }}"
-          echo "Files changed: see PR diff"
+          echo "✅ This workflow triggered because PR includes path-filtered changes"
+          echo ""
+          echo "Paths that trigger build.yml:"
+          echo "  - src/**, scripts/**, tests/**"
+          echo "  - config/** (presets, recipes, runtime data)"
+          echo "  - requirements, workflows, Makefile"
+          echo ""
+          echo "Note: API documentation-only changes trigger docs.yml instead"
+          echo "Note: On main branch, full suite always runs (no filters)"
 
   lint:
     runs-on: ubuntu-24.04

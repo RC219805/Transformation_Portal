@@ -8,7 +8,7 @@ files are not accidentally excluded.
 
 import sys
 from pathlib import Path
-from typing import List, Dict, Set
+from typing import List, Dict
 import yaml
 
 
@@ -41,6 +41,7 @@ def validate_critical_paths(filters: List[str]) -> List[str]:
     critical_patterns = [
         "src/**",
         "tests/**",
+        "config/**",  # Runtime configuration (presets, recipes)
         "requirements*.txt",
         ".github/workflows/**",
     ]
@@ -55,11 +56,12 @@ def validate_critical_paths(filters: List[str]) -> List[str]:
 def check_filter_coverage(filters: List[str]) -> Dict[str, bool]:
     """Check coverage of different file types."""
     coverage = {
-        "source_code": any("src/" in p for p in filters),
-        "tests": any("tests/" in p for p in filters),
+        "source_code": "src/**" in filters,
+        "tests": "tests/**" in filters,
+        "runtime_config": "config/**" in filters,
         "requirements": any("requirements" in p for p in filters),
-        "workflows": any(".github/workflows" in p for p in filters),
-        "config": any(p in ["pyproject.toml", "setup.py"] for p in filters),
+        "workflows": ".github/workflows/**" in filters,
+        "build_config": any(p in ["pyproject.toml", "setup.py"] for p in filters),
     }
     return coverage
 
