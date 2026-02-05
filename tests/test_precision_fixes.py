@@ -232,34 +232,11 @@ class TestFormatSupport:
 class TestInputDiscoveryFormatSupport:
     """Test that input discovery includes WebP and BMP."""
 
-    def test_discover_images_default_extensions(self):
-        """Test that default extensions include WebP and BMP."""
-        from transformation_portal.lux_depth_v3.input_discovery import discover_images, DiscoveryConfig
-
-        # Check the default extensions list in the function
-        # This will be in the discover_images function default parameter
-        import inspect
-        sig = inspect.signature(discover_images)
-        # The test validates that when we use None, it includes webp and bmp
-        # We'll verify by checking the docstring or implementation
-        
-        # Alternative: create test files and verify they're discovered
-        # This is more reliable than inspecting defaults
-        pass  # Covered by integration test below
-
     def test_discover_images_finds_webp_and_bmp(self, tmp_path):
         """Test that discover_images finds WebP and BMP files."""
         from transformation_portal.lux_depth_v3.input_discovery import discover_images, DiscoveryConfig
 
-        # Create test images
-        (tmp_path / "test1.webp").write_bytes(b"fake webp")
-        (tmp_path / "test2.bmp").write_bytes(b"fake bmp")
-        (tmp_path / "test3.jpg").write_bytes(b"fake jpg")
-
-        config = DiscoveryConfig(strict_mode=False)
-        
         # Note: discover_images validates files, so we need real images
-        # Skip this test if PIL can't create the files
         try:
             img1 = tmp_path / "real1.webp"
             Image.new("RGB", (56, 56)).save(img1, "WEBP")
@@ -268,6 +245,7 @@ class TestInputDiscoveryFormatSupport:
             Image.new("RGB", (56, 56)).save(img2, "BMP")
             
             # Discover with default extensions (should include webp, bmp)
+            config = DiscoveryConfig(strict_mode=False)
             images = discover_images(tmp_path, config, image_extensions=None)
             
             # Should find both files
