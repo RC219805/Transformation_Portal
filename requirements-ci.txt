@@ -1,6 +1,6 @@
 # CI environment: runtime + test deps
-# Uses base (core) dependencies only for faster CI builds
-# ML tests run separately with requirements/ml.txt
+# Uses base (core) dependencies only for faster CI builds.
+# Heavy benchmarks/stress tests should be marker-filtered and run manually or in a dedicated workflow.
 -r requirements.txt
 
 # Testing / coverage / property-based tests
