@@ -100,19 +100,23 @@ class Postprocessor:
         try:
             import cv2
 
+            # Heuristics for sigmaColor scaling based on depth value range
+            LEGACY_SIGMA_COLOR_THRESHOLD = 100  # Legacy configs used 0-255-ish values
+            NORMALIZED_DEPTH_THRESHOLD = 2.0     # Normalized depth typically in [0,1]
+            
             # Determine depth value range for sigmaColor scaling
             depth_min = float(depth.min())
             depth_max = float(depth.max())
             depth_range = depth_max - depth_min
             
-            # Heuristic: scale sigmaColor based on depth range
-            # - For normalized depth ~[0,1]: use sigma_color as-is
-            # - For metric/unbounded depth: scale proportionally
-            # - For legacy configs with "0-255-ish" values: clamp to reasonable range
-            if depth_range < 2.0:
+            # Scale sigmaColor based on depth range to handle:
+            # - Normalized depth ~[0,1]: use sigma_color as-is
+            # - Metric/unbounded depth: scale proportionally
+            # - Legacy configs with "0-255-ish" values: normalize to actual range
+            if depth_range < NORMALIZED_DEPTH_THRESHOLD:
                 # Normalized depth [0,1] - use sigma_color directly
                 effective_sigma_color = sigma_color
-            elif sigma_color > 100:
+            elif sigma_color > LEGACY_SIGMA_COLOR_THRESHOLD:
                 # Legacy config detected (0-255-ish sigmaColor) - normalize to [0,1] range
                 effective_sigma_color = sigma_color / 255.0 * depth_range
             else:
