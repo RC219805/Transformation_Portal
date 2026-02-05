@@ -317,13 +317,26 @@ class EnhanceOrchestrator:
         # Phase 2: Parallelization setup with stage-aware concurrency
         # MPS/GPU inference: limit to 1-2 workers to avoid memory contention
         # CPU/I/O operations: use moderate parallelism
+        
+        # Check for forward-compatible max_gpu_workers override
+        max_gpu_workers_override = getattr(config, "max_gpu_workers", None)
+        max_workers_override = getattr(config, "max_workers", None)
+        
         if config.depth_device in ("mps", "cuda"):
             # GPU backends: conservative concurrency to avoid VRAM contention
-            self.max_workers = min(2, cpu_count())
+            # Allow override via --max-gpu-workers
+            if max_gpu_workers_override is not None:
+                self.max_workers = max_gpu_workers_override
+            else:
+                self.max_workers = min(2, cpu_count())
             logger.debug(f"GPU/MPS device detected - limiting workers to {self.max_workers} for VRAM management")
         else:
             # CPU backend: moderate parallelism for I/O-bound operations
-            self.max_workers = config.max_parallel_workers or max(1, cpu_count() - 1)
+            # Allow override via --max-workers
+            if max_workers_override is not None:
+                self.max_workers = max_workers_override
+            else:
+                self.max_workers = config.max_parallel_workers or max(1, cpu_count() - 1)
 
         self._use_parallel = config.enable_parallel_processing
         logger.debug(f"Parallel processing: {'enabled' if self._use_parallel else 'disabled'} (workers={self.max_workers})")
@@ -663,7 +676,22 @@ class EnhanceOrchestrator:
             # Lazy preprocessing: Only validate and preprocess if we're running depth
             from .preprocessing import preprocess_image, validate_image_format
 
+            # Check for strict verification flag (forward-compatible)
+            verify_strict = getattr(self.config, "verify_images", False)
+            
             validated_path = validate_image_format(image_input.path)
+            
+            # Optional: strict PIL.verify() for CI/ingest validation
+            if verify_strict:
+                from PIL import Image
+                try:
+                    img_verify = Image.open(validated_path)
+                    img_verify.verify()
+                    logger.debug(f"Strict verification passed: {validated_path.name}")
+                except Exception as e:
+                    logger.error(f"Strict verification failed: {validated_path.name} - {e}")
+                    raise ValueError(f"Image failed strict verification: {validated_path}") from e
+            
             preprocessed_array, original_shape = preprocess_image(validated_path)
 
             logger.info(f"Stage A: Generating depth for {output_key}...")
@@ -688,8 +716,10 @@ class EnhanceOrchestrator:
                     result = DepthResult(depth_map=cached_depth, original_image=preprocessed_array, metadata={"cached": True})
                 else:
                     # Run inference via backend
+                    # CRITICAL FIX: preprocessing returns float32 [0,1], must scale to uint8 [0,255] for PIL
                     from PIL import Image
-                    pil_image = Image.fromarray(preprocessed_array.astype(np.uint8))
+                    preprocessed_uint8 = (np.clip(preprocessed_array, 0, 1) * 255).astype(np.uint8)
+                    pil_image = Image.fromarray(preprocessed_uint8)
                     result = self.depth_backend.compute(pil_image)
 
                     # Store in cache if enabled

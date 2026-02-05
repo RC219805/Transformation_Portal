@@ -22,7 +22,7 @@ from PIL import Image
 logger = logging.getLogger(__name__)
 
 # Supported image formats
-SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff", ".tif"}
+SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp", ".bmp"}
 
 # Depth Anything V3 requires dimensions to be multiples of 14
 DIMENSION_MULTIPLE = 14
@@ -179,32 +179,48 @@ def _resize_keep_aspect(pil_img: Image.Image, target_size: int) -> Image.Image:
 def _enforce_dimension_multiple(img_array: np.ndarray, multiple: int) -> np.ndarray:
     """Enforce that image dimensions are multiples of a given value.
 
-    Rounds down to nearest multiple, ensuring minimum of `multiple`.
+    Uses center crop + pad to preserve pixel fidelity rather than resampling.
+    This avoids subtle quality degradation from resizing the entire image.
 
     Args:
         img_array: Image array (H, W, C) float32
         multiple: Required multiple (e.g., 14 for Depth Anything V3)
 
     Returns:
-        Resized image array with compliant dimensions
+        Image array with compliant dimensions (may be cropped/padded)
     """
     h, w = img_array.shape[:2]
 
-    # Round down to nearest multiple, clamp to minimum
+    # Compute target dimensions (nearest multiple)
+    # Round down to nearest multiple, then ensure minimum
     new_h = max(multiple, (h // multiple) * multiple)
     new_w = max(multiple, (w // multiple) * multiple)
 
-    # Only resize if dimensions changed
+    # Only adjust if dimensions changed
     if (new_h, new_w) != (h, w):
-        # Convert back to PIL for quality resize
-        img_uint8 = (img_array * 255).astype(np.uint8)
-        pil_img = Image.fromarray(img_uint8, mode="RGB")
-        pil_img = pil_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
-
-        # Convert back to float32
-        img_array = np.array(pil_img, dtype=np.float32) / 255.0
-
-        logger.debug(f"Enforced dimension multiple: ({h}, {w}) → ({new_h}, {new_w})")
+        # Strategy: center crop if oversized, pad if undersized
+        if new_h <= h and new_w <= w:
+            # Crop (center crop to preserve focal content)
+            crop_top = (h - new_h) // 2
+            crop_left = (w - new_w) // 2
+            img_array = img_array[crop_top:crop_top + new_h, crop_left:crop_left + new_w]
+            logger.debug(f"Enforced dimension multiple via crop: ({h}, {w}) → ({new_h}, {new_w})")
+        else:
+            # Pad (symmetric padding to center content)
+            pad_h = max(0, new_h - h)
+            pad_w = max(0, new_w - w)
+            pad_top = pad_h // 2
+            pad_bottom = pad_h - pad_top
+            pad_left = pad_w // 2
+            pad_right = pad_w - pad_left
+            
+            # Pad with edge values to avoid black borders
+            img_array = np.pad(
+                img_array,
+                ((pad_top, pad_bottom), (pad_left, pad_right), (0, 0)),
+                mode='edge'
+            )
+            logger.debug(f"Enforced dimension multiple via pad: ({h}, {w}) → ({new_h}, {new_w})")
 
     return img_array
 
