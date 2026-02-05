@@ -216,52 +216,63 @@ class TestEnhanceBatch:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
 
-            orchestrator = EnhanceOrchestrator(
-                config=config,
-                output_root=tmpdir_path,
-            )
+            # Mock backend initialization BEFORE creating orchestrator
+            with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry") as mock_registry_class:
+                # Setup mock registry
+                mock_backend = Mock()
+                mock_backend.ensure_available.return_value = None
+                mock_backend.name = "da3"
+                
+                mock_registry = Mock()
+                mock_registry.get_backend.return_value = mock_backend
+                mock_registry_class.return_value = mock_registry
 
-            # Mock to simulate partial failure
-            call_count = 0
+                orchestrator = EnhanceOrchestrator(
+                    config=config,
+                    output_root=tmpdir_path,
+                )
 
-            def mock_enhance_image(image_input, input_root=None):
-                nonlocal call_count
-                call_count += 1
+                # Mock to simulate partial failure
+                call_count = 0
 
-                if call_count == 2:
-                    # Second image fails
-                    raise ValueError("Simulated processing error")
+                def mock_enhance_image(image_input, input_root=None):
+                    nonlocal call_count
+                    call_count += 1
 
-                # Other images succeed
-                return {
-                    "status": "ok",
-                    "image": str(image_input.path),
-                    "depth_path": "depth.png",
-                    "manifest": "manifest.json",
-                    "runtime_s": 1.5,
-                }
+                    if call_count == 2:
+                        # Second image fails
+                        raise ValueError("Simulated processing error")
 
-            with patch.object(orchestrator, "enhance_image", side_effect=mock_enhance_image):
-                results = orchestrator.enhance_batch(batch_temp_workspace["input_dir"])
+                    # Other images succeed
+                    return {
+                        "status": "ok",
+                        "image": str(image_input.path),
+                        "depth_path": "depth.png",
+                        "manifest": "manifest.json",
+                        "runtime_s": 1.5,
+                    }
 
-                # Should have 3 results (one for each image)
-                assert len(results) == 3
+                with patch.object(orchestrator, "enhance_image", side_effect=mock_enhance_image):
+                    results = orchestrator.enhance_batch(batch_temp_workspace["input_dir"])
 
-                # Count successes and failures
-                successes = [r for r in results if r.get("status") == "ok"]
-                failures = [r for r in results if "error" in r]
+                    # Should have 3 results (one for each image)
+                    assert len(results) == 3
 
-                assert len(successes) == 2  # Images 1 and 3 succeeded
-                assert len(failures) == 1  # Image 2 failed
+                    # Count successes and failures
+                    successes = [r for r in results if r.get("status") == "ok"]
+                    failures = [r for r in results if "error" in r]
 
-                # Verify runtime_s only in successful results
-                for success in successes:
-                    assert "runtime_s" in success
-                    assert success["runtime_s"] > 0
+                    assert len(successes) == 2  # Images 1 and 3 succeeded
+                    assert len(failures) == 1  # Image 2 failed
 
-                # Verify error in failed result
-                for failure in failures:
-                    assert "error" in failure
+                    # Verify runtime_s only in successful results
+                    for success in successes:
+                        assert "runtime_s" in success
+                        assert success["runtime_s"] > 0
+
+                    # Verify error in failed result
+                    for failure in failures:
+                        assert "error" in failure
 
     def test_batch_manifest_structure(self, batch_temp_workspace):
         """Test that batch manifest has correct structure."""
