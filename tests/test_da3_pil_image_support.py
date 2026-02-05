@@ -311,6 +311,7 @@ class TestCoreMLPathNormalization:
 
         # Force CoreML backend
         from transformation_portal.lux_depth_v3.inference import ModelBackend
+
         engine.backend = ModelBackend.COREML
 
         mock_depth = _create_mock_depth(64, 64)

@@ -542,8 +542,25 @@ class DA3InferenceEngine:
         if not TORCH_AVAILABLE:
             raise ImportError("torch required for PyTorch inference")
 
-        # Run inference using pipeline
-        if hasattr(self.model, "__call__"):
+        # Check if this is a DA3 model (custom API)
+        try:
+            from depth_anything_3.api import DepthAnything3
+
+            is_da3_model = isinstance(self.model, DepthAnything3)
+        except ImportError:
+            is_da3_model = False
+
+        if is_da3_model:
+            # DA3 models use inference() method with list of images
+            prediction = self.model.inference([image])
+            # DA3 returns Prediction object with .depth attribute (1, H, W)
+            depth_raw = prediction.depth[0]  # Remove batch dimension
+
+            # Convert to numpy if needed
+            if isinstance(depth_raw, torch.Tensor):
+                depth_raw = depth_raw.cpu().numpy()
+        elif hasattr(self.model, "__call__"):
+            # Transformers pipeline models
             prediction = self.model(image)
             depth_raw = prediction["depth"]
 
