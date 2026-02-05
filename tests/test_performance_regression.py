@@ -15,6 +15,10 @@ import time
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
+# Mark all tests as ML tier (require depth processing / torch)
+pytestmark = pytest.mark.ml
+
+
 import numpy as np
 import pytest
 from PIL import Image

@@ -204,8 +204,10 @@ def capture_environment() -> EnvironmentMetadata:
     try:
         import torch
 
-        torch_version = torch.__version__
-    except ImportError:
+        # Handle mocked torch (e.g., in CI tests without ML dependencies)
+        if hasattr(torch, "__version__"):
+            torch_version = torch.__version__
+    except (ImportError, AttributeError):
         pass
 
     # Get device (placeholder - would need to detect actual device)
@@ -214,9 +216,9 @@ def capture_environment() -> EnvironmentMetadata:
         try:
             import torch
 
-            if torch.backends.mps.is_available():
+            if hasattr(torch, "backends") and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
                 device = "mps"
-            elif torch.cuda.is_available():
+            elif hasattr(torch, "cuda") and torch.cuda.is_available():
                 device = "cuda"
             else:
                 device = "cpu"
