@@ -20,7 +20,7 @@ from typing import Dict, Any, List
 import pytest
 
 
-pytestmark = pytest.mark.benchmark
+pytestmark = [pytest.mark.benchmark, pytest.mark.slow]
 
 
 def _repo_root() -> Path:
