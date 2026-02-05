@@ -6,8 +6,32 @@ permissions:
 on:
   push:
     branches: [main]
+    # No path filters on main - always run full suite for protected branch
   pull_request:
     branches: [main]
+    paths:
+      # Source code changes
+      - 'src/**'
+      - 'scripts/**'
+      # Tests (always run to validate changes)
+      - 'tests/**'
+      - 'conftest.py'
+      # Runtime configuration (presets, recipes, etc.)
+      - 'config/**'
+      # Dependencies and configuration
+      - 'pyproject.toml'
+      - 'setup.py'
+      - 'requirements*.txt'
+      - 'requirements/**'
+      # Workflow changes (validate CI modifications)
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      # Makefile and core config
+      - 'Makefile'
+      - 'mypy.ini'
+      - '.pylintrc'
+  workflow_dispatch:
+    # Manual trigger always runs full suite
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -32,6 +56,24 @@ env:
   HF_HUB_DISABLE_PROGRESS_BARS: "1"
 
 jobs:
+  # Info job - explains path-based triggering
+  check-skip:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Log workflow trigger reason
+        id: check
+        run: |
+          echo "✅ This workflow triggered because PR includes path-filtered changes"
+          echo ""
+          echo "Paths that trigger build.yml:"
+          echo "  - src/**, scripts/**, tests/**"
+          echo "  - config/** (presets, recipes, runtime data)"
+          echo "  - requirements, workflows, Makefile"
+          echo ""
+          echo "Note: API documentation-only changes trigger docs.yml instead"
+          echo "Note: On main branch, full suite always runs (no filters)"
+
   lint:
     runs-on: ubuntu-24.04
     timeout-minutes: 20

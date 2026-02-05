@@ -3,15 +3,23 @@ name: Documentation
 on:
   pull_request:
     paths:
+      # API documentation
       - 'docs/api/**'
       - 'src/**/*.py'
+      # General documentation
+      - 'docs/**'
+      - 'README*.md'
+      - '*.md'
+      - 'mkdocs.yml'
+      # Dependencies for doc builds
       - 'requirements-dev.txt'
       - '.github/workflows/docs.yml'
   push:
     branches:
       - main
     paths:
-      - 'docs/api/**'
+      - 'docs/**'
+      - 'README*.md'
       - 'src/**/*.py'
   workflow_dispatch:
 
@@ -64,6 +72,29 @@ jobs:
           name: api-documentation
           path: docs/api/_build/html
           retention-days: 30
+
+  validate-markdown:
+    name: Validate Markdown Files
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check markdown files exist
+        run: |
+          echo "Checking for markdown files..."
+          find docs -name "*.md" -type f | head -20
+          echo "README files:"
+          ls -la README*.md || true
+
+      - name: Basic link validation
+        run: |
+          echo "Checking for broken internal links..."
+          # Simple check: look for obviously broken markdown links
+          if grep -r '\[.*\](\s*\?$\|\s*#\?$)' docs/ README*.md 2>/dev/null; then
+            echo "::warning::Found potentially malformed links (empty hrefs)"
+          fi
+          echo "✅ Basic markdown validation complete"
 
   validate-links:
     name: Validate Documentation Links
