@@ -234,30 +234,37 @@ class TestCLIConfiguration:
     def test_enable_v2_off_disables_v2_stage(self, tmp_path, monkeypatch):
         """Test that --enable-v2 off disables V2 enhancement stage."""
         from unittest.mock import MagicMock, patch
-        
+
         input_dir = tmp_path / "input"
         input_dir.mkdir()
         (input_dir / "test.jpg").touch()
-        
+
         # Mock EnhanceOrchestrator to capture config
-        mock_orch = MagicMock()
         captured_config = None
-        
-        def mock_orch_init(config, output_dir):
+
+        def mock_orch_init(config, output_root):
             nonlocal captured_config
             captured_config = config
+            mock_orch = MagicMock()
+            mock_orch.enhance_batch.return_value = {"total": 0, "succeeded": 0}
             return mock_orch
-        
-        with patch("transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator", side_effect=mock_orch_init):
+
+        with patch(
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            side_effect=mock_orch_init,
+        ):
             result = runner.invoke(
                 app,
                 [
-                    "--input-dir", str(input_dir),
-                    "--output-dir", str(tmp_path / "output"),
-                    "--enable-v2", "off",
+                    "--input-dir",
+                    str(input_dir),
+                    "--output-dir",
+                    str(tmp_path / "output"),
+                    "--enable-v2",
+                    "off",
                 ],
             )
-        
+
         # Should not fail during config construction
         assert captured_config is not None
         assert captured_config.enable_v2 is False
@@ -265,33 +272,40 @@ class TestCLIConfiguration:
     def test_v2_preset_none_skips_v2_stage(self, tmp_path, monkeypatch):
         """Test that --v2-preset none results in V2 skip behavior."""
         from unittest.mock import MagicMock, patch
-        
+
         input_dir = tmp_path / "input"
         input_dir.mkdir()
         (input_dir / "test.jpg").touch()
-        
+
         # Mock EnhanceOrchestrator to capture config
-        mock_orch = MagicMock()
         captured_config = None
-        
-        def mock_orch_init(config, output_dir):
+
+        def mock_orch_init(config, output_root):
             nonlocal captured_config
             captured_config = config
+            mock_orch = MagicMock()
+            mock_orch.enhance_batch.return_value = {"total": 0, "succeeded": 0}
             return mock_orch
-        
-        with patch("transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator", side_effect=mock_orch_init):
+
+        with patch(
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            side_effect=mock_orch_init,
+        ):
             result = runner.invoke(
                 app,
                 [
-                    "--input-dir", str(input_dir),
-                    "--output-dir", str(tmp_path / "output"),
-                    "--v2-preset", "none",
+                    "--input-dir",
+                    str(input_dir),
+                    "--output-dir",
+                    str(tmp_path / "output"),
+                    "--v2-preset",
+                    "none",
                 ],
             )
-        
-        # Should capture config with v2_preset set to "none"
+
+        # Should capture config with v2_preset set to None (from "none" string)
         assert captured_config is not None
-        assert captured_config.v2_preset == "none"
+        assert captured_config.v2_preset is None
 
 
 class TestCLIHelp:

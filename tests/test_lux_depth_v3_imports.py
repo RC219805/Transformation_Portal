@@ -296,9 +296,9 @@ def test_depth_writer_opencv_dependency():
 
 def test_v2_runner_fails_when_script_missing():
     """Test that V2Runner.run() raises FileNotFoundError when script is missing.
-    
+
     Since scripts/enhance_image.py now exists, we simulate missing script by
-    patching V2Runner.script_path.exists() to return False.
+    patching Path.exists() globally for the script check.
     """
     from pathlib import Path
     from unittest.mock import patch
@@ -307,8 +307,14 @@ def test_v2_runner_fails_when_script_missing():
 
     runner = V2Runner()
 
-    # Simulate missing script by mocking script_path.exists()
-    with patch.object(runner.script_path, "exists", return_value=False):
+    # Simulate missing script by patching Path.exists globally
+    def mock_exists(self):
+        # Return False only for the V2 script path
+        if "enhance_image.py" in str(self):
+            return False
+        return Path.exists(self)
+
+    with patch("pathlib.Path.exists", mock_exists):
         with pytest.raises(FileNotFoundError, match="V2 enhancement script not found"):
             runner.run(
                 input_path=Path("/tmp/input.png"),
