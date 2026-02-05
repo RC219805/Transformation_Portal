@@ -21,6 +21,9 @@ from transformation_portal.lux_depth_v3.input_manager import ImageInput
 from transformation_portal.lux_depth_v3.manifest import CombinedManifest, InputMetadata
 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
+# Mark all tests in this module as ML tier (require depth processing)
+pytestmark = pytest.mark.ml
+
 # ============================================================================
 # Shared Test Fixtures
 # ============================================================================
