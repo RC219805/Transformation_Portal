@@ -66,8 +66,15 @@ jobs:
             echo "::warning::Documentation coverage is below 50%"
           fi
 
+      - name: Upload documentation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-documentation
+          path: docs/api/_build/html
+          retention-days: 30
+
   validate-markdown:
-    name: Validate Documentation Links
+    name: Validate Markdown Files
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -88,13 +95,6 @@ jobs:
             echo "::warning::Found potentially malformed links (empty hrefs)"
           fi
           echo "✅ Basic markdown validation complete"
-
-      - name: Upload documentation artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: api-documentation
-          path: docs/api/_build/html
-          retention-days: 30
 
   validate-links:
     name: Validate Documentation Links
