@@ -363,6 +363,8 @@ The Documentation Map is your single source of truth for finding guides, referen
 - **Pipelines:** [docs/pipeline/](docs/pipeline/)
 - **CI/CD:** [docs/ci/](docs/ci/)
 - **Troubleshooting:** [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
+- **Lux Depth V3 CLI Guide:** [docs/LUX_DEPTH_V3_CLI_GUIDE.md](docs/LUX_DEPTH_V3_CLI_GUIDE.md)
+- **Lux Depth V3 Troubleshooting:** [docs/LUX_DEPTH_V3_TROUBLESHOOTING.md](docs/LUX_DEPTH_V3_TROUBLESHOOTING.md)
 
 ---
 

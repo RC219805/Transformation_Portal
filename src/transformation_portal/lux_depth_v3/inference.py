@@ -415,8 +415,8 @@ class DA3InferenceEngine:
         """Run depth inference on an image (main API).
 
         Accepts multiple input types for flexibility:
-        - np.ndarray: Direct numpy array (HxWx3, uint8 or float32)
-        - PIL.Image.Image: PIL Image object
+        - np.ndarray: Direct numpy array (HxWx3/HxWx4/HxW, uint8/uint16/float32/float64)
+        - PIL.Image.Image: PIL Image object (any mode)
         - Path/str: File path (delegates to infer_from_path)
         - ImageInput: Path wrapper from input_manager
 
@@ -442,12 +442,8 @@ class DA3InferenceEngine:
         if isinstance(image, (Path, str)):
             return self.infer_from_path(Path(image))
 
-        # Handle PIL.Image
-        if isinstance(image, Image.Image):
-            return self.infer(image)
-
-        # Handle numpy array (main path)
-        if isinstance(image, np.ndarray):
+        # Handle PIL Image or numpy array
+        if isinstance(image, (np.ndarray, Image.Image)):
             return self.infer(image)
 
         raise TypeError(f"Expected np.ndarray, PIL.Image, Path, str, or ImageInput, got {type(image)}")
@@ -456,30 +452,97 @@ class DA3InferenceEngine:
         """Run depth inference on an image.
 
         Accepts multiple input types for flexibility:
-        - np.ndarray: Direct numpy array (HxWx3, uint8 or float32)
-        - PIL.Image.Image: PIL Image object
+        - np.ndarray: Direct numpy array (HxWx3/HxWx4/HxW, uint8/uint16/float32/float64)
+        - PIL.Image.Image: PIL Image object (any mode)
 
         Args:
-            image: Input image as numpy array (HxWx3) or PIL Image
+            image: Input image as numpy array or PIL Image
 
         Returns:
             DepthResult with depth map and metadata
+
+        Raises:
+            TypeError: If image type is not supported
+            ValueError: If array shape/dtype is invalid
         """
         # Lazy load model on first inference
         if not self._model_loaded:
             self._load_model()
 
-        # Normalize input to numpy array and PIL Image
+        # Normalize input to canonical uint8 RGB numpy + PIL Image
         if isinstance(image, Image.Image):
-            # PIL Image input: convert to numpy for storage, keep PIL for inference
+            # PIL Image input: convert to RGB (drop alpha, convert grayscale/palette)
             pil_image = image.convert("RGB")
-            original_image = np.array(pil_image)
+            # Canonical original_image: uint8 RGB numpy
+            original_image = np.array(pil_image, dtype=np.uint8)
+
         elif isinstance(image, np.ndarray):
-            original_image = image.copy()
-            if image.dtype in (np.float32, np.float64):
-                pil_image = Image.fromarray((image * 255).astype(np.uint8))
+            # Validate shape
+            if image.ndim == 2:
+                # Grayscale HxW → RGB HxWx3
+                if image.dtype == np.uint8:
+                    gray = image
+                elif image.dtype in (np.float32, np.float64):
+                    gray = np.clip(image, 0, 1) * 255
+                    gray = gray.astype(np.uint8)
+                elif image.dtype == np.uint16:
+                    gray = (image / 256).astype(np.uint8)  # Scale 16-bit → 8-bit
+                else:
+                    raise ValueError(f"Unsupported grayscale dtype: {image.dtype}")
+
+                # Convert grayscale to RGB by repeating channel
+                rgb_uint8 = np.stack([gray, gray, gray], axis=-1)
+                pil_image = Image.fromarray(rgb_uint8, mode="RGB")
+                original_image = rgb_uint8
+
+            elif image.ndim == 3:
+                h, w, c = image.shape
+
+                if c == 3:
+                    # RGB
+                    if image.dtype == np.uint8:
+                        rgb_uint8 = image.copy()
+                    elif image.dtype in (np.float32, np.float64):
+                        # Clip and scale float [0,1] → uint8 [0,255]
+                        rgb_float = np.clip(image, 0, 1)
+                        rgb_uint8 = (rgb_float * 255).astype(np.uint8)
+                    elif image.dtype == np.uint16:
+                        # Scale 16-bit → 8-bit
+                        rgb_uint8 = (image / 256).astype(np.uint8)
+                    else:
+                        raise ValueError(f"Unsupported RGB dtype: {image.dtype}")
+
+                    pil_image = Image.fromarray(rgb_uint8, mode="RGB")
+                    original_image = rgb_uint8
+
+                elif c == 4:
+                    # RGBA → RGB (drop alpha channel explicitly)
+                    if image.dtype == np.uint8:
+                        rgba = image
+                    elif image.dtype in (np.float32, np.float64):
+                        rgba_float = np.clip(image, 0, 1)
+                        rgba = (rgba_float * 255).astype(np.uint8)
+                    elif image.dtype == np.uint16:
+                        rgba = (image / 256).astype(np.uint8)
+                    else:
+                        raise ValueError(f"Unsupported RGBA dtype: {image.dtype}")
+
+                    # Drop alpha channel
+                    rgb_uint8 = rgba[:, :, :3]
+                    pil_image = Image.fromarray(rgb_uint8, mode="RGB")
+                    original_image = rgb_uint8
+
+                else:
+                    raise ValueError(
+                        f"Expected 3 or 4 channels, got {c}. " f"Supported: HxWx3 (RGB), HxWx4 (RGBA), HxW (grayscale)"
+                    )
+
             else:
-                pil_image = Image.fromarray(image)
+                raise ValueError(
+                    f"Expected 2D (grayscale) or 3D (RGB/RGBA) array, got shape {image.shape}. "
+                    f"Batched inputs not supported—process images one at a time."
+                )
+
         else:
             raise TypeError(f"Expected numpy array or PIL.Image, got {type(image)}")
 
@@ -487,9 +550,12 @@ class DA3InferenceEngine:
         start_time = time.time()
 
         if self.backend == ModelBackend.COREML:
-            # CoreML expects numpy array
-            result = self._estimate_depth_coreml(original_image)
+            # CoreML expects numpy float32 [0,1]
+            # Convert canonical uint8 → float32 for CoreML
+            image_float32 = original_image.astype(np.float32) / 255.0
+            result = self._estimate_depth_coreml(image_float32)
         else:
+            # PyTorch path: pass PIL Image (DA3 and transformers both accept PIL)
             result = self._estimate_depth_pytorch(pil_image)
 
         inference_time_ms = (time.time() - start_time) * 1000
@@ -508,9 +574,10 @@ class DA3InferenceEngine:
             result["metadata"]["using_fallback"] = True
             result["metadata"]["fallback_model"] = self._fallback_model_id
 
+        # CRITICAL: original_image is now ALWAYS uint8 RGB regardless of input type
         return DepthResult(
             depth_map=result["depth"],
-            original_image=original_image,
+            original_image=original_image,  # Canonical uint8 RGB numpy
             metadata=result["metadata"],
         )
 

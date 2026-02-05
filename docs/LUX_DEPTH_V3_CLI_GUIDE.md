@@ -166,6 +166,17 @@ lux-depth-v3 \
 - `--cache-depth TEXT`: Enable content-addressable depth cache (default: `off`)
   - Options: Same as above
 
+### V2 Enhancement Controls
+
+- `--enable-v2 TEXT`: Enable V2 enhancement stage (default: `on`)
+  - Options: `on`, `off`, `true`, `false`, `yes`, `no`, `1`, `0`
+  - Set to `off` to completely skip V2 enhancement (no validation, no execution)
+  - Useful for PBR-only workflows or when the enhancement script is not available
+- `--v2-preset TEXT`: V2 enhancement preset (default: `default`)
+  - Options: `default`, `none`, or custom preset names
+  - Set to `none` to skip V2 processing while keeping validation
+  - Only used when `--enable-v2` is `on`
+
 ### Output Deliverables
 
 - `--emit-master16 TEXT`: Emit master 16-bit output (default: `off`)
@@ -279,7 +290,124 @@ lux-depth-v3 \
   --emit-report "on"
 ```
 
+### Workflow 4: PBR-Only (Skip V2 Enhancement)
+
+For workflows that only need depth and PBR maps without AI-powered enhancement:
+
+```bash
+lux-depth-v3 \
+  --input-dir "./input_images" \
+  --output-dir "./output/pbr_only" \
+  --quality-tier "apex" \
+  --depth-device "mps" \
+  --pbr "on" \
+  --enable-v2 "off" \
+  --emit-master16 "on" \
+  --emit-report "on"
+```
+
+**Key Points:**
+- `--enable-v2 off` completely disables the V2 enhancement stage
+- Faster processing (skips enhancement script execution)
+- Still produces high-quality depth maps and PBR outputs
+- Useful for technical workflows requiring only geometric data
+
+### Workflow 5: Commercial APEX with Quality-Tier Focus
+
+```bash
+lux-depth-v3 \
+  --input-dir "./input_images" \
+  --output-dir "./output/commercial_apex" \
+  --quality-tier "apex" \
+  --depth-device "mps" \
+  --materials-v3 "on" \
+  --pbr "on" \
+  --cache-depth "on" \
+  --emit-master16 "on" \
+  --emit-upscaled16 "on" \
+  --emit-marketing "on"
+```
+
+**Note:** Using `--quality-tier apex` automatically enables appropriate features for commercial production. The `--preset` flag is optional and provides additional fine-tuning.
+
+## Understanding V2 Enhancement
+
+The V2 enhancement stage is an **optional** AI-powered enhancement step that applies after depth estimation and PBR processing. It is controlled by two flags:
+
+- `--enable-v2`: Master switch to enable/disable the entire V2 stage (default: `on`)
+- `--v2-preset`: Preset configuration for V2 enhancement or `none` to skip (default: `default`)
+
+### When V2 Is Enabled (Default Behavior)
+
+When `--enable-v2 on` (the default), the pipeline:
+1. Validates that the enhancement script exists at `scripts/enhance_image.py`
+2. Executes the script for each processed image
+3. Applies AI-powered refinements configured by `--v2-preset`
+
+### How to Disable V2 Enhancement
+
+There are **two ways** to disable V2 enhancement:
+
+**Method 1: Disable the V2 Stage Entirely**
+```bash
+--enable-v2 "off"
+```
+This completely skips V2 validation and execution. Best for PBR-only workflows.
+
+**Method 2: Set V2 Preset to None**
+```bash
+--v2-preset "none"
+```
+This keeps V2 enabled but with no preset applied (effectively a no-op).
+
+### Quality Tier vs Preset
+
+These flags serve **different purposes**:
+
+**`--quality-tier`** (standard|premium|apex)
+- Controls **output quality level** across the entire pipeline
+- Affects processing resolution, precision, and deliverable formats
+- Determines which features are enabled by default
+- Examples: `standard` (fast/draft), `premium` (balanced), `apex` (maximum quality)
+
+**`--preset`** (named configuration)
+- Provides **named combinations** of parameters for specific scenarios
+- Fine-tunes pipeline behavior for particular depth models or use cases
+- Examples: `premium`, `depth-anything-v3.1-research-m4`, `apple-depth-pro-research`
+- Can override quality-tier defaults when specified
+
+**Recommendation**: Start with `--quality-tier` for most workflows. Use `--preset` only when you need specific model configurations or research-only features.
+
 ## Troubleshooting
+
+### "Script not found" Error
+
+**Error Message:**
+```
+ERROR: V2 enhancement script not found: scripts/enhance_image.py
+```
+
+**Cause:** The V2 enhancement stage is enabled (default), but the placeholder script is missing or not executable.
+
+**Solutions:**
+
+1. **Disable V2 Enhancement** (recommended for PBR-only workflows):
+   ```bash
+   --enable-v2 "off"
+   ```
+
+2. **Set V2 Preset to None**:
+   ```bash
+   --v2-preset "none"
+   ```
+
+3. **Ensure Script Exists**: Verify `scripts/enhance_image.py` exists and is executable:
+   ```bash
+   ls -l scripts/enhance_image.py
+   chmod +x scripts/enhance_image.py
+   ```
+
+**Why This Happens:** The pipeline validates all required scripts at startup when V2 is enabled. This is **correct fail-fast design** to prevent wasted processing time.
 
 ### "Input directory does not exist"
 Ensure the `--input-dir` path is correct and the directory exists.
@@ -290,6 +418,29 @@ When using `--depth-backend depth_pro`, you must set `--non-commercial-ok true` 
 ### "No images found in [directory]"
 The input directory must contain at least one supported image format:
 - `.jpg`, `.jpeg`, `.png`, `.tiff`, `.tif`, `.webp`
+
+### Common Configuration Mistakes
+
+**Mistake: Mixing quality-tier with incompatible presets**
+```bash
+# ❌ Don't do this - conflicts between tier and preset
+--quality-tier "standard" --preset "depth-anything-v3.1-research-m4"
+```
+Solution: Let presets override quality-tier, or use quality-tier alone.
+
+**Mistake: Forgetting to disable V2 for PBR-only workflows**
+```bash
+# ❌ V2 is enabled by default but you want PBR-only
+--pbr "on" --quality-tier "apex"
+```
+Solution: Add `--enable-v2 "off"` when you only need depth and PBR outputs.
+
+**Mistake: Using research models without license acknowledgement**
+```bash
+# ❌ Missing required flags
+--preset "depth-anything-v3.1-research-m4"
+```
+Solution: Add `--non-commercial-ok "true"` for non-commercial models.
 
 ### Missing ML Dependencies
 If you see warnings about missing torch, transformers, or coremltools:

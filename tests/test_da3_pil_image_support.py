@@ -14,6 +14,9 @@ from PIL import Image
 
 from transformation_portal.lux_depth_v3.inference import DA3InferenceEngine
 
+# Mark entire test module as ML tier (imports DA3InferenceEngine → torch/transformers)
+pytestmark = pytest.mark.ml
+
 
 def _create_test_pil_image(h: int = 64, w: int = 64, mode: str = "RGB") -> Image.Image:
     """Create a test PIL Image with random content."""
@@ -349,6 +352,304 @@ class TestDocstringUpdates:
         docstring = DA3InferenceEngine.infer.__doc__
         assert docstring is not None
         assert "PIL" in docstring
+
+
+class TestNumpyEdgeCases:
+    """Test edge cases for numpy array inputs."""
+
+    @patch("transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE", True)
+    @patch("transformation_portal.lux_depth_v3.inference.torch")
+    def test_numpy_grayscale_2d_array(self, mock_torch):
+        """Test that 2D grayscale arrays are converted to RGB."""
+        mock_torch.cuda.is_available.return_value = False
+        mock_torch.backends.mps.is_available.return_value = False
+
+        engine = DA3InferenceEngine(config="cpu")
+
+        mock_depth = _create_mock_depth(64, 64)
+        mock_result = {
+            "depth": mock_depth,
+            "depth_raw": mock_depth,
+            "metadata": {"shape": (64, 64)},
+        }
+
+        engine._model_loaded = True
+        engine.model = MagicMock()
+
+        with patch.object(engine, "_estimate_depth_pytorch", return_value=mock_result):
+            # Create 2D grayscale array (HxW)
+            rng = np.random.default_rng(42)
+            gray_2d = rng.integers(0, 256, (64, 64), dtype=np.uint8)
+
+            result = engine.infer(gray_2d)
+
+            # Verify original_image is RGB
+            assert result.original_image.shape == (64, 64, 3)
+            assert result.original_image.dtype == np.uint8
+
+    @patch("transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE", True)
+    @patch("transformation_portal.lux_depth_v3.inference.torch")
+    def test_numpy_rgba_4channel_array(self, mock_torch):
+        """Test that 4-channel RGBA arrays drop alpha channel."""
+        mock_torch.cuda.is_available.return_value = False
+        mock_torch.backends.mps.is_available.return_value = False
+
+        engine = DA3InferenceEngine(config="cpu")
+
+        mock_depth = _create_mock_depth(64, 64)
+        mock_result = {
+            "depth": mock_depth,
+            "depth_raw": mock_depth,
+            "metadata": {"shape": (64, 64)},
+        }
+
+        engine._model_loaded = True
+        engine.model = MagicMock()
+
+        with patch.object(engine, "_estimate_depth_pytorch", return_value=mock_result):
+            # Create RGBA array (HxWx4)
+            rng = np.random.default_rng(42)
+            rgba_array = rng.integers(0, 256, (64, 64, 4), dtype=np.uint8)
+
+            result = engine.infer(rgba_array)
+
+            # Verify alpha channel was dropped
+            assert result.original_image.shape == (64, 64, 3)
+            assert result.original_image.dtype == np.uint8
+
+    @patch("transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE", True)
+    @patch("transformation_portal.lux_depth_v3.inference.torch")
+    def test_numpy_uint16_depth_map(self, mock_torch):
+        """Test that uint16 arrays are scaled to uint8."""
+        mock_torch.cuda.is_available.return_value = False
+        mock_torch.backends.mps.is_available.return_value = False
+
+        engine = DA3InferenceEngine(config="cpu")
+
+        mock_depth = _create_mock_depth(64, 64)
+        mock_result = {
+            "depth": mock_depth,
+            "depth_raw": mock_depth,
+            "metadata": {"shape": (64, 64)},
+        }
+
+        engine._model_loaded = True
+        engine.model = MagicMock()
+
+        with patch.object(engine, "_estimate_depth_pytorch", return_value=mock_result):
+            # Create uint16 array (common in depth maps)
+            rng = np.random.default_rng(42)
+            uint16_array = rng.integers(0, 65536, (64, 64, 3), dtype=np.uint16)
+
+            result = engine.infer(uint16_array)
+
+            # Verify scaled to uint8
+            assert result.original_image.dtype == np.uint8
+            assert result.original_image.shape == (64, 64, 3)
+
+    @patch("transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE", True)
+    @patch("transformation_portal.lux_depth_v3.inference.torch")
+    def test_numpy_float_clipping(self, mock_torch):
+        """Test that float arrays with values >1.0 are clipped."""
+        mock_torch.cuda.is_available.return_value = False
+        mock_torch.backends.mps.is_available.return_value = False
+
+        engine = DA3InferenceEngine(config="cpu")
+
+        mock_depth = _create_mock_depth(64, 64)
+        mock_result = {
+            "depth": mock_depth,
+            "depth_raw": mock_depth,
+            "metadata": {"shape": (64, 64)},
+        }
+
+        engine._model_loaded = True
+        engine.model = MagicMock()
+
+        with patch.object(engine, "_estimate_depth_pytorch", return_value=mock_result):
+            # Create float array with values > 1.0 (should be clipped)
+            rng = np.random.default_rng(42)
+            float_array = rng.random((64, 64, 3)).astype(np.float32) * 2.0  # [0, 2.0]
+
+            result = engine.infer(float_array)
+
+            # Verify clipped to [0, 1] before scaling to uint8
+            assert result.original_image.dtype == np.uint8
+            assert result.original_image.max() <= 255
+            assert result.original_image.min() >= 0
+
+    @patch("transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE", True)
+    @patch("transformation_portal.lux_depth_v3.inference.torch")
+    def test_numpy_invalid_shape_raises(self, mock_torch):
+        """Test that invalid array shapes raise ValueError."""
+        mock_torch.cuda.is_available.return_value = False
+        mock_torch.backends.mps.is_available.return_value = False
+
+        engine = DA3InferenceEngine(config="cpu")
+        engine._model_loaded = True
+
+        # 1D array should fail
+        with pytest.raises(ValueError) as excinfo:
+            engine.infer(np.array([1, 2, 3]))
+        assert "Expected 2D (grayscale) or 3D (RGB/RGBA)" in str(excinfo.value)
+
+        # 4D batched array should fail
+        with pytest.raises(ValueError) as excinfo:
+            engine.infer(np.zeros((10, 64, 64, 3)))
+        assert "Expected 2D (grayscale) or 3D (RGB/RGBA)" in str(excinfo.value)
+
+    @patch("transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE", True)
+    @patch("transformation_portal.lux_depth_v3.inference.torch")
+    def test_numpy_invalid_channels_raises(self, mock_torch):
+        """Test that invalid channel counts raise ValueError."""
+        mock_torch.cuda.is_available.return_value = False
+        mock_torch.backends.mps.is_available.return_value = False
+
+        engine = DA3InferenceEngine(config="cpu")
+        engine._model_loaded = True
+
+        # 2-channel array should fail
+        with pytest.raises(ValueError) as excinfo:
+            engine.infer(np.zeros((64, 64, 2)))
+        assert "Expected 3 or 4 channels" in str(excinfo.value)
+
+        # 5-channel array should fail
+        with pytest.raises(ValueError) as excinfo:
+            engine.infer(np.zeros((64, 64, 5)))
+        assert "Expected 3 or 4 channels" in str(excinfo.value)
+
+
+class TestOriginalImageConsistency:
+    """Test that original_image is always uint8 RGB regardless of input type."""
+
+    @patch("transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE", True)
+    @patch("transformation_portal.lux_depth_v3.inference.torch")
+    def test_pil_input_produces_uint8_rgb(self, mock_torch):
+        """Test PIL input produces uint8 RGB original_image."""
+        mock_torch.cuda.is_available.return_value = False
+        mock_torch.backends.mps.is_available.return_value = False
+
+        engine = DA3InferenceEngine(config="cpu")
+
+        mock_depth = _create_mock_depth(64, 64)
+        mock_result = {
+            "depth": mock_depth,
+            "depth_raw": mock_depth,
+            "metadata": {"shape": (64, 64)},
+        }
+
+        engine._model_loaded = True
+        engine.model = MagicMock()
+
+        with patch.object(engine, "_estimate_depth_pytorch", return_value=mock_result):
+            pil_image = _create_test_pil_image(64, 64)
+            result = engine.infer(pil_image)
+
+            assert result.original_image.dtype == np.uint8
+            assert result.original_image.shape == (64, 64, 3)
+
+    @patch("transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE", True)
+    @patch("transformation_portal.lux_depth_v3.inference.torch")
+    def test_numpy_float32_produces_uint8_rgb(self, mock_torch):
+        """Test float32 input produces uint8 RGB original_image."""
+        mock_torch.cuda.is_available.return_value = False
+        mock_torch.backends.mps.is_available.return_value = False
+
+        engine = DA3InferenceEngine(config="cpu")
+
+        mock_depth = _create_mock_depth(64, 64)
+        mock_result = {
+            "depth": mock_depth,
+            "depth_raw": mock_depth,
+            "metadata": {"shape": (64, 64)},
+        }
+
+        engine._model_loaded = True
+        engine.model = MagicMock()
+
+        with patch.object(engine, "_estimate_depth_pytorch", return_value=mock_result):
+            # Create float32 array [0, 1]
+            rng = np.random.default_rng(42)
+            float_array = rng.random((64, 64, 3)).astype(np.float32)
+
+            result = engine.infer(float_array)
+
+            # Verify normalized to uint8 RGB (not preserved as float32)
+            assert result.original_image.dtype == np.uint8
+            assert result.original_image.shape == (64, 64, 3)
+
+    @patch("transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE", True)
+    @patch("transformation_portal.lux_depth_v3.inference.torch")
+    def test_numpy_uint16_produces_uint8_rgb(self, mock_torch):
+        """Test uint16 input produces uint8 RGB original_image."""
+        mock_torch.cuda.is_available.return_value = False
+        mock_torch.backends.mps.is_available.return_value = False
+
+        engine = DA3InferenceEngine(config="cpu")
+
+        mock_depth = _create_mock_depth(64, 64)
+        mock_result = {
+            "depth": mock_depth,
+            "depth_raw": mock_depth,
+            "metadata": {"shape": (64, 64)},
+        }
+
+        engine._model_loaded = True
+        engine.model = MagicMock()
+
+        with patch.object(engine, "_estimate_depth_pytorch", return_value=mock_result):
+            # Create uint16 array
+            rng = np.random.default_rng(42)
+            uint16_array = rng.integers(0, 65536, (64, 64, 3), dtype=np.uint16)
+
+            result = engine.infer(uint16_array)
+
+            # Verify normalized to uint8 RGB (not preserved as uint16)
+            assert result.original_image.dtype == np.uint8
+            assert result.original_image.shape == (64, 64, 3)
+
+
+class TestCoreMLFloat32Conversion:
+    """Test that CoreML backend receives float32 [0,1] arrays."""
+
+    @patch("transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE", True)
+    @patch("transformation_portal.lux_depth_v3.inference.COREML_AVAILABLE", True)
+    @patch("transformation_portal.lux_depth_v3.inference.torch")
+    def test_coreml_receives_float32_from_uint8_input(self, mock_torch):
+        """Test CoreML receives float32 even from uint8 input."""
+        mock_torch.cuda.is_available.return_value = False
+        mock_torch.backends.mps.is_available.return_value = False
+
+        engine = DA3InferenceEngine(config="cpu")
+
+        from transformation_portal.lux_depth_v3.inference import ModelBackend
+
+        engine.backend = ModelBackend.COREML
+
+        mock_depth = _create_mock_depth(64, 64)
+        mock_result = {
+            "depth": mock_depth,
+            "depth_raw": mock_depth,
+            "metadata": {"shape": (64, 64)},
+        }
+
+        engine._model_loaded = True
+        engine.model = MagicMock()
+
+        with patch.object(engine, "_estimate_depth_coreml", return_value=mock_result) as mock_estimate:
+            # Create uint8 array
+            rng = np.random.default_rng(42)
+            uint8_array = rng.integers(0, 256, (64, 64, 3), dtype=np.uint8)
+
+            _ = engine.infer(uint8_array)
+
+            # Verify CoreML received float32 [0, 1]
+            assert mock_estimate.called
+            call_args = mock_estimate.call_args[0]
+            assert isinstance(call_args[0], np.ndarray)
+            assert call_args[0].dtype == np.float32
+            assert call_args[0].min() >= 0.0
+            assert call_args[0].max() <= 1.0
 
 
 if __name__ == "__main__":
