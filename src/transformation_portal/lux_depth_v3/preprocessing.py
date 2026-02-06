@@ -205,33 +205,25 @@ def _enforce_dimension_multiple(img_array: np.ndarray, multiple: int) -> np.ndar
         if new_h < h:
             # Crop height (center crop)
             crop_top = (h - new_h) // 2
-            img_array = img_array[crop_top:crop_top + new_h, :]
+            img_array = img_array[crop_top : crop_top + new_h, :]
         elif new_h > h:
             # Pad height (symmetric padding)
             pad_h = new_h - h
             pad_top = pad_h // 2
             pad_bottom = pad_h - pad_top
-            img_array = np.pad(
-                img_array,
-                ((pad_top, pad_bottom), (0, 0), (0, 0)),
-                mode='edge'
-            )
+            img_array = np.pad(img_array, ((pad_top, pad_bottom), (0, 0), (0, 0)), mode="edge")
 
         # Handle width dimension
         if new_w < w:
             # Crop width (center crop)
             crop_left = (w - new_w) // 2
-            img_array = img_array[:, crop_left:crop_left + new_w]
+            img_array = img_array[:, crop_left : crop_left + new_w]
         elif new_w > w:
             # Pad width (symmetric padding)
             pad_w = new_w - w
             pad_left = pad_w // 2
             pad_right = pad_w - pad_left
-            img_array = np.pad(
-                img_array,
-                ((0, 0), (pad_left, pad_right), (0, 0)),
-                mode='edge'
-            )
+            img_array = np.pad(img_array, ((0, 0), (pad_left, pad_right), (0, 0)), mode="edge")
 
         logger.debug(f"Enforced dimension multiple: ({h}, {w}) → ({new_h}, {new_w})")
 

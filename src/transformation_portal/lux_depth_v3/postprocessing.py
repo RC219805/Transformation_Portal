@@ -104,7 +104,7 @@ class Postprocessor:
 
             # Heuristics for sigmaColor scaling based on depth value range
             LEGACY_SIGMA_COLOR_THRESHOLD = 100  # Legacy configs used 0-255-ish values
-            NORMALIZED_DEPTH_THRESHOLD = 2.0     # Normalized depth typically in [0,1]
+            NORMALIZED_DEPTH_THRESHOLD = 2.0  # Normalized depth typically in [0,1]
 
             # Sanitize depth: remove NaN/inf to prevent outlier explosion
             depth_clean = np.copy(depth)
@@ -155,11 +155,7 @@ class Postprocessor:
 
                 # RGB-guided joint bilateral (preserves edges from color image)
                 filtered = cv2.ximgproc.jointBilateralFilter(
-                    image_u8,
-                    depth_f32,
-                    d=d_param,
-                    sigmaColor=effective_sigma_color,
-                    sigmaSpace=sigma_space
+                    image_u8, depth_f32, d=d_param, sigmaColor=effective_sigma_color, sigmaSpace=sigma_space
                 )
                 return filtered
 
@@ -176,12 +172,7 @@ class Postprocessor:
                 d_param = 0
 
                 # Apply bilateral filter directly on float32 (no quantization)
-                filtered = cv2.bilateralFilter(
-                    depth_f32,
-                    d=d_param,
-                    sigmaColor=effective_sigma_color,
-                    sigmaSpace=sigma_space
-                )
+                filtered = cv2.bilateralFilter(depth_f32, d=d_param, sigmaColor=effective_sigma_color, sigmaSpace=sigma_space)
                 return filtered
 
         except ImportError:

@@ -85,23 +85,16 @@ class TestBilateralFilterPrecision:
         from transformation_portal.lux_depth_v3.config import PostprocessingConfig
 
         # Create metric depth (e.g., meters, range 0-100)
-        depth = np.array(
-            [[10.0, 20.0, 30.0], [40.0, 50.0, 60.0], [70.0, 80.0, 90.0]], dtype=np.float32
-        )
+        depth = np.array([[10.0, 20.0, 30.0], [40.0, 50.0, 60.0], [70.0, 80.0, 90.0]], dtype=np.float32)
 
         image = np.random.rand(3, 3, 3).astype(np.float32)
 
-        config = PostprocessingConfig(
-            apply_bilateral_filter=True, bilateral_sigma_color=5.0, bilateral_sigma_space=1.0
-        )
+        config = PostprocessingConfig(apply_bilateral_filter=True, bilateral_sigma_color=5.0, bilateral_sigma_space=1.0)
         postprocessor = Postprocessor(config)
 
         try:
             filtered = postprocessor._bilateral_filter(
-                depth,
-                image,
-                config.bilateral_sigma_color,
-                config.bilateral_sigma_space
+                depth, image, config.bilateral_sigma_color, config.bilateral_sigma_space
             )
 
             # Should return float32 with same shape

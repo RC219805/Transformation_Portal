@@ -336,10 +336,10 @@ def main(
     # These are read via getattr in orchestrator, so no config schema changes needed
     if max_workers is not None:
         setattr(config, "max_workers", max_workers)
-    
+
     if max_gpu_workers is not None:
         setattr(config, "max_gpu_workers", max_gpu_workers)
-    
+
     if verify_images:
         setattr(config, "verify_images", verify_images)
 
@@ -349,10 +349,10 @@ def main(
 
     # Discover images using same hygiene filters as orchestrator
     from .input_discovery import DiscoveryConfig, discover_images
-    
+
     logger.info(f"Discovering images in: {input_dir}")
     image_extensions = [".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp", ".bmp"]
-    
+
     discovery_config = DiscoveryConfig(strict_mode=strict_inputs)
     try:
         image_files = discover_images(input_dir, discovery_config, image_extensions)
