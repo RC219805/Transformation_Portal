@@ -13,6 +13,7 @@ import pytest
 # Import both implementations
 try:
     import numpy as np
+
     HAS_NUMPY = True
 except ImportError:
     HAS_NUMPY = False
@@ -29,6 +30,7 @@ from tools.performance_ledger import (
 # Import hypothesis for property-based testing
 try:
     from hypothesis import given, strategies as st, settings
+
     HAS_HYPOTHESIS = True
 except ImportError:
     HAS_HYPOTHESIS = False
@@ -46,8 +48,9 @@ class TestPurePythonMean:
         python_result = _pure_python_mean(values)
 
         # Allow small floating point differences
-        assert abs(numpy_result - python_result) < 1e-9, \
-            f"NumPy: {numpy_result}, Python: {python_result}, values: {values[:5]}..."
+        assert (
+            abs(numpy_result - python_result) < 1e-9
+        ), f"NumPy: {numpy_result}, Python: {python_result}, values: {values[:5]}..."
 
     def test_mean_empty_list_raises(self):
         """Mean of empty list should raise ValueError."""
@@ -77,8 +80,7 @@ class TestPurePythonStd:
         # Allow small relative error for floating point
         if numpy_result > 0:
             relative_error = abs(numpy_result - python_result) / numpy_result
-            assert relative_error < 1e-8, \
-                f"NumPy: {numpy_result}, Python: {python_result}, rel_err: {relative_error}"
+            assert relative_error < 1e-8, f"NumPy: {numpy_result}, Python: {python_result}, rel_err: {relative_error}"
         else:
             assert abs(python_result) < 1e-9
 
@@ -109,7 +111,7 @@ class TestPurePythonPercentile:
 
     @given(
         st.lists(st.floats(min_value=0.1, max_value=1000.0), min_size=2, max_size=100),
-        st.floats(min_value=0.0, max_value=100.0)
+        st.floats(min_value=0.0, max_value=100.0),
     )
     @settings(max_examples=100, deadline=None)
     def test_percentile_matches_numpy(self, values: List[float], percentile: float):
@@ -120,8 +122,7 @@ class TestPurePythonPercentile:
         # Allow small relative error
         if numpy_result > 0:
             relative_error = abs(numpy_result - python_result) / numpy_result
-            assert relative_error < 1e-8, \
-                f"Percentile {percentile}: NumPy={numpy_result}, Python={python_result}"
+            assert relative_error < 1e-8, f"Percentile {percentile}: NumPy={numpy_result}, Python={python_result}"
         else:
             assert abs(python_result) < 1e-9
 
@@ -184,8 +185,7 @@ class TestBootstrapConfidenceInterval:
         lower, upper = _bootstrap_confidence_interval(samples, iterations=1000)
 
         # 95% CI should contain true mean most of the time
-        assert lower <= true_mean <= upper, \
-            f"True mean {true_mean} not in CI [{lower}, {upper}]"
+        assert lower <= true_mean <= upper, f"True mean {true_mean} not in CI [{lower}, {upper}]"
 
     def test_bootstrap_ci_wider_with_more_variance(self):
         """Higher variance should produce wider CI."""
@@ -202,8 +202,7 @@ class TestBootstrapConfidenceInterval:
         width_high = upper_high - lower_high
 
         # High variance should have wider CI
-        assert width_high > width_low, \
-            f"High var width {width_high} not > low var width {width_low}"
+        assert width_high > width_low, f"High var width {width_high} not > low var width {width_low}"
 
     def test_bootstrap_ci_deterministic_with_seed(self):
         """Same seed should produce same CI."""
