@@ -20,15 +20,8 @@ def create_test_manifests(output_dir: Path, count: int = 5, mean_time: float = 1
 
     for i in range(count):
         manifest = {
-            "timing": {
-                "total_seconds": mean_time + (i - count // 2) * 0.5,
-                "depth_seconds": 8.0,
-                "v2_seconds": 2.0
-            },
-            "depth": {
-                "model": "da3",
-                "runtime_seconds": 8.0
-            }
+            "timing": {"total_seconds": mean_time + (i - count // 2) * 0.5, "depth_seconds": 8.0, "v2_seconds": 2.0},
+            "depth": {"model": "da3", "runtime_seconds": 8.0},
         }
         manifest_path = output_dir / f"manifest_{i}.json"
         with open(manifest_path, "w") as f:
@@ -52,10 +45,14 @@ class TestCLIBasicFunctionality:
         baseline_path = tmp_path / "baseline.json"
 
         result = run_ledger(
-            "--manifests-dir", str(manifests_dir),
-            "--output", str(baseline_path),
-            "--baseline-version", "v1.0.0",
-            "--backend", "da3"
+            "--manifests-dir",
+            str(manifests_dir),
+            "--output",
+            str(baseline_path),
+            "--baseline-version",
+            "v1.0.0",
+            "--backend",
+            "da3",
         )
 
         assert result.returncode == 0, f"STDOUT: {result.stdout}\nSTDERR: {result.stderr}"
@@ -78,9 +75,7 @@ class TestCLIBasicFunctionality:
 
         baseline_path = tmp_path / "baseline.json"
         result = run_ledger(
-            "--manifests-dir", str(baseline_manifests),
-            "--output", str(baseline_path),
-            "--baseline-version", "v1.0.0"
+            "--manifests-dir", str(baseline_manifests), "--output", str(baseline_path), "--baseline-version", "v1.0.0"
         )
         assert result.returncode == 0
 
@@ -90,9 +85,7 @@ class TestCLIBasicFunctionality:
 
         report_path = tmp_path / "report.md"
         result = run_ledger(
-            "--baseline", str(baseline_path),
-            "--compare", str(current_manifests),
-            "--output", str(report_path)
+            "--baseline", str(baseline_path), "--compare", str(current_manifests), "--output", str(report_path)
         )
 
         assert result.returncode == 0, f"STDOUT: {result.stdout}\nSTDERR: {result.stderr}"
@@ -109,19 +102,14 @@ class TestCLIExitCodes:
         create_test_manifests(baseline_manifests, count=10, mean_time=10.0)
 
         baseline_path = tmp_path / "baseline.json"
-        run_ledger(
-            "--manifests-dir", str(baseline_manifests),
-            "--output", str(baseline_path)
-        )
+        run_ledger("--manifests-dir", str(baseline_manifests), "--output", str(baseline_path))
 
         current_manifests = tmp_path / "current"
         create_test_manifests(current_manifests, count=10, mean_time=10.0)
 
         report_path = tmp_path / "report.md"
         result = run_ledger(
-            "--baseline", str(baseline_path),
-            "--compare", str(current_manifests),
-            "--output", str(report_path)
+            "--baseline", str(baseline_path), "--compare", str(current_manifests), "--output", str(report_path)
         )
 
         assert result.returncode == 0
@@ -132,10 +120,7 @@ class TestCLIExitCodes:
         create_test_manifests(baseline_manifests, count=10, mean_time=10.0)
 
         baseline_path = tmp_path / "baseline.json"
-        run_ledger(
-            "--manifests-dir", str(baseline_manifests),
-            "--output", str(baseline_path)
-        )
+        run_ledger("--manifests-dir", str(baseline_manifests), "--output", str(baseline_path))
 
         # Current run is 50% slower (triggers p95 regression)
         current_manifests = tmp_path / "current"
@@ -143,9 +128,7 @@ class TestCLIExitCodes:
 
         report_path = tmp_path / "report.md"
         result = run_ledger(
-            "--baseline", str(baseline_path),
-            "--compare", str(current_manifests),
-            "--output", str(report_path)
+            "--baseline", str(baseline_path), "--compare", str(current_manifests), "--output", str(report_path)
         )
 
         assert result.returncode == 1
@@ -158,29 +141,20 @@ class TestCLIExitCodes:
         create_test_manifests(baseline_manifests, count=10)
 
         baseline_path = tmp_path / "baseline.json"
-        run_ledger(
-            "--manifests-dir", str(baseline_manifests),
-            "--output", str(baseline_path),
-            "--backend", "da3"
-        )
+        run_ledger("--manifests-dir", str(baseline_manifests), "--output", str(baseline_path), "--backend", "da3")
 
         # Create current manifests with different backend
         current_manifests = tmp_path / "current"
         current_manifests.mkdir(parents=True)
 
         for i in range(10):
-            manifest = {
-                "timing": {"total_seconds": 10.0},
-                "depth": {"model": "depth-pro", "runtime_seconds": 10.0}
-            }
+            manifest = {"timing": {"total_seconds": 10.0}, "depth": {"model": "depth-pro", "runtime_seconds": 10.0}}
             with open(current_manifests / f"manifest_{i}.json", "w") as f:
                 json.dump(manifest, f)
 
         report_path = tmp_path / "report.md"
         result = run_ledger(
-            "--baseline", str(baseline_path),
-            "--compare", str(current_manifests),
-            "--output", str(report_path)
+            "--baseline", str(baseline_path), "--compare", str(current_manifests), "--output", str(report_path)
         )
 
         assert result.returncode == 2
@@ -193,10 +167,7 @@ class TestCLIExitCodes:
         create_test_manifests(baseline_manifests, count=10)
 
         baseline_path = tmp_path / "baseline.json"
-        run_ledger(
-            "--manifests-dir", str(baseline_manifests),
-            "--output", str(baseline_path)
-        )
+        run_ledger("--manifests-dir", str(baseline_manifests), "--output", str(baseline_path))
 
         # Create current with only 2 samples (< MIN_SAMPLES_FOR_COMPARISON)
         current_manifests = tmp_path / "current"
@@ -204,9 +175,7 @@ class TestCLIExitCodes:
 
         report_path = tmp_path / "report.md"
         result = run_ledger(
-            "--baseline", str(baseline_path),
-            "--compare", str(current_manifests),
-            "--output", str(report_path)
+            "--baseline", str(baseline_path), "--compare", str(current_manifests), "--output", str(report_path)
         )
 
         assert result.returncode == 3
@@ -225,9 +194,7 @@ class TestCLIBackwardCompatibility:
 
         # Use deprecated --version flag
         result = run_ledger(
-            "--manifests-dir", str(manifests_dir),
-            "--output", str(baseline_path),
-            "--version", "v1.0.0-deprecated-test"
+            "--manifests-dir", str(manifests_dir), "--output", str(baseline_path), "--version", "v1.0.0-deprecated-test"
         )
 
         assert result.returncode == 0
@@ -246,9 +213,7 @@ class TestCLIBackwardCompatibility:
         baseline_path = tmp_path / "baseline.json"
 
         result = run_ledger(
-            "--manifests-dir", str(manifests_dir),
-            "--output", str(baseline_path),
-            "--baseline-version", "v2.0.0"
+            "--manifests-dir", str(manifests_dir), "--output", str(baseline_path), "--baseline-version", "v2.0.0"
         )
 
         assert result.returncode == 0
@@ -265,10 +230,7 @@ class TestCLIStrictMode:
         create_test_manifests(baseline_manifests, count=10, mean_time=10.0)
 
         baseline_path = tmp_path / "baseline.json"
-        run_ledger(
-            "--manifests-dir", str(baseline_manifests),
-            "--output", str(baseline_path)
-        )
+        run_ledger("--manifests-dir", str(baseline_manifests), "--output", str(baseline_path))
 
         # Slight slowdown (5% - below default 10% threshold)
         current_manifests = tmp_path / "current"
@@ -278,18 +240,13 @@ class TestCLIStrictMode:
 
         # Without --strict: should pass
         result_lenient = run_ledger(
-            "--baseline", str(baseline_path),
-            "--compare", str(current_manifests),
-            "--output", str(report_path)
+            "--baseline", str(baseline_path), "--compare", str(current_manifests), "--output", str(report_path)
         )
         assert result_lenient.returncode == 0
 
         # With --strict: might fail on potential regression
         result_strict = run_ledger(
-            "--baseline", str(baseline_path),
-            "--compare", str(current_manifests),
-            "--output", str(report_path),
-            "--strict"
+            "--baseline", str(baseline_path), "--compare", str(current_manifests), "--output", str(report_path), "--strict"
         )
         # Strict mode is more sensitive
         assert result_strict.returncode in [0, 1]
@@ -304,10 +261,7 @@ class TestCLIEmitJSON:
         create_test_manifests(baseline_manifests, count=10)
 
         baseline_path = tmp_path / "baseline.json"
-        run_ledger(
-            "--manifests-dir", str(baseline_manifests),
-            "--output", str(baseline_path)
-        )
+        run_ledger("--manifests-dir", str(baseline_manifests), "--output", str(baseline_path))
 
         current_manifests = tmp_path / "current"
         create_test_manifests(current_manifests, count=10)
@@ -316,10 +270,14 @@ class TestCLIEmitJSON:
         json_path = tmp_path / "current.json"
 
         result = run_ledger(
-            "--baseline", str(baseline_path),
-            "--compare", str(current_manifests),
-            "--output", str(report_path),
-            "--emit-json", str(json_path)
+            "--baseline",
+            str(baseline_path),
+            "--compare",
+            str(current_manifests),
+            "--output",
+            str(report_path),
+            "--emit-json",
+            str(json_path),
         )
 
         assert result.returncode == 0
@@ -352,9 +310,7 @@ class TestCLIInputValidation:
 
         # Attempt to use excessive iterations
         result = run_ledger(
-            "--manifests-dir", str(manifests_dir),
-            "--output", str(baseline_path),
-            "--bootstrap-iterations", "20000"
+            "--manifests-dir", str(manifests_dir), "--output", str(baseline_path), "--bootstrap-iterations", "20000"
         )
 
         assert result.returncode == 3  # EXIT_INSUFFICIENT_DATA
@@ -368,9 +324,7 @@ class TestCLIInputValidation:
         baseline_path = tmp_path / "baseline.json"
 
         result = run_ledger(
-            "--manifests-dir", str(manifests_dir),
-            "--output", str(baseline_path),
-            "--bootstrap-iterations", "-100"
+            "--manifests-dir", str(manifests_dir), "--output", str(baseline_path), "--bootstrap-iterations", "-100"
         )
 
         assert result.returncode == 3
@@ -387,10 +341,7 @@ class TestCLIBootstrapFeatures:
 
         baseline_path = tmp_path / "baseline.json"
 
-        result = run_ledger(
-            "--manifests-dir", str(manifests_dir),
-            "--output", str(baseline_path)
-        )
+        result = run_ledger("--manifests-dir", str(manifests_dir), "--output", str(baseline_path))
 
         assert result.returncode == 0
 
@@ -409,11 +360,7 @@ class TestCLIBootstrapFeatures:
 
         baseline_path = tmp_path / "baseline.json"
 
-        result = run_ledger(
-            "--manifests-dir", str(manifests_dir),
-            "--output", str(baseline_path),
-            "--no-bootstrap"
-        )
+        result = run_ledger("--manifests-dir", str(manifests_dir), "--output", str(baseline_path), "--no-bootstrap")
 
         assert result.returncode == 0
 

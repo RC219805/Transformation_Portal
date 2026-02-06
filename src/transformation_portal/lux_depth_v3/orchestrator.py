@@ -41,6 +41,10 @@ except ImportError:
     XXHASH_AVAILABLE = False
     xxhash = None  # type: ignore
 
+from ..depth.backends.protocol import LicenseRestrictionError
+
+# Backend registry for depth estimation
+from ..depth.backends.registry import DepthBackendRegistry
 from .batch_stats import compute_batch_runtime_stats
 
 # Note: Imports adjusted to relative for package context compatibility
@@ -69,10 +73,6 @@ from .postprocessing import Postprocessor
 from .security import HashMode, sanitize_file_stem, sanitize_path_component_nonlossy
 from .v2_runner import V2Runner, find_v2_report
 
-# Backend registry for depth estimation
-from ..depth.backends.registry import DepthBackendRegistry
-from ..depth.backends.protocol import LicenseRestrictionError
-
 logger = logging.getLogger(__name__)
 
 
@@ -90,56 +90,62 @@ def _log_dependency_status() -> dict:
     # Check torch
     try:
         import torch
-        status['torch'] = True
-        version = getattr(torch, '__version__', 'unknown')
+
+        status["torch"] = True
+        version = getattr(torch, "__version__", "unknown")
         logger.debug(f"torch {version} available")
     except ImportError:
-        status['torch'] = False
+        status["torch"] = False
         logger.info("torch not available - ML features disabled. Install: pip install torch")
 
     # Check transformers
     try:
         import transformers
-        status['transformers'] = True
-        version = getattr(transformers, '__version__', 'unknown')
+
+        status["transformers"] = True
+        version = getattr(transformers, "__version__", "unknown")
         logger.debug(f"transformers {version} available")
     except ImportError:
-        status['transformers'] = False
+        status["transformers"] = False
         logger.info("transformers not available - depth models disabled. Install: pip install transformers")
 
     # Check coremltools (optional)
     try:
         import coremltools
-        status['coremltools'] = True
-        version = getattr(coremltools, '__version__', 'unknown')
+
+        status["coremltools"] = True
+        version = getattr(coremltools, "__version__", "unknown")
         logger.debug(f"coremltools {version} available")
     except ImportError:
-        status['coremltools'] = False
+        status["coremltools"] = False
         logger.debug("coremltools not available (optional). Install: pip install coremltools")
 
     # Check scikit-image (optional for some features)
     try:
         import skimage
-        status['scikit-image'] = True
-        version = getattr(skimage, '__version__', 'unknown')
+
+        status["scikit-image"] = True
+        version = getattr(skimage, "__version__", "unknown")
         logger.debug(f"scikit-image {version} available")
     except ImportError:
-        status['scikit-image'] = False
+        status["scikit-image"] = False
         logger.debug("scikit-image not available (optional for advanced filtering)")
 
     # Check numba (optional performance enhancement)
     try:
         import numba
-        status['numba'] = True
+
+        status["numba"] = True
         logger.debug(f"numba {numba.__version__} available - performance optimizations enabled")
     except ImportError:
-        status['numba'] = False
+        status["numba"] = False
         logger.debug("numba not available - using NumPy fallback (30-50% slower for some operations)")
 
     # Check HF_TOKEN for model downloads
     import os
-    hf_token = os.environ.get('HF_TOKEN')
-    status['hf_token'] = bool(hf_token)
+
+    hf_token = os.environ.get("HF_TOKEN")
+    status["hf_token"] = bool(hf_token)
     if hf_token:
         logger.debug("HF_TOKEN present - authenticated model downloads enabled")
     else:
@@ -366,9 +372,7 @@ class EnhanceOrchestrator:
 
             if not available:
                 # Fallback to DA3
-                logger.warning(
-                    f"Backend '{requested}' unavailable: {reason}. Falling back to DA3."
-                )
+                logger.warning(f"Backend '{requested}' unavailable: {reason}. Falling back to DA3.")
                 backend = registry.get_backend("da3", self.config)
                 try:
                     backend.ensure_available()
@@ -377,17 +381,16 @@ class EnhanceOrchestrator:
                 except (ImportError, FileNotFoundError) as fallback_error:
                     # DA3 also unavailable (likely test environment without ML dependencies)
                     # Create a mock backend that will fail gracefully if actually used
-                    logger.warning(
-                        f"DA3 fallback also unavailable: {fallback_error}. "
-                        f"Using mock backend for testing."
-                    )
+                    logger.warning(f"DA3 fallback also unavailable: {fallback_error}. " f"Using mock backend for testing.")
                     from unittest.mock import Mock
+
                     backend = Mock()
                     backend.name = "mock"
-                    backend.compute = Mock(side_effect=ImportError(
-                        "Mock backend used - ML dependencies not installed. "
-                        "This orchestrator cannot process images."
-                    ))
+                    backend.compute = Mock(
+                        side_effect=ImportError(
+                            "Mock backend used - ML dependencies not installed. " "This orchestrator cannot process images."
+                        )
+                    )
                     resolved = "mock"
                     status = "test_mode"
                     reason = f"Test environment (no ML dependencies): {fallback_error}"
@@ -405,9 +408,7 @@ class EnhanceOrchestrator:
                 device=self.config.depth_device,
             )
 
-            logger.info(
-                f"Depth backend: requested={requested} resolved={resolved} device={self.config.depth_device}"
-            )
+            logger.info(f"Depth backend: requested={requested} resolved={resolved} device={self.config.depth_device}")
 
         except LicenseRestrictionError as e:
             logger.error(f"License restriction: {e}")
@@ -437,14 +438,18 @@ class EnhanceOrchestrator:
             BackendSelectionMetadata with selection audit trail
         """
         # Return the metadata captured during initialization
-        return getattr(self, "_backend_metadata", BackendSelectionMetadata(
-            requested_backend=None,
-            resolved_backend="da3",
-            resolution_status="success",
-            resolution_reason=None,
-            model_id=self.config.model_variant.value.huggingface_id,
-            device=self.config.depth_device,
-        ))
+        return getattr(
+            self,
+            "_backend_metadata",
+            BackendSelectionMetadata(
+                requested_backend=None,
+                resolved_backend="da3",
+                resolution_status="success",
+                resolution_reason=None,
+                model_id=self.config.model_variant.value.huggingface_id,
+                device=self.config.depth_device,
+            ),
+        )
 
     def _compute_or_skip_hash(
         self,
@@ -693,6 +698,7 @@ class EnhanceOrchestrator:
                 else:
                     # Run inference via backend
                     from PIL import Image
+
                     pil_image = Image.fromarray(preprocessed_array.astype(np.uint8))
                     result = self.depth_backend.compute(pil_image)
 
@@ -720,7 +726,9 @@ class EnhanceOrchestrator:
                     logger.debug(f"Saved float depth: {float_depth_path}")
 
                 # Capture backend metadata dynamically (ADR-019)
-                license_str = self.depth_backend.license_type.value if hasattr(self.depth_backend, "license_type") else "unknown"
+                license_str = (
+                    self.depth_backend.license_type.value if hasattr(self.depth_backend, "license_type") else "unknown"
+                )
                 stats = {
                     "backend": self.depth_backend.name,
                     "license": license_str,

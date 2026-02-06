@@ -107,7 +107,7 @@ class TestEnhanceBatch:
                 mock_backend = Mock()
                 mock_backend.ensure_available.return_value = None  # Success
                 mock_backend.name = "da3"
-                
+
                 mock_registry = Mock()
                 mock_registry.get_backend.return_value = mock_backend
                 mock_registry_class.return_value = mock_registry
@@ -128,6 +128,7 @@ class TestEnhanceBatch:
 
                 # Mock inference result (DepthResult from backend.compute())
                 from transformation_portal.depth.backends.protocol import DepthResult
+
                 mock_result = DepthResult(
                     depth_map=np.random.rand(100, 100).astype(np.float32),
                     original_image=np.random.rand(100, 100, 3).astype(np.uint8),
@@ -222,7 +223,7 @@ class TestEnhanceBatch:
                 mock_backend = Mock()
                 mock_backend.ensure_available.return_value = None
                 mock_backend.name = "da3"
-                
+
                 mock_registry = Mock()
                 mock_registry.get_backend.return_value = mock_backend
                 mock_registry_class.return_value = mock_registry
@@ -292,7 +293,7 @@ class TestEnhanceBatch:
                 mock_backend = Mock()
                 mock_backend.ensure_available.return_value = None
                 mock_backend.name = "da3"
-                
+
                 mock_registry = Mock()
                 mock_registry.get_backend.return_value = mock_backend
                 mock_registry_class.return_value = mock_registry
