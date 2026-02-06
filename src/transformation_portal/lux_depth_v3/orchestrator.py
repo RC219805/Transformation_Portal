@@ -91,7 +91,8 @@ def _log_dependency_status() -> dict:
     try:
         import torch
         status['torch'] = True
-        logger.debug(f"torch {torch.__version__} available")
+        version = getattr(torch, '__version__', 'unknown')
+        logger.debug(f"torch {version} available")
     except ImportError:
         status['torch'] = False
         logger.info("torch not available - ML features disabled. Install: pip install torch")
