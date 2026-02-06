@@ -155,7 +155,7 @@ class TestParallelProcessing:
             enable_v2=False,  # Disable V2 for simpler testing
         )
 
-        with patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine"):
+        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"):
             orch = EnhanceOrchestrator(config, tmp_path, verify_outputs=False)
             return orch
 
@@ -265,7 +265,7 @@ class TestCacheIntegration:
             enable_v2=False,
         )
 
-        with patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine"):
+        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"):
             orch = EnhanceOrchestrator(config, tmp_path, verify_outputs=False)
             return orch
 
@@ -285,7 +285,7 @@ class TestCacheIntegration:
             enable_v2=False,
         )
 
-        with patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine"):
+        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"):
             orch = EnhanceOrchestrator(config, tmp_path)
 
         assert orch.depth_cache is None
@@ -359,7 +359,7 @@ class TestPerformanceMetrics:
             enable_v2=False,
         )
 
-        with patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine"):
+        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"):
             orch = EnhanceOrchestrator(config, tmp_path)
 
         # Should be cpu_count - 1, minimum 1
@@ -580,22 +580,33 @@ class TestThreadSafety:
             model_variant=ModelVariant.METRIC_SMALL, enable_parallel_processing=True, enable_v2=False, max_parallel_workers=4
         )
 
-        with patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine") as mock_engine:
-            # Mock depth inference with correct shape for postprocessing
-            mock_instance = MagicMock()
+        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"):
+            orch = EnhanceOrchestrator(config, tmp_path / "output")
 
-            def mock_predict(img):
-                mock_result = MagicMock()
+            # Mock the depth backend
+            mock_backend = MagicMock(spec=['name', 'compute'])
+            mock_backend.name = "mock"
+
+            def mock_compute(img):
+                # Convert PIL Image to numpy if needed
+                import numpy as np
+                from PIL import Image
+
+                if isinstance(img, Image.Image):
+                    img_array = np.array(img)
+                else:
+                    img_array = img
+
+                mock_result = MagicMock(spec=['depth', 'depth_map', 'original_image', 'metadata'])
                 # Return 2D depth array (not 1D)
                 mock_result.depth = np.random.rand(100, 100).astype(np.float32)
-                mock_result.original_image = img
+                mock_result.depth_map = mock_result.depth
+                mock_result.original_image = img_array
                 mock_result.metadata = {}
                 return mock_result
 
-            mock_instance.predict = mock_predict
-            mock_engine.return_value = mock_instance
-
-            orch = EnhanceOrchestrator(config, tmp_path / "output")
+            mock_backend.compute = mock_compute
+            orch.depth_backend = mock_backend
 
             # Process batch in parallel
             results = orch.enhance_batch_parallel(test_images, input_root=tmp_path)

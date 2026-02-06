@@ -31,12 +31,12 @@ def orchestrator(tmp_path, mock_config):
         orch = EnhanceOrchestrator(config=mock_config, output_root=tmp_path)
 
         # Mock the depth backend to avoid ML dependencies
-        mock_backend = Mock()
+        mock_backend = Mock(spec=['name', 'compute'])
         mock_backend.name = "mock"
 
         # Create realistic depth result
         depth_array = np.random.rand(100, 100).astype(np.float32)
-        mock_result = Mock()
+        mock_result = Mock(spec=['depth_map', 'depth', 'original_image', 'metadata'])
         mock_result.depth_map = depth_array
         mock_result.depth = depth_array
         mock_result.original_image = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
