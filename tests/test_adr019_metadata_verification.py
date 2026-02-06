@@ -10,11 +10,10 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from transformation_portal.lux_depth_v3.config import EnhanceConfig
-from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
-
 # Import availability helpers from conftest
 from tests.conftest import can_run_da3_compute
+from transformation_portal.lux_depth_v3.config import EnhanceConfig
+from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
 # Mark all tests as ML tier
 pytestmark = pytest.mark.ml

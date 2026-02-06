@@ -8,12 +8,11 @@ import numpy as np
 import pytest
 from PIL import Image
 
+# Import availability helpers from conftest
+from tests.conftest import can_run_da3_compute
 from transformation_portal.depth.backends.da3 import DA3Backend
 from transformation_portal.depth.backends.protocol import DepthResult, LicenseType
 from transformation_portal.depth.backends.registry import DepthBackendRegistry
-
-# Import availability helpers from conftest
-from tests.conftest import can_run_da3_compute
 
 # Mark all tests in this module as ML tier (require torch + transformers)
 pytestmark = pytest.mark.ml
