@@ -32,6 +32,7 @@ def test_da3_backend_implements_protocol():
     assert backend.requires_checkpoint is False
 
 
+@pytest.mark.skipif(not DA3_AVAILABLE, reason="DA3 requires depth_anything_3 library - disabled in offline CI")
 def test_da3_backend_availability():
     """DA3Backend.ensure_available() checks dependencies."""
     backend = DA3Backend()

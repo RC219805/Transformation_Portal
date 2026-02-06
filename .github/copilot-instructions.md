@@ -228,9 +228,9 @@ Performance regressions are treated as correctness failures.
 | (default / core) | `-m "not ml and not slow"`       | config parsing, schemas, IO utilities, orchestration logic | Must run fast; no torch/model loads.                                      |
 | `ml`             | `-m "ml and not slow"`           | backend wiring, inference shape rules, device placement    | Must be offline; small fixtures only.                                     |
 | `slow`           | (excluded by default)            | stress, large fixtures, full pipelines                     | Run manually or scheduled.                                                |
-| `benchmark`      | (manual / gated)                 | performance ledger updates, regression thresholds          | Run in nightly/deep checks; skip in PR gating unless explicitly intended. |
+| `benchmark`      | (manual / scheduled)             | performance ledger updates, regression thresholds          | Run in nightly/deep checks; not currently excluded from PR gating CI.     |
 
-**Note:** Benchmark tests are not currently excluded by CI marker expressions, but should be marked and excluded in future CI iterations to avoid performance testing in fast PR gates.
+**Note:** CI currently uses simple marker expressions (`-m "not ml and not slow"`). Future iterations may add explicit `not benchmark` exclusion for PR gating to fully isolate performance testing from fast feedback loops.
 
 ### CI matrix (do not break this)
 
@@ -381,7 +381,7 @@ Docs are governance, not optional.
 Run the same split CI expects:
 
 ```bash
-pytest -v tests/ -ra -m "not ml and not slow and not benchmark" --maxfail=1
+pytest -v tests/ -ra -m "not ml and not slow" --maxfail=1
 ```
 
 If ML deps are installed:
