@@ -91,7 +91,8 @@ def _log_dependency_status() -> dict:
     try:
         import torch
         status['torch'] = True
-        logger.debug(f"torch {torch.__version__} available")
+        version = getattr(torch, '__version__', 'unknown')
+        logger.debug(f"torch {version} available")
     except ImportError:
         status['torch'] = False
         logger.info("torch not available - ML features disabled. Install: pip install torch")
@@ -100,7 +101,8 @@ def _log_dependency_status() -> dict:
     try:
         import transformers
         status['transformers'] = True
-        logger.debug(f"transformers {transformers.__version__} available")
+        version = getattr(transformers, '__version__', 'unknown')
+        logger.debug(f"transformers {version} available")
     except ImportError:
         status['transformers'] = False
         logger.info("transformers not available - depth models disabled. Install: pip install transformers")
@@ -109,7 +111,8 @@ def _log_dependency_status() -> dict:
     try:
         import coremltools
         status['coremltools'] = True
-        logger.debug(f"coremltools {coremltools.__version__} available")
+        version = getattr(coremltools, '__version__', 'unknown')
+        logger.debug(f"coremltools {version} available")
     except ImportError:
         status['coremltools'] = False
         logger.debug("coremltools not available (optional). Install: pip install coremltools")
@@ -118,7 +121,8 @@ def _log_dependency_status() -> dict:
     try:
         import skimage
         status['scikit-image'] = True
-        logger.debug(f"scikit-image {skimage.__version__} available")
+        version = getattr(skimage, '__version__', 'unknown')
+        logger.debug(f"scikit-image {version} available")
     except ImportError:
         status['scikit-image'] = False
         logger.debug("scikit-image not available (optional for advanced filtering)")
