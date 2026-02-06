@@ -696,8 +696,8 @@ class EnhanceOrchestrator:
             if verify_strict:
                 from PIL import Image
                 try:
-                    img_verify = Image.open(validated_path)
-                    img_verify.verify()
+                    with Image.open(validated_path) as img_verify:
+                        img_verify.verify()
                     logger.debug(f"Strict verification passed: {validated_path.name}")
                 except Exception as e:
                     logger.error(f"Strict verification failed: {validated_path.name} - {e}")
