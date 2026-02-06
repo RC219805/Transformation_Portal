@@ -135,7 +135,15 @@ class Postprocessor:
                 # Ensure image is uint8 RGB for joint bilateral
                 if image.dtype == np.float32:
                     image_u8 = (np.clip(image, 0, 1) * 255).astype(np.uint8)
+                elif image.dtype == np.float64:
+                    image_u8 = (np.clip(image, 0, 1) * 255).astype(np.uint8)
+                elif image.dtype == np.uint16:
+                    image_u8 = (image / 257).astype(np.uint8)  # Scale 16-bit to 8-bit
+                elif np.issubdtype(image.dtype, np.integer):
+                    # Handle other integer types (int8, int16, int32, etc.)
+                    image_u8 = np.clip(image, 0, 255).astype(np.uint8)
                 else:
+                    # Already uint8 or unknown type - attempt direct conversion
                     image_u8 = image.astype(np.uint8)
 
                 # Convert depth to float32 if needed

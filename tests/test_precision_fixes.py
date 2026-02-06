@@ -126,7 +126,7 @@ class TestPreprocessingScaling:
         img = Image.new("RGB", (56, 56), color=(127, 127, 127))
         img.save(img_path)
 
-        result, original_shape = preprocess_image(img_path)
+        result, _ = preprocess_image(img_path)
 
         # Verify float32 output in [0, 1] range
         assert result.dtype == np.float32
@@ -178,6 +178,30 @@ class TestDimensionEnforcementNonDestructive:
         # With symmetric padding: 2px top, 2px left
         center = result[2:12, 2:12]
         assert np.allclose(center, 0.5), "Padding did not preserve center region"
+
+    def test_dimension_enforcement_mixed_crop_pad(self):
+        """Test mixed scenario where one dimension needs crop, other needs pad.
+
+        Example: 15x10 → 14x14 requires cropping width (15→14) and padding height (10→14).
+        This verifies that crop and pad are applied independently per dimension.
+        """
+        # Create 15x10 image with distinct pattern
+        img_array = np.zeros((10, 15, 3), dtype=np.float32)
+        # Set center region to white
+        img_array[4:6, 7:8, :] = 1.0  # Center pixel at (5, 7.5)
+
+        result = _enforce_dimension_multiple(img_array, 14)
+
+        # Should be 14x14 (pad height 10→14, crop width 15→14)
+        assert result.shape[:2] == (14, 14), f"Expected (14, 14), got {result.shape[:2]}"
+
+        # Verify center pattern survived
+        # Original center at [4:6, 7:8]
+        # After height pad (+2 top): [6:8, 7:8]
+        # After width crop (-0.5 left): [6:8, 7:8] (crop is 15-14=1, so 0 or 1 pixel shift)
+        # Due to center crop of 1px from width, the center moves slightly
+        center_region = result[6:8, 6:8]
+        assert np.any(center_region > 0.5), "Center pattern lost - mixed crop/pad failed"
 
 
 class TestFormatSupport:
