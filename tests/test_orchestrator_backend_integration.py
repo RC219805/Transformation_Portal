@@ -4,12 +4,13 @@ Tests that the orchestrator correctly uses the DepthBackendRegistry
 and implements fallback logic.
 """
 
-import pytest
 from pathlib import Path
 
+import pytest
+
+from transformation_portal.depth.backends.protocol import LicenseRestrictionError
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
-from transformation_portal.depth.backends.protocol import LicenseRestrictionError
 
 # Mark all tests as ML tier - they test backend registry behavior with real backends
 pytestmark = pytest.mark.ml
