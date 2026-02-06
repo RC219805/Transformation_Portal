@@ -7,9 +7,6 @@ Tests verify:
 4. Format support includes WebP and BMP
 """
 
-from pathlib import Path
-from unittest.mock import Mock, patch
-
 import numpy as np
 import pytest
 from PIL import Image
@@ -25,11 +22,13 @@ from transformation_portal.lux_depth_v3.preprocessing import (
 class TestBilateralFilterPrecision:
     """Test bilateral filter precision improvements."""
 
-    def test_bilateral_filter_no_uint8_quantization(self):
-        """Test that bilateral filter processes float32 directly without uint8 conversion."""
-        # Import postprocessing module
-        from transformation_portal.lux_depth_v3.postprocessing import Postprocessor
+    def test_bilateral_filter_no_uint8_quantization(self, monkeypatch):
+        """Test that bilateral filter processes float32 directly without uint8 conversion.
+
+        Uses monkeypatching to verify cv2 functions receive float32 inputs.
+        """
         from transformation_portal.lux_depth_v3.config import PostprocessingConfig
+        from transformation_portal.lux_depth_v3.postprocessing import Postprocessor
 
         # Create test depth with high precision values
         # Use values that would lose precision if quantized to uint8
@@ -45,32 +44,39 @@ class TestBilateralFilterPrecision:
         # Create dummy image
         image = np.random.rand(3, 3, 3).astype(np.float32)
 
-        # Create postprocessor with bilateral filter enabled
-        config = PostprocessingConfig(
-            apply_bilateral_filter=True,
-            bilateral_sigma_color=0.1,
-            bilateral_sigma_space=1.0,
-        )
-        postprocessor = Postprocessor(config)
+        # Mock cv2.bilateralFilter to verify it receives float32
+        def mock_bilateral_filter(src, d, sigmaColor, sigmaSpace):
+            # Assert input is float32, not uint8
+            assert src.dtype == np.float32, f"Expected float32, got {src.dtype}"
+            assert src.ndim == 2, f"Expected 2D array, got {src.ndim}D"
+            # Return same shape with slight smoothing
+            return src.copy()
 
-        # Apply bilateral filter
         try:
+            import cv2
+
+            # Monkeypatch cv2.bilateralFilter
+            monkeypatch.setattr(cv2, "bilateralFilter", mock_bilateral_filter)
+
+            # Create postprocessor with bilateral filter enabled
+            config = PostprocessingConfig(
+                apply_bilateral_filter=True,
+                bilateral_sigma_color=0.1,
+                bilateral_sigma_space=1.0,
+            )
+            postprocessor = Postprocessor(config)
+
+            # Apply bilateral filter - mock will verify float32
             filtered = postprocessor._bilateral_filter(
                 depth, image, config.bilateral_sigma_color, config.bilateral_sigma_space
             )
 
             # Verify output is float32
             assert filtered.dtype == np.float32
-
-            # Verify precision is maintained (not quantized to 256 levels)
-            # If uint8 quantization occurred, we'd only have 256 unique values
-            # With float32, we should preserve more precision
-            # Note: bilateral filter will smooth values, so we can't expect exact preservation
-            # but we should have more than 256 unique values in a larger array
             assert filtered.shape == depth.shape
 
         except ImportError:
-            # OpenCV not available - test passes as scipy fallback doesn't quantize either
+            # OpenCV not available - skip test
             pytest.skip("OpenCV not available, skipping bilateral filter test")
 
     def test_bilateral_filter_handles_metric_depth(self):
@@ -91,7 +97,12 @@ class TestBilateralFilterPrecision:
         postprocessor = Postprocessor(config)
 
         try:
-            filtered = postprocessor._bilateral_filter(depth, image, config.bilateral_sigma_color, config.bilateral_sigma_space)
+            filtered = postprocessor._bilateral_filter(
+                depth,
+                image,
+                config.bilateral_sigma_color,
+                config.bilateral_sigma_space
+            )
 
             # Should return float32 with same shape
             assert filtered.dtype == np.float32
@@ -135,7 +146,7 @@ class TestDimensionEnforcementNonDestructive:
         # If Lanczos resampling is used, pixel values will be interpolated
         # If crop is used, original pixel values are preserved
         img_array = np.zeros((100, 100, 3), dtype=np.float32)
-        
+
         # Set distinct pattern in top-left that should survive center crop
         img_array[40:60, 40:60, 0] = 1.0  # Red square in center
         img_array[40:60, 40:60, 1] = 0.0
@@ -240,18 +251,18 @@ class TestInputDiscoveryFormatSupport:
         try:
             img1 = tmp_path / "real1.webp"
             Image.new("RGB", (56, 56)).save(img1, "WEBP")
-            
+
             img2 = tmp_path / "real2.bmp"
             Image.new("RGB", (56, 56)).save(img2, "BMP")
-            
+
             # Discover with default extensions (should include webp, bmp)
             config = DiscoveryConfig(strict_mode=False)
             images = discover_images(tmp_path, config, image_extensions=None)
-            
+
             # Should find both files
             stems = {p.stem for p in images}
             assert "real1" in stems
             assert "real2" in stems
-            
+
         except Exception:
             pytest.skip("Could not create WebP/BMP test files")
