@@ -4,8 +4,6 @@ Tests that DA3Backend implements the DepthBackend protocol correctly
 and integrates with the registry.
 """
 
-import os
-
 import numpy as np
 import pytest
 from PIL import Image
@@ -17,15 +15,14 @@ from transformation_portal.depth.backends.registry import DepthBackendRegistry
 # Mark all tests in this module as ML tier (require torch + transformers)
 pytestmark = pytest.mark.ml
 
-# Check offline mode and DA3 availability
-TRANSFORMERS_OFFLINE = os.getenv("TRANSFORMERS_OFFLINE") == "1"
 
-# Check if depth_anything_3 is available at module level
-try:
-    import depth_anything_3  # noqa: F401
-    DA3_AVAILABLE = True
-except ImportError:
-    DA3_AVAILABLE = False
+def _check_da3_available() -> bool:
+    """Check if DA3 library is available."""
+    try:
+        import depth_anything_3  # noqa: F401
+        return True
+    except ImportError:
+        return False
 
 
 def test_da3_backend_implements_protocol():
@@ -43,10 +40,9 @@ def test_da3_backend_availability():
     backend.ensure_available()
 
 
-@pytest.mark.ml
 @pytest.mark.skipif(
-    not DA3_AVAILABLE or TRANSFORMERS_OFFLINE,
-    reason="DA3 requires depth_anything_3 library and model download"
+    not _check_da3_available(),
+    reason="DA3 library (depth_anything_3) not installed - optional ML dependency"
 )
 def test_da3_backend_compute():
     """DA3Backend.compute() returns DepthResult."""
@@ -70,10 +66,9 @@ def test_da3_backend_compute():
     assert result.backend_id == "da3"
 
 
-@pytest.mark.ml
 @pytest.mark.skipif(
-    not DA3_AVAILABLE or TRANSFORMERS_OFFLINE,
-    reason="DA3 requires depth_anything_3 library and model download"
+    not _check_da3_available(),
+    reason="DA3 library (depth_anything_3) not installed - optional ML dependency"
 )
 def test_da3_backend_compute_numpy():
     """DA3Backend.compute() accepts numpy arrays."""
@@ -113,7 +108,10 @@ def test_da3_backend_registry_integration():
     assert backends["da3"]["requires_checkpoint"] is False
 
 
-@pytest.mark.ml
+@pytest.mark.skipif(
+    not _check_da3_available(),
+    reason="DA3 library (depth_anything_3) not installed - optional ML dependency"
+)
 def test_da3_backend_via_registry():
     """DA3Backend can be instantiated via registry."""
     from transformation_portal.lux_depth_v3.config import EnhanceConfig
@@ -128,10 +126,6 @@ def test_da3_backend_via_registry():
 
 
 @pytest.mark.ml
-@pytest.mark.skipif(
-    not DA3_AVAILABLE,
-    reason="DA3 requires depth_anything_3 library"
-)
 def test_da3_backend_device_override():
     """DA3Backend respects device parameter in compute()."""
     from transformation_portal.lux_depth_v3.config import EnhanceConfig

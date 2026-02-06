@@ -5,7 +5,6 @@ and depth metadata files for both DA3 and Depth Pro backends.
 """
 
 import json
-import os
 from pathlib import Path
 
 import pytest
@@ -17,15 +16,20 @@ from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 # Mark all tests as ML tier
 pytestmark = pytest.mark.ml
 
-# Check offline mode and backend availability
-TRANSFORMERS_OFFLINE = os.getenv("TRANSFORMERS_OFFLINE") == "1"
 
-# Check if depth_anything_3 is available at module level
-try:
-    import depth_anything_3  # noqa: F401
-    DA3_AVAILABLE = True
-except ImportError:
-    DA3_AVAILABLE = False
+def _check_da3_available() -> bool:
+    """Check if DA3 library is available."""
+    try:
+        import depth_anything_3  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _check_depth_pro_available() -> bool:
+    """Check if Depth Pro checkpoint is available."""
+    from pathlib import Path
+    return Path("depth_pro.pt").exists()
 
 
 @pytest.fixture
@@ -42,8 +46,8 @@ def test_input_dir(tmp_path):
 
 
 @pytest.mark.skipif(
-    not DA3_AVAILABLE or TRANSFORMERS_OFFLINE,
-    reason="DA3 requires depth_anything_3 library and model download"
+    not _check_da3_available(),
+    reason="DA3 library (depth_anything_3) not installed - optional ML dependency"
 )
 def test_da3_backend_metadata_in_depth_stats(tmp_path, test_input_dir):
     """Test that DA3 backend metadata is correctly captured in depth stats."""
@@ -80,7 +84,7 @@ def test_da3_backend_metadata_in_depth_stats(tmp_path, test_input_dir):
 
 
 @pytest.mark.skipif(
-    not Path("checkpoints/depth_pro.pt").exists(),
+    not _check_depth_pro_available(),
     reason="Depth Pro checkpoint not available",
 )
 def test_depth_pro_backend_metadata_in_depth_stats(tmp_path, test_input_dir):
@@ -120,8 +124,8 @@ def test_depth_pro_backend_metadata_in_depth_stats(tmp_path, test_input_dir):
 
 
 @pytest.mark.skipif(
-    not DA3_AVAILABLE or TRANSFORMERS_OFFLINE,
-    reason="DA3 requires depth_anything_3 library and model download"
+    not _check_da3_available(),
+    reason="DA3 library (depth_anything_3) not installed - optional ML dependency"
 )
 def test_backend_metadata_in_manifest(tmp_path, test_input_dir):
     """Test that backend selection metadata is captured in manifest."""
