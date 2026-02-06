@@ -192,3 +192,64 @@ def mock_depth_model(deterministic_rng):
     mock = MagicMock()
     mock.infer.return_value = deterministic_rng.random((100, 100)).astype(np.float32)
     return mock
+
+
+# =============================================================================
+# Dependency Availability Helpers (for skip guards)
+# =============================================================================
+
+
+def has_depth_anything_v3() -> bool:
+    """Check if depth_anything_3 package is available.
+
+    Returns:
+        True if depth_anything_3 can be imported, False otherwise.
+
+    Note:
+        This is an optional dependency installed from:
+        https://github.com/DepthAnything/Depth-Anything-V3
+    """
+    try:
+        import depth_anything_3  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def has_transformers() -> bool:
+    """Check if transformers library is available.
+
+    Returns:
+        True if transformers can be imported, False otherwise.
+    """
+    try:
+        import transformers  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def is_offline_mode() -> bool:
+    """Check if running in offline mode (no HuggingFace downloads).
+
+    Returns:
+        True if TRANSFORMERS_OFFLINE=1 or HF_HUB_OFFLINE=1, False otherwise.
+    """
+    return (
+        os.environ.get("TRANSFORMERS_OFFLINE") == "1"
+        or os.environ.get("HF_HUB_OFFLINE") == "1"
+    )
+
+
+def can_run_da3_compute() -> bool:
+    """Check if DA3 compute tests can run (package + not offline).
+
+    DA3 compute tests require:
+    - depth_anything_3 package installed
+    - transformers library available
+    - Not in offline mode (would fail to download models)
+
+    Returns:
+        True if all DA3 compute requirements are met, False otherwise.
+    """
+    return has_depth_anything_v3() and has_transformers() and not is_offline_mode()

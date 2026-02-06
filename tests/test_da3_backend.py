@@ -12,6 +12,9 @@ from transformation_portal.depth.backends.da3 import DA3Backend
 from transformation_portal.depth.backends.protocol import DepthResult, LicenseType
 from transformation_portal.depth.backends.registry import DepthBackendRegistry
 
+# Import availability helpers from conftest
+from tests.conftest import can_run_da3_compute, has_depth_anything_v3
+
 # Mark all tests in this module as ML tier (require torch + transformers)
 pytestmark = pytest.mark.ml
 
@@ -31,7 +34,10 @@ def test_da3_backend_availability():
     backend.ensure_available()
 
 
-@pytest.mark.ml
+@pytest.mark.skipif(
+    not can_run_da3_compute(),
+    reason="DA3 compute requires depth_anything_3 + transformers + online mode",
+)
 def test_da3_backend_compute():
     """DA3Backend.compute() returns DepthResult."""
     from transformation_portal.lux_depth_v3.config import EnhanceConfig
@@ -54,7 +60,10 @@ def test_da3_backend_compute():
     assert result.backend_id == "da3"
 
 
-@pytest.mark.ml
+@pytest.mark.skipif(
+    not can_run_da3_compute(),
+    reason="DA3 compute requires depth_anything_3 + transformers + online mode",
+)
 def test_da3_backend_compute_numpy():
     """DA3Backend.compute() accepts numpy arrays."""
     backend = DA3Backend()
@@ -93,7 +102,10 @@ def test_da3_backend_registry_integration():
     assert backends["da3"]["requires_checkpoint"] is False
 
 
-@pytest.mark.ml
+@pytest.mark.skipif(
+    not can_run_da3_compute(),
+    reason="DA3 compute requires depth_anything_3 + transformers + online mode",
+)
 def test_da3_backend_via_registry():
     """DA3Backend can be instantiated via registry."""
     from transformation_portal.lux_depth_v3.config import EnhanceConfig
@@ -107,7 +119,10 @@ def test_da3_backend_via_registry():
     assert backend.name == "da3"
 
 
-@pytest.mark.ml
+@pytest.mark.skipif(
+    not can_run_da3_compute(),
+    reason="DA3 compute requires depth_anything_3 + transformers + online mode",
+)
 def test_da3_backend_device_override():
     """DA3Backend respects device parameter in compute()."""
     from transformation_portal.lux_depth_v3.config import EnhanceConfig
