@@ -32,6 +32,9 @@ def test_input_dir(tmp_path):
 
 def test_da3_backend_metadata_in_depth_stats(tmp_path, test_input_dir):
     """Test that DA3 backend metadata is correctly captured in depth stats."""
+    # Skip if DA3 libraries not installed (requires depth-anything-3 custom install)
+    pytest.importorskip("depth_anything_3", reason="DA3 requires custom library installation")
+
     output_dir = tmp_path / "output"
 
     config = EnhanceConfig(
@@ -106,6 +109,9 @@ def test_depth_pro_backend_metadata_in_depth_stats(tmp_path, test_input_dir):
 
 def test_backend_metadata_in_manifest(tmp_path, test_input_dir):
     """Test that backend selection metadata is captured in manifest."""
+    # Skip if DA3 libraries not installed (requires depth-anything-3 custom install)
+    pytest.importorskip("depth_anything_3", reason="DA3 requires custom library installation")
+
     output_dir = tmp_path / "output"
 
     config = EnhanceConfig(

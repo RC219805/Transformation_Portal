@@ -40,6 +40,9 @@ def test_da3_backend_availability():
 @pytest.mark.skipif(TRANSFORMERS_OFFLINE, reason="DA3 nested requires model download - offline mode")
 def test_da3_backend_compute():
     """DA3Backend.compute() returns DepthResult."""
+    # Skip if DA3 libraries not installed
+    pytest.importorskip("depth_anything_3", reason="DA3 requires custom library installation")
+
     from transformation_portal.lux_depth_v3.config import EnhanceConfig
 
     config = EnhanceConfig(depth_device="cpu")
@@ -64,6 +67,9 @@ def test_da3_backend_compute():
 @pytest.mark.skipif(TRANSFORMERS_OFFLINE, reason="DA3 nested requires model download - offline mode")
 def test_da3_backend_compute_numpy():
     """DA3Backend.compute() accepts numpy arrays."""
+    # Skip if DA3 libraries not installed
+    pytest.importorskip("depth_anything_3", reason="DA3 requires custom library installation")
+
     backend = DA3Backend()
 
     # Create test image as numpy array
@@ -117,6 +123,9 @@ def test_da3_backend_via_registry():
 @pytest.mark.ml
 def test_da3_backend_device_override():
     """DA3Backend respects device parameter in compute()."""
+    # Skip if DA3 libraries not installed
+    pytest.importorskip("depth_anything_3", reason="DA3 requires custom library installation")
+
     from transformation_portal.lux_depth_v3.config import EnhanceConfig
 
     config = EnhanceConfig(depth_device="cpu")
