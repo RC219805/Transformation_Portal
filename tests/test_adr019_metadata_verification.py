@@ -17,21 +17,6 @@ from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 pytestmark = pytest.mark.ml
 
 
-def _check_da3_available() -> bool:
-    """Check if DA3 library is available."""
-    try:
-        import depth_anything_3  # noqa: F401
-        return True
-    except ImportError:
-        return False
-
-
-def _check_depth_pro_available() -> bool:
-    """Check if Depth Pro checkpoint is available."""
-    from pathlib import Path
-    return Path("depth_pro.pt").exists()
-
-
 @pytest.fixture
 def test_input_dir(tmp_path):
     """Create a test input directory with an image."""
@@ -45,10 +30,6 @@ def test_input_dir(tmp_path):
     return input_dir
 
 
-@pytest.mark.skipif(
-    not _check_da3_available(),
-    reason="DA3 library (depth_anything_3) not installed - optional ML dependency"
-)
 def test_da3_backend_metadata_in_depth_stats(tmp_path, test_input_dir):
     """Test that DA3 backend metadata is correctly captured in depth stats."""
     output_dir = tmp_path / "output"
@@ -84,7 +65,7 @@ def test_da3_backend_metadata_in_depth_stats(tmp_path, test_input_dir):
 
 
 @pytest.mark.skipif(
-    not _check_depth_pro_available(),
+    not Path("checkpoints/depth_pro.pt").exists(),
     reason="Depth Pro checkpoint not available",
 )
 def test_depth_pro_backend_metadata_in_depth_stats(tmp_path, test_input_dir):
@@ -123,10 +104,6 @@ def test_depth_pro_backend_metadata_in_depth_stats(tmp_path, test_input_dir):
     assert metadata["stats"]["unit"] == "meters"  # Depth Pro produces metric depth
 
 
-@pytest.mark.skipif(
-    not _check_da3_available(),
-    reason="DA3 library (depth_anything_3) not installed - optional ML dependency"
-)
 def test_backend_metadata_in_manifest(tmp_path, test_input_dir):
     """Test that backend selection metadata is captured in manifest."""
     output_dir = tmp_path / "output"
