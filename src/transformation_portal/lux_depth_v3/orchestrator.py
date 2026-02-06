@@ -747,15 +747,17 @@ class EnhanceOrchestrator:
                     np.save(str(float_depth_path), result.depth)
                     logger.debug(f"Saved float depth: {float_depth_path}")
 
+                # Capture backend metadata dynamically (ADR-019)
+                license_str = self.depth_backend.license_type.value if hasattr(self.depth_backend, "license_type") else "unknown"
                 stats = {
-                    "backend": "da3",
-                    "license": "CC-BY-NC",
+                    "backend": self.depth_backend.name,
+                    "license": license_str,
                     "non_commercial_ok": self.config.non_commercial_ok,
                     "dtype": "uint16",
                     "shape": list(result.depth.shape[:2]),
                     "representation": "depth",
                     "convention": "higher_is_farther",
-                    "unit": "relative",
+                    "unit": result.depth_units if hasattr(result, "depth_units") else "relative",
                 }
 
                 # Merge inference provenance into depth stats
