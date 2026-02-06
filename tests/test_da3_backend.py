@@ -4,6 +4,8 @@ Tests that DA3Backend implements the DepthBackend protocol correctly
 and integrates with the registry.
 """
 
+import os
+
 import numpy as np
 import pytest
 from PIL import Image
@@ -14,6 +16,9 @@ from transformation_portal.depth.backends.registry import DepthBackendRegistry
 
 # Mark all tests in this module as ML tier (require torch + transformers)
 pytestmark = pytest.mark.ml
+
+# Check offline mode
+TRANSFORMERS_OFFLINE = os.getenv("TRANSFORMERS_OFFLINE") == "1"
 
 
 def test_da3_backend_implements_protocol():
@@ -32,6 +37,7 @@ def test_da3_backend_availability():
 
 
 @pytest.mark.ml
+@pytest.mark.skipif(TRANSFORMERS_OFFLINE, reason="DA3 nested requires model download - offline mode")
 def test_da3_backend_compute():
     """DA3Backend.compute() returns DepthResult."""
     from transformation_portal.lux_depth_v3.config import EnhanceConfig
@@ -55,6 +61,7 @@ def test_da3_backend_compute():
 
 
 @pytest.mark.ml
+@pytest.mark.skipif(TRANSFORMERS_OFFLINE, reason="DA3 nested requires model download - offline mode")
 def test_da3_backend_compute_numpy():
     """DA3Backend.compute() accepts numpy arrays."""
     backend = DA3Backend()
