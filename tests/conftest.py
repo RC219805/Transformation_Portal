@@ -211,6 +211,7 @@ def has_depth_anything_v3() -> bool:
     """
     try:
         import depth_anything_3  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -224,6 +225,7 @@ def has_transformers() -> bool:
     """
     try:
         import transformers  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -235,10 +237,7 @@ def is_offline_mode() -> bool:
     Returns:
         True if TRANSFORMERS_OFFLINE=1 or HF_HUB_OFFLINE=1, False otherwise.
     """
-    return (
-        os.environ.get("TRANSFORMERS_OFFLINE") == "1"
-        or os.environ.get("HF_HUB_OFFLINE") == "1"
-    )
+    return os.environ.get("TRANSFORMERS_OFFLINE") == "1" or os.environ.get("HF_HUB_OFFLINE") == "1"
 
 
 def can_run_da3_compute() -> bool:
