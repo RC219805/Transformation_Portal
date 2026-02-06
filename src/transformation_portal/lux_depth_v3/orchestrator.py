@@ -695,6 +695,7 @@ class EnhanceOrchestrator:
             # Optional: strict PIL.verify() for CI/ingest validation
             if verify_strict:
                 from PIL import Image
+
                 try:
                     with Image.open(validated_path) as img_verify:
                         img_verify.verify()
