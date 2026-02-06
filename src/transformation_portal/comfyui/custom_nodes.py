@@ -48,7 +48,7 @@ class CustomNodeRegistry:
 
 class BaseNode(ABC):
     """Base class for custom nodes.
-    
+
     All ComfyUI nodes must implement INPUT_TYPES, RETURN_TYPES, and execute.
     """
 
