@@ -13,6 +13,7 @@ Node Categories:
 
 import json
 import logging
+from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -45,20 +46,29 @@ class CustomNodeRegistry:
         return list(cls._nodes.keys())
 
 
-class BaseNode:
-    """Base class for custom nodes."""
+class BaseNode(ABC):
+    """Base class for custom nodes.
+
+    All ComfyUI nodes must implement INPUT_TYPES, RETURN_TYPES, and execute.
+    """
 
     CATEGORY = "Transformation Portal"
 
     @classmethod
+    @abstractmethod
     def INPUT_TYPES(cls) -> Dict[str, Any]:
+        """Define input schema for this node."""
         raise NotImplementedError
 
     @classmethod
+    @abstractmethod
     def RETURN_TYPES(cls) -> Tuple[str, ...]:
+        """Define output types for this node."""
         raise NotImplementedError
 
+    @abstractmethod
     def execute(self, **kwargs) -> Tuple[Any, ...]:
+        """Execute the node's processing logic."""
         raise NotImplementedError
 
     def _to_numpy(self, image: Any) -> np.ndarray:
