@@ -1,7 +1,8 @@
 """Tests for input discovery hygiene filters."""
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from transformation_portal.lux_depth_v3.input_discovery import DiscoveryConfig, discover_images
 

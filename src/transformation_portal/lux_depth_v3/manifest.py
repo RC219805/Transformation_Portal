@@ -323,7 +323,17 @@ class CombinedManifest:
 
         # Convert dataclasses to dict
         data = {}
-        for field_name in ["input", "depth", "v2", "timing", "pbr_assets", "repro", "config_fingerprint", "environment", "backend_selection"]:
+        for field_name in [
+            "input",
+            "depth",
+            "v2",
+            "timing",
+            "pbr_assets",
+            "repro",
+            "config_fingerprint",
+            "environment",
+            "backend_selection",
+        ]:
             field_value = getattr(self, field_name)
             if field_value is not None:
                 if field_name in ["pbr_assets", "environment"]:
@@ -402,7 +412,17 @@ class CombinedManifest:
 
         # Convert dataclasses to dict (same logic as save)
         data = {}
-        for field_name in ["input", "depth", "v2", "timing", "pbr_assets", "repro", "config_fingerprint", "environment", "backend_selection"]:
+        for field_name in [
+            "input",
+            "depth",
+            "v2",
+            "timing",
+            "pbr_assets",
+            "repro",
+            "config_fingerprint",
+            "environment",
+            "backend_selection",
+        ]:
             field_value = getattr(self, field_name)
             if field_value is not None:
                 if field_name in ["pbr_assets", "environment"]:

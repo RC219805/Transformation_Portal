@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Performance Ledger v1.7 Upgrade:** Major enhancement with backward compatibility
+  - **Optional NumPy Dependency:** Pure Python fallback for environments without NumPy
+  - **Bootstrap Confidence Intervals:** 95% CI for mean using configurable iterations (default 1000)
+  - **Expanded Exit Codes:** 0=success, 1=regression, 2=backend_mismatch, 3=insufficient_data
+  - **Backend Mismatch Detection:** Prevents comparing incompatible runs
+  - **Input Validation Bounds:** DoS prevention (max 10K bootstrap iterations, min 3 samples)
+  - **Strict Mode:** `--strict` flag fails on potential regressions (recommended for CI)
+  - **Backward Compatibility:** `--version` deprecated but functional (use `--baseline-version`)
+  - **Enhanced Statistics:** Added std_sec and bootstrap CI to baseline schema
+  - **Performance:** NumPy mode maintains v1.0 speed, pure Python ~50x slower (acceptable for small datasets)
+  - **Tests:** 50+ new tests (CLI integration, property-based math validation, benchmarks)
+  - **Migration Guide:** `docs/performance_ledger_v1.7_migration.md`
+  - See: [Performance Ledger v1.7 Verdict](PERFORMANCE_LEDGER_V1.7_VERDICT.md)
+
 - **Backend Registry Integration (ADR-019):** Depth backend orchestration with fallback
   - DA3Backend adapter wrapping DA3InferenceEngine for unified interface
   - DepthBackendRegistry integration in orchestrator
