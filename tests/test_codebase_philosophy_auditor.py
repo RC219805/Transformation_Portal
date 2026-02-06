@@ -22,13 +22,15 @@ def _write_module(tmp_path: Path, content: str) -> Path:
 def test_audit_module_detects_missing_docstring(tmp_path: Path, auditor: CodebasePhilosophyAuditor) -> None:
     module_path = _write_module(
         tmp_path,
-        dedent("""
+        dedent(
+            """
             from math import sqrt
 
 
             def area(radius):
                 return 3.14 * radius * radius
-            """).strip(),
+            """
+        ).strip(),
     )
 
     violations = auditor.audit_module(module_path)
@@ -39,7 +41,8 @@ def test_audit_module_detects_missing_docstring(tmp_path: Path, auditor: Codebas
 def test_audit_module_detects_undocumented_public_api(tmp_path: Path, auditor: CodebasePhilosophyAuditor) -> None:
     module_path = _write_module(
         tmp_path,
-        dedent('''
+        dedent(
+            '''
             """Feature module."""
 
 
@@ -50,7 +53,8 @@ def test_audit_module_detects_undocumented_public_api(tmp_path: Path, auditor: C
 
             async def orchestrate():
                 return None
-            '''),
+            '''
+        ),
     )
 
     violations = auditor.audit_module(module_path)
@@ -64,7 +68,8 @@ def test_audit_module_detects_undocumented_public_api(tmp_path: Path, auditor: C
 def test_audit_module_respects_documented_decisions(tmp_path: Path, auditor: CodebasePhilosophyAuditor) -> None:
     module_path = _write_module(
         tmp_path,
-        dedent('''
+        dedent(
+            '''
             """Experiment module."""
 
             # Decision: allow_wildcard_import - tight integration with plugin API
@@ -80,7 +85,8 @@ def test_audit_module_respects_documented_decisions(tmp_path: Path, auditor: Cod
             def _helper():
                 """Private helper is ignored."""
                 return False
-            '''),
+            '''
+        ),
     )
 
     violations = auditor.audit_module(module_path)
@@ -95,10 +101,12 @@ def test_custom_rules_can_be_supplied(tmp_path: Path) -> None:
     auditor = CodebasePhilosophyAuditor(rules=[always_fail_rule])
     module_path = _write_module(
         tmp_path,
-        dedent('''
+        dedent(
+            '''
             """Doc."""
 
-            '''),
+            '''
+        ),
     )
 
     violations = auditor.audit_module(module_path)
