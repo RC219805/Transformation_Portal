@@ -4,12 +4,14 @@ Verifies that summary counters accurately reflect processing results.
 Critical for CI dashboards, automation trust, and governance gates.
 """
 
+from unittest.mock import Mock, patch
+
 import numpy as np
 import pytest
-from unittest.mock import Mock, patch
-from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
+from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
 
 @pytest.fixture

@@ -19,10 +19,10 @@ except ImportError:
     HAS_NUMPY = False
 
 from tools.performance_ledger import (
+    _bootstrap_confidence_interval,
     _pure_python_mean,
     _pure_python_percentile,
     _pure_python_std,
-    _bootstrap_confidence_interval,
     compute_statistics,
 )
 

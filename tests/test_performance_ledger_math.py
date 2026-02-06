@@ -20,16 +20,17 @@ except ImportError:
     pytest.skip("NumPy required for math validation tests", allow_module_level=True)
 
 from tools.performance_ledger import (
+    _bootstrap_confidence_interval,
     _pure_python_mean,
     _pure_python_percentile,
     _pure_python_std,
-    _bootstrap_confidence_interval,
     compute_statistics,
 )
 
 # Import hypothesis for property-based testing
 try:
-    from hypothesis import given, strategies as st, settings
+    from hypothesis import given, settings
+    from hypothesis import strategies as st
 
     HAS_HYPOTHESIS = True
 except ImportError:

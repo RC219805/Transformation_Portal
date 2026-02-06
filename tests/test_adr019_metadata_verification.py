@@ -5,8 +5,9 @@ and depth metadata files for both DA3 and Depth Pro backends.
 """
 
 import json
-import pytest
 from pathlib import Path
+
+import pytest
 from PIL import Image
 
 from transformation_portal.lux_depth_v3.config import EnhanceConfig

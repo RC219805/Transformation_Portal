@@ -41,6 +41,10 @@ except ImportError:
     XXHASH_AVAILABLE = False
     xxhash = None  # type: ignore
 
+from ..depth.backends.protocol import LicenseRestrictionError
+
+# Backend registry for depth estimation
+from ..depth.backends.registry import DepthBackendRegistry
 from .batch_stats import compute_batch_runtime_stats
 
 # Note: Imports adjusted to relative for package context compatibility
@@ -68,10 +72,6 @@ from .pbr_writer import write_pbr_maps
 from .postprocessing import Postprocessor
 from .security import HashMode, sanitize_file_stem, sanitize_path_component_nonlossy
 from .v2_runner import V2Runner, find_v2_report
-
-# Backend registry for depth estimation
-from ..depth.backends.registry import DepthBackendRegistry
-from ..depth.backends.protocol import LicenseRestrictionError
 
 logger = logging.getLogger(__name__)
 
