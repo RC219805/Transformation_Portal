@@ -4,6 +4,8 @@ Tests that DA3Backend implements the DepthBackend protocol correctly
 and integrates with the registry.
 """
 
+import os
+
 import numpy as np
 import pytest
 from PIL import Image
@@ -14,6 +16,9 @@ from transformation_portal.depth.backends.registry import DepthBackendRegistry
 
 # Mark all tests in this module as ML tier (require torch + transformers)
 pytestmark = pytest.mark.ml
+
+# Check if we're in offline mode (CI)
+OFFLINE = os.getenv("TRANSFORMERS_OFFLINE") == "1" or os.getenv("HF_HUB_OFFLINE") == "1"
 
 
 def test_da3_backend_implements_protocol():
@@ -32,6 +37,7 @@ def test_da3_backend_availability():
 
 
 @pytest.mark.ml
+@pytest.mark.skipif(OFFLINE, reason="DA3 requires model download - disabled in offline CI")
 def test_da3_backend_compute():
     """DA3Backend.compute() returns DepthResult."""
     from transformation_portal.lux_depth_v3.config import EnhanceConfig
@@ -55,6 +61,7 @@ def test_da3_backend_compute():
 
 
 @pytest.mark.ml
+@pytest.mark.skipif(OFFLINE, reason="DA3 requires model download - disabled in offline CI")
 def test_da3_backend_compute_numpy():
     """DA3Backend.compute() accepts numpy arrays."""
     backend = DA3Backend()
@@ -94,6 +101,7 @@ def test_da3_backend_registry_integration():
 
 
 @pytest.mark.ml
+@pytest.mark.skipif(OFFLINE, reason="DA3 requires model download - disabled in offline CI")
 def test_da3_backend_via_registry():
     """DA3Backend can be instantiated via registry."""
     from transformation_portal.lux_depth_v3.config import EnhanceConfig
@@ -108,6 +116,7 @@ def test_da3_backend_via_registry():
 
 
 @pytest.mark.ml
+@pytest.mark.skipif(OFFLINE, reason="DA3 requires model download - disabled in offline CI")
 def test_da3_backend_device_override():
     """DA3Backend respects device parameter in compute()."""
     from transformation_portal.lux_depth_v3.config import EnhanceConfig
