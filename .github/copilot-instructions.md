@@ -249,11 +249,11 @@ Performance regressions are treated as correctness failures.
 
 Minimum supported Python for this repo is **Python 3.11+**.
 
-| CI job     | Python      | Requirements            | Notes                                    |
-| ---------- | ----------- | ----------------------- | ---------------------------------------- |
-| Lint       | 3.12        | `requirements-lint.txt` | Fast static checks.                      |
-| Core tests | 3.11 + 3.12 | `requirements-ci.txt`   | Offline; no heavy deps.                  |
-| ML tests   | 3.11        | ML deps installed       | Offline; no downloads; minimal fixtures. |
+| CI job     | Python      | Requirements                        | Notes                                                           |
+| ---------- | ----------- | ----------------------------------- | --------------------------------------------------------------- |
+| Lint       | 3.12        | `requirements-lint.txt`             | Fast static checks.                                             |
+| Core tests | 3.11 + 3.12 | `requirements-ci.txt`               | Offline; no heavy deps.                                         |
+| ML tests   | 3.11        | CPU torch + `requirements-ci.txt`   | Offline; transformers/diffusers NOT installed; mock heavy deps. |
 
 ### Testing methodology expectations
 
