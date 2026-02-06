@@ -16,6 +16,16 @@ from transformation_portal.depth.backends.registry import DepthBackendRegistry
 pytestmark = pytest.mark.ml
 
 
+def _da3_available() -> bool:
+    """Check if DA3 backend dependencies are available."""
+    try:
+        import depth_anything_3  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
 def test_da3_backend_implements_protocol():
     """DA3Backend implements DepthBackend protocol."""
     backend = DA3Backend()
@@ -31,7 +41,10 @@ def test_da3_backend_availability():
     backend.ensure_available()
 
 
-@pytest.mark.ml
+@pytest.mark.skipif(
+    not _da3_available(),
+    reason="DA3 requires depth_anything_3 package - not available in CI offline mode",
+)
 def test_da3_backend_compute():
     """DA3Backend.compute() returns DepthResult."""
     from transformation_portal.lux_depth_v3.config import EnhanceConfig
@@ -54,7 +67,10 @@ def test_da3_backend_compute():
     assert result.backend_id == "da3"
 
 
-@pytest.mark.ml
+@pytest.mark.skipif(
+    not _da3_available(),
+    reason="DA3 requires depth_anything_3 package - not available in CI offline mode",
+)
 def test_da3_backend_compute_numpy():
     """DA3Backend.compute() accepts numpy arrays."""
     backend = DA3Backend()
@@ -107,7 +123,10 @@ def test_da3_backend_via_registry():
     assert backend.name == "da3"
 
 
-@pytest.mark.ml
+@pytest.mark.skipif(
+    not _da3_available(),
+    reason="DA3 requires depth_anything_3 package - not available in CI offline mode",
+)
 def test_da3_backend_device_override():
     """DA3Backend respects device parameter in compute()."""
     from transformation_portal.lux_depth_v3.config import EnhanceConfig
