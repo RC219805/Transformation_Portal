@@ -30,10 +30,8 @@ def test_input_dir(tmp_path):
     return input_dir
 
 
-@pytest.mark.skipif(
-    True,
-    reason="DA3 requires model download - disabled in offline CI (transformers_offline=1)"
-)
+@pytest.mark.skipif(True, reason="DA3 requires model download - disabled in offline CI (transformers_offline=1)")
+@pytest.mark.skipif(True, reason="DA3 requires model download - disabled in offline CI (transformers_offline=1)")
 def test_da3_backend_metadata_in_depth_stats(tmp_path, test_input_dir):
     """Test that DA3 backend metadata is correctly captured in depth stats."""
     output_dir = tmp_path / "output"
