@@ -5,14 +5,16 @@ Handles metric scaling, filtering, and edge preservation.
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+import logging
+from typing import List
 
 import numpy as np
 from scipy.ndimage import median_filter
 
 from .config import PostprocessingConfig
 from .inference import DepthResult
+
+logger = logging.getLogger(__name__)
 
 # Edge refinement is optional (and may not be present in stripped-down deployments).
 try:
@@ -103,12 +105,17 @@ class Postprocessor:
             # Heuristics for sigmaColor scaling based on depth value range
             LEGACY_SIGMA_COLOR_THRESHOLD = 100  # Legacy configs used 0-255-ish values
             NORMALIZED_DEPTH_THRESHOLD = 2.0     # Normalized depth typically in [0,1]
-            
-            # Determine depth value range for sigmaColor scaling
-            depth_min = float(depth.min())
-            depth_max = float(depth.max())
-            depth_range = depth_max - depth_min
-            
+
+            # Sanitize depth: remove NaN/inf to prevent outlier explosion
+            depth_clean = np.copy(depth)
+            depth_clean = np.nan_to_num(depth_clean, nan=0.0, posinf=0.0, neginf=0.0)
+
+            # Use robust percentiles (p1/p99) to avoid outlier explosion
+            # This prevents single hot pixels/artifacts from breaking the scaling
+            depth_p1 = float(np.percentile(depth_clean, 1))
+            depth_p99 = float(np.percentile(depth_clean, 99))
+            depth_range = depth_p99 - depth_p1
+
             # Scale sigmaColor based on depth range to handle:
             # - Normalized depth ~[0,1]: use sigma_color as-is
             # - Metric/unbounded depth: scale proportionally
@@ -130,28 +137,40 @@ class Postprocessor:
                     image_u8 = (np.clip(image, 0, 1) * 255).astype(np.uint8)
                 else:
                     image_u8 = image.astype(np.uint8)
-                
+
                 # Convert depth to float32 if needed
                 depth_f32 = depth.astype(np.float32) if depth.dtype != np.float32 else depth
-                
+
+                # Compute d parameter: use d=0 for auto-derivation to avoid degenerate cases
+                # Clamp to sensible minimum if explicit value needed
+                d_param = 0  # Auto-derive from sigma_space
+
                 # RGB-guided joint bilateral (preserves edges from color image)
                 filtered = cv2.ximgproc.jointBilateralFilter(
                     image_u8,
                     depth_f32,
-                    d=int(sigma_space * 2 + 1),
+                    d=d_param,
                     sigmaColor=effective_sigma_color,
                     sigmaSpace=sigma_space
                 )
                 return filtered
-            
-            except (ImportError, AttributeError):
-                # cv2.ximgproc not available - fall back to standard bilateral
+
+            except (ImportError, AttributeError, cv2.error):
+                # cv2.ximgproc not available or type mismatch - fall back to standard bilateral
+                # Guide shape validation: ensure depth is 2D
+                if depth.ndim != 2:
+                    logger.warning(f"Bilateral filter expects 2D depth, got shape {depth.shape}. Using first channel.")
+                    depth = depth[:, :, 0] if depth.ndim == 3 else depth.reshape(depth.shape[:2])
+
                 depth_f32 = depth.astype(np.float32) if depth.dtype != np.float32 else depth
-                
+
+                # Use d=0 for auto-derivation (avoids d=1 degenerate case)
+                d_param = 0
+
                 # Apply bilateral filter directly on float32 (no quantization)
                 filtered = cv2.bilateralFilter(
                     depth_f32,
-                    d=int(sigma_space * 2 + 1),
+                    d=d_param,
                     sigmaColor=effective_sigma_color,
                     sigmaSpace=sigma_space
                 )

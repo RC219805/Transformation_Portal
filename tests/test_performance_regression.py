@@ -13,11 +13,7 @@ import hashlib
 import tempfile
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
-
-# Mark all tests as ML tier (require depth processing / torch)
-pytestmark = pytest.mark.ml
-
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -29,6 +25,9 @@ from transformation_portal.lux_depth_v3.inference import DepthResult
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
 from transformation_portal.lux_depth_v3.manifest import CombinedManifest, InputMetadata, compute_file_sha256
 from transformation_portal.lux_depth_v3.orchestrator import _load_manifest_cached
+
+# Mark all tests as ML tier (require depth processing / torch)
+pytestmark = pytest.mark.ml
 
 # ============================================================================
 # Shared Test Fixtures and Helpers
@@ -272,7 +271,7 @@ class TestPhase2Performance:
             f"✓ Parallel batch processing completed: {speedup:.2f}x speedup "
             f"(sequential={seq_time:.2f}s, parallel={par_time:.2f}s)"
         )
-        print(f"  Note: Actual speedup requires real GPU inference, not mocks")
+        print("  Note: Actual speedup requires real GPU inference, not mocks")
 
     @pytest.mark.benchmark
     def test_depth_cache_eliminates_redundant_computation(self, tmp_path):
@@ -292,7 +291,7 @@ class TestPhase2Performance:
         # Benchmark: Cache hit (retrieve operation)
         start_hit = time.time()
         for _ in range(10):
-            retrieved = cache.get(image_hash, config_hash)
+            _ = cache.get(image_hash, config_hash)  # noqa: F841
         hit_time = (time.time() - start_hit) / 10  # Average per retrieval
 
         # Calculate speedup
@@ -478,7 +477,7 @@ class TestPhase2Performance:
         # Verify _store_count is correct
         assert cache._store_count == 50, f"Thread safety issue: _store_count={cache._store_count} (expected 50)"
 
-        print(f"✓ Thread safety: 50 concurrent stores completed successfully")
+        print("✓ Thread safety: 50 concurrent stores completed successfully")
         print(f"  Final state: {len(cache_files)} files, {cache._approximate_size_gb:.4f}GB, {cache._store_count} stores")
 
 
@@ -581,7 +580,7 @@ class TestPerformanceBaselines:
         save_time = time.time() - start_save
 
         start_load = time.time()
-        loaded = np.load(str(tmp_path))
+        _ = np.load(str(tmp_path))  # noqa: F841
         load_time = time.time() - start_load
 
         tmp_path.unlink()

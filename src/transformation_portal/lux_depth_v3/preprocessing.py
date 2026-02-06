@@ -62,12 +62,12 @@ def validate_image_format(image_path: Union[str, Path]) -> Path:
     # Verify image integrity
     try:
         # Open and verify (checks file structure)
-        img = Image.open(image_path)
-        img.verify()
+        with Image.open(image_path) as img:
+            img.verify()
 
         # verify() invalidates the image object, reopen to test pixel load
-        img = Image.open(image_path)
-        img.load()  # Force load pixel data
+        with Image.open(image_path) as img:
+            img.load()  # Force load pixel data
 
     except Exception as e:
         raise ValueError(f"Image file corrupt or invalid: {image_path}") from e
@@ -213,7 +213,7 @@ def _enforce_dimension_multiple(img_array: np.ndarray, multiple: int) -> np.ndar
             pad_bottom = pad_h - pad_top
             pad_left = pad_w // 2
             pad_right = pad_w - pad_left
-            
+
             # Pad with edge values to avoid black borders
             img_array = np.pad(
                 img_array,

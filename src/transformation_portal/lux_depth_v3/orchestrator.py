@@ -317,26 +317,28 @@ class EnhanceOrchestrator:
         # Phase 2: Parallelization setup with stage-aware concurrency
         # MPS/GPU inference: limit to 1-2 workers to avoid memory contention
         # CPU/I/O operations: use moderate parallelism
-        
+
         # Check for forward-compatible max_gpu_workers override
         max_gpu_workers_override = getattr(config, "max_gpu_workers", None)
         max_workers_override = getattr(config, "max_workers", None)
-        
+
         if config.depth_device in ("mps", "cuda"):
             # GPU backends: conservative concurrency to avoid VRAM contention
-            # Allow override via --max-gpu-workers
-            if max_gpu_workers_override is not None:
-                self.max_workers = max_gpu_workers_override
+            # Note: max_gpu_workers is inference-specific, may be applied later
+            if max_workers_override is not None:
+                self.max_workers = max_workers_override
             else:
                 self.max_workers = min(2, cpu_count())
+            # Store GPU-specific limit separately for inference stage
+            self.max_gpu_workers = max_gpu_workers_override if max_gpu_workers_override is not None else self.max_workers
             logger.debug(f"GPU/MPS device detected - limiting workers to {self.max_workers} for VRAM management")
         else:
             # CPU backend: moderate parallelism for I/O-bound operations
-            # Allow override via --max-workers
             if max_workers_override is not None:
                 self.max_workers = max_workers_override
             else:
                 self.max_workers = config.max_parallel_workers or max(1, cpu_count() - 1)
+            self.max_gpu_workers = self.max_workers
 
         self._use_parallel = config.enable_parallel_processing
         logger.debug(f"Parallel processing: {'enabled' if self._use_parallel else 'disabled'} (workers={self.max_workers})")
@@ -678,9 +680,9 @@ class EnhanceOrchestrator:
 
             # Check for strict verification flag (forward-compatible)
             verify_strict = getattr(self.config, "verify_images", False)
-            
+
             validated_path = validate_image_format(image_input.path)
-            
+
             # Optional: strict PIL.verify() for CI/ingest validation
             if verify_strict:
                 from PIL import Image
@@ -691,7 +693,7 @@ class EnhanceOrchestrator:
                 except Exception as e:
                     logger.error(f"Strict verification failed: {validated_path.name} - {e}")
                     raise ValueError(f"Image failed strict verification: {validated_path}") from e
-            
+
             preprocessed_array, original_shape = preprocess_image(validated_path)
 
             logger.info(f"Stage A: Generating depth for {output_key}...")
