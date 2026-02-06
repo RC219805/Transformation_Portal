@@ -121,23 +121,29 @@ This repo uses a multi-backend depth strategy and must enforce compliance.
 
 ### Backend policy (encode as code-as-compliance)
 
-| Backend key    | Model/Tier         | Default? | Offline? | Commercial allowed?              | Notes                                                 |
-| -------------- | ------------------ | -------- | -------- | -------------------------------- | ----------------------------------------------------- |
-| `da3`          | Depth Anything V3  | Yes      | Yes      | Yes ✅                           | Default for production runs.                          |
-| `depth_pro`    | Apple Depth Pro    | No       | Yes      | No ❌ (research-only)            | Requires `non_commercial_ok=True`.                    |
+| Backend key    | Model/Tier         | Default? | Offline? | Commercial allowed?              | Notes                                                                        |
+| -------------- | ------------------ | -------- | -------- | -------------------------------- | ---------------------------------------------------------------------------- |
+| `da3`          | Depth Anything V3  | Yes      | Yes      | Yes ✅                           | Default for production runs.                                                 |
+| `depth_pro`    | Apple Depth Pro    | No       | Yes      | No ❌ (research-only)            | Requires `non_commercial_ok=True` AND `accept_apple_depth_pro_research_license=True`. |
 
 Hard rule: if a model requires non-commercial gating, the code must raise a clear, typed exception **before any processing begins**.
 
 Example guard (using actual exception type from codebase):
 
 ```python
-from transformation_portal.compliance.licensing import LicenseRestrictionError
+from transformation_portal.depth.backends.protocol import LicenseRestrictionError
 
-if backend == "depth_pro" and not cfg.non_commercial_ok:
-    raise LicenseRestrictionError(
-        "Depth Pro is restricted to non-commercial research use. "
-        "Set non_commercial_ok=True to acknowledge this restriction."
-    )
+if backend == "depth_pro":
+    if not cfg.non_commercial_ok:
+        raise LicenseRestrictionError(
+            "Depth Pro is restricted to non-commercial research use. "
+            "Set non_commercial_ok=True to acknowledge this restriction."
+        )
+    if not cfg.accept_apple_depth_pro_research_license:
+        raise LicenseRestrictionError(
+            "Depth Pro requires explicit acceptance of Apple ML Research license. "
+            "Set accept_apple_depth_pro_research_license=True in config."
+        )
 ```
 
 ### No-download policy in tests
@@ -146,6 +152,13 @@ ML tests must honor offline patterns:
 
 * `TRANSFORMERS_OFFLINE=1`
 * `HF_HUB_OFFLINE=1` (if used)
+
+**Offline vs. Availability distinction:**
+
+* **"Offline"** means no network/model downloads during test runs
+* **"Availability"** means backend package is importable (e.g., `depth_anything_3` module installed)
+* Tests must skip gracefully when optional backend modules are not importable (use module-level availability guards)
+* Tests should NOT weaken assertions or skip coverage when the backend IS expected to be available in that CI tier
 
 Tests must use tiny local fixtures or mocks (no network calls, no hub downloads).
 
@@ -313,7 +326,7 @@ To change dependencies:
 3. keep CI lean:
 
    * do not pull heavy ML dependencies into the core runtime unless strictly necessary
-   * prefer optional extras (e.g., `.[ml]`, `.[dev], [ci]`) if supported
+   * prefer optional extras (e.g., `.[ml]`, `.[dev]`, `.[ci]`, `.[coreml]`) if supported
 
 ---
 
@@ -420,7 +433,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Protocol
-from transformation_portal.compliance.licensing import LicenseRestrictionError
+from transformation_portal.depth.backends.protocol import LicenseRestrictionError
 
 class DepthBackend(Protocol):
     def infer_depth(self, image: "np.ndarray") -> "np.ndarray":
@@ -430,13 +443,19 @@ class DepthBackend(Protocol):
 class DepthConfig:
     backend: str
     non_commercial_ok: bool = False
+    accept_apple_depth_pro_research_license: bool = False
 
 def create_depth_backend(cfg: DepthConfig) -> DepthBackend:
     # Registry validation enforces licensing before instantiation
-    if cfg.backend == "depth_pro" and not cfg.non_commercial_ok:
-        raise LicenseRestrictionError(
-            "Depth Pro requires non_commercial_ok=True for research use"
-        )
+    if cfg.backend == "depth_pro":
+        if not cfg.non_commercial_ok:
+            raise LicenseRestrictionError(
+                "Depth Pro requires non_commercial_ok=True for research use"
+            )
+        if not cfg.accept_apple_depth_pro_research_license:
+            raise LicenseRestrictionError(
+                "Depth Pro requires accept_apple_depth_pro_research_license=True"
+            )
 
     # Factory/registry lookup goes here.
     return backend_registry[cfg.backend]()
