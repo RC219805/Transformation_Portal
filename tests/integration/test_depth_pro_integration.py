@@ -113,7 +113,7 @@ class TestDepthProIntegration:
         assert "checkpoint" in prov
         assert prov["checkpoint"]["sha256"] == "3eb35ca68168ad3d14cb150f8947a4edf85589941661fdb2686259c80685c0ce"
 
-        print(f"✓ Inference successful")
+        print("✓ Inference successful")
         print(f"  Depth range: {depth_map.min():.2f} - {depth_map.max():.2f} meters")
         print(f"  Median depth: {np.median(depth_map):.2f} meters")
         print(f"  Inference time: {prov['timing']['inference_sec']:.3f}s")
@@ -150,7 +150,7 @@ class TestDepthProIntegration:
         assert result.is_metric is True
         assert result.backend_id == "depth_pro"
 
-        print(f"✓ Backend inference successful")
+        print("✓ Backend inference successful")
         print(f"  Depth units: {result.depth_units}")
         print(f"  Shape: {result.depth_map.shape}")
         print(f"  Range: {result.depth_map.min():.2f} - {result.depth_map.max():.2f} meters")
@@ -172,4 +172,3 @@ class TestDepthProIntegration:
 
         assert backend.name == "depth_pro"
         assert backend.requires_checkpoint is True
-
