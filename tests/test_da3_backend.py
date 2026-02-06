@@ -39,7 +39,7 @@ def test_da3_backend_availability():
     backend.ensure_available()
 
 
-@pytest.mark.skipif(not DA3_AVAILABLE, reason="DA3 requires depth_anything_3 library - disabled in offline CI")
+@pytest.mark.skipif(not DA3_AVAILABLE, reason="depth_anything_3 not installed (optional dependency)")
 def test_da3_backend_compute():
     """DA3Backend.compute() returns DepthResult."""
     from transformation_portal.lux_depth_v3.config import EnhanceConfig
@@ -62,7 +62,7 @@ def test_da3_backend_compute():
     assert result.backend_id == "da3"
 
 
-@pytest.mark.skipif(not DA3_AVAILABLE, reason="DA3 requires depth_anything_3 library - disabled in offline CI")
+@pytest.mark.skipif(not DA3_AVAILABLE, reason="depth_anything_3 not installed (optional dependency)")
 def test_da3_backend_compute_numpy():
     """DA3Backend.compute() accepts numpy arrays."""
     backend = DA3Backend()
@@ -101,7 +101,7 @@ def test_da3_backend_registry_integration():
     assert backends["da3"]["requires_checkpoint"] is False
 
 
-@pytest.mark.skipif(not DA3_AVAILABLE, reason="DA3 requires depth_anything_3 library - disabled in offline CI")
+@pytest.mark.skipif(not DA3_AVAILABLE, reason="depth_anything_3 not installed (optional dependency)")
 def test_da3_backend_via_registry():
     """DA3Backend can be instantiated via registry."""
     from transformation_portal.lux_depth_v3.config import EnhanceConfig
@@ -115,7 +115,7 @@ def test_da3_backend_via_registry():
     assert backend.name == "da3"
 
 
-@pytest.mark.skipif(not DA3_AVAILABLE, reason="DA3 requires depth_anything_3 library - disabled in offline CI")
+@pytest.mark.skipif(not DA3_AVAILABLE, reason="depth_anything_3 not installed (optional dependency)")
 def test_da3_backend_device_override():
     """DA3Backend respects device parameter in compute()."""
     from transformation_portal.lux_depth_v3.config import EnhanceConfig
