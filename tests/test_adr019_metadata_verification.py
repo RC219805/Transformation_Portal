@@ -5,6 +5,7 @@ and depth metadata files for both DA3 and Depth Pro backends.
 """
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,16 @@ from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
 # Mark all tests as ML tier
 pytestmark = pytest.mark.ml
+
+# Check offline mode and backend availability
+TRANSFORMERS_OFFLINE = os.getenv("TRANSFORMERS_OFFLINE") == "1"
+
+# Check if depth_anything_3 is available at module level
+try:
+    import depth_anything_3  # noqa: F401
+    DA3_AVAILABLE = True
+except ImportError:
+    DA3_AVAILABLE = False
 
 
 @pytest.fixture
@@ -30,11 +41,12 @@ def test_input_dir(tmp_path):
     return input_dir
 
 
+@pytest.mark.skipif(
+    not DA3_AVAILABLE or TRANSFORMERS_OFFLINE,
+    reason="DA3 requires depth_anything_3 library and model download"
+)
 def test_da3_backend_metadata_in_depth_stats(tmp_path, test_input_dir):
     """Test that DA3 backend metadata is correctly captured in depth stats."""
-    # Skip if DA3 libraries not installed (requires depth-anything-3 custom install)
-    pytest.importorskip("depth_anything_3", reason="DA3 requires custom library installation")
-
     output_dir = tmp_path / "output"
 
     config = EnhanceConfig(
@@ -107,11 +119,12 @@ def test_depth_pro_backend_metadata_in_depth_stats(tmp_path, test_input_dir):
     assert metadata["stats"]["unit"] == "meters"  # Depth Pro produces metric depth
 
 
+@pytest.mark.skipif(
+    not DA3_AVAILABLE or TRANSFORMERS_OFFLINE,
+    reason="DA3 requires depth_anything_3 library and model download"
+)
 def test_backend_metadata_in_manifest(tmp_path, test_input_dir):
     """Test that backend selection metadata is captured in manifest."""
-    # Skip if DA3 libraries not installed (requires depth-anything-3 custom install)
-    pytest.importorskip("depth_anything_3", reason="DA3 requires custom library installation")
-
     output_dir = tmp_path / "output"
 
     config = EnhanceConfig(
