@@ -584,7 +584,7 @@ class TestThreadSafety:
             orch = EnhanceOrchestrator(config, tmp_path / "output")
 
             # Mock the depth backend
-            mock_backend = MagicMock(spec=['name', 'compute'])
+            mock_backend = MagicMock(spec=["name", "compute"])
             mock_backend.name = "mock"
 
             def mock_compute(img):
@@ -597,7 +597,7 @@ class TestThreadSafety:
                 else:
                     img_array = img
 
-                mock_result = MagicMock(spec=['depth', 'depth_map', 'original_image', 'metadata'])
+                mock_result = MagicMock(spec=["depth", "depth_map", "original_image", "metadata"])
                 # Return 2D depth array (not 1D)
                 mock_result.depth = np.random.rand(100, 100).astype(np.float32)
                 mock_result.depth_map = mock_result.depth
