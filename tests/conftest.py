@@ -217,6 +217,20 @@ def has_depth_anything_v3() -> bool:
         return False
 
 
+def has_torch() -> bool:
+    """Check if PyTorch is available.
+
+    Returns:
+        True if torch can be imported, False otherwise.
+    """
+    try:
+        import torch  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
 def has_transformers() -> bool:
     """Check if transformers library is available.
 
@@ -241,14 +255,15 @@ def is_offline_mode() -> bool:
 
 
 def can_run_da3_compute() -> bool:
-    """Check if DA3 compute tests can run (package + not offline).
+    """Check if DA3 compute tests can run (all dependencies available).
 
     DA3 compute tests require:
     - depth_anything_3 package installed
+    - torch library available
     - transformers library available
     - Not in offline mode (would fail to download models)
 
     Returns:
         True if all DA3 compute requirements are met, False otherwise.
     """
-    return has_depth_anything_v3() and has_transformers() and not is_offline_mode()
+    return has_depth_anything_v3() and has_torch() and has_transformers() and not is_offline_mode()
