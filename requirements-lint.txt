@@ -18,5 +18,5 @@ pytest>=8,<10
 
 # Linting tools
 flake8>=7.0,<8
-black>=24.8,<25
+black>=24.0,<25
 isort>=5.13,<6

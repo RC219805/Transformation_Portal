@@ -5,7 +5,6 @@ and depth metadata files for both DA3 and Depth Pro backends.
 """
 
 import json
-import os
 from pathlib import Path
 
 import pytest
@@ -16,9 +15,6 @@ from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
 # Mark all tests as ML tier
 pytestmark = pytest.mark.ml
-
-# Check if we're in offline mode (CI)
-OFFLINE = os.getenv("TRANSFORMERS_OFFLINE") == "1" or os.getenv("HF_HUB_OFFLINE") == "1"
 
 
 @pytest.fixture
@@ -34,7 +30,6 @@ def test_input_dir(tmp_path):
     return input_dir
 
 
-@pytest.mark.skipif(OFFLINE, reason="DA3 requires model download - disabled in offline CI")
 def test_da3_backend_metadata_in_depth_stats(tmp_path, test_input_dir):
     """Test that DA3 backend metadata is correctly captured in depth stats."""
     output_dir = tmp_path / "output"
@@ -73,7 +68,6 @@ def test_da3_backend_metadata_in_depth_stats(tmp_path, test_input_dir):
     not Path("checkpoints/depth_pro.pt").exists(),
     reason="Depth Pro checkpoint not available",
 )
-@pytest.mark.skipif(OFFLINE, reason="Depth Pro requires checkpoint - disabled in offline CI")
 def test_depth_pro_backend_metadata_in_depth_stats(tmp_path, test_input_dir):
     """Test that Depth Pro backend metadata is correctly captured in depth stats."""
     output_dir = tmp_path / "output"
@@ -110,7 +104,6 @@ def test_depth_pro_backend_metadata_in_depth_stats(tmp_path, test_input_dir):
     assert metadata["stats"]["unit"] == "meters"  # Depth Pro produces metric depth
 
 
-@pytest.mark.skipif(OFFLINE, reason="DA3 requires model download - disabled in offline CI")
 def test_backend_metadata_in_manifest(tmp_path, test_input_dir):
     """Test that backend selection metadata is captured in manifest."""
     output_dir = tmp_path / "output"
@@ -144,7 +137,6 @@ def test_backend_metadata_in_manifest(tmp_path, test_input_dir):
     assert manifest["backend_selection"]["resolution_status"] == "success"
 
 
-@pytest.mark.skipif(OFFLINE, reason="Fallback requires DA3 model - disabled in offline CI")
 def test_fallback_backend_metadata(tmp_path):
     """Test that fallback backend metadata is correctly captured."""
     output_dir = tmp_path / "output"

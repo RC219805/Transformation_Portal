@@ -313,7 +313,7 @@ To change dependencies:
 3. keep CI lean:
 
    * do not pull heavy ML dependencies into the core runtime unless strictly necessary
-   * prefer optional extras (e.g., `.[ml]`, `.[rag]`) if supported
+   * prefer optional extras (e.g., `.[ml]`, `.[dev], [ci]`) if supported
 
 ---
 
