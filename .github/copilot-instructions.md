@@ -121,20 +121,22 @@ This repo uses a multi-backend depth strategy and must enforce compliance.
 
 ### Backend policy (encode as code-as-compliance)
 
-| Backend            | Tier               | Default? | Offline allowed? | Commercial allowed?              | Notes                                                 |
-| ------------------ | ------------------ | -------- | ---------------- | -------------------------------- | ----------------------------------------------------- |
-| Depth Anything V3  | Production         | Yes      | Yes              | Yes                              | Default for production runs.                          |
-| Apple Depth Pro    | Hardware-optimized | No       | Yes              | Yes                              | Prefer on Apple Silicon when available and validated. |
-| DA3 1.1 (research) | Experimental       | No       | Yes              | Only if `non_commercial_ok=True` | Must hard-fail otherwise.                             |
+| Backend key    | Model/Tier         | Default? | Offline? | Commercial allowed?              | Notes                                                 |
+| -------------- | ------------------ | -------- | -------- | -------------------------------- | ----------------------------------------------------- |
+| `da3`          | Depth Anything V3  | Yes      | Yes      | Yes ✅                           | Default for production runs.                          |
+| `depth_pro`    | Apple Depth Pro    | No       | Yes      | No ❌ (research-only)            | Requires `non_commercial_ok=True`.                    |
 
 Hard rule: if a model requires non-commercial gating, the code must raise a clear, typed exception **before any processing begins**.
 
-Example guard (pattern, not literal file paths):
+Example guard (using actual exception type from codebase):
 
 ```python
-if backend == "da3_1_1" and not cfg.non_commercial_ok:
-    raise ComplianceError(
-        "DA3 1.1 is restricted. Set non_commercial_ok=True for non-commercial use only."
+from transformation_portal.compliance.licensing import LicenseRestrictionError
+
+if backend == "depth_pro" and not cfg.non_commercial_ok:
+    raise LicenseRestrictionError(
+        "Depth Pro is restricted to non-commercial research use. "
+        "Set non_commercial_ok=True to acknowledge this restriction."
     )
 ```
 
@@ -174,10 +176,10 @@ def choose_device():
         and hasattr(torch.backends, "mps")
         and torch.backends.mps.is_available()
     ):
-        return torch.device("mps")
+        return "mps"  # Return string, consistent with codebase pattern
     if hasattr(torch, "cuda") and torch.cuda.is_available():
-        return torch.device("cuda")
-    return torch.device("cpu")
+        return "cuda"
+    return "cpu"
 ```
 
 ### Determinism caveats
@@ -221,12 +223,14 @@ Performance regressions are treated as correctness failures.
 
 ### Marker taxonomy
 
-| Marker           | Typical command                              | What it covers                                             | Constraints                                                               |
-| ---------------- | -------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------- |
-| (default / core) | `-m "not ml and not slow and not benchmark"` | config parsing, schemas, IO utilities, orchestration logic | Must run fast; no torch/model loads.                                      |
-| `ml`             | `-m "ml and not slow"`                       | backend wiring, inference shape rules, device placement    | Must be offline; small fixtures only.                                     |
-| `slow`           | (excluded by default)                        | stress, large fixtures, full pipelines                     | Run manually or scheduled.                                                |
-| `benchmark`      | (manual / gated)                             | performance ledger updates, regression thresholds          | Run in nightly/deep checks; skip in PR gating unless explicitly intended. |
+| Marker           | Typical command                  | What it covers                                             | Constraints                                                               |
+| ---------------- | -------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------- |
+| (default / core) | `-m "not ml and not slow"`       | config parsing, schemas, IO utilities, orchestration logic | Must run fast; no torch/model loads.                                      |
+| `ml`             | `-m "ml and not slow"`           | backend wiring, inference shape rules, device placement    | Must be offline; small fixtures only.                                     |
+| `slow`           | (excluded by default)            | stress, large fixtures, full pipelines                     | Run manually or scheduled.                                                |
+| `benchmark`      | (manual / gated)                 | performance ledger updates, regression thresholds          | Run in nightly/deep checks; skip in PR gating unless explicitly intended. |
+
+**Note:** Benchmark tests are not currently excluded by CI marker expressions, but should be marked and excluded in future CI iterations to avoid performance testing in fast PR gates.
 
 ### CI matrix (do not break this)
 
@@ -416,6 +420,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Protocol
+from transformation_portal.compliance.licensing import LicenseRestrictionError
 
 class DepthBackend(Protocol):
     def infer_depth(self, image: "np.ndarray") -> "np.ndarray":
@@ -427,8 +432,11 @@ class DepthConfig:
     non_commercial_ok: bool = False
 
 def create_depth_backend(cfg: DepthConfig) -> DepthBackend:
-    if cfg.backend == "da3_1_1" and not cfg.non_commercial_ok:
-        raise ComplianceError("Restricted backend requires non_commercial_ok=True")
+    # Registry validation enforces licensing before instantiation
+    if cfg.backend == "depth_pro" and not cfg.non_commercial_ok:
+        raise LicenseRestrictionError(
+            "Depth Pro requires non_commercial_ok=True for research use"
+        )
 
     # Factory/registry lookup goes here.
     return backend_registry[cfg.backend]()
