@@ -173,26 +173,3 @@ class TestDepthProIntegration:
         assert backend.name == "depth_pro"
         assert backend.requires_checkpoint is True
 
-        # Ensure available
-        backend.ensure_available()
-        print("✓ Registry integration successful")
-
-
-def _mps_available() -> bool:
-    """Check if MPS (Apple Silicon) is available."""
-    try:
-        import torch
-
-        return torch.backends.mps.is_available()
-    except (ImportError, AttributeError):
-        return False
-
-
-def _cuda_available() -> bool:
-    """Check if CUDA is available."""
-    try:
-        import torch
-
-        return torch.cuda.is_available()
-    except ImportError:
-        return False

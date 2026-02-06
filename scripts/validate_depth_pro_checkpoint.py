@@ -123,7 +123,7 @@ def check_depth_pro_package():
     
     try:
         import depth_pro
-        print_success(f"depth-pro package installed: version {depth_pro.__version__ if hasattr(depth_pro, '__version__') else 'unknown'}")
+        print_success(f"depth-pro package installed: version {getattr(depth_pro, '__version__', 'unknown')}")
         return True
     except ImportError:
         print_error("depth-pro package not installed")
