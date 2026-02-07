@@ -29,6 +29,7 @@ def make_capsule():
             capsule = make_capsule(scene_type="pool", pixel_count=20_000_000)
             assert ...
     """
+
     def _make(**overrides):
         base = {
             "image_id": "test_image",
@@ -54,6 +55,7 @@ def make_capsule():
         }
         base.update(overrides)
         return PerformanceCapsule(**base)
+
     return _make
 
 
@@ -266,11 +268,13 @@ class TestComputeSpecificity:
 
     def test_combined_scores_add(self):
         """Combined filters should add scores."""
-        score = compute_specificity({
-            "scene_type": "pool",  # +10
-            "device": "mps",  # +5
-            "pixel_count_min": 1000,  # +3
-        })
+        score = compute_specificity(
+            {
+                "scene_type": "pool",  # +10
+                "device": "mps",  # +5
+                "pixel_count_min": 1000,  # +3
+            }
+        )
         assert score == 18
 
 
@@ -478,8 +482,7 @@ class TestDefaultBuckets:
         # Check filter coverage, not names
         assert any(b.filters.get("scene_type") == "aerial" for b in DEFAULT_BUCKETS)
         assert any(b.filters.get("scene_type") == "pool" for b in DEFAULT_BUCKETS)
-        assert any(b.filters.get("scene_type") in {"interior", "great_room", "kitchen"}
-                   for b in DEFAULT_BUCKETS)
+        assert any(b.filters.get("scene_type") in {"interior", "great_room", "kitchen"} for b in DEFAULT_BUCKETS)
 
         # Verify catch-all exists
         assert any(b.filters == {} for b in DEFAULT_BUCKETS), "Missing catch-all bucket"
@@ -493,4 +496,3 @@ class TestDefaultBuckets:
         bucket = catch_all[0]
         assert bucket.p50_threshold_sec >= 60.0, "Catch-all p50 should be very lenient"
         assert bucket.p95_threshold_sec >= 120.0, "Catch-all p95 should be very lenient"
-

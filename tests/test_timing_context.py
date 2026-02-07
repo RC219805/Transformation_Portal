@@ -107,6 +107,7 @@ class TestTimingContextWithTorch:
         """Test MPS synchronization if torch available."""
         try:
             import torch
+
             has_mps = hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
         except ImportError:
             pytest.skip("torch not available")
@@ -124,6 +125,7 @@ class TestTimingContextWithTorch:
         """Test CUDA synchronization if torch available."""
         try:
             import torch
+
             has_cuda = hasattr(torch, "cuda") and torch.cuda.is_available()
         except ImportError:
             pytest.skip("torch not available")
