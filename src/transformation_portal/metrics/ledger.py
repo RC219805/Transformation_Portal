@@ -163,9 +163,7 @@ class PerformanceLedger:
         """Ensure database schema exists and is current (with migration support)."""
         with sqlite3.connect(self.db_path) as conn:
             # Check current schema version
-            cursor = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
-            )
+            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'")
             schema_table_exists = cursor.fetchone() is not None
 
             current_version = 0
@@ -397,10 +395,7 @@ class PerformanceLedger:
         cutoff_iso = cutoff_date.isoformat()
 
         with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
-                "DELETE FROM performance_capsules WHERE captured_at < ?",
-                (cutoff_iso,)
-            )
+            cursor = conn.execute("DELETE FROM performance_capsules WHERE captured_at < ?", (cutoff_iso,))
             deleted = cursor.rowcount
             conn.commit()
 
@@ -498,23 +493,27 @@ def generate_performance_report(
         totals = sorted([c.timings["total"] for c in capsules])
         n = len(totals)
 
-        lines.extend([
-            f"### {scene_type.title()} Scenes (n={n})",
-            "",
-            f"- Mean: {sum(totals) / n:.2f}s",
-            f"- Median: {totals[n // 2]:.2f}s",
-            f"- p95: {totals[int(n * 0.95)] if n > 1 else totals[0]:.2f}s",
-            f"- Min: {totals[0]:.2f}s",
-            f"- Max: {totals[-1]:.2f}s",
-            f"- Max/Min ratio: {totals[-1] / totals[0]:.2f}×",
-            "",
-        ])
+        lines.extend(
+            [
+                f"### {scene_type.title()} Scenes (n={n})",
+                "",
+                f"- Mean: {sum(totals) / n:.2f}s",
+                f"- Median: {totals[n // 2]:.2f}s",
+                f"- p95: {totals[int(n * 0.95)] if n > 1 else totals[0]:.2f}s",
+                f"- Min: {totals[0]:.2f}s",
+                f"- Max: {totals[-1]:.2f}s",
+                f"- Max/Min ratio: {totals[-1] / totals[0]:.2f}×",
+                "",
+            ]
+        )
 
     # Bucket analysis
-    lines.extend([
-        "## Performance Bucket Analysis",
-        "",
-    ])
+    lines.extend(
+        [
+            "## Performance Bucket Analysis",
+            "",
+        ]
+    )
 
     for bucket in DEFAULT_BUCKETS:
         matching = [c for c in all_capsules if bucket.matches(c)]
@@ -529,25 +528,25 @@ def generate_performance_report(
         p50_status = "✅" if p50 <= bucket.p50_threshold_sec else "⚠️"
         p95_status = "✅" if p95 <= bucket.p95_threshold_sec else "❌"
 
-        lines.extend([
-            f"### {bucket.name}",
-            "",
-            f"**Description:** {bucket.description}",
-            "",
-            f"- Samples: {n}",
-            f"- p50: {p50:.2f}s (threshold: {bucket.p50_threshold_sec:.2f}s) {p50_status}",
-            f"- p95: {p95:.2f}s (threshold: {bucket.p95_threshold_sec:.2f}s) {p95_status}",
-            "",
-        ])
+        lines.extend(
+            [
+                f"### {bucket.name}",
+                "",
+                f"**Description:** {bucket.description}",
+                "",
+                f"- Samples: {n}",
+                f"- p50: {p50:.2f}s (threshold: {bucket.p50_threshold_sec:.2f}s) {p50_status}",
+                f"- p95: {p95:.2f}s (threshold: {bucket.p95_threshold_sec:.2f}s) {p95_status}",
+                "",
+            ]
+        )
 
     output_path.write_text("\n".join(lines))
 
 
 def main() -> int:
     """Main CLI entry point."""
-    parser = argparse.ArgumentParser(
-        description="Performance ledger tool for regression detection"
-    )
+    parser = argparse.ArgumentParser(description="Performance ledger tool for regression detection")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -586,10 +585,7 @@ def main() -> int:
 
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s"
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
     try:
         if args.command == "log":

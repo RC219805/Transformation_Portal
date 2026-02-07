@@ -28,6 +28,8 @@ For luxury real estate:
 - Track and enforce performance characteristics
 """
 
+from transformation_portal.metrics.ledger import PerformanceLedger
+
 # Performance metrics (no heavy dependencies)
 from transformation_portal.metrics.performance_capsule import (
     DEFAULT_BUCKETS,
@@ -44,7 +46,6 @@ from transformation_portal.metrics.timing import (
     merge_timings,
     timing_context,
 )
-from transformation_portal.metrics.ledger import PerformanceLedger
 
 __all__ = [
     "PerformanceCapsule",
@@ -64,18 +65,21 @@ __all__ = [
 # Optional ML-based metrics (lazy import to avoid dependency issues)
 try:
     from transformation_portal.metrics.fid_metric import FIDMetric
+
     __all__.append("FIDMetric")
 except ImportError:
     pass
 
 try:
     from transformation_portal.metrics.lpips_metric import LPIPSMetric
+
     __all__.append("LPIPSMetric")
 except ImportError:
     pass
 
 try:
     from transformation_portal.metrics.traditional_metrics import TraditionalMetrics
+
     __all__.append("TraditionalMetrics")
 except ImportError:
     pass

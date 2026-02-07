@@ -120,8 +120,7 @@ class TestAggregator:
         assert "pool_medium_mps" in per_zone["us-west-2b"]
 
         # Zone A has lower p95
-        assert per_zone["us-west-2a"]["pool_medium_mps"].p95 < \
-               per_zone["us-west-2b"]["pool_medium_mps"].p95
+        assert per_zone["us-west-2a"]["pool_medium_mps"].p95 < per_zone["us-west-2b"]["pool_medium_mps"].p95
 
     def test_compute_global_stats(self):
         """Test global statistics computation (across all zones)."""

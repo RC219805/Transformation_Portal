@@ -63,9 +63,7 @@ class TestGate:
 
     def test_gate_bucket_threshold_violation(self):
         """Test gate blocks on bucket threshold violation."""
-        bucket_stats = {
-            "pool_medium": self.create_bucket_stats("pool_medium", p95=16.0, threshold_p95=15.0, pass_fail="fail")
-        }
+        bucket_stats = {"pool_medium": self.create_bucket_stats("pool_medium", p95=16.0, threshold_p95=15.0, pass_fail="fail")}
 
         judgement = Judgement(
             run_id="test123",
@@ -167,9 +165,7 @@ class TestGate:
 
     def test_gate_passes_when_all_rules_pass(self):
         """Test gate passes when all rules pass."""
-        bucket_stats = {
-            "pool_medium": self.create_bucket_stats("pool_medium", p95=12.0, threshold_p95=15.0, pass_fail="pass")
-        }
+        bucket_stats = {"pool_medium": self.create_bucket_stats("pool_medium", p95=12.0, threshold_p95=15.0, pass_fail="pass")}
 
         judgement = Judgement(
             run_id="test123",
@@ -196,9 +192,7 @@ class TestGate:
 
     def test_should_block_simple_api(self):
         """Test simple should_block API."""
-        bucket_stats = {
-            "pool_medium": self.create_bucket_stats("pool_medium", p95=16.0, threshold_p95=15.0, pass_fail="fail")
-        }
+        bucket_stats = {"pool_medium": self.create_bucket_stats("pool_medium", p95=16.0, threshold_p95=15.0, pass_fail="fail")}
 
         judgement = Judgement(
             run_id="test123",
@@ -217,9 +211,7 @@ class TestGate:
 
     def test_multiple_violations_all_reported(self):
         """Test that multiple violations are all reported."""
-        bucket_stats = {
-            "pool_medium": self.create_bucket_stats("pool_medium", p95=16.0, threshold_p95=15.0, pass_fail="fail")
-        }
+        bucket_stats = {"pool_medium": self.create_bucket_stats("pool_medium", p95=16.0, threshold_p95=15.0, pass_fail="fail")}
 
         regression_report = RegressionReport(
             baseline_run_id="baseline",

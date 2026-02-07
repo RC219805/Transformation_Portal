@@ -29,8 +29,8 @@ Version: 1.0.0
 
 from __future__ import annotations
 
-import os
 import logging
+import os
 from typing import Optional
 
 __version__ = "1.0.0"
@@ -135,15 +135,13 @@ class ZoneResolver:
             Availability zone (e.g., "us-west-2a") or None
         """
         try:
-            import urllib.request
             import urllib.error
+            import urllib.request
 
             # IMDSv2: Get token first
             token_url = "http://169.254.169.254/latest/api/token"
             token_req = urllib.request.Request(
-                token_url,
-                headers={"X-aws-ec2-metadata-token-ttl-seconds": "21600"},
-                method="PUT"
+                token_url, headers={"X-aws-ec2-metadata-token-ttl-seconds": "21600"}, method="PUT"
             )
 
             try:
@@ -155,10 +153,7 @@ class ZoneResolver:
 
             # Get availability zone using token
             az_url = "http://169.254.169.254/latest/meta-data/placement/availability-zone"
-            az_req = urllib.request.Request(
-                az_url,
-                headers={"X-aws-ec2-metadata-token": token}
-            )
+            az_req = urllib.request.Request(az_url, headers={"X-aws-ec2-metadata-token": token})
 
             with urllib.request.urlopen(az_req, timeout=1) as response:
                 az = response.read().decode().strip()

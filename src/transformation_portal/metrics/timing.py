@@ -38,12 +38,7 @@ class TimingContext:
         device: Optional device string for GPU synchronization ("mps", "cuda", "cpu")
     """
 
-    def __init__(
-        self,
-        phase_name: str,
-        timings_dict: Optional[Dict[str, float]] = None,
-        device: Optional[str] = None
-    ) -> None:
+    def __init__(self, phase_name: str, timings_dict: Optional[Dict[str, float]] = None, device: Optional[str] = None) -> None:
         self.phase_name = phase_name
         self.elapsed_sec: float = 0.0
         self.timings_dict = timings_dict
@@ -83,11 +78,7 @@ class TimingContext:
 
                 # Fallback to device-specific sync (check attribute existence first)
                 if self.device == "mps":
-                    if (
-                        hasattr(torch, "backends")
-                        and hasattr(torch.backends, "mps")
-                        and torch.backends.mps.is_available()
-                    ):
+                    if hasattr(torch, "backends") and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
                         torch.mps.synchronize()
                 elif self.device == "cuda":
                     if hasattr(torch, "cuda") and torch.cuda.is_available():
@@ -98,9 +89,7 @@ class TimingContext:
 
 @contextmanager
 def timing_context(
-    phase_name: str,
-    timings_dict: Optional[Dict[str, float]] = None,
-    device: Optional[str] = None
+    phase_name: str, timings_dict: Optional[Dict[str, float]] = None, device: Optional[str] = None
 ) -> TimingContext:
     """Context manager for timing a code block with GPU synchronization.
 

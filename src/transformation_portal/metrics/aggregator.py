@@ -168,9 +168,7 @@ def compute_global_stats(
     return global_stats
 
 
-def compute_worst_zone_p95(
-    per_zone_stats: Dict[str, Dict[str, BucketStats]]
-) -> Tuple[Optional[str], Optional[float]]:
+def compute_worst_zone_p95(per_zone_stats: Dict[str, Dict[str, BucketStats]]) -> Tuple[Optional[str], Optional[float]]:
     """Find the zone with the worst (highest) p95 across all buckets.
 
     This is critical for gating - we gate on worst-case user experience.
