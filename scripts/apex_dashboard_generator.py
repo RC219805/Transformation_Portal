@@ -62,21 +62,21 @@ def generate_dashboard_data(db_path: Path, days: int = 90) -> Dict[str, Any]:
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
 
-        # Query trends (daily aggregates)
+        # Query trends using pre-aggregated view (Phase 3 optimization)
         trends_query = """
             SELECT 
-                DATE(timestamp) as date,
+                date,
                 bucket_name,
                 zone,
                 workflow_version,
-                AVG(p50) as avg_p50,
-                AVG(p95) as avg_p95,
-                AVG(p99) as avg_p99,
-                COUNT(*) as run_count,
-                SUM(CASE WHEN pass_fail = 'fail' THEN 1 ELSE 0 END) as fail_count
-            FROM apex_runs
-            WHERE timestamp >= ?
-            GROUP BY DATE(timestamp), bucket_name, zone, workflow_version
+                avg_p50,
+                avg_p95,
+                avg_p99,
+                run_count,
+                fail_count,
+                warn_count
+            FROM apex_trends
+            WHERE date >= DATE(?)
             ORDER BY date DESC
         """
 
@@ -105,6 +105,7 @@ def generate_dashboard_data(db_path: Path, days: int = 90) -> Dict[str, Any]:
         regressions = [dict(row) for row in cursor.fetchall()]
 
         # Query worst offenders (all time, by max ratio)
+        # Using optimized composite index on bucket_name, zone, timestamp
         worst_query = """
             SELECT 
                 bucket_name,
@@ -124,12 +125,25 @@ def generate_dashboard_data(db_path: Path, days: int = 90) -> Dict[str, Any]:
         cursor = conn.execute(worst_query)
         worst_offenders = [dict(row) for row in cursor.fetchall()]
 
-        # Latest run summary
+        # Latest run summary (using timestamp DESC index)
         latest_query = """
-            SELECT *
+            SELECT 
+                run_id,
+                commit_sha,
+                timestamp,
+                workflow_version,
+                zone,
+                bucket_name,
+                p50,
+                p95,
+                p99,
+                count,
+                threshold_p50,
+                threshold_p95,
+                pass_fail
             FROM apex_runs
             ORDER BY timestamp DESC
-            LIMIT 50
+            LIMIT 100
         """
 
         cursor = conn.execute(latest_query)

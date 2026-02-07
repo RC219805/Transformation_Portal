@@ -58,12 +58,12 @@ from transformation_portal.metrics.performance_capsule import (
     get_bucket_for_capsule,
 )
 
-__version__ = "2.0.0"
+__version__ = "3.0.0"
 
 logger = logging.getLogger(__name__)
 
 # Database schema
-SCHEMA_VERSION = 2  # v2: Added workflow_version and zone support
+SCHEMA_VERSION = 3  # v3: Phase 3 - Added optimized indexes and apex_trends view
 
 CREATE_TABLES_SQL = """
 CREATE TABLE IF NOT EXISTS schema_version (
