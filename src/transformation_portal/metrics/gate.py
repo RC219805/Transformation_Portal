@@ -140,14 +140,9 @@ def evaluate_gate(
 
     # Rule 1: Check bucket threshold violations
     if judgement.pass_fail == "fail":
-        failing_buckets = [
-            name for name, stats in judgement.bucket_stats.items()
-            if stats.pass_fail == "fail"
-        ]
+        failing_buckets = [name for name, stats in judgement.bucket_stats.items() if stats.pass_fail == "fail"]
         if failing_buckets:
-            reasons.append(
-                f"Bucket threshold violation: {', '.join(failing_buckets)} exceeded p95 threshold"
-            )
+            reasons.append(f"Bucket threshold violation: {', '.join(failing_buckets)} exceeded p95 threshold")
 
     # Rule 2: Check worst-zone p95
     if worst_zone_p95_threshold is not None and judgement.worst_zone_p95 is not None:

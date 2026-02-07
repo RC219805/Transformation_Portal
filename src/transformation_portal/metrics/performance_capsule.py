@@ -308,10 +308,7 @@ def compute_specificity(filters: Dict[str, Any]) -> int:
     return score
 
 
-def compute_dimension_adjustment(
-    original: Tuple[int, int],
-    enforced: Tuple[int, int]
-) -> str:
+def compute_dimension_adjustment(original: Tuple[int, int], enforced: Tuple[int, int]) -> str:
     """Compute human-readable dimension adjustment description.
 
     Args:
@@ -400,8 +397,7 @@ DEFAULT_BUCKETS = [
 
 
 def get_bucket_for_capsule(
-    capsule: PerformanceCapsule,
-    buckets: Optional[list[PerformanceBucket]] = None
+    capsule: PerformanceCapsule, buckets: Optional[list[PerformanceBucket]] = None
 ) -> PerformanceBucket:
     """Find the most specific bucket matching the capsule.
 
