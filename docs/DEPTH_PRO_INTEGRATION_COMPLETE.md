@@ -1,8 +1,8 @@
 # Depth Pro Integration - Completion Summary
 
-**Date:** 2026-02-06  
-**Status:** ✅ Complete (PR2 Wiring Phase)  
-**Tier:** Experimental  
+**Date:** 2026-02-06
+**Status:** ✅ Complete (PR2 Wiring Phase)
+**Tier:** Experimental
 **ADR:** [ADR-018](architecture/ADR-018-depth-pro-integration.md)
 
 ---
@@ -60,8 +60,8 @@ The Depth Pro integration is **functionally complete** for research and experime
 
 4. **CLI Support** (`src/transformation_portal/lux_depth_v3/__main__.py`)
    - `--depth-backend depth_pro` flag
-   - `--enable-non-commercial` flag
-   - `--enable-apple-license` flag
+   - `--non-commercial-ok` flag
+   - `--accept-apple-depth-pro-research-license` flag
    - License requirement validation
 
 5. **Configuration** (`src/transformation_portal/lux_depth_v3/config.py`)
@@ -160,8 +160,8 @@ python -m transformation_portal.lux_depth_v3 \
   --input-dir ./images \
   --output-dir ./output \
   --preset depth-pro-example \
-  --enable-non-commercial \
-  --enable-apple-license
+  --non-commercial-ok \
+  --accept-apple-depth-pro-research-license
 ```
 
 **Option 2: CLI Flags**
@@ -171,8 +171,8 @@ python -m transformation_portal.lux_depth_v3 \
   --output-dir ./output \
   --depth-backend depth_pro \
   --depth-device mps \
-  --enable-non-commercial \
-  --enable-apple-license
+  --non-commercial-ok \
+  --accept-apple-depth-pro-research-license
 ```
 
 **Option 3: Python API**
@@ -209,7 +209,7 @@ Depth Pro requires **explicit license acceptance** via two flags:
 1. **`non_commercial_ok=True`**: Acknowledge non-commercial use only
 2. **`accept_apple_depth_pro_research_license=True`**: Accept Apple AMLR license
 
-**License Type:** Apple Machine Learning Research License (AMLR)  
+**License Type:** Apple Machine Learning Research License (AMLR)
 **Restrictions:**
 - ❌ Commercial products or services
 - ❌ Revenue-generating applications
@@ -228,7 +228,7 @@ Depth Pro requires **explicit license acceptance** via two flags:
 **Layer 1: Configuration Validation** (CLI parsing)
 ```python
 if depth_backend == "depth_pro" and not enable_non_commercial:
-    raise ValueError("Depth Pro requires --enable-non-commercial")
+    raise ValueError("Depth Pro requires --non-commercial-ok")
 ```
 
 **Layer 2: Registry Validation** (Factory level)
@@ -392,8 +392,8 @@ pytest tests/integration/test_depth_pro_e2e.py -v
 
 ## Contact & Support
 
-**Status:** Experimental (use at your own risk)  
-**Tier Policy:** Changes may occur without deprecation notice  
+**Status:** Experimental (use at your own risk)
+**Tier Policy:** Changes may occur without deprecation notice
 **Support:** Community support only (no production SLA)
 
 For questions or issues:
@@ -403,6 +403,6 @@ For questions or issues:
 
 ---
 
-**Last Updated:** 2026-02-06  
-**Integration Phase:** PR2 Complete, PR3 Deferred  
+**Last Updated:** 2026-02-06
+**Integration Phase:** PR2 Complete, PR3 Deferred
 **Next Milestone:** Real-world validation by users with checkpoints

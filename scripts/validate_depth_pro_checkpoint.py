@@ -283,8 +283,8 @@ def main():
         print("    --input-dir ./images \\")
         print("    --output-dir ./output \\")
         print("    --preset depth-pro-example \\")
-        print("    --enable-non-commercial \\")
-        print("    --enable-apple-license")
+        print("    --non-commercial-ok \\")
+        print("    --accept-apple-depth-pro-research-license")
         return 0
     else:
         print("\n❌ Some validation checks failed.")

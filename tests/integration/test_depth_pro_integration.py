@@ -24,13 +24,9 @@ skip_if_no_checkpoint = pytest.mark.skipif(
     "curl -L https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt -o checkpoints/depth_pro.pt",
 )
 
-# Try importing depth_pro
-try:
-    import depth_pro  # noqa: F401
-
-    DEPTH_PRO_AVAILABLE = True
-except ImportError:
-    DEPTH_PRO_AVAILABLE = False
+# Check if depth_pro package is available
+depth_pro = pytest.importorskip("depth_pro", reason="depth-pro package not installed. Install with: pip install depth-pro")
+DEPTH_PRO_AVAILABLE = True
 
 skip_if_no_depth_pro = pytest.mark.skipif(
     not DEPTH_PRO_AVAILABLE, reason="depth-pro package not installed. Install with: pip install depth-pro"

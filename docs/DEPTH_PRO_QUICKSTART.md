@@ -92,8 +92,8 @@ python -m transformation_portal.lux_depth_v3 \
   --input-dir ./images \
   --output-dir ./output \
   --preset depth-pro-example \
-  --enable-non-commercial \
-  --enable-apple-license
+  --non-commercial-ok \
+  --accept-apple-depth-pro-research-license
 ```
 
 **Available Presets:**
@@ -111,8 +111,8 @@ python -m transformation_portal.lux_depth_v3 \
   --output-dir ./output \
   --depth-backend depth_pro \
   --depth-device mps \
-  --enable-non-commercial \
-  --enable-apple-license
+  --non-commercial-ok \
+  --accept-apple-depth-pro-research-license
 ```
 
 **Device Options:**
@@ -158,8 +158,8 @@ enhance_batch(
 ⚠️ **Depth Pro requires explicit license acceptance**
 
 You **must** set both flags:
-1. `--enable-non-commercial` (or `non_commercial_ok=True` in config)
-2. `--enable-apple-license` (or `accept_apple_depth_pro_research_license=True` in config)
+1. `--non-commercial-ok` (or `non_commercial_ok=True` in config)
+2. `--accept-apple-depth-pro-research-license` (or `accept_apple_depth_pro_research_license=True` in config)
 
 **License:** Apple Machine Learning Research License (AMLR)
 
@@ -284,7 +284,7 @@ LicenseRestrictionError: Depth Pro requires non_commercial_ok=True
 **Solution:**
 Add both license flags:
 ```bash
---enable-non-commercial --enable-apple-license
+--non-commercial-ok --accept-apple-depth-pro-research-license
 ```
 
 ### MPS not available on Mac
@@ -321,6 +321,6 @@ For more details, see:
 
 ---
 
-**Status:** Experimental (research use only)  
-**Tier:** Experimental  
+**Status:** Experimental (research use only)
+**Tier:** Experimental
 **Support:** Community support only
