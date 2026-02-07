@@ -1,10 +1,12 @@
 name: CI Quality Firewall
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI (Lint, Tests & Manifest)"]
     branches: [main, develop]
-  # pull_request disabled - CI Gate in build.yml is the required governance check
-  # This workflow provides post-merge validation only
+    types: [completed]
+  # Runs after main CI completes on main/develop
+  # Avoids duplicating CI minutes and conflicting results
 
 # Concurrency control: Cancel outdated runs on new pushes to the same branch
 # This reduces CI minutes and speeds up feedback on the latest code
@@ -14,8 +16,6 @@ concurrency:
 
 permissions:
   contents: read
-  pull-requests: write
-  checks: write
 
 env:
   PYTHON_VERSION_LINT: "3.12"
@@ -205,7 +205,6 @@ jobs:
             --maxfail=3 \
             --tb=short
         env:
-          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
           PYTHONNOUSERSITE: 1
 
       - name: Upload coverage to Codecov
@@ -315,9 +314,9 @@ jobs:
             --maxfail=3 \
             --tb=short
         env:
-          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
           PYTHONNOUSERSITE: 1
           TRANSFORMERS_OFFLINE: 1
+          HF_HUB_OFFLINE: 1
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
@@ -482,14 +481,20 @@ jobs:
 
       - name: Check for root clutter
         run: |
-          # Check for workflow markers
-          if ls DEFER MERGE ROLLBACK SUCCESS Continue SKIP INVESTIGATE "=" 2>/dev/null; then
-            echo "ERROR: Workflow marker files found in root"
+          # Check for workflow markers (one at a time to avoid ls masking)
+          marker_found=0
+          for marker in DEFER MERGE ROLLBACK SUCCESS Continue SKIP INVESTIGATE "="; do
+            if [ -e "$marker" ]; then
+              echo "ERROR: Workflow marker file found: $marker"
+              marker_found=1
+            fi
+          done
+          if [ "$marker_found" -eq 1 ]; then
             exit 1
           fi
 
           # Check for coverage artifacts
-          if ls .coverage coverage.json 2>/dev/null; then
+          if [ -e .coverage ] || [ -e coverage.json ]; then
             echo "ERROR: Coverage artifacts in root (should be gitignored)"
             exit 1
           fi
@@ -541,6 +546,8 @@ jobs:
           if [ "${{ needs.lint.result }}" != "success" ] || \
              [ "${{ needs.security.result }}" != "success" ] || \
              [ "${{ needs.test-core.result }}" != "success" ] || \
+             [ "${{ needs.test-ml.result }}" != "success" ] || \
+             [ "${{ needs.coverage-gate.result }}" != "success" ] || \
              [ "${{ needs.build.result }}" != "success" ] || \
              [ "${{ needs.repo-hygiene.result }}" != "success" ]; then
             echo "FAILED: Critical quality gates did not pass"
