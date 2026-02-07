@@ -3,7 +3,8 @@
 Provides context managers and decorators for capturing phase-level timings
 with zero-overhead when disabled.
 
-Usage:
+Usage::
+
     from transformation_portal.metrics.timing import TimingContext, timing_context
 
     # Context manager
@@ -80,13 +81,19 @@ class TimingContext:
                     torch.accelerator.synchronize()
                     return
 
-                # Fallback to device-specific sync
-                if self.device == "mps" and torch.backends.mps.is_available():
-                    torch.mps.synchronize()
-                elif self.device == "cuda" and torch.cuda.is_available():
-                    torch.cuda.synchronize()
-            except ImportError:
-                pass  # torch not available, fall back to CPU timing
+                # Fallback to device-specific sync (check attribute existence first)
+                if self.device == "mps":
+                    if (
+                        hasattr(torch, "backends")
+                        and hasattr(torch.backends, "mps")
+                        and torch.backends.mps.is_available()
+                    ):
+                        torch.mps.synchronize()
+                elif self.device == "cuda":
+                    if hasattr(torch, "cuda") and torch.cuda.is_available():
+                        torch.cuda.synchronize()
+            except (ImportError, AttributeError):
+                pass  # torch not available or incomplete, fall back to CPU timing
 
 
 @contextmanager
@@ -105,7 +112,8 @@ def timing_context(
     Yields:
         TimingContext with elapsed_sec available after exit
 
-    Example:
+    Example::
+
         timings = {}
         with timing_context("inference", timings, device="mps") as timer:
             result = expensive_operation()

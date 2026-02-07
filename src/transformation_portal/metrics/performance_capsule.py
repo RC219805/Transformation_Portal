@@ -63,10 +63,11 @@ class PerformanceCapsule:
         cache_hit: Whether depth was loaded from cache
         cache_key: Cache key used for lookup
 
-        timings: Phase-level timing breakdown in seconds
-            Required keys: "total"
-            Optional keys: "load_decode", "preprocess", "inference", "postprocess",
-                          "write_depth", "pbr_normals", "pbr_roughness", "pbr_ao"
+        timings: Phase-level timing breakdown in seconds.
+            Required keys: ``total``.
+            Optional keys: ``load_decode``, ``preprocess``, ``inference``,
+            ``postprocess``, ``write_depth``, ``pbr_normals``, ``pbr_roughness``,
+            ``pbr_ao``.
 
         scene_type: Optional scene classification ("pool", "aerial", "interior", etc.)
         texture_complexity: Optional texture descriptor ("high_frequency", "smooth", "mixed")

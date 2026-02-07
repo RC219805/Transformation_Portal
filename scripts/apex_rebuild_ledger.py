@@ -96,9 +96,9 @@ def rebuild_ledger(input_dir: Path, db_path: Path) -> int:
                     cap_dict, obs_zone, obs_workflow_version
                 )
                 
-                # Convert to PerformanceCapsule and record
+                # Convert to PerformanceCapsule and log
                 capsule = PerformanceCapsule.from_dict(cap_dict)
-                ledger.record_capsule(capsule)
+                ledger.log_capsule(capsule)
                 ingested += 1
             
             logger.info(f"✓ Ingested {len(capsules_data)} capsules from {filepath.name}")
