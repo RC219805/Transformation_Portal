@@ -27,12 +27,11 @@ def test_da3_backend_implements_protocol():
 
 
 def test_da3_backend_availability():
-    """DA3Backend.ensure_available() raises ImportError when dependencies missing.
+    """DA3Backend has ensure_available() method.
 
-    Uses monkeypatch to force import failure, verifying error handling.
+    Verifies the method exists and is callable.
+    Actual error handling is tested in test_da3_backend_availability_missing_transformers.
     """
-    import importlib
-
     from transformation_portal.depth.backends.da3 import DA3Backend
 
     backend = DA3Backend()
@@ -45,35 +44,21 @@ def test_da3_backend_availability():
 def test_da3_backend_availability_missing_transformers(monkeypatch):
     """DA3Backend.ensure_available() detects missing transformers dependency.
 
-    Uses sys.modules patching to simulate ImportError during import statement.
+    Uses monkeypatch to manage sys.modules, simulating missing dependency.
     """
     import sys
 
     from transformation_portal.depth.backends.da3 import DA3Backend
 
-    # Temporarily remove transformers from sys.modules to force ImportError
-    # Save original value (if it exists)
-    original_transformers = sys.modules.get("transformers")
+    # Use monkeypatch to safely modify sys.modules
+    monkeypatch.delitem(sys.modules, "transformers", raising=False)
+    monkeypatch.setitem(sys.modules, "transformers", None)
 
-    try:
-        # Remove transformers from sys.modules
-        if "transformers" in sys.modules:
-            del sys.modules["transformers"]
+    backend = DA3Backend()
 
-        # Block future imports by setting to None
-        sys.modules["transformers"] = None
-
-        backend = DA3Backend()
-
-        # This should raise ImportError when ensure_available tries to import transformers
-        with pytest.raises(ImportError, match="transformers"):
-            backend.ensure_available()
-    finally:
-        # Restore original state
-        if original_transformers is not None:
-            sys.modules["transformers"] = original_transformers
-        elif "transformers" in sys.modules:
-            del sys.modules["transformers"]
+    # This should raise ImportError when ensure_available tries to import transformers
+    with pytest.raises(ImportError, match="transformers"):
+        backend.ensure_available()
 
 
 @pytest.mark.skipif(
