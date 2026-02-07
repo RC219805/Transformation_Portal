@@ -1,6 +1,8 @@
-# CI environment: runtime + test deps
-# Uses base (core) dependencies only for faster CI builds
-# ML tests run separately with requirements/ml.txt
+# CI environment: runtime + test deps (base layer)
+# This file defines the *base* dependencies used across CI for fast installs.
+# The dedicated `test-ml` job installs additional ML wheels (e.g., CPU-only torch/torchvision)
+# on top of this base layer for ML tier tests.
+# Heavy benchmark/stress suites are marker-gated and not part of the default fast CI run.
 -r requirements.txt
 
 # Testing / coverage / property-based tests
