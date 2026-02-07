@@ -81,8 +81,8 @@ class TestBilateralFilterPrecision:
 
     def test_bilateral_filter_handles_metric_depth(self):
         """Test that bilateral filter scales sigmaColor for metric depth ranges."""
-        from transformation_portal.lux_depth_v3.postprocessing import Postprocessor
         from transformation_portal.lux_depth_v3.config import PostprocessingConfig
+        from transformation_portal.lux_depth_v3.postprocessing import Postprocessor
 
         # Create metric depth (e.g., meters, range 0-100)
         depth = np.array([[10.0, 20.0, 30.0], [40.0, 50.0, 60.0], [70.0, 80.0, 90.0]], dtype=np.float32)
@@ -262,7 +262,7 @@ class TestInputDiscoveryFormatSupport:
 
     def test_discover_images_finds_webp_and_bmp(self, tmp_path):
         """Test that discover_images finds WebP and BMP files."""
-        from transformation_portal.lux_depth_v3.input_discovery import discover_images, DiscoveryConfig
+        from transformation_portal.lux_depth_v3.input_discovery import DiscoveryConfig, discover_images
 
         # Note: discover_images validates files, so we need real images
         try:
