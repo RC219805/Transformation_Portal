@@ -10,6 +10,7 @@ import json
 import logging
 import sqlite3
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from transformation_portal.metrics.aggregator import (
@@ -69,17 +70,19 @@ def aggregate_ledger(
                 
                 logger.info(f"Computing stats for {workflow_version} ({len(wf_capsules)} capsules)")
                 
-                stats = compute_per_zone_stats(wf_capsules)
+                per_zone_stats = compute_per_zone_stats(wf_capsules)
+                timestamp = datetime.now(timezone.utc).isoformat()
+                
                 log_aggregated_stats_to_ledger(
                     run_id=run_id,
                     commit_sha=commit_sha,
                     workflow_version=workflow_version,
-                    zone="CI",  # TODO: Make configurable
-                    stats=stats,
-                    db_path=str(db_path),
+                    timestamp=timestamp,
+                    per_zone_stats=per_zone_stats,
+                    ledger_db_path=str(db_path),
                 )
                 
-                logger.info(f"✓ Logged {len(stats)} bucket stats for {workflow_version}")
+                logger.info(f"✓ Logged stats for {len(per_zone_stats)} zones ({workflow_version})")
         
         logger.info("✅ Aggregation complete")
         return 0

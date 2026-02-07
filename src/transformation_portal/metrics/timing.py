@@ -112,7 +112,8 @@ def timing_context(
     Yields:
         TimingContext with elapsed_sec available after exit
 
-    Example:
+    Example::
+
         timings = {}
         with timing_context("inference", timings, device="mps") as timer:
             result = expensive_operation()
