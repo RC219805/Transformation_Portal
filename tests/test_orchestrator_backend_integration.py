@@ -5,6 +5,7 @@ and implements fallback logic.
 """
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -16,7 +17,14 @@ from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 pytestmark = pytest.mark.ml
 
 
-def test_orchestrator_uses_registry(tmp_path):
+@pytest.fixture
+def mock_da3_available():
+    """Mock DA3Backend.ensure_available() to succeed in offline CI."""
+    with patch("transformation_portal.depth.backends.da3.DA3Backend.ensure_available"):
+        yield
+
+
+def test_orchestrator_uses_registry(tmp_path, mock_da3_available):
     """Orchestrator uses DepthBackendRegistry."""
     config = EnhanceConfig(
         depth_backend="da3",
@@ -30,7 +38,7 @@ def test_orchestrator_uses_registry(tmp_path):
     assert orchestrator.depth_backend.name == "da3"
 
 
-def test_orchestrator_default_backend(tmp_path):
+def test_orchestrator_default_backend(tmp_path, mock_da3_available):
     """Orchestrator defaults to DA3 if no backend specified."""
     config = EnhanceConfig(
         depth_device="cpu",
@@ -56,7 +64,7 @@ def test_orchestrator_fallback_logic(tmp_path):
         EnhanceOrchestrator(config, tmp_path)
 
 
-def test_orchestrator_backend_metadata_capture(tmp_path):
+def test_orchestrator_backend_metadata_capture(tmp_path, mock_da3_available):
     """Orchestrator captures backend selection metadata."""
     config = EnhanceConfig(
         depth_backend="da3",
