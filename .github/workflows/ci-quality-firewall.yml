@@ -137,9 +137,19 @@ jobs:
           pip-audit --desc -r requirements-ci.txt
 
       - name: Check for secrets with gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # gitleaks-action@v2 doesn't support workflow_run events
+        # Use direct gitleaks binary instead for post-merge validation
+        run: |
+          # Install gitleaks
+          wget https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz
+          tar -xzf gitleaks_8.21.2_linux_x64.tar.gz
+          chmod +x gitleaks
+
+          # Run gitleaks scan on repository
+          ./gitleaks detect --source . --verbose --no-git --exit-code 1 || {
+            echo "⚠️  Secrets detected - review gitleaks output above"
+            exit 1
+          }
 
       - name: Upload security reports
         if: always()
