@@ -5,15 +5,19 @@ Validates performance claims and prevents regressions:
 - Phase 2: Parallel processing (3-5x speedup), depth caching
 - Phase 3: PBR batching (30% speedup), msgpack serialization
 
-Tests are marked with @pytest.mark.benchmark to run separately from unit tests.
-CI skips these tests - run manually for performance validation.
+Tests are marked with @pytest.mark.benchmark.
+Note: CI runs these unless explicitly excluded by marker selection (e.g., -m "not benchmark").
+
+ADR-019 Note:
+Uses backend protocol mocks (DA3Backend.compute) instead of legacy
+orchestrator.DA3InferenceEngine + Postprocessor pattern.
 """
 
 import hashlib
 import tempfile
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -24,7 +28,6 @@ pytestmark = pytest.mark.ml
 
 from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
 from transformation_portal.lux_depth_v3.depth_cache import DepthCache
-from transformation_portal.lux_depth_v3.inference import DepthResult
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
 from transformation_portal.lux_depth_v3.manifest import CombinedManifest, InputMetadata, compute_file_sha256
 from transformation_portal.lux_depth_v3.orchestrator import _load_manifest_cached
@@ -36,19 +39,34 @@ from transformation_portal.lux_depth_v3.orchestrator import _load_manifest_cache
 
 @pytest.fixture
 def mock_depth_result():
-    """Create a realistic mock DepthResult with proper array shapes."""
+    """Create a realistic mock DepthResult with proper array shapes (backend protocol)."""
 
     def _create(height=512, width=512):
+        from transformation_portal.depth.backends.protocol import DepthResult as BackendDepthResult
+
         depth_map = np.random.rand(height, width).astype(np.float32)
-        original_image = np.random.rand(height, width, 3).astype(np.float32)
-        return DepthResult(depth_map=depth_map, original_image=original_image, metadata={"model": "mock", "backend": "test"})
+        original_image = (np.random.rand(height, width, 3) * 255).astype(np.uint8)
+
+        return BackendDepthResult(
+            depth_map=depth_map,
+            original_image=original_image,
+            metadata={"model": "mock", "backend": "test"},
+            depth_units="relative",
+            focal_length_px=None,
+            field_of_view_deg=None,
+            backend_id="mock",
+            device="cpu",
+            dtype="float32",
+            input_size=(height, width),
+            warnings=[],
+        )
 
     return _create
 
 
 @pytest.fixture
-def mock_inference_engine(mock_depth_result):
-    """Mock DA3Backend.compute() with proper DepthResult return values (ADR-019)."""
+def mock_backend_compute(mock_depth_result):
+    """Mock DA3Backend.compute() for performance tests (ADR-019)."""
     with patch("transformation_portal.depth.backends.da3.DA3Backend.compute") as mock_compute:
         # Configure backend compute mock to return realistic depth result
         def _mock_compute(image, **kwargs):
@@ -294,7 +312,7 @@ class TestPhase2Performance:
         print(f"✓ Depth cache speedup: {speedup:.1f}x")
 
     @pytest.mark.benchmark
-    def test_sequential_fallback_no_overhead(self, tmp_path, mock_inference_engine):
+    def test_sequential_fallback_no_overhead(self, tmp_path, mock_backend_compute):
         """Ensure small batches fall back to sequential without penalty."""
         from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
@@ -496,7 +514,7 @@ class TestPhase3Performance:
         print(f"✓ PBR generation baseline: {per_image_time*1000:.0f}ms per image")
 
     @pytest.mark.benchmark
-    def test_no_regression_single_image(self, tmp_path, mock_inference_engine):
+    def test_no_regression_single_image(self, tmp_path, mock_backend_compute):
         """Ensure optimizations don't regress single-image performance."""
         from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
