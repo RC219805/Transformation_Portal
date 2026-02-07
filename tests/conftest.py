@@ -199,50 +199,60 @@ def mock_depth_model(deterministic_rng):
 # =============================================================================
 
 
+# Cache for expensive availability checks (avoid repeated imports)
+_AVAILABILITY_CACHE = {}
+
+
 def has_depth_anything_v3() -> bool:
     """Check if depth_anything_3 package is available.
+
+    Uses importlib.util.find_spec for fast, side-effect-free checking.
+    Result is cached to avoid repeated filesystem lookups.
 
     Returns:
         True if depth_anything_3 can be imported, False otherwise.
 
     Note:
-        This is an optional dependency installed from:
+        This is an optional dependency. Install from:
         https://github.com/DepthAnything/Depth-Anything-V3
-    """
-    try:
-        import depth_anything_3  # noqa: F401
 
-        return True
-    except ImportError:
-        return False
+        Provides the `depth_anything_3` Python module for DA3 nested models.
+    """
+    if "depth_anything_v3" not in _AVAILABILITY_CACHE:
+        import importlib.util
+
+        _AVAILABILITY_CACHE["depth_anything_v3"] = importlib.util.find_spec("depth_anything_3") is not None
+    return _AVAILABILITY_CACHE["depth_anything_v3"]
 
 
 def has_torch() -> bool:
     """Check if PyTorch is available.
 
+    Uses importlib.util.find_spec to avoid triggering torch initialization.
+
     Returns:
         True if torch can be imported, False otherwise.
     """
-    try:
-        import torch  # noqa: F401
+    if "torch" not in _AVAILABILITY_CACHE:
+        import importlib.util
 
-        return True
-    except ImportError:
-        return False
+        _AVAILABILITY_CACHE["torch"] = importlib.util.find_spec("torch") is not None
+    return _AVAILABILITY_CACHE["torch"]
 
 
 def has_transformers() -> bool:
     """Check if transformers library is available.
 
+    Uses importlib.util.find_spec for fast checking without import side effects.
+
     Returns:
         True if transformers can be imported, False otherwise.
     """
-    try:
-        import transformers  # noqa: F401
+    if "transformers" not in _AVAILABILITY_CACHE:
+        import importlib.util
 
-        return True
-    except ImportError:
-        return False
+        _AVAILABILITY_CACHE["transformers"] = importlib.util.find_spec("transformers") is not None
+    return _AVAILABILITY_CACHE["transformers"]
 
 
 def is_offline_mode() -> bool:

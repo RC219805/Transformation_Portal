@@ -5,18 +5,20 @@ Validates:
 - Phase optimizations work in isolation
 - Phases work together correctly
 - Manifest format backward compatibility
+
+ADR-019 Note:
+Uses backend protocol mocks (DA3Backend.compute) instead of legacy
+orchestrator.DA3InferenceEngine pattern.
 """
 
-import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pytest
 from PIL import Image
 
 from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
-from transformation_portal.lux_depth_v3.inference import DepthResult
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
 from transformation_portal.lux_depth_v3.manifest import CombinedManifest, InputMetadata
 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
@@ -57,8 +59,8 @@ def mock_depth_result():
 
 
 @pytest.fixture(autouse=True)
-def mock_depth_backend(mock_depth_result):
-    """Auto-setup mock for depth backend compute (ADR-019 compatible).
+def mock_backend_compute(mock_depth_result):
+    """Auto-setup mock for DA3Backend.compute() (ADR-019 compatible).
 
     Mocks the backend's compute() method to return fake depth results,
     allowing integration tests to run without actual ML dependencies.
