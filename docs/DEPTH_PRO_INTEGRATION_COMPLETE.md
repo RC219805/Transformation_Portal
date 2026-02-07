@@ -309,7 +309,7 @@ Depth Pro produces the following artifacts:
 **Requires manual execution with checkpoint:**
 ```bash
 # After downloading checkpoint
-pytest tests/integration/test_depth_pro_e2e.py -v
+pytest tests/integration/test_depth_pro_integration.py -v
 ```
 
 **Planned coverage:**
