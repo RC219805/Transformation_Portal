@@ -31,41 +31,58 @@ pytestmark = pytest.mark.ml
 
 @pytest.fixture
 def mock_depth_result():
-    """Create a realistic mock DepthResult with proper array shapes."""
+    """Create a realistic mock DepthResult with proper array shapes (backend protocol)."""
 
     def _create(height=256, width=256):
+        from transformation_portal.depth.backends.protocol import DepthResult as BackendDepthResult
+
         depth_map = np.random.rand(height, width).astype(np.float32)
-        original_image = np.random.rand(height, width, 3).astype(np.float32)
-        return DepthResult(depth_map=depth_map, original_image=original_image, metadata={"model": "mock", "backend": "test"})
+        original_image = (np.random.rand(height, width, 3) * 255).astype(np.uint8)
+
+        return BackendDepthResult(
+            depth_map=depth_map,
+            original_image=original_image,
+            metadata={"model": "mock", "backend": "test"},
+            depth_units="relative",
+            focal_length_px=None,
+            field_of_view_deg=None,
+            backend_id="mock",
+            device="cpu",
+            dtype="float32",
+            input_size=(height, width),
+            warnings=[],
+        )
 
     return _create
 
 
 @pytest.fixture(autouse=True)
-def mock_inference_and_postprocessor(mock_depth_result):
-    """Auto-setup mocks for all integration tests."""
-    with (
-        patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine") as mock_engine_class,
-        patch("transformation_portal.lux_depth_v3.orchestrator.Postprocessor") as mock_proc_class,
-    ):
+def mock_depth_backend(mock_depth_result):
+    """Auto-setup mock for depth backend compute (ADR-019 compatible).
 
-        # Configure inference engine mock
-        mock_engine = MagicMock()
-        mock_engine.predict.return_value = mock_depth_result()
-        mock_engine_class.return_value = mock_engine
+    Mocks the backend's compute() method to return fake depth results,
+    allowing integration tests to run without actual ML dependencies.
+    """
+    with patch("transformation_portal.depth.backends.da3.DA3Backend.compute") as mock_compute:
+        # Configure backend compute mock to return realistic depth result
+        def _mock_compute(image, **kwargs):
+            # Extract dimensions from input image
+            if hasattr(image, "size"):
+                width, height = image.size
+            elif hasattr(image, "shape"):
+                height, width = image.shape[:2]
+            else:
+                height, width = 256, 256
 
-        # Configure postprocessor mock (pass through)
-        mock_proc = MagicMock()
-        mock_proc.process.side_effect = lambda result: result
-        mock_proc_class.return_value = mock_proc
+            return mock_depth_result(height=height, width=width)
 
-        yield (mock_engine, mock_proc)
+        mock_compute.side_effect = _mock_compute
+        yield mock_compute
 
 
 class TestPhase123Integration:
     """Integration tests for Phase 1+2+3 interoperability."""
 
-    @pytest.mark.skip(reason="FIXME: DA3InferenceEngine not exported from orchestrator module")
     def test_all_optimizations_disabled_works(self, tmp_path):
         """Ensure all optimizations can be disabled (sequential fallback)."""
         # Create test image
