@@ -16,18 +16,66 @@ Provides perceptual and distribution-based metrics:
    - Provided for completeness
    - Less correlated with human perception than LPIPS
 
+4. **Performance Metrics** (PerformanceCapsule, ledger)
+   - Scene-dependent performance tracking
+   - Regression detection with bucketing
+   - Zero-overhead timing instrumentation
+
 For luxury real estate:
 - Validate enhancements maintain photographic realism
 - Ensure no distribution drift into obvious synthetic appearance
 - Quantify perceptual quality improvements
+- Track and enforce performance characteristics
 """
 
-from transformation_portal.metrics.fid_metric import FIDMetric
-from transformation_portal.metrics.lpips_metric import LPIPSMetric
-from transformation_portal.metrics.traditional_metrics import TraditionalMetrics
+# Performance metrics (no heavy dependencies)
+from transformation_portal.metrics.performance_capsule import (
+    DEFAULT_BUCKETS,
+    PerformanceBucket,
+    PerformanceCapsule,
+    compute_config_hash,
+    compute_dimension_adjustment,
+    compute_specificity,
+    get_bucket_for_capsule,
+)
+from transformation_portal.metrics.timing import (
+    TimingContext,
+    compute_overhead,
+    merge_timings,
+    timing_context,
+)
+from transformation_portal.metrics.ledger import PerformanceLedger
 
 __all__ = [
-    "LPIPSMetric",
-    "FIDMetric",
-    "TraditionalMetrics",
+    "PerformanceCapsule",
+    "PerformanceBucket",
+    "PerformanceLedger",
+    "TimingContext",
+    "timing_context",
+    "compute_config_hash",
+    "compute_dimension_adjustment",
+    "compute_specificity",
+    "get_bucket_for_capsule",
+    "compute_overhead",
+    "merge_timings",
+    "DEFAULT_BUCKETS",
 ]
+
+# Optional ML-based metrics (lazy import to avoid dependency issues)
+try:
+    from transformation_portal.metrics.fid_metric import FIDMetric
+    __all__.append("FIDMetric")
+except ImportError:
+    pass
+
+try:
+    from transformation_portal.metrics.lpips_metric import LPIPSMetric
+    __all__.append("LPIPSMetric")
+except ImportError:
+    pass
+
+try:
+    from transformation_portal.metrics.traditional_metrics import TraditionalMetrics
+    __all__.append("TraditionalMetrics")
+except ImportError:
+    pass

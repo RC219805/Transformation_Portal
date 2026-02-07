@@ -1,0 +1,165 @@
+name: APEX Performance Matrix
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: apex-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+env:
+  APEX_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+  APEX_COMMIT_SHA: ${{ github.sha }}
+
+jobs:
+  apex_matrix:
+    name: Run (${{ matrix.workflow_version }} / ${{ matrix.zone }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        workflow_version: [v1, v2]
+        zone: [local]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Setup Python
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b  # v5.3.0
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e .
+
+      - name: Run APEX Matrix
+        env:
+          APEX_ZONE: ${{ matrix.zone }}
+        run: |
+          python scripts/apex_matrix_runner.py \
+            --run-id "${{ env.APEX_RUN_ID }}" \
+            --commit-sha "${{ env.APEX_COMMIT_SHA }}" \
+            --workflow-versions ${{ matrix.workflow_version }} \
+            --zones ${{ matrix.zone }} \
+            --output-dir ./apex_results \
+            --ledger-db ./apex_performance.db \
+            --dry-run
+
+      - name: Upload Results
+        if: always()
+        uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b  # v4.5.0
+        with:
+          name: apex-results-${{ matrix.workflow_version }}-${{ matrix.zone }}
+          path: apex_results/
+          retention-days: 3
+
+  apex_gate:
+    name: APEX Gate & Report
+    needs: apex_matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: always()
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Setup Python
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b  # v5.3.0
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -e .
+
+      - name: Download Results
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
+        with:
+          path: apex_downloaded_results
+          pattern: apex-results-*
+          merge-multiple: true
+
+      - name: Rebuild Ledger
+        run: |
+          python scripts/apex_rebuild_ledger.py \
+            --input-dir apex_downloaded_results \
+            --ledger-db apex_performance.db
+
+      - name: Aggregate Stats
+        run: |
+          python scripts/apex_aggregate_ledger.py \
+            --ledger-db apex_performance.db \
+            --run-id "${{ env.APEX_RUN_ID }}" \
+            --commit-sha "${{ env.APEX_COMMIT_SHA }}"
+
+      - name: Generate PR Comment
+        run: |
+          python scripts/apex_pr_comment.py \
+            --run-id "${{ env.APEX_RUN_ID }}" \
+            --commit-sha "${{ env.APEX_COMMIT_SHA }}" \
+            --ledger-db apex_performance.db \
+            --output apex_comment.md
+
+      - name: Write to Job Summary
+        if: always()
+        run: cat apex_comment.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post PR Comment (idempotent)
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --edit-last \
+            --body-file apex_comment.md || \
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --body-file apex_comment.md
+
+      - name: Enforce Gate (fail if V2 FAIL)
+        run: |
+          python - <<'PY'
+          import sqlite3, sys
+          
+          db = "apex_performance.db"
+          run_id = "${{ env.APEX_RUN_ID }}"
+          commit_sha = "${{ env.APEX_COMMIT_SHA }}"
+          
+          conn = sqlite3.connect(db)
+          cursor = conn.execute("""
+            SELECT COUNT(*)
+            FROM apex_runs
+            WHERE run_id = ? 
+              AND workflow_version = 'v2' 
+              AND commit_sha = ? 
+              AND pass_fail = 'fail'
+          """, (run_id, commit_sha))
+          
+          fails = cursor.fetchone()[0]
+          
+          if fails > 0:
+              print(f"❌ APEX gate failed: {fails} failing bucket(s) in V2")
+              sys.exit(1)
+          
+          print("✅ APEX gate passed (no V2 FAIL buckets)")
+          PY
+
+      - name: Upload Ledger Artifact
+        if: always()
+        uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b  # v4.5.0
+        with:
+          name: apex-ledger
+          path: apex_performance.db
+          retention-days: 90

@@ -213,6 +213,81 @@ twine check dist/*
 
 ---
 
+## Performance Buckets (Scene-Dependent Thresholds)
+
+Performance regression detection uses scene-specific buckets to account for natural variance.
+
+### Bucket Definitions
+
+| Bucket Name          | Filters                                          | p50 (sec) | p95 (sec) | Description                                    |
+|----------------------|--------------------------------------------------|-----------|-----------|------------------------------------------------|
+| aerial_large_mps     | scene_type=aerial, pixel_count≥20M, device=mps   | 8.5       | 12.0      | Large aerial scenes with high-frequency texture|
+| pool_medium_mps      | scene_type=pool, pixel_count≥10M, device=mps     | 11.0      | 15.0      | Pool scenes with specular highlights           |
+| interior_standard_mps| scene_type=interior, pixel_count≤15M, device=mps | 7.0       | 10.0      | Standard interior architectural scenes         |
+| generic_large        | pixel_count≥20M                                  | 10.0      | 15.0      | Fallback for large images (device-agnostic)    |
+| generic_medium       | 5M≤pixel_count<20M                               | 6.0       | 10.0      | Fallback for medium images (device-agnostic)   |
+
+### Firewall Logic
+
+1. Capture `PerformanceCapsule` for each image with phase-level timings
+2. Match capsule to most specific bucket using filters
+3. Compare `timings["total"]` to bucket thresholds:
+   - `total > p95_threshold` → **BLOCK** (regression)
+   - `total > p50_threshold × 1.5` → **WARN** (investigate)
+   - `total ≤ p50_threshold` → **PASS** (nominal)
+4. Batch verdict: PASS only if all images PASS
+
+### Usage Example
+
+```python
+from transformation_portal.metrics import PerformanceCapsule, get_bucket_for_capsule
+
+capsule = PerformanceCapsule(
+    image_id="750_Picacho_Pool",
+    pixel_count=47_892_448,
+    scene_type="pool",
+    device="mps",
+    timings={"total": 11.49, "inference": 8.2, "load_decode": 0.8},
+    firewall_status="pass",
+    ...
+)
+
+bucket = get_bucket_for_capsule(capsule)
+# Returns: pool_medium_mps (p50=11.0s, p95=15.0s)
+# Verdict: PASS (11.49s < 15.0s)
+```
+
+### Performance Ledger Tool
+
+```bash
+# Log performance capsule to SQLite database
+python -m transformation_portal.metrics.ledger log \
+  --capsule capsule.json \
+  --ledger-db performance.db
+
+# Query historical data
+python -m transformation_portal.metrics.ledger query \
+  --ledger-db performance.db \
+  --scene-type pool \
+  --device mps \
+  --min-days 30
+
+# Detect regression
+python -m transformation_portal.metrics.ledger regression \
+  --ledger-db performance.db \
+  --capsule current_capsule.json \
+  --baseline-days 30
+
+# Generate performance report
+python -m transformation_portal.metrics.ledger report \
+  --ledger-db performance.db \
+  --output performance_report.md
+```
+
+See `docs/PERFORMANCE_ANALYSIS_20260207.md` for detailed analysis and optimization roadmap.
+
+---
+
 **Status**: Implementation complete, ready for branch protection activation.
-**Impact**: Quality firewall active, ratcheting coverage established, production readiness clarified.
+**Impact**: Quality firewall active, ratcheting coverage established, production readiness clarified, performance ledger system deployed.
 **Next**: Configure branch protection, merge to main, validate first PR through gates.
