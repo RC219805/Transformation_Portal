@@ -22,7 +22,7 @@ from PIL import Image
 logger = logging.getLogger(__name__)
 
 # Supported image formats
-SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff", ".tif"}
+SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp", ".bmp"}
 
 # Depth Anything V3 requires dimensions to be multiples of 14
 DIMENSION_MULTIPLE = 14
@@ -62,12 +62,12 @@ def validate_image_format(image_path: Union[str, Path]) -> Path:
     # Verify image integrity
     try:
         # Open and verify (checks file structure)
-        img = Image.open(image_path)
-        img.verify()
+        with Image.open(image_path) as img:
+            img.verify()
 
         # verify() invalidates the image object, reopen to test pixel load
-        img = Image.open(image_path)
-        img.load()  # Force load pixel data
+        with Image.open(image_path) as img:
+            img.load()  # Force load pixel data
 
     except Exception as e:
         raise ValueError(f"Image file corrupt or invalid: {image_path}") from e
@@ -179,30 +179,51 @@ def _resize_keep_aspect(pil_img: Image.Image, target_size: int) -> Image.Image:
 def _enforce_dimension_multiple(img_array: np.ndarray, multiple: int) -> np.ndarray:
     """Enforce that image dimensions are multiples of a given value.
 
-    Rounds down to nearest multiple, ensuring minimum of `multiple`.
+    Uses center crop + pad to preserve pixel fidelity rather than resampling.
+    This avoids subtle quality degradation from resizing the entire image.
 
     Args:
         img_array: Image array (H, W, C) float32
         multiple: Required multiple (e.g., 14 for Depth Anything V3)
 
     Returns:
-        Resized image array with compliant dimensions
+        Image array with compliant dimensions (may be cropped/padded)
     """
     h, w = img_array.shape[:2]
 
-    # Round down to nearest multiple, clamp to minimum
+    # Compute target dimensions (nearest multiple)
+    # Round down to nearest multiple, then ensure minimum
     new_h = max(multiple, (h // multiple) * multiple)
     new_w = max(multiple, (w // multiple) * multiple)
 
-    # Only resize if dimensions changed
+    # Only adjust if dimensions changed
     if (new_h, new_w) != (h, w):
-        # Convert back to PIL for quality resize
-        img_uint8 = (img_array * 255).astype(np.uint8)
-        pil_img = Image.fromarray(img_uint8, mode="RGB")
-        pil_img = pil_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+        # Strategy: handle crop and pad independently per dimension
+        # This supports mixed scenarios (e.g., 15x10 → 14x14: crop width, pad height)
 
-        # Convert back to float32
-        img_array = np.array(pil_img, dtype=np.float32) / 255.0
+        # Handle height dimension
+        if new_h < h:
+            # Crop height (center crop)
+            crop_top = (h - new_h) // 2
+            img_array = img_array[crop_top : crop_top + new_h, :]
+        elif new_h > h:
+            # Pad height (symmetric padding)
+            pad_h = new_h - h
+            pad_top = pad_h // 2
+            pad_bottom = pad_h - pad_top
+            img_array = np.pad(img_array, ((pad_top, pad_bottom), (0, 0), (0, 0)), mode="edge")
+
+        # Handle width dimension
+        if new_w < w:
+            # Crop width (center crop)
+            crop_left = (w - new_w) // 2
+            img_array = img_array[:, crop_left : crop_left + new_w]
+        elif new_w > w:
+            # Pad width (symmetric padding)
+            pad_w = new_w - w
+            pad_left = pad_w // 2
+            pad_right = pad_w - pad_left
+            img_array = np.pad(img_array, ((0, 0), (pad_left, pad_right), (0, 0)), mode="edge")
 
         logger.debug(f"Enforced dimension multiple: ({h}, {w}) → ({new_h}, {new_w})")
 

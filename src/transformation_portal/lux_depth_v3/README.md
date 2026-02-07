@@ -295,7 +295,74 @@ Cached depth maps are reused across runs, dramatically speeding up parameter exp
 ### Batch Processing
 
 The pipeline automatically processes all images in `--input-dir` recursively. Supported formats:
-- `.jpg`, `.jpeg`, `.png`, `.tiff`, `.tif`, `.webp`
+- `.jpg`, `.jpeg`, `.png`, `.tiff`, `.tif`, `.webp`, `.bmp`
+
+### Performance Tuning (Advanced)
+
+Control parallelism and resource usage:
+
+```bash
+# Limit CPU/I/O workers
+--max-workers 4
+
+# Limit GPU workers (MPS/CUDA)
+--max-gpu-workers 2
+
+# Enable strict image verification (CI/ingest validation)
+--verify-images
+```
+
+**Default behavior:**
+- GPU/MPS: 2 workers (VRAM-conservative)
+- CPU: Auto-detect (CPU count - 1)
+
+## Precision Guardrails
+
+The pipeline maintains **16-bit precision** throughout the depth processing chain to prevent quality degradation.
+
+### Design Principles
+
+1. **Quantize only at write boundaries** - Internal processing uses float32/float64
+2. **No intermediate uint8 conversions** - Prevents banding and precision loss
+3. **Scale-aware filtering** - Bilateral filter adapts to depth value range
+4. **Crop/pad over resample** - Dimension enforcement preserves pixel fidelity
+
+### Implementation Details
+
+**Bilateral Filter (v2.0+):**
+- Processes float32 depth directly (no uint8 quantization)
+- Auto-scales sigmaColor based on depth range
+- Optional RGB-guided joint bilateral (cv2.ximgproc)
+
+**Preprocessing:**
+- Returns float32 RGB [0, 1] for inference
+- Dimension enforcement via center crop + edge pad
+- No quality-degrading resampling for 1-13px adjustments
+
+**Write Path:**
+- 16-bit PNG output maintains full dynamic range
+- Optional float32 NPY for maximum precision PBR
+- Quantization strategies: linear, percentile, adaptive
+
+### Avoiding Common Pitfalls
+
+❌ **Don't do this:**
+```python
+# Lossy uint8 round-trip
+depth_u8 = (depth * 255).astype(np.uint8)
+filtered = cv2.bilateralFilter(depth_u8, ...)
+depth = filtered.astype(np.float32) / 255.0
+# Result: 256 discrete levels, visible banding
+```
+
+✅ **Do this instead:**
+```python
+# Direct float32 processing
+filtered = cv2.bilateralFilter(depth.astype(np.float32), ...)
+# Result: Smooth gradients, full precision maintained
+```
+
+**For more details:** See `src/transformation_portal/lux_depth_v3/postprocessing.py` and `preprocessing.py`
 
 ## Output Structure
 
@@ -374,6 +441,44 @@ pytest tests/lux_depth_v3/ -v -m "ml"
 flake8 src/transformation_portal/lux_depth_v3/
 pylint src/transformation_portal/lux_depth_v3/
 ```
+
+## Roadmap
+
+### Near-Term Enhancements
+
+**Uncertainty-Guided Refinement** (v2.1)
+- Pixel-wise confidence estimation from depth backend
+- Selective smoothing based on uncertainty masks
+- QA tooling with uncertainty visualization
+- Manifest integration for downstream quality gates
+
+**Multi-View Consistency** (v2.2)
+- Detect view groups via EXIF + similarity embeddings
+- Cross-view depth consistency enforcement
+- Optional refinement stage for real estate multi-shot workflows
+- Artifact tiering (original + refined depth)
+
+### Research-Track Features
+
+**Planar Priors for Architectural Scenes** (v3.0)
+- Plane segmentation for indoor/architectural content
+- Depth snapping to detected planes (walls, floors, ceilings)
+- Sharp occlusion boundaries, reduced "rubber wall" artifacts
+- Plane masks for PBR/material processing
+
+**Multi-Input Geometry Path** (v3.1+)
+- First-class support for multi-view depth estimation
+- Depth Anything 3 style spatially consistent geometry
+- Integration with existing cacheable/manifest-driven architecture
+
+### Quality of Life
+
+- Preset editor/validator tool
+- Live preview mode for parameter tuning
+- Benchmark suite for regression detection
+- Container/serverless deployment patterns
+
+**Contributions welcome!** See [CONTRIBUTING.md](../../../../CONTRIBUTING.md)
 
 ## Additional Resources
 

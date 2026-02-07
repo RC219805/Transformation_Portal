@@ -83,7 +83,7 @@ def discover_images(input_dir: Path, config: DiscoveryConfig, image_extensions: 
         INFO: Discovered 17 images, excluded 3 artifacts
     """
     if image_extensions is None:
-        image_extensions = [".jpg", ".jpeg", ".png", ".tif", ".tiff"]
+        image_extensions = [".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp", ".bmp"]
 
     logger.debug(f"Scanning {input_dir} for images with extensions: {image_extensions}")
     logger.debug(f"Exclude path patterns: {config.exclude_path_patterns}")

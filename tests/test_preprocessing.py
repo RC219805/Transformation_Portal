@@ -41,8 +41,9 @@ class TestValidateImageFormat:
 
     def test_unsupported_extension_raises_valueerror(self, tmp_path):
         """Test that unsupported format raises ValueError."""
-        bad_path = tmp_path / "test.bmp"
-        bad_path.write_text("fake bmp")
+        # Use .gif which is actually unsupported (we now support .bmp and .webp)
+        bad_path = tmp_path / "test.gif"
+        bad_path.write_text("fake gif")
 
         with pytest.raises(ValueError, match="Unsupported image format"):
             validate_image_format(bad_path)
@@ -55,12 +56,22 @@ class TestValidateImageFormat:
         with pytest.raises(ValueError, match="corrupt or invalid"):
             validate_image_format(corrupt_path)
 
-    @pytest.mark.parametrize("ext", [".jpg", ".jpeg", ".png", ".tiff", ".tif"])
+    @pytest.mark.parametrize("ext", [".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp", ".bmp"])
     def test_all_supported_extensions(self, tmp_path, ext):
         """Test that all supported extensions are accepted."""
         img_path = tmp_path / f"test{ext}"
         img = Image.new("RGB", (32, 32))
-        img.save(img_path)
+        # Map extensions to PIL format names
+        fmt_map = {
+            ".jpg": "JPEG",
+            ".jpeg": "JPEG",
+            ".png": "PNG",
+            ".tiff": "TIFF",
+            ".tif": "TIFF",
+            ".webp": "WEBP",
+            ".bmp": "BMP",
+        }
+        img.save(img_path, fmt_map[ext])
 
         result = validate_image_format(img_path)
 
