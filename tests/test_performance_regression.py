@@ -48,24 +48,26 @@ def mock_depth_result():
 
 @pytest.fixture
 def mock_inference_engine(mock_depth_result):
-    """Mock DA3InferenceEngine with proper DepthResult return values."""
-    with patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine") as mock_engine_class:
-        mock_instance = MagicMock()
-        # Return properly shaped DepthResult
-        mock_instance.predict.return_value = mock_depth_result()
-        mock_engine_class.return_value = mock_instance
-        yield mock_instance
+    """Mock DA3Backend.compute() with proper DepthResult return values (ADR-019)."""
+    with patch("transformation_portal.depth.backends.da3.DA3Backend.compute") as mock_compute:
+        # Configure backend compute mock to return realistic depth result
+        def _mock_compute(image, **kwargs):
+            # Extract dimensions from input image
+            if hasattr(image, "size"):
+                width, height = image.size
+            elif hasattr(image, "shape"):
+                height, width = image.shape[:2]
+            else:
+                height, width = 256, 256
+
+            return mock_depth_result(height=height, width=width)
+
+        mock_compute.side_effect = _mock_compute
+        yield mock_compute
 
 
-@pytest.fixture
-def mock_postprocessor():
-    """Mock Postprocessor that passes through results unchanged."""
-    with patch("transformation_portal.lux_depth_v3.orchestrator.Postprocessor") as mock_proc_class:
-        mock_instance = MagicMock()
-        # Pass through the result unchanged
-        mock_instance.process.side_effect = lambda result: result
-        mock_proc_class.return_value = mock_instance
-        yield mock_instance
+# Postprocessor mock removed - no longer needed with ADR-019 backend pattern
+# Backend handles its own postprocessing internally
 
 
 class TestPhase1Performance:
@@ -201,23 +203,19 @@ class TestPhase2Performance:
             test_images.append(ImageInput(img_path))
 
         # Simulate realistic inference time: 100ms
-        def mock_predict_with_delay(img):
+        def mock_compute_with_delay(image, **kwargs):
             time.sleep(0.1)
-            return mock_depth_result()
+            if hasattr(image, "size"):
+                width, height = image.size
+            elif hasattr(image, "shape"):
+                height, width = image.shape[:2]
+            else:
+                height, width = 256, 256
+            return mock_depth_result(height=height, width=width)
 
         # Test sequential processing
-        with (
-            patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine") as mock_engine_class,
-            patch("transformation_portal.lux_depth_v3.orchestrator.Postprocessor") as mock_proc_class,
-        ):
-
-            mock_engine = MagicMock()
-            mock_engine.predict.side_effect = mock_predict_with_delay
-            mock_engine_class.return_value = mock_engine
-
-            mock_proc = MagicMock()
-            mock_proc.process.side_effect = lambda result: result
-            mock_proc_class.return_value = mock_proc
+        with patch("transformation_portal.depth.backends.da3.DA3Backend.compute") as mock_compute_seq:
+            mock_compute_seq.side_effect = mock_compute_with_delay
 
             config_seq = EnhanceConfig(
                 model_variant=ModelVariant.METRIC_SMALL,
@@ -232,18 +230,8 @@ class TestPhase2Performance:
             seq_time = time.time() - start_seq
 
         # Test parallel processing with fresh mocks
-        with (
-            patch("transformation_portal.lux_depth_v3.orchestrator.DA3InferenceEngine") as mock_engine_class,
-            patch("transformation_portal.lux_depth_v3.orchestrator.Postprocessor") as mock_proc_class,
-        ):
-
-            mock_engine = MagicMock()
-            mock_engine.predict.side_effect = mock_predict_with_delay
-            mock_engine_class.return_value = mock_engine
-
-            mock_proc = MagicMock()
-            mock_proc.process.side_effect = lambda result: result
-            mock_proc_class.return_value = mock_proc
+        with patch("transformation_portal.depth.backends.da3.DA3Backend.compute") as mock_compute_par:
+            mock_compute_par.side_effect = mock_compute_with_delay
 
             config_par = EnhanceConfig(
                 model_variant=ModelVariant.METRIC_SMALL,
@@ -306,7 +294,7 @@ class TestPhase2Performance:
         print(f"✓ Depth cache speedup: {speedup:.1f}x")
 
     @pytest.mark.benchmark
-    def test_sequential_fallback_no_overhead(self, tmp_path, mock_inference_engine, mock_postprocessor):
+    def test_sequential_fallback_no_overhead(self, tmp_path, mock_inference_engine):
         """Ensure small batches fall back to sequential without penalty."""
         from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
@@ -508,7 +496,7 @@ class TestPhase3Performance:
         print(f"✓ PBR generation baseline: {per_image_time*1000:.0f}ms per image")
 
     @pytest.mark.benchmark
-    def test_no_regression_single_image(self, tmp_path, mock_inference_engine, mock_postprocessor):
+    def test_no_regression_single_image(self, tmp_path, mock_inference_engine):
         """Ensure optimizations don't regress single-image performance."""
         from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
