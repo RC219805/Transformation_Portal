@@ -64,22 +64,26 @@ def mock_backend_compute(mock_depth_result):
 
     Mocks the backend's compute() method to return fake depth results,
     allowing integration tests to run without actual ML dependencies.
+
+    Also mocks ensure_available() to prevent orchestrator from creating
+    a fallback mock backend when transformers is not installed.
     """
-    with patch("transformation_portal.depth.backends.da3.DA3Backend.compute") as mock_compute:
-        # Configure backend compute mock to return realistic depth result
-        def _mock_compute(image, **kwargs):
-            # Extract dimensions from input image
-            if hasattr(image, "size"):
-                width, height = image.size
-            elif hasattr(image, "shape"):
-                height, width = image.shape[:2]
-            else:
-                height, width = 256, 256
+    with patch("transformation_portal.depth.backends.da3.DA3Backend.ensure_available"):
+        with patch("transformation_portal.depth.backends.da3.DA3Backend.compute") as mock_compute:
+            # Configure backend compute mock to return realistic depth result
+            def _mock_compute(image, **kwargs):
+                # Extract dimensions from input image
+                if hasattr(image, "size"):
+                    width, height = image.size
+                elif hasattr(image, "shape"):
+                    height, width = image.shape[:2]
+                else:
+                    height, width = 256, 256
 
-            return mock_depth_result(height=height, width=width)
+                return mock_depth_result(height=height, width=width)
 
-        mock_compute.side_effect = _mock_compute
-        yield mock_compute
+            mock_compute.side_effect = _mock_compute
+            yield mock_compute
 
 
 class TestPhase123Integration:
