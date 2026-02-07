@@ -14,6 +14,7 @@ orchestrator.DA3InferenceEngine + Postprocessor pattern.
 """
 
 import hashlib
+import tempfile
 import time
 from pathlib import Path
 from unittest.mock import patch
