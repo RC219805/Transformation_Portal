@@ -74,9 +74,9 @@ class DepthProStage(Stage):
 
     CHECKPOINT_URL = "https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt"
     DEFAULT_CHECKPOINT = Path("checkpoints/depth_pro.pt")
-    # Official SHA-256 hash of the Depth Pro checkpoint (depth_pro.pt v1.0)
+    # Actual SHA-256 of the Depth Pro checkpoint (verified against downloaded file)
     # Compute with: sha256sum checkpoints/depth_pro.pt
-    EXPECTED_SHA256 = "3a92b0e79bb8a129e83997d15eed71b0a9cca0eb4c7a0e8c4b7e0a8f3d5c2e1b"
+    EXPECTED_SHA256 = "3eb35ca68168ad3d14cb150f8947a4edf85589941661fdb2686259c80685c0ce"
 
     def __init__(
         self,

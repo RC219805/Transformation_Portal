@@ -24,6 +24,7 @@ or if PYTHONPATH is set correctly.
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -192,3 +193,105 @@ def mock_depth_model(deterministic_rng):
     mock = MagicMock()
     mock.infer.return_value = deterministic_rng.random((100, 100)).astype(np.float32)
     return mock
+
+
+# =============================================================================
+# Dependency Availability Helpers (for skip guards)
+# =============================================================================
+
+
+# Cache for expensive availability checks (avoid repeated imports / lookups)
+_AVAILABILITY_CACHE: dict[str, bool] = {}
+
+
+def _cached_bool(key: str, compute: "Callable[[], bool]") -> bool:
+    """Return cached boolean for `key`, computing it once if needed."""
+    if key not in _AVAILABILITY_CACHE:
+        _AVAILABILITY_CACHE[key] = bool(compute())
+    return _AVAILABILITY_CACHE[key]
+
+
+def has_depth_anything_v3() -> bool:
+    """Check if the optional `depth_anything_3` package is available.
+
+    This provides the `depth_anything_3` Python module used by DA3 nested models.
+    Uses importlib.util.find_spec for fast, side-effect-free checking.
+
+    Returns:
+        True if the module spec exists, False otherwise.
+    """
+
+    def _compute() -> bool:
+        import importlib.util
+
+        return importlib.util.find_spec("depth_anything_3") is not None
+
+    return _cached_bool("depth_anything_v3", _compute)
+
+
+def has_torch() -> bool:
+    """Check if PyTorch is available.
+
+    We use a two-step probe:
+      1) find_spec("torch") to avoid expensive imports when torch isn't present
+      2) import torch to ensure it actually loads (guards against broken wheels /
+         missing shared libraries, which can raise OSError)
+
+    Returns:
+        True if torch can be imported successfully, False otherwise.
+    """
+
+    def _compute() -> bool:
+        import importlib.util
+
+        if importlib.util.find_spec("torch") is None:
+            return False
+        try:
+            import torch  # noqa: F401
+
+            return True
+        except (ImportError, OSError):
+            return False
+
+    return _cached_bool("torch", _compute)
+
+
+def has_transformers() -> bool:
+    """Check if transformers is available (module spec exists).
+
+    Uses find_spec to avoid import-time side effects during test collection.
+
+    Returns:
+        True if transformers appears installable, False otherwise.
+    """
+
+    def _compute() -> bool:
+        import importlib.util
+
+        return importlib.util.find_spec("transformers") is not None
+
+    return _cached_bool("transformers", _compute)
+
+
+def is_offline_mode() -> bool:
+    """Check if running in offline mode (no HuggingFace downloads).
+
+    Returns:
+        True if TRANSFORMERS_OFFLINE=1 or HF_HUB_OFFLINE=1, False otherwise.
+    """
+    return os.environ.get("TRANSFORMERS_OFFLINE") == "1" or os.environ.get("HF_HUB_OFFLINE") == "1"
+
+
+def can_run_da3_compute() -> bool:
+    """Check if DA3 compute tests can run (all dependencies available).
+
+    DA3 compute tests require:
+    - depth_anything_3 package installed
+    - torch library available
+    - transformers library available
+    - Not in offline mode (would fail to download models)
+
+    Returns:
+        True if all DA3 compute requirements are met, False otherwise.
+    """
+    return has_depth_anything_v3() and has_torch() and has_transformers() and not is_offline_mode()

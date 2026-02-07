@@ -1,9 +1,9 @@
 # ADR-019: Depth Backend Unification Architecture
 
-**Status:** Proposed  
-**Date:** 2026-02-02  
-**Authority:** Transformation Portal Architect  
-**Supersedes:** None  
+**Status:** Proposed
+**Date:** 2026-02-02
+**Authority:** Transformation Portal Architect
+**Supersedes:** None
 **Related:** ADR-018 (Depth Pro Integration), ADR-0015 (DA3 1.1 Research Tier), PR #780
 
 ---
@@ -74,7 +74,7 @@ src/transformation_portal/depth/backends/
 ├── protocol.py              # DepthBackend Protocol, DepthResult dataclass
 ├── registry.py              # DepthBackendRegistry (factory + device auto-detection)
 ├── depth_anything_v2.py     # DA2 backend adapter
-├── depth_anything_v3.py     # DA3 backend adapter  
+├── depth_anything_v3.py     # DA3 backend adapter
 └── depth_pro.py             # Depth Pro backend adapter
 ```
 
@@ -113,18 +113,18 @@ from enum import Enum
 class LicenseType(Enum):
     COMMERCIAL = "commercial"
     RESEARCH_ONLY = "research_only"
-    
+
 @dataclass
 class DepthResult:
     """Unified depth estimation result.
-    
-    Enhanced to support both relative depth (0-1 normalized) and 
+
+    Enhanced to support both relative depth (0-1 normalized) and
     metric depth (absolute scale in meters).
     """
     depth_map: np.ndarray
     original_image: np.ndarray
     metadata: Dict[str, Any]
-    
+
     # New fields for metric depth support
     depth_units: Literal["relative", "meters"] = "relative"
     focal_length_px: Optional[float] = None
@@ -132,19 +132,19 @@ class DepthResult:
 
 class DepthBackend(Protocol):
     """Unified depth estimation backend contract."""
-    
+
     name: str
     license_type: LicenseType
     requires_checkpoint: bool
-    
+
     def compute(
-        self, 
+        self,
         image: Union[Image.Image, np.ndarray],
         device: Optional[str] = None
     ) -> DepthResult:
         """Estimate depth from image."""
         ...
-    
+
     def get_cache_key(self, image: Union[Image.Image, np.ndarray]) -> str:
         """Generate deterministic cache key."""
         ...
@@ -156,10 +156,10 @@ class DepthBackend(Protocol):
 class EnhanceConfig:
     # Existing fields...
     non_commercial_ok: bool = False
-    
+
     # NEW: Explicit Depth Pro license acceptance
     accept_apple_depth_pro_research_license: bool = False
-    
+
     def validate(self) -> None:
         """Validate configuration before execution."""
         # Check depth backend license requirements
@@ -182,32 +182,32 @@ class EnhanceConfig:
 # src/transformation_portal/depth/backends/registry.py
 class DepthBackendRegistry:
     """Factory for depth backends with license governance."""
-    
+
     def get_backend(
-        self, 
+        self,
         backend_name: str,
         config: EnhanceConfig
     ) -> DepthBackend:
         """Get depth backend with license validation."""
-        
+
         backend_cls = self._backends.get(backend_name)
         if backend_cls is None:
             raise ValueError(f"Unknown backend: {backend_name}")
-        
+
         # License gate (Layer 2)
         if backend_cls.license_type == LicenseType.RESEARCH_ONLY:
             if not config.non_commercial_ok:
                 raise LicenseRestrictionError(
                     f"Backend '{backend_name}' requires non_commercial_ok=True"
                 )
-            
+
             # Depth Pro specific gate
             if backend_name == "depth_pro":
                 if not config.accept_apple_depth_pro_research_license:
                     raise LicenseRestrictionError(
                         f"Backend 'depth_pro' requires accept_apple_depth_pro_research_license=True"
                     )
-        
+
         return backend_cls(config)
 ```
 
@@ -240,24 +240,24 @@ class DepthBackendRegistry:
 @dataclass
 class DepthResult:
     """Unified depth estimation result contract.
-    
+
     Supports both relative depth (0-1 normalized) and metric depth (meters).
     """
     # Existing fields (v2.0.0 contract)
     depth_map: np.ndarray        # Shape: (H, W), values depend on depth_units
     original_image: np.ndarray   # Shape: (H, W, 3), RGB [0-255]
     metadata: Dict[str, Any]     # Backend-specific metadata
-    
+
     # New fields for metric depth (backward compatible)
     depth_units: Literal["relative", "meters"] = "relative"
     focal_length_px: Optional[float] = None  # Focal length in pixels (metric depth)
     field_of_view_deg: Optional[float] = None  # Horizontal FOV in degrees
-    
+
     @property
     def depth(self) -> np.ndarray:
         """Alias for depth_map (backward compatibility)."""
         return self.depth_map
-    
+
     @property
     def is_metric(self) -> bool:
         """Check if depth is metric (absolute scale)."""
@@ -303,25 +303,25 @@ class DepthResult:
 # src/transformation_portal/depth/backends/depth_pro.py
 class DepthProBackend:
     """Adapter wrapping DepthProStage for backend registry."""
-    
+
     name = "depth_pro"
     license_type = LicenseType.RESEARCH_ONLY
     requires_checkpoint = True
-    
+
     def __init__(self, config: EnhanceConfig):
         self._stage = DepthProStage(
             checkpoint_path=config.depth_pro_checkpoint_path,
             device=config.depth_device,
         )
-    
+
     def compute(self, image, device=None) -> DepthResult:
         """Run Depth Pro inference."""
         context = StageContext(artifacts={"image": image})
         result = self._stage.compute(context)
-        
+
         if result.status != StageStatus.COMPLETED:
             raise RuntimeError(f"Depth Pro failed: {result.error}")
-        
+
         # Extract DepthResult from stage artifacts
         return DepthResult(
             depth_map=result.artifacts["depth_map"],
@@ -355,15 +355,15 @@ depth_cache/abc123.json         # Provenance metadata (human-readable)
 ```python
 class DepthCacheWriter:
     """Write depth results to cache with metadata."""
-    
+
     def write(self, cache_key: str, result: DepthResult) -> Path:
         """Write depth result to cache."""
-        
+
         if result.is_metric:
             # Enhanced format for metric depth
             npz_path = self.cache_dir / f"{cache_key}.npz"
             json_path = self.cache_dir / f"{cache_key}.json"
-            
+
             # Write compressed depth + metadata
             np.savez_compressed(
                 npz_path,
@@ -371,32 +371,32 @@ class DepthCacheWriter:
                 focal_length_px=result.focal_length_px,
                 fov_deg=result.field_of_view_deg,
             )
-            
+
             # Write provenance sidecar
             with open(json_path, 'w') as f:
                 json.dump(result.metadata, f, indent=2)
-            
+
             return npz_path
         else:
             # Legacy format for relative depth (backward compatible)
             npy_path = self.cache_dir / f"{cache_key}.npy"
             np.save(npy_path, result.depth_map)
             return npy_path
-    
+
     def read(self, cache_key: str) -> Optional[DepthResult]:
         """Read depth result from cache (backward compatible)."""
-        
+
         # Try enhanced format first
         npz_path = self.cache_dir / f"{cache_key}.npz"
         json_path = self.cache_dir / f"{cache_key}.json"
-        
+
         if npz_path.exists():
             data = np.load(npz_path)
             metadata = {}
             if json_path.exists():
                 with open(json_path) as f:
                     metadata = json.load(f)
-            
+
             return DepthResult(
                 depth_map=data["depth"],
                 original_image=None,  # Not cached
@@ -405,7 +405,7 @@ class DepthCacheWriter:
                 focal_length_px=data.get("focal_length_px"),
                 field_of_view_deg=data.get("fov_deg"),
             )
-        
+
         # Fallback to legacy format
         npy_path = self.cache_dir / f"{cache_key}.npy"
         if npy_path.exists():
@@ -415,7 +415,7 @@ class DepthCacheWriter:
                 metadata={},
                 depth_units="relative",  # Legacy is always relative
             )
-        
+
         return None
 ```
 
@@ -444,12 +444,12 @@ model:
   variant: depth-pro
   device: mps
   checkpoint_path: checkpoints/depth_pro.pt
-  expected_sha256: 3a92b0e79bb8a129e83997d15eed71b0a9cca0eb4c7a0e8c4b7e0a8f3d5c2e1b
+  expected_sha256: 3eb35ca68168ad3d14cb150f8947a4edf85589941661fdb2686259c80685c0ce
 
 processing:
   apply_bilateral: false
   enable_zone_mapping: false  # Metric depth incompatible with relative zone mapping
-  
+
   pbr:
     enabled: true
     normal_strength: 1.2  # Metric depth has different gradient characteristics
@@ -476,7 +476,7 @@ depth_backend: depth_pro
 model:
   variant: depth-pro
   device: cpu  # Explicit CPU (no MPS/CUDA)
-  
+
 # Inherit rest from depth_pro_metric_mps.yaml
 extends: depth_pro_metric_mps
 ```
