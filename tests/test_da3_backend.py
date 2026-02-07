@@ -45,25 +45,35 @@ def test_da3_backend_availability():
 def test_da3_backend_availability_missing_transformers(monkeypatch):
     """DA3Backend.ensure_available() detects missing transformers dependency.
 
-    Forces ImportError via monkeypatch to validate error path deterministically.
+    Uses sys.modules patching to simulate ImportError during import statement.
     """
-    import importlib
+    import sys
 
     from transformation_portal.depth.backends.da3 import DA3Backend
 
-    # Intercept import attempts for transformers
-    real_import = importlib.import_module
+    # Temporarily remove transformers from sys.modules to force ImportError
+    # Save original value (if it exists)
+    original_transformers = sys.modules.get("transformers")
 
-    def fake_import(name, package=None):
-        if name == "transformers" or (name and "transformers" in name):
-            raise ImportError("No module named 'transformers'")
-        return real_import(name, package)
+    try:
+        # Remove transformers from sys.modules
+        if "transformers" in sys.modules:
+            del sys.modules["transformers"]
 
-    monkeypatch.setattr(importlib, "import_module", fake_import)
+        # Block future imports by setting to None
+        sys.modules["transformers"] = None
 
-    backend = DA3Backend()
-    with pytest.raises(ImportError, match="transformers"):
-        backend.ensure_available()
+        backend = DA3Backend()
+
+        # This should raise ImportError when ensure_available tries to import transformers
+        with pytest.raises(ImportError, match="transformers"):
+            backend.ensure_available()
+    finally:
+        # Restore original state
+        if original_transformers is not None:
+            sys.modules["transformers"] = original_transformers
+        elif "transformers" in sys.modules:
+            del sys.modules["transformers"]
 
 
 @pytest.mark.skipif(
