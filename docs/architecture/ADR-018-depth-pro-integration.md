@@ -35,7 +35,7 @@ Apple's [Depth Pro](https://github.com/apple/ml-depth-pro) offers metric (absolu
 | Phase | PR | Scope | Status |
 |-------|-----|-------|--------|
 | **PR1: Stage** | #780 | Add `DepthProStage` class as isolated leaf stage with strict caching and provenance. | ✅ Merged |
-| **PR2: Wiring** | TBD | Wire stage into preset loader with `depth_backend` configuration key. | Planned |
+| **PR2: Wiring** | ✅ Complete | Wire stage into preset loader with `depth_backend` configuration key. | ✅ Merged |
 | **PR3: Validation** | TBD | Integration tests with real checkpoint, benchmark against DA3. | Planned |
 
 ### Tier Classification
@@ -211,7 +211,6 @@ Cache invalidation triggers:
 1. **Manual Install:** Users must install `depth-pro` separately.
 2. **Large Checkpoint:** 1.9 GB download not bundled.
 3. **Experimental Status:** No stability guarantees.
-4. **Limited Wiring:** Not yet integrated into preset loader (PR2 pending).
 
 ### Neutral
 
@@ -333,3 +332,4 @@ depth_backend: depth_pro
 
 **Document History**
 - **2026-02-02:** Initial ADR-018 created following PR #780 merge
+- **2026-02-06:** Updated status - PR2 (Wiring) marked complete, SHA-256 hash standardized across all files

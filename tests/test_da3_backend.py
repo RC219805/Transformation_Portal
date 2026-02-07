@@ -4,6 +4,8 @@ Tests that DA3Backend implements the DepthBackend protocol correctly
 and integrates with the registry.
 """
 
+import os
+
 import numpy as np
 import pytest
 from PIL import Image
@@ -16,6 +18,9 @@ from transformation_portal.depth.backends.registry import DepthBackendRegistry
 
 # Mark all tests in this module as ML tier (require torch + transformers)
 pytestmark = pytest.mark.ml
+
+# Check if we're in offline mode (CI)
+OFFLINE = os.getenv("TRANSFORMERS_OFFLINE") == "1" or os.getenv("HF_HUB_OFFLINE") == "1"
 
 
 def test_da3_backend_implements_protocol():

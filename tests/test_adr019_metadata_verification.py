@@ -5,6 +5,7 @@ and depth metadata files for both DA3 and Depth Pro backends.
 """
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,9 @@ from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
 # Mark all tests as ML tier
 pytestmark = pytest.mark.ml
+
+# Check if we're in offline mode (CI)
+OFFLINE = os.getenv("TRANSFORMERS_OFFLINE") == "1" or os.getenv("HF_HUB_OFFLINE") == "1"
 
 
 @pytest.fixture
