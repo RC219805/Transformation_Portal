@@ -5,8 +5,8 @@ Validates performance claims and prevents regressions:
 - Phase 2: Parallel processing (3-5x speedup), depth caching
 - Phase 3: PBR batching (30% speedup), msgpack serialization
 
-Tests are marked with @pytest.mark.benchmark to run separately from unit tests.
-CI skips these tests - run manually for performance validation.
+Tests are marked with @pytest.mark.benchmark.
+Note: CI runs these unless explicitly excluded by marker selection (e.g., -m "not benchmark").
 
 ADR-019 Note:
 Uses backend protocol mocks (DA3Backend.compute) instead of legacy

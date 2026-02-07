@@ -444,7 +444,7 @@ model:
   variant: depth-pro
   device: mps
   checkpoint_path: checkpoints/depth_pro.pt
-  expected_sha256: 3a92b0e79bb8a129e83997d15eed71b0a9cca0eb4c7a0e8c4b7e0a8f3d5c2e1b
+  expected_sha256: 3eb35ca68168ad3d14cb150f8947a4edf85589941661fdb2686259c80685c0ce
 
 processing:
   apply_bilateral: false

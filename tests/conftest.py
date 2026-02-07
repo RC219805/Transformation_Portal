@@ -24,6 +24,7 @@ or if PYTHONPATH is set correctly.
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -199,15 +200,11 @@ def mock_depth_model(deterministic_rng):
 # =============================================================================
 
 
-# Cache for expensive availability checks (avoid repeated imports)
-_AVAILABILITY_CACHE = {}
-
-
 # Cache for expensive availability checks (avoid repeated imports / lookups)
 _AVAILABILITY_CACHE: dict[str, bool] = {}
 
 
-def _cached_bool(key: str, compute: "callable[[], bool]") -> bool:
+def _cached_bool(key: str, compute: "Callable[[], bool]") -> bool:
     """Return cached boolean for `key`, computing it once if needed."""
     if key not in _AVAILABILITY_CACHE:
         _AVAILABILITY_CACHE[key] = bool(compute())

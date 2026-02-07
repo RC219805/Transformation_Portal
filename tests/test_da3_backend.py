@@ -29,29 +29,41 @@ def test_da3_backend_implements_protocol():
 def test_da3_backend_availability():
     """DA3Backend.ensure_available() raises ImportError when dependencies missing.
 
-    Uses monkeypatch to simulate missing transformers, verifying that
-    ensure_available() detects the issue and raises with helpful message.
+    Uses monkeypatch to force import failure, verifying error handling.
     """
+    import importlib
+
+    from transformation_portal.depth.backends.da3 import DA3Backend
+
     backend = DA3Backend()
 
     # Verify method exists
     assert hasattr(backend, "ensure_available")
     assert callable(backend.ensure_available)
 
-    # Test behavior when transformers is missing (simulate via monkeypatch)
-    import sys
-    from unittest.mock import patch
 
-    with patch.dict(sys.modules, {"transformers": None}):
-        # Force re-check by clearing any cached imports in backend
-        try:
-            backend.ensure_available()
-            # If we get here without error, transformers is actually installed
-            # (can't simulate ImportError in a real environment where it exists)
-            # This is expected in dev/local, but in CI without transformers, would fail
-        except (ImportError, AttributeError) as e:
-            # Expected when transformers truly missing
-            assert "transformers" in str(e).lower() or "module" in str(e).lower()
+def test_da3_backend_availability_missing_transformers(monkeypatch):
+    """DA3Backend.ensure_available() detects missing transformers dependency.
+
+    Forces ImportError via monkeypatch to validate error path deterministically.
+    """
+    import importlib
+
+    from transformation_portal.depth.backends.da3 import DA3Backend
+
+    # Intercept import attempts for transformers
+    real_import = importlib.import_module
+
+    def fake_import(name, package=None):
+        if name == "transformers" or (name and "transformers" in name):
+            raise ImportError("No module named 'transformers'")
+        return real_import(name, package)
+
+    monkeypatch.setattr(importlib, "import_module", fake_import)
+
+    backend = DA3Backend()
+    with pytest.raises(ImportError, match="transformers"):
+        backend.ensure_available()
 
 
 @pytest.mark.skipif(
