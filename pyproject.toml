@@ -135,8 +135,8 @@ markers = [
     "integration: tests requiring multiple components",
     "ml: tests requiring ML models/large downloads",
     "golden: golden regression tests with curated fixtures",
-    "stress: stress tests for large batches and resource limits (deselect with '-m \"not stress\"')",
-    "benchmark: performance benchmarks with budgets",
+    "stress: stress tests for large batches and resource limits (CI typically excludes; run manually)",
+    "benchmark: performance benchmarks with budgets (CI typically excludes; run manually)",
 ]
 
 [tool.coverage.run]
