@@ -12,22 +12,23 @@ Usage:
     python scripts/benchmark_phase2.py --synthetic --num-images 100
 """
 from __future__ import annotations
+
 import argparse
-import time
-import tempfile
-import shutil
-from pathlib import Path
-from typing import List, Dict, Any
 import json
-import sys
 import logging
+import shutil
+import sys
+import tempfile
+import time
+from pathlib import Path
+from typing import Any, Dict, List
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
-from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
+from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)

@@ -9,13 +9,14 @@ from pathlib import Path
 from typing import Tuple
 
 import numpy as np
-from PIL import Image
 import tifffile
+from PIL import Image
 
 # Import existing utilities
 sys.path.insert(0, str(Path(__file__).parent))
-from transformation_portal.utils.format_utils import normalize_extension
 from fix_tiff_16bit import save_16bit_tiff_tifffile
+
+from transformation_portal.utils.format_utils import normalize_extension
 
 
 def load_exr_or_tiff(input_path: Path) -> Tuple[np.ndarray, dict]:
@@ -27,8 +28,8 @@ def load_exr_or_tiff(input_path: Path) -> Tuple[np.ndarray, dict]:
 
     if ext == ".exr":
         try:
-            import OpenEXR
             import Imath
+            import OpenEXR
 
             exr_file = OpenEXR.InputFile(str(input_path))
             header = exr_file.header()

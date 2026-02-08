@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 def create_depth_comparison(image_path: Path, output_dir: Path, model_variants: list = ["small", "large"]):
     """Create side-by-side comparison of depth maps from different models."""
 
-    from depth_anything_v2 import DepthAnythingV2Model, ModelVariant, ModelBackend
+    from depth_anything_v2 import DepthAnythingV2Model, ModelBackend, ModelVariant
 
     logger.info(f"\n{'='*70}")
     logger.info(f"Processing: {image_path.name}")

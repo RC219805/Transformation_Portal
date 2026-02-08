@@ -13,12 +13,12 @@ Author: Transformation Portal
 Date: 2025-11-08
 """
 
-import sys
 import json
-from pathlib import Path
-from typing import List, Dict, Optional
-from datetime import datetime
+import sys
 import traceback
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional
 
 # Add project root to path
 project_root = Path(__file__).parent
@@ -47,7 +47,7 @@ def process_single_image(source_path: Path, output_dir: Path, scene_name: str, p
     Returns:
         Processing results dictionary
     """
-    from unified_luxury_pipeline import UnifiedLuxuryPipeline, LuxuryConfig
+    from unified_luxury_pipeline import LuxuryConfig, UnifiedLuxuryPipeline
 
     print(f"\n{'='*80}")
     print(f"Processing: {scene_name}")

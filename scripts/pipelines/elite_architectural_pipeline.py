@@ -27,16 +27,13 @@ from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
-import torch
 import tifffile
+import torch
 from PIL import Image, ImageEnhance
 
 # Import Material Response (via backward-compatible wrapper)
 try:
-    from transformation_portal.processors.material_response.core import (
-        MaterialAestheticProfile,
-        LightingProfile,
-    )
+    from transformation_portal.processors.material_response.core import LightingProfile, MaterialAestheticProfile
 
     MATERIAL_RESPONSE_AVAILABLE = True
 except ImportError:

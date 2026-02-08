@@ -38,11 +38,7 @@ import logging
 from typing import Dict, List, Optional, Tuple
 
 from transformation_portal.metrics.contracts import BucketStats
-from transformation_portal.metrics.performance_capsule import (
-    DEFAULT_BUCKETS,
-    PerformanceBucket,
-    PerformanceCapsule,
-)
+from transformation_portal.metrics.performance_capsule import DEFAULT_BUCKETS, PerformanceBucket, PerformanceCapsule
 
 __version__ = "1.0.0"
 

@@ -5,10 +5,11 @@ Fix float32 TIFF files with values outside [0,1] range.
 Converts improperly saved float32 TIFFs to proper 16-bit uint16 TIFFs.
 """
 
-import tifffile
-import numpy as np
-from pathlib import Path
 import sys
+from pathlib import Path
+
+import numpy as np
+import tifffile
 
 
 def fix_float_tiff(input_path: Path, output_path: Path = None, dry_run: bool = False):

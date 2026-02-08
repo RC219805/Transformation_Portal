@@ -8,11 +8,12 @@ and generates detailed quality assessment report.
 
 import json
 import sys
+import time
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
+from typing import Any, Dict, List, Tuple
+
 import numpy as np
 from PIL import Image
-import time
 
 # Optional imports with fallbacks
 try:

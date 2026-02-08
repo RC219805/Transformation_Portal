@@ -29,8 +29,8 @@ print(f"  ✓ Python {sys.version_info.major}.{sys.version_info.minor}.{sys.vers
 # Test 2: Core dependencies
 print("\n[2/8] Checking core dependencies...")
 try:
-    import numpy as np
     import cv2
+    import numpy as np
     import torch
     from PIL import Image
 
@@ -68,10 +68,7 @@ except ImportError as e:
 # Test 5: Material Response
 print("\n[5/8] Checking Material Response...")
 try:
-    from transformation_portal.processors.material_response.core import (
-        MaterialAestheticProfile,
-        LightingProfile,
-    )
+    from transformation_portal.processors.material_response.core import LightingProfile, MaterialAestheticProfile
 
     print("  ✓ Material Response Technology available")
 except ImportError:
@@ -98,8 +95,8 @@ except ImportError:
 # Test 7: AI enhancement
 print("\n[7/8] Checking AI enhancement...")
 try:
-    from diffusers import ControlNetModel, StableDiffusionControlNetImg2ImgPipeline
     from controlnet_aux import CannyDetector
+    from diffusers import ControlNetModel, StableDiffusionControlNetImg2ImgPipeline
 
     print("  ✓ ControlNet + Stable Diffusion available")
 except ImportError:
@@ -138,11 +135,7 @@ else:
 print("\n[Pipeline Test]")
 print("-" * 80)
 try:
-    from luxury_estate_master_pipeline import (
-        LuxuryEstateMasterPipeline,
-        get_750_picacho_preset,
-        get_aerial_preset,
-    )
+    from luxury_estate_master_pipeline import LuxuryEstateMasterPipeline, get_750_picacho_preset, get_aerial_preset
 
     print("  ✓ Pipeline module imports successfully")
 
@@ -191,7 +184,9 @@ if sys.version_info < (3, 10):
     critical_ok = False
 
 try:
-    import numpy, cv2, torch
+    import cv2
+    import numpy
+    import torch
     from PIL import Image
 except ImportError:
     critical_ok = False

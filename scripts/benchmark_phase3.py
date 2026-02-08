@@ -10,10 +10,10 @@ Tests performance of:
 """
 
 import argparse
-import time
 import json
-from pathlib import Path
 import sys
+import time
+from pathlib import Path
 
 import numpy as np
 
@@ -34,7 +34,7 @@ def benchmark_coreml():
         return None
 
     try:
-        from transformation_portal.lux_depth_v3.config import DeviceConfig, DA3Config
+        from transformation_portal.lux_depth_v3.config import DA3Config, DeviceConfig
         from transformation_portal.lux_depth_v3.inference import DA3InferenceEngine
     except ImportError as e:
         print(f"⚠️  Skipped: {e}")

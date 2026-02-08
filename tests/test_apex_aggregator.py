@@ -13,10 +13,7 @@ from transformation_portal.metrics.aggregator import (
     compute_per_zone_stats,
     compute_worst_zone_p95,
 )
-from transformation_portal.metrics.performance_capsule import (
-    PerformanceBucket,
-    PerformanceCapsule,
-)
+from transformation_portal.metrics.performance_capsule import PerformanceBucket, PerformanceCapsule
 
 
 class TestAggregator:

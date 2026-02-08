@@ -6,7 +6,7 @@ Handles 16-bit EXR input with proper tone mapping and outputs high-quality TIFFs
 
 import sys
 from pathlib import Path
-from typing import Tuple, Optional
+from typing import Optional, Tuple
 
 import numpy as np
 from PIL import Image
@@ -29,8 +29,8 @@ def load_exr_with_tone_mapping(exr_path: Path, target_size: Optional[Tuple[int, 
     print(f"  Loading EXR: {exr_path.name}")
 
     # Load EXR using OpenEXR library
-    import OpenEXR
     import Imath
+    import OpenEXR
 
     # Open the EXR file
     exr_file = OpenEXR.InputFile(str(exr_path))

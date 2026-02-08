@@ -11,11 +11,10 @@ This script:
 """
 
 import os
-import sys
 import platform
 import subprocess
+import sys
 from pathlib import Path
-
 
 # === Configuration ===
 REPO_ROOT = Path("/Users/rc/Projects/Transformation_Portal")

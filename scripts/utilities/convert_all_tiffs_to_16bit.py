@@ -2,8 +2,9 @@
 """Convert all 8-bit TIFFs to proper 16-bit TIFFs."""
 
 from pathlib import Path
-from fix_tiff_16bit import convert_8bit_to_16bit_tiff
+
 import tifffile
+from fix_tiff_16bit import convert_8bit_to_16bit_tiff
 
 # Find all TIFF files
 output_dir = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/TIFFs/_TIFFs")

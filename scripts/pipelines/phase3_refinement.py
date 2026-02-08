@@ -5,6 +5,7 @@ Applies targeted exposure and enhancement per scene type
 """
 
 from pathlib import Path
+
 import numpy as np
 import tifffile
 from PIL import Image, ImageEnhance

@@ -10,9 +10,10 @@ Strategy: Extract PNG metadata chunks and parse selectively
 import json
 import logging
 import struct
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
+
 from PIL import Image, PngImagePlugin
 
 logging.basicConfig(level=logging.INFO)

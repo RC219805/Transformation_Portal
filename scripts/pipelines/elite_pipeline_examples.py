@@ -5,14 +5,15 @@ Demonstrates different processing workflows for luxury real estate imagery
 """
 
 from pathlib import Path
+
 from elite_architectural_pipeline import (
+    AIEnhancementConfig,
+    ColorGradingConfig,
+    DepthConfig,
     EliteArchitecturalPipeline,
     PipelinePreset,
-    get_750_picacho_preset,
-    DepthConfig,
     ToneMappingConfig,
-    ColorGradingConfig,
-    AIEnhancementConfig,
+    get_750_picacho_preset,
 )
 
 # ============================================================================

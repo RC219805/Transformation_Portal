@@ -7,9 +7,10 @@ Use this instead of PIL.Image.save() for 16-bit TIFFs.
 
 from pathlib import Path
 from typing import Optional, Union
+
 import numpy as np
-from PIL import Image
 import tifffile
+from PIL import Image
 
 
 def save_16bit_tiff_correctly(

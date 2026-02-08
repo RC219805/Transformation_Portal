@@ -11,14 +11,15 @@ from pathlib import Path
 rag_path = Path(__file__).parent / ".github" / "agents"
 sys.path.insert(0, str(rag_path))
 
-# Now import RAG components
-from rag_system.indexer import RepositoryIndexer
-from rag_system.retriever import HybridRetriever
-from rag_system.reranker import ResultReranker
 from rag_system.citation import CitationGenerator
 from rag_system.classifier import ArtifactClassifier
+
+# Now import RAG components
+from rag_system.indexer import RepositoryIndexer
 from rag_system.knowledge_engine import KnowledgeIntegrationEngine
-from rag_system.templates import PromptTemplates, CodeModificationResponse, FileModification
+from rag_system.reranker import ResultReranker
+from rag_system.retriever import HybridRetriever
+from rag_system.templates import CodeModificationResponse, FileModification, PromptTemplates
 
 
 def run_workflow():

@@ -23,8 +23,8 @@ from pathlib import Path
 from typing import Dict, List
 
 import numpy as np
-from PIL import Image
 import tifffile
+from PIL import Image
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -268,8 +268,9 @@ def test_depth_model_download() -> Dict:
     # Check if depth model is cached
     if transformers_available:
         try:
-            from transformers import AutoImageProcessor, AutoModelForDepthEstimation
             from pathlib import Path
+
+            from transformers import AutoImageProcessor, AutoModelForDepthEstimation
 
             model_id = "depth-anything/Depth-Anything-V2-Small-hf"
             cache_dir = Path.home() / ".cache" / "huggingface" / "hub"

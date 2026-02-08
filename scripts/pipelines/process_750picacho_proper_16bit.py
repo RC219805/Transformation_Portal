@@ -3,13 +3,14 @@
 Proper 16-bit TIFF conversion from EXR sources for 750 Picacho Lane
 Preserves full dynamic range and applies luxury real estate grading
 """
-import OpenEXR
+from pathlib import Path
+from typing import Optional
+
 import Imath
 import numpy as np
-from PIL import Image
-from pathlib import Path
+import OpenEXR
 import typer
-from typing import Optional
+from PIL import Image
 
 app = typer.Typer()
 

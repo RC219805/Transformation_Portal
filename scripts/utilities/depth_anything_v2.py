@@ -218,9 +218,7 @@ class DepthAnythingV2Model:
 
     def _download_coreml_model(self) -> Path:
         """Download CoreML model from HuggingFace Hub."""
-        from huggingface_hub import (  # pylint: disable=import-outside-toplevel
-            hf_hub_download,
-        )
+        from huggingface_hub import hf_hub_download  # pylint: disable=import-outside-toplevel
 
         # Map variant to CoreML repo
         coreml_variant = {

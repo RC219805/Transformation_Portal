@@ -14,7 +14,6 @@ from typing import List, Set
 
 import tomli
 
-
 # Banned packages (security/license/quality concerns)
 BANNED_PACKAGES = {
     "realesrgan": "Unmaintained, use local implementation",

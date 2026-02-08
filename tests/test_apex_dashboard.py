@@ -179,11 +179,7 @@ def test_dashboard_data_json_serializable(sample_ledger: Path) -> None:
 
 def test_dashboard_html_generation(sample_ledger: Path, tmp_path: Path) -> None:
     """Test HTML dashboard generation."""
-    from scripts.apex_dashboard_generator import (
-        generate_dashboard_data,
-        generate_index_html,
-        generate_latest_html,
-    )
+    from scripts.apex_dashboard_generator import generate_dashboard_data, generate_index_html, generate_latest_html
 
     data = generate_dashboard_data(sample_ledger, days=30)
     output_dir = tmp_path / "dashboard"
@@ -386,10 +382,7 @@ def test_ledger_migration_v2_to_v3(tmp_path: Path) -> None:
 
 def test_dashboard_responsive_design(sample_ledger: Path, tmp_path: Path) -> None:
     """Verify dashboard HTML includes responsive design elements."""
-    from scripts.apex_dashboard_generator import (
-        generate_dashboard_data,
-        generate_index_html,
-    )
+    from scripts.apex_dashboard_generator import generate_dashboard_data, generate_index_html
 
     data = generate_dashboard_data(sample_ledger, days=30)
     output_dir = tmp_path / "dashboard"

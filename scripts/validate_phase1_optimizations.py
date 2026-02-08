@@ -10,18 +10,19 @@ Demonstrates and validates:
 
 Run: python scripts/validate_phase1_optimizations.py
 """
-import sys
-import time
-import tempfile
 import hashlib
+import sys
+import tempfile
+import time
 from pathlib import Path
+
 import numpy as np
 
 # Add src to path for direct module imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from transformation_portal.lux_depth_v3.config import EnhanceConfig, DeviceConfig, PostprocessingConfig
-from transformation_portal.lux_depth_v3.manifest import compute_file_sha256, CombinedManifest
+from transformation_portal.lux_depth_v3.config import DeviceConfig, EnhanceConfig, PostprocessingConfig
+from transformation_portal.lux_depth_v3.manifest import CombinedManifest, compute_file_sha256
 from transformation_portal.lux_depth_v3.orchestrator import _load_manifest_cached
 from transformation_portal.lux_depth_v3.postprocessing import Postprocessor
 

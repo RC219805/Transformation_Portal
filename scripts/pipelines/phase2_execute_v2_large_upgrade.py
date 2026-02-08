@@ -40,7 +40,7 @@ def test_model_variant(variant: str) -> Dict:
     logger.info(f"{'='*70}")
 
     try:
-        from depth_anything_v2 import DepthAnythingV2Model, ModelVariant, ModelBackend
+        from depth_anything_v2 import DepthAnythingV2Model, ModelBackend, ModelVariant
 
         # Map variant names to enum
         variant_map = {

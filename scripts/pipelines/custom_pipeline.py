@@ -32,12 +32,7 @@ try:
         DepthGuidedFilters,
         ZoneToneMapping,
     )
-    from transformation_portal.depth.utils import (
-        depth_statistics,
-        load_image,
-        save_image,
-        visualize_depth,
-    )
+    from transformation_portal.depth.utils import depth_statistics, load_image, save_image, visualize_depth
 except ImportError as e:
     print("ERROR: Could not import transformation_portal package.")
     print(f"Details: {e}")

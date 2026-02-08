@@ -5,10 +5,11 @@ Fix TIFF 16-bit Saving Issue
 Proper method to save 16-bit TIFFs with full quality preservation.
 """
 
-import numpy as np
-from PIL import Image
-import tifffile
 from pathlib import Path
+
+import numpy as np
+import tifffile
+from PIL import Image
 
 
 def save_16bit_tiff_pil(image_array: np.ndarray, output_path: Path, compression="lzw"):

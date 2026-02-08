@@ -9,14 +9,14 @@ Maximum quality processing with all available tools:
 - Film emulation LUTs
 """
 
+import logging
 import sys
 from pathlib import Path
-from typing import Optional, List
-import logging
+from typing import List, Optional
 
 import numpy as np
-from PIL import Image
 import tifffile
+from PIL import Image
 from tqdm import tqdm
 
 # Setup logging

@@ -6,10 +6,11 @@ Confirms that all pipelines use the optimal tifffile.imwrite() method
 for 16-bit RGB TIFF saving.
 """
 
-import numpy as np
 from pathlib import Path
-from PIL import Image
+
+import numpy as np
 import tifffile
+from PIL import Image
 
 
 def test_tiff_quality():

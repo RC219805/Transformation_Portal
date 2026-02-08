@@ -21,11 +21,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 # Import architectural context engine
-from architectural_context_engine import (
-    ArchitecturalContext,
-    ContextAwareRenderingPipeline,
-    SpaceType,
-)
+from architectural_context_engine import ArchitecturalContext, ContextAwareRenderingPipeline, SpaceType
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)

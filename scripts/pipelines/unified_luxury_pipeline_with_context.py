@@ -7,17 +7,18 @@ Usage:
     python3 unified_luxury_pipeline_with_context.py [--source-dir PATH] [--output-dir PATH]
 """
 
-import sys
 import json
 import logging
+import sys
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 import numpy as np
 
 # Import pipeline and context engine
 sys.path.insert(0, str(Path(__file__).parent))
-from unified_luxury_pipeline import process_single_view
 from architectural_context_engine_enhanced import ArchitecturalContextEngine
+from unified_luxury_pipeline import process_single_view
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)

@@ -4,9 +4,10 @@ Utility to save 16-bit TIFF files correctly.
 This fixes the PIL bug where 16-bit data is saved as 8-bit.
 """
 
-import numpy as np
 from pathlib import Path
 from typing import Union
+
+import numpy as np
 from PIL import Image
 
 

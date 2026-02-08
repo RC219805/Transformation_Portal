@@ -6,11 +6,11 @@ Run this to verify the implementation.
 """
 
 from transformation_portal.metrics import (
+    DEFAULT_BUCKETS,
     PerformanceBucket,
     PerformanceCapsule,
     get_bucket_for_capsule,
     timing_context,
-    DEFAULT_BUCKETS,
 )
 
 

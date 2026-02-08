@@ -16,7 +16,7 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
 
 from transformation_portal.metrics.ledger import PerformanceLedger
 from transformation_portal.metrics.performance_capsule import PerformanceCapsule

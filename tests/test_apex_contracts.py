@@ -9,13 +9,7 @@ Tests validate:
 
 import pytest
 
-from transformation_portal.metrics.contracts import (
-    BucketStats,
-    Judgement,
-    Observation,
-    RegressionReport,
-    RunSpec,
-)
+from transformation_portal.metrics.contracts import BucketStats, Judgement, Observation, RegressionReport, RunSpec
 from transformation_portal.metrics.performance_capsule import PerformanceCapsule
 
 

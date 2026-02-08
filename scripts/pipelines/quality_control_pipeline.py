@@ -4,13 +4,14 @@ Quality Control Pipeline for 750 Picacho Lane
 Ensures consistent, high-quality processing with verification
 """
 
+import hashlib
+import json
+import subprocess
 import sys
 from pathlib import Path
-import json
-import hashlib
 from typing import Dict, List
+
 from PIL import Image
-import subprocess
 
 
 class QualityControlPipeline:

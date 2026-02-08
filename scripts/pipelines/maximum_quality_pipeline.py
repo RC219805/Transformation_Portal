@@ -12,13 +12,14 @@ This pipeline delivers absolute maximum quality by:
 """
 
 import sys
-from pathlib import Path
-import numpy as np
-from PIL import Image
-import torch
-from transformers import pipeline as transformers_pipeline
-from typing import Optional, Tuple
 import warnings
+from pathlib import Path
+from typing import Optional, Tuple
+
+import numpy as np
+import torch
+from PIL import Image
+from transformers import pipeline as transformers_pipeline
 
 # Suppress less critical warnings
 warnings.filterwarnings("ignore", category=UserWarning)

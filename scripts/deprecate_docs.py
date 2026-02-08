@@ -5,8 +5,8 @@ Part of DOC-001: Documentation consolidation.
 """
 
 import os
-from pathlib import Path
 from datetime import datetime, timedelta
+from pathlib import Path
 
 # Deprecation date: 30 days from now
 deprecation_date = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")

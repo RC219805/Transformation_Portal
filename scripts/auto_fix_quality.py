@@ -29,7 +29,6 @@ import subprocess
 from pathlib import Path
 from typing import List, Optional, Set
 
-
 logger = logging.getLogger("auto_fix_quality")
 
 

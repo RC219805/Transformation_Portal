@@ -4,8 +4,6 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw
-
 from board_material_aerial_enhancer import (
     DEFAULT_TEXTURES,
     _assign_full_image,
@@ -17,6 +15,7 @@ from board_material_aerial_enhancer import (
     load_palette_assignments,
     save_palette_assignments,
 )
+from PIL import Image, ImageDraw
 
 # Load the input image
 input_path = Path("/workspaces/800-Picacho-Lane-LUTs/input_images/RC-office750Picacho_Aerial.tif")

@@ -139,10 +139,11 @@ def run_basic_inference(checkpoint_path):
 
     try:
         # Import required modules
-        from PIL import Image
         import numpy as np
-        from transformation_portal.stage_graph.stages.depth_pro import DepthProStage
+        from PIL import Image
+
         from transformation_portal.stage_graph.stage import StageContext, StageStatus
+        from transformation_portal.stage_graph.stages.depth_pro import DepthProStage
 
         print("  Creating test image (640x480)...")
         test_image = Image.new("RGB", (640, 480), color=(120, 150, 180))

@@ -11,8 +11,9 @@ Exit codes:
 - 1: Import failure or contract violation
 """
 import sys
-import numpy as np
 from pathlib import Path
+
+import numpy as np
 
 
 def verify_imports():
@@ -22,16 +23,16 @@ def verify_imports():
     # Test 1: Public API imports (validates __init__.py exports)
     try:
         from transformation_portal.lux_depth_v3 import (
-            EnhanceOrchestrator,
             DA3Config,
-            ModelVariant,
-            Preset,
-            EnhanceConfig,
-            PostprocessingConfig,
-            DeviceConfig,
-            Postprocessor,
             DA3InferenceEngine,
             DepthResult,
+            DeviceConfig,
+            EnhanceConfig,
+            EnhanceOrchestrator,
+            ModelVariant,
+            PostprocessingConfig,
+            Postprocessor,
+            Preset,
         )
 
         print("✅ Public API imports successful")
@@ -55,9 +56,9 @@ def verify_intentional_failures():
     """Verify DA3InferenceEngine works (no longer a stub)."""
     print("\n🔍 Verifying DA3InferenceEngine implementation...")
 
-    from transformation_portal.lux_depth_v3.inference import DA3InferenceEngine
     from transformation_portal.lux_depth_v3.config import DA3Config
     from transformation_portal.lux_depth_v3.depth_writer import atomic_write_depth_u16_png_with_stats
+    from transformation_portal.lux_depth_v3.inference import DA3InferenceEngine
     from transformation_portal.lux_depth_v3.v2_runner import V2Runner, find_v2_report
 
     checks_passed = 0
@@ -142,9 +143,10 @@ def verify_call_site_compatibility():
     """Verify critical call-site compatibility requirements."""
     print("\n🔍 Verifying call-site compatibility...")
 
+    import numpy as np
+
     from transformation_portal.lux_depth_v3.config import PostprocessingConfig
     from transformation_portal.lux_depth_v3.inference import DepthResult
-    import numpy as np
 
     checks_passed = 0
     checks_total = 0

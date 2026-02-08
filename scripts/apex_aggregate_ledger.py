@@ -13,10 +13,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from transformation_portal.metrics.aggregator import (
-    compute_per_zone_stats,
-    log_aggregated_stats_to_ledger,
-)
+from transformation_portal.metrics.aggregator import compute_per_zone_stats, log_aggregated_stats_to_ledger
 from transformation_portal.metrics.performance_capsule import PerformanceCapsule
 
 logging.basicConfig(level=logging.INFO)

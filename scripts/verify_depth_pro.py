@@ -5,8 +5,8 @@ import logging
 import sys
 from pathlib import Path
 
-import torch
 import depth_pro
+import torch
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("DepthProVerifier")

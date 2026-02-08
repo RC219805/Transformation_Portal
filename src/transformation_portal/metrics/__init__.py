@@ -40,12 +40,7 @@ from transformation_portal.metrics.performance_capsule import (
     compute_specificity,
     get_bucket_for_capsule,
 )
-from transformation_portal.metrics.timing import (
-    TimingContext,
-    compute_overhead,
-    merge_timings,
-    timing_context,
-)
+from transformation_portal.metrics.timing import TimingContext, compute_overhead, merge_timings, timing_context
 
 __all__ = [
     "PerformanceCapsule",

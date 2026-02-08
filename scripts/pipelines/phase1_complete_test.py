@@ -15,9 +15,9 @@ import time
 from pathlib import Path
 
 import numpy as np
+import tifffile
 import torch
 from PIL import Image
-import tifffile
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")

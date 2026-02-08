@@ -8,8 +8,8 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
 import tifffile
+from PIL import Image
 
 
 def apply_luxury_enhancements(img: np.ndarray, scene_name: str) -> np.ndarray:

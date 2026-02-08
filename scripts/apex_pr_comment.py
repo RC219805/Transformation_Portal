@@ -30,6 +30,7 @@ import sqlite3
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
 from transformation_portal.metrics.comparator import query_baseline_stats
 from transformation_portal.metrics.contracts import BucketStats, Judgement
 from transformation_portal.metrics.gate import evaluate_gate

@@ -21,18 +21,18 @@ def test_imports():
     try:
         from transformation_portal.depth_canonical import DepthPipeline
         from transformation_portal.depth_canonical.config import (
-            UnifiedDepthConfig,
+            DeviceType,
             ModelConfig,
             ModelVariant,
-            DeviceType,
-            ProcessingConfig,
             PBRConfig,
+            ProcessingConfig,
+            UnifiedDepthConfig,
         )
         from transformation_portal.depth_canonical.models import (
-            ModelRegistry,
-            DepthEstimationModel,
             DA2ModelWrapper,
             DA3ModelWrapper,
+            DepthEstimationModel,
+            ModelRegistry,
         )
 
         print("  ✓ All imports successful")
@@ -47,8 +47,8 @@ def test_model_registry():
     print("\n🔧 Testing ModelRegistry...")
 
     try:
+        from transformation_portal.depth_canonical.config import DeviceType, ModelVariant
         from transformation_portal.depth_canonical.models import ModelRegistry
-        from transformation_portal.depth_canonical.config import ModelVariant, DeviceType
 
         registry = ModelRegistry()
 
@@ -78,12 +78,9 @@ def test_depth_pipeline():
 
     try:
         import numpy as np
+
         from transformation_portal.depth_canonical import DepthPipeline
-        from transformation_portal.depth_canonical.config import (
-            UnifiedDepthConfig,
-            ProcessingConfig,
-            PBRConfig,
-        )
+        from transformation_portal.depth_canonical.config import PBRConfig, ProcessingConfig, UnifiedDepthConfig
 
         # Test initialization
         config = UnifiedDepthConfig(processing=ProcessingConfig(pbr=PBRConfig(enabled=False)))
@@ -116,14 +113,14 @@ def test_configuration():
 
     try:
         from transformation_portal.depth_canonical.config import (
-            UnifiedDepthConfig,
+            DeviceType,
+            IOConfig,
             ModelConfig,
             ModelVariant,
-            DeviceType,
-            ProcessingConfig,
             PBRConfig,
-            IOConfig,
+            ProcessingConfig,
             SecurityConfig,
+            UnifiedDepthConfig,
         )
 
         # Test default config

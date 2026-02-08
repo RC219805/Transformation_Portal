@@ -12,11 +12,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
-import numpy as np
-import torch
 import depth_pro
-from PIL import Image
+import numpy as np
 import PIL  # for __version__
+import torch
+from PIL import Image
 
 try:
     import importlib.metadata as importlib_metadata  # py3.8+

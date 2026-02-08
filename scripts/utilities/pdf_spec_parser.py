@@ -9,9 +9,10 @@ Uses pypdf for text extraction with pattern matching for common architectural sp
 import json
 import logging
 import re
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
 from pypdf import PdfReader
 
 logging.basicConfig(level=logging.INFO)
