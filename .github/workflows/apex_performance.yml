@@ -43,10 +43,12 @@ jobs:
       - name: Install dependencies
         run: pip install -e .
 
-      - name: Run APEX Matrix
+      - name: Run APEX Matrix (Synthetic - Schema Validation Only)
         env:
           APEX_ZONE: ${{ matrix.zone }}
         run: |
+          # NOTE: Running with --dry-run for schema/plumbing validation.
+          # This does NOT measure real performance. Remove --dry-run when ready for production gates.
           python scripts/apex_matrix_runner.py \
             --run-id "${{ env.APEX_RUN_ID }}" \
             --commit-sha "${{ env.APEX_COMMIT_SHA }}" \
@@ -145,33 +147,15 @@ jobs:
             gh pr comment "$pr_number" --body-file apex_comment.md
           fi
 
-      - name: Enforce Gate (fail if V2 FAIL)
+      - name: Enforce Gate (Shadow Mode - Informational Only)
         run: |
-          python - <<'PY'
-          import sqlite3, sys
-
-          db = "apex_performance.db"
-          run_id = "${{ env.APEX_RUN_ID }}"
-          commit_sha = "${{ env.APEX_COMMIT_SHA }}"
-
-          conn = sqlite3.connect(db)
-          cursor = conn.execute("""
-            SELECT COUNT(*)
-            FROM apex_runs
-            WHERE run_id = ?
-              AND workflow_version = 'v2'
-              AND commit_sha = ?
-              AND pass_fail = 'fail'
-          """, (run_id, commit_sha))
-
-          fails = cursor.fetchone()[0]
-
-          if fails > 0:
-              print(f"❌ APEX gate failed: {fails} failing bucket(s) in V2")
-              sys.exit(1)
-
-          print("✅ APEX gate passed (no V2 FAIL buckets)")
-          PY
+          # NOTE: Gate is in SHADOW MODE because --dry-run produces synthetic data.
+          # Reports failures but does not block merge. Switch to enforcing when --dry-run is removed.
+          python scripts/apex_enforce_gate.py \
+            --ledger-db apex_performance.db \
+            --run-id "${{ env.APEX_RUN_ID }}" \
+            --commit-sha "${{ env.APEX_COMMIT_SHA }}" \
+            --mode shadow
 
       - name: Upload Ledger Artifact
         if: always()
