@@ -48,12 +48,14 @@ logger = logging.getLogger(__name__)
 def compute_bucket_stats(
     capsules: List[PerformanceCapsule],
     bucket: PerformanceBucket,
+    min_samples: int = 20,
 ) -> Optional[BucketStats]:
     """Compute statistics for capsules matching a specific bucket.
 
     Args:
         capsules: List of performance capsules
         bucket: Bucket definition with filters and thresholds
+        min_samples: Minimum samples required for valid statistics (contract: 20)
 
     Returns:
         BucketStats if any capsules match, None otherwise
@@ -67,6 +69,22 @@ def compute_bucket_stats(
     # Extract total times and sort
     total_times = sorted([c.timings["total"] for c in matching])
     n = len(total_times)
+
+    # BLOCKER FIX #2: Enforce minimum sample size per APEX Contract v1.0.0
+    if n < min_samples:
+        return BucketStats(
+            bucket_name=bucket.name,
+            count=n,
+            p50=0.0,
+            p95=0.0,
+            p99=0.0,
+            mean=0.0,
+            min=0.0,
+            max=0.0,
+            threshold_p50=bucket.p50_threshold_sec,
+            threshold_p95=bucket.p95_threshold_sec,
+            pass_fail="insufficient_data",  # Never blocks per contract
+        )
 
     # Compute percentiles (use proper median for p50)
     if n % 2 == 0:

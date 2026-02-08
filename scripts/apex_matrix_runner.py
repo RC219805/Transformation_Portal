@@ -152,6 +152,13 @@ def main() -> int:
 
     args = parser.parse_args()
 
+    # BLOCKER FIX #1: Enforce dry-run until real pipeline is wired
+    if not args.dry_run:
+        logger.error("❌ Real pipeline integration not yet implemented")
+        logger.error("   Use --dry-run to test APEX scaffolding")
+        logger.error("   Track progress: docs/APEX_REAL_PIPELINE_INTEGRATION.md")
+        return 1
+
     # Create output directory
     args.output_dir.mkdir(parents=True, exist_ok=True)
 

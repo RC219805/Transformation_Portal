@@ -38,8 +38,33 @@ def aggregate_ledger(
         with sqlite3.connect(db_path) as conn:
             conn.row_factory = sqlite3.Row
 
-            # Load all capsules from ledger
-            cursor = conn.execute("SELECT capsule_json FROM performance_capsules")
+            # BLOCKER FIX #3: Scope capsules by run_id and commit_sha
+            # Check schema capabilities
+            schema_cursor = conn.execute("PRAGMA table_info(performance_capsules)")
+            columns = {row[1] for row in schema_cursor.fetchall()}
+
+            where_clauses = []
+            params = []
+
+            # Build scoped query based on available columns
+            if "run_id" in columns:
+                where_clauses.append("run_id = ?")
+                params.append(run_id)
+
+            if "commit_sha" in columns:
+                where_clauses.append("commit_sha = ?")
+                params.append(commit_sha)
+
+            if where_clauses:
+                where_sql = " WHERE " + " AND ".join(where_clauses)
+                query = f"SELECT capsule_json FROM performance_capsules{where_sql}"
+                logger.info(f"Scoping capsules: {where_sql}")
+                cursor = conn.execute(query, params)
+            else:
+                # Fallback: no scoping columns (v2 schema)
+                logger.warning("⚠️ Schema lacks run_id/commit_sha columns - loading all capsules")
+                cursor = conn.execute("SELECT capsule_json FROM performance_capsules")
+
             rows = cursor.fetchall()
 
             if not rows:

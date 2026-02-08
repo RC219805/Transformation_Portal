@@ -57,6 +57,8 @@ def get_status_icon(pass_fail: str) -> str:
         return "✅"
     elif pass_fail == "warn":
         return "⚠️"
+    elif pass_fail == "insufficient_data":
+        return "📊"  # Data icon for insufficient samples
     else:
         return "❌"
 
@@ -470,7 +472,9 @@ def generate_pr_comment(
         Markdown comment string
     """
     lines = []
-    lines.append("# 🎯 APEX Performance Report\n")
+    lines.append("# 🎯 APEX Performance Report [SYNTHETIC DATA]\n")
+    lines.append("> ⚠️ **This report uses mock data (dry-run mode)**  \n")
+    lines.append("> Real pipeline integration tracked in `docs/APEX_REAL_PIPELINE_INTEGRATION.md`\n")
 
     # Overall gate verdict at top
     overall_status = worst_status(v2_stats or v1_stats)
