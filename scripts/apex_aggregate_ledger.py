@@ -27,6 +27,10 @@ def aggregate_ledger(
 ) -> int:
     """Compute and log aggregated statistics.
 
+    In schema v3, run_id/commit_sha are NOT columns on performance_capsules;
+    they live only in apex_runs. This aggregator assumes the DB contains
+    capsules from a single run (CI creates fresh DB per workflow execution).
+
     Returns:
         Exit code (0=success, non-zero=failure)
     """
@@ -38,21 +42,35 @@ def aggregate_ledger(
         with sqlite3.connect(db_path) as conn:
             conn.row_factory = sqlite3.Row
 
-            # Load all capsules from ledger
-            cursor = conn.execute("SELECT capsule_json FROM performance_capsules")
-            rows = cursor.fetchall()
+            # Check if this run is already aggregated (idempotency)
+            existing_count = conn.execute("SELECT COUNT(*) as count FROM apex_runs WHERE run_id = ?", (run_id,)).fetchone()[
+                "count"
+            ]
+
+            if existing_count > 0:
+                logger.warning(
+                    f"Run {run_id} already has {existing_count} aggregated rows. " "Will re-aggregate (ON CONFLICT REPLACE)."
+                )
+
+            # Load all capsules
+            # ASSUMPTION: This DB contains capsules from only this run
+            # (CI workflow creates fresh DB per matrix execution)
+            query = "SELECT capsule_json FROM performance_capsules"
+            logger.info("Loading all capsules (assuming single-run DB)")
+            rows = conn.execute(query).fetchall()
 
             if not rows:
                 logger.warning("No capsules found in ledger")
                 return 1
 
+            # Parse all capsules
             capsules = []
             for row in rows:
                 cap_dict = json.loads(row["capsule_json"])
                 capsule = PerformanceCapsule.from_dict(cap_dict)
                 capsules.append(capsule)
 
-            logger.info(f"Loaded {len(capsules)} capsules")
+            logger.info(f"Loaded {len(capsules)} capsules (assuming all from run {run_id})")
 
             # Aggregate per workflow version
             for workflow_version in ("v1", "v2"):

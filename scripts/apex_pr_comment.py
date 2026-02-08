@@ -51,9 +51,19 @@ def format_time(seconds: float) -> str:
     return f"{seconds:.2f}s"
 
 
-def get_status_icon(pass_fail: str) -> str:
-    """Get emoji icon for pass/fail status."""
-    if pass_fail == "pass":
+def get_status_icon(pass_fail: str, is_insufficient_data: bool = False) -> str:
+    """Get emoji icon for pass/fail status.
+
+    Args:
+        pass_fail: Verdict ("pass", "warn", "fail")
+        is_insufficient_data: Whether sample count is below minimum
+
+    Returns:
+        Status icon emoji
+    """
+    if is_insufficient_data:
+        return "📊"  # Data icon for insufficient samples
+    elif pass_fail == "pass":
         return "✅"
     elif pass_fail == "warn":
         return "⚠️"
@@ -62,9 +72,10 @@ def get_status_icon(pass_fail: str) -> str:
 
 
 def worst_status(stats: List[Dict[str, Any]]) -> str:
-    """Return worst pass_fail status across all rows.
+    """Return worst pass_fail status across all rows (excluding insufficient data).
 
     Ordering: fail > warn > pass (worst-of logic)
+    Insufficient data buckets are excluded from verdict (never block)
 
     Args:
         stats: List of performance stats dicts
@@ -80,6 +91,9 @@ def worst_status(stats: List[Dict[str, Any]]) -> str:
 
     worst = 0
     for row in stats:
+        # Skip insufficient data buckets per contract
+        if row.get("is_insufficient_data", False):
+            continue
         status = row.get("pass_fail", "pass")
         worst = max(worst, order.get(status, 0))
 
@@ -172,7 +186,7 @@ def generate_bucket_table(
     ]
 
     for bucket_name, stats in sorted(bucket_stats.items()):
-        status = get_status_icon(stats.pass_fail)
+        status = get_status_icon(stats.pass_fail, stats.is_insufficient_data)
         p50_str = format_time(stats.p50)
         p95_str = format_time(stats.p95)
         threshold_str = format_time(stats.threshold_p95)
@@ -216,7 +230,7 @@ def generate_zone_heatmap(
             if bucket_name in zone_stats:
                 stats = zone_stats[bucket_name]
                 p95_str = format_time(stats.p95)
-                status = get_status_icon(stats.pass_fail)
+                status = get_status_icon(stats.pass_fail, stats.is_insufficient_data)
                 cells.append(f"{p95_str} {status}")
             else:
                 cells.append("—")
@@ -269,14 +283,16 @@ def generate_zone_heatmap_from_stats(
         for zone in shown_zones:
             row = index.get((bucket, zone))
             if row:
-                icon = get_status_icon(row["pass_fail"])
+                icon = get_status_icon(row["pass_fail"], row.get("is_insufficient_data", False))
                 row_cells.append(icon)
             else:
                 row_cells.append("—")
 
         # Global cell
         global_row = index.get((bucket, None))
-        global_cell = get_status_icon(global_row["pass_fail"]) if global_row else "—"
+        global_cell = (
+            get_status_icon(global_row["pass_fail"], global_row.get("is_insufficient_data", False)) if global_row else "—"
+        )
 
         lines.append(f"| {bucket} | " + " | ".join(row_cells) + f" | {global_cell} |")
 
@@ -349,7 +365,7 @@ def generate_worst_offenders(
         p95_str = format_time(r["p95"])
         limit_str = format_time(r["threshold_p95"])
         delta_str = format_time(delta)
-        icon = get_status_icon(r["pass_fail"])
+        icon = get_status_icon(r["pass_fail"], r.get("is_insufficient_data", False))
 
         lines.append(
             f"| {i} | {r['bucket_name']} | {zone_str} | {workflow} | "
@@ -470,7 +486,9 @@ def generate_pr_comment(
         Markdown comment string
     """
     lines = []
-    lines.append("# 🎯 APEX Performance Report\n")
+    lines.append("# 🎯 APEX Performance Report [SYNTHETIC DATA]\n")
+    lines.append("> ⚠️ **This report uses mock data (dry-run mode)**  \n")
+    lines.append("> Real pipeline integration tracked in `docs/APEX_REAL_PIPELINE_INTEGRATION.md`\n")
 
     # Overall gate verdict at top
     overall_status = worst_status(v2_stats or v1_stats)
@@ -633,15 +651,27 @@ def main() -> int:
                 explanation="V2 workflow performance",
             )
 
-        # Evaluate gates
+        # Evaluate gates (returns tuple: verdict, explanation)
         gate_result_v1 = None
         gate_result_v2 = None
 
         if v1_judgement:
-            gate_result_v1 = evaluate_gate(v1_judgement, mode="enforce").to_dict()
+            gate_obj = evaluate_gate(v1_judgement, mode="enforce")
+            gate_result_v1 = {
+                "verdict": "fail" if gate_obj.should_block else ("warn" if gate_obj.reasons else "pass"),
+                "explanation": gate_obj.explanation,
+                "mode": gate_obj.mode,
+                "should_block": gate_obj.should_block,
+            }
 
         if v2_judgement:
-            gate_result_v2 = evaluate_gate(v2_judgement, mode="shadow").to_dict()
+            gate_obj = evaluate_gate(v2_judgement, mode="shadow")
+            gate_result_v2 = {
+                "verdict": "fail" if gate_obj.should_block else ("warn" if gate_obj.reasons else "pass"),
+                "explanation": gate_obj.explanation,
+                "mode": gate_obj.mode,
+                "should_block": gate_obj.should_block,
+            }
 
         # Generate comment with new signature
         comment = generate_pr_comment(
@@ -666,6 +696,30 @@ def main() -> int:
 
     except Exception as e:
         logger.error(f"Failed to generate PR comment: {e}")
+
+        # Write fallback error comment so CI doesn't fail on missing file
+        error_comment = f"""# 🎯 APEX Performance Report [ERROR]
+
+⚠️ **Failed to generate performance report**
+
+**Error:** `{e}`
+
+**Run ID:** {args.run_id}
+**Commit:** {args.commit_sha}
+
+This likely means:
+- No performance data was aggregated
+- Database query failed
+- Schema mismatch
+
+Please check the job logs for details.
+"""
+        try:
+            args.output.write_text(error_comment)
+            logger.info(f"Wrote fallback error comment to {args.output}")
+        except Exception as write_err:
+            logger.error(f"Could not write fallback comment: {write_err}")
+
         return 1
 
 

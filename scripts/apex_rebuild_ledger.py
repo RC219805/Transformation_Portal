@@ -42,7 +42,7 @@ def backfill_capsule_metadata(
     return capsule_dict
 
 
-def rebuild_ledger(input_dir: Path, db_path: Path) -> int:
+def rebuild_ledger(input_dir: Path, db_path: Path, clean: bool = False) -> int:
     """Rebuild ledger from observation JSON files.
 
     Returns:
@@ -56,6 +56,32 @@ def rebuild_ledger(input_dir: Path, db_path: Path) -> int:
     if not ledger.ensure_ready():
         logger.error("Ledger initialization failed")
         return 1
+
+    # Clean rebuild: truncate both capsules AND derived aggregates
+    if clean:
+        import sqlite3
+
+        logger.warning("🧹 CLEAN MODE: Truncating performance_capsules and apex_runs tables")
+
+        tables_to_truncate = ["performance_capsules", "apex_runs"]
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            # Check which tables exist
+            placeholders = ",".join("?" for _ in tables_to_truncate)
+            existing_tables = {
+                row[0]
+                for row in cursor.execute(
+                    f"SELECT name FROM sqlite_master " f"WHERE type='table' AND name IN ({placeholders})",
+                    tables_to_truncate,
+                ).fetchall()
+            }
+            # Truncate each existing table
+            for table_name in tables_to_truncate:
+                if table_name in existing_tables:
+                    logger.info(f"  Truncating {table_name}...")
+                    cursor.execute(f"DELETE FROM {table_name}")
+            conn.commit()
+        logger.info("✅ Clean complete")
 
     # Find all observation files
     files = sorted(input_dir.glob("**/observation_*.json"))
@@ -130,6 +156,11 @@ def main():
         default=Path("apex_performance.db"),
         help="Path to ledger database (default: apex_performance.db)",
     )
+    parser.add_argument(
+        "--clean",
+        action="store_true",
+        help="Truncate capsules AND aggregates before rebuild (prevents duplicates)",
+    )
 
     args = parser.parse_args()
 
@@ -137,7 +168,7 @@ def main():
         logger.error(f"Input directory does not exist: {args.input_dir}")
         sys.exit(1)
 
-    sys.exit(rebuild_ledger(args.input_dir, args.ledger_db))
+    sys.exit(rebuild_ledger(args.input_dir, args.ledger_db, clean=args.clean))
 
 
 if __name__ == "__main__":

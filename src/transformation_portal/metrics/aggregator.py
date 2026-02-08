@@ -48,12 +48,14 @@ logger = logging.getLogger(__name__)
 def compute_bucket_stats(
     capsules: List[PerformanceCapsule],
     bucket: PerformanceBucket,
+    min_samples: int = 20,
 ) -> Optional[BucketStats]:
     """Compute statistics for capsules matching a specific bucket.
 
     Args:
         capsules: List of performance capsules
         bucket: Bucket definition with filters and thresholds
+        min_samples: Minimum samples required for valid statistics (contract: 20)
 
     Returns:
         BucketStats if any capsules match, None otherwise
@@ -77,7 +79,25 @@ def compute_bucket_stats(
     p99 = total_times[int(n * 0.99)] if n > 1 else total_times[0]
     mean = sum(total_times) / n
 
-    # Determine pass/fail status
+    # BLOCKER FIX #2: Enforce minimum sample size per APEX Contract v1.0.0
+    # Compute stats but mark as insufficient_data (never blocks)
+    if n < min_samples:
+        return BucketStats(
+            bucket_name=bucket.name,
+            count=n,
+            p50=p50,
+            p95=p95,
+            p99=p99,
+            mean=mean,
+            min=total_times[0],
+            max=total_times[-1],
+            threshold_p50=bucket.p50_threshold_sec,
+            threshold_p95=bucket.p95_threshold_sec,
+            pass_fail="pass",  # Nominal verdict; flag indicates insufficient data
+            is_insufficient_data=True,  # Never blocks per contract
+        )
+
+    # Determine pass/fail status (only for n >= min_samples)
     if p95 > bucket.p95_threshold_sec:
         pass_fail = "fail"
     elif p50 > bucket.p50_threshold_sec * 1.2:
@@ -97,6 +117,7 @@ def compute_bucket_stats(
         threshold_p50=bucket.p50_threshold_sec,
         threshold_p95=bucket.p95_threshold_sec,
         pass_fail=pass_fail,
+        is_insufficient_data=False,  # Sufficient samples
     )
 
 

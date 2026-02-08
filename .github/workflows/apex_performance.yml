@@ -214,6 +214,7 @@ jobs:
     if: github.event.schedule == '0 0 * * 0'  # Sunday 00:00 UTC only
     permissions:
       contents: write
+      actions: read  # Required for dawidd6/action-download-artifact
 
     steps:
       - name: Checkout
@@ -243,4 +244,3 @@ jobs:
             Workflow: APEX Performance Matrix
             Branch: main
           files: apex_ledger_*.db.gz
-
