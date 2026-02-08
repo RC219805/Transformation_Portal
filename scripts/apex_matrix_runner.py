@@ -45,7 +45,7 @@ import logging
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Literal
+from typing import List
 
 from transformation_portal.metrics.aggregator import (
     compute_global_stats,
@@ -55,7 +55,6 @@ from transformation_portal.metrics.aggregator import (
 )
 from transformation_portal.metrics.contracts import Observation, RunSpec
 from transformation_portal.metrics.performance_capsule import PerformanceCapsule
-from transformation_portal.metrics.zone_resolver import ZoneResolver
 
 __version__ = "1.0.0"
 
@@ -267,13 +266,23 @@ def main() -> int:
 
             logger.info(f"V1 worst-zone p95: {v1_worst_p95:.2f}s (zone: {v1_worst_zone})")
 
-            # Write to ledger
+            # Write per-zone stats to ledger
             log_aggregated_stats_to_ledger(
                 run_id=args.run_id,
                 commit_sha=args.commit_sha,
                 workflow_version="v1",
                 timestamp=timestamp,
                 per_zone_stats=v1_per_zone,
+                ledger_db_path=str(args.ledger_db),
+            )
+
+            # Write global stats to ledger (zone=None)
+            log_aggregated_stats_to_ledger(
+                run_id=args.run_id,
+                commit_sha=args.commit_sha,
+                workflow_version="v1",
+                timestamp=timestamp,
+                per_zone_stats={None: v1_global},
                 ledger_db_path=str(args.ledger_db),
             )
 
@@ -285,13 +294,23 @@ def main() -> int:
 
             logger.info(f"V2 worst-zone p95: {v2_worst_p95:.2f}s (zone: {v2_worst_zone})")
 
-            # Write to ledger
+            # Write per-zone stats to ledger
             log_aggregated_stats_to_ledger(
                 run_id=args.run_id,
                 commit_sha=args.commit_sha,
                 workflow_version="v2",
                 timestamp=timestamp,
                 per_zone_stats=v2_per_zone,
+                ledger_db_path=str(args.ledger_db),
+            )
+
+            # Write global stats to ledger (zone=None)
+            log_aggregated_stats_to_ledger(
+                run_id=args.run_id,
+                commit_sha=args.commit_sha,
+                workflow_version="v2",
+                timestamp=timestamp,
+                per_zone_stats={None: v2_global},
                 ledger_db_path=str(args.ledger_db),
             )
 

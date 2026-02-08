@@ -142,7 +142,7 @@ class FIDMetric:
 
         # Process in batches
         for i in range(0, len(images), batch_size):
-            batch = images[i : i + batch_size]
+            batch = images[i: i + batch_size]
 
             # Prepare batch
             batch_tensors = [self._prepare_image(img) for img in batch]

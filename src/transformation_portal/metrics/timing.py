@@ -76,15 +76,25 @@ class TimingContext:
                     torch.accelerator.synchronize()
                     return
 
-                # Fallback to device-specific sync (check attribute existence first)
-                if self.device == "mps":
-                    if hasattr(torch, "backends") and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-                        torch.mps.synchronize()
-                elif self.device == "cuda":
-                    if hasattr(torch, "cuda") and torch.cuda.is_available():
-                        torch.cuda.synchronize()
-            except (ImportError, AttributeError):
-                pass  # torch not available or incomplete, fall back to CPU timing
+                # Fallback to device-specific sync with safe attribute checks
+                if (
+                    self.device == "mps"
+                    and hasattr(torch, "backends")
+                    and hasattr(torch.backends, "mps")
+                    and torch.backends.mps.is_available()
+                    and hasattr(torch, "mps")
+                    and hasattr(torch.mps, "synchronize")
+                ):
+                    torch.mps.synchronize()
+                elif (
+                    self.device == "cuda"
+                    and hasattr(torch, "cuda")
+                    and torch.cuda.is_available()
+                    and hasattr(torch.cuda, "synchronize")
+                ):
+                    torch.cuda.synchronize()
+            except ImportError:
+                pass  # torch not available, fall back to CPU timing
 
 
 @contextmanager

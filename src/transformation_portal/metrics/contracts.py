@@ -264,7 +264,11 @@ class Judgement:
             workflow_version=data["workflow_version"],
             zone=data["zone"],
             bucket_stats={k: BucketStats.from_dict(v) for k, v in data["bucket_stats"].items()},
-            regression_report=RegressionReport.from_dict(data["regression_report"]) if data.get("regression_report") else None,
+            regression_report=(
+                RegressionReport.from_dict(data["regression_report"])
+                if data.get("regression_report")
+                else None
+            ),
             pass_fail=data["pass_fail"],
             explanation=data["explanation"],
             worst_zone_p95=data.get("worst_zone_p95"),

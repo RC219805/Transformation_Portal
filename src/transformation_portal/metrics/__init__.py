@@ -64,22 +64,19 @@ __all__ = [
 
 # Optional ML-based metrics (lazy import to avoid dependency issues)
 try:
-    from transformation_portal.metrics.fid_metric import FIDMetric
-
+    from transformation_portal.metrics.fid_metric import FIDMetric  # noqa: F401
     __all__.append("FIDMetric")
 except ImportError:
     pass
 
 try:
-    from transformation_portal.metrics.lpips_metric import LPIPSMetric
-
+    from transformation_portal.metrics.lpips_metric import LPIPSMetric  # noqa: F401
     __all__.append("LPIPSMetric")
 except ImportError:
     pass
 
 try:
-    from transformation_portal.metrics.traditional_metrics import TraditionalMetrics
-
+    from transformation_portal.metrics.traditional_metrics import TraditionalMetrics  # noqa: F401
     __all__.append("TraditionalMetrics")
 except ImportError:
     pass

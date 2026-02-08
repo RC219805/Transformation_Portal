@@ -42,7 +42,6 @@ from transformation_portal.metrics.performance_capsule import (
     DEFAULT_BUCKETS,
     PerformanceBucket,
     PerformanceCapsule,
-    get_bucket_for_capsule,
 )
 
 __version__ = "1.0.0"
@@ -73,8 +72,11 @@ def compute_bucket_stats(
     total_times = sorted([c.timings["total"] for c in matching])
     n = len(total_times)
 
-    # Compute percentiles
-    p50 = total_times[n // 2]
+    # Compute percentiles (use proper median for p50)
+    if n % 2 == 0:
+        p50 = (total_times[n // 2 - 1] + total_times[n // 2]) / 2.0
+    else:
+        p50 = total_times[n // 2]
     p95 = total_times[int(n * 0.95)] if n > 1 else total_times[0]
     p99 = total_times[int(n * 0.99)] if n > 1 else total_times[0]
     mean = sum(total_times) / n

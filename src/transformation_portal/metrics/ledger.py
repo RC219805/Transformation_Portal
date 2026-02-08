@@ -49,7 +49,7 @@ import sqlite3
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from transformation_portal.metrics.performance_capsule import (
     DEFAULT_BUCKETS,
@@ -130,7 +130,7 @@ CREATE INDEX IF NOT EXISTS idx_apex_runs_pass_fail ON apex_runs(pass_fail);
 
 -- Aggregation view for dashboard trend analysis
 CREATE VIEW IF NOT EXISTS apex_trends AS
-SELECT 
+SELECT
     bucket_name,
     zone,
     workflow_version,

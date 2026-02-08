@@ -201,6 +201,10 @@ def query_baseline_stats(
 ) -> Dict[str, BucketStats]:
     """Query baseline statistics from ledger.
 
+    Uses two-step query to avoid silent data loss from LIMIT:
+    1. Find latest run_id matching filters
+    2. Get ALL buckets for that run
+
     Args:
         ledger_db_path: Path to ledger database
         workflow_version: Workflow version ("v1" or "v2")
@@ -226,18 +230,38 @@ def query_baseline_stats(
 
     where_sql = " AND ".join(where_clauses)
 
-    query = f"""
-        SELECT bucket_name, p50, p95, p99, count, threshold_p50, threshold_p95, pass_fail
-        FROM apex_runs
-        WHERE {where_sql}
-        ORDER BY timestamp DESC
-        LIMIT {limit}
-    """
-
     baseline_stats: Dict[str, BucketStats] = {}
 
     with sqlite3.connect(ledger_db_path) as conn:
-        cursor = conn.execute(query, params)
+        # Step 1: Find latest run_id
+        run_query = f"""
+            SELECT run_id, timestamp
+            FROM apex_runs
+            WHERE {where_sql}
+            ORDER BY timestamp DESC
+            LIMIT {limit}
+        """
+        cursor = conn.execute(run_query, params)
+        latest_run = cursor.fetchone()
+
+        if not latest_run:
+            return baseline_stats
+
+        latest_run_id = latest_run[0]
+
+        # Step 2: Get ALL buckets for that run (no LIMIT)
+        bucket_query = """
+            SELECT bucket_name, p50, p95, p99, count, threshold_p50, threshold_p95, pass_fail
+            FROM apex_runs
+            WHERE run_id = ? AND workflow_version = ?
+        """
+        bucket_params = [latest_run_id, workflow_version]
+
+        if zone is not None:
+            bucket_query += " AND zone = ?"
+            bucket_params.append(zone)
+
+        cursor = conn.execute(bucket_query, bucket_params)
         for row in cursor.fetchall():
             bucket_name, p50, p95, p99, count, threshold_p50, threshold_p95, pass_fail = row
             baseline_stats[bucket_name] = BucketStats(
