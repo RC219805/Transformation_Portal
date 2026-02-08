@@ -102,87 +102,97 @@ def should_block(
 
 
 def evaluate_gate(
-    judgement: Judgement,
+    judgement: Optional[Judgement] = None,
+    bucket_stats: Optional[Dict] = None,
+    regression_report: Optional[Any] = None,
     worst_zone_p95_threshold: Optional[float] = None,
     max_regression_threshold: float = 0.15,
     mode: Literal["enforce", "shadow", "disabled"] = "enforce",
-) -> GateResult:
+    min_samples: int = 20,
+) -> Tuple[str, str]:
     """Evaluate full gate logic with detailed results.
 
     Gate rules (evaluated in order):
-    1. If mode is "disabled", always pass
-    2. Check if judgement.pass_fail == "fail" (bucket threshold violation)
+    0. If mode is "disabled", always pass
+    1. Check minimum sample size (insufficient_data if too small)
+    2. Check if bucket_stats indicate "fail" (bucket threshold violation)
     3. Check if worst_zone_p95 > threshold (user experience gate)
     4. Check if regression > threshold (quality regression gate)
 
     Args:
-        judgement: Judgement to evaluate
+        judgement: Judgement to evaluate (legacy API)
+        bucket_stats: Dict of BucketStats (direct API)
+        regression_report: RegressionReport (direct API)
         worst_zone_p95_threshold: Maximum allowed worst-zone p95 (seconds)
         max_regression_threshold: Maximum allowed regression (fraction)
         mode: Gate mode:
             - "enforce": Block if any rule fails
             - "shadow": Log warnings but don't block
             - "disabled": Always pass
+        min_samples: Minimum samples required for statistical validity (default: 20)
 
     Returns:
-        GateResult with verdict and explanation
+        Tuple of (verdict, explanation)
+        verdict: "pass", "warn", "fail", "insufficient_data"
     """
     reasons = []
 
+    # Support both old API (judgement) and new API (bucket_stats)
+    if judgement is not None:
+        bucket_stats = judgement.bucket_stats
+        regression_report = judgement.regression_report
+        worst_zone_p95 = judgement.worst_zone_p95
+    else:
+        worst_zone_p95 = None
+
     # Rule 0: Disabled mode always passes
     if mode == "disabled":
-        return GateResult(
-            should_block=False,
-            mode=mode,
-            reasons=[],
-            explanation="Gate is disabled",
-        )
+        return "pass", "Gate is disabled"
 
-    # Rule 1: Check bucket threshold violations
-    if judgement.pass_fail == "fail":
-        failing_buckets = [name for name, stats in judgement.bucket_stats.items() if stats.pass_fail == "fail"]
-        if failing_buckets:
-            reasons.append(f"Bucket threshold violation: {', '.join(failing_buckets)} exceeded p95 threshold")
+    # Rule 1: Check minimum sample size for statistical validity
+    if bucket_stats:
+        max_samples = max((stats.count for stats in bucket_stats.values()), default=0)
+        if max_samples < min_samples:
+            explanation = (
+                f"Insufficient data: largest bucket has n={max_samples} samples, "
+                f"need n>={min_samples} for reliable percentiles"
+            )
+            logger.warning(explanation)
+            return "insufficient_data", explanation
 
-    # Rule 2: Check worst-zone p95
-    if worst_zone_p95_threshold is not None and judgement.worst_zone_p95 is not None:
-        if judgement.worst_zone_p95 > worst_zone_p95_threshold:
+    # Rule 2: Check bucket threshold violations
+    failing_buckets = []
+    if bucket_stats:
+        for name, stats in bucket_stats.items():
+            if stats.pass_fail == "fail":
+                failing_buckets.append(name)
+
+    if failing_buckets:
+        reasons.append(f"Bucket threshold violation: {', '.join(failing_buckets)} exceeded p95 threshold")
+
+    # Rule 3: Check worst-zone p95
+    if worst_zone_p95_threshold is not None and worst_zone_p95 is not None:
+        if worst_zone_p95 > worst_zone_p95_threshold:
             reasons.append(
-                f"Worst-zone p95 exceeded: {judgement.worst_zone_p95:.2f}s > {worst_zone_p95_threshold:.2f}s "
-                f"(zone: {judgement.worst_zone_name or 'unknown'})"
+                f"Worst-zone p95 exceeded: {worst_zone_p95:.2f}s > {worst_zone_p95_threshold:.2f}s"
             )
 
-    # Rule 3: Check regression threshold
-    if judgement.regression_report is not None:
-        if judgement.regression_report.max_regression > max_regression_threshold:
+    # Rule 4: Check regression threshold
+    if regression_report is not None:
+        if regression_report.max_regression > max_regression_threshold:
             reasons.append(
-                f"Regression threshold exceeded: {judgement.regression_report.max_regression * 100:.1f}% > "
-                f"{max_regression_threshold * 100:.1f}% (bucket: {judgement.regression_report.max_regression_bucket})"
+                f"Regression threshold exceeded: {regression_report.max_regression * 100:.1f}% > "
+                f"{max_regression_threshold * 100:.1f}% (bucket: {regression_report.max_regression_bucket})"
             )
 
     # Determine verdict based on mode
-    should_block_value = len(reasons) > 0 and mode == "enforce"
+    if len(reasons) > 0:
+        if mode == "enforce":
+            return "fail", f"Gate BLOCKED: {'; '.join(reasons)}"
+        else:  # shadow
+            return "warn", f"Gate SHADOW (would block): {'; '.join(reasons)}"
 
-    if should_block_value:
-        explanation = f"Gate BLOCKED: {'; '.join(reasons)}"
-    elif reasons and mode == "shadow":
-        explanation = f"Gate SHADOW (would block): {'; '.join(reasons)}"
-    else:
-        explanation = "Gate PASSED"
-
-    if reasons:
-        logger.warning(f"Gate evaluation: {explanation}")
-    else:
-        logger.info("Gate evaluation: PASSED")
-
-    return GateResult(
-        should_block=should_block_value,
-        mode=mode,
-        reasons=reasons,
-        explanation=explanation,
-        worst_zone_p95=judgement.worst_zone_p95,
-        worst_zone_name=judgement.worst_zone_name,
-    )
+    return "pass", "Gate PASSED"
 
 
 def should_block_v1_v2_comparison(

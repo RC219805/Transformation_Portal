@@ -126,6 +126,9 @@ class PerformanceCapsule:
     quality_score: Optional[float] = None
     firewall_status: str = "unknown"
 
+    # Synthetic Data Protection (v2.1.0)
+    is_synthetic: bool = False  # True if generated via --dry-run or mock data
+
     # Metadata
     captured_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     schema_version: str = __version__
