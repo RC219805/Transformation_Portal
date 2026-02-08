@@ -67,6 +67,7 @@ def run_apex_for_config(
     zone: str,
     output_dir: Path,
     dry_run: bool = False,
+    synthetic: bool = False,
     input_dir: Optional[Path] = None,
     sample_size: Optional[int] = None,
 ) -> Observation:
@@ -77,6 +78,7 @@ def run_apex_for_config(
         zone: Zone identifier
         output_dir: Output directory for capsules
         dry_run: If True, skip actual execution
+        synthetic: If True, mark observations as synthetic
         input_dir: Directory containing test images
         sample_size: Number of images to process (None = all)
 
@@ -232,7 +234,7 @@ def run_apex_for_config(
                         zone=zone,
                         scene_type=run_spec.scene_type,
                         pipeline_version="2.0.0",
-                        is_synthetic=False,  # Real data
+                        is_synthetic=synthetic,  # Respects --synthetic flag
                     )
 
                     capsules.append(capsule)
@@ -298,9 +300,17 @@ def main() -> int:
 
     # Execution control
     parser.add_argument("--dry-run", action="store_true", help="Dry run (skip actual execution, use mock data)")
+    parser.add_argument(
+        "--synthetic", action="store_true", help="Mark observations as synthetic (auto-enabled with --dry-run)"
+    )
     parser.add_argument("--continue-on-error", action="store_true", help="Continue running even if some configurations fail")
 
     args = parser.parse_args()
+
+    # Auto-enable synthetic flag when dry-run is used
+    if args.dry_run and not args.synthetic:
+        args.synthetic = True
+        logger.info("Auto-enabled --synthetic (paired with --dry-run)")
 
     # Validate input requirements for real execution
     if not args.dry_run:
@@ -356,6 +366,7 @@ def main() -> int:
                     zone=zone,
                     output_dir=args.output_dir,
                     dry_run=args.dry_run,
+                    synthetic=args.synthetic,
                     input_dir=args.input_dir,
                     sample_size=args.sample_size,
                 )

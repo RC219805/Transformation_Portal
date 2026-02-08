@@ -7,7 +7,7 @@ on:
     branches: [main]
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * 0'  # Weekly on Sunday 00:00 UTC
+    - cron: "0 0 * * 0" # Weekly on Sunday 00:00 UTC
 
 concurrency:
   group: apex-${{ github.event.pull_request.number || github.ref }}
@@ -16,6 +16,8 @@ concurrency:
 env:
   APEX_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
   APEX_COMMIT_SHA: ${{ github.sha }}
+  APEX_RESULTS_DIR: ./apex_results
+  APEX_LEDGER_DB: ./apex_performance.db
 
 jobs:
   apex_matrix:
@@ -32,21 +34,24 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Setup Python
-        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b  # v5.3.0
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
           python-version: "3.11"
           cache: pip
 
       - name: Install dependencies
-        run: pip install -e .
+        run: |
+          set -euo pipefail
+          pip install -e .
 
       - name: Run APEX Matrix (Shadow Mode)
         env:
           APEX_ZONE: ${{ matrix.zone }}
         run: |
+          set -euo pipefail
           # NOTE: Running in dry-run mode (synthetic data) until ML infrastructure ready.
           # Real pipeline integration complete but requires torch/transformers/models (~5GB).
           # Dry-run validates schema, contracts, and reporting without ML dependencies.
@@ -55,17 +60,18 @@ jobs:
             --commit-sha "${{ env.APEX_COMMIT_SHA }}" \
             --workflow-versions ${{ matrix.workflow_version }} \
             --zones ${{ matrix.zone }} \
-            --output-dir ./apex_results \
-            --ledger-db ./apex_performance.db \
+            --output-dir "${{ env.APEX_RESULTS_DIR }}" \
+            --ledger-db "${{ env.APEX_LEDGER_DB }}" \
             --device cpu \
-            --dry-run
+            --dry-run \
+            --synthetic
 
       - name: Upload Results
         if: always()
-        uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b  # v4.5.0
+        uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b # v4.5.0
         with:
           name: apex-results-${{ matrix.workflow_version }}-${{ matrix.zone }}
-          path: apex_results/
+          path: ${{ env.APEX_RESULTS_DIR }}/
           retention-days: 3
 
   apex_gate:
@@ -80,19 +86,21 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Setup Python
-        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b  # v5.3.0
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
           python-version: "3.11"
           cache: pip
 
       - name: Install dependencies
-        run: pip install -e .
+        run: |
+          set -euo pipefail
+          pip install -e .
 
       - name: Download Results
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
           path: apex_downloaded_results
           pattern: apex-results-*
@@ -100,25 +108,30 @@ jobs:
 
       - name: Rebuild Ledger
         run: |
+          set -euo pipefail
           python scripts/apex_rebuild_ledger.py \
             --input-dir apex_downloaded_results \
-            --ledger-db apex_performance.db
+            --ledger-db "${{ env.APEX_LEDGER_DB }}"
 
       - name: Aggregate Stats
         run: |
+          set -euo pipefail
           python scripts/apex_aggregate_ledger.py \
-            --ledger-db apex_performance.db \
+            --ledger-db "${{ env.APEX_LEDGER_DB }}" \
             --run-id "${{ env.APEX_RUN_ID }}" \
             --commit-sha "${{ env.APEX_COMMIT_SHA }}"
 
       - name: Generate PR Comment
+        if: always()
         run: |
+          set -euo pipefail
           # Always create apex_comment.md (even on error) to prevent downstream failures
           : > apex_comment.md
           python scripts/apex_pr_comment.py \
             --run-id "${{ env.APEX_RUN_ID }}" \
             --commit-sha "${{ env.APEX_COMMIT_SHA }}" \
-            --ledger-db apex_performance.db \
+            --ledger-db "${{ env.APEX_LEDGER_DB }}" \
+            --synthetic \
             --output apex_comment.md || {
             cat > apex_comment.md <<'ERREOF'
           # 🎯 APEX Performance Report [ERROR]
@@ -136,7 +149,7 @@ jobs:
         run: cat apex_comment.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Post PR Comment (idempotent)
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -145,11 +158,11 @@ jobs:
           pr_number="${{ github.event.pull_request.number }}"
           repo="${{ github.repository }}"
 
-          # Find existing APEX comment by unique header
+          # Find existing APEX comment by unique header (pagination-safe)
           marker="# 🎯 APEX Performance Report"
 
           comment_id=$(gh api "repos/$repo/issues/$pr_number/comments" --paginate \
-            | jq -r --arg marker "$marker" '[.[] | select(.body | startswith($marker))][0].id // empty')
+            | jq -s 'add | map(select(.body | startswith("'"$marker"'"))) | .[0].id // empty')
 
           if [ -n "$comment_id" ]; then
             echo "Updating existing APEX comment (id=$comment_id)"
@@ -163,20 +176,21 @@ jobs:
 
       - name: Enforce Gate (Shadow Mode - Informational Only)
         run: |
+          set -euo pipefail
           # NOTE: Gate is in SHADOW MODE for initial real-data rollout.
           # Reports failures but does not block merge. Switch to enforcing once baseline is stable.
           python scripts/apex_enforce_gate.py \
-            --ledger-db apex_performance.db \
+            --ledger-db "${{ env.APEX_LEDGER_DB }}" \
             --run-id "${{ env.APEX_RUN_ID }}" \
             --commit-sha "${{ env.APEX_COMMIT_SHA }}" \
             --mode shadow
 
       - name: Upload Ledger Artifact
         if: always()
-        uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b  # v4.5.0
+        uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b # v4.5.0
         with:
           name: apex-ledger
-          path: apex_performance.db
+          path: ${{ env.APEX_LEDGER_DB }}
           retention-days: 90
 
   dashboard_deploy:
@@ -191,51 +205,54 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Setup Python
-        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b  # v5.3.0
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
           python-version: "3.11"
           cache: pip
 
       - name: Install dependencies
-        run: pip install -e .
+        run: |
+          set -euo pipefail
+          pip install -e .
 
       - name: Download Ledger
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
           name: apex-ledger
 
       - name: Generate Dashboard Site
         run: |
+          set -euo pipefail
           python scripts/apex_dashboard_generator.py \
-            --ledger-db apex_performance.db \
+            --ledger-db "${{ env.APEX_LEDGER_DB }}" \
             --output-dir _site \
             --days 90
 
       - name: Upload Pages Artifact
-        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa  # v3.0.1
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
         with:
           path: _site
 
       - name: Deploy to GitHub Pages
-        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e  # v4.0.5
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
 
   weekly_backup:
     name: Weekly Ledger Backup
     runs-on: ubuntu-latest
-    if: github.event.schedule == '0 0 * * 0'  # Sunday 00:00 UTC only
+    if: github.event_name == 'schedule'
     permissions:
       contents: write
-      actions: read  # Required for dawidd6/action-download-artifact
+      actions: read # Required for dawidd6/action-download-artifact
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Download Latest Ledger
-        uses: dawidd6/action-download-artifact@bf251b5aa9c2f7eeb574a96ee720e24f801b7c11  # v6
+        uses: dawidd6/action-download-artifact@bf251b5aa9c2f7eeb574a96ee720e24f801b7c11 # v6
         with:
           name: apex-ledger
           workflow: apex_performance.yml
@@ -243,11 +260,12 @@ jobs:
 
       - name: Compress Ledger
         run: |
+          set -euo pipefail
           DATE=$(date +%Y-%m-%d)
-          gzip -c apex_performance.db > apex_ledger_$DATE.db.gz
+          gzip -c "${{ env.APEX_LEDGER_DB }}" > "apex_ledger_${DATE}.db.gz"
 
       - name: Create Release Backup
-        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191  # v2.0.8
+        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.0.8
         with:
           tag_name: ledger-backup-${{ github.run_number }}
           name: APEX Ledger Backup ${{ github.run_number }}
