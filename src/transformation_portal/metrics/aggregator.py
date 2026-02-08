@@ -93,7 +93,8 @@ def compute_bucket_stats(
             max=total_times[-1],
             threshold_p50=bucket.p50_threshold_sec,
             threshold_p95=bucket.p95_threshold_sec,
-            pass_fail="insufficient_data",  # Never blocks per contract
+            pass_fail="pass",  # Nominal verdict; flag indicates insufficient data
+            is_insufficient_data=True,  # Never blocks per contract
         )
 
     # Determine pass/fail status (only for n >= min_samples)
@@ -116,6 +117,7 @@ def compute_bucket_stats(
         threshold_p50=bucket.p50_threshold_sec,
         threshold_p95=bucket.p95_threshold_sec,
         pass_fail=pass_fail,
+        is_insufficient_data=False,  # Sufficient samples
     )
 
 

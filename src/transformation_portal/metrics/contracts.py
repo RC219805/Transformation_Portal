@@ -151,6 +151,7 @@ class BucketStats:
         threshold_p50: Configured p50 threshold
         threshold_p95: Configured p95 threshold
         pass_fail: Verdict ("pass", "warn", "fail")
+        is_insufficient_data: Whether count < minimum sample size (never blocks)
     """
 
     bucket_name: str
@@ -164,6 +165,7 @@ class BucketStats:
     threshold_p50: float
     threshold_p95: float
     pass_fail: Literal["pass", "warn", "fail"]
+    is_insufficient_data: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dict for serialization."""

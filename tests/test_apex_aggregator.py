@@ -71,8 +71,9 @@ class TestAggregator:
         assert stats.p95 == 16.0  # 95th percentile (small sample)
         assert stats.min == 8.0
         assert stats.max == 16.0
-        # With n=5 < min_samples=20, contract requires insufficient_data
-        assert stats.pass_fail == "insufficient_data"
+        # With n=5 < min_samples=20, contract requires insufficient_data flag
+        assert stats.is_insufficient_data is True
+        assert stats.pass_fail == "pass"  # Nominal verdict (flag indicates insufficient data)
 
     def test_compute_bucket_stats_no_match(self):
         """Test bucket stats returns None when no capsules match."""

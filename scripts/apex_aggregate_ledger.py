@@ -61,9 +61,13 @@ def aggregate_ledger(
                 logger.info(f"Scoping capsules: {where_sql}")
                 cursor = conn.execute(query, params)
             else:
-                # Fallback: no scoping columns (v2 schema)
-                logger.warning("⚠️ Schema lacks run_id/commit_sha columns - loading all capsules")
-                cursor = conn.execute("SELECT capsule_json FROM performance_capsules")
+                # BLOCKER FIX #3: Refuse unsafe aggregation per contract
+                logger.error(
+                    "❌ REFUSING TO AGGREGATE: Schema lacks run_id/commit_sha columns. "
+                    "This would mix data from multiple runs and produce incorrect verdicts. "
+                    "Update ledger schema to v3 or migrate data."
+                )
+                return 2  # Hard fail per quality firewall
 
             rows = cursor.fetchall()
 
