@@ -1,6 +1,6 @@
 # APEX PR #867: Contract Verification Complete ✅
 
-**Status:** MERGE READY (all blocking issues resolved)
+**Status:** RECOMMENDED FOR MERGE (scaffolding complete, real execution pending)
 **Date:** 2026-02-08
 **Contract Version:** 1.0.0
 **Schema Version:** 3.0.0
@@ -8,6 +8,8 @@
 ## Executive Summary
 
 PR #867 is now **production-ready for scaffolding**. All critical governance gaps identified in the review have been closed with **machine-verifiable enforcement**.
+
+**Important:** This PR delivers the complete APEX observability framework (contracts, aggregation, gating, reporting) in **shadow/dry-run mode**. Real pipeline execution is tracked separately (see docs/APEX_REAL_PIPELINE_INTEGRATION.md).
 
 ## Verification Results
 
@@ -30,6 +32,7 @@ Running unit tests...
 
 MERGE RECOMMENDATION: YES (scaffolding complete)
 HUMAN APPROVAL: REQUIRED
+CI CONFIRMATION: PR comment observed with [SYNTHETIC DATA] label
 ```
 
 ## What Was Fixed
