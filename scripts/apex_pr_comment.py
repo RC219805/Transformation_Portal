@@ -469,6 +469,7 @@ def generate_pr_comment(
     v2_judgement: Optional[Judgement] = None,
     gate_result_v1: Optional[Dict] = None,
     gate_result_v2: Optional[Dict] = None,
+    is_synthetic: bool = False,
 ) -> str:
     """Generate full PR comment markdown.
 
@@ -481,14 +482,20 @@ def generate_pr_comment(
         v2_judgement: V2 workflow judgement (optional)
         gate_result_v1: V1 gate result (optional)
         gate_result_v2: V2 gate result (optional)
+        is_synthetic: Whether data is from --dry-run mode (default: False)
 
     Returns:
         Markdown comment string
     """
     lines = []
-    lines.append("# 🎯 APEX Performance Report [SYNTHETIC DATA]\n")
-    lines.append("> ⚠️ **This report uses mock data (dry-run mode)**  \n")
-    lines.append("> Real pipeline integration tracked in `docs/APEX_REAL_PIPELINE_INTEGRATION.md`\n")
+
+    # Conditionally show synthetic banner
+    if is_synthetic:
+        lines.append("# 🎯 APEX Performance Report [SYNTHETIC DATA]\n")
+        lines.append("> ⚠️ **This report uses mock data (dry-run mode)**  \n")
+        lines.append("> Real pipeline integration tracked in `docs/APEX_REAL_PIPELINE_INTEGRATION.md`\n")
+    else:
+        lines.append("# 🎯 APEX Performance Report\n")
 
     # Overall gate verdict at top
     overall_status = worst_status(v2_stats or v1_stats)
@@ -592,6 +599,7 @@ def main() -> int:
     parser.add_argument("--ledger-db", type=Path, required=True, help="Ledger database")
     parser.add_argument("--output", type=Path, required=True, help="Output markdown file")
     parser.add_argument("--summary-file", type=Path, help="Optional summary.json from matrix runner")
+    parser.add_argument("--synthetic", action="store_true", help="Mark as synthetic data (dry-run mode)")
 
     args = parser.parse_args()
 
@@ -611,6 +619,23 @@ def main() -> int:
             workflow_version="v2",
             commit_sha=args.commit_sha,
         )
+
+        # Determine if data is synthetic by checking capsule metadata
+        is_synthetic = args.synthetic
+        if not is_synthetic and (v1_stats or v2_stats):
+            # Check if any capsules are marked as synthetic
+            # This is a safety check in case --synthetic flag wasn't passed
+            import sqlite3
+
+            try:
+                with sqlite3.connect(args.ledger_db) as conn:
+                    cursor = conn.execute("SELECT is_synthetic FROM apex_runs WHERE run_id = ? LIMIT 1", [args.run_id])
+                    row = cursor.fetchone()
+                    if row and len(row) > 0:
+                        is_synthetic = bool(row[0])
+            except (sqlite3.Error, IndexError):
+                # Column might not exist in older schema, default to False
+                pass
 
         # Also query using existing baseline stats API (for judgements)
         v1_bucket_stats = query_baseline_stats(
@@ -683,6 +708,7 @@ def main() -> int:
             v2_judgement=v2_judgement,
             gate_result_v1=gate_result_v1,
             gate_result_v2=gate_result_v2,
+            is_synthetic=is_synthetic,
         )
 
         # Write to file

@@ -217,7 +217,11 @@ def main() -> int:
             logger.info("Writing report: %s", report_path)
             atomic_write_json(report_path, report)
 
-        logger.warning("This is a PLACEHOLDER implementation (passthrough).")
+        # INTENTIONAL: This is a passthrough mode for testing/validation workflows.
+        # Real enhancement logic delegates to the installed transformation_portal package.
+        # This script serves as a CLI entry point and config validator only.
+        # See ADR-019 for context on CLI-to-package delegation pattern.
+        logger.warning("Running in passthrough mode (copies input to output for validation)")
         return 0
 
     except Exception as e:

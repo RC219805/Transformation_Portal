@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Performance ledger tool for pipeline regression detection.
+"""Performance ledger tool for pipeline regression detection (legacy).
+
+NOTE: For CI/CD performance gating, the APEX Performance Observability Platform
+is now authoritative (see .github/workflows/apex_performance.yml and ADR-024).
+This tool remains available for historical baseline queries and ad-hoc analysis.
 
 Parses manifests from batch runs, computes statistics, and compares against
 baselines to detect performance regressions.
@@ -38,6 +42,7 @@ from typing import Any, Dict, List, Optional, Tuple
 # NumPy is optional in v1.7 (Condition #2)
 try:
     import numpy as np
+
     HAS_NUMPY = True
 except ImportError:
     HAS_NUMPY = False
@@ -143,7 +148,7 @@ def _pure_python_std(values: List[float], mean: Optional[float] = None) -> float
     if mean is None:
         mean = _pure_python_mean(values)
     variance = sum((x - mean) ** 2 for x in values) / (len(values) - 1)
-    return variance ** 0.5
+    return variance**0.5
 
 
 def _pure_python_percentile(values: List[float], percentile: float) -> float:
@@ -188,12 +193,12 @@ def _bootstrap_confidence_interval(
     if HAS_NUMPY:
         return (
             float(np.percentile(bootstrap_means, lower_percentile)),
-            float(np.percentile(bootstrap_means, upper_percentile))
+            float(np.percentile(bootstrap_means, upper_percentile)),
         )
     else:
         return (
             _pure_python_percentile(bootstrap_means, lower_percentile),
-            _pure_python_percentile(bootstrap_means, upper_percentile)
+            _pure_python_percentile(bootstrap_means, upper_percentile),
         )
 
 
@@ -253,11 +258,7 @@ def extract_backends(manifests: List[Dict[str, Any]]) -> List[str]:
     return backends
 
 
-def compute_statistics(
-    timings: List[float],
-    bootstrap_iterations: int = 1000,
-    enable_bootstrap: bool = True
-) -> Statistics:
+def compute_statistics(timings: List[float], bootstrap_iterations: int = 1000, enable_bootstrap: bool = True) -> Statistics:
     """Compute runtime statistics with optional bootstrap CI."""
     if not timings:
         raise ValueError("No timings provided")
@@ -287,9 +288,7 @@ def compute_statistics(
     bootstrap_ci_lower = None
     bootstrap_ci_upper = None
     if enable_bootstrap and bootstrap_iterations > 0:
-        bootstrap_ci_lower, bootstrap_ci_upper = _bootstrap_confidence_interval(
-            timings, iterations=bootstrap_iterations
-        )
+        bootstrap_ci_lower, bootstrap_ci_upper = _bootstrap_confidence_interval(timings, iterations=bootstrap_iterations)
 
     return Statistics(
         count=len(timings),
@@ -314,6 +313,7 @@ def capture_environment() -> EnvironmentMetadata:
     torch_version = None
     try:
         import torch
+
         if hasattr(torch, "__version__"):
             torch_version = torch.__version__
     except (ImportError, AttributeError):
@@ -323,6 +323,7 @@ def capture_environment() -> EnvironmentMetadata:
     if torch_version:
         try:
             import torch
+
             if hasattr(torch, "backends") and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
                 device = "mps"
             elif hasattr(torch, "cuda") and torch.cuda.is_available():
@@ -371,16 +372,16 @@ def detect_backend_mismatch(baseline: Baseline, current_backends: List[str]) -> 
 
     if mismatches:
         mismatch_pct = (len(mismatches) / len(current_backends)) * 100
-        return True, f"Backend mismatch: {mismatch_pct:.1f}% samples ({len(mismatches)}/{len(current_backends)}) differ from baseline '{baseline_backend}'"
+        return (
+            True,
+            f"Backend mismatch: {mismatch_pct:.1f}% samples ({len(mismatches)}/{len(current_backends)}) differ from baseline '{baseline_backend}'",
+        )
 
     return False, ""
 
 
 def detect_regressions(
-    baseline: Baseline,
-    current_stats: Statistics,
-    thresholds: Dict[str, float],
-    strict: bool = False
+    baseline: Baseline, current_stats: Statistics, thresholds: Dict[str, float], strict: bool = False
 ) -> List[Regression]:
     """Compare current stats against baseline and detect regressions."""
     regressions = []
@@ -480,10 +481,12 @@ def format_markdown(
 
     # Add bootstrap CI if available
     if current_stats.bootstrap_ci_95_lower is not None:
-        lines.extend([
-            "",
-            f"**Bootstrap 95% CI for mean:** [{current_stats.bootstrap_ci_95_lower:.2f}s, {current_stats.bootstrap_ci_95_upper:.2f}s]",
-        ])
+        lines.extend(
+            [
+                "",
+                f"**Bootstrap 95% CI for mean:** [{current_stats.bootstrap_ci_95_lower:.2f}s, {current_stats.bootstrap_ci_95_upper:.2f}s]",
+            ]
+        )
 
     if regressions:
         lines.extend(["", "## Regressions Detected", ""])
@@ -555,7 +558,7 @@ Exit Codes:
   1 - Significant regression detected
   2 - Backend mismatch between baseline and current run
   3 - Insufficient data for comparison
-        """
+        """,
     )
 
     # Core arguments
@@ -568,15 +571,10 @@ Exit Codes:
     # Condition #1: Backward compatibility - add --version as alias for --baseline-version
     # Log deprecation warning when used
     parser.add_argument(
-        "--baseline-version",
-        dest="baseline_version",
-        default="v2.0.0-post-pr841",
-        help="Version identifier for baseline"
+        "--baseline-version", dest="baseline_version", default="v2.0.0-post-pr841", help="Version identifier for baseline"
     )
     parser.add_argument(
-        "--version",  # DEPRECATED alias
-        dest="baseline_version_deprecated",
-        help=argparse.SUPPRESS  # Hidden deprecated flag
+        "--version", dest="baseline_version_deprecated", help=argparse.SUPPRESS  # DEPRECATED alias  # Hidden deprecated flag
     )
 
     parser.add_argument("--backend", default="da3", help="Backend identifier")
@@ -585,7 +583,9 @@ Exit Codes:
     # Threshold arguments
     parser.add_argument("--p95-threshold", type=float, default=10.0, help="p95 regression threshold (default: 10%%)")
     parser.add_argument("--mean-threshold", type=float, default=15.0, help="mean regression threshold (default: 15%%)")
-    parser.add_argument("--failure-rate-threshold", type=float, default=0.0, help="Failure rate increase threshold (default: 0.0%%)")
+    parser.add_argument(
+        "--failure-rate-threshold", type=float, default=0.0, help="Failure rate increase threshold (default: 0.0%%)"
+    )
 
     # v1.7 new arguments
     parser.add_argument("--strict", action="store_true", help="Strict mode: fail on any potential regression")
@@ -593,7 +593,7 @@ Exit Codes:
         "--bootstrap-iterations",
         type=int,
         default=1000,
-        help=f"Bootstrap iterations for CI (default: 1000, max: {MAX_BOOTSTRAP_ITERATIONS})"
+        help=f"Bootstrap iterations for CI (default: 1000, max: {MAX_BOOTSTRAP_ITERATIONS})",
     )
     parser.add_argument("--no-bootstrap", action="store_true", help="Disable bootstrap confidence intervals")
 
@@ -610,7 +610,7 @@ Exit Codes:
         warnings.warn(
             "Flag '--version' is deprecated and will be removed in v2.0. Use '--baseline-version' instead.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         logger.warning("⚠️  DEPRECATED: --version flag will be removed in v2.0. Use --baseline-version instead.")
         args.baseline_version = args.baseline_version_deprecated
@@ -638,7 +638,7 @@ Exit Codes:
             stats = compute_statistics(
                 timings,
                 bootstrap_iterations=args.bootstrap_iterations if not args.no_bootstrap else 0,
-                enable_bootstrap=not args.no_bootstrap
+                enable_bootstrap=not args.no_bootstrap,
             )
             total_count = success_count + failure_count
             stats.success_rate = success_count / total_count if total_count > 0 else 0.0
@@ -650,7 +650,7 @@ Exit Codes:
             backend_compliance = {
                 "expected": args.backend,
                 "actual": list(set(backends)),
-                "mismatch_count": sum(1 for b in backends if b.lower() != args.backend.lower())
+                "mismatch_count": sum(1 for b in backends if b.lower() != args.backend.lower()),
             }
 
             baseline = Baseline(
@@ -695,7 +695,7 @@ Exit Codes:
             current_stats = compute_statistics(
                 timings,
                 bootstrap_iterations=args.bootstrap_iterations if not args.no_bootstrap else 0,
-                enable_bootstrap=not args.no_bootstrap
+                enable_bootstrap=not args.no_bootstrap,
             )
             total_count = success_count + failure_count
             current_stats.success_rate = success_count / total_count if total_count > 0 else 0.0
@@ -738,7 +738,9 @@ Exit Codes:
                 return EXIT_SUCCESS
 
         else:
-            logger.error("Invalid arguments. Use --manifests-dir --output for baseline capture, or --baseline --compare --output for comparison")
+            logger.error(
+                "Invalid arguments. Use --manifests-dir --output for baseline capture, or --baseline --compare --output for comparison"
+            )
             return EXIT_INSUFFICIENT_DATA
 
     except Exception as e:

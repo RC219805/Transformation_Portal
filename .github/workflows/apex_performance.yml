@@ -43,20 +43,22 @@ jobs:
       - name: Install dependencies
         run: pip install -e .
 
-      - name: Run APEX Matrix (Synthetic - Schema Validation Only)
+      - name: Run APEX Matrix (Shadow Mode)
         env:
           APEX_ZONE: ${{ matrix.zone }}
         run: |
-          # NOTE: Running with --dry-run for schema/plumbing validation.
-          # This does NOT measure real performance. Remove --dry-run when ready for production gates.
+          # NOTE: Running without --dry-run to collect real performance data.
+          # Using committed test fixtures (3 tiny images) for deterministic CI.
+          # Gate is in shadow mode (informational only).
           python scripts/apex_matrix_runner.py \
             --run-id "${{ env.APEX_RUN_ID }}" \
             --commit-sha "${{ env.APEX_COMMIT_SHA }}" \
             --workflow-versions ${{ matrix.workflow_version }} \
             --zones ${{ matrix.zone }} \
+            --input-dir ./tests/fixtures \
+            --sample-size 3 \
             --output-dir ./apex_results \
-            --ledger-db ./apex_performance.db \
-            --dry-run
+            --ledger-db ./apex_performance.db
 
       - name: Upload Results
         if: always()
@@ -149,8 +151,8 @@ jobs:
 
       - name: Enforce Gate (Shadow Mode - Informational Only)
         run: |
-          # NOTE: Gate is in SHADOW MODE because --dry-run produces synthetic data.
-          # Reports failures but does not block merge. Switch to enforcing when --dry-run is removed.
+          # NOTE: Gate is in SHADOW MODE for initial real-data rollout.
+          # Reports failures but does not block merge. Switch to enforcing once baseline is stable.
           python scripts/apex_enforce_gate.py \
             --ledger-db apex_performance.db \
             --run-id "${{ env.APEX_RUN_ID }}" \

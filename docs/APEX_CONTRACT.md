@@ -125,8 +125,8 @@ WHERE run_id = ? AND commit_sha = ?
 - PR comments labeled `[SYNTHETIC DATA]`
 - Baseline comparisons excluded (future)
 
-**Future (tracked in #XXX):**
-- Add `is_synthetic` column to ledger
+**Future considerations:**
+- Add `is_synthetic` column to ledger schema
 - Default filter: `WHERE is_synthetic = 0`
 - Require explicit flag to include synthetic data
 
@@ -155,9 +155,9 @@ WHERE run_id = ? AND commit_sha = ?
 - `p95 = sorted_values[int(n * 0.95)]`
 - `p99 = sorted_values[int(n * 0.99)]`
 
-**Future enhancement (tracked in #XXX):**
+**Future enhancement:**
 - Interpolated percentiles for even sample counts
-- True median for p50
+- True median for p50 (already implemented in aggregator)
 
 ---
 
