@@ -682,6 +682,30 @@ def main() -> int:
 
     except Exception as e:
         logger.error(f"Failed to generate PR comment: {e}")
+
+        # Write fallback error comment so CI doesn't fail on missing file
+        error_comment = f"""# 🎯 APEX Performance Report [ERROR]
+
+⚠️ **Failed to generate performance report**
+
+**Error:** `{e}`
+
+**Run ID:** {args.run_id}
+**Commit:** {args.commit_sha}
+
+This likely means:
+- No performance data was aggregated
+- Database query failed
+- Schema mismatch
+
+Please check the job logs for details.
+"""
+        try:
+            args.output.write_text(error_comment)
+            logger.info(f"Wrote fallback error comment to {args.output}")
+        except Exception as write_err:
+            logger.error(f"Could not write fallback comment: {write_err}")
+
         return 1
 
 
