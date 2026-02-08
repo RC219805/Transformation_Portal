@@ -110,7 +110,7 @@ Minimal placeholder implementation providing pipeline continuity.
 This script satisfies the V2Runner's subprocess invocation contract
 while allowing the orchestrator to function without a full V2 implementation.
 
-Current Status: PLACEHOLDER (pass-through mode)
+Current Status: Intentional Pass-Through Mode (ADR-020)
 - Copies input image to output directory
 - Emits expected report JSON for pipeline continuity
 - Validates all CLI arguments
