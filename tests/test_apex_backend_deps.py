@@ -51,25 +51,30 @@ def test_da3_backend_requires_torch_and_transformers(mock_backend_registry):
     """Test that DA3 backend requires both torch and transformers."""
     from scripts.apex_matrix_runner import check_ml_dependencies
 
-    with patch("transformation_portal.depth.backends.get_registry", return_value=mock_backend_registry):
-        with patch.dict(sys.modules, {"torch": MagicMock(), "transformers": MagicMock()}):
-            all_available, missing = check_ml_dependencies("da3")
+    # Mock find_spec to return valid specs for all packages
+    def find_spec_side_effect(name):
+        return MagicMock()  # All packages exist
 
-            assert all_available is True
-            assert missing == []
+    with patch("transformation_portal.depth.backends.get_registry", return_value=mock_backend_registry):
+        with patch("importlib.util.find_spec", side_effect=find_spec_side_effect):
+            with patch.dict(sys.modules, {"torch": MagicMock(), "transformers": MagicMock()}):
+                all_available, missing = check_ml_dependencies("da3")
+
+                assert all_available is True
+                assert missing == []
 
 
 def test_da3_backend_fails_when_transformers_missing(mock_backend_registry):
     """Test that DA3 backend fails when transformers is missing."""
     from scripts.apex_matrix_runner import check_ml_dependencies
 
-    def import_side_effect(name, *args, **kwargs):
+    def find_spec_side_effect(name):
         if name == "transformers":
-            raise ImportError("No module named 'transformers'")
-        return MagicMock()
+            return None  # Simulate package not found
+        return MagicMock()  # Package exists
 
     with patch("transformation_portal.depth.backends.get_registry", return_value=mock_backend_registry):
-        with patch("builtins.__import__", side_effect=import_side_effect):
+        with patch("importlib.util.find_spec", side_effect=find_spec_side_effect):
             all_available, missing = check_ml_dependencies("da3")
 
             assert all_available is False
@@ -80,13 +85,17 @@ def test_non_hf_backend_does_not_require_transformers(mock_backend_registry):
     """Test that non-HF backends don't require transformers."""
     from scripts.apex_matrix_runner import check_ml_dependencies
 
-    def import_side_effect(name, *args, **kwargs):
+    def find_spec_side_effect(name):
         if name == "transformers":
-            raise ImportError("No module named 'transformers'")
+            return None  # Simulate package not found
+        elif name == "onnxruntime":
+            return MagicMock()  # ONNX runtime is available
+        elif name == "torch":
+            return MagicMock()  # Torch is available
         return MagicMock()
 
     with patch("transformation_portal.depth.backends.get_registry", return_value=mock_backend_registry):
-        with patch("builtins.__import__", side_effect=import_side_effect):
+        with patch("importlib.util.find_spec", side_effect=find_spec_side_effect):
             all_available, missing = check_ml_dependencies("onnx")
 
             # Should pass because ONNX backend doesn't require transformers
@@ -98,13 +107,13 @@ def test_torch_always_required(mock_backend_registry):
     """Test that torch is always required regardless of backend."""
     from scripts.apex_matrix_runner import check_ml_dependencies
 
-    def import_side_effect(name, *args, **kwargs):
+    def find_spec_side_effect(name):
         if name == "torch":
-            raise ImportError("No module named 'torch'")
+            return None  # Simulate torch not found
         return MagicMock()
 
     with patch("transformation_portal.depth.backends.get_registry", return_value=mock_backend_registry):
-        with patch("builtins.__import__", side_effect=import_side_effect):
+        with patch("importlib.util.find_spec", side_effect=find_spec_side_effect):
             all_available, missing = check_ml_dependencies("mock")
 
             assert all_available is False
@@ -115,30 +124,38 @@ def test_torch_broken_install_treated_as_missing(mock_backend_registry):
     """Test that broken torch install (OSError/RuntimeError) is treated as missing."""
     from scripts.apex_matrix_runner import check_ml_dependencies
 
-    def import_side_effect(name, *args, **kwargs):
+    # Mock find_spec to return valid spec, but then fail on actual import
+    def find_spec_side_effect(name):
+        return MagicMock()  # Spec exists
+
+    def import_module_side_effect(name):
         if name == "torch":
             raise OSError("Missing CUDA libraries")
-        return MagicMock()
+        # For all other imports, use the real import
+        import importlib
+
+        return importlib.import_module(name)
 
     with patch("transformation_portal.depth.backends.get_registry", return_value=mock_backend_registry):
-        with patch("builtins.__import__", side_effect=import_side_effect):
-            all_available, missing = check_ml_dependencies("mock")
+        with patch("importlib.util.find_spec", side_effect=find_spec_side_effect):
+            with patch("importlib.import_module", side_effect=import_module_side_effect):
+                all_available, missing = check_ml_dependencies("mock")
 
-            assert all_available is False
-            assert "torch" in missing
+                assert all_available is False
+                assert "torch" in missing
 
 
 def test_backend_specific_dep_missing_reported_correctly(mock_backend_registry):
     """Test that backend-specific missing dep is reported with backend ID."""
     from scripts.apex_matrix_runner import check_ml_dependencies
 
-    def import_side_effect(name, *args, **kwargs):
+    def find_spec_side_effect(name):
         if name == "onnxruntime":
-            raise ImportError("No module named 'onnxruntime'")
-        return MagicMock()
+            return None  # Package not found
+        return MagicMock()  # Other packages exist
 
     with patch("transformation_portal.depth.backends.get_registry", return_value=mock_backend_registry):
-        with patch("builtins.__import__", side_effect=import_side_effect):
+        with patch("importlib.util.find_spec", side_effect=find_spec_side_effect):
             all_available, missing = check_ml_dependencies("onnx")
 
             assert all_available is False
@@ -149,13 +166,13 @@ def test_unknown_backend_fallback_strict_check(mock_backend_registry):
     """Test that unknown backend falls back to strict torch+transformers check."""
     from scripts.apex_matrix_runner import check_ml_dependencies
 
-    def import_side_effect(name, *args, **kwargs):
+    def find_spec_side_effect(name):
         if name == "transformers":
-            raise ImportError("No module named 'transformers'")
-        return MagicMock()
+            return None  # transformers not found
+        return MagicMock()  # Other packages exist
 
     with patch("transformation_portal.depth.backends.get_registry", return_value=mock_backend_registry):
-        with patch("builtins.__import__", side_effect=import_side_effect):
+        with patch("importlib.util.find_spec", side_effect=find_spec_side_effect):
             all_available, missing = check_ml_dependencies("unknown_backend")
 
             assert all_available is False
@@ -166,10 +183,14 @@ def test_minimal_backend_requires_only_torch(mock_backend_registry):
     """Test that minimal backend (no extra deps) only requires torch."""
     from scripts.apex_matrix_runner import check_ml_dependencies
 
-    with patch("transformation_portal.depth.backends.get_registry", return_value=mock_backend_registry):
-        with patch.dict(sys.modules, {"torch": MagicMock()}):
-            # Mock backend declares no extra requirements
-            all_available, missing = check_ml_dependencies("mock")
+    def find_spec_side_effect(name):
+        return MagicMock()  # All packages exist
 
-            assert all_available is True
-            assert missing == []
+    with patch("transformation_portal.depth.backends.get_registry", return_value=mock_backend_registry):
+        with patch("importlib.util.find_spec", side_effect=find_spec_side_effect):
+            with patch.dict(sys.modules, {"torch": MagicMock()}):
+                # Mock backend declares no extra requirements
+                all_available, missing = check_ml_dependencies("mock")
+
+                assert all_available is True
+                assert missing == []

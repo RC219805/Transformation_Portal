@@ -40,6 +40,8 @@ Version: 1.0.0
 from __future__ import annotations
 
 import argparse
+import importlib
+import importlib.util
 import json
 import logging
 import sys
@@ -177,7 +179,16 @@ def check_ml_dependencies(backend_id: str) -> tuple[bool, list[str]]:
     missing = []
     for pkg in required:
         try:
-            __import__(pkg)
+            # Use importlib to check if package can be imported
+            # This properly detects both missing and broken installs
+            spec = importlib.util.find_spec(pkg)
+            if spec is None:
+                logger.debug(f"{pkg} not found (spec is None)")
+                missing.append(pkg)
+            else:
+                # Try actual import to catch broken installs (missing .so files, etc.)
+                # Use importlib.import_module instead of __import__ for better testability
+                importlib.import_module(pkg)
         except Exception as e:
             logger.debug(f"{pkg} import failed ({type(e).__name__}: {e}), treating as missing")
             missing.append(pkg)
