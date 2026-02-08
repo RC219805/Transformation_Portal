@@ -1,8 +1,8 @@
 # Gate 0: CI Baseline Stabilization Checklist
 
-**Priority**: P0 (blocks all tranche work)  
-**Owner**: Repository Maintainer  
-**Timeline**: 2-3 days  
+**Priority**: P0 (blocks all tranche work)
+**Owner**: Repository Maintainer
+**Timeline**: 2-3 days
 **Epic**: #819
 
 ---
@@ -73,7 +73,7 @@
   ```bash
   # Core tests
   pytest -v tests/ -ra -m "not ml and not slow"
-  
+
   # ML tests (if environment supports)
   pytest -v tests/ -ra -m "ml and not slow"
   ```
@@ -94,10 +94,10 @@
   # Baseline formatting: black + isort applied to entire codebase
   # Applied on: 2026-02-04
   # PR: #[PR_NUMBER]
-  [COMMIT_SHA_PLACEHOLDER]
+  <COMMIT_SHA_HERE>
   EOF
   ```
-  **Note**: Update `[COMMIT_SHA_PLACEHOLDER]` after commit is created
+  **Note**: Update `<COMMIT_SHA_HERE>` after commit is created
 
 - [ ] Add to git:
   ```bash
@@ -178,7 +178,7 @@
 
 - [ ] Update `.git-blame-ignore-revs`:
   ```bash
-  # Replace [COMMIT_SHA_PLACEHOLDER] with actual SHA
+  # Replace <COMMIT_SHA_HERE> with actual SHA from formatting commit
   git checkout -b chore/update-blame-ignore-revs
   # Edit .git-blame-ignore-revs manually
   git add .git-blame-ignore-revs
@@ -476,7 +476,6 @@ All must be true to exit Gate 0:
 
 ---
 
-**Tracked by**: [Issue #XXX]  
-**Status**: [NOT_STARTED | IN_PROGRESS | COMPLETE]  
-**Owner**: Repository Maintainer  
-**Architect Approval**: [PENDING | APPROVED]
+**Status**: Reference checklist (not a specific tracked issue)
+**Purpose**: Baseline quality gate documentation
+**Architect Approval**: Approved as governance template

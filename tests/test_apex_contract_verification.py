@@ -24,27 +24,38 @@ from transformation_portal.metrics.performance_capsule import PerformanceCapsule
 class TestExecutionModeEnforcement:
     """Test that dry-run is enforced correctly."""
 
-    def test_dry_run_enforced_without_env_var(self, tmp_path):
-        """Verify that running without --dry-run fails with helpful message."""
-        # This is a smoke test; actual enforcement is in apex_matrix_runner.py
+    def test_runner_help_shows_dry_run_flag(self):
+        """Verify that --dry-run flag is exposed via --help."""
         runner_script = Path("scripts/apex_matrix_runner.py")
         assert runner_script.exists(), "Runner script not found"
 
-        content = runner_script.read_text()
-        assert "NotImplementedError" in content, "Dry-run enforcement not implemented"
-        assert "--dry-run" in content, "Dry-run flag not documented"
+        result = subprocess.run(
+            [sys.executable, str(runner_script), "--help"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
 
-    def test_dry_run_env_bypass_possible(self):
-        """Verify that REAL_EXECUTION_ENABLED env var is checked."""
+        assert "--dry-run" in result.stdout, "--dry-run flag not in help output"
+        assert "--input-dir" in result.stdout, "--input-dir flag not in help output"
+
+    def test_runner_requires_input_dir_for_real_execution(self):
+        """Verify that running without --dry-run requires --input-dir."""
         runner_script = Path("scripts/apex_matrix_runner.py")
-        content = runner_script.read_text()
+        assert runner_script.exists(), "Runner script not found"
 
-        # We expect either explicit env check or a clear TODO/comment
-        has_bypass_logic = "REAL_EXECUTION_ENABLED" in content or "os.environ" in content
-        # For scaffolding, we accept a NotImplementedError as the bypass
-        has_not_implemented = "NotImplementedError" in content
+        # Attempt to run without --dry-run and without --input-dir (should fail)
+        result = subprocess.run(
+            [sys.executable, str(runner_script), "--run-id", "test", "--commit-sha", "abc123"],
+            capture_output=True,
+            text=True,
+        )
 
-        assert has_bypass_logic or has_not_implemented, "No clear bypass mechanism for dry-run"
+        # Should fail with non-zero exit code
+        assert result.returncode != 0, "Should fail when --input-dir missing for real run"
+        # Error message should mention input-dir or dry-run
+        error_text = (result.stderr + result.stdout).lower()
+        assert "input" in error_text or "dry" in error_text, "Error should mention input-dir or dry-run"
 
 
 class TestSyntheticDataLabeling:

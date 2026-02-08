@@ -45,7 +45,7 @@ import logging
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from transformation_portal.metrics.aggregator import (
     compute_global_stats,
@@ -67,6 +67,8 @@ def run_apex_for_config(
     zone: str,
     output_dir: Path,
     dry_run: bool = False,
+    input_dir: Optional[Path] = None,
+    sample_size: Optional[int] = None,
 ) -> Observation:
     """Execute APEX run for a specific configuration.
 
@@ -75,6 +77,8 @@ def run_apex_for_config(
         zone: Zone identifier
         output_dir: Output directory for capsules
         dry_run: If True, skip actual execution
+        input_dir: Directory containing test images
+        sample_size: Number of images to process (None = all)
 
     Returns:
         Observation with captured capsules
@@ -98,6 +102,7 @@ def run_apex_for_config(
             workflow_version=run_spec.workflow_version,
             zone=zone,
             scene_type=run_spec.scene_type,
+            is_synthetic=True,  # Mark as synthetic
         )
 
         return Observation(
@@ -106,13 +111,154 @@ def run_apex_for_config(
             capsules=[mock_capsule],
         )
 
-    # TODO: Integrate with actual pipeline runner
-    # For now, this is a placeholder that would call:
-    # - Lux Depth V3 pipeline (V1)
-    # - New V2 pipeline (V2)
-    # Both should emit PerformanceCapsules
+    # Real pipeline execution
+    if not input_dir or not input_dir.exists():
+        raise ValueError(f"Input directory required for real execution: {input_dir}")
 
-    raise NotImplementedError("Actual pipeline integration not yet implemented. Use --dry-run for testing.")
+    import hashlib
+    import signal
+
+    from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+    from transformation_portal.lux_depth_v3.input_discovery import DiscoveryConfig, discover_images
+    from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+    from transformation_portal.metrics.timing import timing_context
+
+    # Timeout handler for long-running operations
+    class TimeoutError(Exception):
+        pass
+
+    def timeout_handler(signum, frame):
+        raise TimeoutError("Image processing timeout")
+
+    # Discover input images
+    discovery_config = DiscoveryConfig(strict_mode=False)
+    images = discover_images(input_dir, discovery_config, [".jpg", ".jpeg", ".png"])
+
+    if not images:
+        raise ValueError(f"No images found in {input_dir}")
+
+    # Apply sample size limit
+    if sample_size is not None:
+        images = sorted(images)[:sample_size]
+
+    logger.info(f"Processing {len(images)} images with {run_spec.workflow_version} workflow")
+
+    # Create workflow-specific output directory
+    workflow_output = output_dir / f"{run_spec.workflow_version}_{zone}"
+    workflow_output.mkdir(parents=True, exist_ok=True)
+
+    # Configure pipeline based on workflow version
+    # V1 = depth only, V2 = depth + enhancement
+    enable_v2 = run_spec.workflow_version == "v2"
+
+    config = EnhanceConfig(
+        model_variant=ModelVariant.METRIC_LARGE,
+        depth_device=run_spec.device,
+        v2_device=run_spec.device,
+        depth_backend=run_spec.backend_id,
+        generate_pbr=False,  # Disable PBR for performance testing
+        save_float_depth=False,
+        strict_inputs=False,
+        # V2 enhancement only for v2 workflow
+        v2_preset="default" if enable_v2 else None,
+    )
+
+    # Initialize orchestrator
+    orchestrator = EnhanceOrchestrator(
+        config=config,
+        output_root=workflow_output,
+        verify_outputs=False,  # Speed up for benchmarking
+    )
+
+    capsules = []
+    timeout_seconds = 300  # 5 minutes per image max
+
+    # Process each image with timing instrumentation
+    for image_path in images:
+        try:
+            from transformation_portal.lux_depth_v3.input_manager import ImageInput
+            from transformation_portal.metrics.performance_capsule import compute_dimension_adjustment
+
+            image_input = ImageInput(image_path)
+
+            # Set timeout alarm (Unix only)
+            if hasattr(signal, "SIGALRM"):
+                signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(timeout_seconds)
+
+            try:
+                # Wrap processing in timing context
+                timings = {}
+
+                with timing_context("total", timings, device=run_spec.device):
+                    # Load and preprocess image
+                    with timing_context("load_decode", timings, device=run_spec.device):
+                        from PIL import Image
+
+                        with Image.open(image_path) as img:
+                            original_shape = (img.height, img.width)
+
+                    # Run pipeline (V1 = depth only, V2 = depth + enhancement)
+                    result = orchestrator.enhance_image(image_input, input_root=input_dir)
+
+                # Cancel timeout
+                if hasattr(signal, "SIGALRM"):
+                    signal.alarm(0)
+
+                # Extract metadata from result
+                if result and result.get("status") == "ok":
+                    # Compute input hash
+                    input_hash = hashlib.sha256(image_path.read_bytes()).hexdigest()[:16]
+
+                    # Get enforced shape from result or use original
+                    enforced_shape = result.get("enforced_shape", original_shape)
+                    pixel_count = enforced_shape[0] * enforced_shape[1]
+
+                    # Create performance capsule
+                    capsule = PerformanceCapsule(
+                        image_id=image_path.stem,
+                        image_path=str(image_path),
+                        input_hash=input_hash,
+                        original_shape=original_shape,
+                        enforced_shape=enforced_shape,
+                        pixel_count=pixel_count,
+                        dimension_adjustment=compute_dimension_adjustment(original_shape, enforced_shape),
+                        backend_id=run_spec.backend_id,
+                        model_variant=config.model_variant.value.name,
+                        device=run_spec.device,
+                        dtype="float32",
+                        timings=timings,
+                        workflow_version=run_spec.workflow_version,
+                        zone=zone,
+                        scene_type=run_spec.scene_type,
+                        pipeline_version="2.0.0",
+                        is_synthetic=False,  # Real data
+                    )
+
+                    capsules.append(capsule)
+                    logger.info(f"✅ {image_path.name}: {timings['total']:.2f}s")
+                else:
+                    logger.warning(f"⚠️ {image_path.name}: processing returned non-ok status")
+
+            except TimeoutError:
+                logger.error(f"❌ {image_path.name}: timeout after {timeout_seconds}s")
+                if hasattr(signal, "SIGALRM"):
+                    signal.alarm(0)
+                continue
+
+        except Exception as e:
+            logger.error(f"❌ {image_path.name}: {e}")
+            # Continue processing other images
+            continue
+
+    if not capsules:
+        raise RuntimeError(f"No images successfully processed for {run_spec.workflow_version}/{zone}")
+
+    return Observation(
+        run_spec=run_spec,
+        zone=zone,
+        capsules=capsules,
+    )
 
 
 def main() -> int:
@@ -146,18 +292,24 @@ def main() -> int:
         help="Ledger database path (default: ./apex_performance.db)",
     )
 
+    # Input
+    parser.add_argument("--input-dir", type=Path, help="Input directory with test images (required for real execution)")
+    parser.add_argument("--sample-size", type=int, help="Number of images to process per workflow (default: all)")
+
     # Execution control
     parser.add_argument("--dry-run", action="store_true", help="Dry run (skip actual execution, use mock data)")
     parser.add_argument("--continue-on-error", action="store_true", help="Continue running even if some configurations fail")
 
     args = parser.parse_args()
 
-    # BLOCKER FIX #1: Enforce dry-run until real pipeline is wired
+    # Validate input requirements for real execution
     if not args.dry_run:
-        logger.error("❌ Real pipeline integration not yet implemented")
-        logger.error("   Use --dry-run to test APEX scaffolding")
-        logger.error("   Track progress: docs/APEX_REAL_PIPELINE_INTEGRATION.md")
-        return 1
+        if not args.input_dir:
+            logger.error("❌ --input-dir required for real execution (or use --dry-run)")
+            return 1
+        if not args.input_dir.exists():
+            logger.error(f"❌ Input directory does not exist: {args.input_dir}")
+            return 1
 
     # Create output directory
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -204,6 +356,8 @@ def main() -> int:
                     zone=zone,
                     output_dir=args.output_dir,
                     dry_run=args.dry_run,
+                    input_dir=args.input_dir,
+                    sample_size=args.sample_size,
                 )
 
                 all_observations.append(observation)

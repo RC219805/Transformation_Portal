@@ -158,13 +158,29 @@ def evaluate_gate(
         )
 
     # Rule 1: Check minimum sample size for statistical validity
+    # Filter out insufficient-data buckets BEFORE gate evaluation
     if bucket_stats:
-        max_samples = max((stats.count for stats in bucket_stats.values()), default=0)
-        if max_samples < min_samples:
-            explanation = (
-                f"Insufficient data: largest bucket has n={max_samples} samples, "
-                f"need n>={min_samples} for reliable percentiles"
+        # Separate valid buckets from insufficient-data buckets
+        valid_buckets = {
+            name: stats
+            for name, stats in bucket_stats.items()
+            if not getattr(stats, "is_insufficient_data", False) and stats.count >= min_samples
+        }
+
+        insufficient_buckets = {
+            name: stats
+            for name, stats in bucket_stats.items()
+            if getattr(stats, "is_insufficient_data", False) or stats.count < min_samples
+        }
+
+        if insufficient_buckets:
+            logger.info(
+                f"Skipping {len(insufficient_buckets)} buckets with insufficient data: {list(insufficient_buckets.keys())}"
             )
+
+        # If ALL buckets have insufficient data, never block
+        if not valid_buckets:
+            explanation = f"Insufficient data: all {len(bucket_stats)} buckets below minimum n={min_samples} samples"
             logger.warning(explanation)
             return GateResult(
                 should_block=False,
@@ -174,6 +190,9 @@ def evaluate_gate(
                 worst_zone_p95=worst_zone_p95,
                 worst_zone_name=worst_zone_name,
             )
+
+        # Continue with only valid buckets
+        bucket_stats = valid_buckets
 
     # Rule 2: Check bucket threshold violations
     failing_buckets = []

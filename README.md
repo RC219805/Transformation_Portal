@@ -415,9 +415,26 @@ make ci
 
 ## Performance Monitoring
 
-Transformation Portal includes performance regression detection via the Performance Ledger tool.
+Transformation Portal includes automated performance regression detection via the **APEX Performance Observability Platform** (integrated in CI) and the legacy Performance Ledger tool (for historical analysis).
 
-### Capture Baseline
+### APEX System (Authoritative for CI/CD)
+
+The APEX system runs automatically on every PR, providing:
+- Scene-aware performance bucketing
+- Multi-zone aggregation
+- Automated PR comments with regression analysis
+- See `.github/workflows/apex_performance.yml`
+
+**Regression thresholds:**
+- **p95 > 10% worse:** Tail latency regression (blocks)
+- **mean > 15% worse:** Average performance regression (blocks)
+- **failure_rate > 0%:** Any new failures (blocks)
+
+### Legacy Performance Ledger (Ad-hoc Analysis)
+
+For local analysis and historical baselines:
+
+#### Capture Baseline
 
 ```bash
 python tools/performance_ledger.py \
@@ -428,7 +445,7 @@ python tools/performance_ledger.py \
   --quality-tier "standard"
 ```
 
-### Compare Against Baseline
+#### Compare Against Baseline
 
 ```bash
 python tools/performance_ledger.py \
@@ -441,13 +458,7 @@ Exit codes:
 - `0`: No regressions detected
 - `1`: Regressions detected (blocks merge)
 
-### Regression Thresholds
-
-- **p95 > 10% worse:** Tail latency regression
-- **mean > 15% worse:** Average performance regression
-- **failure_rate > 0%:** Any new failures
-
-See [Performance Monitoring Guide](docs/performance/README.md) for details.
+See [Performance Monitoring Guide](docs/performance/README.md) and [ADR-024](docs/decisions/ADR-024-performance-regression-authority-canonicalization.md) for details.
 
 ---
 
