@@ -131,6 +131,17 @@ class DA3Backend:
 
         logger.debug("DA3 backend dependencies available")
 
+    def required_packages(self) -> list[str]:
+        """Return required import module names for DA3 backend.
+
+        DA3 requires transformers (HuggingFace Transformers) for model inference.
+        torch is handled by the APEX runner and not listed here.
+
+        Returns:
+            ["transformers"]
+        """
+        return ["transformers"]
+
     def compute(
         self,
         image: Union[Image.Image, np.ndarray],
