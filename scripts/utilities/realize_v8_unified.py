@@ -21,12 +21,14 @@ from PIL import Image
 # Optional imports for 16-bit TIFF support
 try:
     import tifffile
+
     HAS_TIFFFILE = True
 except ImportError:
     HAS_TIFFFILE = False
 
 
 # ==================== Logging Utilities ====================
+
 
 def _info(msg: str) -> None:
     """Print info message."""
@@ -44,6 +46,7 @@ def _error(msg: str) -> None:
 
 
 # ==================== Image I/O ====================
+
 
 def _open_any(path: Union[str, Path]) -> Tuple[Image.Image, Dict[str, Any]]:
     """
@@ -63,25 +66,21 @@ def _open_any(path: Union[str, Path]) -> Tuple[Image.Image, Dict[str, Any]]:
 
     # Extract metadata
     meta = {
-        'format': img.format,
-        'mode': img.mode,
-        'size': img.size,
-        'info': img.info.copy() if hasattr(img, 'info') else {},
+        "format": img.format,
+        "mode": img.mode,
+        "size": img.size,
+        "info": img.info.copy() if hasattr(img, "info") else {},
     }
 
     # Convert to RGB
-    if img.mode != 'RGB':
-        img = img.convert('RGB')
+    if img.mode != "RGB":
+        img = img.convert("RGB")
 
     return img, meta
 
 
 def _save_with_meta(
-    img: Image.Image,
-    arr: Optional[np.ndarray],
-    path: Union[str, Path],
-    meta: Dict[str, Any],
-    out_bitdepth: int = 16
+    img: Image.Image, arr: Optional[np.ndarray], path: Union[str, Path], meta: Dict[str, Any], out_bitdepth: int = 16
 ) -> None:
     """
     Save image with metadata preservation.
@@ -109,28 +108,29 @@ def _save_with_meta(
             if arr_uint.ndim == 3 and arr_uint.shape[2] == 3:
                 # 16-bit RGB - requires tifffile for TIFF
                 ext = path.suffix.lower()
-                if ext in ['.ti', '.tiff']:
+                if ext in [".ti", ".tiff"]:
                     if HAS_TIFFFILE:
                         try:
                             # Preserve metadata if present
-                            tifffile_kwargs = {'photometric': 'rgb'}
+                            tifffile_kwargs = {"photometric": "rgb"}
                             # tifffile supports 'description' (string) and 'metadata' (dict)
                             if meta:
                                 # If 'description' is present, use it; else, serialize all meta as description
-                                description = meta.get('description')
+                                description = meta.get("description")
                                 if description is None and meta:
                                     # Fallback: serialize meta as a string for description
                                     import json
+
                                     try:
                                         description = json.dumps(meta)
                                     except Exception:
                                         description = str(meta)
                                 if description is not None:
-                                    tifffile_kwargs['description'] = description
+                                    tifffile_kwargs["description"] = description
                                 # If 'metadata' is present and a dict, pass it
-                                metadata_dict = meta.get('metadata')
+                                metadata_dict = meta.get("metadata")
                                 if isinstance(metadata_dict, dict):
-                                    tifffile_kwargs['metadata'] = metadata_dict
+                                    tifffile_kwargs["metadata"] = metadata_dict
                             tifffile.imwrite(path, arr_uint, **tifffile_kwargs)
                             _info(f"Saved: {path} (16-bit TIFF via tifffile, metadata preserved if possible)")
                             return
@@ -148,24 +148,25 @@ def _save_with_meta(
 
             elif arr_uint.ndim == 2:
                 # Grayscale 16-bit - PNG and TIFF supported
-                img = Image.fromarray(arr_uint, mode='I;16')
+                img = Image.fromarray(arr_uint, mode="I;16")
                 # Try saving the 16-bit grayscale image to ensure PIL supports it
                 try:
                     # Save to a temporary in-memory file to test support
                     from io import BytesIO
+
                     tmp = BytesIO()
-                    img.save(tmp, format=path.suffix.lstrip('.').upper() or 'PNG')
+                    img.save(tmp, format=path.suffix.lstrip(".").upper() or "PNG")
                 except Exception as e:
                     _warn(f"Failed to save 16-bit grayscale image: {e}")
                     _warn("Falling back to 8-bit grayscale")
                     arr_uint_8 = (np.clip(arr, 0, 1) * 255).astype(np.uint8)
-                    img = Image.fromarray(arr_uint_8, mode='L')
+                    img = Image.fromarray(arr_uint_8, mode="L")
                     out_bitdepth = 8
 
         elif out_bitdepth == 32:
             # Mode 'F' only supports 2D (grayscale) float32 arrays in PIL.
             if arr.ndim == 2:
-                img = Image.fromarray(arr.astype(np.float32), mode='F')
+                img = Image.fromarray(arr.astype(np.float32), mode="F")
             elif arr.ndim == 3 and arr.shape[2] == 3:
                 raise ValueError(
                     "Cannot save 32-bit float RGB images with PIL. "
@@ -178,10 +179,10 @@ def _save_with_meta(
         else:
             # 8-bit (default)
             arr_uint = (np.clip(arr, 0, 1) * 255).astype(np.uint8)
-            img = Image.fromarray(arr_uint, mode='RGB')
+            img = Image.fromarray(arr_uint, mode="RGB")
 
     # Preserve metadata
-    info = meta.get('info', {})
+    info = meta.get("info", {})
 
     # Save the image
     try:
@@ -204,8 +205,8 @@ def _image_to_float_array(img: Image.Image) -> np.ndarray:
     Returns:
         Float32 numpy array (H, W, 3)
     """
-    if img.mode != 'RGB':
-        img = img.convert('RGB')
+    if img.mode != "RGB":
+        img = img.convert("RGB")
 
     arr = np.array(img, dtype=np.float32) / 255.0
     return arr
@@ -213,9 +214,11 @@ def _image_to_float_array(img: Image.Image) -> np.ndarray:
 
 # ==================== Preset Configuration ====================
 
+
 @dataclass
 class Preset:
     """Configuration preset for image enhancement."""
+
     name: str
     description: str
     exposure: float = 0.0
@@ -261,6 +264,7 @@ PRESETS = {
 
 # ==================== Core Enhancement Functions ====================
 
+
 def enhance(
     img_or_arr: Union[Image.Image, np.ndarray, str, Path],
     exposure: float = 0.0,
@@ -270,7 +274,7 @@ def enhance(
     grain: float = 0.0,
     vignette: float = 0.0,
     random_seed: Optional[int] = None,
-    **kwargs
+    **kwargs,
 ) -> Tuple[Image.Image, np.ndarray, Dict[str, Any]]:
     """
     Apply basic enhancement to an image.
@@ -290,6 +294,7 @@ def enhance(
         Tuple of (preview PIL Image, working numpy array, metrics dict)
     """
     import time
+
     t_start = time.perf_counter()
 
     # Load image
@@ -308,7 +313,7 @@ def enhance(
 
     # Exposure
     if exposure != 0.0:
-        result = result * (2.0 ** exposure)
+        result = result * (2.0**exposure)
 
     # Contrast (around middle gray)
     if contrast != 1.0:
@@ -324,7 +329,8 @@ def enhance(
     # Clarity (local contrast via unsharp mask)
     if clarity > 0.0:
         from scipy.ndimage import gaussian_filter
-        blurred = gaussian_filter(result, sigma=5.0, mode='reflect')
+
+        blurred = gaussian_filter(result, sigma=5.0, mode="reflect")
         result = result + (result - blurred) * clarity
 
     # Grain
@@ -338,7 +344,7 @@ def enhance(
         h, w = result.shape[:2]
         y, x = np.ogrid[:h, :w]
         cx, cy = w / 2, h / 2
-        dist = np.sqrt((x - cx)**2 + (y - cy)**2)
+        dist = np.sqrt((x - cx) ** 2 + (y - cy) ** 2)
         max_dist = np.sqrt(cx**2 + cy**2)
         vignette_mask = 1.0 - (dist / max_dist) * vignette
         vignette_mask = np.clip(vignette_mask, 0, 1)
@@ -353,17 +359,18 @@ def enhance(
     # Metrics
     elapsed_ms = int((time.perf_counter() - t_start) * 1000)
     metrics = {
-        'total_time_ms': elapsed_ms,
-        'exposure': exposure,
-        'contrast': contrast,
-        'saturation': saturation,
-        'clarity': clarity,
+        "total_time_ms": elapsed_ms,
+        "exposure": exposure,
+        "contrast": contrast,
+        "saturation": saturation,
+        "clarity": clarity,
     }
 
     return preview, result, metrics
 
 
 # ==================== CLI Entry Point ====================
+
 
 def main():
     """CLI for Realize V8 with VFX extension support."""
@@ -376,23 +383,29 @@ def main():
         # pylint: disable=cyclic-import
         # Lazy import to allow VFX extension to import from this module
         from realize_v8_unified_cli_extension import add_vfx_commands
+
         has_vfx = True
     except ImportError:
         has_vfx = False
 
     # Use subparsers if VFX is available, otherwise simple args
     if has_vfx:
-        subparsers = parser.add_subparsers(dest='command', help='Available commands', required=True)
+        subparsers = parser.add_subparsers(dest="command", help="Available commands", required=True)
 
         # Basic enhance command
         # Note: Basic enhance outputs 8/16-bit RGB images (input images of any type are supported; conversion to RGB is automatic)
         # 32-bit output is only supported for grayscale images (used by VFX commands for depth maps)
-        p_enhance = subparsers.add_parser('enhance', help='Basic enhancement')
-        p_enhance.add_argument('--input', type=Path, required=True)
-        p_enhance.add_argument('--output', type=Path, required=True)
-        p_enhance.add_argument('--preset', choices=list(PRESETS.keys()), default='signature_estate')
-        p_enhance.add_argument('--out-bitdepth', type=int, choices=[8, 16, 32], default=8,
-                               help='Output bit depth: 8 or 16 for RGB images, 32 for grayscale only')
+        p_enhance = subparsers.add_parser("enhance", help="Basic enhancement")
+        p_enhance.add_argument("--input", type=Path, required=True)
+        p_enhance.add_argument("--output", type=Path, required=True)
+        p_enhance.add_argument("--preset", choices=list(PRESETS.keys()), default="signature_estate")
+        p_enhance.add_argument(
+            "--out-bitdepth",
+            type=int,
+            choices=[8, 16, 32],
+            default=8,
+            help="Output bit depth: 8 or 16 for RGB images, 32 for grayscale only",
+        )
         p_enhance.set_defaults(func=_handle_basic_enhance)
 
         # Add VFX commands
@@ -404,11 +417,16 @@ def main():
         return args.func(args) or 0
     else:
         # Fallback to simple CLI without VFX
-        parser.add_argument('--input', type=Path, required=True)
-        parser.add_argument('--output', type=Path, required=True)
-        parser.add_argument('--preset', choices=list(PRESETS.keys()), default='signature_estate')
-        parser.add_argument('--out-bitdepth', type=int, choices=[8, 16, 32], default=8,
-                            help='Output bit depth: 8 or 16 for RGB images, 32 for grayscale only')
+        parser.add_argument("--input", type=Path, required=True)
+        parser.add_argument("--output", type=Path, required=True)
+        parser.add_argument("--preset", choices=list(PRESETS.keys()), default="signature_estate")
+        parser.add_argument(
+            "--out-bitdepth",
+            type=int,
+            choices=[8, 16, 32],
+            default=8,
+            help="Output bit depth: 8 or 16 for RGB images, 32 for grayscale only",
+        )
 
         args = parser.parse_args()
 
@@ -436,7 +454,7 @@ def _handle_basic_enhance(args):
     preview, arr, metrics = enhance(img, **preset.to_dict())
 
     # Save
-    out_bitdepth = getattr(args, 'out_bitdepth', 8)
+    out_bitdepth = getattr(args, "out_bitdepth", 8)
     _save_with_meta(preview, arr, args.output, meta, out_bitdepth=out_bitdepth)
 
     _info(f"Processing complete: {metrics['total_time_ms']}ms")
@@ -445,4 +463,5 @@ def _handle_basic_enhance(args):
 
 if __name__ == "__main__":
     import sys
+
     sys.exit(main())

@@ -32,10 +32,10 @@ def load_16bit_tiff(path: Union[str, Path]) -> Tuple[np.ndarray, dict]:
             image = page.asarray()
 
             metadata = {
-                'original_dtype': str(image.dtype),
-                'original_shape': image.shape,
-                'bits_per_sample': page.bitspersample,
-                'compression': page.compression,
+                "original_dtype": str(image.dtype),
+                "original_shape": image.shape,
+                "bits_per_sample": page.bitspersample,
+                "compression": page.compression,
             }
 
             # Convert to float [0, 1]
@@ -57,10 +57,10 @@ def load_16bit_tiff(path: Union[str, Path]) -> Tuple[np.ndarray, dict]:
         image = np.array(pil_img)
 
         metadata = {
-            'original_dtype': str(image.dtype),
-            'original_shape': image.shape,
-            'bits_per_sample': 8,
-            'warning': 'Loaded via PIL - 16-bit depth lost',
+            "original_dtype": str(image.dtype),
+            "original_shape": image.shape,
+            "bits_per_sample": 8,
+            "warning": "Loaded via PIL - 16-bit depth lost",
         }
 
         image_float = image.astype(np.float32) / 255.0
@@ -112,7 +112,7 @@ def verify_and_fix_directory(input_dir: Union[str, Path], output_dir: Union[str,
     for tiff_path in tiff_files:
         result = verify_tiff_depth(tiff_path)
 
-        if result.get('is_16bit'):
+        if result.get("is_16bit"):
             print(f"✓ {tiff_path.name}: Correct 16-bit")
         else:
             print(f"✗ {tiff_path.name}: Incorrect 8-bit - NEEDS FIX")

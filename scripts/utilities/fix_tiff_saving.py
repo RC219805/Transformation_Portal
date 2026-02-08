@@ -13,9 +13,9 @@ from PIL import Image
 def save_16bit_tiff(
     image: Union[np.ndarray, Image.Image],
     output_path: Union[str, Path],
-    compression: str = 'lzw',
+    compression: str = "lzw",
     dpi: tuple = (300, 300),
-    metadata: dict = None
+    metadata: dict = None,
 ) -> Path:
     """
     Save image as true 16-bit TIFF.
@@ -61,10 +61,10 @@ def save_16bit_tiff(
             output_path,
             image_16bit,
             compression=compression,
-            photometric='rgb',
+            photometric="rgb",
             resolution=(x_resolution, y_resolution),
             resolutionunit=resolution_unit,
-            metadata=metadata or {}
+            metadata=metadata or {},
         )
 
         file_size_mb = output_path.stat().st_size / (1024**2)
@@ -77,7 +77,7 @@ def save_16bit_tiff(
         # Fallback to PIL - this will save as 8-bit!
         image_8bit = (np.clip(image_float, 0, 1) * 255).astype(np.uint8)
         pil_img = Image.fromarray(image_8bit)
-        pil_img.save(output_path, format='TIFF', compression=f'tiff_{compression}', dpi=dpi)
+        pil_img.save(output_path, format="TIFF", compression=f"tiff_{compression}", dpi=dpi)
 
         file_size_mb = output_path.stat().st_size / (1024**2)
         print(f"  Saved 8-bit TIFF: {output_path.name} ({file_size_mb:.1f} MB)")
@@ -102,33 +102,33 @@ def verify_tiff_depth(tiff_path: Union[str, Path]) -> dict:
             img_array = page.asarray()
 
             result = {
-                'path': tiff_path,
-                'shape': page.shape,
-                'dtype': str(page.dtype),
-                'bits_per_sample': page.bitspersample,
-                'compression': page.compression,
-                'photometric': page.photometric,
-                'data_range': (img_array.min(), img_array.max()),
-                'is_16bit': page.dtype == np.uint16,
-                'file_size_mb': tiff_path.stat().st_size / (1024**2)
+                "path": tiff_path,
+                "shape": page.shape,
+                "dtype": str(page.dtype),
+                "bits_per_sample": page.bitspersample,
+                "compression": page.compression,
+                "photometric": page.photometric,
+                "data_range": (img_array.min(), img_array.max()),
+                "is_16bit": page.dtype == np.uint16,
+                "file_size_mb": tiff_path.stat().st_size / (1024**2),
             }
 
             # Check if 16-bit data is properly utilized
-            if result['is_16bit']:
+            if result["is_16bit"]:
                 unique_values = len(np.unique(img_array))
-                result['unique_values'] = unique_values
-                result['bit_utilization'] = (unique_values / 65536) * 100
+                result["unique_values"] = unique_values
+                result["bit_utilization"] = (unique_values / 65536) * 100
 
                 # Check for incorrect scaling
                 if img_array.max() < 300:
-                    result['warning'] = "Data appears 8-bit scaled to 16-bit range"
+                    result["warning"] = "Data appears 8-bit scaled to 16-bit range"
 
             return result
 
     except ImportError:
-        return {'error': 'tifffile not available for verification'}
+        return {"error": "tifffile not available for verification"}
     except Exception as e:
-        return {'error': str(e)}
+        return {"error": str(e)}
 
 
 if __name__ == "__main__":

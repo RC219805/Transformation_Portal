@@ -36,7 +36,7 @@ def check_package(package_name: str, import_name: str = None) -> Tuple[bool, str
 
     try:
         module = importlib.import_module(import_name)
-        version = getattr(module, '__version__', 'unknown')
+        version = getattr(module, "__version__", "unknown")
         return True, version
     except ImportError as e:
         return False, str(e)
@@ -49,15 +49,16 @@ def check_torch_backend() -> Dict[str, bool]:
         Dictionary of backend availability
     """
     backends = {
-        'cpu': True,  # Always available
-        'cuda': False,
-        'mps': False,
+        "cpu": True,  # Always available
+        "cuda": False,
+        "mps": False,
     }
 
     try:
         import torch
-        backends['cuda'] = torch.cuda.is_available()
-        backends['mps'] = torch.backends.mps.is_available() if hasattr(torch.backends, 'mps') else False
+
+        backends["cuda"] = torch.cuda.is_available()
+        backends["mps"] = torch.backends.mps.is_available() if hasattr(torch.backends, "mps") else False
     except ImportError:
         # PyTorch is not installed; report 'cuda' and 'mps' as unavailable.
         pass
@@ -74,8 +75,8 @@ def check_model_files() -> Dict[str, bool]:
     repo_root = Path(__file__).parent.parent
 
     models = {
-        'Depth Anything V2 (CoreML)': repo_root / 'DepthAnythingV2SmallF16.mlpackage',
-        'Real-ESRGAN weights': repo_root / 'weights' / 'RealESRGAN_x4plus.pth',
+        "Depth Anything V2 (CoreML)": repo_root / "DepthAnythingV2SmallF16.mlpackage",
+        "Real-ESRGAN weights": repo_root / "weights" / "RealESRGAN_x4plus.pth",
     }
 
     return {name: path.exists() for name, path in models.items()}
@@ -88,12 +89,13 @@ def verify_dimension_validation():
 
     # Try to import constants from main module
     try:
-        sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+        sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
         from transformation_portal.pipelines.lux_render_pipeline import (
             MIN_SD_DIMENSION,
             SD_DIMENSION_MULTIPLE,
             validate_sd_dimensions,
         )
+
         print(f"Using imported constants: SD_DIMENSION_MULTIPLE={SD_DIMENSION_MULTIPLE}, MIN_SD_DIMENSION={MIN_SD_DIMENSION}")
     except ImportError as e:
         print("✗ Could not import dimension validation constants from main module.")
@@ -114,6 +116,7 @@ def verify_dimension_validation():
     try:
         try:
             import typer
+
             validation_exception = typer.BadParameter
         except ImportError:
             validation_exception = ValueError  # fallback for fallback implementation
@@ -136,30 +139,24 @@ def verify_dimension_validation():
 
 def main():
     """Main verification routine."""
-    parser = argparse.ArgumentParser(
-        description="Verify Transformation Portal installation"
-    )
-    parser.add_argument(
-        '--verbose',
-        action='store_true',
-        help='Show detailed error messages'
-    )
+    parser = argparse.ArgumentParser(description="Verify Transformation Portal installation")
+    parser.add_argument("--verbose", action="store_true", help="Show detailed error messages")
 
     args = parser.parse_args()
 
-    print("="*70)
+    print("=" * 70)
     print("TRANSFORMATION PORTAL - INSTALLATION VERIFICATION")
-    print("="*70)
+    print("=" * 70)
 
     # Check required packages
     print("\nRequired Packages:")
     print("-" * 70)
 
     required_packages = [
-        ('numpy', 'numpy'),
-        ('Pillow', 'PIL'),
-        ('scipy', 'scipy'),
-        ('typer', 'typer'),
+        ("numpy", "numpy"),
+        ("Pillow", "PIL"),
+        ("scipy", "scipy"),
+        ("typer", "typer"),
     ]
 
     required_ok = True
@@ -178,12 +175,12 @@ def main():
     print("-" * 70)
 
     ml_packages = [
-        ('torch', 'torch'),
-        ('diffusers', 'diffusers'),
-        ('transformers', 'transformers'),
-        ('controlnet-aux', 'controlnet_aux'),
-        ('realesrgan', 'realesrgan'),
-        ('accelerate', 'accelerate'),
+        ("torch", "torch"),
+        ("diffusers", "diffusers"),
+        ("transformers", "transformers"),
+        ("controlnet-aux", "controlnet_aux"),
+        ("realesrgan", "realesrgan"),
+        ("accelerate", "accelerate"),
     ]
 
     for pkg_name, import_name in ml_packages:
@@ -204,9 +201,9 @@ def main():
         status = "Available" if available else "Not available"
         print(f"{symbol} {backend.upper():20s} {status}")
 
-    if backends['mps']:
+    if backends["mps"]:
         print("   → Apple Silicon detected - CoreML models recommended for best performance")
-    elif backends['cuda']:
+    elif backends["cuda"]:
         print("   → CUDA available - GPU acceleration enabled")
     else:
         print("   → CPU only - processing will be slower")
@@ -225,9 +222,9 @@ def main():
     verify_dimension_validation()
 
     # Summary
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("SUMMARY")
-    print("="*70)
+    print("=" * 70)
 
     if required_ok:
         print("✓ All required packages are installed")

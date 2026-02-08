@@ -65,6 +65,6 @@ def add_deprecation_notice(filepath: str, canonical: str):
 if __name__ == "__main__":
     for filepath, canonical in DUPLICATES:
         add_deprecation_notice(filepath, canonical)
-    
+
     print(f"\nDeprecated {len(DUPLICATES)} files")
     print(f"Removal scheduled for: {deprecation_date}")

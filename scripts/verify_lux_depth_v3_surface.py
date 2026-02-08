@@ -23,10 +23,17 @@ def verify_imports():
     try:
         from transformation_portal.lux_depth_v3 import (
             EnhanceOrchestrator,
-            DA3Config, ModelVariant, Preset, EnhanceConfig, PostprocessingConfig, DeviceConfig,
+            DA3Config,
+            ModelVariant,
+            Preset,
+            EnhanceConfig,
+            PostprocessingConfig,
+            DeviceConfig,
             Postprocessor,
-            DA3InferenceEngine, DepthResult,
+            DA3InferenceEngine,
+            DepthResult,
         )
+
         print("✅ Public API imports successful")
     except ImportError as e:
         print(f"❌ Public API import failed: {e}")
@@ -36,6 +43,7 @@ def verify_imports():
     try:
         from transformation_portal.lux_depth_v3.depth_writer import atomic_write_depth_u16_png_with_stats
         from transformation_portal.lux_depth_v3.v2_runner import V2Runner, find_v2_report
+
         print("✅ Internal module imports successful")
         return True
     except ImportError as e:
@@ -62,9 +70,9 @@ def verify_intentional_failures():
         engine = DA3InferenceEngine(config=config)
         result = engine.predict(np.zeros((64, 64, 3), dtype=np.float32))
         # Verify result structure
-        assert hasattr(result, 'depth_map')
-        assert hasattr(result, 'depth')
-        assert hasattr(result, 'metadata')
+        assert hasattr(result, "depth_map")
+        assert hasattr(result, "depth")
+        assert hasattr(result, "metadata")
         assert result.depth_map.shape == (64, 64)
         print("✅ DA3InferenceEngine.predict() works (real implementation)")
         checks_passed += 1
@@ -77,18 +85,16 @@ def verify_intentional_failures():
     checks_total += 1
     try:
         import tempfile
+
         with tempfile.TemporaryDirectory() as tmpdir:
             test_path = Path(tmpdir) / "test.png"
             path, _, stats = atomic_write_depth_u16_png_with_stats(
-                output_path=test_path,
-                depth_map=np.random.rand(64, 64).astype(np.float32),
-                method="u16",
-                debug_verify=True
+                output_path=test_path, depth_map=np.random.rand(64, 64).astype(np.float32), method="u16", debug_verify=True
             )
             # Verify it worked
             assert path.exists()
             assert stats.shape == (64, 64)
-            assert hasattr(stats, '_asdict')  # Verify orchestrator compatibility
+            assert hasattr(stats, "_asdict")  # Verify orchestrator compatibility
             print("✅ atomic_write_depth_u16_png_with_stats() works (real implementation)")
             checks_passed += 1
     except NotImplementedError:
@@ -108,7 +114,7 @@ def verify_intentional_failures():
             depth_dir=Path("/tmp/depth"),
             output_dir=Path("/tmp/output"),
             preset="default",
-            device="cpu"
+            device="cpu",
         )
         print("❌ V2Runner.run() should raise FileNotFoundError (script missing)")
     except FileNotFoundError:
@@ -147,9 +153,16 @@ def verify_call_site_compatibility():
     checks_total += 1
     config = PostprocessingConfig()
     required_fields = [
-        'apply_metric_scaling', 'scale_factor', 'apply_median_filter',
-        'median_kernel_size', 'apply_bilateral_filter', 'bilateral_sigma_color',
-        'bilateral_sigma_space', 'preserve_edges', 'edge_threshold', 'fusion_mode'
+        "apply_metric_scaling",
+        "scale_factor",
+        "apply_median_filter",
+        "median_kernel_size",
+        "apply_bilateral_filter",
+        "bilateral_sigma_color",
+        "bilateral_sigma_space",
+        "preserve_edges",
+        "edge_threshold",
+        "fusion_mode",
     ]
     missing_fields = [f for f in required_fields if not hasattr(config, f)]
     if missing_fields:
@@ -164,7 +177,7 @@ def verify_call_site_compatibility():
     image = np.zeros((64, 64, 3), dtype=np.float32)
     result = DepthResult(depth_map=depth_map, original_image=image, metadata={})
 
-    if not hasattr(result, 'depth'):
+    if not hasattr(result, "depth"):
         print("❌ DepthResult missing .depth property alias")
     elif result.depth is not result.depth_map:
         print("❌ DepthResult.depth is not an alias for depth_map")

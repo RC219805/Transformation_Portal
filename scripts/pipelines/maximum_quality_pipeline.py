@@ -21,7 +21,7 @@ from typing import Optional, Tuple
 import warnings
 
 # Suppress less critical warnings
-warnings.filterwarnings('ignore', category=UserWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
 
 
 class MaximumQualityPipeline:
@@ -38,15 +38,14 @@ class MaximumQualityPipeline:
         print(f"Initializing Maximum Quality Pipeline on {self.device}...")
 
         # Initialize depth estimation
-        depth_model = ("depth-anything/Depth-Anything-V2-Large-hf" if use_large_depth_model
-                      else "depth-anything/Depth-Anything-V2-Small-hf")
+        depth_model = (
+            "depth-anything/Depth-Anything-V2-Large-hf"
+            if use_large_depth_model
+            else "depth-anything/Depth-Anything-V2-Small-hf"
+        )
 
         print(f"Loading {depth_model}...")
-        self.depth_pipe = transformers_pipeline(
-            task="depth-estimation",
-            model=depth_model,
-            device=self.device
-        )
+        self.depth_pipe = transformers_pipeline(task="depth-estimation", model=depth_model, device=self.device)
         print("✓ Depth model ready")
 
     def load_image_16bit(self, image_path: Path) -> np.ndarray:
@@ -59,10 +58,11 @@ class MaximumQualityPipeline:
         ext = image_path.suffix.lower()
 
         # Handle EXR files
-        if ext == '.exr':
+        if ext == ".exr":
             try:
                 import imageio
-                img_array = imageio.imread(image_path, format='EXR-FI')
+
+                img_array = imageio.imread(image_path, format="EXR-FI")
                 # EXR is already in float format
                 if img_array.dtype == np.float32 or img_array.dtype == np.float64:
                     img_array = img_array.astype(np.float32)
@@ -79,7 +79,7 @@ class MaximumQualityPipeline:
             except Exception as e:
                 print(f"  Warning: Could not load EXR with imageio ({e}), trying TIFF version...")
                 # Fall back to TIFF if EXR fails
-                tiff_path = image_path.with_suffix('.ti')
+                tiff_path = image_path.with_suffix(".ti")
                 if tiff_path.exists():
                     image_path = tiff_path
                 else:
@@ -89,15 +89,15 @@ class MaximumQualityPipeline:
         img = Image.open(image_path)
 
         # Convert to RGB if needed
-        if img.mode in ('RGBA', 'LA'):
-            background = Image.new('RGB', img.size, (255, 255, 255))
-            if img.mode == 'RGBA':
+        if img.mode in ("RGBA", "LA"):
+            background = Image.new("RGB", img.size, (255, 255, 255))
+            if img.mode == "RGBA":
                 background.paste(img, mask=img.split()[3])
             else:
                 background.paste(img, mask=img.split()[1])
             img = background
-        elif img.mode != 'RGB':
-            img = img.convert('RGB')
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
 
         # Convert to float32 array normalized to [0, 1]
         img_array = np.array(img, dtype=np.float32)
@@ -126,7 +126,7 @@ class MaximumQualityPipeline:
 
         # Generate depth
         depth_result = self.depth_pipe(pil_image)
-        depth_map = np.array(depth_result['depth'])
+        depth_map = np.array(depth_result["depth"])
 
         # Normalize to [0, 1]
         depth_map = depth_map.astype(np.float32)
@@ -137,11 +137,7 @@ class MaximumQualityPipeline:
         return depth_map
 
     def apply_depth_aware_enhancement(
-        self,
-        image: np.ndarray,
-        depth: np.ndarray,
-        clarity_strength: float = 0.15,
-        atmospheric_strength: float = 0.10
+        self, image: np.ndarray, depth: np.ndarray, clarity_strength: float = 0.15, atmospheric_strength: float = 0.10
     ) -> np.ndarray:
         """
         Apply depth-aware enhancements with conservative settings.
@@ -164,6 +160,7 @@ class MaximumQualityPipeline:
         if clarity_strength > 0:
             # Simple local contrast (unsharp mask substitute)
             from scipy.ndimage import gaussian_filter
+
             # Apply gaussian per channel
             blurred = np.zeros_like(result)
             for c in range(3):
@@ -173,11 +170,7 @@ class MaximumQualityPipeline:
 
             # Apply only to foreground
             for c in range(3):
-                result[:, :, c] = np.where(
-                    foreground_mask,
-                    clarity_boost[:, :, c],
-                    result[:, :, c]
-                )
+                result[:, :, c] = np.where(foreground_mask, clarity_boost[:, :, c], result[:, :, c])
 
         # BACKGROUND: Subtle atmospheric haze
         if atmospheric_strength > 0:
@@ -186,19 +179,11 @@ class MaximumQualityPipeline:
 
             for c in range(3):
                 haze_layer = result[:, :, c] * (1 - atmospheric_strength) + haze_color[c] * atmospheric_strength
-                result[:, :, c] = np.where(
-                    background_mask,
-                    haze_layer,
-                    result[:, :, c]
-                )
+                result[:, :, c] = np.where(background_mask, haze_layer, result[:, :, c])
 
         return np.clip(result, 0, 1)
 
-    def apply_material_response(
-        self,
-        image: np.ndarray,
-        strength: float = 0.65
-    ) -> np.ndarray:
+    def apply_material_response(self, image: np.ndarray, strength: float = 0.65) -> np.ndarray:
         """
         Apply conservative Material Response enhancement.
 
@@ -223,11 +208,7 @@ class MaximumQualityPipeline:
 
         for c in range(3):
             deviation = image[:, :, c] - luminance
-            enhanced[:, :, c] = np.where(
-                midtone_mask,
-                luminance + deviation * saturation_boost,
-                enhanced[:, :, c]
-            )
+            enhanced[:, :, c] = np.where(midtone_mask, luminance + deviation * saturation_boost, enhanced[:, :, c])
 
         return np.clip(enhanced, 0, 1)
 
@@ -275,9 +256,9 @@ class MaximumQualityPipeline:
             tifffile.imwrite(
                 output_path,
                 image_16bit,
-                compression='lzw',
-                photometric='rgb',
-                metadata={'Software': 'Transformation Portal - Maximum Quality Pipeline'}
+                compression="lzw",
+                photometric="rgb",
+                metadata={"Software": "Transformation Portal - Maximum Quality Pipeline"},
             )
             print(f"✓ Saved 16-bit TIFF: {output_path.name} [{image_16bit.nbytes / (1024**2):.1f} MB]")
 
@@ -286,7 +267,7 @@ class MaximumQualityPipeline:
             print("  ⚠️  Warning: tifffile not available, saving as 8-bit TIFF")
             image_8bit = (np.clip(image, 0, 1) * 255).astype(np.uint8)
             pil_image = Image.fromarray(image_8bit)
-            pil_image.save(output_path, format='TIFF', compression='tiff_lzw')
+            pil_image.save(output_path, format="TIFF", compression="tiff_lzw")
             print(f"  Saved 8-bit TIFF: {output_path.name}")
 
     def save_jpeg(self, image: np.ndarray, output_path: Path, quality: int = 98):
@@ -295,19 +276,14 @@ class MaximumQualityPipeline:
         """
         # Convert to 8-bit
         image_8bit = (np.clip(image, 0, 1) * 255).astype(np.uint8)
-        pil_image = Image.fromarray(image_8bit, mode='RGB')
+        pil_image = Image.fromarray(image_8bit, mode="RGB")
 
         # Save with high quality, optimized
-        pil_image.save(output_path, format='JPEG', quality=quality, optimize=True, subsampling=0)
+        pil_image.save(output_path, format="JPEG", quality=quality, optimize=True, subsampling=0)
         print(f"✓ Saved high-quality JPEG: {output_path.name}")
 
     def process_image(
-        self,
-        input_path: Path,
-        output_dir: Path,
-        save_tiff: bool = True,
-        save_jpeg: bool = True,
-        save_depth: bool = False
+        self, input_path: Path, output_dir: Path, save_tiff: bool = True, save_jpeg: bool = True, save_depth: bool = False
     ) -> dict:
         """
         Process single image through maximum quality pipeline.
@@ -327,11 +303,7 @@ class MaximumQualityPipeline:
 
         # Apply depth-aware enhancements
         print("Applying depth-aware processing...")
-        enhanced = self.apply_depth_aware_enhancement(
-            image, depth,
-            clarity_strength=0.15,
-            atmospheric_strength=0.10
-        )
+        enhanced = self.apply_depth_aware_enhancement(image, depth, clarity_strength=0.15, atmospheric_strength=0.10)
 
         # Apply Material Response
         print("Applying Material Response enhancement...")
@@ -349,18 +321,18 @@ class MaximumQualityPipeline:
         if save_tiff:
             tiff_path = output_dir / f"{stem}_MaxQuality.ti"
             self.save_16bit_tiff(final, tiff_path)
-            outputs['tiff'] = tiff_path
+            outputs["tiff"] = tiff_path
 
         if save_jpeg:
             jpeg_path = output_dir / f"{stem}_MaxQuality.jpg"
             self.save_jpeg(final, jpeg_path, quality=98)
-            outputs['jpeg'] = jpeg_path
+            outputs["jpeg"] = jpeg_path
 
         if save_depth:
             depth_path = output_dir / f"{stem}_Depth.png"
             depth_8bit = (depth * 255).astype(np.uint8)
             Image.fromarray(depth_8bit).save(depth_path)
-            outputs['depth'] = depth_path
+            outputs["depth"] = depth_path
             print(f"✓ Saved depth map: {depth_path.name}")
 
         print("-" * 60)
@@ -373,18 +345,13 @@ def main():
     """Main entry point for maximum quality processing."""
     import argparse
 
-    parser = argparse.ArgumentParser(description='Maximum Quality Pipeline for 750 Picacho Lane')
-    parser.add_argument('input', type=str, help='Input image path or directory')
-    parser.add_argument('--output', '-o', type=str, default='Maximum_Quality_Output',
-                       help='Output directory')
-    parser.add_argument('--tif', action='store_true', default=True,
-                       help='Save 16-bit TIFF (default: True)')
-    parser.add_argument('--jpeg', action='store_true', default=True,
-                       help='Save high-quality JPEG (default: True)')
-    parser.add_argument('--depth', action='store_true',
-                       help='Save depth map visualization')
-    parser.add_argument('--small-model', action='store_true',
-                       help='Use smaller/faster depth model')
+    parser = argparse.ArgumentParser(description="Maximum Quality Pipeline for 750 Picacho Lane")
+    parser.add_argument("input", type=str, help="Input image path or directory")
+    parser.add_argument("--output", "-o", type=str, default="Maximum_Quality_Output", help="Output directory")
+    parser.add_argument("--tif", action="store_true", default=True, help="Save 16-bit TIFF (default: True)")
+    parser.add_argument("--jpeg", action="store_true", default=True, help="Save high-quality JPEG (default: True)")
+    parser.add_argument("--depth", action="store_true", help="Save depth map visualization")
+    parser.add_argument("--small-model", action="store_true", help="Use smaller/faster depth model")
 
     args = parser.parse_args()
 
@@ -397,28 +364,18 @@ def main():
 
     if input_path.is_file():
         # Single file
-        pipeline.process_image(
-            input_path, output_dir,
-            save_tiff=args.tiff,
-            save_jpeg=args.jpeg,
-            save_depth=args.depth
-        )
+        pipeline.process_image(input_path, output_dir, save_tiff=args.tiff, save_jpeg=args.jpeg, save_depth=args.depth)
     elif input_path.is_dir():
         # Batch process directory
         image_files = []
-        for ext in ['.exr', '.ti', '.tif', '.jpg', '.jpeg', '.png']:
-            image_files.extend(input_path.glob(f'*{ext}'))
+        for ext in [".exr", ".ti", ".tif", ".jpg", ".jpeg", ".png"]:
+            image_files.extend(input_path.glob(f"*{ext}"))
 
         print(f"\nFound {len(image_files)} images to process")
 
         for img_path in image_files:
             try:
-                pipeline.process_image(
-                    img_path, output_dir,
-                    save_tiff=args.tiff,
-                    save_jpeg=args.jpeg,
-                    save_depth=args.depth
-                )
+                pipeline.process_image(img_path, output_dir, save_tiff=args.tiff, save_jpeg=args.jpeg, save_depth=args.depth)
             except Exception as e:
                 print(f"✗ Error processing {img_path.name}: {e}")
                 continue
@@ -432,5 +389,5 @@ def main():
     print("=" * 60)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

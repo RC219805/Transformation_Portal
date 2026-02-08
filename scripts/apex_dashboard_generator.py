@@ -663,32 +663,11 @@ def generate_latest_html(data: Dict[str, Any], output_dir: Path) -> None:
 
 def main() -> int:
     """Main CLI entry point."""
-    parser = argparse.ArgumentParser(
-        description="Generate APEX dashboard from performance ledger"
-    )
-    parser.add_argument(
-        "--version",
-        action="version",
-        version=f"%(prog)s {__version__}"
-    )
-    parser.add_argument(
-        "--ledger-db",
-        type=Path,
-        required=True,
-        help="Path to APEX ledger database"
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        required=True,
-        help="Output directory for dashboard files"
-    )
-    parser.add_argument(
-        "--days",
-        type=int,
-        default=90,
-        help="Number of days of history to include (default: 90)"
-    )
+    parser = argparse.ArgumentParser(description="Generate APEX dashboard from performance ledger")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    parser.add_argument("--ledger-db", type=Path, required=True, help="Path to APEX ledger database")
+    parser.add_argument("--output-dir", type=Path, required=True, help="Output directory for dashboard files")
+    parser.add_argument("--days", type=int, default=90, help="Number of days of history to include (default: 90)")
 
     args = parser.parse_args()
 
@@ -723,6 +702,7 @@ def main() -> int:
     except Exception as e:
         print(f"❌ Error generating dashboard: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 

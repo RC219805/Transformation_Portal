@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ColorSpec:
     """Color specification from architectural documents."""
+
     name: str
     category: str  # primary, accent, neutral
     hex_code: Optional[str] = None
@@ -30,16 +31,17 @@ class ColorSpec:
     def to_dict(self) -> Dict[str, Any]:
         data = asdict(self)
         if self.rgb:
-            data['rgb'] = list(self.rgb)
+            data["rgb"] = list(self.rgb)
         return data
 
 
 @dataclass
 class FinishSpec:
     """Finish specification from architectural documents."""
+
     material: str
     material_type: str  # wood, stone, metal, glass, etc.
-    finish_type: str = 'natural'  # matte, glossy, brushed, honed, etc.
+    finish_type: str = "natural"  # matte, glossy, brushed, honed, etc.
     manufacturer: Optional[str] = None
     product_name: Optional[str] = None
     location: Optional[str] = None
@@ -52,9 +54,10 @@ class FinishSpec:
 @dataclass
 class DimensionSpec:
     """Dimension specification from architectural documents."""
+
     element: str
     dimension: float
-    unit: str = 'feet'
+    unit: str = "feet"
     notes: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -85,7 +88,7 @@ class PDFSpecParser:
 
         all_text = []
         try:
-            with open(self.pdf_path, 'rb') as f:
+            with open(self.pdf_path, "rb") as f:
                 reader = PdfReader(f)
                 total_pages = len(reader.pages)
                 logger.info(f"Processing {total_pages} pages")
@@ -116,37 +119,35 @@ class PDFSpecParser:
         # Material patterns for luxury estates
         material_patterns = [
             # Wood
-            (r'(white oak|walnut|maple|cherry|mahogany|teak)\s+(\w+\s+)?finish', 'wood'),
-            (r'custom\s+cabinetry.*?(\w+\s+oak|\w+\s+walnut)', 'wood'),
-            (r'flooring.*?(oak|walnut|maple|hardwood)', 'wood'),
-
+            (r"(white oak|walnut|maple|cherry|mahogany|teak)\s+(\w+\s+)?finish", "wood"),
+            (r"custom\s+cabinetry.*?(\w+\s+oak|\w+\s+walnut)", "wood"),
+            (r"flooring.*?(oak|walnut|maple|hardwood)", "wood"),
             # Stone
-            (r'(carrara|calacatta|statuario)\s+marble', 'stone'),
-            (r'(granite|limestone|travertine|onyx)\s+(\w+)', 'stone'),
-            (r'(honed|polished|flamed)\s+(marble|granite|stone)', 'stone'),
-
+            (r"(carrara|calacatta|statuario)\s+marble", "stone"),
+            (r"(granite|limestone|travertine|onyx)\s+(\w+)", "stone"),
+            (r"(honed|polished|flamed)\s+(marble|granite|stone)", "stone"),
             # Metal
-            (r'(brushed|polished|satin)\s+(nickel|brass|bronze|steel)', 'metal'),
-            (r'stainless\s+steel.*?(brushed|polished)', 'metal'),
-
+            (r"(brushed|polished|satin)\s+(nickel|brass|bronze|steel)", "metal"),
+            (r"stainless\s+steel.*?(brushed|polished)", "metal"),
             # Glass
-            (r'(frameless|tempered|low-e|laminated)\s+glass', 'glass'),
-            (r'glazing.*?(clear|tinted|frosted)', 'glass'),
-
+            (r"(frameless|tempered|low-e|laminated)\s+glass", "glass"),
+            (r"glazing.*?(clear|tinted|frosted)", "glass"),
             # Tile
-            (r'(porcelain|ceramic|mosaic)\s+tile', 'tile'),
-            (r'tile.*?(subway|hexagon|penny)', 'tile'),
+            (r"(porcelain|ceramic|mosaic)\s+tile", "tile"),
+            (r"tile.*?(subway|hexagon|penny)", "tile"),
         ]
 
         for pattern, category in material_patterns:
             matches = re.finditer(pattern, self.text_content, re.IGNORECASE)
             for match in matches:
-                finishes.append(FinishSpec(
-                    material=match.group(0),
-                    material_type=category,
-                    finish_type='standard',
-                    location=self._find_location_context(match.start())
-                ))
+                finishes.append(
+                    FinishSpec(
+                        material=match.group(0),
+                        material_type=category,
+                        finish_type="standard",
+                        location=self._find_location_context(match.start()),
+                    )
+                )
 
         # Deduplicate and clean
         unique_finishes = self._deduplicate_finishes(finishes)
@@ -164,45 +165,34 @@ class PDFSpecParser:
         # Color name patterns
         color_patterns = [
             # Sherwin Williams / Benjamin Moore style
-            (r'(SW|BM)\s+\d{4}[-\s]*([\w\s]+)', 'paint'),
-
+            (r"(SW|BM)\s+\d{4}[-\s]*([\w\s]+)", "paint"),
             # Generic color names with categories
-            (r'(warm white|soft white|bright white|off-white)', 'neutral'),
-            (r'(gray|grey|charcoal|slate)', 'neutral'),
-            (r'(beige|taupe|greige|sand)', 'neutral'),
-            (r'(navy|ocean blue|coastal blue)', 'accent'),
-            (r'(sage|olive|moss|forest green)', 'accent'),
-            (r'(terracotta|rust|clay)', 'accent'),
-
+            (r"(warm white|soft white|bright white|off-white)", "neutral"),
+            (r"(gray|grey|charcoal|slate)", "neutral"),
+            (r"(beige|taupe|greige|sand)", "neutral"),
+            (r"(navy|ocean blue|coastal blue)", "accent"),
+            (r"(sage|olive|moss|forest green)", "accent"),
+            (r"(terracotta|rust|clay)", "accent"),
             # With hex codes
-            (r'#([0-9A-Fa-f]{6})', 'hex'),
-
+            (r"#([0-9A-Fa-f]{6})", "hex"),
             # RGB values
-            (r'RGB\s*\(?\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)?', 'rgb'),
+            (r"RGB\s*\(?\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)?", "rgb"),
         ]
 
         for pattern, category in color_patterns:
             matches = re.finditer(pattern, self.text_content, re.IGNORECASE)
             for match in matches:
-                if category == 'hex':
-                    colors.append(ColorSpec(
-                        name=f"Color #{match.group(1)}",
-                        category='accent',
-                        hex_code=f"#{match.group(1)}"
-                    ))
-                elif category == 'rgb':
+                if category == "hex":
+                    colors.append(ColorSpec(name=f"Color #{match.group(1)}", category="accent", hex_code=f"#{match.group(1)}"))
+                elif category == "rgb":
                     r, g, b = int(match.group(1)), int(match.group(2)), int(match.group(3))
-                    colors.append(ColorSpec(
-                        name="RGB Color",
-                        category='custom',
-                        rgb=(r, g, b)
-                    ))
+                    colors.append(ColorSpec(name="RGB Color", category="custom", rgb=(r, g, b)))
                 else:
-                    colors.append(ColorSpec(
-                        name=match.group(0),
-                        category=category,
-                        application=self._find_location_context(match.start())
-                    ))
+                    colors.append(
+                        ColorSpec(
+                            name=match.group(0), category=category, application=self._find_location_context(match.start())
+                        )
+                    )
 
         # Deduplicate
         unique_colors = self._deduplicate_colors(colors)
@@ -220,36 +210,33 @@ class PDFSpecParser:
         # Dimension patterns
         dimension_patterns = [
             # Ceiling height
-            (r'ceiling\s+height.*?(\d+)[\s\-]*(?:ft|feet|\')', 'ceiling_height'),
-            (r'(\d+)[\s\-]*(?:ft|feet|\')\s+ceiling', 'ceiling_height'),
-
+            (r"ceiling\s+height.*?(\d+)[\s\-]*(?:ft|feet|\')", "ceiling_height"),
+            (r"(\d+)[\s\-]*(?:ft|feet|\')\s+ceiling", "ceiling_height"),
             # Room dimensions
-            (r'(\d+)[\s\-]*x\s*(\d+)[\s\-]*(?:ft|feet)', 'room_dimension'),
-
+            (r"(\d+)[\s\-]*x\s*(\d+)[\s\-]*(?:ft|feet)", "room_dimension"),
             # Window/door sizes
-            (r'(window|door).*?(\d+)[\s\-]*x\s*(\d+)', 'opening'),
-
+            (r"(window|door).*?(\d+)[\s\-]*x\s*(\d+)", "opening"),
             # General dimensions
-            (r'(\d+)[\s\-]*(?:ft|feet|\')\s+(\w+)', 'general'),
+            (r"(\d+)[\s\-]*(?:ft|feet|\')\s+(\w+)", "general"),
         ]
 
         for pattern, dim_type in dimension_patterns:
             matches = re.finditer(pattern, self.text_content, re.IGNORECASE)
             for match in matches:
                 try:
-                    if dim_type == 'room_dimension':
-                        dimensions.append(DimensionSpec(
-                            element='room',
-                            dimension=float(match.group(1)),
-                            unit='feet',
-                            notes=f"{match.group(1)} x {match.group(2)} feet"
-                        ))
-                    elif dim_type == 'ceiling_height':
-                        dimensions.append(DimensionSpec(
-                            element='ceiling_height',
-                            dimension=float(match.group(1)),
-                            unit='feet'
-                        ))
+                    if dim_type == "room_dimension":
+                        dimensions.append(
+                            DimensionSpec(
+                                element="room",
+                                dimension=float(match.group(1)),
+                                unit="feet",
+                                notes=f"{match.group(1)} x {match.group(2)} feet",
+                            )
+                        )
+                    elif dim_type == "ceiling_height":
+                        dimensions.append(
+                            DimensionSpec(element="ceiling_height", dimension=float(match.group(1)), unit="feet")
+                        )
                 except (ValueError, IndexError):
                     continue
 
@@ -262,42 +249,74 @@ class PDFSpecParser:
         Look for sections with design philosophy, style descriptions.
         """
         intent = {
-            'style_keywords': [],
-            'ambiance': [],
-            'key_features': [],
+            "style_keywords": [],
+            "ambiance": [],
+            "key_features": [],
         }
 
         # Style keywords
         style_patterns = [
-            'mediterranean', 'modern', 'contemporary', 'traditional', 'transitional',
-            'coastal', 'luxury', 'estate', 'villa', 'resort-style',
-            'minimalist', 'elegant', 'sophisticated', 'timeless', 'classic',
+            "mediterranean",
+            "modern",
+            "contemporary",
+            "traditional",
+            "transitional",
+            "coastal",
+            "luxury",
+            "estate",
+            "villa",
+            "resort-style",
+            "minimalist",
+            "elegant",
+            "sophisticated",
+            "timeless",
+            "classic",
         ]
 
         for keyword in style_patterns:
-            if re.search(r'\b' + keyword + r'\b', self.text_content, re.IGNORECASE):
-                intent['style_keywords'].append(keyword)
+            if re.search(r"\b" + keyword + r"\b", self.text_content, re.IGNORECASE):
+                intent["style_keywords"].append(keyword)
 
         # Ambiance keywords
         ambiance_patterns = [
-            'bright', 'airy', 'open', 'spacious', 'intimate', 'cozy',
-            'warm', 'cool', 'inviting', 'serene', 'dramatic', 'tranquil',
+            "bright",
+            "airy",
+            "open",
+            "spacious",
+            "intimate",
+            "cozy",
+            "warm",
+            "cool",
+            "inviting",
+            "serene",
+            "dramatic",
+            "tranquil",
         ]
 
         for keyword in ambiance_patterns:
-            if re.search(r'\b' + keyword + r'\b', self.text_content, re.IGNORECASE):
-                intent['ambiance'].append(keyword)
+            if re.search(r"\b" + keyword + r"\b", self.text_content, re.IGNORECASE):
+                intent["ambiance"].append(keyword)
 
         # Key features
         feature_patterns = [
-            'floor-to-ceiling', 'vaulted ceiling', 'skylights', 'french doors',
-            'custom cabinetry', 'built-in', 'fireplace', 'wine cellar',
-            'pool', 'spa', 'outdoor living', 'ocean view', 'mountain view',
+            "floor-to-ceiling",
+            "vaulted ceiling",
+            "skylights",
+            "french doors",
+            "custom cabinetry",
+            "built-in",
+            "fireplace",
+            "wine cellar",
+            "pool",
+            "spa",
+            "outdoor living",
+            "ocean view",
+            "mountain view",
         ]
 
         for keyword in feature_patterns:
-            if re.search(r'\b' + keyword + r'\b', self.text_content, re.IGNORECASE):
-                intent['key_features'].append(keyword)
+            if re.search(r"\b" + keyword + r"\b", self.text_content, re.IGNORECASE):
+                intent["key_features"].append(keyword)
 
         logger.info(f"Extracted design intent: {len(intent['style_keywords'])} style keywords")
         return intent
@@ -309,7 +328,7 @@ class PDFSpecParser:
         context = self.text_content[start:end]
 
         # Look for room names
-        room_patterns = ['kitchen', 'bath', 'bedroom', 'living', 'dining', 'entry', 'pool']
+        room_patterns = ["kitchen", "bath", "bedroom", "living", "dining", "entry", "pool"]
         for room in room_patterns:
             if room in context.lower():
                 return room
@@ -361,20 +380,20 @@ class PDFSpecParser:
         design_intent = self.extract_design_intent()
 
         result = {
-            'pdf_file': str(self.pdf_path),
-            'pdf_file_size_mb': self.pdf_path.stat().st_size / (1024 * 1024),
-            'total_pages': len(self.pages),
-            'text_length': len(self.text_content),
-            'material_specifications': [m.to_dict() for m in materials],
-            'color_palette': [c.to_dict() for c in colors],
-            'dimensions': [d.to_dict() for d in dimensions],
-            'design_intent': design_intent,
-            'extraction_summary': {
-                'materials_count': len(materials),
-                'colors_count': len(colors),
-                'dimensions_count': len(dimensions),
-                'style_keywords': len(design_intent['style_keywords']),
-            }
+            "pdf_file": str(self.pdf_path),
+            "pdf_file_size_mb": self.pdf_path.stat().st_size / (1024 * 1024),
+            "total_pages": len(self.pages),
+            "text_length": len(self.text_content),
+            "material_specifications": [m.to_dict() for m in materials],
+            "color_palette": [c.to_dict() for c in colors],
+            "dimensions": [d.to_dict() for d in dimensions],
+            "design_intent": design_intent,
+            "extraction_summary": {
+                "materials_count": len(materials),
+                "colors_count": len(colors),
+                "dimensions_count": len(dimensions),
+                "style_keywords": len(design_intent["style_keywords"]),
+            },
         }
 
         logger.info(f"Parsed {len(materials)} materials, {len(colors)} colors, {len(dimensions)} dimensions")
@@ -389,44 +408,40 @@ class PDFSpecParser:
         logger.info("Using fallback specifications for 750 Picacho Lane")
 
         return {
-            'pdf_file': str(self.pdf_path),
-            'extraction_method': 'fallback_montecito_luxury_standards',
-            'material_specifications': [
-                FinishSpec('White Oak Flooring', 'wood', 'matte',
-                           location='living areas').to_dict(),
-                FinishSpec('Carrara Marble', 'stone', 'honed',
-                           location='kitchen/bath').to_dict(),
-                FinishSpec('Stainless Steel', 'metal', 'brushed',
-                           location='kitchen').to_dict(),
-                FinishSpec('Floor-to-Ceiling Glass', 'glass', 'clear',
-                           location='living areas').to_dict(),
+            "pdf_file": str(self.pdf_path),
+            "extraction_method": "fallback_montecito_luxury_standards",
+            "material_specifications": [
+                FinishSpec("White Oak Flooring", "wood", "matte", location="living areas").to_dict(),
+                FinishSpec("Carrara Marble", "stone", "honed", location="kitchen/bath").to_dict(),
+                FinishSpec("Stainless Steel", "metal", "brushed", location="kitchen").to_dict(),
+                FinishSpec("Floor-to-Ceiling Glass", "glass", "clear", location="living areas").to_dict(),
             ],
-            'color_palette': [
-                ColorSpec('Warm White', 'primary', application='walls').to_dict(),
-                ColorSpec('Soft Gray', 'neutral', application='trim').to_dict(),
-                ColorSpec('Ocean Blue', 'accent', application='accents').to_dict(),
-                ColorSpec('Natural Wood', 'primary', application='floors/cabinetry').to_dict(),
+            "color_palette": [
+                ColorSpec("Warm White", "primary", application="walls").to_dict(),
+                ColorSpec("Soft Gray", "neutral", application="trim").to_dict(),
+                ColorSpec("Ocean Blue", "accent", application="accents").to_dict(),
+                ColorSpec("Natural Wood", "primary", application="floors/cabinetry").to_dict(),
             ],
-            'dimensions': [
-                DimensionSpec('ceiling_height', 12.0, 'feet', 'living areas').to_dict(),
-                DimensionSpec('ceiling_height', 10.0, 'feet', 'bedrooms').to_dict(),
+            "dimensions": [
+                DimensionSpec("ceiling_height", 12.0, "feet", "living areas").to_dict(),
+                DimensionSpec("ceiling_height", 10.0, "feet", "bedrooms").to_dict(),
             ],
-            'design_intent': {
-                'style_keywords': ['mediterranean', 'luxury', 'coastal', 'elegant'],
-                'ambiance': ['bright', 'airy', 'serene', 'sophisticated'],
-                'key_features': ['floor-to-ceiling', 'pool', 'ocean view', 'custom cabinetry'],
+            "design_intent": {
+                "style_keywords": ["mediterranean", "luxury", "coastal", "elegant"],
+                "ambiance": ["bright", "airy", "serene", "sophisticated"],
+                "key_features": ["floor-to-ceiling", "pool", "ocean view", "custom cabinetry"],
             },
-            'extraction_summary': {
-                'materials_count': 4,
-                'colors_count': 4,
-                'dimensions_count': 2,
-                'style_keywords': 4,
-            }
+            "extraction_summary": {
+                "materials_count": 4,
+                "colors_count": 4,
+                "dimensions_count": 2,
+                "style_keywords": 4,
+            },
         }
 
     def save_specs(self, output_path: Path, specs: Dict[str, Any]) -> None:
         """Save extracted specifications to JSON."""
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             json.dump(specs, f, indent=2)
         logger.info(f"Saved specifications to: {output_path}")
 
@@ -435,10 +450,9 @@ def main():
     """Example usage."""
     import argparse
 
-    parser = argparse.ArgumentParser(description='Parse architectural specifications from PDF')
-    parser.add_argument('pdf_file', type=Path, help='Path to PDF file')
-    parser.add_argument('--output', '-o', type=Path, default=Path('pdf_specs.json'),
-                       help='Output JSON file')
+    parser = argparse.ArgumentParser(description="Parse architectural specifications from PDF")
+    parser.add_argument("pdf_file", type=Path, help="Path to PDF file")
+    parser.add_argument("--output", "-o", type=Path, default=Path("pdf_specs.json"), help="Output JSON file")
 
     args = parser.parse_args()
 
@@ -455,5 +469,5 @@ def main():
     print(f"\nSaved to: {args.output}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

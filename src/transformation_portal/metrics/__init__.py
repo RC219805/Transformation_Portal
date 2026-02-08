@@ -65,6 +65,7 @@ __all__ = [
 # Optional ML-based metrics (lazy import to avoid dependency issues)
 try:
     from transformation_portal.metrics.fid_metric import FIDMetric  # noqa: F401
+
     __all__.append("FIDMetric")
 except ImportError:
     # Optional dependency: FIDMetric unavailable when torch-fidelity not installed
@@ -72,6 +73,7 @@ except ImportError:
 
 try:
     from transformation_portal.metrics.lpips_metric import LPIPSMetric  # noqa: F401
+
     __all__.append("LPIPSMetric")
 except ImportError:
     # Optional dependency: LPIPSMetric unavailable when lpips package not installed
@@ -79,6 +81,7 @@ except ImportError:
 
 try:
     from transformation_portal.metrics.traditional_metrics import TraditionalMetrics  # noqa: F401
+
     __all__.append("TraditionalMetrics")
 except ImportError:
     # Optional dependency: TraditionalMetrics unavailable when skimage not installed

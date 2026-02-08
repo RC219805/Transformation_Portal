@@ -59,8 +59,9 @@ def test_fix_2_specificity_scoring():
         p95_threshold_sec=15.0,
     )
 
-    assert scene_bucket.specificity > range_bucket.specificity, \
-        "FAILED: Range bucket has higher specificity than scene bucket!"
+    assert (
+        scene_bucket.specificity > range_bucket.specificity
+    ), "FAILED: Range bucket has higher specificity than scene bucket!"
 
     print(f"   ✓ Scene bucket specificity: {scene_bucket.specificity} (scene_type=+10)")
     print(f"   ✓ Range bucket specificity: {range_bucket.specificity} (pixel_count_min+max=+3)")
@@ -97,30 +98,42 @@ def test_fix_4_boundary_conditions():
 
     # Test at exact min
     capsule_min = PerformanceCapsule(
-        image_id="min", image_path="min.tiff", input_hash="min",
-        original_shape=(1, 1), enforced_shape=(1, 1),
+        image_id="min",
+        image_path="min.tiff",
+        input_hash="min",
+        original_shape=(1, 1),
+        enforced_shape=(1, 1),
         pixel_count=20_000_000,  # Exactly at min
-        dimension_adjustment="exact", timings={"total": 1.0}
+        dimension_adjustment="exact",
+        timings={"total": 1.0},
     )
     assert bucket.matches(capsule_min), "FAILED: Should match at exact min (inclusive)"
     print(f"   ✓ Inclusive at min: pixel_count={capsule_min.pixel_count:,}")
 
     # Test at exact max
     capsule_max = PerformanceCapsule(
-        image_id="max", image_path="max.tiff", input_hash="max",
-        original_shape=(1, 1), enforced_shape=(1, 1),
+        image_id="max",
+        image_path="max.tiff",
+        input_hash="max",
+        original_shape=(1, 1),
+        enforced_shape=(1, 1),
         pixel_count=50_000_000,  # Exactly at max
-        dimension_adjustment="exact", timings={"total": 1.0}
+        dimension_adjustment="exact",
+        timings={"total": 1.0},
     )
     assert bucket.matches(capsule_max), "FAILED: Should match at exact max (inclusive)"
     print(f"   ✓ Inclusive at max: pixel_count={capsule_max.pixel_count:,}")
 
     # Test just outside range
     capsule_below = PerformanceCapsule(
-        image_id="below", image_path="below.tiff", input_hash="below",
-        original_shape=(1, 1), enforced_shape=(1, 1),
+        image_id="below",
+        image_path="below.tiff",
+        input_hash="below",
+        original_shape=(1, 1),
+        enforced_shape=(1, 1),
         pixel_count=19_999_999,  # Just below min
-        dimension_adjustment="exact", timings={"total": 1.0}
+        dimension_adjustment="exact",
+        timings={"total": 1.0},
     )
     assert not bucket.matches(capsule_below), "FAILED: Should NOT match below min"
     print(f"   ✓ Exclusive below min: pixel_count={capsule_below.pixel_count:,}")
@@ -210,6 +223,7 @@ def main():
     except Exception as e:
         print(f"\n❌ UNEXPECTED ERROR: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 

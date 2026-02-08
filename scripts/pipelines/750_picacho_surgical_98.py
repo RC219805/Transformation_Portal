@@ -24,7 +24,8 @@ import logging
 from datetime import datetime
 import json
 import warnings
-warnings.filterwarnings('ignore')
+
+warnings.filterwarnings("ignore")
 
 import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter
@@ -33,10 +34,7 @@ from scipy.ndimage import gaussian_filter
 from skimage import color
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -124,13 +122,13 @@ class SurgicalQualityMetrics:
     def calculate_overall_quality(metrics: Dict[str, float]) -> float:
         """Calculate overall quality."""
         weights = {
-            'sharpness': 0.20,
-            'contrast': 0.15,
-            'color_vibrancy': 0.15,
-            'exposure_quality': 0.20,
-            'detail_preservation': 0.15,
-            'dynamic_range': 0.10,
-            'noise_quality': 0.05
+            "sharpness": 0.20,
+            "contrast": 0.15,
+            "color_vibrancy": 0.15,
+            "exposure_quality": 0.20,
+            "detail_preservation": 0.15,
+            "dynamic_range": 0.10,
+            "noise_quality": 0.05,
         }
         total = sum(metrics[k] * weights[k] for k in weights.keys())
         return round(total, 2)
@@ -139,15 +137,15 @@ class SurgicalQualityMetrics:
     def evaluate(cls, image: np.ndarray) -> Dict[str, float]:
         """Calculate all metrics."""
         metrics = {
-            'sharpness': cls.calculate_sharpness(image),
-            'contrast': cls.calculate_contrast(image),
-            'color_vibrancy': cls.calculate_color_vibrancy(image),
-            'exposure_quality': cls.calculate_exposure_quality(image),
-            'detail_preservation': cls.calculate_detail_preservation(image),
-            'dynamic_range': cls.calculate_dynamic_range(image),
-            'noise_quality': cls.calculate_noise_quality(image)
+            "sharpness": cls.calculate_sharpness(image),
+            "contrast": cls.calculate_contrast(image),
+            "color_vibrancy": cls.calculate_color_vibrancy(image),
+            "exposure_quality": cls.calculate_exposure_quality(image),
+            "detail_preservation": cls.calculate_detail_preservation(image),
+            "dynamic_range": cls.calculate_dynamic_range(image),
+            "noise_quality": cls.calculate_noise_quality(image),
         }
-        metrics['overall_quality'] = cls.calculate_overall_quality(metrics)
+        metrics["overall_quality"] = cls.calculate_overall_quality(metrics)
         return {k: round(float(v), 2) for k, v in metrics.items()}
 
     @classmethod
@@ -155,7 +153,7 @@ class SurgicalQualityMetrics:
         """Identify areas below 95 that could be improved."""
         weaknesses = []
         for key, value in metrics.items():
-            if key != 'overall_quality' and value < 95:
+            if key != "overall_quality" and value < 95:
                 weaknesses.append((key, value))
         weaknesses.sort(key=lambda x: x[1])  # Sort by score (lowest first)
         return weaknesses
@@ -171,7 +169,7 @@ class SurgicalRefinement:
 
     def load_image(self, path: Path) -> np.ndarray:
         """Load image."""
-        img = Image.open(path).convert('RGB')
+        img = Image.open(path).convert("RGB")
         return np.array(img, dtype=np.float32) / 255.0
 
     def apply_micro_sharpening(self, image: np.ndarray, strength: float) -> np.ndarray:
@@ -224,7 +222,7 @@ class SurgicalRefinement:
         logger.info(f"Overall Quality: {initial_metrics['overall_quality']:.2f}/100\n")
         logger.info("Component Scores:")
         for key, value in initial_metrics.items():
-            if key != 'overall_quality':
+            if key != "overall_quality":
                 status = "✅" if value >= 95 else "⚠️" if value >= 85 else "❌"
                 logger.info(f"  {status} {key:25s}: {value:6.2f}/100")
 
@@ -237,17 +235,15 @@ class SurgicalRefinement:
 
             # Save original as-is
             output_path = self.output_dir / f"{input_path.stem}_Surgical98.tif"
-            Image.fromarray((image * 255).astype(np.uint8)).save(
-                output_path, format='TIFF', compression='lzw'
-            )
+            Image.fromarray((image * 255).astype(np.uint8)).save(output_path, format="TIFF", compression="lzw")
 
             return {
-                'input': input_path.name,
-                'output': output_path.name,
-                'initial_metrics': initial_metrics,
-                'final_metrics': initial_metrics,
-                'improvement': 0.0,
-                'actions': ['no_processing_needed']
+                "input": input_path.name,
+                "output": output_path.name,
+                "initial_metrics": initial_metrics,
+                "final_metrics": initial_metrics,
+                "improvement": 0.0,
+                "actions": ["no_processing_needed"],
             }
 
         logger.info(f"\n⚠️  Areas for improvement ({len(weaknesses)}):")
@@ -262,8 +258,8 @@ class SurgicalRefinement:
         enhanced = image.copy()
 
         # Sharpness adjustment
-        if initial_metrics['sharpness'] < 95:
-            deficit = 95 - initial_metrics['sharpness']
+        if initial_metrics["sharpness"] < 95:
+            deficit = 95 - initial_metrics["sharpness"]
             strength = 1.0 + (deficit / 200)  # Very conservative
             strength = min(strength, 1.08)  # Cap at 8% increase
             logger.info(f"1. Micro-sharpening: {strength:.3f}x (targeting +{deficit:.1f} points)")
@@ -271,8 +267,8 @@ class SurgicalRefinement:
             actions.append(f"sharpening_{strength:.3f}")
 
         # Color vibrancy
-        if initial_metrics['color_vibrancy'] < 95:
-            deficit = 95 - initial_metrics['color_vibrancy']
+        if initial_metrics["color_vibrancy"] < 95:
+            deficit = 95 - initial_metrics["color_vibrancy"]
             boost = 1.0 + (deficit / 500)  # Extremely conservative
             boost = min(boost, 1.03)  # Cap at 3% increase
             logger.info(f"2. Micro-saturation: {boost:.3f}x (targeting +{deficit:.1f} points)")
@@ -280,8 +276,8 @@ class SurgicalRefinement:
             actions.append(f"saturation_{boost:.3f}")
 
         # Contrast
-        if initial_metrics['contrast'] < 95:
-            deficit = 95 - initial_metrics['contrast']
+        if initial_metrics["contrast"] < 95:
+            deficit = 95 - initial_metrics["contrast"]
             amount = 1.0 + (deficit / 400)
             amount = min(amount, 1.04)  # Cap at 4% increase
             logger.info(f"3. Micro-contrast: {amount:.3f}x (targeting +{deficit:.1f} points)")
@@ -290,24 +286,26 @@ class SurgicalRefinement:
 
         if not actions:
             logger.info("No specific interventions needed.")
-            actions.append('minimal_adjustment')
+            actions.append("minimal_adjustment")
 
         # Convert to PIL for saving
         enhanced_pil = Image.fromarray((np.clip(enhanced, 0, 1) * 255).astype(np.uint8))
 
         # Final analysis
-        logger.info("\n" + "="*80)
+        logger.info("\n" + "=" * 80)
         logger.info("RESULTS:")
-        logger.info("="*80)
+        logger.info("=" * 80)
 
         final_metrics = SurgicalQualityMetrics.evaluate(np.array(enhanced_pil).astype(np.float32) / 255.0)
-        improvement = final_metrics['overall_quality'] - initial_metrics['overall_quality']
+        improvement = final_metrics["overall_quality"] - initial_metrics["overall_quality"]
 
-        logger.info(f"\nOverall Quality: {initial_metrics['overall_quality']:.2f} → {final_metrics['overall_quality']:.2f} ({improvement:+.2f})")
+        logger.info(
+            f"\nOverall Quality: {initial_metrics['overall_quality']:.2f} → {final_metrics['overall_quality']:.2f} ({improvement:+.2f})"
+        )
         logger.info("\nDetailed Changes:")
 
         for key in initial_metrics.keys():
-            if key != 'overall_quality':
+            if key != "overall_quality":
                 initial = initial_metrics[key]
                 final = final_metrics[key]
                 delta = final - initial
@@ -317,33 +315,33 @@ class SurgicalRefinement:
         # Save
         stem = input_path.stem
         output_path = self.output_dir / f"{stem}_Surgical98.tif"
-        enhanced_pil.save(output_path, format='TIFF', compression='lzw')
+        enhanced_pil.save(output_path, format="TIFF", compression="lzw")
         logger.info(f"\n✓ Saved: {output_path.name}")
 
         preview_path = self.output_dir / f"{stem}_Surgical98_preview.jpg"
-        enhanced_pil.save(preview_path, format='JPEG', quality=98, optimize=True)
+        enhanced_pil.save(preview_path, format="JPEG", quality=98, optimize=True)
         logger.info(f"✓ Preview: {preview_path.name}")
 
         # Quality assessment
-        logger.info("\n" + "="*80)
-        if final_metrics['overall_quality'] >= 98:
+        logger.info("\n" + "=" * 80)
+        if final_metrics["overall_quality"] >= 98:
             logger.info("🏆 EXCELLENT: Achieved 98+ quality target!")
-        elif final_metrics['overall_quality'] >= 95:
+        elif final_metrics["overall_quality"] >= 95:
             logger.info("✅ VERY GOOD: 95+ quality achieved")
-        elif final_metrics['overall_quality'] >= 90:
+        elif final_metrics["overall_quality"] >= 90:
             logger.info("👍 GOOD: 90+ quality achieved")
         else:
             logger.info("📊 BASELINE: Further refinement may be needed")
-        logger.info("="*80 + "\n")
+        logger.info("=" * 80 + "\n")
 
         return {
-            'input': input_path.name,
-            'output': output_path.name,
-            'preview': preview_path.name,
-            'initial_metrics': initial_metrics,
-            'final_metrics': final_metrics,
-            'improvement': round(float(improvement), 2),
-            'actions': actions
+            "input": input_path.name,
+            "output": output_path.name,
+            "preview": preview_path.name,
+            "initial_metrics": initial_metrics,
+            "final_metrics": final_metrics,
+            "improvement": round(float(improvement), 2),
+            "actions": actions,
         }
 
 
@@ -351,10 +349,9 @@ def main():
     """Main execution - process images one at a time."""
     import argparse
 
-    parser = argparse.ArgumentParser(description='Surgical refinement for 98+ quality')
-    parser.add_argument('image', type=str, help='Path to image file')
-    parser.add_argument('--output-dir', type=str, default='outputs/750_picacho/Surgical98',
-                       help='Output directory')
+    parser = argparse.ArgumentParser(description="Surgical refinement for 98+ quality")
+    parser.add_argument("image", type=str, help="Path to image file")
+    parser.add_argument("--output-dir", type=str, default="outputs/750_picacho/Surgical98", help="Output directory")
 
     args = parser.parse_args()
 
@@ -363,20 +360,19 @@ def main():
         logger.error(f"Image not found: {input_path}")
         return 1
 
-    output_dir = Path(args.output_dir) / datetime.now().strftime('%Y%m%d_%H%M%S')
+    output_dir = Path(args.output_dir) / datetime.now().strftime("%Y%m%d_%H%M%S")
 
     pipeline = SurgicalRefinement(output_dir)
     result = pipeline.refine_image(input_path, interactive=True)
 
     # Save metadata
     metadata_path = output_dir / "refinement_report.json"
-    with open(metadata_path, 'w') as f:
-        json.dump({
-            'pipeline': 'Surgical98',
-            'version': '1.0',
-            'timestamp': datetime.now().isoformat(),
-            'result': result
-        }, f, indent=2)
+    with open(metadata_path, "w") as f:
+        json.dump(
+            {"pipeline": "Surgical98", "version": "1.0", "timestamp": datetime.now().isoformat(), "result": result},
+            f,
+            indent=2,
+        )
 
     logger.info(f"📁 Output directory: {output_dir}")
     logger.info(f"📊 Report: {metadata_path.name}\n")

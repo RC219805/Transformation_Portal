@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Union
 
 try:
     from PIL import Image, ImageFile
+
     ImageFile.LOAD_TRUNCATED_IMAGES = True  # Handle truncated images gracefully
 except ImportError as exc:
     raise ImportError("Pillow is required. Install with: pip install Pillow") from exc
@@ -35,6 +36,7 @@ except ImportError as exc:
 # Optional but recommended for advanced features
 try:
     import tifffile
+
     HAS_TIFFFILE = True
 except ImportError:
     HAS_TIFFFILE = False
@@ -42,6 +44,7 @@ except ImportError:
 
 try:
     import numpy as np
+
     HAS_NUMPY = True
 except ImportError:
     if TYPE_CHECKING:
@@ -105,13 +108,13 @@ def get_mime_type(path: Union[str, Path]) -> Optional[str]:
         return None
 
     mime_map = {
-        'JPEG': 'image/jpeg',
-        'PNG': 'image/png',
-        'TIFF': 'image/tif',
-        'GIF': 'image/gi',
-        'BMP': 'image/bmp',
-        'WEBP': 'image/webp',
-        'ICO': 'image/x-icon',
+        "JPEG": "image/jpeg",
+        "PNG": "image/png",
+        "TIFF": "image/tif",
+        "GIF": "image/gi",
+        "BMP": "image/bmp",
+        "WEBP": "image/webp",
+        "ICO": "image/x-icon",
     }
 
     return mime_map.get(format_type.upper())
@@ -190,55 +193,55 @@ def get_image_metadata(path: Union[str, Path]) -> Dict[str, Any]:
     """
     path_obj = Path(path)
     metadata = {
-        'format': None,
-        'size': None,
-        'mode': None,
-        'bit_depth': None,
-        'has_alpha': False,
-        'file_size': path_obj.stat().st_size if path_obj.exists() else 0,
-        'exif': None,
+        "format": None,
+        "size": None,
+        "mode": None,
+        "bit_depth": None,
+        "has_alpha": False,
+        "file_size": path_obj.stat().st_size if path_obj.exists() else 0,
+        "exif": None,
     }
 
     try:
         with Image.open(path_obj) as img:
-            metadata['format'] = img.format
-            metadata['size'] = img.size
-            metadata['mode'] = img.mode
-            metadata['has_alpha'] = 'A' in img.mode
+            metadata["format"] = img.format
+            metadata["size"] = img.size
+            metadata["mode"] = img.mode
+            metadata["has_alpha"] = "A" in img.mode
 
             # Calculate bit depth
             mode_bit_depth = {
-                '1': 1,
-                'L': 8,
-                'P': 8,
-                'RGB': 8,
-                'RGBA': 8,
-                'CMYK': 8,
-                'YCbCr': 8,
-                'LAB': 8,
-                'HSV': 8,
-                'I': 32,
-                'F': 32,
-                'I;16': 16,
-                'I;16B': 16,
-                'I;16L': 16,
-                'I;16S': 16,
-                'I;16BS': 16,
-                'I;16LS': 16,
+                "1": 1,
+                "L": 8,
+                "P": 8,
+                "RGB": 8,
+                "RGBA": 8,
+                "CMYK": 8,
+                "YCbCr": 8,
+                "LAB": 8,
+                "HSV": 8,
+                "I": 32,
+                "F": 32,
+                "I;16": 16,
+                "I;16B": 16,
+                "I;16L": 16,
+                "I;16S": 16,
+                "I;16BS": 16,
+                "I;16LS": 16,
             }
-            metadata['bit_depth'] = mode_bit_depth.get(img.mode, 8)
+            metadata["bit_depth"] = mode_bit_depth.get(img.mode, 8)
 
             # Try to get EXIF data
             try:
                 exif = img.getexif()
                 if exif:
-                    metadata['exif'] = {k: str(v) for k, v in exif.items()}
+                    metadata["exif"] = {k: str(v) for k, v in exif.items()}
             except Exception as exif_exc:
                 warnings.warn(f"Failed to extract EXIF data from {path_obj}: {exif_exc}")
-                metadata['exif_error'] = str(exif_exc)
+                metadata["exif_error"] = str(exif_exc)
 
     except Exception as e:
-        metadata['error'] = str(e)
+        metadata["error"] = str(e)
 
     return metadata
 
@@ -247,12 +250,13 @@ def get_image_metadata(path: Union[str, Path]) -> Dict[str, Any]:
 # OPTION 3: Format Conversion Utilities
 # ==============================================================================
 
+
 def convert_image_format(
     input_path: Union[str, Path],
     output_path: Union[str, Path],
     quality: int = 95,
     preserve_metadata: bool = True,
-    optimize: bool = True
+    optimize: bool = True,
 ) -> bool:
     """Convert image from one format to another with quality preservation.
 
@@ -281,33 +285,33 @@ def convert_image_format(
         with Image.open(input_path) as img:
             # Convert to RGB if saving to format that doesn't support alpha
             output_ext = output_path.suffix.lower()
-            if output_ext in {'.jpg', '.jpeg'} and img.mode in ('RGBA', 'LA', 'P'):
+            if output_ext in {".jpg", ".jpeg"} and img.mode in ("RGBA", "LA", "P"):
                 # Create white background
-                rgb_img = Image.new('RGB', img.size, (255, 255, 255))
-                if img.mode == 'P':
-                    img = img.convert('RGBA')
-                rgb_img.paste(img, mask=img.split()[-1] if 'A' in img.mode else None)
+                rgb_img = Image.new("RGB", img.size, (255, 255, 255))
+                if img.mode == "P":
+                    img = img.convert("RGBA")
+                rgb_img.paste(img, mask=img.split()[-1] if "A" in img.mode else None)
                 img = rgb_img
 
             # Prepare save parameters
-            save_kwargs = {'optimize': optimize}
+            save_kwargs = {"optimize": optimize}
 
             # Format-specific parameters
-            if output_ext in {'.jpg', '.jpeg'}:
-                save_kwargs['quality'] = quality
-                save_kwargs['subsampling'] = 0  # Best quality
-            elif output_ext == '.webp':
-                save_kwargs['quality'] = quality
-            elif output_ext in {'.ti', '.tiff'}:
-                save_kwargs['compression'] = 'tiff_lzw'  # Good lossless compression
-            elif output_ext == '.png':
-                save_kwargs['compress_level'] = 6  # Balance speed/size
+            if output_ext in {".jpg", ".jpeg"}:
+                save_kwargs["quality"] = quality
+                save_kwargs["subsampling"] = 0  # Best quality
+            elif output_ext == ".webp":
+                save_kwargs["quality"] = quality
+            elif output_ext in {".ti", ".tiff"}:
+                save_kwargs["compression"] = "tiff_lzw"  # Good lossless compression
+            elif output_ext == ".png":
+                save_kwargs["compress_level"] = 6  # Balance speed/size
 
             # Preserve metadata if requested
             if preserve_metadata:
                 exif = img.getexif()
                 if exif:
-                    save_kwargs['exif'] = exif
+                    save_kwargs["exif"] = exif
 
             # Ensure output directory exists
             output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -328,7 +332,7 @@ def batch_convert_directory(
     target_format: str,
     quality: int = 95,
     recursive: bool = False,
-    preserve_metadata: bool = True
+    preserve_metadata: bool = True,
 ) -> Dict[str, int]:
     """Convert all images in directory to target format.
 
@@ -355,14 +359,14 @@ def batch_convert_directory(
     output_dir = Path(output_dir)
     target_format = target_format.lower()
 
-    if not target_format.startswith('.'):
-        target_format = f'.{target_format}'
+    if not target_format.startswith("."):
+        target_format = f".{target_format}"
 
-    stats = {'total': 0, 'success': 0, 'failed': 0, 'skipped': 0}
+    stats = {"total": 0, "success": 0, "failed": 0, "skipped": 0}
 
     # Get all image files
-    pattern = '**/*' if recursive else '*'
-    image_extensions = {'.jpg', '.jpeg', '.png', '.ti', '.tif', '.bmp', '.webp', '.gif'}
+    pattern = "**/*" if recursive else "*"
+    image_extensions = {".jpg", ".jpeg", ".png", ".ti", ".tif", ".bmp", ".webp", ".gif"}
 
     for input_file in input_dir.glob(pattern):
         if not input_file.is_file():
@@ -371,11 +375,11 @@ def batch_convert_directory(
         if input_file.suffix.lower() not in image_extensions:
             continue
 
-        stats['total'] += 1
+        stats["total"] += 1
 
         # Skip if already in target format
         if input_file.suffix.lower() == target_format:
-            stats['skipped'] += 1
+            stats["skipped"] += 1
             continue
 
         # Construct output path preserving directory structure
@@ -384,18 +388,15 @@ def batch_convert_directory(
 
         # Convert
         if convert_image_format(input_file, output_file, quality, preserve_metadata):
-            stats['success'] += 1
+            stats["success"] += 1
         else:
-            stats['failed'] += 1
+            stats["failed"] += 1
 
     return stats
 
 
 def smart_convert(
-    input_path: Union[str, Path],
-    output_path: Union[str, Path],
-    auto_quality: bool = True,
-    preserve_bit_depth: bool = True
+    input_path: Union[str, Path], output_path: Union[str, Path], auto_quality: bool = True, preserve_bit_depth: bool = True
 ) -> bool:
     """Intelligently convert image choosing best quality settings.
 
@@ -431,16 +432,16 @@ def smart_convert(
 
     if auto_quality:
         # Use higher quality for photos, lower for graphics
-        if metadata.get('format') == 'JPEG':
+        if metadata.get("format") == "JPEG":
             quality = 93  # Slight transcode
-        elif metadata.get('has_alpha'):
+        elif metadata.get("has_alpha"):
             quality = 95  # Preserve transparency quality
         else:
             quality = 90  # Good balance for most content
 
     # Handle 16-bit preservation
-    if preserve_bit_depth and metadata.get('bit_depth') == 16:
-        if output_ext in {'.ti', '.tif', '.png'}:
+    if preserve_bit_depth and metadata.get("bit_depth") == 16:
+        if output_ext in {".ti", ".tif", ".png"}:
             # Use specialized converter for formats that support 16-bit (TIFF/PNG)
             return convert_tiff_preserve_depth(input_path, output_path)
 
@@ -450,6 +451,7 @@ def smart_convert(
 # ==============================================================================
 # OPTION 4: Improved 16-bit TIFF Handling
 # ==============================================================================
+
 
 def check_tifffile_available() -> bool:
     """Check if tifffile library is available for 16-bit support.
@@ -461,10 +463,7 @@ def check_tifffile_available() -> bool:
 
 
 def save_tiff_16bit(
-    image_array: 'np.ndarray',
-    output_path: Union[str, Path],
-    compression: str = 'lzw',
-    metadata: Optional[Dict] = None
+    image_array: "np.ndarray", output_path: Union[str, Path], compression: str = "lzw", metadata: Optional[Dict] = None
 ) -> bool:
     """Save image as 16-bit TIFF with metadata and compression.
 
@@ -506,7 +505,7 @@ def save_tiff_16bit(
             image_array,
             compression=compression,
             metadata=tiff_metadata,
-            photometric='rgb' if image_array.ndim == 3 else 'minisblack'
+            photometric="rgb" if image_array.ndim == 3 else "minisblack",
         )
 
         return True
@@ -516,9 +515,7 @@ def save_tiff_16bit(
         return False
 
 
-def load_tiff_preserve_depth(
-    path: Union[str, Path]
-) -> Tuple[Optional[np.ndarray], Optional[int]]:
+def load_tiff_preserve_depth(path: Union[str, Path]) -> Tuple[Optional[np.ndarray], Optional[int]]:
     """Load TIFF preserving original bit depth.
 
     Args:
@@ -569,11 +566,7 @@ def load_tiff_preserve_depth(
         return None, None
 
 
-def convert_tiff_preserve_depth(
-    input_path: Union[str, Path],
-    output_path: Union[str, Path],
-    compression: str = 'lzw'
-) -> bool:
+def convert_tiff_preserve_depth(input_path: Union[str, Path], output_path: Union[str, Path], compression: str = "lzw") -> bool:
     """Convert TIFF while preserving bit depth and metadata.
 
     Args:
@@ -618,9 +611,7 @@ def get_tiff_compression_info(path: Union[str, Path]) -> Optional[str]:
 
 
 def optimize_tiff_compression(
-    input_path: Union[str, Path],
-    output_path: Union[str, Path],
-    target_compression: str = 'lzw'
+    input_path: Union[str, Path], output_path: Union[str, Path], target_compression: str = "lzw"
 ) -> Tuple[bool, Optional[float]]:
     """Re-compress TIFF with optimal compression, preserving quality.
 
@@ -660,11 +651,8 @@ def optimize_tiff_compression(
 # Convenience Functions
 # ==============================================================================
 
-def get_optimal_format_for_use_case(
-    use_case: str,
-    has_alpha: bool = False,
-    requires_16bit: bool = False
-) -> str:
+
+def get_optimal_format_for_use_case(use_case: str, has_alpha: bool = False, requires_16bit: bool = False) -> str:
     """Suggest optimal image format for specific use case.
 
     Args:
@@ -682,27 +670,27 @@ def get_optimal_format_for_use_case(
         '.tif'
     """
     if requires_16bit:
-        return '.tif'  # Only format that reliably supports 16-bit
+        return ".tif"  # Only format that reliably supports 16-bit
 
-    if use_case == 'web':
-        return '.png' if has_alpha else '.webp'
-    elif use_case == 'print':
-        return '.tif'
-    elif use_case == 'editing':
-        return '.tif' if requires_16bit else '.png'
-    elif use_case == 'archival':
-        return '.tif'
-    elif use_case == 'preview':
-        return '.jpg'
+    if use_case == "web":
+        return ".png" if has_alpha else ".webp"
+    elif use_case == "print":
+        return ".tif"
+    elif use_case == "editing":
+        return ".tif" if requires_16bit else ".png"
+    elif use_case == "archival":
+        return ".tif"
+    elif use_case == "preview":
+        return ".jpg"
     else:
-        return '.png'  # Safe default
+        return ".png"  # Safe default
 
 
 # ==============================================================================
 # Example Usage
 # ==============================================================================
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Example: Enhanced format detection
     print("=== Format Detection Examples ===")
     test_file = "example.jpg"

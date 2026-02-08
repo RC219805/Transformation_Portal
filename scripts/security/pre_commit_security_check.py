@@ -12,19 +12,19 @@ def check_file(filepath):
     """Check a single file for bidirectional Unicode characters."""
     # Bidirectional override characters
     bidi_chars = [
-        '\u202a',  # LEFT-TO-RIGHT EMBEDDING
-        '\u202b',  # RIGHT-TO-LEFT EMBEDDING
-        '\u202c',  # POP DIRECTIONAL FORMATTING
-        '\u202d',  # LEFT-TO-RIGHT OVERRIDE
-        '\u202e',  # RIGHT-TO-LEFT OVERRIDE
-        '\u2066',  # LEFT-TO-RIGHT ISOLATE
-        '\u2067',  # RIGHT-TO-LEFT ISOLATE
-        '\u2068',  # FIRST STRONG ISOLATE
-        '\u2069',  # POP DIRECTIONAL ISOLATE
+        "\u202a",  # LEFT-TO-RIGHT EMBEDDING
+        "\u202b",  # RIGHT-TO-LEFT EMBEDDING
+        "\u202c",  # POP DIRECTIONAL FORMATTING
+        "\u202d",  # LEFT-TO-RIGHT OVERRIDE
+        "\u202e",  # RIGHT-TO-LEFT OVERRIDE
+        "\u2066",  # LEFT-TO-RIGHT ISOLATE
+        "\u2067",  # RIGHT-TO-LEFT ISOLATE
+        "\u2068",  # FIRST STRONG ISOLATE
+        "\u2069",  # POP DIRECTIONAL ISOLATE
     ]
 
     try:
-        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
             content = f.read()
             for char in bidi_chars:
                 if char in content:

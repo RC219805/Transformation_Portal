@@ -71,7 +71,6 @@ SAMPLE_REGISTRY: Dict[str, Dict] = {
         "sha256": None,
         "description": "Grayscale depth map for testing (256x256px)",
     },
-
     # ========================================================================
     # DEMO: Small examples for README and documentation
     # ========================================================================
@@ -91,7 +90,6 @@ SAMPLE_REGISTRY: Dict[str, Dict] = {
         "sha256": None,
         "description": "Pool aerial enhancement demo (downscaled to 2K)",
     },
-
     # ========================================================================
     # FULL: Complete sample dataset for pipeline testing
     # ========================================================================
@@ -118,6 +116,7 @@ SAMPLE_REGISTRY: Dict[str, Dict] = {
 # Download Utilities
 # ============================================================================
 
+
 class DownloadProgressBar:
     """Progress bar for downloads using tqdm if available."""
 
@@ -128,15 +127,10 @@ class DownloadProgressBar:
     def __call__(self, block_num: int, block_size: int, total_size: int):
         if self.pbar is None:
             if tqdm:
-                self.pbar = tqdm(
-                    total=total_size,
-                    unit='B',
-                    unit_scale=True,
-                    desc=self.desc
-                )
+                self.pbar = tqdm(total=total_size, unit="B", unit_scale=True, desc=self.desc)
             else:
                 # Fallback to simple progress
-                print(f"Downloading {self.desc}...", end='', flush=True)
+                print(f"Downloading {self.desc}...", end="", flush=True)
 
         if self.pbar:
             downloaded = block_num * block_size
@@ -154,8 +148,8 @@ def verify_checksum(file_path: Path, expected_sha256: Optional[str]) -> bool:
         return True  # Skip verification if no checksum provided
 
     sha256 = hashlib.sha256()
-    with open(file_path, 'rb') as f:
-        for chunk in iter(lambda: f.read(4096), b''):
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
             sha256.update(chunk)
 
     actual = sha256.hexdigest()
@@ -174,11 +168,7 @@ def download_file(url: str, output_path: Path, description: str, sha256: Optiona
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Download file
-        urllib.request.urlretrieve(
-            url,
-            output_path,
-            reporthook=DownloadProgressBar(description)
-        )
+        urllib.request.urlretrieve(url, output_path, reporthook=DownloadProgressBar(description))
 
         # Verify checksum
         if not verify_checksum(output_path, sha256):
@@ -198,20 +188,13 @@ def download_file(url: str, output_path: Path, description: str, sha256: Optiona
 # Main Download Logic
 # ============================================================================
 
+
 def get_samples_by_category(category: str) -> List[Dict]:
     """Get all samples in a category."""
-    return [
-        {**sample, "name": name}
-        for name, sample in SAMPLE_REGISTRY.items()
-        if sample["category"] == category
-    ]
+    return [{**sample, "name": name} for name, sample in SAMPLE_REGISTRY.items() if sample["category"] == category]
 
 
-def download_samples(
-    categories: List[str],
-    output_dir: Optional[Path] = None,
-    force: bool = False
-) -> int:
+def download_samples(categories: List[str], output_dir: Optional[Path] = None, force: bool = False) -> int:
     """
     Download samples from specified categories.
 
@@ -259,12 +242,7 @@ def download_samples(
             continue
 
         # Download file
-        success = download_file(
-            sample["url"],
-            output_path,
-            sample["name"],
-            sample.get("sha256")
-        )
+        success = download_file(sample["url"], output_path, sample["name"], sample.get("sha256"))
 
         if success:
             print(f"✅ Downloaded {sample['name']} ({sample['size']})")
@@ -290,6 +268,7 @@ def download_samples(
 # CLI Interface
 # ============================================================================
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Download sample images for Transformation Portal",
@@ -312,34 +291,14 @@ Categories:
   minimal - Tiny synthetic images for unit tests (< 50KB total)
   demo    - Small demo images for README examples (~10MB total)
   full    - Complete sample dataset for pipeline testing (~50MB total)
-        """
+        """,
     )
 
-    parser.add_argument(
-        "--all",
-        action="store_true",
-        help="Download all sample categories (minimal + demo + full)"
-    )
-    parser.add_argument(
-        "--demo",
-        action="store_true",
-        help="Download demo samples in addition to minimal"
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        help="Output directory (default: repository root)"
-    )
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Force re-download even if files exist"
-    )
-    parser.add_argument(
-        "--list",
-        action="store_true",
-        help="List available samples without downloading"
-    )
+    parser.add_argument("--all", action="store_true", help="Download all sample categories (minimal + demo + full)")
+    parser.add_argument("--demo", action="store_true", help="Download demo samples in addition to minimal")
+    parser.add_argument("--output-dir", type=Path, help="Output directory (default: repository root)")
+    parser.add_argument("--force", action="store_true", help="Force re-download even if files exist")
+    parser.add_argument("--list", action="store_true", help="List available samples without downloading")
 
     args = parser.parse_args()
 
@@ -364,11 +323,7 @@ Categories:
         categories = ["minimal", "demo", "full"]
 
     # Download samples
-    downloaded = download_samples(
-        categories,
-        output_dir=args.output_dir,
-        force=args.force
-    )
+    downloaded = download_samples(categories, output_dir=args.output_dir, force=args.force)
 
     if downloaded == 0 and not args.list:
         print("ℹ️  No new files downloaded. Use --force to re-download existing files.")

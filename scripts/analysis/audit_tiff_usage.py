@@ -7,9 +7,10 @@ Identifies any files still using PIL for TIFF saving (should use tifffile instea
 import re
 from pathlib import Path
 
+
 def audit_file(filepath):
     """Check a Python file for TIFF saving methods."""
-    with open(filepath, 'r') as f:
+    with open(filepath, "r") as f:
         content = f.read()
 
     issues = []
@@ -22,17 +23,18 @@ def audit_file(filepath):
         issues.append("Uses PIL .save() with .tif extension")
 
     # Check for good patterns
-    has_tifffile_import = 'import tifffile' in content
-    has_tifffile_write = 'tifffile.imwrite' in content or 'tifffile.imsave' in content
-    has_correct_function = 'save_16bit_tiff_tifffile' in content
+    has_tifffile_import = "import tifffile" in content
+    has_tifffile_write = "tifffile.imwrite" in content or "tifffile.imsave" in content
+    has_correct_function = "save_16bit_tiff_tifffile" in content
 
     return {
-        'issues': issues,
-        'has_tifffile': has_tifffile_import,
-        'uses_tifffile': has_tifffile_write,
-        'uses_correct_func': has_correct_function,
-        'is_good': (has_tifffile_write or has_correct_function) and not issues
+        "issues": issues,
+        "has_tifffile": has_tifffile_import,
+        "uses_tifffile": has_tifffile_write,
+        "uses_correct_func": has_correct_function,
+        "is_good": (has_tifffile_write or has_correct_function) and not issues,
     }
+
 
 def main():
     repo_root = Path.cwd()
@@ -43,10 +45,10 @@ def main():
 
     # Find all Python files (excluding tests, deprecated, venv)
     python_files = []
-    for pattern in ['*.py', '*/*.py', '*/*/*.py']:
+    for pattern in ["*.py", "*/*.py", "*/*/*.py"]:
         for f in repo_root.glob(pattern):
             # Skip test files, deprecated, venv, .git
-            if any(skip in str(f) for skip in ['test_', 'deprecated', '.venv', 'venv', '.git', '__pycache__']):
+            if any(skip in str(f) for skip in ["test_", "deprecated", ".venv", "venv", ".git", "__pycache__"]):
                 continue
             python_files.append(f)
 
@@ -57,7 +59,7 @@ def main():
         result = audit_file(filepath)
 
         # Only report files that do TIFF operations
-        if result['issues'] or result['uses_tifffile'] or result['uses_correct_func']:
+        if result["issues"] or result["uses_tifffile"] or result["uses_correct_func"]:
             results[str(rel_path)] = result
 
     # Report results
@@ -67,9 +69,9 @@ def main():
     bad_files = []
 
     for filepath, result in results.items():
-        if result['is_good']:
+        if result["is_good"]:
             good_files.append((filepath, result))
-        elif result['issues']:
+        elif result["issues"]:
             bad_files.append((filepath, result))
 
     # Good files
@@ -77,9 +79,9 @@ def main():
         print("✅ Files using OPTIMAL method (tifffile):")
         for filepath, result in good_files:
             markers = []
-            if result['uses_tifffile']:
+            if result["uses_tifffile"]:
                 markers.append("tifffile.imwrite")
-            if result['uses_correct_func']:
+            if result["uses_correct_func"]:
                 markers.append("save_16bit_tiff_tifffile")
             print(f"   ✓ {filepath:60s} ({', '.join(markers)})")
 
@@ -88,7 +90,7 @@ def main():
         print("\n⚠️  Files using PROBLEMATIC method (PIL):")
         for filepath, result in bad_files:
             print(f"   ⚠️  {filepath:60s}")
-            for issue in result['issues']:
+            for issue in result["issues"]:
                 print(f"       → {issue}")
     else:
         print("\n✅ No files found using problematic PIL TIFF saving")
@@ -103,6 +105,7 @@ def main():
     else:
         print("\n✅ All TIFF-related code uses optimal saving methods")
         return 0
+
 
 if __name__ == "__main__":
     exit(main())

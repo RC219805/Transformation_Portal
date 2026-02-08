@@ -13,6 +13,7 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+
 def test_imports():
     """Test that all Phase 2 modules can be imported."""
     print("\n📦 Testing imports...")
@@ -33,6 +34,7 @@ def test_imports():
             DA2ModelWrapper,
             DA3ModelWrapper,
         )
+
         print("  ✓ All imports successful")
         return True
     except ImportError as e:
@@ -84,11 +86,7 @@ def test_depth_pipeline():
         )
 
         # Test initialization
-        config = UnifiedDepthConfig(
-            processing=ProcessingConfig(
-                pbr=PBRConfig(enabled=False)
-            )
-        )
+        config = UnifiedDepthConfig(processing=ProcessingConfig(pbr=PBRConfig(enabled=False)))
         pipeline = DepthPipeline(config)
         print("  ✓ Pipeline initialization works")
 
@@ -186,9 +184,9 @@ def check_test_coverage():
 
 def main():
     """Run all validation checks."""
-    print("="*70)
+    print("=" * 70)
     print("PHASE 2 IMPLEMENTATION VALIDATION")
-    print("="*70)
+    print("=" * 70)
 
     checks = [
         ("Imports", test_imports),
@@ -207,9 +205,9 @@ def main():
             results[name] = False
 
     # Summary
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("VALIDATION SUMMARY")
-    print("="*70)
+    print("=" * 70)
 
     all_passed = True
     for name, passed in results.items():
@@ -218,7 +216,7 @@ def main():
         if not passed:
             all_passed = False
 
-    print("="*70)
+    print("=" * 70)
 
     if all_passed:
         print("\n✅ ALL VALIDATION CHECKS PASSED")

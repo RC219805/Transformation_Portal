@@ -9,6 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+
 def run_command(cmd, description):
     """Run a command and report results.
 
@@ -28,6 +29,7 @@ def run_command(cmd, description):
         print("STDERR:", result.stderr)
     return result.returncode
 
+
 def main():
     """Fix quality issues."""
     repo_root = Path(__file__).parent
@@ -44,16 +46,16 @@ def main():
 
     for file_path in files_to_fix:
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
 
             # Remove trailing whitespace
-            lines = content.split('\n')
+            lines = content.split("\n")
             fixed_lines = [line.rstrip() for line in lines]
-            fixed_content = '\n'.join(fixed_lines)
+            fixed_content = "\n".join(fixed_lines)
 
             if fixed_content != content:
-                with open(file_path, 'w', encoding='utf-8') as f:
+                with open(file_path, "w", encoding="utf-8") as f:
                     f.write(fixed_content)
                 print(f"✓ Fixed: {file_path.relative_to(repo_root)}")
         except Exception as e:
@@ -65,7 +67,7 @@ def main():
         "autopep8 --in-place --max-line-length=127 --select=E501 "
         "--exclude=deprecated,src/transformation_portal,.venv,.backup_local,.local_backup "
         "--recursive .",
-        "Auto-fixing line length issues"
+        "Auto-fixing line length issues",
     )
 
     # 3. Run flake8 to verify
@@ -73,7 +75,7 @@ def main():
     flake8_result = run_command(
         "python3 -m flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics "
         "--exclude=deprecated/,src/transformation_portal/,.venv/",
-        "Critical errors check"
+        "Critical errors check",
     )
 
     # 4. Check imports order
@@ -82,16 +84,17 @@ def main():
         "python3 -m isort --check-only --profile=black --line-length=127 "
         "--skip deprecated --skip src/transformation_portal --skip .venv "
         "--skip .backup_local --skip .local_backup .",
-        "Import order check"
+        "Import order check",
     )
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     if flake8_result == 0:
         print("✅ All critical issues fixed!")
         return 0
     else:
         print("⚠️  Some issues remain - check output above")
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -39,10 +39,7 @@ __version__ = "1.0.0"
 # GitHub comment size limit (leave buffer for safety)
 MAX_GITHUB_COMMENT_SIZE = 65_000
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -179,9 +176,7 @@ def generate_bucket_table(
         p95_str = format_time(stats.p95)
         threshold_str = format_time(stats.threshold_p95)
 
-        lines.append(
-            f"| {bucket_name} | {stats.count} | {p50_str} | {p95_str} | {threshold_str} | {status} |"
-        )
+        lines.append(f"| {bucket_name} | {stats.count} | {p50_str} | {p95_str} | {threshold_str} | {status} |")
 
     return "\n".join(lines)
 
@@ -257,9 +252,7 @@ def generate_zone_heatmap_from_stats(
     hidden_count = max(0, len(zones) - len(shown_zones))
 
     # Index for O(1) lookup
-    index: Dict[Tuple[str, Optional[str]], Dict[str, Any]] = {
-        (r["bucket_name"], r["zone"]): r for r in stats
-    }
+    index: Dict[Tuple[str, Optional[str]], Dict[str, Any]] = {(r["bucket_name"], r["zone"]): r for r in stats}
 
     # Table header
     header = "| Bucket | " + " | ".join(shown_zones) + " | Global |"
@@ -282,18 +275,13 @@ def generate_zone_heatmap_from_stats(
 
         # Global cell
         global_row = index.get((bucket, None))
-        global_cell = (
-            get_status_icon(global_row["pass_fail"]) if global_row else "—"
-        )
+        global_cell = get_status_icon(global_row["pass_fail"]) if global_row else "—"
 
         lines.append(f"| {bucket} | " + " | ".join(row_cells) + f" | {global_cell} |")
 
     if hidden_count:
         lines.append("")
-        lines.append(
-            f"_Note: {hidden_count} additional zones not shown "
-            f"to keep PR comment compact._"
-        )
+        lines.append(f"_Note: {hidden_count} additional zones not shown " f"to keep PR comment compact._")
 
     # Wrap in collapsed section
     output = f"<details>\n<summary>{title}</summary>\n\n"
@@ -402,8 +390,7 @@ def truncate_comment(lines: List[str], max_chars: int = MAX_GITHUB_COMMENT_SIZE)
     truncated = lines[:truncate_index]
     truncated.append("\n---\n")
     truncated.append(
-        f"⚠️ **Comment truncated** (exceeded {max_chars:,} characters). "
-        f"See job summary or ledger DB for full details.\n"
+        f"⚠️ **Comment truncated** (exceeded {max_chars:,} characters). " f"See job summary or ledger DB for full details.\n"
     )
 
     return truncated
@@ -447,10 +434,7 @@ def generate_v1_v2_comparison(
             else:
                 status = "❌ Slower"
 
-            lines.append(
-                f"| {bucket_name} | {format_time(v1_p95)} | {format_time(v2_p95)} | "
-                f"{delta:+.1f}% | {status} |"
-            )
+            lines.append(f"| {bucket_name} | {format_time(v1_p95)} | {format_time(v2_p95)} | " f"{delta:+.1f}% | {status} |")
         elif bucket_name in v1_stats:
             lines.append(f"| {bucket_name} | {format_time(v1_stats[bucket_name].p95)} | — | — | New in V2 |")
         else:
@@ -528,60 +512,50 @@ def generate_pr_comment(
 
     # Per-zone heatmap (collapsed sections)
     if v1_stats and len(v1_stats) > 0:
-        heatmap = generate_zone_heatmap_from_stats(
-            v1_stats,
-            "📊 V1 Zone × Bucket Heatmap",
-            max_zones=8
-        )
+        heatmap = generate_zone_heatmap_from_stats(v1_stats, "📊 V1 Zone × Bucket Heatmap", max_zones=8)
         if heatmap:
             lines.append(heatmap)
             lines.append("")
 
     if v2_stats and len(v2_stats) > 0:
-        heatmap = generate_zone_heatmap_from_stats(
-            v2_stats,
-            "📊 V2 Zone × Bucket Heatmap",
-            max_zones=8
-        )
+        heatmap = generate_zone_heatmap_from_stats(v2_stats, "📊 V2 Zone × Bucket Heatmap", max_zones=8)
         if heatmap:
             lines.append(heatmap)
             lines.append("")
 
     # Worst offenders (collapsed sections)
     if v1_stats and len(v1_stats) > 0:
-        offenders = generate_worst_offenders(
-            v1_stats,
-            "⚠️ V1 Worst Offenders (Top 10)",
-            top_n=10
-        )
+        offenders = generate_worst_offenders(v1_stats, "⚠️ V1 Worst Offenders (Top 10)", top_n=10)
         if offenders:
             lines.append(offenders)
             lines.append("")
 
     if v2_stats and len(v2_stats) > 0:
-        offenders = generate_worst_offenders(
-            v2_stats,
-            "⚠️ V2 Worst Offenders (Top 10)",
-            top_n=10
-        )
+        offenders = generate_worst_offenders(v2_stats, "⚠️ V2 Worst Offenders (Top 10)", top_n=10)
         if offenders:
             lines.append(offenders)
             lines.append("")
 
     # Worst-zone summary (if using judgements)
     if v1_judgement and v1_judgement.worst_zone_p95:
-        lines.append(f"**V1 Worst-Zone p95:** {format_time(v1_judgement.worst_zone_p95)} "
-                     f"(zone: {v1_judgement.worst_zone_name or 'unknown'})")
+        lines.append(
+            f"**V1 Worst-Zone p95:** {format_time(v1_judgement.worst_zone_p95)} "
+            f"(zone: {v1_judgement.worst_zone_name or 'unknown'})"
+        )
 
     if v2_judgement and v2_judgement.worst_zone_p95:
-        lines.append(f"**V2 Worst-Zone p95:** {format_time(v2_judgement.worst_zone_p95)} "
-                     f"(zone: {v2_judgement.worst_zone_name or 'unknown'})")
+        lines.append(
+            f"**V2 Worst-Zone p95:** {format_time(v2_judgement.worst_zone_p95)} "
+            f"(zone: {v2_judgement.worst_zone_name or 'unknown'})"
+        )
 
-    lines.extend([
-        "",
-        "---",
-        f"*Generated by APEX PR Comment Generator v{__version__}*",
-    ])
+    lines.extend(
+        [
+            "",
+            "---",
+            f"*Generated by APEX PR Comment Generator v{__version__}*",
+        ]
+    )
 
     # Apply size guardrails
     lines = truncate_comment(lines)
@@ -591,20 +565,14 @@ def generate_pr_comment(
 
 def main() -> int:
     """Main entry point."""
-    parser = argparse.ArgumentParser(
-        description="Generate APEX PR comment"
-    )
+    parser = argparse.ArgumentParser(description="Generate APEX PR comment")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
     parser.add_argument("--run-id", required=True, help="Run identifier")
     parser.add_argument("--commit-sha", required=True, help="Git commit SHA")
     parser.add_argument("--ledger-db", type=Path, required=True, help="Ledger database")
     parser.add_argument("--output", type=Path, required=True, help="Output markdown file")
-    parser.add_argument(
-        "--summary-file",
-        type=Path,
-        help="Optional summary.json from matrix runner"
-    )
+    parser.add_argument("--summary-file", type=Path, help="Optional summary.json from matrix runner")
 
     args = parser.parse_args()
 

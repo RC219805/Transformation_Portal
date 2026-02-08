@@ -33,11 +33,7 @@ import numpy as np
 from PIL import Image
 
 # Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    datefmt='%H:%M:%S'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
 log = logging.getLogger("pipeline_v2")
 
 
@@ -51,6 +47,7 @@ AERIAL_PERSPECTIVE_VARIANCE_THRESHOLD = 15
 @dataclass
 class MaterialClusterConfig:
     """Configuration for material clustering."""
+
     n_clusters: int = 6
     seed: int = 42
     max_iter: int = 100
@@ -85,11 +82,8 @@ class MaterialClusterer:
 
         # K-means clustering
         from sklearn.cluster import KMeans
-        kmeans = KMeans(
-            n_clusters=self.config.n_clusters,
-            random_state=self.config.seed,
-            max_iter=self.config.max_iter
-        )
+
+        kmeans = KMeans(n_clusters=self.config.n_clusters, random_state=self.config.seed, max_iter=self.config.max_iter)
         labels = kmeans.fit_predict(features)
         label_map = labels.reshape(h, w)
 
@@ -105,7 +99,7 @@ class MaterialClusterer:
         stats = self._compute_stats(labels, features, kmeans.cluster_centers_)
         stats_path = output_dir / f"{base_name}_cluster_stats.json"
 
-        with open(stats_path, 'w') as f:
+        with open(stats_path, "w") as f:
             json.dump(stats, f, indent=2)
 
         # Generate material masks (similar to Detectron2 output format)
@@ -118,16 +112,18 @@ class MaterialClusterer:
     def _colorize_labels(self, labels: np.ndarray, n_clusters: int) -> np.ndarray:
         """Create colorized visualization of label map."""
         h, w = labels.shape
-        colors = np.array([
-            [1.0, 0.0, 0.0],  # Red
-            [0.0, 1.0, 0.0],  # Green
-            [0.0, 0.0, 1.0],  # Blue
-            [1.0, 1.0, 0.0],  # Yellow
-            [1.0, 0.0, 1.0],  # Magenta
-            [0.0, 1.0, 1.0],  # Cyan
-            [1.0, 0.5, 0.0],  # Orange
-            [0.5, 0.0, 1.0],  # Purple
-        ])
+        colors = np.array(
+            [
+                [1.0, 0.0, 0.0],  # Red
+                [0.0, 1.0, 0.0],  # Green
+                [0.0, 0.0, 1.0],  # Blue
+                [1.0, 1.0, 0.0],  # Yellow
+                [1.0, 0.0, 1.0],  # Magenta
+                [0.0, 1.0, 1.0],  # Cyan
+                [1.0, 0.5, 0.0],  # Orange
+                [0.5, 0.0, 1.0],  # Purple
+            ]
+        )
 
         colorized = np.zeros((h, w, 3), dtype=np.float32)
         for i in range(min(n_clusters, len(colors))):
@@ -136,13 +132,9 @@ class MaterialClusterer:
 
         return colorized
 
-    def _compute_stats(self, labels: np.ndarray, features: np.ndarray,
-                       centroids: np.ndarray) -> Dict:
+    def _compute_stats(self, labels: np.ndarray, features: np.ndarray, centroids: np.ndarray) -> Dict:
         """Compute cluster statistics."""
-        stats = {
-            "n_clusters": self.config.n_clusters,
-            "clusters": []
-        }
+        stats = {"n_clusters": self.config.n_clusters, "clusters": []}
 
         for i in range(self.config.n_clusters):
             mask = labels == i
@@ -153,19 +145,18 @@ class MaterialClusterer:
                 "count": int(mask.sum()),
                 "percentage": float(mask.sum() / len(labels) * 100),
                 "centroid": centroids[i].tolist(),
-                "std": cluster_features.std(axis=0).tolist() if len(cluster_features) > 0 else [0, 0, 0]
+                "std": cluster_features.std(axis=0).tolist() if len(cluster_features) > 0 else [0, 0, 0],
             }
             stats["clusters"].append(cluster_stat)
 
         return stats
 
-    def _generate_material_masks(self, label_map: np.ndarray,
-                                 output_dir: Path, base_name: str):
+    def _generate_material_masks(self, label_map: np.ndarray, output_dir: Path, base_name: str):
         """Generate individual binary masks per material cluster."""
         for cluster_id in range(self.config.n_clusters):
             mask = (label_map == cluster_id).astype(np.uint8) * 255
             mask_path = output_dir / f"{base_name}_mask_material{cluster_id}.png"
-            Image.fromarray(mask, mode='L').save(mask_path)
+            Image.fromarray(mask, mode="L").save(mask_path)
 
 
 class MaterialConfigProtocol(Protocol):
@@ -175,6 +166,7 @@ class MaterialConfigProtocol(Protocol):
     This ensures type safety at static analysis time rather than relying on
     runtime hasattr() checks.
     """
+
     material_clusters: int
     material_textures: Optional[Path]
     device: str
@@ -202,48 +194,40 @@ class AdaptiveSegmentationStage:
         if mode in ["material", "hybrid", "auto"]:
             # Type system ensures config has required attributes via Protocol
             self.material_clusterer = MaterialClusterer(
-                MaterialClusterConfig(
-                    n_clusters=config.material_clusters,
-                    texture_config=config.material_textures
-                )
+                MaterialClusterConfig(n_clusters=config.material_clusters, texture_config=config.material_textures)
             )
 
-    def execute(self, enhanced_images_dir: Path, depth_maps_dir: Path,
-                output_dir: Path) -> Tuple[bool, int]:
+    def execute(self, enhanced_images_dir: Path, depth_maps_dir: Path, output_dir: Path) -> Tuple[bool, int]:
         """Execute segmentation based on selected mode."""
 
         if self.mode == "semantic":
-            return self._run_semantic_segmentation(
-                enhanced_images_dir, depth_maps_dir, output_dir
-            )
+            return self._run_semantic_segmentation(enhanced_images_dir, depth_maps_dir, output_dir)
         elif self.mode == "material":
-            return self._run_material_clustering(
-                enhanced_images_dir, depth_maps_dir, output_dir
-            )
+            return self._run_material_clustering(enhanced_images_dir, depth_maps_dir, output_dir)
         elif self.mode == "hybrid":
-            return self._run_hybrid_segmentation(
-                enhanced_images_dir, depth_maps_dir, output_dir
-            )
+            return self._run_hybrid_segmentation(enhanced_images_dir, depth_maps_dir, output_dir)
         elif self.mode == "auto":
-            return self._run_auto_segmentation(
-                enhanced_images_dir, depth_maps_dir, output_dir
-            )
+            return self._run_auto_segmentation(enhanced_images_dir, depth_maps_dir, output_dir)
         # Fallback for unknown mode (should not happen with proper validation)
         return False, 0
 
-    def _run_semantic_segmentation(self, enhanced_dir: Path, depth_dir: Path,
-                                   output_dir: Path) -> Tuple[bool, int]:
+    def _run_semantic_segmentation(self, enhanced_dir: Path, depth_dir: Path, output_dir: Path) -> Tuple[bool, int]:
         """Run Detectron2 panoptic segmentation (original behavior)."""
         log.info("Running semantic segmentation (Detectron2)...")
 
         script = Path(__file__).parent / "run_detectron2_panoptic_batch.py"
 
         cmd = [
-            sys.executable, str(script),
-            "--images-root", str(enhanced_dir),
-            "--depths-root", str(depth_dir),
-            "--mask-root", str(output_dir),
-            "--device", self.config.device
+            sys.executable,
+            str(script),
+            "--images-root",
+            str(enhanced_dir),
+            "--depths-root",
+            str(depth_dir),
+            "--mask-root",
+            str(output_dir),
+            "--device",
+            self.config.device,
         ]
 
         try:
@@ -256,8 +240,7 @@ class AdaptiveSegmentationStage:
             log.error(f"Semantic segmentation failed: {e}")
             return False, 0
 
-    def _run_material_clustering(self, enhanced_dir: Path, _depth_dir: Path,
-                                 output_dir: Path) -> Tuple[bool, int]:
+    def _run_material_clustering(self, enhanced_dir: Path, _depth_dir: Path, output_dir: Path) -> Tuple[bool, int]:
         """
         Run K-means material clustering (fast aerial mode).
 
@@ -268,16 +251,12 @@ class AdaptiveSegmentationStage:
         log.info(f"Running material clustering (k={self.config.material_clusters})...")
 
         # Find enhanced images
-        enhanced_images = (list(enhanced_dir.glob("*.ti")) +
-                           list(enhanced_dir.glob("*.tif")) +
-                           list(enhanced_dir.glob("*.jpg")))
+        enhanced_images = list(enhanced_dir.glob("*.ti")) + list(enhanced_dir.glob("*.tif")) + list(enhanced_dir.glob("*.jpg"))
 
         mask_count = 0
         for img_path in enhanced_images:
             try:
-                self.material_clusterer.cluster(
-                    img_path, output_dir
-                )
+                self.material_clusterer.cluster(img_path, output_dir)
                 # Count generated masks
                 base_name = img_path.stem
                 masks = list(output_dir.glob(f"{base_name}_mask_material*.png"))
@@ -287,8 +266,7 @@ class AdaptiveSegmentationStage:
 
         return True, mask_count
 
-    def _run_hybrid_segmentation(self, enhanced_dir: Path, depth_dir: Path,
-                                 output_dir: Path) -> Tuple[bool, int]:
+    def _run_hybrid_segmentation(self, enhanced_dir: Path, depth_dir: Path, output_dir: Path) -> Tuple[bool, int]:
         """Run both semantic and material segmentation."""
         log.info("Running hybrid segmentation (semantic + material)...")
 
@@ -299,12 +277,8 @@ class AdaptiveSegmentationStage:
         material_dir.mkdir(exist_ok=True)
 
         # Run both
-        success_sem, count_sem = self._run_semantic_segmentation(
-            enhanced_dir, depth_dir, semantic_dir
-        )
-        success_mat, count_mat = self._run_material_clustering(
-            enhanced_dir, depth_dir, material_dir
-        )
+        success_sem, count_sem = self._run_semantic_segmentation(enhanced_dir, depth_dir, semantic_dir)
+        success_mat, count_mat = self._run_material_clustering(enhanced_dir, depth_dir, material_dir)
 
         # Copy all masks to main output directory
         for mask in semantic_dir.glob("*"):
@@ -314,14 +288,12 @@ class AdaptiveSegmentationStage:
 
         return success_sem and success_mat, count_sem + count_mat
 
-    def _run_auto_segmentation(self, enhanced_dir: Path, depth_dir: Path,
-                               output_dir: Path) -> Tuple[bool, int]:
+    def _run_auto_segmentation(self, enhanced_dir: Path, depth_dir: Path, output_dir: Path) -> Tuple[bool, int]:
         """Automatically choose segmentation method based on image analysis."""
         log.info("Auto-detecting optimal segmentation method...")
 
         # Analyze first image to determine type
-        enhanced_images = (list(enhanced_dir.glob("*.ti")) +
-                           list(enhanced_dir.glob("*.tif")))
+        enhanced_images = list(enhanced_dir.glob("*.ti")) + list(enhanced_dir.glob("*.tif"))
 
         if not enhanced_images:
             log.error("No images found for analysis")
@@ -342,18 +314,19 @@ class AdaptiveSegmentationStage:
         h, w = image.shape[:2]
 
         # Check top region brightness (sky in ground photos)
-        top_region = image[:h//5, :]
+        top_region = image[: h // 5, :]
         top_brightness = top_region.mean()
 
         # Check for perspective (ground photos have convergence)
         # Simple proxy: variance in horizontal lines
-        mid_section = image[h//3:2*h//3, :]
+        mid_section = image[h // 3 : 2 * h // 3, :]
         row_means = mid_section.mean(axis=1)
         perspective_indicator = row_means.std()
 
         # Aerial: bright top region (likely sky) AND low perspective
-        is_aerial = (top_brightness > AERIAL_TOP_BRIGHTNESS_THRESHOLD and
-                     perspective_indicator < AERIAL_PERSPECTIVE_VARIANCE_THRESHOLD)
+        is_aerial = (
+            top_brightness > AERIAL_TOP_BRIGHTNESS_THRESHOLD and perspective_indicator < AERIAL_PERSPECTIVE_VARIANCE_THRESHOLD
+        )
 
         return is_aerial
 
@@ -362,6 +335,7 @@ class AdaptiveSegmentationStage:
 @dataclass
 class EnhancedPipelineConfig:
     """Extended configuration with material clustering options."""
+
     # ... (inherit all original fields)
 
     # New fields for material clustering
@@ -374,8 +348,7 @@ class EnhancedPipelineConfig:
 def build_enhanced_parser() -> argparse.ArgumentParser:
     """Build enhanced CLI parser with material clustering options."""
     ap = argparse.ArgumentParser(
-        description="Enhanced TIFF pipeline with adaptive segmentation",
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        description="Enhanced TIFF pipeline with adaptive segmentation", formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
     # Original arguments
@@ -387,16 +360,17 @@ def build_enhanced_parser() -> argparse.ArgumentParser:
 
     # New segmentation options
     seg = ap.add_argument_group("Segmentation Options")
-    seg.add_argument("--segmentation-mode",
-                     choices=["semantic", "material", "hybrid", "auto"],
-                     default="semantic",
-                     help="Segmentation strategy (semantic=Detectron2, material=K-means)")
-    seg.add_argument("--material-clusters", type=int, default=6,
-                     help="Number of material clusters for K-means")
-    seg.add_argument("--material-textures", type=Path, default=None,
-                     help="JSON config file for material texture rules")
-    seg.add_argument("--aerial-mode", action="store_true",
-                     help="Optimize for aerial/drone imagery (implies --segmentation-mode material)")
+    seg.add_argument(
+        "--segmentation-mode",
+        choices=["semantic", "material", "hybrid", "auto"],
+        default="semantic",
+        help="Segmentation strategy (semantic=Detectron2, material=K-means)",
+    )
+    seg.add_argument("--material-clusters", type=int, default=6, help="Number of material clusters for K-means")
+    seg.add_argument("--material-textures", type=Path, default=None, help="JSON config file for material texture rules")
+    seg.add_argument(
+        "--aerial-mode", action="store_true", help="Optimize for aerial/drone imagery (implies --segmentation-mode material)"
+    )
 
     return ap
 

@@ -85,10 +85,7 @@ class DreamState:
     def crystallize(self, dream_sequence: DreamSequence) -> Technique:
         return Technique(
             name=f"Technique::{dream_sequence.idea}",
-            description=(
-                "A structured approach distilled from the subconscious "
-                f"exploration of {dream_sequence.idea}."
-            ),
+            description=("A structured approach distilled from the subconscious " f"exploration of {dream_sequence.idea}."),
         )
 
 
@@ -199,12 +196,12 @@ class QuantumOptimizer:
             return True
         return self._iteration >= self.max_iterations
 
-    async def evolve_pipeline(self,
-                              performance_metrics: Callable[[ArchitecturalHypothesis],
-                                                            float | Awaitable[float] | Dict[str,
-                                                                                            float] | Awaitable[Dict[str,
-                                                                                                                    float]]],
-                              ) -> None:
+    async def evolve_pipeline(
+        self,
+        performance_metrics: Callable[
+            [ArchitecturalHypothesis], float | Awaitable[float] | Dict[str, float] | Awaitable[Dict[str, float]]
+        ],
+    ) -> None:
         """Continuously optimise the pipeline until convergence."""
 
         while not self.convergence_achieved():
@@ -220,10 +217,7 @@ class QuantumOptimizer:
         """Expand the search frontier with freshly crystallised techniques."""
 
         dreams = await asyncio.gather(
-            *(
-                self.pipeline.rem_cycles.generate_vision()
-                for _ in range(self.exploration_batch_size)
-            )
+            *(self.pipeline.rem_cycles.generate_vision() for _ in range(self.exploration_batch_size))
         )
         hypotheses: List[ArchitecturalHypothesis] = []
         for dream, counter in zip(dreams, itertools.count(1)):
@@ -244,8 +238,9 @@ class QuantumOptimizer:
     async def test_parallel_realities(
         self,
         hypotheses: Sequence[ArchitecturalHypothesis],
-        performance_metrics: Callable[[ArchitecturalHypothesis],
-                                      float | Awaitable[float] | Dict[str, float] | Awaitable[Dict[str, float]]],
+        performance_metrics: Callable[
+            [ArchitecturalHypothesis], float | Awaitable[float] | Dict[str, float] | Awaitable[Dict[str, float]]
+        ],
     ) -> List[EvaluationResult]:
         """Evaluate hypotheses concurrently."""
 

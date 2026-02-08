@@ -15,23 +15,21 @@ def main():
     python_files = list(repo_root.glob("**/*.py"))
 
     # Exclude virtual environments, deprecated code, and this verification script itself
-    excluded_parts = ['.venv', 'venv', 'venv_py311', 'deprecated']
-    excluded_files = ['verify_no_basicsr_imports.py']
+    excluded_parts = [".venv", "venv", "venv_py311", "deprecated"]
+    excluded_files = ["verify_no_basicsr_imports.py"]
 
     python_files = [
-        f for f in python_files
-        if not any(part in f.parts for part in excluded_parts)
-        and f.name not in excluded_files
+        f for f in python_files if not any(part in f.parts for part in excluded_parts) and f.name not in excluded_files
     ]
 
     violations = []
 
     for py_file in python_files:
         try:
-            content = py_file.read_text(encoding='utf-8')
+            content = py_file.read_text(encoding="utf-8")
             for line_num, line in enumerate(content.splitlines(), start=1):
                 # Check for basicsr imports
-                if 'import basicsr' in line or 'from basicsr' in line:
+                if "import basicsr" in line or "from basicsr" in line:
                     violations.append((py_file, line_num, line.strip()))
         except Exception:
             # Skip files that can't be read

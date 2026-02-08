@@ -18,21 +18,21 @@ def load_exr_as_16bit(exr_path: Path) -> np.ndarray:
     """Load EXR and convert to 16-bit preserving dynamic range"""
     exr_file = OpenEXR.InputFile(str(exr_path))
     header = exr_file.header()
-    dw = header['dataWindow']
+    dw = header["dataWindow"]
     width = dw.max.x - dw.min.x + 1
     height = dw.max.y - dw.min.y + 1
 
     # Read RGB channels as float32
     FLOAT = Imath.PixelType(Imath.PixelType.FLOAT)
     channels = {}
-    for c in ['R', 'G', 'B']:
+    for c in ["R", "G", "B"]:
         channel_str = exr_file.channel(c, FLOAT)
         channel = np.frombuffer(channel_str, dtype=np.float32)
         channel = channel.reshape((height, width))
         channels[c] = channel
 
     # Stack into RGB array
-    rgb = np.stack([channels['R'], channels['G'], channels['B']], axis=-1)
+    rgb = np.stack([channels["R"], channels["G"], channels["B"]], axis=-1)
 
     print(f"  EXR loaded: {width}x{height}, range [{rgb.min():.3f}, {rgb.max():.3f}]")
 
@@ -49,9 +49,7 @@ def load_exr_as_16bit(exr_path: Path) -> np.ndarray:
     rgb_exposed = rgb_clipped * exposure_factor
 
     # Soft clipping at highlights
-    rgb_tone = np.where(rgb_exposed < 1.0,
-                        rgb_exposed,
-                        1.0 - np.exp(-(rgb_exposed - 1.0)))
+    rgb_tone = np.where(rgb_exposed < 1.0, rgb_exposed, 1.0 - np.exp(-(rgb_exposed - 1.0)))
 
     # Convert to 16-bit integer (0-65535 range)
     rgb_16bit = (np.clip(rgb_tone, 0, 1) * 65535).astype(np.uint16)
@@ -115,22 +113,25 @@ def process_view(
     # Use tifffile for proper 16-bit RGB TIFF
     try:
         import tifffile
+
         tifffile.imwrite(
             output_path,
             rgb_16bit,
-            photometric='rgb',
-            compression='lzw',
+            photometric="rgb",
+            compression="lzw",
             metadata={
-                'Software': 'Transformation Portal',
-                'ImageDescription': f'750 Picacho Lane - {view_name} - 16-bit Master'
-            }
+                "Software": "Transformation Portal",
+                "ImageDescription": f"750 Picacho Lane - {view_name} - 16-bit Master",
+            },
         )
         print(f"  Saved: {output_path.name}")
 
         # Verify the save (use tifffile to properly read 16-bit)
         verify_arr = tifffile.imread(output_path)
-        print(f"  Verification: dtype={verify_arr.dtype}, "
-              f"range=[{verify_arr.min()}, {verify_arr.max()}], shape={verify_arr.shape}")
+        print(
+            f"  Verification: dtype={verify_arr.dtype}, "
+            f"range=[{verify_arr.min()}, {verify_arr.max()}], shape={verify_arr.shape}"
+        )
 
         if verify_arr.dtype == np.uint16 and verify_arr.max() > 255:
             print("  ✅ Successfully saved as 16-bit TIFF")
@@ -169,6 +170,7 @@ def process_all(
         except Exception as e:
             print(f"❌ Error processing {view_name}: {e}")
             import traceback
+
             traceback.print_exc()
 
     print("\n✅ Processing complete!")

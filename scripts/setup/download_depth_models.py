@@ -34,7 +34,9 @@ except ImportError:
 # NOTE: Update URL and version when new releases are available
 # Latest releases: https://github.com/xinntao/Real-ESRGAN/releases
 REALESRGAN_MODEL_VERSION = "v0.2.5.0"
-REALESRGAN_MODEL_URL = f"https://github.com/xinntao/Real-ESRGAN/releases/download/{REALESRGAN_MODEL_VERSION}/RealESRGAN_x4plus.pth"
+REALESRGAN_MODEL_URL = (
+    f"https://github.com/xinntao/Real-ESRGAN/releases/download/{REALESRGAN_MODEL_VERSION}/RealESRGAN_x4plus.pth"
+)
 REALESRGAN_MODEL_FILENAME = "RealESRGAN_x4plus.pth"
 
 # Depth Anything V2 CoreML model (not yet publicly hosted)
@@ -53,22 +55,16 @@ class DownloadProgressBar:
         if total_size > 0:
             if self.pbar is None:
                 if tqdm:
-                    self.pbar = tqdm(
-                        total=total_size,
-                        unit='B',
-                        unit_scale=True,
-                        unit_divisor=1024,
-                        desc=self.desc
-                    )
+                    self.pbar = tqdm(total=total_size, unit="B", unit_scale=True, unit_divisor=1024, desc=self.desc)
                 else:
-                    print(f"Downloading {self.desc}... 0%", end='', flush=True)
+                    print(f"Downloading {self.desc}... 0%", end="", flush=True)
 
             downloaded = block_num * block_size
             if tqdm and self.pbar:
                 self.pbar.update(block_size)
             elif not tqdm:
                 percent = min(100, int(downloaded * 100 / total_size))
-                print(f"\rDownloading {self.desc}... {percent}%", end='', flush=True)
+                print(f"\rDownloading {self.desc}... {percent}%", end="", flush=True)
 
             if downloaded >= total_size:
                 if tqdm and self.pbar:
@@ -92,11 +88,7 @@ def download_file(url: str, output_path: Path, desc: str = "file") -> bool:
         print(f"Downloading {desc} from {url}")
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        urllib.request.urlretrieve(
-            url,
-            output_path,
-            reporthook=DownloadProgressBar(desc)
-        )
+        urllib.request.urlretrieve(url, output_path, reporthook=DownloadProgressBar(desc))
 
         print(f"✓ Successfully downloaded to {output_path}")
         return True
@@ -123,9 +115,9 @@ def download_depth_anything_v2_coreml(output_dir: Path) -> bool:
     """
     model_path = output_dir / DEPTH_ANYTHING_V2_COREML_FILENAME
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("DEPTH ANYTHING V2 COREML MODEL")
-    print("="*70)
+    print("=" * 70)
     print("\nThe CoreML model for Depth Anything V2 is not yet publicly hosted.")
     print("You have two options:\n")
 
@@ -150,7 +142,7 @@ def download_depth_anything_v2_coreml(output_dir: Path) -> bool:
     print("  pip install controlnet-aux")
     print("Models download automatically but are large (1.4GB+).")
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
 
     return False  # Manual action required
 
@@ -166,9 +158,9 @@ def download_realesrgan_weights(output_dir: Path) -> bool:
     """
     model_path = output_dir / REALESRGAN_MODEL_FILENAME
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("REAL-ESRGAN 4X UPSCALING MODEL")
-    print("="*70)
+    print("=" * 70)
 
     if model_path.exists():
         print(f"✓ Model already exists: {model_path}")
@@ -191,9 +183,9 @@ def verify_models(model_dir: Path) -> dict:
         "realesrgan": (model_dir / REALESRGAN_MODEL_FILENAME).exists(),
     }
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("MODEL STATUS")
-    print("="*70)
+    print("=" * 70)
 
     for model_name, installed in status.items():
         symbol = "✓" if installed else "✗"
@@ -205,34 +197,23 @@ def verify_models(model_dir: Path) -> dict:
 
 def main():
     """Main entry point for model download script."""
-    parser = argparse.ArgumentParser(
-        description="Download depth estimation and upscaling models for Transformation Portal"
-    )
+    parser = argparse.ArgumentParser(description="Download depth estimation and upscaling models for Transformation Portal")
     parser.add_argument(
         "--model",
         type=str,
         choices=["depth", "realesrgan", "all"],
         default="all",
-        help="Which model to download (default: all)"
+        help="Which model to download (default: all)",
     )
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        default="./weights",
-        help="Output directory for models (default: ./weights)"
-    )
-    parser.add_argument(
-        "--verify-only",
-        action="store_true",
-        help="Only verify model status, don't download"
-    )
+    parser.add_argument("--output-dir", type=str, default="./weights", help="Output directory for models (default: ./weights)")
+    parser.add_argument("--verify-only", action="store_true", help="Only verify model status, don't download")
 
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print("Transformation Portal - Model Download Utility")
-    print("="*70)
+    print("=" * 70)
     print(f"Output directory: {output_dir.absolute()}\n")
 
     if args.verify_only:
@@ -254,9 +235,9 @@ def main():
     print("\n")
     verify_models(output_dir)
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("NEXT STEPS")
-    print("="*70)
+    print("=" * 70)
     print("1. Install required packages:")
     print("   pip install -r requirements.txt")
     print("\n2. For depth processing, install transformers:")

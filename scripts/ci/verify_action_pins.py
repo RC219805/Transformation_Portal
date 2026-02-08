@@ -19,7 +19,7 @@ CRITICAL_WORKFLOWS = {
 }
 
 # Pattern to match action uses
-ACTION_PATTERN = re.compile(r'uses:\s+([^@\s]+)@([^\s]+)')
+ACTION_PATTERN = re.compile(r"uses:\s+([^@\s]+)@([^\s]+)")
 
 
 def check_workflow(workflow_path: Path) -> List[Tuple[str, int, str, bool]]:
@@ -40,7 +40,7 @@ def check_workflow(workflow_path: Path) -> List[Tuple[str, int, str, bool]]:
                 if action.startswith("actions/") and version.startswith("v"):
                     continue
                 # Check if version is a commit SHA (40 hex chars)
-                if not re.match(r'^[0-9a-f]{40}$', version):
+                if not re.match(r"^[0-9a-f]{40}$", version):
                     issues.append((action, line_num, version, is_critical))
 
     return issues
@@ -59,11 +59,7 @@ def main():
         issues = check_workflow(workflow_file)
         if issues:
             all_issues.extend([(workflow_file.name, *issue) for issue in issues])
-            critical_issues.extend([
-                (workflow_file.name, *issue)
-                for issue in issues
-                if issue[3]  # is_critical
-            ])
+            critical_issues.extend([(workflow_file.name, *issue) for issue in issues if issue[3]])  # is_critical
 
     if not all_issues:
         print("✅ All GitHub Actions are properly pinned")

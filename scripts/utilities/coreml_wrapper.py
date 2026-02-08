@@ -14,6 +14,7 @@ from PIL import Image
 
 try:
     import coremltools as ct
+
     COREML_AVAILABLE = True
 except ImportError:
     COREML_AVAILABLE = False
@@ -50,10 +51,7 @@ class CoreMLDepthModel:
                           "ALL" auto-selects optimal (ANE > GPU > CPU)
         """
         if not COREML_AVAILABLE:
-            raise ImportError(
-                "coremltools required for CoreML models. "
-                "Install with: pip install coremltools"
-            )
+            raise ImportError("coremltools required for CoreML models. " "Install with: pip install coremltools")
 
         self.model_path = Path(model_path)
         if not self.model_path.exists():
@@ -70,17 +68,12 @@ class CoreMLDepthModel:
         # Load model
         self.model = self._load_model()
 
-        logger.info(
-            "Loaded CoreML model from %s (compute=%s)", model_path, compute_units
-        )
+        logger.info("Loaded CoreML model from %s (compute=%s)", model_path, compute_units)
 
     def _load_model(self):
         """Load CoreML model with error handling."""
         try:
-            model = ct.models.MLModel(
-                str(self.model_path),
-                compute_units=self.compute_unit
-            )
+            model = ct.models.MLModel(str(self.model_path), compute_units=self.compute_unit)
             return model
         except Exception as e:
             logger.error("Failed to load CoreML model: %s", e)
@@ -115,11 +108,11 @@ class CoreMLDepthModel:
 
         # Run inference
         try:
-            prediction = self.model.predict({'image': image})
+            prediction = self.model.predict({"image": image})
 
             # Extract depth (output name may vary)
-            if 'depth' in prediction:
-                depth = prediction['depth']
+            if "depth" in prediction:
+                depth = prediction["depth"]
             else:
                 # Fallback to first output
                 depth = next(iter(prediction.values()))
@@ -147,20 +140,17 @@ class CoreMLDepthModel:
         Returns:
             List of depth maps
         """
-        return [
-            self.predict(img, normalize_input=normalize_input)
-            for img in images
-        ]
+        return [self.predict(img, normalize_input=normalize_input) for img in images]
 
     def get_model_info(self) -> dict:
         """Get model metadata."""
         spec = self.model.get_spec()
 
         return {
-            'input_description': spec.description.input,
-            'output_description': spec.description.output,
-            'compute_unit': str(self.compute_unit),
-            'model_path': str(self.model_path),
+            "input_description": spec.description.input,
+            "output_description": spec.description.output,
+            "compute_unit": str(self.compute_unit),
+            "model_path": str(self.model_path),
         }
 
     def __repr__(self) -> str:

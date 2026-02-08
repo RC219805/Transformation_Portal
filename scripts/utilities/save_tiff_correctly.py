@@ -13,10 +13,7 @@ import tifffile
 
 
 def save_16bit_tiff_correctly(
-    image_array: np.ndarray,
-    output_path: Union[str, Path],
-    compression: str = 'adobe_deflate',
-    metadata: Optional[dict] = None
+    image_array: np.ndarray, output_path: Union[str, Path], compression: str = "adobe_deflate", metadata: Optional[dict] = None
 ) -> Path:
     """
     Save 16-bit TIFF correctly using tifffile.
@@ -48,17 +45,17 @@ def save_16bit_tiff_correctly(
 
     # Convert uint8 to uint16 for maximum quality
     elif image_array.dtype == np.uint8:
-        image_array = (image_array.astype(np.uint16) * 257)  # 0-255 -> 0-65535
+        image_array = image_array.astype(np.uint16) * 257  # 0-255 -> 0-65535
 
     # Determine photometric
     if image_array.ndim == 2:
-        photometric = 'minisblack'
+        photometric = "minisblack"
     elif image_array.shape[2] == 3:
-        photometric = 'rgb'
+        photometric = "rgb"
     elif image_array.shape[2] == 4:
-        photometric = 'rgb'
+        photometric = "rgb"
     else:
-        photometric = 'minisblack'
+        photometric = "minisblack"
 
     # Save with tifffile for perfect quality
     tifffile.imwrite(
@@ -67,7 +64,7 @@ def save_16bit_tiff_correctly(
         compression=compression,
         metadata=metadata or {},
         photometric=photometric,
-        planarconfig='contig',
+        planarconfig="contig",
     )
 
     print(f"✓ Saved perfect-quality TIFF: {output_path.name}")
@@ -78,9 +75,7 @@ def save_16bit_tiff_correctly(
 
 
 def load_pil_and_save_correctly(
-    input_path: Union[str, Path],
-    output_path: Union[str, Path],
-    compression: str = 'adobe_deflate'
+    input_path: Union[str, Path], output_path: Union[str, Path], compression: str = "adobe_deflate"
 ) -> Path:
     """
     Load image with PIL, save with tifffile for perfect quality.
@@ -96,13 +91,13 @@ def load_pil_and_save_correctly(
     # Load with PIL
     with Image.open(input_path) as img:
         # Convert to RGB if needed
-        if img.mode in ('RGBA', 'LA'):
+        if img.mode in ("RGBA", "LA"):
             # Composite on white background
-            rgb = Image.new('RGB', img.size, (255, 255, 255))
-            rgb.paste(img, mask=img.split()[-1] if 'A' in img.mode else None)
+            rgb = Image.new("RGB", img.size, (255, 255, 255))
+            rgb.paste(img, mask=img.split()[-1] if "A" in img.mode else None)
             img = rgb
-        elif img.mode != 'RGB':
-            img = img.convert('RGB')
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
 
         # Convert to numpy
         array = np.array(img)
@@ -111,7 +106,7 @@ def load_pil_and_save_correctly(
     return save_16bit_tiff_correctly(array, output_path, compression)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import sys
 
     if len(sys.argv) != 3:

@@ -12,18 +12,14 @@ from typing import Dict, List
 from PIL import Image
 import subprocess
 
+
 class QualityControlPipeline:
     """Manages end-to-end quality control for luxury rendering pipeline"""
 
     def __init__(self, project_name: str = "750_Picacho"):
         self.project_name = project_name
         self.canonical_sources = []
-        self.quality_report = {
-            "project": project_name,
-            "sources": {},
-            "outputs": {},
-            "verification": {}
-        }
+        self.quality_report = {"project": project_name, "sources": {}, "outputs": {}, "verification": {}}
 
     def verify_source_integrity(self, source_dir: Path) -> Dict:
         """Verify all source files are present and valid"""
@@ -33,7 +29,7 @@ class QualityControlPipeline:
             "750Picacho_Kitchen.jpg",
             "750Picacho_Pool.jpg",
             "750Picacho_PrimaryBathroom.jpg",
-            "750Picacho_PrimaryBedroom.jpg"
+            "750Picacho_PrimaryBedroom.jpg",
         ]
 
         results = {}
@@ -55,13 +51,10 @@ class QualityControlPipeline:
                         "mode": img.mode,
                         "format": img.format,
                         "file_size_mb": filepath.stat().st_size / (1024 * 1024),
-                        "hash": file_hash
+                        "hash": file_hash,
                     }
             except Exception as e:
-                results[filename] = {
-                    "status": f"ERROR: {e}",
-                    "valid": False
-                }
+                results[filename] = {"status": f"ERROR: {e}", "valid": False}
 
         self.quality_report["sources"] = results
         return results
@@ -75,22 +68,13 @@ class QualityControlPipeline:
             output_file = output_dir / f"{base_name}_luxury.{format_type}"
 
             if not output_file.exists():
-                results[output_file.name] = {
-                    "status": "MISSING",
-                    "valid": False
-                }
+                results[output_file.name] = {"status": "MISSING", "valid": False}
                 continue
 
             try:
                 with Image.open(output_file) as img:
                     # Quality checks
-                    checks = {
-                        "exists": True,
-                        "readable": True,
-                        "size": img.size,
-                        "mode": img.mode,
-                        "format": img.format
-                    }
+                    checks = {"exists": True, "readable": True, "size": img.size, "mode": img.mode, "format": img.format}
 
                     # Format-specific checks
                     if format_type == "ti":
@@ -104,22 +88,14 @@ class QualityControlPipeline:
                             size_match = img.size == src_img.size
                             checks["size_matches_source"] = size_match
 
-                    results[output_file.name] = {
-                        "status": "OK",
-                        "valid": True,
-                        **checks
-                    }
+                    results[output_file.name] = {"status": "OK", "valid": True, **checks}
 
             except Exception as e:
-                results[output_file.name] = {
-                    "status": f"ERROR: {e}",
-                    "valid": False
-                }
+                results[output_file.name] = {"status": f"ERROR: {e}", "valid": False}
 
         return results
 
-    def run_pipeline(self, input_dir: Path, output_dir: Path,
-                    formats: List[str] = ["jpeg", "png", "tif"]):
+    def run_pipeline(self, input_dir: Path, output_dir: Path, formats: List[str] = ["jpeg", "png", "tif"]):
         """Run the unified luxury pipeline with quality controls"""
 
         # Step 1: Verify sources
@@ -135,24 +111,25 @@ class QualityControlPipeline:
                 if not result.get("valid"):
                     print(f"    - {filename}: {result.get('status')}")
 
-            if input("Continue anyway? (y/n): ").lower() != 'y':
+            if input("Continue anyway? (y/n): ").lower() != "y":
                 return False
 
         # Store canonical sources for later verification
-        self.canonical_sources = [
-            input_dir / f for f in source_results.keys()
-            if source_results[f].get("valid")
-        ]
+        self.canonical_sources = [input_dir / f for f in source_results.keys() if source_results[f].get("valid")]
 
         # Step 2: Run unified pipeline
         print("\nStep 2: Running unified luxury pipeline...")
         cmd = [
             sys.executable,
             "unified_luxury_pipeline.py",
-            "--input", str(input_dir),
-            "--output", str(output_dir),
-            "--formats", *formats,
-            "--preset", "luxury_estate"
+            "--input",
+            str(input_dir),
+            "--output",
+            str(output_dir),
+            "--formats",
+            *formats,
+            "--preset",
+            "luxury_estate",
         ]
 
         try:
@@ -177,7 +154,8 @@ class QualityControlPipeline:
             # Check for TIFF degradation issue
             if fmt == "tif":
                 degraded = [
-                    name for name, result in output_results.items()
+                    name
+                    for name, result in output_results.items()
                     if result.get("valid") and not result.get("tiff_quality_ok", True)
                 ]
                 if degraded:
@@ -187,7 +165,7 @@ class QualityControlPipeline:
 
         # Step 4: Save quality report
         report_path = output_dir / "quality_control_report.json"
-        with open(report_path, 'w') as f:
+        with open(report_path, "w") as f:
             json.dump(self.quality_report, f, indent=2)
         print(f"\n✓ Quality report saved to: {report_path}")
 
@@ -201,11 +179,7 @@ def main():
     output_dir = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/Final_Production")
 
     qc = QualityControlPipeline("750_Picacho_Lane")
-    success = qc.run_pipeline(
-        input_dir=input_dir,
-        output_dir=output_dir,
-        formats=["jpeg", "png", "tif"]
-    )
+    success = qc.run_pipeline(input_dir=input_dir, output_dir=output_dir, formats=["jpeg", "png", "tif"])
 
     sys.exit(0 if success else 1)
 

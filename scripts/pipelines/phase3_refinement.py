@@ -11,41 +11,41 @@ from PIL import Image, ImageEnhance
 
 # Scene-specific configurations from action plan
 SCENE_CONFIGS = {
-    'Pool': {
-        'exposure': +0.25,          # CRITICAL FIX
-        'water_clarity': 0.85,
-        'saturation': 1.12,
-        'warmth': 0.10,
-        'contrast': 1.05,
+    "Pool": {
+        "exposure": +0.25,  # CRITICAL FIX
+        "water_clarity": 0.85,
+        "saturation": 1.12,
+        "warmth": 0.10,
+        "contrast": 1.05,
     },
-    'Aerial': {
-        'exposure': +0.10,
-        'clarity': 0.30,
-        'saturation': 1.10,
-        'contrast': 1.08,
+    "Aerial": {
+        "exposure": +0.10,
+        "clarity": 0.30,
+        "saturation": 1.10,
+        "contrast": 1.08,
     },
-    'GreatRoom': {
-        'exposure': +0.05,
-        'contrast': 1.12,
-        'warmth': 0.20,
-        'saturation': 1.05,
+    "GreatRoom": {
+        "exposure": +0.05,
+        "contrast": 1.12,
+        "warmth": 0.20,
+        "saturation": 1.05,
     },
-    'Kitchen': {
-        'exposure': 0.0,
-        'contrast': 1.10,
-        'saturation': 1.08,
+    "Kitchen": {
+        "exposure": 0.0,
+        "contrast": 1.10,
+        "saturation": 1.08,
     },
-    'PrimaryBathroom': {
-        'exposure': +0.05,
-        'contrast': 1.05,
-        'warmth': 0.12,
-        'saturation': 1.05,
+    "PrimaryBathroom": {
+        "exposure": +0.05,
+        "contrast": 1.05,
+        "warmth": 0.12,
+        "saturation": 1.05,
     },
-    'PrimaryBedroom': {
-        'exposure': 0.0,
-        'contrast': 1.06,
-        'warmth': 0.18,
-        'saturation': 1.05,
+    "PrimaryBedroom": {
+        "exposure": 0.0,
+        "contrast": 1.06,
+        "warmth": 0.18,
+        "saturation": 1.05,
     },
 }
 
@@ -56,7 +56,7 @@ def detect_scene_type(filename: str) -> str:
     for scene in SCENE_CONFIGS.keys():
         if scene.lower() in filename_lower:
             return scene
-    return 'default'
+    return "default"
 
 
 def apply_exposure(img: np.ndarray, exposure_ev: float) -> np.ndarray:
@@ -68,7 +68,7 @@ def apply_exposure(img: np.ndarray, exposure_ev: float) -> np.ndarray:
         return img
 
     # Convert EV to linear multiplier: 2^EV
-    multiplier = 2 ** exposure_ev
+    multiplier = 2**exposure_ev
 
     # Apply and clip
     img_adjusted = np.clip(img * multiplier, 0, 1)
@@ -104,20 +104,12 @@ def enhance_water_clarity(img: np.ndarray, strength: float) -> np.ndarray:
     # Enhance blue saturation in water regions
     img_enhanced = img.copy()
     if water_mask.any():
-        img_enhanced[..., 2] = np.where(
-            water_mask,
-            np.clip(img[..., 2] * (1 + strength * 0.15), 0, 1),
-            img[..., 2]
-        )
+        img_enhanced[..., 2] = np.where(water_mask, np.clip(img[..., 2] * (1 + strength * 0.15), 0, 1), img[..., 2])
 
     return img_enhanced
 
 
-def process_scene(
-    input_path: Path,
-    output_path: Path,
-    scene_type: str
-) -> None:
+def process_scene(input_path: Path, output_path: Path, scene_type: str) -> None:
     """Process a single image with scene-specific enhancements"""
 
     print(f"\n{'=' * 80}")
@@ -129,7 +121,7 @@ def process_scene(
     config = SCENE_CONFIGS.get(scene_type, {})
     if not config:
         print(f"⚠️  No config for scene type '{scene_type}', using defaults")
-        config = {'exposure': 0.0, 'contrast': 1.0, 'saturation': 1.0}
+        config = {"exposure": 0.0, "contrast": 1.0, "saturation": 1.0}
 
     print("Configuration:")
     for key, value in config.items():
@@ -153,38 +145,38 @@ def process_scene(
     print("\nApplying enhancements...")
 
     # 1. Exposure correction
-    if 'exposure' in config and config['exposure'] != 0:
+    if "exposure" in config and config["exposure"] != 0:
         print(f"  • Exposure: {config['exposure']:+.2f} EV")
-        img_float = apply_exposure(img_float, config['exposure'])
+        img_float = apply_exposure(img_float, config["exposure"])
 
     # 2. Warmth
-    if 'warmth' in config and config['warmth'] > 0:
+    if "warmth" in config and config["warmth"] > 0:
         print(f"  • Warmth: {config['warmth']:.2f}")
-        img_float = apply_warmth(img_float, config['warmth'])
+        img_float = apply_warmth(img_float, config["warmth"])
 
     # 3. Water clarity (for pool scenes)
-    if 'water_clarity' in config and config['water_clarity'] > 0:
+    if "water_clarity" in config and config["water_clarity"] > 0:
         print(f"  • Water clarity: {config['water_clarity']:.2f}")
-        img_float = enhance_water_clarity(img_float, config['water_clarity'])
+        img_float = enhance_water_clarity(img_float, config["water_clarity"])
 
     # Convert back to uint16
     img_16bit = (img_float * 65535).astype(np.uint16)
 
     # Apply PIL enhancements (contrast, saturation) on 8-bit for compatibility
     img_8bit = (img_float * 255).astype(np.uint8)
-    img_pil = Image.fromarray(img_8bit, mode='RGB')
+    img_pil = Image.fromarray(img_8bit, mode="RGB")
 
     # 4. Contrast
-    if 'contrast' in config and config['contrast'] != 1.0:
+    if "contrast" in config and config["contrast"] != 1.0:
         print(f"  • Contrast: {config['contrast']:.2f}")
         enhancer = ImageEnhance.Contrast(img_pil)
-        img_pil = enhancer.enhance(config['contrast'])
+        img_pil = enhancer.enhance(config["contrast"])
 
     # 5. Saturation
-    if 'saturation' in config and config['saturation'] != 1.0:
+    if "saturation" in config and config["saturation"] != 1.0:
         print(f"  • Saturation: {config['saturation']:.2f}")
         enhancer = ImageEnhance.Color(img_pil)
-        img_pil = enhancer.enhance(config['saturation'])
+        img_pil = enhancer.enhance(config["saturation"])
 
     # Convert PIL result back to 16-bit
     img_final_8bit = np.array(img_pil)
@@ -198,9 +190,7 @@ def process_scene(
     # Apply mask per channel (avoid broadcasting issues)
     for c in range(3):
         img_blended[..., c] = np.where(
-            highlight_mask[..., c],
-            img_float[..., c],  # Use 16-bit for highlights
-            img_final_float[..., c]  # Use PIL for rest
+            highlight_mask[..., c], img_float[..., c], img_final_float[..., c]  # Use 16-bit for highlights  # Use PIL for rest
         )
 
     # Final conversion to 16-bit
@@ -209,12 +199,7 @@ def process_scene(
     # Save 16-bit TIFF
     print("\nSaving refined 16-bit TIFF...")
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    tifffile.imwrite(
-        str(output_path),
-        img_output,
-        compression='lzw',
-        photometric='rgb'
-    )
+    tifffile.imwrite(str(output_path), img_output, compression="lzw", photometric="rgb")
 
     print(f"✓ Saved: {output_path.name}")
     print(f"  Shape: {img_output.shape}, dtype: {img_output.dtype}")
@@ -222,9 +207,9 @@ def process_scene(
     print(f"  Size: {output_path.stat().st_size / 1024 / 1024:.1f} MB")
 
     # Also save high-quality JPEG
-    jpeg_path = output_path.with_suffix('.jpg')
+    jpeg_path = output_path.with_suffix(".jpg")
     img_jpeg = Image.fromarray((img_blended * 255).astype(np.uint8))
-    img_jpeg.save(jpeg_path, 'JPEG', quality=98, optimize=True, subsampling=0)
+    img_jpeg.save(jpeg_path, "JPEG", quality=98, optimize=True, subsampling=0)
     print(f"✓ Saved JPEG: {jpeg_path.name}")
 
 
@@ -259,7 +244,7 @@ def main():
         scene_type = detect_scene_type(tiff_path.name)
 
         # Create output filename
-        base_name = tiff_path.stem.replace('_luxury', '').replace('_ultimate', '')
+        base_name = tiff_path.stem.replace("_luxury", "").replace("_ultimate", "")
         output_path = output_dir / f"{base_name}_refined.ti"
 
         # Process
@@ -269,6 +254,7 @@ def main():
         except Exception as e:
             print(f"❌ Error processing {tiff_path.name}: {e}")
             import traceback
+
             traceback.print_exc()
 
     print(f"\n{'#' * 80}")
@@ -278,5 +264,5 @@ def main():
     print(f"Total files: {len(list(output_dir.glob('*')))}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

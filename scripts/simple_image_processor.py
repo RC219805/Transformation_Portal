@@ -37,6 +37,7 @@ except ImportError as e:
 
 try:
     import typer
+
     HAS_TYPER = True
 except ImportError:
     HAS_TYPER = False
@@ -44,11 +45,11 @@ except ImportError:
 
 def adjust_brightness(image: Image.Image, factor: float = 1.0) -> Image.Image:
     """Adjust image brightness.
-    
+
     Args:
         image: Input PIL Image
         factor: Brightness factor (1.0 = no change, <1.0 darker, >1.0 brighter)
-    
+
     Returns:
         Adjusted image
     """
@@ -58,11 +59,11 @@ def adjust_brightness(image: Image.Image, factor: float = 1.0) -> Image.Image:
 
 def adjust_contrast(image: Image.Image, factor: float = 1.0) -> Image.Image:
     """Adjust image contrast.
-    
+
     Args:
         image: Input PIL Image
         factor: Contrast factor (1.0 = no change, <1.0 less contrast, >1.0 more contrast)
-    
+
     Returns:
         Adjusted image
     """
@@ -72,11 +73,11 @@ def adjust_contrast(image: Image.Image, factor: float = 1.0) -> Image.Image:
 
 def adjust_saturation(image: Image.Image, factor: float = 1.0) -> Image.Image:
     """Adjust image saturation.
-    
+
     Args:
         image: Input PIL Image
         factor: Saturation factor (0.0 = grayscale, 1.0 = no change, >1.0 more saturated)
-    
+
     Returns:
         Adjusted image
     """
@@ -84,18 +85,14 @@ def adjust_saturation(image: Image.Image, factor: float = 1.0) -> Image.Image:
     return enhancer.enhance(factor)
 
 
-def resize_image(
-    image: Image.Image,
-    target_size: Tuple[int, int],
-    maintain_aspect: bool = True
-) -> Image.Image:
+def resize_image(image: Image.Image, target_size: Tuple[int, int], maintain_aspect: bool = True) -> Image.Image:
     """Resize image with optional aspect ratio preservation.
-    
+
     Args:
         image: Input PIL Image
         target_size: Target (width, height)
         maintain_aspect: If True, maintain aspect ratio and fit within target_size
-    
+
     Returns:
         Resized image
     """
@@ -115,10 +112,10 @@ def process_image(
     saturation: float = 1.0,
     resize: Optional[Tuple[int, int]] = None,
     quality: int = 95,
-    verbose: bool = False
+    verbose: bool = False,
 ) -> bool:
     """Process a single image with basic adjustments.
-    
+
     Args:
         input_path: Path to input image
         output_path: Path to save processed image
@@ -128,7 +125,7 @@ def process_image(
         resize: Optional target size (width, height)
         quality: JPEG quality (1-100, default: 95)
         verbose: Print processing details
-    
+
     Returns:
         True if successful, False otherwise
     """
@@ -136,63 +133,63 @@ def process_image(
         # Load image
         if verbose:
             print(f"Loading: {input_path}")
-        
+
         img = Image.open(input_path)
         original_size = img.size
         original_mode = img.mode
-        
+
         if verbose:
             print(f"  Original: {original_size[0]}x{original_size[1]} {original_mode}")
-        
+
         # Convert to RGB if needed (for processing)
-        if img.mode != 'RGB':
+        if img.mode != "RGB":
             if verbose:
                 print(f"  Converting {img.mode} → RGB")
-            img = img.convert('RGB')
-        
+            img = img.convert("RGB")
+
         # Apply adjustments
         if brightness != 1.0:
             if verbose:
                 print(f"  Adjusting brightness: {brightness:.2f}")
             img = adjust_brightness(img, brightness)
-        
+
         if contrast != 1.0:
             if verbose:
                 print(f"  Adjusting contrast: {contrast:.2f}")
             img = adjust_contrast(img, contrast)
-        
+
         if saturation != 1.0:
             if verbose:
                 print(f"  Adjusting saturation: {saturation:.2f}")
             img = adjust_saturation(img, saturation)
-        
+
         # Resize if requested
         if resize:
             if verbose:
                 print(f"  Resizing to: {resize[0]}x{resize[1]}")
             img = resize_image(img, resize, maintain_aspect=True)
-        
+
         # Save image
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # Determine format from extension
         output_format = output_path.suffix.lower()
         save_kwargs = {}
-        
-        if output_format in ['.jpg', '.jpeg']:
-            save_kwargs['quality'] = quality
-            save_kwargs['optimize'] = True
-        elif output_format == '.png':
-            save_kwargs['optimize'] = True
-        
+
+        if output_format in [".jpg", ".jpeg"]:
+            save_kwargs["quality"] = quality
+            save_kwargs["optimize"] = True
+        elif output_format == ".png":
+            save_kwargs["optimize"] = True
+
         img.save(output_path, **save_kwargs)
-        
+
         if verbose:
             print(f"  Saved: {output_path}")
             print(f"  Final: {img.size[0]}x{img.size[1]}")
-        
+
         return True
-        
+
     except Exception as e:
         print(f"Error processing {input_path}: {e}")
         return False
@@ -207,34 +204,34 @@ def main_simple(
     width: Optional[int] = None,
     height: Optional[int] = None,
     quality: int = 95,
-    verbose: bool = False
+    verbose: bool = False,
 ):
     """
     Simple image processor for basic operations.
-    
+
     Works with minimal dependencies (numpy, Pillow only).
     """
     input_file = Path(input_path)
-    
+
     if not input_file.exists():
         print(f"Error: Input file not found: {input_file}")
         return 1
-    
+
     # Determine output path
     if output:
         output_file = Path(output)
     else:
         # Default: same name with _processed suffix
         output_file = input_file.parent / f"{input_file.stem}_processed{input_file.suffix}"
-    
+
     # Determine resize target
     resize_target = None
     if width and height:
         resize_target = (width, height)
-    
+
     # Process the image
     print(f"Processing: {input_file.name}")
-    
+
     success = process_image(
         input_file,
         output_file,
@@ -243,9 +240,9 @@ def main_simple(
         saturation=saturation,
         resize=resize_target,
         quality=quality,
-        verbose=verbose
+        verbose=verbose,
     )
-    
+
     if success:
         print(f"✓ Successfully processed: {output_file}")
         return 0
@@ -256,11 +253,8 @@ def main_simple(
 
 # CLI setup
 if HAS_TYPER:
-    app = typer.Typer(
-        help="Simple image processor (minimal dependencies)",
-        add_completion=False
-    )
-    
+    app = typer.Typer(help="Simple image processor (minimal dependencies)", add_completion=False)
+
     @app.command()
     def main(
         input_path: str = typer.Argument(..., help="Path to input image"),
@@ -275,14 +269,14 @@ if HAS_TYPER:
     ):
         """Process image with basic adjustments."""
         return main_simple(input_path, output, brightness, contrast, saturation, width, height, quality, verbose)
-    
+
     if __name__ == "__main__":
         sys.exit(app())
 else:
     # Fallback for when typer is not installed
     if __name__ == "__main__":
         import argparse
-        
+
         parser = argparse.ArgumentParser(description="Simple image processor")
         parser.add_argument("input_path", help="Path to input image")
         parser.add_argument("-o", "--output", help="Output path")
@@ -293,17 +287,19 @@ else:
         parser.add_argument("--height", type=int, help="Target height")
         parser.add_argument("-q", "--quality", type=int, default=95, help="JPEG quality")
         parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
-        
+
         args = parser.parse_args()
-        
-        sys.exit(main_simple(
-            args.input_path,
-            args.output,
-            args.brightness,
-            args.contrast,
-            args.saturation,
-            args.width,
-            args.height,
-            args.quality,
-            args.verbose
-        ))
+
+        sys.exit(
+            main_simple(
+                args.input_path,
+                args.output,
+                args.brightness,
+                args.contrast,
+                args.saturation,
+                args.width,
+                args.height,
+                args.quality,
+                args.verbose,
+            )
+        )

@@ -25,22 +25,26 @@ REPO_ROOT = Path(__file__).parent.parent
 WEIGHTS_DIR = REPO_ROOT / "weights"
 WEIGHTS_DIR.mkdir(exist_ok=True)
 
+
 class DownloadProgressBar(tqdm):
     """Progress bar for downloads."""
+
     def update_to(self, b=1, bsize=1, tsize=None):
         if tsize is not None:
             self.total = tsize
         self.update(b * bsize - self.n)
+
 
 def download_file(url, output_path):
     """Download file with progress bar."""
     print(f"\nDownloading: {output_path.name}")
     print(f"From: {url}")
 
-    with DownloadProgressBar(unit='B', unit_scale=True, miniters=1, desc=output_path.name) as t:
+    with DownloadProgressBar(unit="B", unit_scale=True, miniters=1, desc=output_path.name) as t:
         urllib.request.urlretrieve(url, output_path, reporthook=t.update_to)
 
     print(f"✓ Downloaded: {output_path}")
+
 
 # ============================================================================
 # 1. DEPTH ANYTHING V2 - HuggingFace Model
@@ -98,7 +102,7 @@ for model_name, model_url in REALESRGAN_MODELS.items():
         print(f"\n⚠ Missing: {model_name}")
         response = input(f"  Download {model_name}? (~67MB) [y/N]: ").lower().strip()
 
-        if response == 'y':
+        if response == "y":
             try:
                 download_file(model_url, model_path)
             except Exception as e:
@@ -129,6 +133,7 @@ try:
         try:
             # Check if model exists in cache (don't load)
             from huggingface_hub import snapshot_download
+
             cache_dir = snapshot_download(repo_id=model_id, allow_patterns=["*.json"])
             print(f"✓ Found: {model_id}")
         except Exception as e:

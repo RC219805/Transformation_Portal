@@ -13,11 +13,18 @@ def run_flake8_critical():
     """Run flake8 for critical errors only"""
     print("🔍 Running flake8 (critical errors only)...")
     result = subprocess.run(
-        ['flake8', '.', '--count', '--select=E9,F63,F7,F82', '--show-source', '--statistics',
-         '--exclude=.venv,deprecated,src/transformation_portal,scripts'],
+        [
+            "flake8",
+            ".",
+            "--count",
+            "--select=E9,F63,F7,F82",
+            "--show-source",
+            "--statistics",
+            "--exclude=.venv,deprecated,src/transformation_portal,scripts",
+        ],
         capture_output=True,
         text=True,
-        check=False
+        check=False,
     )
 
     if result.returncode != 0:
@@ -34,9 +41,9 @@ def check_undefined_names():
     """Check for common undefined name errors"""
     print("🔍 Checking for undefined names...")
     result = subprocess.run(
-        ['flake8', '.', '--select=F821', '--exclude=.venv,deprecated,src/transformation_portal,scripts'],
+        ["flake8", ".", "--select=F821", "--exclude=.venv,deprecated,src/transformation_portal,scripts"],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     if result.returncode != 0:
@@ -51,8 +58,8 @@ def check_undefined_names():
 def check_markdown_count():
     """Ensure root markdown files don't exceed limit"""
     print("🔍 Checking markdown file count...")
-    root = Path('.')
-    md_files = list(root.glob('*.md'))
+    root = Path(".")
+    md_files = list(root.glob("*.md"))
 
     if len(md_files) > 10:
         print(f"❌ Too many markdown files in root ({len(md_files)} > 10):")
@@ -69,28 +76,24 @@ def check_trailing_whitespace():
     """Check for excessive trailing whitespace"""
     print("🔍 Checking for trailing whitespace...")
 
-    result = subprocess.run(
-        ['git', 'dif', '--cached', '--name-only', '--diff-filter=ACM'],
-        capture_output=True,
-        text=True
-    )
+    result = subprocess.run(["git", "dif", "--cached", "--name-only", "--diff-filter=ACM"], capture_output=True, text=True)
 
     if result.returncode != 0:
         return True  # No staged files
 
-    staged_files = [f for f in result.stdout.strip().split('\n') if f.endswith('.py')]
+    staged_files = [f for f in result.stdout.strip().split("\n") if f.endswith(".py")]
     issues_found = False
 
     for filepath in staged_files:
         if not Path(filepath).exists():
             continue
 
-        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
             lines = f.readlines()
 
         trailing_lines = []
         for i, line in enumerate(lines, 1):
-            if line.rstrip() != line.rstrip('\n'):
+            if line.rstrip() != line.rstrip("\n"):
                 trailing_lines.append(i)
 
         if len(trailing_lines) > 5:
@@ -110,9 +113,9 @@ def check_import_order():
     print("🔍 Checking imports...")
 
     result = subprocess.run(
-        ['flake8', '.', '--select=E402,F401', '--exclude=.venv,deprecated,src/transformation_portal,scripts'],
+        ["flake8", ".", "--select=E402,F401", "--exclude=.venv,deprecated,src/transformation_portal,scripts"],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     if result.returncode != 0:
@@ -129,11 +132,16 @@ def run_quick_tests():
     print("🔍 Running quick tests...")
 
     result = subprocess.run(
-        ['pytest', '-x', '-v', '--tb=short',
-         'tests/test_format_utils.py::TestNormalizeExtension',
-         'tests/test_error_handling.py::TestFileValidation'],
+        [
+            "pytest",
+            "-x",
+            "-v",
+            "--tb=short",
+            "tests/test_format_utils.py::TestNormalizeExtension",
+            "tests/test_error_handling.py::TestFileValidation",
+        ],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     if result.returncode != 0:
@@ -197,5 +205,5 @@ def main():
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

@@ -65,7 +65,7 @@ def to_image_array(arr: np.ndarray) -> np.ndarray:
                 arr = arr.astype(np.uint8)
     else:
         # fallback: cast to uint8 via normalization
-        arr = normalize_float_to_uint8(arr.astype('float32'))
+        arr = normalize_float_to_uint8(arr.astype("float32"))
     return arr
 
 

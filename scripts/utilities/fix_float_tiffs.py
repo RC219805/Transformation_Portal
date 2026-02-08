@@ -10,6 +10,7 @@ import numpy as np
 from pathlib import Path
 import sys
 
+
 def fix_float_tiff(input_path: Path, output_path: Path = None, dry_run: bool = False):
     """
     Fix a float32 TIFF with values outside [0,1].
@@ -21,7 +22,7 @@ def fix_float_tiff(input_path: Path, output_path: Path = None, dry_run: bool = F
     """
     if output_path is None:
         # Create backup and overwrite original
-        backup_path = input_path.with_suffix('.tif.backup')
+        backup_path = input_path.with_suffix(".tif.backup")
         output_path = input_path
     else:
         backup_path = None
@@ -74,12 +75,7 @@ def fix_float_tiff(input_path: Path, output_path: Path = None, dry_run: bool = F
 
         # Save fixed version
         print(f"Saving fixed version: {output_path.name}")
-        tifffile.imwrite(
-            output_path,
-            data_16bit,
-            photometric='rgb',
-            compression='lzw'
-        )
+        tifffile.imwrite(output_path, data_16bit, photometric="rgb", compression="lzw")
 
         # Verify
         new_size = output_path.stat().st_size / (1024**2)
@@ -90,6 +86,7 @@ def fix_float_tiff(input_path: Path, output_path: Path = None, dry_run: bool = F
         print(f"  File size: {old_size:.1f} MB → {new_size:.1f} MB")
 
         return True
+
 
 def main():
     """Fix all float TIFFs in TIFFs/_TIFFs directory."""
@@ -122,6 +119,7 @@ def main():
     print("\n" + "=" * 70)
     print(f"SUMMARY: Fixed {fixed_count}/{len(tiff_files)} files")
     print("=" * 70)
+
 
 if __name__ == "__main__":
     main()

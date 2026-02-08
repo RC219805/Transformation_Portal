@@ -20,12 +20,8 @@ import numpy as np
 # Add src to path for direct module imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from transformation_portal.lux_depth_v3.config import (
-    EnhanceConfig, DeviceConfig, PostprocessingConfig
-)
-from transformation_portal.lux_depth_v3.manifest import (
-    compute_file_sha256, CombinedManifest
-)
+from transformation_portal.lux_depth_v3.config import EnhanceConfig, DeviceConfig, PostprocessingConfig
+from transformation_portal.lux_depth_v3.manifest import compute_file_sha256, CombinedManifest
 from transformation_portal.lux_depth_v3.orchestrator import _load_manifest_cached
 from transformation_portal.lux_depth_v3.postprocessing import Postprocessor
 
@@ -143,6 +139,7 @@ def validate_bilateral_filter():
 
     try:
         import cv2
+
         opencv_available = True
     except ImportError:
         opencv_available = False
@@ -153,31 +150,22 @@ def validate_bilateral_filter():
     depth = np.random.rand(512, 512).astype(np.float32)
     image = np.random.rand(512, 512, 3).astype(np.float32)
 
-    config = PostprocessingConfig(
-        apply_bilateral_filter=True,
-        bilateral_sigma_color=0.05,
-        bilateral_sigma_space=5.0
-    )
+    config = PostprocessingConfig(apply_bilateral_filter=True, bilateral_sigma_color=0.05, bilateral_sigma_space=5.0)
     processor = Postprocessor(config)
 
     # Benchmark
     start = time.perf_counter()
-    filtered = processor._bilateral_filter(
-        depth, image,
-        sigma_color=0.05,
-        sigma_space=5.0
-    )
+    filtered = processor._bilateral_filter(depth, image, sigma_color=0.05, sigma_space=5.0)
     elapsed = time.perf_counter() - start
 
     # Validate output
     valid_shape = filtered.shape == depth.shape
     valid_dtype = filtered.dtype == np.float32
-    valid_range = (0 <= filtered.min() <= filtered.max() <= 1)
+    valid_range = 0 <= filtered.min() <= filtered.max() <= 1
 
     print(f"  Output shape: {filtered.shape} {'✅' if valid_shape else '❌'}")
     print(f"  Output dtype: {filtered.dtype} {'✅' if valid_dtype else '❌'}")
-    print(f"  Output range: [{filtered.min():.3f}, {filtered.max():.3f}] "
-          f"{'✅' if valid_range else '❌'}")
+    print(f"  Output range: [{filtered.min():.3f}, {filtered.max():.3f}] " f"{'✅' if valid_range else '❌'}")
     print(f"  Processing time: {elapsed*1000:.2f}ms")
 
     if opencv_available:
@@ -204,21 +192,13 @@ def validate_enhance_config_flags():
 
     config = EnhanceConfig()
 
-    print(f"  enable_manifest_cache: {config.enable_manifest_cache} "
-          f"{'✅' if config.enable_manifest_cache else '❌'}")
-    print(f"  chunked_hashing: {config.chunked_hashing} "
-          f"{'✅' if config.chunked_hashing else '❌'}")
+    print(f"  enable_manifest_cache: {config.enable_manifest_cache} " f"{'✅' if config.enable_manifest_cache else '❌'}")
+    print(f"  chunked_hashing: {config.chunked_hashing} " f"{'✅' if config.chunked_hashing else '❌'}")
 
     # Test disabling
-    config_disabled = EnhanceConfig(
-        enable_manifest_cache=False,
-        chunked_hashing=False
-    )
+    config_disabled = EnhanceConfig(enable_manifest_cache=False, chunked_hashing=False)
 
-    disabled_ok = (
-        not config_disabled.enable_manifest_cache and
-        not config_disabled.chunked_hashing
-    )
+    disabled_ok = not config_disabled.enable_manifest_cache and not config_disabled.chunked_hashing
 
     print(f"  Can disable optimizations: {'✅' if disabled_ok else '❌'}")
     print(f"  Status: ✅ PASS")

@@ -27,9 +27,7 @@ except Exception:  # pragma: no cover
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("DepthProExport")
 
-DEFAULT_IMAGE = Path(
-    "/Users/rc/Projects/Transformation_Portal/input_images/750_picacho/source_jpegs/750Picacho_Pool.jpg"
-)
+DEFAULT_IMAGE = Path("/Users/rc/Projects/Transformation_Portal/input_images/750_picacho/source_jpegs/750Picacho_Pool.jpg")
 DEFAULT_CKPT = Path("checkpoints/depth_pro.pt")
 DEPTHPRO_URL = "https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt"
 
@@ -141,7 +139,9 @@ def extract_depthpro_meta(model: Any, transform: Any) -> Dict[str, Any]:
                 cfg_attrs[k] = v
         if cfg_attrs:
             meta["model"]["config_attributes"] = cfg_attrs
-            meta["model"]["id"] = meta["model"]["id"] or cfg_attrs.get("model_id") or cfg_attrs.get("name") or cfg_attrs.get("preset")
+            meta["model"]["id"] = (
+                meta["model"]["id"] or cfg_attrs.get("model_id") or cfg_attrs.get("name") or cfg_attrs.get("preset")
+            )
 
     return meta
 
