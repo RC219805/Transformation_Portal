@@ -56,12 +56,17 @@ python scripts/apex_matrix_runner.py \
 
 **Implementation:**
 ```python
-def check_ml_dependencies(require_torch: bool = False) -> tuple[bool, list[str]]:
-    """Check availability of ML dependencies."""
+def check_ml_dependencies() -> tuple[bool, list[str]]:
+    """Check availability of ML dependencies for real pipeline execution.
+
+    For Phase 2 real runs, both torch and transformers are required.
+    Catches all exceptions (not just ImportError) to handle broken installs.
+    """
     missing = []
     try:
         import torch  # noqa: F401
-    except ImportError:
+    except Exception as e:
+        logger.debug(f"torch import failed ({e}), treating as missing")
         missing.append("torch")
     # ... similar for transformers
     return len(missing) == 0, missing
@@ -72,7 +77,7 @@ def check_ml_dependencies(require_torch: bool = False) -> tuple[bool, list[str]]
 RuntimeError: Real execution requires ML dependencies: torch, transformers
 
 Install with:
-  pip install torch transformers
+  pip install -e .[ml]
 
 Or use --dry-run for synthetic testing without ML deps.
 ```
@@ -310,7 +315,7 @@ Keeping PR CI in dry-run mode until:
 **Mitigation:** Fallback to CPU always safe. Explicit override (`--device`) still supported.
 
 ### Risk: Dependency check too strict
-**Mitigation:** Only torch required for real execution. Transformers optional (backend-dependent). Clear error messages guide users.
+**Mitigation:** Both torch and transformers are required for Phase 2 real execution (current HuggingFace-based backends). Broad exception handling (not just ImportError) catches broken installs. Clear error messages guide users to `pip install -e .[ml]`.
 
 ### Risk: Real execution timing noise in CI
 **Mitigation:** Not running real execution in PR CI yet. Nightly/manual runs will use stable hardware or self-hosted runners.

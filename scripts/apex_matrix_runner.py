@@ -123,19 +123,22 @@ def check_ml_dependencies() -> tuple[bool, list[str]]:
         (all_available, missing_packages)
 
     Note:
-        Simplified from earlier version - real pipeline requires both deps,
-        so no point in having a confusing require_torch flag.
+        Catches all exceptions (not just ImportError) to handle broken installs
+        (e.g., missing CUDA libraries, corrupted shared libraries). Treats broken
+        dependencies as missing to provide clear error messages.
     """
     missing = []
 
     try:
         import torch  # noqa: F401
-    except ImportError:
+    except Exception as e:
+        logger.debug(f"torch import failed ({e}), treating as missing")
         missing.append("torch")
 
     try:
         import transformers  # noqa: F401
-    except ImportError:
+    except Exception as e:
+        logger.debug(f"transformers import failed ({e}), treating as missing")
         missing.append("transformers")
 
     all_available = len(missing) == 0
