@@ -70,22 +70,6 @@ def compute_bucket_stats(
     total_times = sorted([c.timings["total"] for c in matching])
     n = len(total_times)
 
-    # BLOCKER FIX #2: Enforce minimum sample size per APEX Contract v1.0.0
-    if n < min_samples:
-        return BucketStats(
-            bucket_name=bucket.name,
-            count=n,
-            p50=0.0,
-            p95=0.0,
-            p99=0.0,
-            mean=0.0,
-            min=0.0,
-            max=0.0,
-            threshold_p50=bucket.p50_threshold_sec,
-            threshold_p95=bucket.p95_threshold_sec,
-            pass_fail="insufficient_data",  # Never blocks per contract
-        )
-
     # Compute percentiles (use proper median for p50)
     if n % 2 == 0:
         p50 = (total_times[n // 2 - 1] + total_times[n // 2]) / 2.0
@@ -95,7 +79,24 @@ def compute_bucket_stats(
     p99 = total_times[int(n * 0.99)] if n > 1 else total_times[0]
     mean = sum(total_times) / n
 
-    # Determine pass/fail status
+    # BLOCKER FIX #2: Enforce minimum sample size per APEX Contract v1.0.0
+    # Compute stats but mark as insufficient_data (never blocks)
+    if n < min_samples:
+        return BucketStats(
+            bucket_name=bucket.name,
+            count=n,
+            p50=p50,
+            p95=p95,
+            p99=p99,
+            mean=mean,
+            min=total_times[0],
+            max=total_times[-1],
+            threshold_p50=bucket.p50_threshold_sec,
+            threshold_p95=bucket.p95_threshold_sec,
+            pass_fail="insufficient_data",  # Never blocks per contract
+        )
+
+    # Determine pass/fail status (only for n >= min_samples)
     if p95 > bucket.p95_threshold_sec:
         pass_fail = "fail"
     elif p50 > bucket.p50_threshold_sec * 1.2:

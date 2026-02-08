@@ -637,15 +637,17 @@ def main() -> int:
                 explanation="V2 workflow performance",
             )
 
-        # Evaluate gates
+        # Evaluate gates (returns tuple: verdict, explanation)
         gate_result_v1 = None
         gate_result_v2 = None
 
         if v1_judgement:
-            gate_result_v1 = evaluate_gate(v1_judgement, mode="enforce").to_dict()
+            verdict, explanation = evaluate_gate(v1_judgement, mode="enforce")
+            gate_result_v1 = {"verdict": verdict, "explanation": explanation, "mode": "enforce"}
 
         if v2_judgement:
-            gate_result_v2 = evaluate_gate(v2_judgement, mode="shadow").to_dict()
+            verdict, explanation = evaluate_gate(v2_judgement, mode="shadow")
+            gate_result_v2 = {"verdict": verdict, "explanation": explanation, "mode": "shadow"}
 
         # Generate comment with new signature
         comment = generate_pr_comment(
