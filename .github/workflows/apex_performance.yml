@@ -127,6 +127,7 @@ jobs:
           set -euo pipefail
           # Always create apex_comment.md (even on error) to prevent downstream failures
           : > apex_comment.md
+          # NOTE: --synthetic flag marks dry-run data (no auto-detection from schema)
           python scripts/apex_pr_comment.py \
             --run-id "${{ env.APEX_RUN_ID }}" \
             --commit-sha "${{ env.APEX_COMMIT_SHA }}" \

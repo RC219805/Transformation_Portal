@@ -419,16 +419,35 @@ Transformation Portal includes automated performance regression detection via th
 
 ### APEX System (Authoritative for CI/CD)
 
-The APEX system runs automatically on every PR, providing:
-- Scene-aware performance bucketing
-- Multi-zone aggregation
-- Automated PR comments with regression analysis
+**Current Status (Phase 1):** Shadow mode with synthetic data (informational only, non-blocking)
+
+The APEX system runs automatically on every PR with:
+- **V1 vs V2 performance comparison** (workflow baseline)
+- **Per-zone performance heatmaps** (deployment topology awareness)
+- **Worst offenders detection** (pinpoint regressions)
+- **Gate verdict reporting** (pass/warn/fail with explanations)
 - See `.github/workflows/apex_performance.yml`
 
-**Regression thresholds:**
-- **p95 > 10% worse:** Tail latency regression (blocks)
-- **mean > 15% worse:** Average performance regression (blocks)
-- **failure_rate > 0%:** Any new failures (blocks)
+**Phase 1 Configuration (Current):**
+- Mode: Shadow (reports but does not block)
+- Data: Synthetic (dry-run mode validates contracts/schema)
+- Purpose: Validate APEX infrastructure before real integration
+
+**Future (Phase 2 - Real Pipeline Integration):**
+Once ML dependencies (torch/transformers, ~5GB) and model caching are deployed:
+- Mode: Enforce (blocks merges on violations)
+- Data: Real pipeline execution (actual performance measurements)
+- Thresholds (to be calibrated from Phase 2 baseline):
+  - **p95 > 10% worse:** Tail latency regression (blocks)
+  - **mean > 15% worse:** Average performance regression (blocks)
+  - **failure_rate > 0%:** Any new failures (blocks)
+
+**Why Phased Rollout:**
+- Phase 1 validates data contracts and reporting without ML overhead
+- Phase 2 adds real measurements and enforcement once infrastructure is ready
+- Prevents false failures during scaffold validation phase
+
+See [APEX Real Pipeline Integration Plan](docs/APEX_REAL_PIPELINE_INTEGRATION.md) and [ADR-024](docs/decisions/ADR-024-performance-regression-authority-canonicalization.md) for details.
 
 ### Legacy Performance Ledger (Ad-hoc Analysis)
 
