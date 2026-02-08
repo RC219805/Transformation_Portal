@@ -123,7 +123,6 @@ def compute_bucket_stats(
 
 def validate_workflow_version_consistency(
     capsules: List[PerformanceCapsule],
-    expected_run_context: Optional[str] = None,
     *,
     strict: bool = True,
 ) -> None:
@@ -134,7 +133,6 @@ def validate_workflow_version_consistency(
 
     Args:
         capsules: List of performance capsules to validate
-        expected_run_context: Optional expected context identifier (unused, deprecated)
         strict: If True, raises ValueError on mixed versions (default).
                 If False, logs warning only (for forensic analysis).
 
@@ -197,7 +195,7 @@ def compute_per_zone_stats(
     if buckets is None:
         buckets = DEFAULT_BUCKETS
 
-    # Validate workflow version consistency (raises on contamination in strict mode, warns otherwise)
+    # Validate workflow version consistency (intentionally strict: raises on contamination)
     validate_workflow_version_consistency(capsules)
 
     # Group capsules by zone

@@ -203,6 +203,9 @@ def run_apex_for_config(
     capsules = []
     timeout_seconds = 300  # 5 minutes per image max
 
+    # Cache pipeline version once (avoid repeated git/metadata lookups per image)
+    pipeline_version = _get_pipeline_version()
+
     # Process each image with timing instrumentation
     for image_path in images:
         try:
@@ -265,7 +268,7 @@ def run_apex_for_config(
                         workflow_version=run_spec.workflow_version,
                         zone=zone,
                         scene_type=run_spec.scene_type,
-                        pipeline_version="2.0.0",
+                        pipeline_version=pipeline_version,  # Cached from metadata/git
                         is_synthetic=synthetic,  # Respects --synthetic flag
                     )
 
