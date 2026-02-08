@@ -6,6 +6,7 @@ code changes. They are designed to be fast, deterministic, and CI-friendly.
 Contract Version: 1.0.0
 Schema Version: 3.0.0
 """
+
 import sqlite3
 import subprocess
 import sys
@@ -30,9 +31,7 @@ class TestExecutionModeEnforcement:
         assert runner_script.exists(), "Runner script not found"
 
         content = runner_script.read_text()
-        assert (
-            "NotImplementedError" in content
-        ), "Dry-run enforcement not implemented"
+        assert "NotImplementedError" in content, "Dry-run enforcement not implemented"
         assert "--dry-run" in content, "Dry-run flag not documented"
 
     def test_dry_run_env_bypass_possible(self):
@@ -41,15 +40,11 @@ class TestExecutionModeEnforcement:
         content = runner_script.read_text()
 
         # We expect either explicit env check or a clear TODO/comment
-        has_bypass_logic = (
-            "REAL_EXECUTION_ENABLED" in content or "os.environ" in content
-        )
+        has_bypass_logic = "REAL_EXECUTION_ENABLED" in content or "os.environ" in content
         # For scaffolding, we accept a NotImplementedError as the bypass
         has_not_implemented = "NotImplementedError" in content
 
-        assert (
-            has_bypass_logic or has_not_implemented
-        ), "No clear bypass mechanism for dry-run"
+        assert has_bypass_logic or has_not_implemented, "No clear bypass mechanism for dry-run"
 
 
 class TestSyntheticDataLabeling:
@@ -83,9 +78,7 @@ class TestSyntheticDataLabeling:
             is_synthetic=True,  # The field we're testing
         )
 
-        assert hasattr(
-            capsule, "is_synthetic"
-        ), "PerformanceCapsule missing is_synthetic field"
+        assert hasattr(capsule, "is_synthetic"), "PerformanceCapsule missing is_synthetic field"
         assert capsule.is_synthetic is True
 
 
@@ -231,9 +224,7 @@ class TestSyntheticIsolation:
         if "is_synthetic" in columns:
             pytest.skip("is_synthetic column already implemented")
         else:
-            pytest.skip(
-                "is_synthetic column not yet in schema (acceptable for scaffolding)"
-            )
+            pytest.skip("is_synthetic column not yet in schema (acceptable for scaffolding)")
 
     def test_aggregator_can_filter_synthetic(self):
         """Verify aggregator has logic to exclude synthetic capsules."""
@@ -304,9 +295,7 @@ class TestContractVersioning:
         merge_readiness = Path("docs/apex/MERGE_READINESS.md")
         if merge_readiness.exists():
             content = merge_readiness.read_text()
-            assert (
-                "3.0.0" in content
-            ), "Merge readiness doc should reference schema v3"
+            assert "3.0.0" in content, "Merge readiness doc should reference schema v3"
 
 
 # Integration smoke test

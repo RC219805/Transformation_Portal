@@ -485,12 +485,12 @@ def generate_pr_comment(
 
     # Gate verdict details
     if gate_result_v1:
-        v1_verdict = "PASSED ✅" if not gate_result_v1["should_block"] else "BLOCKED ❌"
+        v1_verdict = "PASSED ✅" if not gate_result_v1.should_block else "BLOCKED ❌"
         lines.append(f"**V1 Gate:** {v1_verdict}")
 
     if gate_result_v2:
-        v2_verdict = "PASSED ✅" if not gate_result_v2["should_block"] else "BLOCKED ❌"
-        lines.append(f"**V2 Gate:** {v2_verdict} (mode: {gate_result_v2['mode']})")
+        v2_verdict = "PASSED ✅" if not gate_result_v2.should_block else "BLOCKED ❌"
+        lines.append(f"**V2 Gate:** {v2_verdict} (mode: {gate_result_v2.mode})")
 
     lines.append("")
 
