@@ -90,6 +90,58 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 
+def auto_detect_device() -> str:
+    """Auto-detect best available device for inference.
+
+    Returns:
+        "mps" if Apple Silicon available, "cuda" if NVIDIA GPU available, else "cpu"
+
+    Note:
+        Catches all exceptions (not just ImportError) to handle broken torch installs
+        (e.g., CUDA driver mismatches, corrupted shared libs). Degrades to CPU.
+    """
+    try:
+        import torch
+
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            return "mps"
+        if torch.cuda.is_available():
+            return "cuda"
+        return "cpu"
+    except Exception as e:
+        # Torch not available or broken, default to CPU
+        logger.debug(f"Torch import/check failed ({e}), falling back to CPU")
+        return "cpu"
+
+
+def check_ml_dependencies() -> tuple[bool, list[str]]:
+    """Check availability of ML dependencies for real pipeline execution.
+
+    For Phase 2 real runs, both torch and transformers are required.
+
+    Returns:
+        (all_available, missing_packages)
+
+    Note:
+        Simplified from earlier version - real pipeline requires both deps,
+        so no point in having a confusing require_torch flag.
+    """
+    missing = []
+
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        missing.append("torch")
+
+    try:
+        import transformers  # noqa: F401
+    except ImportError:
+        missing.append("transformers")
+
+    all_available = len(missing) == 0
+    return all_available, missing
+
+
 def run_apex_for_config(
     run_spec: RunSpec,
     zone: str,
@@ -144,6 +196,17 @@ def run_apex_for_config(
     # Real pipeline execution
     if not input_dir or not input_dir.exists():
         raise ValueError(f"Input directory required for real execution: {input_dir}")
+
+    # Check ML dependencies early (fail fast with clear message)
+    ml_available, missing = check_ml_dependencies()
+    if not ml_available:
+        error_msg = (
+            f"Real execution requires ML dependencies: {', '.join(missing)}\n\n"
+            "Install with:\n"
+            "  pip install -e .[ml]\n\n"
+            "Or use --dry-run for synthetic testing without ML deps."
+        )
+        raise RuntimeError(error_msg)
 
     import hashlib
     import signal
@@ -316,7 +379,10 @@ def main() -> int:
         help="Workflow versions to run (default: v1 v2)",
     )
     parser.add_argument("--zones", nargs="+", default=["local"], help="Zones to run across (default: local)")
-    parser.add_argument("--device", default="mps", help="Device (default: mps)")
+    parser.add_argument(
+        "--device",
+        help="Device for inference (auto-detects mps/cuda/cpu if not specified)",
+    )
     parser.add_argument("--backend-id", default="da3", help="Backend (default: da3)")
     parser.add_argument("--scene-type", help="Optional scene type filter")
 
@@ -341,6 +407,11 @@ def main() -> int:
     parser.add_argument("--continue-on-error", action="store_true", help="Continue running even if some configurations fail")
 
     args = parser.parse_args()
+
+    # Auto-detect device if not specified
+    if args.device is None:
+        args.device = auto_detect_device()
+        logger.info(f"Auto-detected device: {args.device}")
 
     # Auto-enable synthetic flag when dry-run is used
     if args.dry_run and not args.synthetic:
