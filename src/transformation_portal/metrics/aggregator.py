@@ -142,9 +142,15 @@ def validate_single_run_capsules(
         ValueError: If strict=True and capsules from multiple runs detected
 
     Design note:
-        In CI, each job uses an ephemeral DB, so contamination is impossible.
-        For local/multi-run analysis, pass strict=False and handle mixed data
-        explicitly via run_id/commit_sha filters in queries.
+        Current implementation uses workflow_version + zone as contamination proxy.
+        This is a HEURISTIC - stronger invariant would be commit_sha or run_id.
+        Future schema evolution should add run_id/commit_sha to capsules for
+        robust contamination detection. For now, workflow_version mixing is
+        sufficient to catch common contamination scenarios in CI.
+
+        In CI: DB is intended to be ephemeral per job (unique temp/workspace path),
+        so contamination should not occur unless DB path or artifacts are reused
+        across jobs. Locally: pass strict=False and filter by commit/run explicitly.
     """
     if not capsules:
         return

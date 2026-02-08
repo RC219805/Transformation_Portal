@@ -257,7 +257,7 @@ class TestValidateSingleRun:
         with pytest.raises(ValueError, match="mixed workflow versions"):
             validate_single_run_capsules(capsules, strict=True)
 
-    def test_non_strict_warns_on_mixed_workflow_versions(self):
+    def test_non_strict_warns_on_mixed_workflow_versions(self, caplog):
         """Test that strict=False logs warning but doesn't raise on contamination."""
         import logging
 
@@ -269,11 +269,11 @@ class TestValidateSingleRun:
         ]
 
         # Should not raise
-        with caplog_context(logging.WARNING) as records:
+        with caplog.at_level(logging.WARNING):
             validate_single_run_capsules(capsules, strict=False)
 
         # Should have logged warning
-        assert any("mixed workflow versions" in rec.message.lower() for rec in records)
+        assert "mixed workflow versions" in caplog.text.lower()
 
     def test_happy_path_single_workflow_no_raise(self):
         """Test that clean single-workflow data doesn't raise or warn."""
@@ -306,27 +306,3 @@ class TestValidateSingleRun:
         from transformation_portal.metrics.aggregator import validate_single_run_capsules
 
         validate_single_run_capsules([], strict=True)
-
-
-def caplog_context(level):
-    """Helper context manager to capture log records."""
-    import logging
-
-    class LogCapture:
-        def __init__(self, level):
-            self.level = level
-            self.records = []
-            self.handler = None
-
-        def __enter__(self):
-            self.handler = logging.Handler()
-            self.handler.setLevel(self.level)
-            self.handler.emit = lambda record: self.records.append(record)
-            logging.getLogger().addHandler(self.handler)
-            return self.records
-
-        def __exit__(self, *args):
-            if self.handler:
-                logging.getLogger().removeHandler(self.handler)
-
-    return LogCapture(level)
