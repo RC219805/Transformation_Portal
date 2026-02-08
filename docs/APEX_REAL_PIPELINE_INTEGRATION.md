@@ -1,6 +1,6 @@
 # APEX Real Pipeline Integration
 
-**Status:** Planned (tracked in issue #XXX)
+**Status:** Planned (see Issue #868)
 **Priority:** High
 **Complexity:** Medium
 
@@ -218,9 +218,9 @@ Expected:
 
 ## Dependencies
 
-- Issue #XXX: Unified orchestrator V2 implementation
-- Issue #XXX: Scene type auto-detection
-- PR #864: APEX scaffolding (prerequisite)
+- Unified orchestrator V2 implementation (future work)
+- Scene type auto-detection (future work)
+- PR #867: APEX scaffolding (✅ merged)
 
 ## Timeline
 
@@ -230,6 +230,5 @@ Expected:
 
 ---
 
-**Tracked in:** GitHub Issue #XXX
-**Owner:** TBD
+**Implementation tracked in:** GitHub Issue #868
 **Milestone:** APEX Production Readiness

@@ -121,6 +121,64 @@ def compute_bucket_stats(
     )
 
 
+def validate_single_run_capsules(
+    capsules: List[PerformanceCapsule],
+    expected_run_context: Optional[str] = None,
+    *,
+    strict: bool = True,
+) -> None:
+    """Validate that all capsules belong to the same logical run context.
+
+    In APEX v1.0, aggregation assumes a single-run ledger (CI creates fresh DB
+    per workflow execution). This validator detects violations of that assumption.
+
+    Args:
+        capsules: List of performance capsules to validate
+        expected_run_context: Optional expected context identifier (unused, deprecated)
+        strict: If True, raises ValueError on contamination (default).
+                If False, logs warning only (for forensic analysis).
+
+    Raises:
+        ValueError: If strict=True and capsules from multiple runs detected
+
+    Design note:
+        Current implementation uses workflow_version + zone as contamination proxy.
+        This is a HEURISTIC - stronger invariant would be commit_sha or run_id.
+        Future schema evolution should add run_id/commit_sha to capsules for
+        robust contamination detection. For now, workflow_version mixing is
+        sufficient to catch common contamination scenarios in CI.
+
+        In CI: DB is intended to be ephemeral per job (unique temp/workspace path),
+        so contamination should not occur unless DB path or artifacts are reused
+        across jobs. Locally: pass strict=False and filter by commit/run explicitly.
+    """
+    if not capsules:
+        return
+
+    # Extract unique run contexts (image_id prefixes, timestamps, commit metadata)
+    # For now, just validate workflow_version consistency within each zone
+    # (a proxy for detecting mixed-run contamination)
+
+    zones_workflows = {}
+    for capsule in capsules:
+        zone = capsule.zone or "unknown"
+        wf_ver = getattr(capsule, "workflow_version", "v1")
+        zones_workflows.setdefault(zone, set()).add(wf_ver)
+
+    # Each zone should have capsules from only v1 OR v2, not both
+    # (unless explicitly doing dual-workflow comparison)
+    mixed_zones = {z: wfs for z, wfs in zones_workflows.items() if len(wfs) > 1}
+
+    if mixed_zones:
+        msg = (
+            f"Detected mixed workflow versions in zones: {mixed_zones}. "
+            f"This may indicate multi-run ledger contamination or intentional V1/V2 comparison."
+        )
+        if strict:
+            raise ValueError(msg)
+        logger.warning(msg)
+
+
 def compute_per_zone_stats(
     capsules: List[PerformanceCapsule],
     buckets: Optional[List[PerformanceBucket]] = None,
@@ -137,6 +195,9 @@ def compute_per_zone_stats(
     """
     if buckets is None:
         buckets = DEFAULT_BUCKETS
+
+    # Validate single-run assumption (logs warning if violated)
+    validate_single_run_capsules(capsules)
 
     # Group capsules by zone
     capsules_by_zone: Dict[str, List[PerformanceCapsule]] = {}
