@@ -124,6 +124,8 @@ def compute_bucket_stats(
 def validate_single_run_capsules(
     capsules: List[PerformanceCapsule],
     expected_run_context: Optional[str] = None,
+    *,
+    strict: bool = True,
 ) -> None:
     """Validate that all capsules belong to the same logical run context.
 
@@ -132,10 +134,17 @@ def validate_single_run_capsules(
 
     Args:
         capsules: List of performance capsules to validate
-        expected_run_context: Optional expected context identifier for validation
+        expected_run_context: Optional expected context identifier (unused, deprecated)
+        strict: If True, raises ValueError on contamination (default).
+                If False, logs warning only (for forensic analysis).
 
     Raises:
-        ValueError: If capsules appear to come from multiple distinct runs
+        ValueError: If strict=True and capsules from multiple runs detected
+
+    Design note:
+        In CI, each job uses an ephemeral DB, so contamination is impossible.
+        For local/multi-run analysis, pass strict=False and handle mixed data
+        explicitly via run_id/commit_sha filters in queries.
     """
     if not capsules:
         return
@@ -155,10 +164,13 @@ def validate_single_run_capsules(
     mixed_zones = {z: wfs for z, wfs in zones_workflows.items() if len(wfs) > 1}
 
     if mixed_zones:
-        logger.warning(
+        msg = (
             f"Detected mixed workflow versions in zones: {mixed_zones}. "
             f"This may indicate multi-run ledger contamination or intentional V1/V2 comparison."
         )
+        if strict:
+            raise ValueError(msg)
+        logger.warning(msg)
 
 
 def compute_per_zone_stats(

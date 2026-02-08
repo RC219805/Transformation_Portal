@@ -57,6 +57,7 @@ jobs:
             --zones ${{ matrix.zone }} \
             --output-dir ./apex_results \
             --ledger-db ./apex_performance.db \
+            --device cpu \
             --dry-run
 
       - name: Upload Results
