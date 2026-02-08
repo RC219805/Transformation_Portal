@@ -22,6 +22,7 @@ dependencies = [
     "tqdm>=4.66,<5",
     "tifffile>=2023.7.18,<2025",
     "imagecodecs>=2023.9.18,<2025",
+    "PyYAML>=6.0,<7",  # required for APEX pipeline config parsing
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
