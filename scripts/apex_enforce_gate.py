@@ -36,33 +36,17 @@ def enforce_gate(db_path: Path, run_id: str, commit_sha: str, mode: str = "enfor
 
     try:
         with sqlite3.connect(db_path) as conn:
-            # Schema-aware query: check if commit_sha column exists
-            cursor = conn.execute("PRAGMA table_info(apex_runs)")
-            columns = [row[1] for row in cursor.fetchall()]
-
-            if "commit_sha" in columns:
-                query = """
-                    SELECT bucket_name, zone, p95, threshold_p95, pass_fail
-                    FROM apex_runs
-                    WHERE run_id = ?
-                      AND workflow_version = 'v2'
-                      AND commit_sha = ?
-                      AND pass_fail = 'fail'
+            cursor = conn.execute(
                 """
-                params = (run_id, commit_sha)
-            else:
-                # Fallback: filter by run_id only (legacy schema)
-                logger.warning("commit_sha column not found; filtering by run_id only")
-                query = """
-                    SELECT bucket_name, zone, p95, threshold_p95, pass_fail
-                    FROM apex_runs
-                    WHERE run_id = ?
-                      AND workflow_version = 'v2'
-                      AND pass_fail = 'fail'
-                """
-                params = (run_id,)
-
-            cursor = conn.execute(query, params)
+                SELECT bucket_name, zone, p95, threshold_p95, pass_fail
+                FROM apex_runs
+                WHERE run_id = ?
+                  AND workflow_version = 'v2'
+                  AND commit_sha = ?
+                  AND pass_fail = 'fail'
+            """,
+                (run_id, commit_sha),
+            )
 
             failures = cursor.fetchall()
 

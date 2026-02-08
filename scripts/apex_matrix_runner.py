@@ -82,7 +82,7 @@ def run_apex_for_config(
     logger.info(f"Running APEX: workflow={run_spec.workflow_version}, zone={zone}")
 
     if dry_run:
-        logger.info("⚠️  DRY RUN: Using synthetic data (not a real performance measurement)")
+        logger.info("DRY RUN: Skipping actual execution")
         # Create mock capsule for testing
         mock_capsule = PerformanceCapsule(
             image_id=f"test_image_{zone}",
@@ -98,7 +98,6 @@ def run_apex_for_config(
             workflow_version=run_spec.workflow_version,
             zone=zone,
             scene_type=run_spec.scene_type,
-            metadata={"synthetic": True, "dry_run": True},
         )
 
         return Observation(
@@ -107,30 +106,13 @@ def run_apex_for_config(
             capsules=[mock_capsule],
         )
 
-    # --- Real pipeline execution path ---
-    # Import actual pipeline runners here to avoid circular dependencies
-    # and to make imports optional when in dry-run mode
-    try:
-        from transformation_portal.orchestrator import UnifiedOrchestrator
-        from transformation_portal.config import load_config
-    except ImportError as e:
-        raise ImportError(
-            f"Real pipeline execution requires transformation_portal orchestrator. "
-            f"Use --dry-run for testing without dependencies. Error: {e}"
-        ) from e
+    # TODO: Integrate with actual pipeline runner
+    # For now, this is a placeholder that would call:
+    # - Lux Depth V3 pipeline (V1)
+    # - New V2 pipeline (V2)
+    # Both should emit PerformanceCapsules
 
-    logger.info(f"🚀 Starting real pipeline execution for {run_spec.workflow_version}")
-
-    # Load appropriate config for workflow version
-    # V1 uses legacy path, V2 uses new unified path
-    # (Customize based on your actual config structure)
-    config_version = "v2" if run_spec.workflow_version == "v2" else "v1"
-
-    raise NotImplementedError(
-        f"Real pipeline integration for {config_version} is tracked in GitHub issue. "
-        f"Pipeline skeleton is ready; connect orchestrator.run() and capture timing contexts. "
-        f"Use --dry-run for scaffolding validation."
-    )
+    raise NotImplementedError("Actual pipeline integration not yet implemented. Use --dry-run for testing.")
 
 
 def main() -> int:

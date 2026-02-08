@@ -96,13 +96,11 @@ jobs:
           pattern: apex-results-*
           merge-multiple: true
 
-      - name: Rebuild Ledger (Clean Mode)
+      - name: Rebuild Ledger
         run: |
-          # Clean mode: deterministic rebuild from this run's artifacts only
           python scripts/apex_rebuild_ledger.py \
             --input-dir apex_downloaded_results \
-            --ledger-db apex_performance.db \
-            --clean
+            --ledger-db apex_performance.db
 
       - name: Aggregate Stats
         run: |
@@ -113,13 +111,11 @@ jobs:
 
       - name: Generate PR Comment
         run: |
-          # Mark as synthetic since we're using --dry-run
           python scripts/apex_pr_comment.py \
             --run-id "${{ env.APEX_RUN_ID }}" \
             --commit-sha "${{ env.APEX_COMMIT_SHA }}" \
             --ledger-db apex_performance.db \
-            --output apex_comment.md \
-            --synthetic
+            --output apex_comment.md
 
       - name: Write to Job Summary
         if: always()
