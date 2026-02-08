@@ -656,21 +656,21 @@ def main() -> int:
         gate_result_v2 = None
 
         if v1_judgement:
-            verdict, explanation = evaluate_gate(v1_judgement, mode="enforce")
+            gate_obj = evaluate_gate(v1_judgement, mode="enforce")
             gate_result_v1 = {
-                "verdict": verdict,
-                "explanation": explanation,
+                "verdict": gate_obj.verdict,
+                "explanation": gate_obj.explanation,
                 "mode": "enforce",
-                "should_block": verdict == "fail",  # Add should_block for consistency
+                "should_block": gate_obj.should_block,
             }
 
         if v2_judgement:
-            verdict, explanation = evaluate_gate(v2_judgement, mode="shadow")
+            gate_obj = evaluate_gate(v2_judgement, mode="shadow")
             gate_result_v2 = {
-                "verdict": verdict,
-                "explanation": explanation,
+                "verdict": gate_obj.verdict,
+                "explanation": gate_obj.explanation,
                 "mode": "shadow",
-                "should_block": verdict == "fail",  # Add should_block for consistency
+                "should_block": gate_obj.should_block,
             }
 
         # Generate comment with new signature
