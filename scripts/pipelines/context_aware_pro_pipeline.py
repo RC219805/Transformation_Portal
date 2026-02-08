@@ -21,25 +21,16 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 # Import architectural context engine
-from architectural_context_engine import (
-    ArchitecturalContext,
-    ContextAwareRenderingPipeline,
-    SpaceType,
-)
+from architectural_context_engine import ArchitecturalContext, ContextAwareRenderingPipeline, SpaceType
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
 class ContextAwareProPipeline:
     """Professional pipeline with architectural context awareness."""
 
-    def __init__(self,
-                 output_dir: Path = Path("output_context_aware_pro"),
-                 context_dir: Path = Path("extracted_context")):
+    def __init__(self, output_dir: Path = Path("output_context_aware_pro"), context_dir: Path = Path("extracted_context")):
         """
         Initialize context-aware pipeline.
 
@@ -56,14 +47,16 @@ class ContextAwareProPipeline:
         logger.info(f"  Output: {self.output_dir}")
         logger.info(f"  Context cache: {context_dir}")
 
-    def process_image(self,
-                     image_path: Path,
-                     pdf_documents: Optional[List[Path]] = None,
-                     base_prompt: str = "photorealistic luxury architectural rendering",
-                     enable_depth: bool = True,
-                     enable_material_response: bool = True,
-                     enable_ai_enhancement: bool = True,
-                     upscale_4x: bool = False) -> Dict[str, Path]:
+    def process_image(
+        self,
+        image_path: Path,
+        pdf_documents: Optional[List[Path]] = None,
+        base_prompt: str = "photorealistic luxury architectural rendering",
+        enable_depth: bool = True,
+        enable_material_response: bool = True,
+        enable_ai_enhancement: bool = True,
+        upscale_4x: bool = False,
+    ) -> Dict[str, Path]:
         """
         Process image with architectural context awareness.
 
@@ -103,35 +96,29 @@ class ContextAwareProPipeline:
         # 3. Depth-aware processing (if enabled)
         if enable_depth:
             logger.info("\n[3/5] Depth-aware processing...")
-            depth_output = self._process_depth_stage(
-                image_path, context, enhanced_prompt
-            )
-            outputs['depth'] = depth_output
+            depth_output = self._process_depth_stage(image_path, context, enhanced_prompt)
+            outputs["depth"] = depth_output
         else:
             logger.info("\n[3/5] Depth processing: SKIPPED")
-            outputs['depth'] = image_path
+            outputs["depth"] = image_path
 
         # 4. Material response (if enabled)
         if enable_material_response:
             logger.info("\n[4/5] Material response processing...")
-            material_output = self._process_material_stage(
-                outputs['depth'], context, enhanced_prompt
-            )
-            outputs['material'] = material_output
+            material_output = self._process_material_stage(outputs["depth"], context, enhanced_prompt)
+            outputs["material"] = material_output
         else:
             logger.info("\n[4/5] Material response: SKIPPED")
-            outputs['material'] = outputs['depth']
+            outputs["material"] = outputs["depth"]
 
         # 5. AI enhancement (if enabled)
         if enable_ai_enhancement:
             logger.info("\n[5/5] AI enhancement...")
-            ai_output = self._process_ai_stage(
-                outputs['material'], context, enhanced_prompt, upscale_4x
-            )
-            outputs['ai_enhanced'] = ai_output
+            ai_output = self._process_ai_stage(outputs["material"], context, enhanced_prompt, upscale_4x)
+            outputs["ai_enhanced"] = ai_output
         else:
             logger.info("\n[5/5] AI enhancement: SKIPPED")
-            outputs['ai_enhanced'] = outputs['material']
+            outputs["ai_enhanced"] = outputs["material"]
 
         # Save final context summary
         summary_path = self.output_dir / f"{image_path.stem}_context_summary.txt"
@@ -144,10 +131,7 @@ class ContextAwareProPipeline:
 
         return outputs
 
-    def _process_depth_stage(self,
-                            image_path: Path,
-                            context: ArchitecturalContext,
-                            prompt: str) -> Path:
+    def _process_depth_stage(self, image_path: Path, context: ArchitecturalContext, prompt: str) -> Path:
         """Process with depth-aware pipeline."""
         try:
             from depth_pipeline.pipeline import ArchitecturalDepthPipeline
@@ -161,10 +145,7 @@ class ContextAwareProPipeline:
                 SpaceType.POOL_AREA: "config/exterior_preset.yaml",
             }
 
-            config_path = config_map.get(
-                context.space_type,
-                "config/interior_preset.yaml"
-            )
+            config_path = config_map.get(context.space_type, "config/interior_preset.yaml")
 
             logger.info(f"  Using depth config: {config_path}")
 
@@ -186,10 +167,7 @@ class ContextAwareProPipeline:
             logger.info("  Continuing with original image...")
             return image_path
 
-    def _process_material_stage(self,
-                                image_path: Path,
-                                context: ArchitecturalContext,
-                                prompt: str) -> Path:
+    def _process_material_stage(self, image_path: Path, context: ArchitecturalContext, prompt: str) -> Path:
         """Process with material response."""
         try:
             from material_response import MaterialResponse, SurfaceType
@@ -231,10 +209,7 @@ class ContextAwareProPipeline:
 
             # Process with material response
             enhanced = mr.enhance(
-                image_array,
-                surfaces=surfaces,
-                strength=0.75,  # Strong material response
-                preserve_highlights=True
+                image_array, surfaces=surfaces, strength=0.75, preserve_highlights=True  # Strong material response
             )
 
             # Save
@@ -249,11 +224,9 @@ class ContextAwareProPipeline:
             logger.info("  Continuing with depth-processed image...")
             return image_path
 
-    def _process_ai_stage(self,
-                         image_path: Path,
-                         context: ArchitecturalContext,
-                         prompt: str,
-                         upscale_4x: bool = False) -> Path:
+    def _process_ai_stage(
+        self, image_path: Path, context: ArchitecturalContext, prompt: str, upscale_4x: bool = False
+    ) -> Path:
         """Process with AI enhancement."""
         try:
             # Import AI pipeline components
@@ -267,12 +240,7 @@ class ContextAwareProPipeline:
             output_path = self.output_dir / f"{image_path.stem}_ai_enhanced.png"
 
             # Process with enhanced prompt
-            result = process_image(
-                image_path,
-                prompt=prompt,
-                output_path=output_path,
-                upscale=upscale_4x
-            )
+            result = process_image(image_path, prompt=prompt, output_path=output_path, upscale=upscale_4x)
 
             logger.info(f"  ✓ AI output: {output_path}")
             return output_path
@@ -282,13 +250,10 @@ class ContextAwareProPipeline:
             logger.info("  Continuing with material-processed image...")
             return image_path
 
-    def _save_processing_summary(self,
-                                context: ArchitecturalContext,
-                                outputs: Dict[str, Path],
-                                summary_path: Path):
+    def _save_processing_summary(self, context: ArchitecturalContext, outputs: Dict[str, Path], summary_path: Path):
         """Save processing summary with context details."""
 
-        with open(summary_path, 'w') as f:
+        with open(summary_path, "w") as f:
             f.write("=" * 80 + "\n")
             f.write("CONTEXT-AWARE PRO PIPELINE - PROCESSING SUMMARY\n")
             f.write("=" * 80 + "\n\n")
@@ -344,59 +309,34 @@ class ContextAwareProPipeline:
 def main():
     """CLI for context-aware pro pipeline."""
 
-    parser = argparse.ArgumentParser(
-        description="Context-Aware Pro Pipeline - Architectural Intelligence"
-    )
+    parser = argparse.ArgumentParser(description="Context-Aware Pro Pipeline - Architectural Intelligence")
+
+    parser.add_argument("image", type=Path, help="Input image path")
 
     parser.add_argument(
-        "image",
-        type=Path,
-        help="Input image path"
-    )
-
-    parser.add_argument(
-        "--pd",
-        type=Path,
-        action="append",
-        help="Architectural PDF document(s) for context extraction (can specify multiple)"
+        "--pd", type=Path, action="append", help="Architectural PDF document(s) for context extraction (can specify multiple)"
     )
 
     parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path("output_context_aware_pro"),
-        help="Output directory (default: output_context_aware_pro)"
+        help="Output directory (default: output_context_aware_pro)",
     )
 
     parser.add_argument(
         "--prompt",
         default="photorealistic luxury architectural rendering",
-        help="Base AI prompt (will be enhanced with context)"
+        help="Base AI prompt (will be enhanced with context)",
     )
 
-    parser.add_argument(
-        "--no-depth",
-        action="store_true",
-        help="Disable depth-aware processing"
-    )
+    parser.add_argument("--no-depth", action="store_true", help="Disable depth-aware processing")
 
-    parser.add_argument(
-        "--no-material",
-        action="store_true",
-        help="Disable material response"
-    )
+    parser.add_argument("--no-material", action="store_true", help="Disable material response")
 
-    parser.add_argument(
-        "--no-ai",
-        action="store_true",
-        help="Disable AI enhancement"
-    )
+    parser.add_argument("--no-ai", action="store_true", help="Disable AI enhancement")
 
-    parser.add_argument(
-        "--upscale-4x",
-        action="store_true",
-        help="Enable 4x upscaling (slower, higher quality)"
-    )
+    parser.add_argument("--upscale-4x", action="store_true", help="Enable 4x upscaling (slower, higher quality)")
 
     args = parser.parse_args()
 
@@ -415,9 +355,7 @@ def main():
                 print(f"Warning: PDF not found: {pdf_path}")
 
     # Initialize pipeline
-    pipeline = ContextAwareProPipeline(
-        output_dir=args.output_dir
-    )
+    pipeline = ContextAwareProPipeline(output_dir=args.output_dir)
 
     # Process
     outputs = pipeline.process_image(
@@ -427,7 +365,7 @@ def main():
         enable_depth=not args.no_depth,
         enable_material_response=not args.no_material,
         enable_ai_enhancement=not args.no_ai,
-        upscale_4x=args.upscale_4x
+        upscale_4x=args.upscale_4x,
     )
 
     print("\n✅ Processing complete!")

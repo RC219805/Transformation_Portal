@@ -4,20 +4,21 @@ Ultimate Quality Pipeline for 750 Picacho Lane Renderings
 Optimized for Apple M4 Max with MPS GPU acceleration
 """
 
+import json
 import sys
 from pathlib import Path
+from typing import Any, Dict
+
+import numpy as np
+import tifffile
 import torch
 from PIL import Image
-import numpy as np
-from typing import Dict, Any
-import json
-import tifffile
 
 # Add transformation_portal to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from transformation_portal.utils.image_utils import load_image, save_image
 from transformation_portal.utils.error_handling import safe_execute
+from transformation_portal.utils.image_utils import load_image, save_image
 
 
 def get_optimal_device() -> str:
@@ -38,11 +39,7 @@ def estimate_depth_mps(image: Image.Image, device: str = "mps") -> np.ndarray:
 
     print(f"Loading Depth Anything V2 Large on {device}...")
 
-    depth_estimator = pipeline(
-        "depth-estimation",
-        model="depth-anything/Depth-Anything-V2-Large-h",
-        device=device
-    )
+    depth_estimator = pipeline("depth-estimation", model="depth-anything/Depth-Anything-V2-Large-h", device=device)
 
     print("Estimating depth...")
     result = depth_estimator(image)
@@ -55,11 +52,7 @@ def estimate_depth_mps(image: Image.Image, device: str = "mps") -> np.ndarray:
     return depth_array
 
 
-def apply_depth_aware_clarity(
-    image_array: np.ndarray,
-    depth_map: np.ndarray,
-    strength: float = 0.3
-) -> np.ndarray:
+def apply_depth_aware_clarity(image_array: np.ndarray, depth_map: np.ndarray, strength: float = 0.3) -> np.ndarray:
     """
     Apply depth-aware clarity enhancement.
     Stronger sharpening on foreground, gentler on background.
@@ -78,7 +71,7 @@ def apply_depth_aware_clarity(
     # Zone-based strength
     clarity_map = np.zeros_like(depth_map)
     clarity_map[foreground_mask] = strength * 1.5  # Strong on foreground
-    clarity_map[midground_mask] = strength * 1.0   # Medium on midground
+    clarity_map[midground_mask] = strength * 1.0  # Medium on midground
     clarity_map[background_mask] = strength * 0.5  # Gentle on background
 
     # Apply clarity
@@ -114,8 +107,9 @@ def apply_luxury_color_grade(image_array: np.ndarray) -> np.ndarray:
     midtone_mask = (luminance >= 0.3) & (luminance <= 0.7)
     saturation_boost = 1.08
     for c in range(3):
-        result[midtone_mask, c] = luminance[midtone_mask] + \
-            (result[midtone_mask, c] - luminance[midtone_mask]) * saturation_boost
+        result[midtone_mask, c] = (
+            luminance[midtone_mask] + (result[midtone_mask, c] - luminance[midtone_mask]) * saturation_boost
+        )
 
     return np.clip(result, 0, 1)
 
@@ -146,11 +140,7 @@ def apply_material_response(image_array: np.ndarray, depth_map: np.ndarray) -> n
     return np.clip(result, 0, 1)
 
 
-def process_ultimate_quality(
-    input_path: Path,
-    output_dir: Path,
-    device: str = "mps"
-) -> Dict[str, Any]:
+def process_ultimate_quality(input_path: Path, output_dir: Path, device: str = "mps") -> Dict[str, Any]:
     """
     Process image with ultimate quality settings.
     """
@@ -191,7 +181,7 @@ def process_ultimate_quality(
 
     # Convert back to uint8
     result = (enhanced * 255).astype(np.uint8)
-    result_image = Image.fromarray(result, mode='RGB')
+    result_image = Image.fromarray(result, mode="RGB")
 
     # Save outputs
     outputs = {}
@@ -204,23 +194,23 @@ def process_ultimate_quality(
     tifffile.imwrite(
         tiff_output,
         result_16bit,
-        photometric='rgb',
-        compression='lzw',
-        metadata={'Software': 'Transformation Portal Ultimate Quality Pipeline'}
+        photometric="rgb",
+        compression="lzw",
+        metadata={"Software": "Transformation Portal Ultimate Quality Pipeline"},
     )
-    outputs['tiff'] = tiff_output
+    outputs["tiff"] = tiff_output
     print(f"\nSaved 16-bit TIFF: {tiff_output}")
 
     # PNG (8-bit for preview)
     png_output = output_dir / f"{input_path.stem}_ultimate.png"
-    result_image.save(png_output, format='PNG', compress_level=1)
-    outputs['png'] = png_output
+    result_image.save(png_output, format="PNG", compress_level=1)
+    outputs["png"] = png_output
     print(f"Saved PNG: {png_output}")
 
     # JPEG (high quality for delivery)
     jpg_output = output_dir / f"{input_path.stem}_ultimate.jpg"
-    result_image.save(jpg_output, format='JPEG', quality=98, subsampling=0)
-    outputs['jpg'] = jpg_output
+    result_image.save(jpg_output, format="JPEG", quality=98, subsampling=0)
+    outputs["jpg"] = jpg_output
     print(f"Saved JPEG: {jpg_output}")
 
     return outputs
@@ -263,20 +253,14 @@ def main():
 
         try:
             outputs = process_ultimate_quality(tiff_file, output_dir, device=device)
-            results[tiff_file.name] = {
-                'status': 'success',
-                'outputs': {k: str(v) for k, v in outputs.items()}
-            }
+            results[tiff_file.name] = {"status": "success", "outputs": {k: str(v) for k, v in outputs.items()}}
         except Exception as e:
             print(f"ERROR processing {tiff_file.name}: {e}")
-            results[tiff_file.name] = {
-                'status': 'error',
-                'error': str(e)
-            }
+            results[tiff_file.name] = {"status": "error", "error": str(e)}
 
     # Save processing log
     log_file = output_dir / "processing_log.json"
-    with open(log_file, 'w') as f:
+    with open(log_file, "w") as f:
         json.dump(results, f, indent=2)
 
     print(f"\n{'='*80}")
@@ -286,7 +270,7 @@ def main():
     print(f"{'='*80}\n")
 
     # Summary
-    successful = sum(1 for r in results.values() if r['status'] == 'success')
+    successful = sum(1 for r in results.values() if r["status"] == "success")
     failed = len(results) - successful
     print(f"Successfully processed: {successful}")
     if failed > 0:

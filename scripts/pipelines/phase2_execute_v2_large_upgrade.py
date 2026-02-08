@@ -28,10 +28,7 @@ import numpy as np
 from PIL import Image
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -43,13 +40,13 @@ def test_model_variant(variant: str) -> Dict:
     logger.info(f"{'='*70}")
 
     try:
-        from depth_anything_v2 import DepthAnythingV2Model, ModelVariant, ModelBackend
+        from depth_anything_v2 import DepthAnythingV2Model, ModelBackend, ModelVariant
 
         # Map variant names to enum
         variant_map = {
-            'small': ModelVariant.SMALL,
-            'base': ModelVariant.BASE,
-            'large': ModelVariant.LARGE,
+            "small": ModelVariant.SMALL,
+            "base": ModelVariant.BASE,
+            "large": ModelVariant.LARGE,
         }
 
         model_variant = variant_map[variant.lower()]
@@ -61,8 +58,8 @@ def test_model_variant(variant: str) -> Dict:
         depth_model = DepthAnythingV2Model(
             variant=model_variant,
             backend=ModelBackend.PYTORCH_MPS,  # M4 Max Metal Performance Shaders
-            device='mps',
-            precision='fp16'
+            device="mps",
+            precision="fp16",
         )
 
         init_time = time.time() - start_init
@@ -82,7 +79,7 @@ def test_model_variant(variant: str) -> Dict:
         for i in range(5):
             start = time.time()
             depth_result = depth_model.estimate_depth(test_pil)
-            depth_map = depth_result['depth']
+            depth_map = depth_result["depth"]
             elapsed = (time.time() - start) * 1000  # Convert to ms
             times.append(elapsed)
             logger.info(f"  Run {i+1}: {elapsed:.1f}ms")
@@ -94,16 +91,16 @@ def test_model_variant(variant: str) -> Dict:
         model_id = model_variant.value
 
         results = {
-            'variant': variant,
-            'model_id': model_id,
-            'init_time_sec': init_time,
-            'avg_inference_ms': avg_time,
-            'std_inference_ms': std_time,
-            'min_inference_ms': min(times),
-            'max_inference_ms': max(times),
-            'depth_map_shape': depth_map.shape,
-            'depth_map_dtype': str(depth_map.dtype),
-            'depth_range': [float(depth_map.min()), float(depth_map.max())],
+            "variant": variant,
+            "model_id": model_id,
+            "init_time_sec": init_time,
+            "avg_inference_ms": avg_time,
+            "std_inference_ms": std_time,
+            "min_inference_ms": min(times),
+            "max_inference_ms": max(times),
+            "depth_map_shape": depth_map.shape,
+            "depth_map_dtype": str(depth_map.dtype),
+            "depth_range": [float(depth_map.min()), float(depth_map.max())],
         }
 
         logger.info(f"\n✓ Results:")
@@ -118,35 +115,36 @@ def test_model_variant(variant: str) -> Dict:
     except Exception as e:
         logger.error(f"✗ Failed to test V2-{variant.upper()}: {e}")
         import traceback
+
         traceback.print_exc()
-        return {'variant': variant, 'error': str(e)}
+        return {"variant": variant, "error": str(e)}
 
 
 def compare_variants() -> Dict:
     """Compare all V2 variants."""
 
-    logger.info("\n" + "="*70)
+    logger.info("\n" + "=" * 70)
     logger.info("PHASE 2: DEPTH ANYTHING V2 VARIANT COMPARISON")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
-    variants = ['small', 'large']  # Skip 'base' to save time
+    variants = ["small", "large"]  # Skip 'base' to save time
     results = {}
 
     for variant in variants:
         results[variant] = test_model_variant(variant)
 
     # Generate comparison summary
-    logger.info("\n" + "="*70)
+    logger.info("\n" + "=" * 70)
     logger.info("COMPARISON SUMMARY")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
-    if 'small' in results and 'large' in results:
-        small = results['small']
-        large = results['large']
+    if "small" in results and "large" in results:
+        small = results["small"]
+        large = results["large"]
 
-        if 'error' not in small and 'error' not in large:
-            small_time = small['avg_inference_ms']
-            large_time = large['avg_inference_ms']
+        if "error" not in small and "error" not in large:
+            small_time = small["avg_inference_ms"]
+            large_time = large["avg_inference_ms"]
             slowdown = (large_time / small_time - 1) * 100
 
             logger.info(f"\nV2-Small:")
@@ -169,7 +167,7 @@ def compare_variants() -> Dict:
             # Recommendation
             logger.info(f"\n{'='*70}")
             logger.info("RECOMMENDATION")
-            logger.info("="*70)
+            logger.info("=" * 70)
 
             if slowdown < 100:  # Less than 2x slower
                 logger.info("✓ V2-Large is acceptable for production use")
@@ -190,9 +188,9 @@ def compare_variants() -> Dict:
 def update_pipeline_config():
     """Update pipeline configuration to support model variant selection."""
 
-    logger.info("\n" + "="*70)
+    logger.info("\n" + "=" * 70)
     logger.info("UPDATING PIPELINE CONFIGURATION")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
     # Check if config file exists
     config_path = Path("config/750_picacho_master_preset.yaml")
@@ -209,19 +207,19 @@ def update_pipeline_config():
 def main():
     """Execute Phase 2: V2-Large upgrade."""
 
-    logger.info("="*70)
+    logger.info("=" * 70)
     logger.info("PHASE 2 EXECUTION: DEPTH ANYTHING V2-LARGE UPGRADE")
-    logger.info("="*70)
+    logger.info("=" * 70)
     logger.info("Date: November 10, 2025")
     logger.info("Objective: Upgrade from V2-Small to V2-Large for improved quality")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
     # Step 1: Compare model variants
     results = compare_variants()
 
     # Save results
     output_file = "phase2_benchmark_results.json"
-    with open(output_file, 'w') as f:
+    with open(output_file, "w") as f:
         json.dump(results, f, indent=2)
     logger.info(f"\n✓ Results saved to {output_file}")
 
@@ -229,15 +227,15 @@ def main():
     update_pipeline_config()
 
     # Summary
-    logger.info("\n" + "="*70)
+    logger.info("\n" + "=" * 70)
     logger.info("PHASE 2 EXECUTION COMPLETE")
-    logger.info("="*70)
+    logger.info("=" * 70)
     logger.info("\nNext Steps:")
     logger.info("1. Review benchmark results in phase2_benchmark_results.json")
     logger.info("2. Process test images with V2-Large")
     logger.info("3. Generate visual comparisons (Small vs Large)")
     logger.info("4. Update documentation with findings")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
     return 0
 

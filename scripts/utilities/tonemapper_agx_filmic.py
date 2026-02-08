@@ -1,4 +1,3 @@
-
 """
 tonemapper_agx_filmic.py
 ------------------------
@@ -34,6 +33,7 @@ import numpy as np
 # Optional dependency: PyOpenColorIO (pip install opencolorio)
 try:
     import PyOpenColorIO as ocio  # type: ignore
+
     _HAVE_OCIO = True
 except ImportError:
     ocio = None  # type: ignore
@@ -41,6 +41,7 @@ except ImportError:
 
 
 # ---------- Utility: sRGB OETF/EOTF ----------
+
 
 def srgb_to_linear(srgb: np.ndarray) -> np.ndarray:
     """Decode sRGB to linear (expects 0..1)."""
@@ -89,8 +90,8 @@ def highlight_desat(rgb: np.ndarray, start: float = 0.8, strength: float = 0.85)
 
 # ---------- Filmic (Hable) Tone Mapper ----------
 
-def _hable_curve(x: np.ndarray,
-                 A=0.15, B=0.50, C=0.10, D=0.20, E=0.02, F=0.30) -> np.ndarray:
+
+def _hable_curve(x: np.ndarray, A=0.15, B=0.50, C=0.10, D=0.20, E=0.02, F=0.30) -> np.ndarray:
     """
     John Hable's Uncharted 2 filmic curve for HDR tone mapping.
     Operates on linear scene values.
@@ -120,13 +121,15 @@ def _hable_curve(x: np.ndarray,
     return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - (E / F)
 
 
-def apply_filmic_hable(img_lin: np.ndarray,
-                       exposure: float = 1.0,
-                       white_point: float = 11.2,
-                       desat_highlights: bool = True,
-                       desat_start: float = 0.85,
-                       desat_strength: float = 0.85,
-                       encode_srgb: bool = True) -> np.ndarray:
+def apply_filmic_hable(
+    img_lin: np.ndarray,
+    exposure: float = 1.0,
+    white_point: float = 11.2,
+    desat_highlights: bool = True,
+    desat_start: float = 0.85,
+    desat_strength: float = 0.85,
+    encode_srgb: bool = True,
+) -> np.ndarray:
     """
     Apply Hable filmic tonemapper to a scene-linear RGB image (float32).
     Parameters
@@ -154,6 +157,7 @@ def apply_filmic_hable(img_lin: np.ndarray,
 
 # ---------- AgX via OpenColorIO (exact transform if config provided) ----------
 
+
 def _resolve_config(config_path: str | None):
     """
     Resolve an OCIO config: prefer explicit path, then OCIO env var, else None.
@@ -177,19 +181,21 @@ def list_ocio_views(config_path: str | None = None) -> dict:
     """
     cfg = _resolve_config(config_path)
     out = {}
-    displays = cfg.getDisplaysAll() if hasattr(cfg, 'getDisplaysAll') else cfg.getDisplays()
+    displays = cfg.getDisplaysAll() if hasattr(cfg, "getDisplaysAll") else cfg.getDisplays()
     for display in displays:
         views = list(cfg.getViews(display))
         out[display] = views
     return out
 
 
-def apply_agx_ocio(img_lin: np.ndarray,
-                   config_path: str | None = None,
-                   in_colorspace: str | None = None,
-                   display: str | None = None,
-                   view: str | None = None,
-                   encode_srgb: bool = True) -> np.ndarray:
+def apply_agx_ocio(
+    img_lin: np.ndarray,
+    config_path: str | None = None,
+    in_colorspace: str | None = None,
+    display: str | None = None,
+    view: str | None = None,
+    encode_srgb: bool = True,
+) -> np.ndarray:
     """
     Apply AgX (or any display/view) via OpenColorIO v2.
     - img_lin: scene-linear RGB in the named 'in_colorspace' of the config.
@@ -209,8 +215,11 @@ def apply_agx_ocio(img_lin: np.ndarray,
         img = img_lin
 
     cfg = _resolve_config(config_path)
-    src_cs = in_colorspace or (cfg.getSceneLinearColorSpaceName() if hasattr(
-        cfg, 'getSceneLinearColorSpaceName') else cfg.getRole(ocio.ROLE_SCENE_LINEAR))
+    src_cs = in_colorspace or (
+        cfg.getSceneLinearColorSpaceName()
+        if hasattr(cfg, "getSceneLinearColorSpaceName")
+        else cfg.getRole(ocio.ROLE_SCENE_LINEAR)
+    )
 
     # Fallback to defaults if not specified
     display = display or cfg.getDefaultDisplay()
@@ -240,19 +249,20 @@ def apply_agx_ocio(img_lin: np.ndarray,
 
 # ---------- Convenience: soft check for common AgX view names ----------
 
+
 def guess_agx_view(config_path: str | None = None) -> tuple[str, str]:
     """
     Return (display, view) picking an AgX-like view if present.
     Otherwise returns (default_display, default_view).
     """
     cfg = _resolve_config(config_path)
-    display = cfg.getDefaultDisplay() if hasattr(cfg, 'getDefaultDisplay') else cfg.getDefaultDisplayDeviceName()
+    display = cfg.getDefaultDisplay() if hasattr(cfg, "getDefaultDisplay") else cfg.getDefaultDisplayDeviceName()
     candidates = []
-    displays = cfg.getDisplaysAll() if hasattr(cfg, 'getDisplaysAll') else cfg.getDisplays()
+    displays = cfg.getDisplaysAll() if hasattr(cfg, "getDisplaysAll") else cfg.getDisplays()
     for disp in displays:
         for v in cfg.getViews(disp):
             name = v.lower()
-            if 'agx' in name:
+            if "agx" in name:
                 candidates.append((disp, v))
     if candidates:
         # Prefer the default display if any candidate belongs to it

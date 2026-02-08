@@ -67,8 +67,8 @@ def check_file_size(checkpoint_path):
     print_step(2, "Checking checkpoint file size")
 
     size_bytes = checkpoint_path.stat().st_size
-    size_gb = size_bytes / (1024 ** 3)
-    size_mb = size_bytes / (1024 ** 2)
+    size_gb = size_bytes / (1024**3)
+    size_mb = size_bytes / (1024**2)
 
     print(f"  File size: {size_gb:.2f} GB ({size_mb:.0f} MB)")
 
@@ -123,6 +123,7 @@ def check_depth_pro_package():
 
     try:
         import depth_pro
+
         print_success(f"depth-pro package installed: version {getattr(depth_pro, '__version__', 'unknown')}")
         return True
     except ImportError:
@@ -138,10 +139,11 @@ def run_basic_inference(checkpoint_path):
 
     try:
         # Import required modules
-        from PIL import Image
         import numpy as np
-        from transformation_portal.stage_graph.stages.depth_pro import DepthProStage
+        from PIL import Image
+
         from transformation_portal.stage_graph.stage import StageContext, StageStatus
+        from transformation_portal.stage_graph.stages.depth_pro import DepthProStage
 
         print("  Creating test image (640x480)...")
         test_image = Image.new("RGB", (640, 480), color=(120, 150, 180))
@@ -218,15 +220,14 @@ def run_basic_inference(checkpoint_path):
     except Exception as e:
         print_error(f"Inference test failed with exception: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
 
 def main():
     """Main validation workflow."""
-    parser = argparse.ArgumentParser(
-        description="Validate Depth Pro checkpoint and run basic inference"
-    )
+    parser = argparse.ArgumentParser(description="Validate Depth Pro checkpoint and run basic inference")
     parser.add_argument(
         "--checkpoint",
         type=Path,

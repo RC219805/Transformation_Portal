@@ -5,8 +5,8 @@ import logging
 import sys
 from pathlib import Path
 
-import torch
 import depth_pro
+import torch
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("DepthProVerifier")
@@ -25,7 +25,9 @@ def verify_depth_pro() -> bool:
     ckpt = Path("./checkpoints/depth_pro.pt").resolve()
     if not ckpt.exists():
         logger.error(f"❌ Checkpoint not found: {ckpt}")
-        logger.error("   Download: curl -L https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt -o checkpoints/depth_pro.pt")
+        logger.error(
+            "   Download: curl -L https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt -o checkpoints/depth_pro.pt"
+        )
         return False
     logger.info(f"ℹ️  Checkpoint: {ckpt} ({ckpt.stat().st_size/1e9:.2f} GB)")
 

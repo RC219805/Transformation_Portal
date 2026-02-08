@@ -23,14 +23,11 @@ from pathlib import Path
 from typing import Dict, List
 
 import numpy as np
-from PIL import Image
 import tifffile
+from PIL import Image
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -45,7 +42,7 @@ def analyze_shadow_clipping(image_path: Path) -> Dict:
         Dictionary with clipping statistics
     """
     # Load image
-    if image_path.suffix.lower() in ['.tif', '.tiff']:
+    if image_path.suffix.lower() in [".tif", ".tiff"]:
         image = tifffile.imread(str(image_path))
         if image.dtype == np.uint16:
             image = image.astype(np.float32) / 65535.0
@@ -82,14 +79,14 @@ def analyze_shadow_clipping(image_path: Path) -> Dict:
     is_outdoor = (dynamic_range > 8.0) or (shadow_pixels_pct > 15 and highlight_pixels_pct > 10)
 
     return {
-        'shadow_clipped_pct': shadow_clipped_pct,
-        'highlight_clipped_pct': highlight_clipped_pct,
-        'dynamic_range': dynamic_range,
-        'shadow_pixels_pct': shadow_pixels_pct,
-        'highlight_pixels_pct': highlight_pixels_pct,
-        'scene_type': 'outdoor' if is_outdoor else 'indoor',
-        'mean_luminance': float(np.mean(luminance)),
-        'median_luminance': float(np.median(luminance)),
+        "shadow_clipped_pct": shadow_clipped_pct,
+        "highlight_clipped_pct": highlight_clipped_pct,
+        "dynamic_range": dynamic_range,
+        "shadow_pixels_pct": shadow_pixels_pct,
+        "highlight_pixels_pct": highlight_pixels_pct,
+        "scene_type": "outdoor" if is_outdoor else "indoor",
+        "mean_luminance": float(np.mean(luminance)),
+        "median_luminance": float(np.median(luminance)),
     }
 
 
@@ -103,9 +100,9 @@ def test_shadow_clipping_fix(image_paths: List[Path]) -> Dict:
     Returns:
         Test results dictionary
     """
-    logger.info("\n" + "="*80)
+    logger.info("\n" + "=" * 80)
     logger.info("TEST 1: Shadow Clipping Reduction")
-    logger.info("="*80)
+    logger.info("=" * 80)
 
     results = {}
     outdoor_clipping = []
@@ -121,13 +118,13 @@ def test_shadow_clipping_fix(image_paths: List[Path]) -> Dict:
         logger.info(f"  Highlight clipping: {stats['highlight_clipped_pct']:.2f}%")
         logger.info(f"  Dynamic range: {stats['dynamic_range']:.1f}x")
 
-        if stats['scene_type'] == 'outdoor':
-            outdoor_clipping.append(stats['shadow_clipped_pct'])
+        if stats["scene_type"] == "outdoor":
+            outdoor_clipping.append(stats["shadow_clipped_pct"])
         else:
-            indoor_clipping.append(stats['shadow_clipped_pct'])
+            indoor_clipping.append(stats["shadow_clipped_pct"])
 
     # Summary
-    logger.info("\n" + "-"*80)
+    logger.info("\n" + "-" * 80)
     logger.info("SUMMARY:")
 
     if outdoor_clipping:
@@ -155,11 +152,11 @@ def test_shadow_clipping_fix(image_paths: List[Path]) -> Dict:
             logger.info(f"    ⚠️  WARN - Indoor clipping increased")
 
     return {
-        'outdoor_clipping': outdoor_clipping,
-        'indoor_clipping': indoor_clipping,
-        'outdoor_avg': np.mean(outdoor_clipping) if outdoor_clipping else 0,
-        'indoor_avg': np.mean(indoor_clipping) if indoor_clipping else 0,
-        'details': results
+        "outdoor_clipping": outdoor_clipping,
+        "indoor_clipping": indoor_clipping,
+        "outdoor_avg": np.mean(outdoor_clipping) if outdoor_clipping else 0,
+        "indoor_avg": np.mean(indoor_clipping) if indoor_clipping else 0,
+        "details": results,
     }
 
 
@@ -170,15 +167,15 @@ def test_ai_enhancement_compatibility() -> Dict:
     Returns:
         Test results dictionary
     """
-    logger.info("\n" + "="*80)
+    logger.info("\n" + "=" * 80)
     logger.info("TEST 2: AI Enhancement Tensor Compatibility")
-    logger.info("="*80)
+    logger.info("=" * 80)
 
-    results = {'tests': []}
+    results = {"tests": []}
 
     # Test different image sizes
     test_sizes = [
-        (1152, 768),   # Original problematic size
+        (1152, 768),  # Original problematic size
         (1536, 1024),  # Another common size
         (1920, 1280),  # Full HD aspect
         (2048, 1365),  # Irregular size
@@ -186,6 +183,7 @@ def test_ai_enhancement_compatibility() -> Dict:
 
     try:
         from luxury_estate_master_pipeline import LuxuryEstateMasterPipeline
+
         pipeline = LuxuryEstateMasterPipeline.__new__(LuxuryEstateMasterPipeline)
 
         for width, height in test_sizes:
@@ -202,20 +200,20 @@ def test_ai_enhancement_compatibility() -> Dict:
             target_h = ((height + 63) // 64) * 64
             target_w = ((width + 63) // 64) * 64
 
-            padded_correct = (padded.shape[0] == target_h and padded.shape[1] == target_w)
-            unpadded_correct = (unpadded.shape[0] == height and unpadded.shape[1] == width)
+            padded_correct = padded.shape[0] == target_h and padded.shape[1] == target_w
+            unpadded_correct = unpadded.shape[0] == height and unpadded.shape[1] == width
 
             test_result = {
-                'original_size': f"{width}x{height}",
-                'padded_size': f"{padded.shape[1]}x{padded.shape[0]}",
-                'target_size': f"{target_w}x{target_h}",
-                'unpadded_size': f"{unpadded.shape[1]}x{unpadded.shape[0]}",
-                'padding_correct': padded_correct,
-                'unpadding_correct': unpadded_correct,
-                'status': 'PASS' if (padded_correct and unpadded_correct) else 'FAIL'
+                "original_size": f"{width}x{height}",
+                "padded_size": f"{padded.shape[1]}x{padded.shape[0]}",
+                "target_size": f"{target_w}x{target_h}",
+                "unpadded_size": f"{unpadded.shape[1]}x{unpadded.shape[0]}",
+                "padding_correct": padded_correct,
+                "unpadding_correct": unpadded_correct,
+                "status": "PASS" if (padded_correct and unpadded_correct) else "FAIL",
             }
 
-            results['tests'].append(test_result)
+            results["tests"].append(test_result)
 
             logger.info(f"  Original: {width}x{height}")
             logger.info(f"  Padded:   {padded.shape[1]}x{padded.shape[0]} (target: {target_w}x{target_h})")
@@ -223,16 +221,18 @@ def test_ai_enhancement_compatibility() -> Dict:
             logger.info(f"  Status:   {'✅ PASS' if test_result['status'] == 'PASS' else '❌ FAIL'}")
 
         # Overall result
-        all_passed = all(t['status'] == 'PASS' for t in results['tests'])
-        results['overall_status'] = 'PASS' if all_passed else 'FAIL'
+        all_passed = all(t["status"] == "PASS" for t in results["tests"])
+        results["overall_status"] = "PASS" if all_passed else "FAIL"
 
-        logger.info("\n" + "-"*80)
-        logger.info(f"OVERALL: {'✅ PASS' if all_passed else '❌ FAIL'} - {len(results['tests'])}/{len(results['tests'])} tests passed")
+        logger.info("\n" + "-" * 80)
+        logger.info(
+            f"OVERALL: {'✅ PASS' if all_passed else '❌ FAIL'} - {len(results['tests'])}/{len(results['tests'])} tests passed"
+        )
 
     except Exception as e:
         logger.error(f"Test failed with error: {e}")
-        results['error'] = str(e)
-        results['overall_status'] = 'ERROR'
+        results["error"] = str(e)
+        results["overall_status"] = "ERROR"
 
     return results
 
@@ -244,40 +244,36 @@ def test_depth_model_download() -> Dict:
     Returns:
         Test results dictionary
     """
-    logger.info("\n" + "="*80)
+    logger.info("\n" + "=" * 80)
     logger.info("TEST 3: Depth Model Auto-Download")
-    logger.info("="*80)
+    logger.info("=" * 80)
 
-    results = {'checks': []}
+    results = {"checks": []}
 
     # Check if transformers is available
     try:
         import transformers
+
         transformers_available = True
         transformers_version = transformers.__version__
         logger.info(f"✅ transformers library available: v{transformers_version}")
-        results['checks'].append({
-            'name': 'transformers_library',
-            'status': 'PASS',
-            'version': transformers_version
-        })
+        results["checks"].append({"name": "transformers_library", "status": "PASS", "version": transformers_version})
     except ImportError:
         transformers_available = False
         logger.warning("⚠️  transformers library not available")
-        results['checks'].append({
-            'name': 'transformers_library',
-            'status': 'FAIL',
-            'message': 'Install with: pip install transformers'
-        })
+        results["checks"].append(
+            {"name": "transformers_library", "status": "FAIL", "message": "Install with: pip install transformers"}
+        )
 
     # Check if depth model is cached
     if transformers_available:
         try:
-            from transformers import AutoImageProcessor, AutoModelForDepthEstimation
             from pathlib import Path
 
+            from transformers import AutoImageProcessor, AutoModelForDepthEstimation
+
             model_id = "depth-anything/Depth-Anything-V2-Small-hf"
-            cache_dir = Path.home() / '.cache' / 'huggingface' / 'hub'
+            cache_dir = Path.home() / ".cache" / "huggingface" / "hub"
 
             logger.info(f"\nChecking cache for: {model_id}")
             logger.info(f"Cache directory: {cache_dir}")
@@ -287,25 +283,17 @@ def test_depth_model_download() -> Dict:
             model = AutoModelForDepthEstimation.from_pretrained(model_id)
 
             logger.info("✅ Depth Anything V2 model accessible")
-            results['checks'].append({
-                'name': 'depth_model_access',
-                'status': 'PASS',
-                'model_id': model_id
-            })
+            results["checks"].append({"name": "depth_model_access", "status": "PASS", "model_id": model_id})
 
         except Exception as e:
             logger.error(f"❌ Failed to access depth model: {e}")
-            results['checks'].append({
-                'name': 'depth_model_access',
-                'status': 'FAIL',
-                'error': str(e)
-            })
+            results["checks"].append({"name": "depth_model_access", "status": "FAIL", "error": str(e)})
 
     # Overall status
-    all_passed = all(c['status'] == 'PASS' for c in results['checks'])
-    results['overall_status'] = 'PASS' if all_passed else 'FAIL'
+    all_passed = all(c["status"] == "PASS" for c in results["checks"])
+    results["overall_status"] = "PASS" if all_passed else "FAIL"
 
-    logger.info("\n" + "-"*80)
+    logger.info("\n" + "-" * 80)
     logger.info(f"OVERALL: {'✅ PASS' if all_passed else '⚠️  PARTIAL'}")
 
     return results
@@ -314,76 +302,62 @@ def test_depth_model_download() -> Dict:
 def main():
     """Main test runner."""
     parser = argparse.ArgumentParser(
-        description="Test Luxury Estate Pipeline Fixes",
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        description="Test Luxury Estate Pipeline Fixes", formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
+    parser.add_argument("--input-dir", type=Path, help="Directory containing test images")
     parser.add_argument(
-        '--input-dir',
-        type=Path,
-        help='Directory containing test images'
+        "--output-report", type=Path, default="pipeline_fixes_test_report.json", help="Output JSON report path"
     )
     parser.add_argument(
-        '--output-report',
-        type=Path,
-        default='pipeline_fixes_test_report.json',
-        help='Output JSON report path'
-    )
-    parser.add_argument(
-        '--test',
-        choices=['shadow', 'ai', 'depth', 'all'],
-        default='all',
-        help='Which test to run (default: all)'
+        "--test", choices=["shadow", "ai", "depth", "all"], default="all", help="Which test to run (default: all)"
     )
 
     args = parser.parse_args()
 
-    logger.info("\n" + "="*80)
+    logger.info("\n" + "=" * 80)
     logger.info("LUXURY ESTATE MASTER PIPELINE - FIX VALIDATION")
-    logger.info("="*80)
+    logger.info("=" * 80)
 
-    report = {
-        'test_suite': 'Pipeline Fixes Validation',
-        'tests': {}
-    }
+    report = {"test_suite": "Pipeline Fixes Validation", "tests": {}}
 
     # Test 1: Shadow clipping
-    if args.test in ['shadow', 'all']:
+    if args.test in ["shadow", "all"]:
         if args.input_dir and args.input_dir.exists():
-            image_paths = list(args.input_dir.glob('*.tif')) + list(args.input_dir.glob('*.tiff'))
+            image_paths = list(args.input_dir.glob("*.tif")) + list(args.input_dir.glob("*.tiff"))
             if image_paths:
-                report['tests']['shadow_clipping'] = test_shadow_clipping_fix(image_paths)
+                report["tests"]["shadow_clipping"] = test_shadow_clipping_fix(image_paths)
             else:
                 logger.warning("No TIFF images found in input directory")
         else:
             logger.warning("Skipping shadow clipping test (no input directory)")
 
     # Test 2: AI enhancement
-    if args.test in ['ai', 'all']:
-        report['tests']['ai_enhancement'] = test_ai_enhancement_compatibility()
+    if args.test in ["ai", "all"]:
+        report["tests"]["ai_enhancement"] = test_ai_enhancement_compatibility()
 
     # Test 3: Depth model
-    if args.test in ['depth', 'all']:
-        report['tests']['depth_model'] = test_depth_model_download()
+    if args.test in ["depth", "all"]:
+        report["tests"]["depth_model"] = test_depth_model_download()
 
     # Save report
-    with open(args.output_report, 'w') as f:
+    with open(args.output_report, "w") as f:
         json.dump(report, f, indent=2)
 
     logger.info(f"\n📄 Test report saved: {args.output_report}")
 
     # Summary
-    logger.info("\n" + "="*80)
+    logger.info("\n" + "=" * 80)
     logger.info("TEST SUMMARY")
-    logger.info("="*80)
+    logger.info("=" * 80)
 
-    for test_name, test_results in report['tests'].items():
-        status = test_results.get('overall_status', 'N/A')
-        symbol = '✅' if status == 'PASS' else '⚠️' if status == 'PARTIAL' else '❌'
+    for test_name, test_results in report["tests"].items():
+        status = test_results.get("overall_status", "N/A")
+        symbol = "✅" if status == "PASS" else "⚠️" if status == "PARTIAL" else "❌"
         logger.info(f"{symbol} {test_name}: {status}")
 
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     raise SystemExit(main())

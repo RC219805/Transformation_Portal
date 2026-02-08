@@ -36,8 +36,8 @@ from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
-import torch
 import tifffile
+import torch
 from PIL import Image, ImageEnhance
 from tqdm import tqdm
 
@@ -45,6 +45,7 @@ from tqdm import tqdm
 try:
     from realesrgan import RealESRGANer
     from realesrgan.archs.rrdbnet_arch import RRDBNet
+
     ESRGAN_AVAILABLE = True
 except ImportError:
     ESRGAN_AVAILABLE = False
@@ -53,6 +54,7 @@ except ImportError:
 try:
     from controlnet_aux import CannyDetector
     from diffusers import ControlNetModel, StableDiffusionControlNetImg2ImgPipeline, UniPCMultistepScheduler
+
     AI_ENHANCEMENT_AVAILABLE = True
 except ImportError:
     AI_ENHANCEMENT_AVAILABLE = False
@@ -66,16 +68,15 @@ try:
         DepthGuidedFilters,
         ZoneToneMapping,
     )
+
     DEPTH_PIPELINE_AVAILABLE = True
 except ImportError:
     DEPTH_PIPELINE_AVAILABLE = False
     logging.warning("Depth pipeline not available - will skip depth-aware processing")
 
 try:
-    from transformation_portal.processors.material_response.core import (
-        MaterialAestheticProfile,
-        LightingProfile,
-    )
+    from transformation_portal.processors.material_response.core import LightingProfile, MaterialAestheticProfile
+
     MATERIAL_RESPONSE_AVAILABLE = True
 except ImportError:
     MATERIAL_RESPONSE_AVAILABLE = False
@@ -86,11 +87,8 @@ from tonemapper_agx_filmic import apply_agx_ocio, apply_filmic_hable, linear_to_
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('luxury_estate_pipeline.log'),
-        logging.StreamHandler()
-    ]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.FileHandler("luxury_estate_pipeline.log"), logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 
@@ -99,9 +97,11 @@ logger = logging.getLogger(__name__)
 # Configuration Dataclasses
 # ============================================================================
 
+
 @dataclass
 class DepthConfig:
     """Depth processing configuration."""
+
     enabled: bool = True
     quality_mode: str = "fast"  # fast (V2-Small) or premium (V2-Large)
     model_variant: str = "small"  # small, base, large (manual override)
@@ -117,6 +117,7 @@ class DepthConfig:
 @dataclass
 class MaterialResponseConfig:
     """Material Response configuration."""
+
     enabled: bool = True
     strength: float = 0.75
     preserve_highlights: bool = True
@@ -130,6 +131,7 @@ class MaterialResponseConfig:
 @dataclass
 class ToneMappingConfig:
     """HDR tone mapping configuration."""
+
     method: str = "filmic"  # agx, filmic, reinhard
     exposure: float = 0.0
     contrast: float = 1.05
@@ -144,11 +146,14 @@ class ToneMappingConfig:
 @dataclass
 class ColorGradingConfig:
     """Color grading and LUT configuration."""
+
     enabled: bool = True
-    lut_stack: List[Tuple[str, float]] = field(default_factory=lambda: [
-        ("assets/luts/location_aesthetic/California/Montecito_Golden_Hour_HDR.cube", 0.70),
-        ("assets/luts/film_emulation/Kodak/Kodak_2393_D55_HDR.cube", 0.50),
-    ])
+    lut_stack: List[Tuple[str, float]] = field(
+        default_factory=lambda: [
+            ("assets/luts/location_aesthetic/California/Montecito_Golden_Hour_HDR.cube", 0.70),
+            ("assets/luts/film_emulation/Kodak/Kodak_2393_D55_HDR.cube", 0.50),
+        ]
+    )
     temperature_shift: float = 0.0  # -100 to +100
     tint_shift: float = 0.0  # -100 to +100
     saturation: float = 1.08
@@ -158,6 +163,7 @@ class ColorGradingConfig:
 @dataclass
 class AIEnhancementConfig:
     """AI enhancement configuration."""
+
     enabled: bool = True
     model_id: str = "runwayml/stable-diffusion-v1-5"
     controlnet_id: str = "lllyasviel/sd-controlnet-canny"
@@ -165,7 +171,9 @@ class AIEnhancementConfig:
     guidance_scale: float = 7.5
     strength: float = 0.30
     seed: int = 42
-    prompt_template: str = "luxury {room_type} architectural photography, {style}, ultra detailed, professional, photorealistic, 8k"
+    prompt_template: str = (
+        "luxury {room_type} architectural photography, {style}, ultra detailed, professional, photorealistic, 8k"
+    )
     negative_prompt: str = "blurry, artifacts, cartoon, painting, oversaturated, unrealistic, low quality, distorted"
     ai_enhancement_padding: bool = True  # Auto-pad for tensor compatibility
     target_size_multiple: int = 64  # Pad to multiples of this value
@@ -174,6 +182,7 @@ class AIEnhancementConfig:
 @dataclass
 class UpscalingConfig:
     """Upscaling configuration."""
+
     enabled: bool = True
     method: str = "esrgan"  # esrgan, lanczos
     scale_factor: float = 4.0
@@ -185,6 +194,7 @@ class UpscalingConfig:
 @dataclass
 class OutputConfig:
     """Output configuration."""
+
     save_master_tiff: bool = True
     save_delivery_jpeg: bool = True
     save_intermediate_stages: bool = True
@@ -196,6 +206,7 @@ class OutputConfig:
 @dataclass
 class PipelinePreset:
     """Complete pipeline preset configuration."""
+
     name: str
     description: str
     depth: DepthConfig = field(default_factory=DepthConfig)
@@ -211,6 +222,7 @@ class PipelinePreset:
 # Preset Definitions
 # ============================================================================
 
+
 def get_750_picacho_preset() -> PipelinePreset:
     """Get optimized preset for 750 Picacho luxury estate."""
     return PipelinePreset(
@@ -219,7 +231,7 @@ def get_750_picacho_preset() -> PipelinePreset:
         depth=DepthConfig(
             enabled=True,
             quality_mode="premium",  # Phase 2: Use V2-Large for 750 Picacho
-            model_variant="large",   # Phase 2: Premium quality
+            model_variant="large",  # Phase 2: Premium quality
             backend="pytorch_mps",
             num_zones=4,
             zone_tone_method="filmic",
@@ -290,6 +302,7 @@ def get_aerial_preset() -> PipelinePreset:
 # Pipeline Implementation
 # ============================================================================
 
+
 class LuxuryEstateMasterPipeline:
     """
     Production-ready HDR processing pipeline for luxury real estate.
@@ -308,9 +321,9 @@ class LuxuryEstateMasterPipeline:
         self.preset = preset
         self.device = device or self._detect_device()
         self.stats = {
-            'images_processed': 0,
-            'total_time': 0.0,
-            'stage_times': {},
+            "images_processed": 0,
+            "total_time": 0.0,
+            "stage_times": {},
         }
 
         logger.info(f"Initializing {preset.name}")
@@ -337,6 +350,7 @@ class LuxuryEstateMasterPipeline:
 
         try:
             from transformers import AutoImageProcessor, AutoModelForDepthEstimation
+
             logger.info("Checking Depth Anything V2 model availability...")
 
             model_id = "depth-anything/Depth-Anything-V2-Small-hf"
@@ -385,7 +399,9 @@ class LuxuryEstateMasterPipeline:
         is_outdoor = (dynamic_range > 8.0) or (shadow_pixels > 0.15 and highlight_pixels > 0.1)
 
         scene_type = "outdoor" if is_outdoor else "indoor"
-        logger.info(f"  → Scene detection: {scene_type.upper()} (DR={dynamic_range:.1f}x, shadows={shadow_pixels*100:.1f}%, highlights={highlight_pixels*100:.1f}%)")
+        logger.info(
+            f"  → Scene detection: {scene_type.upper()} (DR={dynamic_range:.1f}x, shadows={shadow_pixels*100:.1f}%, highlights={highlight_pixels*100:.1f}%)"
+        )
 
         return scene_type
 
@@ -418,9 +434,9 @@ class LuxuryEstateMasterPipeline:
 
         # Apply padding (reflect mode preserves edges)
         if len(image.shape) == 3:
-            padded = np.pad(image, ((top, bottom), (left, right), (0, 0)), mode='reflect')
+            padded = np.pad(image, ((top, bottom), (left, right), (0, 0)), mode="reflect")
         else:
-            padded = np.pad(image, ((top, bottom), (left, right)), mode='reflect')
+            padded = np.pad(image, ((top, bottom), (left, right)), mode="reflect")
 
         logger.info(f"  → Padded {w}x{h} → {target_w}x{target_h} for ControlNet compatibility")
 
@@ -454,20 +470,20 @@ class LuxuryEstateMasterPipeline:
 
         try:
             variant_map = {
-                'small': ModelVariant.SMALL,
-                'base': ModelVariant.BASE,
-                'large': ModelVariant.LARGE,
+                "small": ModelVariant.SMALL,
+                "base": ModelVariant.BASE,
+                "large": ModelVariant.LARGE,
             }
             backend_map = {
-                'pytorch_cpu': ModelBackend.PYTORCH_CPU,
-                'pytorch_mps': ModelBackend.PYTORCH_MPS,
-                'coreml': ModelBackend.COREML,
+                "pytorch_cpu": ModelBackend.PYTORCH_CPU,
+                "pytorch_mps": ModelBackend.PYTORCH_MPS,
+                "coreml": ModelBackend.COREML,
             }
 
             # Phase 2 upgrade: Support quality_mode selector
             # quality_mode overrides model_variant if set
             model_variant = self.preset.depth.model_variant
-            if hasattr(self.preset.depth, 'quality_mode'):
+            if hasattr(self.preset.depth, "quality_mode"):
                 if self.preset.depth.quality_mode == "premium":
                     model_variant = "large"
                     logger.info("Using premium quality mode: V2-Large")
@@ -478,7 +494,7 @@ class LuxuryEstateMasterPipeline:
             self.depth_model = DepthAnythingV2Model(
                 variant=variant_map[model_variant],
                 backend=backend_map.get(self.preset.depth.backend),
-                precision='fp16',
+                precision="fp16",
             )
             logger.info(f"Loaded Depth Anything V2 ({model_variant}, {self.preset.depth.backend})")
         except Exception as e:
@@ -497,20 +513,14 @@ class LuxuryEstateMasterPipeline:
         try:
             logger.info("Loading ControlNet...")
             self.controlnet = ControlNetModel.from_pretrained(
-                self.preset.ai_enhancement.controlnet_id,
-                torch_dtype=torch.float32
+                self.preset.ai_enhancement.controlnet_id, torch_dtype=torch.float32
             ).to(self.device)
 
             logger.info("Loading Stable Diffusion pipeline...")
             self.ai_pipeline = StableDiffusionControlNetImg2ImgPipeline.from_pretrained(
-                self.preset.ai_enhancement.model_id,
-                controlnet=self.controlnet,
-                torch_dtype=torch.float32,
-                safety_checker=None
+                self.preset.ai_enhancement.model_id, controlnet=self.controlnet, torch_dtype=torch.float32, safety_checker=None
             ).to(self.device)
-            self.ai_pipeline.scheduler = UniPCMultistepScheduler.from_config(
-                self.ai_pipeline.scheduler.config
-            )
+            self.ai_pipeline.scheduler = UniPCMultistepScheduler.from_config(self.ai_pipeline.scheduler.config)
 
             self.canny_detector = CannyDetector()
             logger.info("AI enhancement models ready")
@@ -539,7 +549,7 @@ class LuxuryEstateMasterPipeline:
                 tile_pad=self.preset.upscaling.tile_padding,
                 pre_pad=0,
                 half=False,
-                device=self.device
+                device=self.device,
             )
             logger.info(f"Real-ESRGAN {self.preset.upscaling.scale_factor}x upscaler ready")
         except Exception as e:
@@ -563,58 +573,58 @@ class LuxuryEstateMasterPipeline:
         logger.info(f"{'='*80}")
 
         results = {
-            'source_path': str(image_path),
-            'room_type': room_type,
-            'stages': {},
-            'output_paths': {},
+            "source_path": str(image_path),
+            "room_type": room_type,
+            "stages": {},
+            "output_paths": {},
         }
 
         # Stage 1: Load 32-bit HDR TIFF
         image_linear, metadata = self._stage_1_load_hdr(image_path)
-        results['metadata'] = metadata
-        results['stages']['1_load'] = time.time() - start_time
+        results["metadata"] = metadata
+        results["stages"]["1_load"] = time.time() - start_time
 
         # Stage 1.5: Auto White Balance (fix color casts)
         image_linear = self._auto_white_balance(image_linear)
 
         # Stage 2: Depth estimation
         depth_map = self._stage_2_depth_estimation(image_linear)
-        results['stages']['2_depth'] = time.time() - start_time - sum(results['stages'].values())
+        results["stages"]["2_depth"] = time.time() - start_time - sum(results["stages"].values())
 
         # Stage 3: Material Response
         image_enhanced = self._stage_3_material_response(image_linear, depth_map)
-        results['stages']['3_material'] = time.time() - start_time - sum(results['stages'].values())
+        results["stages"]["3_material"] = time.time() - start_time - sum(results["stages"].values())
 
         # Detect scene type for adaptive processing
         scene_type = self._detect_scene_type(image_enhanced) if self.preset.tone_mapping.adaptive_tone_mapping else None
-        results['scene_type'] = scene_type
+        results["scene_type"] = scene_type
 
         # Stage 4: Tone mapping (now receives depth map and scene type)
         image_tonemapped = self._stage_4_tone_mapping(image_enhanced, depth_map, scene_type)
-        results['stages']['4_tonemap'] = time.time() - start_time - sum(results['stages'].values())
+        results["stages"]["4_tonemap"] = time.time() - start_time - sum(results["stages"].values())
 
         # Stage 5: Color grading
         image_graded = self._stage_5_color_grading(image_tonemapped)
-        results['stages']['5_color'] = time.time() - start_time - sum(results['stages'].values())
+        results["stages"]["5_color"] = time.time() - start_time - sum(results["stages"].values())
 
         # Stage 6: AI enhancement
         image_ai = self._stage_6_ai_enhancement(image_graded, depth_map, room_type)
-        results['stages']['6_ai'] = time.time() - start_time - sum(results['stages'].values())
+        results["stages"]["6_ai"] = time.time() - start_time - sum(results["stages"].values())
 
         # Stage 7: Upscaling
-        image_final = self._stage_7_upscaling(image_ai, metadata['original_size'])
-        results['stages']['7_upscale'] = time.time() - start_time - sum(results['stages'].values())
+        image_final = self._stage_7_upscaling(image_ai, metadata["original_size"])
+        results["stages"]["7_upscale"] = time.time() - start_time - sum(results["stages"].values())
 
         # Save outputs
         self._save_outputs(image_path, image_final, image_tonemapped, results)
 
         total_time = time.time() - start_time
-        results['total_time'] = total_time
-        self.stats['images_processed'] += 1
-        self.stats['total_time'] += total_time
+        results["total_time"] = total_time
+        self.stats["images_processed"] += 1
+        self.stats["total_time"] += total_time
 
         logger.info(f"\n✅ Completed in {total_time:.1f}s")
-        self._log_stage_times(results['stages'])
+        self._log_stage_times(results["stages"])
 
         return results
 
@@ -627,9 +637,9 @@ class LuxuryEstateMasterPipeline:
 
         # Extract metadata
         metadata = {
-            'original_size': (image_data.shape[1], image_data.shape[0]),
-            'bit_depth': image_data.dtype,
-            'has_alpha': image_data.shape[2] == 4 if len(image_data.shape) == 3 else False,
+            "original_size": (image_data.shape[1], image_data.shape[0]),
+            "bit_depth": image_data.dtype,
+            "has_alpha": image_data.shape[2] == 4 if len(image_data.shape) == 3 else False,
         }
 
         # Convert to float32 linear RGB
@@ -643,8 +653,8 @@ class LuxuryEstateMasterPipeline:
             image_linear = image_data.astype(np.float32)
 
         # Handle alpha channel
-        if metadata['has_alpha']:
-            metadata['alpha'] = image_linear[:, :, 3]
+        if metadata["has_alpha"]:
+            metadata["alpha"] = image_linear[:, :, 3]
             image_linear = image_linear[:, :, :3]
 
         logger.info(f"  ✓ Loaded: {metadata['original_size'][0]}×{metadata['original_size'][1]}, {metadata['bit_depth']}")
@@ -715,7 +725,7 @@ class LuxuryEstateMasterPipeline:
 
             # Estimate depth
             result = self.depth_model.estimate_depth(image_uint8)
-            depth_map = result['depth']  # Extract depth map from result dict
+            depth_map = result["depth"]  # Extract depth map from result dict
 
             logger.info(f"  ✓ Depth map: {depth_map.shape}, range [{depth_map.min():.2f}, {depth_map.max():.2f}]")
             return depth_map
@@ -736,11 +746,12 @@ class LuxuryEstateMasterPipeline:
 
         # Enhance micro-contrast (material detail)
         strength = self.preset.material_response.strength
-        enhanced = cv2.detailEnhance(
-            (np.clip(image_linear, 0, 1) * 255).astype(np.uint8),
-            sigma_s=10,
-            sigma_r=0.15
-        ).astype(np.float32) / 255.0
+        enhanced = (
+            cv2.detailEnhance((np.clip(image_linear, 0, 1) * 255).astype(np.uint8), sigma_s=10, sigma_r=0.15).astype(
+                np.float32
+            )
+            / 255.0
+        )
 
         image_enhanced = image_linear * (1 - strength * 0.3) + enhanced * (strength * 0.3)
 
@@ -757,8 +768,9 @@ class LuxuryEstateMasterPipeline:
         logger.info(f"  ✓ Enhanced with strength {strength:.2f}")
         return image_enhanced
 
-    def _stage_4_tone_mapping(self, image_linear: np.ndarray, depth_map: Optional[np.ndarray] = None,
-                             scene_type: Optional[str] = None) -> np.ndarray:
+    def _stage_4_tone_mapping(
+        self, image_linear: np.ndarray, depth_map: Optional[np.ndarray] = None, scene_type: Optional[str] = None
+    ) -> np.ndarray:
         """Stage 4: Intelligent HDR tone mapping with adaptive shadow handling."""
         logger.info("\n[Stage 4/7] HDR tone mapping...")
 
@@ -770,7 +782,7 @@ class LuxuryEstateMasterPipeline:
 
         # Apply exposure adjustment
         if cfg.exposure != 0.0:
-            exposure_scale = 2.0 ** cfg.exposure
+            exposure_scale = 2.0**cfg.exposure
             image_exposed = image_linear * exposure_scale
         else:
             image_exposed = image_linear
@@ -785,18 +797,11 @@ class LuxuryEstateMasterPipeline:
         else:
             # Standard tone mapping
             if cfg.method == "filmic":
-                image_tonemapped = apply_filmic_hable(
-                    image_exposed,
-                    exposure=1.0,
-                    white_point=cfg.white_point
-                )
+                image_tonemapped = apply_filmic_hable(image_exposed, exposure=1.0, white_point=cfg.white_point)
                 logger.info(f"  ✓ Filmic Hable (white point: {cfg.white_point})")
             elif cfg.method == "agx" and cfg.agx_config_path:
                 try:
-                    image_tonemapped = apply_agx_ocio(
-                        image_exposed,
-                        config_path=cfg.agx_config_path
-                    )
+                    image_tonemapped = apply_agx_ocio(image_exposed, config_path=cfg.agx_config_path)
                     logger.info("  ✓ AgX OCIO")
                 except Exception as e:
                     logger.warning(f"  ⚠ AgX failed, falling back to Filmic: {e}")
@@ -814,8 +819,9 @@ class LuxuryEstateMasterPipeline:
 
         return image_tonemapped
 
-    def _apply_shadow_boost(self, image_linear: np.ndarray, boost_strength: float,
-                           depth_map: Optional[np.ndarray] = None) -> np.ndarray:
+    def _apply_shadow_boost(
+        self, image_linear: np.ndarray, boost_strength: float, depth_map: Optional[np.ndarray] = None
+    ) -> np.ndarray:
         """
         Apply adaptive shadow boost for outdoor scenes to reduce clipping.
 
@@ -833,7 +839,7 @@ class LuxuryEstateMasterPipeline:
         # Create shadow mask (smooth transition from 0.0 to 0.3 luminance)
         shadow_threshold = 0.3
         shadow_mask = 1.0 - np.clip(luminance / shadow_threshold, 0, 1)
-        shadow_mask = shadow_mask ** 0.5  # Smooth falloff
+        shadow_mask = shadow_mask**0.5  # Smooth falloff
 
         # If depth available, boost distant shadows more (atmospheric perspective)
         if depth_map is not None:
@@ -862,8 +868,7 @@ class LuxuryEstateMasterPipeline:
 
         return final
 
-    def _zone_based_tone_mapping(self, image_linear: np.ndarray, depth_map: np.ndarray,
-                                cfg: ToneMappingConfig) -> np.ndarray:
+    def _zone_based_tone_mapping(self, image_linear: np.ndarray, depth_map: np.ndarray, cfg: ToneMappingConfig) -> np.ndarray:
         """
         Apply zone-based tone mapping using depth information.
 
@@ -887,8 +892,7 @@ class LuxuryEstateMasterPipeline:
             zone_end = (i + 1) / num_zones
 
             # Smooth transitions between zones
-            zone_mask = np.clip((depth_norm - zone_start) / 0.1, 0, 1) * \
-                       np.clip((zone_end - depth_norm) / 0.1, 0, 1)
+            zone_mask = np.clip((depth_norm - zone_start) / 0.1, 0, 1) * np.clip((zone_end - depth_norm) / 0.1, 0, 1)
             zone_maps.append(zone_mask)
 
         # Apply tone mapping per zone with different parameters
@@ -899,11 +903,7 @@ class LuxuryEstateMasterPipeline:
             zone_white_point = cfg.white_point * (1.0 + 0.3 * i / num_zones)
 
             # Tone map this zone
-            zone_toned = apply_filmic_hable(
-                image_linear,
-                exposure=1.0,
-                white_point=zone_white_point
-            )
+            zone_toned = apply_filmic_hable(image_linear, exposure=1.0, white_point=zone_white_point)
 
             # Blend into result
             result += zone_toned * zone_mask[:, :, None]
@@ -945,8 +945,7 @@ class LuxuryEstateMasterPipeline:
 
         return image_graded
 
-    def _stage_6_ai_enhancement(self, image: np.ndarray, depth_map: Optional[np.ndarray],
-                                room_type: str) -> np.ndarray:
+    def _stage_6_ai_enhancement(self, image: np.ndarray, depth_map: Optional[np.ndarray], room_type: str) -> np.ndarray:
         """Stage 6: AI enhancement with ControlNet + SDXL (with tensor padding fix)."""
         if not self.preset.ai_enhancement.enabled or self.ai_pipeline is None:
             logger.info("\n[Stage 6/7] AI enhancement: SKIPPED")
@@ -981,10 +980,7 @@ class LuxuryEstateMasterPipeline:
             canny = self.canny_detector(image_padded_pil, 100, 200)
 
             # Build prompt
-            prompt = cfg.prompt_template.format(
-                room_type=room_type,
-                style="montecito coastal estate, golden hour lighting"
-            )
+            prompt = cfg.prompt_template.format(room_type=room_type, style="montecito coastal estate, golden hour lighting")
 
             # Generate
             generator = torch.Generator(device=self.device).manual_seed(cfg.seed)
@@ -992,11 +988,11 @@ class LuxuryEstateMasterPipeline:
                 prompt=prompt,
                 negative_prompt=cfg.negative_prompt,
                 image=image_padded_pil,  # Use padded image
-                control_image=canny,     # Canny from padded image (same size)
+                control_image=canny,  # Canny from padded image (same size)
                 num_inference_steps=cfg.num_inference_steps,
                 guidance_scale=cfg.guidance_scale,
                 strength=cfg.strength,
-                generator=generator
+                generator=generator,
             ).images[0]
 
             # Convert result to numpy
@@ -1029,16 +1025,18 @@ class LuxuryEstateMasterPipeline:
         logger.info(f"\n[Stage 7/7] Upscaling ({self.preset.upscaling.scale_factor}x)...")
 
         # Force Lanczos if method is set to lanczos, or if ESRGAN not available
-        use_lanczos = (self.preset.upscaling.method == "lanczos" or self.upscaler is None)
+        use_lanczos = self.preset.upscaling.method == "lanczos" or self.upscaler is None
 
         if use_lanczos:
             # Use Lanczos (color-neutral, no AI bias)
             logger.info("  → Using Lanczos (traditional, color-neutral)")
             image_pil = Image.fromarray((np.clip(image, 0, 1) * 255).astype(np.uint8))
             upscaled_pil = image_pil.resize(
-                (int(original_size[0] * self.preset.upscaling.scale_factor),
-                 int(original_size[1] * self.preset.upscaling.scale_factor)),
-                Image.Resampling.LANCZOS
+                (
+                    int(original_size[0] * self.preset.upscaling.scale_factor),
+                    int(original_size[1] * self.preset.upscaling.scale_factor),
+                ),
+                Image.Resampling.LANCZOS,
             )
             image_upscaled = np.array(upscaled_pil).astype(np.float32) / 255.0
             logger.info(f"  ✓ Upscaled to {upscaled_pil.size[0]}×{upscaled_pil.size[1]}")
@@ -1051,10 +1049,7 @@ class LuxuryEstateMasterPipeline:
             image_bgr = cv2.cvtColor((np.clip(image, 0, 1) * 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
 
             # Upscale
-            upscaled_bgr, _ = self.upscaler.enhance(
-                image_bgr,
-                outscale=self.preset.upscaling.scale_factor
-            )
+            upscaled_bgr, _ = self.upscaler.enhance(image_bgr, outscale=self.preset.upscaling.scale_factor)
 
             # Convert back to RGB
             image_upscaled = cv2.cvtColor(upscaled_bgr, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
@@ -1066,8 +1061,7 @@ class LuxuryEstateMasterPipeline:
             logger.info("  → Falling back to Lanczos")
             return self._stage_7_upscaling(image, original_size)  # Retry with Lanczos
 
-    def _save_outputs(self, source_path: Path, image_final: np.ndarray,
-                     image_tonemapped: np.ndarray, results: Dict):
+    def _save_outputs(self, source_path: Path, image_final: np.ndarray, image_tonemapped: np.ndarray, results: Dict):
         """Save output files (TIFF master + JPEG delivery)."""
         logger.info("\n[Output] Saving files...")
 
@@ -1084,8 +1078,8 @@ class LuxuryEstateMasterPipeline:
                 master_data = image_final.astype(np.float32)
 
             master_path = output_dir / f"{stem}_master.tif"
-            tifffile.imwrite(str(master_path), master_data, compression='lzw')
-            results['output_paths']['master_tiff'] = str(master_path)
+            tifffile.imwrite(str(master_path), master_data, compression="lzw")
+            results["output_paths"]["master_tiff"] = str(master_path)
             logger.info(f"  ✓ Master TIFF: {master_path.name}")
 
         # Save delivery JPEG
@@ -1094,7 +1088,7 @@ class LuxuryEstateMasterPipeline:
             jpeg_pil = Image.fromarray(jpeg_data)
             jpeg_path = output_dir / f"{stem}_delivery.jpg"
             jpeg_pil.save(jpeg_path, quality=self.preset.output.jpeg_quality, optimize=True)
-            results['output_paths']['delivery_jpeg'] = str(jpeg_path)
+            results["output_paths"]["delivery_jpeg"] = str(jpeg_path)
             logger.info(f"  ✓ Delivery JPEG: {jpeg_path.name}")
 
         # Save intermediate stages
@@ -1102,7 +1096,7 @@ class LuxuryEstateMasterPipeline:
             intermediate_path = output_dir / f"{stem}_tonemapped.jpg"
             intermediate_data = (np.clip(image_tonemapped, 0, 1) * 255).astype(np.uint8)
             Image.fromarray(intermediate_data).save(intermediate_path, quality=90)
-            results['output_paths']['tonemapped'] = str(intermediate_path)
+            results["output_paths"]["tonemapped"] = str(intermediate_path)
 
     def _log_stage_times(self, stages: Dict[str, float]):
         """Log processing time breakdown."""
@@ -1135,10 +1129,7 @@ class LuxuryEstateMasterPipeline:
                 results.append(result)
             except Exception as e:
                 logger.error(f"Failed to process {image_path.name}: {e}")
-                results.append({
-                    'source_path': str(image_path),
-                    'error': str(e)
-                })
+                results.append({"source_path": str(image_path), "error": str(e)})
 
         # Save batch report
         self._save_batch_report(results)
@@ -1151,14 +1142,14 @@ class LuxuryEstateMasterPipeline:
         report_path = output_dir / "processing_report.json"
 
         report = {
-            'preset': self.preset.name,
-            'images_processed': len(results),
-            'total_time': self.stats['total_time'],
-            'average_time': self.stats['total_time'] / len(results) if results else 0,
-            'results': results,
+            "preset": self.preset.name,
+            "images_processed": len(results),
+            "total_time": self.stats["total_time"],
+            "average_time": self.stats["total_time"] / len(results) if results else 0,
+            "results": results,
         }
 
-        with open(report_path, 'w') as f:
+        with open(report_path, "w") as f:
             json.dump(report, f, indent=2)
 
         logger.info(f"\n📄 Batch report saved: {report_path}")
@@ -1169,6 +1160,7 @@ class LuxuryEstateMasterPipeline:
 # ============================================================================
 # CLI Interface
 # ============================================================================
+
 
 def main():
     """Main CLI entry point."""
@@ -1188,24 +1180,24 @@ Examples:
 
   # Dry run (show configuration)
   python luxury_estate_master_pipeline.py --dry-run --preset 750_picacho
-        """
+        """,
     )
 
-    parser.add_argument('images', nargs='*', help='Input image path(s)')
-    parser.add_argument('--preset', choices=['750_picacho', 'aerial'], default='750_picacho',
-                       help='Pipeline preset (default: 750_picacho)')
-    parser.add_argument('--room-type', default='interior',
-                       help='Room type for AI prompts (default: interior)')
-    parser.add_argument('--output-dir', help='Output directory (overrides preset)')
-    parser.add_argument('--dry-run', action='store_true', help='Show configuration and exit')
-    parser.add_argument('--save-preset', help='Save preset to YAML file')
+    parser.add_argument("images", nargs="*", help="Input image path(s)")
+    parser.add_argument(
+        "--preset", choices=["750_picacho", "aerial"], default="750_picacho", help="Pipeline preset (default: 750_picacho)"
+    )
+    parser.add_argument("--room-type", default="interior", help="Room type for AI prompts (default: interior)")
+    parser.add_argument("--output-dir", help="Output directory (overrides preset)")
+    parser.add_argument("--dry-run", action="store_true", help="Show configuration and exit")
+    parser.add_argument("--save-preset", help="Save preset to YAML file")
 
     args = parser.parse_args()
 
     # Load preset
-    if args.preset == '750_picacho':
+    if args.preset == "750_picacho":
         preset = get_750_picacho_preset()
-    elif args.preset == 'aerial':
+    elif args.preset == "aerial":
         preset = get_aerial_preset()
     else:
         preset = get_750_picacho_preset()
@@ -1215,16 +1207,17 @@ Examples:
 
     # Dry run
     if args.dry_run:
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print(f"PRESET: {preset.name}")
-        print("="*80)
+        print("=" * 80)
         print(json.dumps(asdict(preset), indent=2))
         return 0
 
     # Save preset
     if args.save_preset:
         import yaml
-        with open(args.save_preset, 'w') as f:
+
+        with open(args.save_preset, "w") as f:
             yaml.dump(asdict(preset), f, default_flow_style=False)
         print(f"✓ Preset saved to {args.save_preset}")
         return 0
@@ -1240,7 +1233,7 @@ Examples:
             image_paths.append(path)
         else:
             # Glob pattern
-            image_paths.extend(Path('.').glob(pattern))
+            image_paths.extend(Path(".").glob(pattern))
 
     if not image_paths:
         parser.error("No valid input images found")
@@ -1257,5 +1250,5 @@ Examples:
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     raise SystemExit(main())

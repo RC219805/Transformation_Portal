@@ -7,19 +7,20 @@ Usage:
     python3 unified_luxury_pipeline_with_context.py [--source-dir PATH] [--output-dir PATH]
 """
 
-import sys
 import json
 import logging
+import sys
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 import numpy as np
 
 # Import pipeline and context engine
 sys.path.insert(0, str(Path(__file__).parent))
-from unified_luxury_pipeline import process_single_view
 from architectural_context_engine_enhanced import ArchitecturalContextEngine
+from unified_luxury_pipeline import process_single_view
 
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -37,7 +38,7 @@ class ContextAwarePipeline:
 
     def __init__(self, metadata_path: Optional[Path] = None):
         """Initialize with architectural metadata."""
-        self.metadata_path = metadata_path or Path('750_picacho_metadata.json')
+        self.metadata_path = metadata_path or Path("750_picacho_metadata.json")
 
         # Initialize context engine
         if self.metadata_path.exists():
@@ -61,19 +62,16 @@ class ContextAwarePipeline:
         stem = input_path.stem
 
         # Remove common suffixes
-        for suffix in ['_16bit', '_processed', '_final', '_master']:
+        for suffix in ["_16bit", "_processed", "_final", "_master"]:
             if stem.endswith(suffix):
-                stem = stem[:-len(suffix)]
+                stem = stem[: -len(suffix)]
 
         # Canonical filename
         canonical_name = f"{stem}.jpg"
 
         return canonical_name
 
-    def apply_architectural_context(self,
-                                   view_filename: str,
-                                   image: np.ndarray,
-                                   config: Dict[str, Any]) -> np.ndarray:
+    def apply_architectural_context(self, view_filename: str, image: np.ndarray, config: Dict[str, Any]) -> np.ndarray:
         """
         Apply architectural context enhancements to image.
 
@@ -92,29 +90,30 @@ class ContextAwarePipeline:
             return image
 
         # Extract enhancement parameters
-        enhancement_params = config.get('enhancement_params', {})
+        enhancement_params = config.get("enhancement_params", {})
 
         # Material response strength adjustment
-        material_config = config.get('material_response', {})
-        if material_config.get('enabled'):
-            material_strength = material_config.get('base_strength', 0.70)
+        material_config = config.get("material_response", {})
+        if material_config.get("enabled"):
+            material_strength = material_config.get("base_strength", 0.70)
             logger.debug(f"  Material response strength: {material_strength:.2f}")
 
         # Depth processing configuration
-        depth_config = config.get('depth_processing', {})
-        if depth_config.get('enabled'):
+        depth_config = config.get("depth_processing", {})
+        if depth_config.get("enabled"):
             logger.debug(f"  Depth processing: DOF={depth_config.get('depth_of_field', 0):.2f}")
 
         # Color grading adjustments
-        color_config = config.get('color_grading', {})
-        if color_config.get('enabled'):
-            saturation = color_config.get('saturation_boost', 1.0)
-            contrast = color_config.get('contrast_boost', 1.0)
+        color_config = config.get("color_grading", {})
+        if color_config.get("enabled"):
+            saturation = color_config.get("saturation_boost", 1.0)
+            contrast = color_config.get("contrast_boost", 1.0)
 
             # Apply subtle saturation boost from architectural palette
             if saturation != 1.0:
                 # Convert to HSV for saturation adjustment
                 from PIL import Image
+
                 img_pil = Image.fromarray((np.clip(image, 0, 1) * 255).astype(np.uint8))
 
                 # Note: Full implementation would apply saturation in LAB or HSV space
@@ -124,11 +123,9 @@ class ContextAwarePipeline:
         # Return image (context parameters logged for future enhancement)
         return image
 
-    def process_view_with_context(self,
-                                  input_path: Path,
-                                  output_dir: Path,
-                                  save_jpeg: bool = True,
-                                  save_tiff: bool = True) -> list:
+    def process_view_with_context(
+        self, input_path: Path, output_dir: Path, save_jpeg: bool = True, save_tiff: bool = True
+    ) -> list:
         """
         Process single view with architectural context.
 
@@ -142,6 +139,7 @@ class ContextAwarePipeline:
             List of output file paths
         """
         import time
+
         start_time = time.time()
 
         # Get canonical view filename
@@ -154,25 +152,20 @@ class ContextAwarePipeline:
         config = None
         if self.context_engine:
             config = self.context_engine.get_complete_pipeline_config(view_filename)
-            room_type = config.get('room_type', 'unknown')
+            room_type = config.get("room_type", "unknown")
             logger.info(f"   Room type: {room_type}")
 
             # Log architectural guidance
-            material_config = config.get('material_response', {})
-            if material_config.get('enabled'):
-                materials = material_config.get('material_types', [])
+            material_config = config.get("material_response", {})
+            if material_config.get("enabled"):
+                materials = material_config.get("material_types", [])
                 logger.info(f"   Materials: {', '.join(materials)}")
 
         context_time = time.time() - context_start
 
         # Process with standard pipeline
         process_start = time.time()
-        outputs = process_single_view(
-            input_path=input_path,
-            output_dir=output_dir,
-            save_jpeg=save_jpeg,
-            save_tiff=save_tiff
-        )
+        outputs = process_single_view(input_path=input_path, output_dir=output_dir, save_jpeg=save_jpeg, save_tiff=save_tiff)
         process_time = time.time() - process_start
 
         total_time = time.time() - start_time
@@ -182,12 +175,12 @@ class ContextAwarePipeline:
 
         # Log performance
         stats = {
-            'view': view_filename,
-            'total_time_s': total_time,
-            'context_time_ms': context_time * 1000,
-            'process_time_s': process_time,
-            'overhead_pct': overhead_pct,
-            'outputs': len(outputs)
+            "view": view_filename,
+            "total_time_s": total_time,
+            "context_time_ms": context_time * 1000,
+            "process_time_s": process_time,
+            "overhead_pct": overhead_pct,
+            "outputs": len(outputs),
         }
         self.processing_stats.append(stats)
 
@@ -204,18 +197,18 @@ class ContextAwarePipeline:
         if not self.processing_stats:
             return {}
 
-        total_overhead = sum(s['context_time_ms'] for s in self.processing_stats)
-        total_time = sum(s['total_time_s'] for s in self.processing_stats)
+        total_overhead = sum(s["context_time_ms"] for s in self.processing_stats)
+        total_time = sum(s["total_time_s"] for s in self.processing_stats)
         avg_overhead_pct = (total_overhead / (total_time * 1000)) * 100 if total_time > 0 else 0
 
         summary = {
-            'views_processed': len(self.processing_stats),
-            'total_processing_time_s': total_time,
-            'total_context_overhead_ms': total_overhead,
-            'average_overhead_pct': avg_overhead_pct,
-            'target_overhead_pct': 5.0,
-            'overhead_within_target': avg_overhead_pct < 5.0,
-            'per_view_stats': self.processing_stats
+            "views_processed": len(self.processing_stats),
+            "total_processing_time_s": total_time,
+            "total_context_overhead_ms": total_overhead,
+            "average_overhead_pct": avg_overhead_pct,
+            "target_overhead_pct": 5.0,
+            "overhead_within_target": avg_overhead_pct < 5.0,
+            "per_view_stats": self.processing_stats,
         }
 
         return summary
@@ -225,24 +218,23 @@ def main():
     """Main processing function."""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description='Unified Luxury Pipeline with Architectural Context Integration'
+    parser = argparse.ArgumentParser(description="Unified Luxury Pipeline with Architectural Context Integration")
+    parser.add_argument(
+        "--source-dir",
+        type=Path,
+        default=Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/JPEGs"),
+        help="Source directory with JPEG files",
     )
-    parser.add_argument('--source-dir', type=Path,
-                       default=Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/JPEGs"),
-                       help='Source directory with JPEG files')
-    parser.add_argument('--output-dir', type=Path,
-                       default=Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/Final_Production"),
-                       help='Output directory')
-    parser.add_argument('--metadata', type=Path,
-                       default=Path('750_picacho_metadata.json'),
-                       help='Architectural metadata JSON')
-    parser.add_argument('--save-jpeg', action='store_true', default=True,
-                       help='Save JPEG outputs')
-    parser.add_argument('--save-tif', action='store_true', default=True,
-                       help='Save 16-bit TIFF outputs')
-    parser.add_argument('--export-configs', type=Path,
-                       help='Export view configs to directory')
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/Final_Production"),
+        help="Output directory",
+    )
+    parser.add_argument("--metadata", type=Path, default=Path("750_picacho_metadata.json"), help="Architectural metadata JSON")
+    parser.add_argument("--save-jpeg", action="store_true", default=True, help="Save JPEG outputs")
+    parser.add_argument("--save-tif", action="store_true", default=True, help="Save 16-bit TIFF outputs")
+    parser.add_argument("--export-configs", type=Path, help="Export view configs to directory")
 
     args = parser.parse_args()
 
@@ -267,10 +259,10 @@ def main():
         return 1
 
     # Print header
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("  750 PICACHO LANE - CONTEXT-AWARE LUXURY PIPELINE")
     print("  BIM/PDF Metadata Integration Active")
-    print("="*80)
+    print("=" * 80)
     print(f"\nSource: {args.source_dir}")
     print(f"Output: {args.output_dir}")
     print(f"Files to process: {len(source_files)}")
@@ -280,25 +272,23 @@ def main():
     # Process each view
     all_outputs = []
     for i, source_file in enumerate(source_files, 1):
-        print(f"\n[{i}/{len(source_files)}] " + "-"*70)
+        print(f"\n[{i}/{len(source_files)}] " + "-" * 70)
         try:
             outputs = pipeline.process_view_with_context(
-                input_path=source_file,
-                output_dir=args.output_dir,
-                save_jpeg=args.save_jpeg,
-                save_tiff=args.save_tiff
+                input_path=source_file, output_dir=args.output_dir, save_jpeg=args.save_jpeg, save_tiff=args.save_tiff
             )
             all_outputs.extend(outputs)
         except Exception as e:
             logger.error(f"❌ Error processing {source_file.name}: {e}")
             import traceback
+
             traceback.print_exc()
             continue
 
     # Performance summary
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("  PROCESSING COMPLETE")
-    print("="*80)
+    print("=" * 80)
 
     summary = pipeline.get_performance_summary()
 
@@ -310,7 +300,7 @@ def main():
     print(f"   Average overhead: {summary.get('average_overhead_pct', 0):.2f}%")
     print(f"   Target overhead: {summary.get('target_overhead_pct', 0):.1f}%")
 
-    if summary.get('overhead_within_target'):
+    if summary.get("overhead_within_target"):
         print("   ✅ Overhead within target (<5%)")
     else:
         print("   ⚠️  Overhead exceeds target")
@@ -318,8 +308,8 @@ def main():
     print(f"\n✅ Outputs saved to: {args.output_dir}\n")
 
     # Save performance stats
-    stats_file = args.output_dir / 'processing_stats.json'
-    with open(stats_file, 'w') as f:
+    stats_file = args.output_dir / "processing_stats.json"
+    with open(stats_file, "w") as f:
         json.dump(summary, f, indent=2)
     logger.info(f"Performance stats saved to: {stats_file}")
 

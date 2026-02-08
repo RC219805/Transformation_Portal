@@ -13,9 +13,9 @@ Usage:
 import sys
 from pathlib import Path
 
-print("="*80)
+print("=" * 80)
 print("LUXURY ESTATE MASTER PIPELINE - VALIDATION TEST")
-print("="*80)
+print("=" * 80)
 print()
 
 # Test 1: Python version
@@ -29,10 +29,11 @@ print(f"  ✓ Python {sys.version_info.major}.{sys.version_info.minor}.{sys.vers
 # Test 2: Core dependencies
 print("\n[2/8] Checking core dependencies...")
 try:
-    import numpy as np
     import cv2
+    import numpy as np
     import torch
     from PIL import Image
+
     print("  ✓ NumPy, OpenCV, PyTorch, Pillow")
 except ImportError as e:
     print(f"  ✗ Missing core dependency: {e}")
@@ -42,6 +43,7 @@ except ImportError as e:
 print("\n[3/8] Checking TIFF support...")
 try:
     import tifffile
+
     print("  ✓ tifffile (16/32-bit TIFF support)")
 except ImportError:
     print("  ⚠ tifffile not available - limited TIFF support")
@@ -57,6 +59,7 @@ try:
         DepthGuidedFilters,
         ZoneToneMapping,
     )
+
     print("  ✓ Depth Anything V2 pipeline available")
 except ImportError as e:
     print(f"  ⚠ Depth pipeline not fully available: {e}")
@@ -65,10 +68,8 @@ except ImportError as e:
 # Test 5: Material Response
 print("\n[5/8] Checking Material Response...")
 try:
-    from transformation_portal.processors.material_response.core import (
-        MaterialAestheticProfile,
-        LightingProfile,
-    )
+    from transformation_portal.processors.material_response.core import LightingProfile, MaterialAestheticProfile
+
     print("  ✓ Material Response Technology available")
 except ImportError:
     print("  ⚠ Material Response not available")
@@ -78,6 +79,7 @@ except ImportError:
 print("\n[6/8] Checking tone mapping...")
 try:
     from tonemapper_agx_filmic import apply_filmic_hable, linear_to_srgb
+
     print("  ✓ Filmic (Hable) tone mapper")
 except ImportError:
     print("  ✗ Tone mapping not available")
@@ -85,6 +87,7 @@ except ImportError:
 
 try:
     from tonemapper_agx_filmic import apply_agx_ocio
+
     print("  ✓ AgX OCIO tone mapper")
 except ImportError:
     print("  ⚠ AgX OCIO not available (requires PyOpenColorIO)")
@@ -92,8 +95,9 @@ except ImportError:
 # Test 7: AI enhancement
 print("\n[7/8] Checking AI enhancement...")
 try:
-    from diffusers import ControlNetModel, StableDiffusionControlNetImg2ImgPipeline
     from controlnet_aux import CannyDetector
+    from diffusers import ControlNetModel, StableDiffusionControlNetImg2ImgPipeline
+
     print("  ✓ ControlNet + Stable Diffusion available")
 except ImportError:
     print("  ⚠ AI enhancement not available")
@@ -131,11 +135,8 @@ else:
 print("\n[Pipeline Test]")
 print("-" * 80)
 try:
-    from luxury_estate_master_pipeline import (
-        LuxuryEstateMasterPipeline,
-        get_750_picacho_preset,
-        get_aerial_preset,
-    )
+    from luxury_estate_master_pipeline import LuxuryEstateMasterPipeline, get_750_picacho_preset, get_aerial_preset
+
     print("  ✓ Pipeline module imports successfully")
 
     # Try to initialize preset
@@ -150,6 +151,7 @@ try:
 except Exception as e:
     print(f"  ✗ Pipeline initialization failed: {e}")
     import traceback
+
     traceback.print_exc()
     sys.exit(1)
 
@@ -170,9 +172,9 @@ else:
     print(f"  ⚠ Source directory not found: {source_dir}")
 
 # Summary
-print("\n" + "="*80)
+print("\n" + "=" * 80)
 print("VALIDATION COMPLETE")
-print("="*80)
+print("=" * 80)
 
 # Check critical requirements
 critical_ok = True
@@ -182,7 +184,9 @@ if sys.version_info < (3, 10):
     critical_ok = False
 
 try:
-    import numpy, cv2, torch
+    import cv2
+    import numpy
+    import torch
     from PIL import Image
 except ImportError:
     critical_ok = False
@@ -240,5 +244,5 @@ else:
     print("\n❌ CRITICAL DEPENDENCIES MISSING")
     print("\nInstall required dependencies:")
     print("  pip install -e .")
-    print("  pip install -e \".[ml,tiff]\"")
+    print('  pip install -e ".[ml,tiff]"')
     sys.exit(1)

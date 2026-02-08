@@ -27,16 +27,14 @@ from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
-import torch
 import tifffile
+import torch
 from PIL import Image, ImageEnhance
 
 # Import Material Response (via backward-compatible wrapper)
 try:
-    from transformation_portal.processors.material_response.core import (
-        MaterialAestheticProfile,
-        LightingProfile,
-    )
+    from transformation_portal.processors.material_response.core import LightingProfile, MaterialAestheticProfile
+
     MATERIAL_RESPONSE_AVAILABLE = True
 except ImportError:
     MATERIAL_RESPONSE_AVAILABLE = False
@@ -46,10 +44,7 @@ except ImportError:
 from tonemapper_agx_filmic import apply_agx_ocio, apply_filmic_hable, linear_to_srgb
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -57,9 +52,11 @@ logger = logging.getLogger(__name__)
 # Configuration Dataclasses
 # ============================================================================
 
+
 @dataclass
 class DepthConfig:
     """Depth processing configuration."""
+
     enabled: bool = True
     model_variant: str = "small"  # small, base, large
     backend: str = "pytorch_mps"  # pytorch_mps, coreml, pytorch_cpu
@@ -73,6 +70,7 @@ class DepthConfig:
 @dataclass
 class MaterialResponseConfig:
     """Material Response configuration."""
+
     enabled: bool = True
     strength: float = 0.75
     preserve_highlights: bool = True
@@ -86,6 +84,7 @@ class MaterialResponseConfig:
 @dataclass
 class ToneMappingConfig:
     """HDR tone mapping configuration."""
+
     method: str = "agx"  # agx, filmic, reinhard, aces
     exposure: float = 0.0
     contrast: float = 1.0
@@ -97,6 +96,7 @@ class ToneMappingConfig:
 @dataclass
 class ColorGradingConfig:
     """Color grading and LUT configuration."""
+
     enabled: bool = True
     lut_stack: List[str] = field(default_factory=list)
     lut_strengths: List[float] = field(default_factory=list)
@@ -108,6 +108,7 @@ class ColorGradingConfig:
 @dataclass
 class AIEnhancementConfig:
     """AI enhancement configuration."""
+
     enabled: bool = True
     use_controlnet: bool = True
     use_depth_controlnet: bool = True
@@ -123,6 +124,7 @@ class AIEnhancementConfig:
 @dataclass
 class OutputConfig:
     """Output configuration."""
+
     master_tiff_16bit: bool = True
     delivery_jpeg_quality: int = 98
     delivery_jpeg_progressive: bool = True
@@ -133,6 +135,7 @@ class OutputConfig:
 @dataclass
 class PipelinePreset:
     """Complete pipeline preset configuration."""
+
     name: str
     description: str
     depth: DepthConfig = field(default_factory=DepthConfig)
@@ -146,6 +149,7 @@ class PipelinePreset:
 # ============================================================================
 # Preset Definitions
 # ============================================================================
+
 
 def get_750_picacho_preset(room_type: str = "interior") -> PipelinePreset:
     """Get optimized preset for 750 Picacho property."""
@@ -226,6 +230,7 @@ def get_750_picacho_preset(room_type: str = "interior") -> PipelinePreset:
 # Core Pipeline Class
 # ============================================================================
 
+
 class EliteArchitecturalPipeline:
     """
     Cutting-edge processing pipeline for luxury architectural imagery.
@@ -293,7 +298,7 @@ class EliteArchitecturalPipeline:
         logger.info("\n[Stage 1/8] Loading HDR image...")
         hdr_image = self._load_hdr_image(input_path)
         logger.info(f"  Shape: {hdr_image.shape}, Range: [{hdr_image.min():.3f}, {hdr_image.max():.3f}]")
-        self.stage_timings['load'] = time.time() - stage_start
+        self.stage_timings["load"] = time.time() - stage_start
 
         # Stage 2: Depth estimation (optional)
         if self.preset.depth.enabled:
@@ -303,9 +308,9 @@ class EliteArchitecturalPipeline:
             depth_path = self.output_dir / f"{input_path.stem}_depth.png"
             if not self.dry_run:
                 self._save_depth_visualization(depth_map, depth_path)
-            outputs['depth'] = depth_path
+            outputs["depth"] = depth_path
             logger.info(f"  ✓ Depth map generated: {depth_map.shape}")
-            self.stage_timings['depth'] = time.time() - stage_start
+            self.stage_timings["depth"] = time.time() - stage_start
         else:
             depth_map = None
             logger.info("\n[Stage 2/8] Depth estimation: SKIPPED")
@@ -316,7 +321,7 @@ class EliteArchitecturalPipeline:
         tone_mapped = self._apply_tone_mapping(hdr_image, depth_map)
         logger.info(f"  Method: {self.preset.tone_mapping.method}")
         logger.info(f"  Range after TM: [{tone_mapped.min():.3f}, {tone_mapped.max():.3f}]")
-        self.stage_timings['tone_mapping'] = time.time() - stage_start
+        self.stage_timings["tone_mapping"] = time.time() - stage_start
 
         # Stage 4: Material Response
         if self.preset.material_response.enabled:
@@ -326,9 +331,9 @@ class EliteArchitecturalPipeline:
             material_path = self.output_dir / f"{input_path.stem}_material.tiff"
             if not self.dry_run:
                 self._save_16bit_tiff(material_enhanced, material_path)
-            outputs['material'] = material_path
+            outputs["material"] = material_path
             logger.info("  ✓ Material enhancements applied")
-            self.stage_timings['material'] = time.time() - stage_start
+            self.stage_timings["material"] = time.time() - stage_start
         else:
             material_enhanced = tone_mapped
             logger.info("\n[Stage 4/8] Material Response: SKIPPED")
@@ -341,9 +346,9 @@ class EliteArchitecturalPipeline:
             color_path = self.output_dir / f"{input_path.stem}_graded.tiff"
             if not self.dry_run:
                 self._save_16bit_tiff(color_graded, color_path)
-            outputs['graded'] = color_path
+            outputs["graded"] = color_path
             logger.info(f"  ✓ LUTs applied: {len(self.preset.color_grading.lut_stack)}")
-            self.stage_timings['color'] = time.time() - stage_start
+            self.stage_timings["color"] = time.time() - stage_start
         else:
             color_graded = material_enhanced
             logger.info("\n[Stage 5/8] Color grading: SKIPPED")
@@ -355,9 +360,9 @@ class EliteArchitecturalPipeline:
             ai_enhanced = self._apply_ai_enhancement(color_graded, depth_map, input_path)
             ai_path = self.output_dir / f"{input_path.stem}_ai_enhanced.png"
             ai_enhanced.save(ai_path, quality=100)
-            outputs['ai_enhanced'] = ai_path
+            outputs["ai_enhanced"] = ai_path
             logger.info("  ✓ AI enhancement complete")
-            self.stage_timings['ai'] = time.time() - stage_start
+            self.stage_timings["ai"] = time.time() - stage_start
         else:
             ai_enhanced = self._numpy_to_pil(color_graded)
             logger.info("\n[Stage 6/8] AI enhancement: SKIPPED")
@@ -369,9 +374,9 @@ class EliteArchitecturalPipeline:
             upscaled = self._apply_upscaling(ai_enhanced)
             upscale_path = self.output_dir / f"{input_path.stem}_4x_upscaled.png"
             upscaled.save(upscale_path, quality=100)
-            outputs['upscaled'] = upscale_path
+            outputs["upscaled"] = upscale_path
             logger.info(f"  ✓ Upscaled to: {upscaled.size}")
-            self.stage_timings['upscale'] = time.time() - stage_start
+            self.stage_timings["upscale"] = time.time() - stage_start
             final_image = upscaled
         else:
             logger.info("\n[Stage 7/8] Upscaling: SKIPPED")
@@ -387,7 +392,7 @@ class EliteArchitecturalPipeline:
                 master_path = self.output_dir / f"{input_path.stem}_MASTER.tiff"
                 final_np = np.array(final_image).astype(np.float32) / 255.0
                 self._save_16bit_tiff(final_np, master_path)
-                outputs['master_tiff'] = master_path
+                outputs["master_tiff"] = master_path
                 logger.info(f"  ✓ Master TIFF: {master_path.name}")
 
             # Delivery JPEG
@@ -396,12 +401,12 @@ class EliteArchitecturalPipeline:
                 delivery_path,
                 quality=self.preset.output.delivery_jpeg_quality,
                 progressive=self.preset.output.delivery_jpeg_progressive,
-                optimize=True
+                optimize=True,
             )
-            outputs['delivery_jpeg'] = delivery_path
+            outputs["delivery_jpeg"] = delivery_path
             logger.info(f"  ✓ Delivery JPEG: {delivery_path.name}")
 
-        self.stage_timings['output'] = time.time() - stage_start
+        self.stage_timings["output"] = time.time() - stage_start
 
         # Processing report
         total_time = time.time() - start_time
@@ -409,7 +414,7 @@ class EliteArchitecturalPipeline:
             report_path = self.output_dir / f"{input_path.stem}_processing_report.json"
             if not self.dry_run:
                 self._save_processing_report(input_path, outputs, total_time, report_path)
-            outputs['report'] = report_path
+            outputs["report"] = report_path
 
         logger.info("\n" + "=" * 80)
         logger.info("✅ PROCESSING COMPLETE")
@@ -457,23 +462,17 @@ class EliteArchitecturalPipeline:
             try:
                 # Try AgX via OCIO
                 tone_mapped = apply_agx_ocio(
-                    hdr_image,
-                    config_path=self.preset.tone_mapping.agx_config_path,
-                    in_colorspace="Utility - Linear - sRGB"
+                    hdr_image, config_path=self.preset.tone_mapping.agx_config_path, in_colorspace="Utility - Linear - sRGB"
                 )
                 logger.info("  Using AgX (OCIO)")
             except Exception as e:
                 logger.warning(f"  AgX OCIO failed: {e}, falling back to Filmic")
                 tone_mapped = apply_filmic_hable(
-                    hdr_image,
-                    exposure=self.preset.tone_mapping.exposure,
-                    white_point=self.preset.tone_mapping.white_point
+                    hdr_image, exposure=self.preset.tone_mapping.exposure, white_point=self.preset.tone_mapping.white_point
                 )
         elif method == "filmic":
             tone_mapped = apply_filmic_hable(
-                hdr_image,
-                exposure=self.preset.tone_mapping.exposure,
-                white_point=self.preset.tone_mapping.white_point
+                hdr_image, exposure=self.preset.tone_mapping.exposure, white_point=self.preset.tone_mapping.white_point
             )
             logger.info("  Using Filmic (Hable)")
         else:
@@ -483,7 +482,7 @@ class EliteArchitecturalPipeline:
 
         # Apply exposure adjustment
         if self.preset.tone_mapping.exposure != 0:
-            tone_mapped = tone_mapped * (2.0 ** self.preset.tone_mapping.exposure)
+            tone_mapped = tone_mapped * (2.0**self.preset.tone_mapping.exposure)
 
         # Contrast adjustment
         if self.preset.tone_mapping.contrast != 1.0:
@@ -513,8 +512,7 @@ class EliteArchitecturalPipeline:
         enhanced = enhanced.astype(np.float32) / 255.0
 
         # Blend based on strength
-        enhanced = image * (1 - self.preset.material_response.strength) + \
-                   enhanced * self.preset.material_response.strength
+        enhanced = image * (1 - self.preset.material_response.strength) + enhanced * self.preset.material_response.strength
 
         return np.clip(enhanced, 0, 1)
 
@@ -524,10 +522,9 @@ class EliteArchitecturalPipeline:
 
         # Apply LUTs (simplified - real implementation would use actual .cube files)
         logger.info(f"  LUT stack: {len(self.preset.color_grading.lut_stack)} LUTs")
-        for i, (lut_path, strength) in enumerate(zip(
-            self.preset.color_grading.lut_stack,
-            self.preset.color_grading.lut_strengths
-        )):
+        for i, (lut_path, strength) in enumerate(
+            zip(self.preset.color_grading.lut_stack, self.preset.color_grading.lut_strengths)
+        ):
             logger.info(f"    [{i+1}] {Path(lut_path).name} @ {strength*100:.0f}%")
             # Real implementation would load and apply .cube LUT here
 
@@ -586,10 +583,10 @@ class EliteArchitecturalPipeline:
         img_16bit = (np.clip(image, 0, 1) * 65535).astype(np.uint16)
         try:
             # Try LZW compression if imagecodecs available
-            tifffile.imwrite(str(path), img_16bit, photometric='rgb', compression='lzw')
+            tifffile.imwrite(str(path), img_16bit, photometric="rgb", compression="lzw")
         except (KeyError, AttributeError):
             # Fallback to no compression if imagecodecs not available
-            tifffile.imwrite(str(path), img_16bit, photometric='rgb', compression=None)
+            tifffile.imwrite(str(path), img_16bit, photometric="rgb", compression=None)
         logger.info(f"  Saved 16-bit TIFF: {path.name}")
 
     def _save_depth_visualization(self, depth_map: np.ndarray, path: Path):
@@ -599,26 +596,25 @@ class EliteArchitecturalPipeline:
         depth_colormap = cv2.cvtColor(depth_colormap, cv2.COLOR_BGR2RGB)
         Image.fromarray(depth_colormap).save(path)
 
-    def _save_processing_report(self, input_path: Path, outputs: Dict[str, Path],
-                               total_time: float, report_path: Path):
+    def _save_processing_report(self, input_path: Path, outputs: Dict[str, Path], total_time: float, report_path: Path):
         """Save detailed processing report."""
         report = {
-            'input': str(input_path),
-            'preset': self.preset.name,
-            'processing_time_seconds': total_time,
-            'stage_timings': self.stage_timings,
-            'outputs': {k: str(v) for k, v in outputs.items()},
-            'configuration': {
-                'depth': asdict(self.preset.depth),
-                'material_response': asdict(self.preset.material_response),
-                'tone_mapping': asdict(self.preset.tone_mapping),
-                'color_grading': asdict(self.preset.color_grading),
-                'ai_enhancement': asdict(self.preset.ai_enhancement),
+            "input": str(input_path),
+            "preset": self.preset.name,
+            "processing_time_seconds": total_time,
+            "stage_timings": self.stage_timings,
+            "outputs": {k: str(v) for k, v in outputs.items()},
+            "configuration": {
+                "depth": asdict(self.preset.depth),
+                "material_response": asdict(self.preset.material_response),
+                "tone_mapping": asdict(self.preset.tone_mapping),
+                "color_grading": asdict(self.preset.color_grading),
+                "ai_enhancement": asdict(self.preset.ai_enhancement),
             },
-            'device': self.device,
+            "device": self.device,
         }
 
-        with open(report_path, 'w') as f:
+        with open(report_path, "w") as f:
             json.dump(report, f, indent=2)
 
         logger.info(f"  Processing report: {report_path.name}")
@@ -670,6 +666,7 @@ class EliteArchitecturalPipeline:
 # CLI Interface
 # ============================================================================
 
+
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -690,31 +687,32 @@ Examples:
 
   # Custom preset from JSON
   python elite_architectural_pipeline.py -i input.tif --config custom_preset.json
-        """
+        """,
     )
 
     # Input/Output
-    parser.add_argument('-i', '--input', type=Path, help='Input image path')
-    parser.add_argument('-d', '--directory', type=Path, help='Batch process directory')
-    parser.add_argument('-o', '--output', type=Path, default=Path('output_elite'),
-                       help='Output directory (default: output_elite)')
-    parser.add_argument('--pattern', default='*.tif', help='Glob pattern for batch (default: *.tif)')
+    parser.add_argument("-i", "--input", type=Path, help="Input image path")
+    parser.add_argument("-d", "--directory", type=Path, help="Batch process directory")
+    parser.add_argument(
+        "-o", "--output", type=Path, default=Path("output_elite"), help="Output directory (default: output_elite)"
+    )
+    parser.add_argument("--pattern", default="*.tif", help="Glob pattern for batch (default: *.tif)")
 
     # Preset selection
-    parser.add_argument('--preset', choices=['interior', 'aerial', 'pool', 'auto'],
-                       default='auto', help='Processing preset (default: auto)')
-    parser.add_argument('--config', type=Path, help='Custom preset JSON config')
+    parser.add_argument(
+        "--preset", choices=["interior", "aerial", "pool", "auto"], default="auto", help="Processing preset (default: auto)"
+    )
+    parser.add_argument("--config", type=Path, help="Custom preset JSON config")
 
     # Processing options
-    parser.add_argument('--no-depth', action='store_true', help='Disable depth processing')
-    parser.add_argument('--no-ai', action='store_true', help='Disable AI enhancement')
-    parser.add_argument('--no-upscale', action='store_true', help='Disable 4x upscaling')
-    parser.add_argument('--no-material', action='store_true', help='Disable Material Response')
+    parser.add_argument("--no-depth", action="store_true", help="Disable depth processing")
+    parser.add_argument("--no-ai", action="store_true", help="Disable AI enhancement")
+    parser.add_argument("--no-upscale", action="store_true", help="Disable 4x upscaling")
+    parser.add_argument("--no-material", action="store_true", help="Disable Material Response")
 
     # Utility
-    parser.add_argument('--dry-run', action='store_true',
-                       help='Show configuration without processing')
-    parser.add_argument('--verbose', action='store_true', help='Verbose logging')
+    parser.add_argument("--dry-run", action="store_true", help="Show configuration without processing")
+    parser.add_argument("--verbose", action="store_true", help="Verbose logging")
 
     args = parser.parse_args()
 
@@ -738,14 +736,14 @@ Examples:
         else:
             filename = ""
 
-        if 'aerial' in filename:
-            room_type = 'aerial'
-        elif 'pool' in filename:
-            room_type = 'pool'
-        elif 'bathroom' in filename or 'bedroom' in filename or 'kitchen' in filename or 'great' in filename:
-            room_type = 'interior'
-        elif args.preset == 'auto':
-            room_type = 'interior'  # Default
+        if "aerial" in filename:
+            room_type = "aerial"
+        elif "pool" in filename:
+            room_type = "pool"
+        elif "bathroom" in filename or "bedroom" in filename or "kitchen" in filename or "great" in filename:
+            room_type = "interior"
+        elif args.preset == "auto":
+            room_type = "interior"  # Default
         else:
             room_type = args.preset
 
@@ -762,11 +760,7 @@ Examples:
         preset.material_response.enabled = False
 
     # Initialize pipeline
-    pipeline = EliteArchitecturalPipeline(
-        preset=preset,
-        output_dir=args.output,
-        dry_run=args.dry_run
-    )
+    pipeline = EliteArchitecturalPipeline(preset=preset, output_dir=args.output, dry_run=args.dry_run)
 
     if args.dry_run:
         logger.info("\n" + "=" * 80)
@@ -791,5 +785,5 @@ Examples:
         return 1
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     raise SystemExit(main())

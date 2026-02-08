@@ -8,17 +8,18 @@ import sys
 from pathlib import Path
 
 # Add RAG system to Python path
-rag_path = Path(__file__).parent / '.github' / 'agents'
+rag_path = Path(__file__).parent / ".github" / "agents"
 sys.path.insert(0, str(rag_path))
+
+from rag_system.citation import CitationGenerator
+from rag_system.classifier import ArtifactClassifier
 
 # Now import RAG components
 from rag_system.indexer import RepositoryIndexer
-from rag_system.retriever import HybridRetriever
-from rag_system.reranker import ResultReranker
-from rag_system.citation import CitationGenerator
-from rag_system.classifier import ArtifactClassifier
 from rag_system.knowledge_engine import KnowledgeIntegrationEngine
-from rag_system.templates import PromptTemplates, CodeModificationResponse, FileModification
+from rag_system.reranker import ResultReranker
+from rag_system.retriever import HybridRetriever
+from rag_system.templates import CodeModificationResponse, FileModification, PromptTemplates
 
 
 def run_workflow():
@@ -47,11 +48,7 @@ def run_workflow():
     # Step 3: Search Query
     print("\n[3/7] EXECUTING SEARCH QUERIES...")
     print("-" * 80)
-    queries = [
-        "depth pipeline atmospheric effects",
-        "material response enhancement",
-        "FFmpeg video processing HDR"
-    ]
+    queries = ["depth pipeline atmospheric effects", "material response enhancement", "FFmpeg video processing HDR"]
 
     all_results = {}
     for query in queries:
@@ -76,13 +73,10 @@ def run_workflow():
     citation_gen = CitationGenerator()
 
     query = queries[0]  # Use first query for detailed example
-    citations = citation_gen.generate_citations(
-        reranked_results[query],
-        max_citations=3
-    )
+    citations = citation_gen.generate_citations(reranked_results[query], max_citations=3)
     print(f"✓ Generated {len(citations)} citations for: '{query}'")
 
-    markdown_citations = citation_gen.format_citations(citations, format_type='markdown')
+    markdown_citations = citation_gen.format_citations(citations, format_type="markdown")
     print("\nSample Citations (Markdown):")
     print(markdown_citations)
 
@@ -90,10 +84,9 @@ def run_workflow():
     print("\n[6/7] GENERATING PROMPT TEMPLATE WITH CONTEXT...")
     print("-" * 80)
 
-    context = citation_gen.format_citations(citations, format_type='text')
+    context = citation_gen.format_citations(citations, format_type="text")
     template = PromptTemplates.feature_implementation(
-        feature_description="Add real-time depth map visualization overlay",
-        context=context
+        feature_description="Add real-time depth map visualization overlay", context=context
     )
     print(f"✓ Generated feature implementation template ({len(template)} chars)")
     print("\nTemplate Preview (first 400 chars):")
@@ -133,11 +126,12 @@ def run_workflow():
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         sys.exit(run_workflow())
     except Exception as e:
         print(f"\n❌ Error: {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

@@ -22,14 +22,17 @@ from typing import Dict, List, Optional, Tuple
 
 try:
     import fitz  # PyMuPDF
+
     HAS_PYMUPDF = True
 except ImportError:
     HAS_PYMUPDF = False
     print("⚠ PyMuPDF not installed. Install: pip install PyMuPDF")
 
+
 @dataclass
 class ArchitecturalContext:
     """Structured architectural context from documents."""
+
     property_address: Optional[str] = None
     project_number: Optional[str] = None
     rooms: List[str] = None
@@ -65,26 +68,36 @@ class ArchitecturalContextExtractor:
 
     # Pattern recognition for architectural drawings
     ROOM_PATTERNS = [
-        r'kitchen', r'bedroom', r'bath', r'living', r'dining',
-        r'entry', r'foyer', r'office', r'studio', r'gallery',
-        r'great\s*room', r'master\s*bed', r'primary\s*bed'
+        r"kitchen",
+        r"bedroom",
+        r"bath",
+        r"living",
+        r"dining",
+        r"entry",
+        r"foyer",
+        r"office",
+        r"studio",
+        r"gallery",
+        r"great\s*room",
+        r"master\s*bed",
+        r"primary\s*bed",
     ]
 
-    DIMENSION_PATTERN = r'(\d+(?:\.\d+)?)\s*[\'\"x×]\s*(\d+(?:\.\d+)?)'
+    DIMENSION_PATTERN = r"(\d+(?:\.\d+)?)\s*[\'\"x×]\s*(\d+(?:\.\d+)?)"
 
     MATERIAL_KEYWORDS = {
-        'wood': ['oak', 'walnut', 'maple', 'cherry', 'wood', 'timber'],
-        'stone': ['granite', 'marble', 'limestone', 'travertine', 'stone'],
-        'metal': ['steel', 'bronze', 'brass', 'aluminum', 'metal'],
-        'glass': ['glass', 'glazing', 'window'],
-        'tile': ['tile', 'ceramic', 'porcelain'],
+        "wood": ["oak", "walnut", "maple", "cherry", "wood", "timber"],
+        "stone": ["granite", "marble", "limestone", "travertine", "stone"],
+        "metal": ["steel", "bronze", "brass", "aluminum", "metal"],
+        "glass": ["glass", "glazing", "window"],
+        "tile": ["tile", "ceramic", "porcelain"],
     }
 
     DRAWING_TYPE_KEYWORDS = {
-        'floor_plan': ['floor plan', 'plan view', 'layout'],
-        'elevation': ['elevation', 'front view', 'side view'],
-        'section': ['section', 'cross section'],
-        'detail': ['detail', 'enlarged'],
+        "floor_plan": ["floor plan", "plan view", "layout"],
+        "elevation": ["elevation", "front view", "side view"],
+        "section": ["section", "cross section"],
+        "detail": ["detail", "enlarged"],
     }
 
     def __init__(self):
@@ -109,10 +122,10 @@ class ArchitecturalContextExtractor:
         try:
             doc = fitz.open(pdf_path)
             self.context.metadata = {
-                'filename': pdf_path.name,
-                'pages': len(doc),
-                'title': doc.metadata.get('title', ''),
-                'subject': doc.metadata.get('subject', ''),
+                "filename": pdf_path.name,
+                "pages": len(doc),
+                "title": doc.metadata.get("title", ""),
+                "subject": doc.metadata.get("subject", ""),
             }
 
             print(f"Pages: {len(doc)}")
@@ -127,11 +140,11 @@ class ArchitecturalContextExtractor:
 
                 # Classify page type
                 page_type = self._classify_page(text)
-                if 'floor' in page_type or 'plan' in page_type:
+                if "floor" in page_type or "plan" in page_type:
                     self.context.floor_plan_pages.append(page_num)
-                elif 'elevation' in page_type:
+                elif "elevation" in page_type:
                     self.context.elevation_pages.append(page_num)
-                elif 'detail' in page_type:
+                elif "detail" in page_type:
                     self.context.detail_pages.append(page_num)
 
                 # Extract rooms
@@ -166,12 +179,12 @@ class ArchitecturalContextExtractor:
     def _extract_from_filename(self, filename: str):
         """Extract context from filename."""
         # Project number (e.g., "24098.00")
-        proj_match = re.search(r'(\d{5}\.\d{2})', filename)
+        proj_match = re.search(r"(\d{5}\.\d{2})", filename)
         if proj_match:
             self.context.project_number = proj_match.group(1)
 
         # Address (e.g., "750 PICACHO LANE")
-        addr_match = re.search(r'(\d+\s+[A-Z\s]+(?:LANE|ROAD|DRIVE|STREET|WAY|COURT))', filename)
+        addr_match = re.search(r"(\d+\s+[A-Z\s]+(?:LANE|ROAD|DRIVE|STREET|WAY|COURT))", filename)
         if addr_match:
             self.context.property_address = addr_match.group(1).strip()
 
@@ -181,7 +194,7 @@ class ArchitecturalContextExtractor:
         for page_type, keywords in self.DRAWING_TYPE_KEYWORDS.items():
             if any(kw in text_lower for kw in keywords):
                 return page_type
-        return 'general'
+        return "general"
 
     def _extract_rooms(self, text: str) -> List[str]:
         """Extract room names from text."""
@@ -252,7 +265,7 @@ class ArchitecturalContextExtractor:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             json.dump(asdict(self.context), f, indent=2)
 
         print(f"\n✓ Context saved: {output_path}")
@@ -267,7 +280,7 @@ def main():
         sys.exit(1)
 
     pdf_path = Path(sys.argv[1])
-    output_path = Path(sys.argv[2]) if len(sys.argv) > 2 else pdf_path.with_suffix('.json')
+    output_path = Path(sys.argv[2]) if len(sys.argv) > 2 else pdf_path.with_suffix(".json")
 
     extractor = ArchitecturalContextExtractor()
     context = extractor.extract_from_pdf(pdf_path)
@@ -276,5 +289,5 @@ def main():
     print("\n✅ Extraction complete!")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

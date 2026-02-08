@@ -4,13 +4,15 @@ CLI runner for Unified Luxury Pipeline
 Process 750 Picacho Lane renderings with production-grade pipeline
 """
 from pathlib import Path
+
 from src.transformation_portal.pipelines.unified_luxury_pipeline import (
-    UnifiedLuxuryPipeline,
-    UnifiedPipelineConfig,
+    OutputFormat,
     ProcessingProfile,
     SceneType,
-    OutputFormat
+    UnifiedLuxuryPipeline,
+    UnifiedPipelineConfig,
 )
+
 
 def main():
     # Input file from desktop cache - using Master TIFF (16-bit)
@@ -32,19 +34,19 @@ def main():
         scene_type=SceneType.EXTERIOR,  # Pool view is exterior
         profile=ProcessingProfile.PREMIUM,  # Highest quality
         enable_material_response=True,  # Physics-based water/tile enhancement
-        enable_depth=True,              # Depth-aware atmospheric effects
-        enable_vfx=True,                # VFX enhancements (reflections, bloom)
-        enable_color_grading=True,      # Professional color grading
+        enable_depth=True,  # Depth-aware atmospheric effects
+        enable_vfx=True,  # VFX enhancements (reflections, bloom)
+        enable_color_grading=True,  # Professional color grading
         output_formats=[
-            OutputFormat.MASTER_TIFF,   # 16-bit master
-            OutputFormat.WEB_4K,        # Web delivery
-            OutputFormat.PRINT_8K,      # Print quality
-            OutputFormat.SOCIAL         # Social media
+            OutputFormat.MASTER_TIFF,  # 16-bit master
+            OutputFormat.WEB_4K,  # Web delivery
+            OutputFormat.PRINT_8K,  # Print quality
+            OutputFormat.SOCIAL,  # Social media
         ],
         output_dir=output_dir,
-        preserve_metadata=True,         # Keep EXIF/IPTC
-        save_intermediates=True,        # Save processing stages
-        parallel_outputs=True           # Fast multi-format generation
+        preserve_metadata=True,  # Keep EXIF/IPTC
+        save_intermediates=True,  # Save processing stages
+        parallel_outputs=True,  # Fast multi-format generation
     )
 
     print("Pipeline Configuration:")
@@ -99,8 +101,10 @@ def main():
         print("=" * 80)
         print(f"Error: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
+
 
 if __name__ == "__main__":
     exit(main())

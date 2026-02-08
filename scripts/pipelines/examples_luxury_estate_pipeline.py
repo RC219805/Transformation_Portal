@@ -19,16 +19,17 @@ Date: 2025-11-10
 """
 
 from pathlib import Path
+
 from luxury_estate_master_pipeline import (
-    LuxuryEstateMasterPipeline,
-    PipelinePreset,
-    DepthConfig,
-    MaterialResponseConfig,
-    ToneMappingConfig,
-    ColorGradingConfig,
     AIEnhancementConfig,
-    UpscalingConfig,
+    ColorGradingConfig,
+    DepthConfig,
+    LuxuryEstateMasterPipeline,
+    MaterialResponseConfig,
     OutputConfig,
+    PipelinePreset,
+    ToneMappingConfig,
+    UpscalingConfig,
     get_750_picacho_preset,
     get_aerial_preset,
 )
@@ -36,9 +37,9 @@ from luxury_estate_master_pipeline import (
 
 def example_1_basic_single_image():
     """Example 1: Process single image with default preset."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("EXAMPLE 1: Basic Single Image Processing")
-    print("="*80)
+    print("=" * 80)
 
     # Initialize pipeline with default preset
     preset = get_750_picacho_preset()
@@ -57,9 +58,9 @@ def example_1_basic_single_image():
 
 def example_2_aerial_preset():
     """Example 2: Process aerial image with optimized preset."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("EXAMPLE 2: Aerial Photography with Specialized Preset")
-    print("="*80)
+    print("=" * 80)
 
     # Use aerial-optimized preset
     preset = get_aerial_preset()
@@ -77,9 +78,9 @@ def example_2_aerial_preset():
 
 def example_3_batch_processing():
     """Example 3: Batch process all images with room type mapping."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("EXAMPLE 3: Batch Processing with Room Type Detection")
-    print("="*80)
+    print("=" * 80)
 
     preset = get_750_picacho_preset()
     pipeline = LuxuryEstateMasterPipeline(preset)
@@ -94,12 +95,12 @@ def example_3_batch_processing():
 
     # Define room type mappings
     room_types = {
-        '750Picacho_Aerial_HDR_32-bit': 'aerial',
-        '750Picacho_Bathroom_HDR_32-bit': 'bathroom',
-        '750Picacho_Bedroom_HDR_32-bit': 'bedroom',
-        '750Picacho_Great_Room_HDR_32-bit': 'great_room',
-        '750Picacho_Kitchen_HDR_32-bit': 'kitchen',
-        '750Picacho_Pool_HDR_32-bit': 'pool',
+        "750Picacho_Aerial_HDR_32-bit": "aerial",
+        "750Picacho_Bathroom_HDR_32-bit": "bathroom",
+        "750Picacho_Bedroom_HDR_32-bit": "bedroom",
+        "750Picacho_Great_Room_HDR_32-bit": "great_room",
+        "750Picacho_Kitchen_HDR_32-bit": "kitchen",
+        "750Picacho_Pool_HDR_32-bit": "pool",
     }
 
     # Batch process
@@ -113,15 +114,14 @@ def example_3_batch_processing():
 
 def example_4_custom_preset():
     """Example 4: Create and use custom preset."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("EXAMPLE 4: Custom Preset Configuration")
-    print("="*80)
+    print("=" * 80)
 
     # Create custom preset optimized for speed
     custom_preset = PipelinePreset(
         name="Fast Processing",
         description="Speed-optimized configuration for quick turnaround",
-
         # Enable only essential stages
         depth=DepthConfig(
             enabled=True,
@@ -129,32 +129,26 @@ def example_4_custom_preset():
             backend="coreml",  # Fastest on M-series
             clarity_strength=0.5,
         ),
-
         material_response=MaterialResponseConfig(
             enabled=True,
             strength=0.6,  # Reduced for speed
         ),
-
         tone_mapping=ToneMappingConfig(
             method="filmic",
             exposure=0.0,
             contrast=1.05,
         ),
-
         color_grading=ColorGradingConfig(
             enabled=True,
             saturation=1.08,
         ),
-
         # Disable slow stages
         ai_enhancement=AIEnhancementConfig(
             enabled=False,  # Skip AI for speed
         ),
-
         upscaling=UpscalingConfig(
             enabled=False,  # Skip upscaling for speed
         ),
-
         output=OutputConfig(
             save_master_tiff=True,
             save_delivery_jpeg=True,
@@ -174,9 +168,9 @@ def example_4_custom_preset():
 
 def example_5_quality_optimized():
     """Example 5: Maximum quality configuration."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("EXAMPLE 5: Maximum Quality Configuration")
-    print("="*80)
+    print("=" * 80)
 
     # Start with default preset
     preset = get_750_picacho_preset()
@@ -200,9 +194,9 @@ def example_5_quality_optimized():
 
 def example_6_stage_by_stage():
     """Example 6: Access individual processing stages."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("EXAMPLE 6: Stage-by-Stage Processing")
-    print("="*80)
+    print("=" * 80)
 
     preset = get_750_picacho_preset()
     pipeline = LuxuryEstateMasterPipeline(preset)
@@ -226,9 +220,9 @@ def example_6_stage_by_stage():
 
 def example_7_output_comparison():
     """Example 7: Generate comparison outputs."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("EXAMPLE 7: Output Comparison (Multiple Presets)")
-    print("="*80)
+    print("=" * 80)
 
     image_path = Path("input_images/750_Picacho_HDR_sRGB_alpha_32-bit_TIFFs/750Picacho_Pool_HDR_32-bit.tif")
 
@@ -270,9 +264,9 @@ def example_7_output_comparison():
 
 def example_8_report_analysis():
     """Example 8: Analyze processing report."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("EXAMPLE 8: Processing Report Analysis")
-    print("="*80)
+    print("=" * 80)
 
     import json
 
@@ -291,11 +285,11 @@ def example_8_report_analysis():
         print(f"  Average time: {report['average_time']:.1f}s per image")
 
         # Analyze stage times
-        if report['results']:
-            first_result = report['results'][0]
-            if 'stages' in first_result:
+        if report["results"]:
+            first_result = report["results"][0]
+            if "stages" in first_result:
                 print(f"\nStage breakdown (first image):")
-                for stage, duration in first_result['stages'].items():
+                for stage, duration in first_result["stages"].items():
                     print(f"    {stage}: {duration:.2f}s")
     else:
         print(f"⚠ Report not found: {report_path}")
@@ -305,9 +299,9 @@ def example_8_report_analysis():
 
 def main():
     """Run all examples."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("LUXURY ESTATE MASTER PIPELINE - USAGE EXAMPLES")
-    print("="*80)
+    print("=" * 80)
     print("\nThis script demonstrates various pipeline usage patterns.")
     print("Uncomment example calls in main() to run specific examples.")
 
@@ -322,12 +316,12 @@ def main():
     example_7_output_comparison()
     # example_8_report_analysis()
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("For full documentation, see:")
     print("  docs/LUXURY_ESTATE_PIPELINE.md")
     print("  LUXURY_ESTATE_PIPELINE_QUICKSTART.md")
-    print("="*80)
+    print("=" * 80)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

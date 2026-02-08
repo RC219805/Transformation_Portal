@@ -2,8 +2,9 @@
 """Convert all 8-bit TIFFs to proper 16-bit TIFFs."""
 
 from pathlib import Path
-from fix_tiff_16bit import convert_8bit_to_16bit_tiff
+
 import tifffile
+from fix_tiff_16bit import convert_8bit_to_16bit_tiff
 
 # Find all TIFF files
 output_dir = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/TIFFs/_TIFFs")
@@ -27,11 +28,12 @@ for tiff_path in sorted(tiff_files):
 
         # Save as 16-bit (overwrite)
         from fix_tiff_16bit import save_16bit_tiff_tifffile
-        save_16bit_tiff_tifffile(img_array, tiff_path, compression='lzw')
+
+        save_16bit_tiff_tifffile(img_array, tiff_path, compression="lzw")
 
         # Verify
         verify_array = tifffile.imread(tiff_path)
-        if verify_array.dtype == 'uint16':
+        if verify_array.dtype == "uint16":
             print(f"✅ VERIFIED: {tiff_path.name} is now 16-bit")
         else:
             print(f"❌ ERROR: {tiff_path.name} is still {verify_array.dtype}")

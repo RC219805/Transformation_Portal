@@ -49,27 +49,24 @@ from typing import Dict, List, Optional, Tuple
 # Configuration & Logging
 # ----------------------------------------------------------
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    datefmt='%H:%M:%S'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
 log = logging.getLogger("pipeline")
 
 
 @dataclass
 class PipelineConfig:
     """Pipeline configuration and paths."""
+
     # Input/Output
     input_dir: Path
     output_dir: Path
 
     # Stage directories
     stage1_enhance: Path  # realize_v8 output
-    stage2_depth: Path    # depth maps
+    stage2_depth: Path  # depth maps
     stage3_tonemap: Path  # AgX tone-mapped
-    stage4_masks: Path    # segmentation masks
-    stage5_final: Path    # final depth effects
+    stage4_masks: Path  # segmentation masks
+    stage5_final: Path  # final depth effects
 
     # Processing options
     preset: str = "dramatic"
@@ -100,8 +97,7 @@ class PipelineConfig:
             self.skip_stages = []
 
         # Create stage directories
-        for stage in ["stage1_enhance", "stage2_depth", "stage3_tonemap",
-                      "stage4_masks", "stage5_final"]:
+        for stage in ["stage1_enhance", "stage2_depth", "stage3_tonemap", "stage4_masks", "stage5_final"]:
             path = getattr(self, stage)
             if not self.dry_run:
                 path.mkdir(parents=True, exist_ok=True)
@@ -117,12 +113,8 @@ class PipelineConfig:
 
     def save_manifest(self, filepath: Path) -> None:
         """Save pipeline manifest to JSON."""
-        manifest = {
-            "pipeline_version": "1.0.0",
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "config": self.to_dict()
-        }
-        with open(filepath, 'w') as f:
+        manifest = {"pipeline_version": "1.0.0", "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"), "config": self.to_dict()}
+        with open(filepath, "w") as f:
             json.dump(manifest, f, indent=2)
         log.info(f"Saved pipeline manifest: {filepath}")
 
@@ -130,6 +122,7 @@ class PipelineConfig:
 # ----------------------------------------------------------
 # Stage Executors
 # ----------------------------------------------------------
+
 
 class StageExecutor:
     """Base class for pipeline stage execution."""
@@ -184,16 +177,23 @@ class Stage1Enhance(StageExecutor):
 
         # Build command
         cmd = [
-            sys.executable, str(script),
+            sys.executable,
+            str(script),
             "batch",
             str(self.config.input_dir),
             str(self.config.stage1_enhance),
-            "--preset", self.config.preset,
-            "--tone-curve", self.config.tone_curve,
-            "--suffix", "_ENH",
-            "--out-bitdepth", str(self.config.out_bitdepth),
-            "--quality-jpeg", str(self.config.quality_jpeg),
-            "--jobs", str(self.config.workers)
+            "--preset",
+            self.config.preset,
+            "--tone-curve",
+            self.config.tone_curve,
+            "--suffix",
+            "_ENH",
+            "--out-bitdepth",
+            str(self.config.out_bitdepth),
+            "--quality-jpeg",
+            str(self.config.quality_jpeg),
+            "--jobs",
+            str(self.config.workers),
         ]
 
         if self.config.ocio_config:
@@ -236,8 +236,10 @@ class Stage2Depth(StageExecutor):
 
         # Check if depth model path is configured (optional)
         if not self.config.depth_model_path:
-            log.info("Stage 2 (depth prediction) is optional and not configured. "
-                     "Skipping to Stage 3. To enable depth processing, provide --depth-model-path")
+            log.info(
+                "Stage 2 (depth prediction) is optional and not configured. "
+                "Skipping to Stage 3. To enable depth processing, provide --depth-model-path"
+            )
             return True, 0
 
         t0 = time.time()
@@ -252,8 +254,10 @@ class Stage2Depth(StageExecutor):
         cmd = [
             sys.executable,
             str(script),
-            "--in-dir", str(self.config.stage1_enhance),
-            "--out-dir", str(self.config.stage2_depth),
+            "--in-dir",
+            str(self.config.stage1_enhance),
+            "--out-dir",
+            str(self.config.stage2_depth),
         ]
         # Optionally add model path if available in config
         if self.config.depth_model_path:
@@ -269,12 +273,7 @@ class Stage2Depth(StageExecutor):
         try:
             if self.config.depth_model_path:
                 log.debug(f"Executing depth_predict_coreml.py with model: {Path(self.config.depth_model_path).name}")
-            result = subprocess.run(
-                cmd,
-                check=True,
-                capture_output=True,
-                text=True
-            )
+            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
             if result.stdout:
                 log.debug(result.stdout)
 
@@ -321,15 +320,24 @@ class Stage3Tonemap(StageExecutor):
 
         # Build command
         cmd = [
-            sys.executable, str(script),
-            "--input-dir", str(self.config.stage1_enhance),
-            "--output-dir", str(self.config.stage3_tonemap),
-            "--tone", self.config.tone_curve,
-            "--contrast", "1.10",
-            "--saturation", "1.05",
-            "--auto-exposure", "logmean",
-            "--workers", str(self.config.workers),
-            "--quality", str(self.config.quality_jpeg)
+            sys.executable,
+            str(script),
+            "--input-dir",
+            str(self.config.stage1_enhance),
+            "--output-dir",
+            str(self.config.stage3_tonemap),
+            "--tone",
+            self.config.tone_curve,
+            "--contrast",
+            "1.10",
+            "--saturation",
+            "1.05",
+            "--auto-exposure",
+            "logmean",
+            "--workers",
+            str(self.config.workers),
+            "--quality",
+            str(self.config.quality_jpeg),
         ]
 
         if self.config.ocio_config:
@@ -380,11 +388,16 @@ class Stage4Segmentation(StageExecutor):
 
         # Build command
         cmd = [
-            sys.executable, str(script),
-            "--images-root", str(self.config.stage3_tonemap),
-            "--depths-root", str(self.config.stage2_depth),
-            "--mask-root", str(self.config.stage4_masks),
-            "--device", self.config.device
+            sys.executable,
+            str(script),
+            "--images-root",
+            str(self.config.stage3_tonemap),
+            "--depths-root",
+            str(self.config.stage2_depth),
+            "--mask-root",
+            str(self.config.stage4_masks),
+            "--device",
+            self.config.device,
         ]
 
         log.info(f"Command: {' '.join(cmd)}")
@@ -436,33 +449,27 @@ class Stage5DepthEffects(StageExecutor):
 
             # Build command
             cmd = [
-                sys.executable, str(script),
+                sys.executable,
+                str(script),
                 effect,
                 str(self.config.stage3_tonemap),
                 str(self.config.stage2_depth),
                 str(self.config.stage5_final),
-                "--mask-root", str(self.config.stage4_masks),
-                "--fmt", "tif" if self.config.out_bitdepth > 8 else "jpg",
-                "--workers", str(self.config.workers)
+                "--mask-root",
+                str(self.config.stage4_masks),
+                "--fmt",
+                "tif" if self.config.out_bitdepth > 8 else "jpg",
+                "--workers",
+                str(self.config.workers),
             ]
 
             # Add effect-specific parameters
             if effect == "haze":
-                cmd.extend([
-                    "--strength", "0.20",
-                    "--near", "15.0",
-                    "--far", "85.0"
-                ])
+                cmd.extend(["--strength", "0.20", "--near", "15.0", "--far", "85.0"])
             elif effect == "clarity":
-                cmd.extend([
-                    "--amount", "0.15",
-                    "--radius", "3"
-                ])
+                cmd.extend(["--amount", "0.15", "--radius", "3"])
             elif effect == "do":
-                cmd.extend([
-                    "--focus", "35.0",
-                    "--aperture", "0.25"
-                ])
+                cmd.extend(["--focus", "35.0", "--aperture", "0.25"])
 
             log.info(f"Command: {' '.join(cmd)}")
 
@@ -496,6 +503,7 @@ class Stage5DepthEffects(StageExecutor):
 # Pipeline Orchestrator
 # ----------------------------------------------------------
 
+
 class Pipeline:
     """Main pipeline orchestrator."""
 
@@ -506,7 +514,7 @@ class Pipeline:
             Stage2Depth(config),
             Stage3Tonemap(config),
             Stage4Segmentation(config),
-            Stage5DepthEffects(config)
+            Stage5DepthEffects(config),
         ]
 
     def validate_environment(self) -> bool:
@@ -519,10 +527,12 @@ class Pipeline:
             return False
 
         # Check for TIFF files
-        tiff_files = (list(self.config.input_dir.glob("*.ti")) +
-                      list(self.config.input_dir.glob("*.tif")) +
-                      list(self.config.input_dir.glob("*.TIF")) +
-                      list(self.config.input_dir.glob("*.TIFF")))
+        tiff_files = (
+            list(self.config.input_dir.glob("*.ti"))
+            + list(self.config.input_dir.glob("*.tif"))
+            + list(self.config.input_dir.glob("*.TIF"))
+            + list(self.config.input_dir.glob("*.TIFF"))
+        )
 
         if not tiff_files:
             log.error(f"No TIFF files found in {self.config.input_dir}")
@@ -534,7 +544,7 @@ class Pipeline:
         # Note: Do not check built-in modules (argparse, pathlib, logging, etc.)
         always_required = [
             ("numpy", "numpy"),
-            ("Pillow", "PIL"),           # Pillow provides PIL namespace
+            ("Pillow", "PIL"),  # Pillow provides PIL namespace
             ("tifffile", "tifffile"),
         ]
         # Optional dependencies, only required if corresponding stage is enabled
@@ -570,10 +580,7 @@ class Pipeline:
         if missing:
             for pip_name, import_name, feature_desc in missing:
                 if pip_name == "Pillow":
-                    log.error(
-                        "Missing required package: Pillow (imported as 'PIL'). "
-                        "Install with: pip install Pillow"
-                    )
+                    log.error("Missing required package: Pillow (imported as 'PIL'). " "Install with: pip install Pillow")
                 elif feature_desc == "required":
                     log.error(
                         f"Missing required package: {pip_name} (imported as '{import_name}'). "
@@ -652,57 +659,61 @@ class Pipeline:
 # CLI
 # ----------------------------------------------------------
 
+
 def build_parser() -> argparse.ArgumentParser:
     """Build argument parser."""
     ap = argparse.ArgumentParser(
-        description="Comprehensive TIFF enhancement pipeline",
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        description="Comprehensive TIFF enhancement pipeline", formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
     # Required
-    ap.add_argument("--input-dir", type=Path, required=True,
-                    help="Input directory containing 16/32-bit TIFFs")
-    ap.add_argument("--output-dir", type=Path, required=True,
-                    help="Output directory for final enhanced images")
+    ap.add_argument("--input-dir", type=Path, required=True, help="Input directory containing 16/32-bit TIFFs")
+    ap.add_argument("--output-dir", type=Path, required=True, help="Output directory for final enhanced images")
 
     # Enhancement options
-    ap.add_argument("--preset", choices=["natural", "punchy", "dramatic", "golden", "vibrant"],
-                    default="dramatic", help="Enhancement preset")
-    ap.add_argument("--tone-curve", choices=["agx", "agx-base", "agx-medium", "agx-high", "hable"],
-                    default="agx", help="Tone mapping method")
-    ap.add_argument("--ocio-config", type=str, default=None,
-                    help="Path to OpenColorIO config for AgX")
+    ap.add_argument(
+        "--preset",
+        choices=["natural", "punchy", "dramatic", "golden", "vibrant"],
+        default="dramatic",
+        help="Enhancement preset",
+    )
+    ap.add_argument(
+        "--tone-curve",
+        choices=["agx", "agx-base", "agx-medium", "agx-high", "hable"],
+        default="agx",
+        help="Tone mapping method",
+    )
+    ap.add_argument("--ocio-config", type=str, default=None, help="Path to OpenColorIO config for AgX")
 
     # Depth processing (optional)
-    ap.add_argument("--depth-model-path", type=str, default=None,
-                    help="[OPTIONAL] Path to CoreML depth model directory (.mlpackage) for Stage 2. "
-                         "Stage 2 (depth prediction) will be skipped if not provided, and the "
-                         "pipeline will proceed directly to Stage 3 (AgX tone mapping).")
-    ap.add_argument("--depth-effects", nargs="+",
-                    choices=["haze", "clarity", "do"],
-                    default=["haze", "clarity"],
-                    help="Depth-based effects to apply")
+    ap.add_argument(
+        "--depth-model-path",
+        type=str,
+        default=None,
+        help="[OPTIONAL] Path to CoreML depth model directory (.mlpackage) for Stage 2. "
+        "Stage 2 (depth prediction) will be skipped if not provided, and the "
+        "pipeline will proceed directly to Stage 3 (AgX tone mapping).",
+    )
+    ap.add_argument(
+        "--depth-effects",
+        nargs="+",
+        choices=["haze", "clarity", "do"],
+        default=["haze", "clarity"],
+        help="Depth-based effects to apply",
+    )
 
     # Performance
-    ap.add_argument("--workers", type=int, default=4,
-                    help="Number of parallel workers")
-    ap.add_argument("--device", choices=["cpu", "cuda", "mps"],
-                    default="cpu", help="Device for neural networks")
+    ap.add_argument("--workers", type=int, default=4, help="Number of parallel workers")
+    ap.add_argument("--device", choices=["cpu", "cuda", "mps"], default="cpu", help="Device for neural networks")
 
     # Quality
-    ap.add_argument("--quality", type=int, default=95,
-                    help="JPEG quality (1-100)")
-    ap.add_argument("--bitdepth", type=int, choices=[8, 16, 32],
-                    default=16, help="Output bit depth")
+    ap.add_argument("--quality", type=int, default=95, help="JPEG quality (1-100)")
+    ap.add_argument("--bitdepth", type=int, choices=[8, 16, 32], default=16, help="Output bit depth")
 
     # Pipeline control
-    ap.add_argument("--skip-stages", nargs="+",
-                    choices=["1", "2", "3", "4", "5"],
-                    default=[], help="Stages to skip")
-    ap.add_argument("--keep-intermediates", action="store_true",
-                    help="Keep intermediate files from each stage")
-    ap.add_argument("--dry-run", action="store_true",
-                    help="Show what would be executed without running")
+    ap.add_argument("--skip-stages", nargs="+", choices=["1", "2", "3", "4", "5"], default=[], help="Stages to skip")
+    ap.add_argument("--keep-intermediates", action="store_true", help="Keep intermediate files from each stage")
+    ap.add_argument("--dry-run", action="store_true", help="Show what would be executed without running")
 
     return ap
 
@@ -732,7 +743,7 @@ def main(argv=None):
             out_bitdepth=args.bitdepth,
             skip_stages=args.skip_stages,
             keep_intermediates=args.keep_intermediates,
-            dry_run=args.dry_run
+            dry_run=args.dry_run,
         )
 
         # Execute pipeline

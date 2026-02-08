@@ -8,8 +8,8 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
 import tifffile
+from PIL import Image
 
 
 def apply_luxury_enhancements(img: np.ndarray, scene_name: str) -> np.ndarray:
@@ -27,19 +27,20 @@ def apply_luxury_enhancements(img: np.ndarray, scene_name: str) -> np.ndarray:
 
     # 2. Micro-contrast (local)
     from scipy.ndimage import gaussian_filter
+
     blurred = gaussian_filter(img_float, sigma=2)
     img_float = img_float + 0.15 * (img_float - blurred)
 
     # 3. Saturation refinement (+3%)
     if img_float.shape[2] == 3:
-        luminance = 0.299 * img_float[:,:,0] + 0.587 * img_float[:,:,1] + 0.114 * img_float[:,:,2]
+        luminance = 0.299 * img_float[:, :, 0] + 0.587 * img_float[:, :, 1] + 0.114 * img_float[:, :, 2]
         for c in range(3):
-            img_float[:,:,c] = luminance + 1.03 * (img_float[:,:,c] - luminance)
+            img_float[:, :, c] = luminance + 1.03 * (img_float[:, :, c] - luminance)
 
     return np.clip(img_float, 0, 1).astype(np.float32)
 
 
-def save_16bit_tiff_proper(img: np.ndarray, output_path: Path, compression: str = 'lzw'):
+def save_16bit_tiff_proper(img: np.ndarray, output_path: Path, compression: str = "lzw"):
     """
     Save as proper 16-bit TIFF using tifffile (not PIL).
     Input: float32 array [0-1]
@@ -49,17 +50,12 @@ def save_16bit_tiff_proper(img: np.ndarray, output_path: Path, compression: str 
     img_16bit = (img * 65535.0).astype(np.uint16)
 
     # Save with tifffile for proper 16-bit handling
-    tifffile.imwrite(
-        output_path,
-        img_16bit,
-        compression=compression,
-        photometric='rgb'
-    )
+    tifffile.imwrite(output_path, img_16bit, compression=compression, photometric="rgb")
 
     return img_16bit
 
 
-def process_single_jpeg(input_path: Path, output_dir: Path, formats: list = ['jpeg', 'png', 'tiff']):
+def process_single_jpeg(input_path: Path, output_dir: Path, formats: list = ["jpeg", "png", "tiff"]):
     """Process a single JPEG with luxury enhancements."""
 
     print(f"\n{'='*80}")
@@ -67,7 +63,7 @@ def process_single_jpeg(input_path: Path, output_dir: Path, formats: list = ['jp
     print(f"{'='*80}\n")
 
     # Load JPEG
-    img = Image.open(input_path).convert('RGB')
+    img = Image.open(input_path).convert("RGB")
     img = np.array(img)
     print(f"✓ Loaded JPEG: {img.shape[1]}x{img.shape[0]}")
 
@@ -86,29 +82,29 @@ def process_single_jpeg(input_path: Path, output_dir: Path, formats: list = ['jp
     base_name = input_path.stem
 
     # Save in requested formats
-    if 'tiff' in formats:
+    if "tiff" in formats:
         tiff_path = output_dir / f"{base_name}_luxury.ti"
         img_16bit = save_16bit_tiff_proper(img_enhanced, tiff_path)
-        outputs['tiff'] = tiff_path
+        outputs["tiff"] = tiff_path
         print(f"✓ Saved 16-bit TIFF: {tiff_path.name}")
         print(f"  - Shape: {img_16bit.shape}")
         print(f"  - Range: [{img_16bit.min()}, {img_16bit.max()}]")
         print(f"  - Size: {tiff_path.stat().st_size / 1024 / 1024:.2f} MB")
 
-    if 'jpeg' in formats:
+    if "jpeg" in formats:
         jpeg_path = output_dir / f"{base_name}_luxury.jpg"
         img_uint8 = (img_enhanced * 255).astype(np.uint8)
-        img_pil = Image.fromarray(img_uint8, mode='RGB')
+        img_pil = Image.fromarray(img_uint8, mode="RGB")
         img_pil.save(jpeg_path, quality=95, optimize=True)
-        outputs['jpeg'] = jpeg_path
+        outputs["jpeg"] = jpeg_path
         print(f"✓ Saved JPEG: {jpeg_path.name}")
 
-    if 'png' in formats:
+    if "png" in formats:
         png_path = output_dir / f"{base_name}_luxury.png"
         img_uint8 = (img_enhanced * 255).astype(np.uint8)
-        img_pil = Image.fromarray(img_uint8, mode='RGB')
+        img_pil = Image.fromarray(img_uint8, mode="RGB")
         img_pil.save(png_path, optimize=True)
-        outputs['png'] = png_path
+        outputs["png"] = png_path
         print(f"✓ Saved PNG: {png_path.name}")
 
     print(f"\n✅ Completed: {input_path.name}")
@@ -130,7 +126,7 @@ def main():
         "750Picacho_Kitchen.jpg",
         "750Picacho_Pool.jpg",
         "750Picacho_PrimaryBathroom.jpg",
-        "750Picacho_PrimaryBedroom.jpg"
+        "750Picacho_PrimaryBedroom.jpg",
     ]
 
     print("#" * 80)
@@ -162,7 +158,7 @@ def main():
     for i, filename in enumerate(canonical_files, 1):
         print(f"\n[{i}/{len(canonical_files)}] " + "=" * 70)
         input_path = source_dir / filename
-        outputs = process_single_jpeg(input_path, output_dir, formats=['jpeg', 'png', 'tiff'])
+        outputs = process_single_jpeg(input_path, output_dir, formats=["jpeg", "png", "tiff"])
         total_outputs += len(outputs)
 
     print("\n" + "#" * 80)

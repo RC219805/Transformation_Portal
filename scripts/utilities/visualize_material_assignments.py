@@ -1,10 +1,9 @@
 """Generate a visualization showing MBAR material assignments for the aerial."""
+
 import sys
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw
-
 from board_material_aerial_enhancer import (
     DEFAULT_TEXTURES,
     _assign_full_image,
@@ -16,6 +15,7 @@ from board_material_aerial_enhancer import (
     load_palette_assignments,
     save_palette_assignments,
 )
+from PIL import Image, ImageDraw
 
 # Load the input image
 input_path = Path("/workspaces/800-Picacho-Lane-LUTs/input_images/RC-office750Picacho_Aerial.tif")
@@ -96,9 +96,7 @@ viz_img = Image.fromarray(viz_array)
 
 # Add legend
 LEGEND_HEIGHT = 400
-legend_img = Image.new(
-    "RGB", (viz_img.width, viz_img.height + LEGEND_HEIGHT), (255, 255, 255)
-)
+legend_img = Image.new("RGB", (viz_img.width, viz_img.height + LEGEND_HEIGHT), (255, 255, 255))
 legend_img.paste(viz_img, (0, 0))
 
 draw = ImageDraw.Draw(legend_img)
@@ -140,10 +138,7 @@ if unassigned:
         y_offset += 45
 
 # Save visualization
-output_path = Path(
-    "/workspaces/800-Picacho-Lane-LUTs/processed_images/"
-    "750_Picacho_Material_Assignment_Map.jpg"
-)
+output_path = Path("/workspaces/800-Picacho-Lane-LUTs/processed_images/" "750_Picacho_Material_Assignment_Map.jpg")
 legend_img.save(output_path, quality=95)
 
 print(f"✅ Material assignment map saved to: {output_path}")

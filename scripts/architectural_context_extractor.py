@@ -28,6 +28,7 @@ from PIL import Image
 @dataclass
 class RoomContext:
     """Room-specific context from plans."""
+
     name: str
     dimensions: Optional[Tuple[float, float]] = None  # (width, depth) in feet
     floor_level: Optional[str] = None
@@ -44,9 +45,11 @@ class RoomContext:
         if self.adjacent_rooms is None:
             self.adjacent_rooms = []
 
+
 @dataclass
 class ProjectContext:
     """Complete project architectural context."""
+
     project_name: str
     project_number: Optional[str] = None
     address: Optional[str] = None
@@ -75,33 +78,30 @@ class ArchitecturalContextExtractor:
 
     # Pattern recognition for common architectural elements
     ROOM_PATTERNS = {
-        'kitchen': r'kitchen|kitch\b',
-        'bathroom': r'bath(?:room)?|powder\s+room',
-        'bedroom': r'bed(?:room)?|master\s+(?:bed|suite)|primary\s+(?:bed|suite)',
-        'living': r'living|great\s+room|family\s+room',
-        'dining': r'dining',
-        'office': r'office|study|den',
-        'garage': r'garage|carport',
-        'entry': r'entry|foyer|vestibule',
-        'laundry': r'laundry|utility',
-        'outdoor': r'pool|patio|deck|terrace|courtyard|veranda',
+        "kitchen": r"kitchen|kitch\b",
+        "bathroom": r"bath(?:room)?|powder\s+room",
+        "bedroom": r"bed(?:room)?|master\s+(?:bed|suite)|primary\s+(?:bed|suite)",
+        "living": r"living|great\s+room|family\s+room",
+        "dining": r"dining",
+        "office": r"office|study|den",
+        "garage": r"garage|carport",
+        "entry": r"entry|foyer|vestibule",
+        "laundry": r"laundry|utility",
+        "outdoor": r"pool|patio|deck|terrace|courtyard|veranda",
     }
 
     MATERIAL_PATTERNS = {
-        'wood': r'wood|oak|walnut|maple|cherry|timber|veneer',
-        'stone': r'stone|granite|marble|limestone|travertine|slate',
-        'metal': r'metal|steel|bronze|brass|copper|aluminum',
-        'glass': r'glass|glazing|window|skylight',
-        'concrete': r'concrete|cement',
-        'tile': r'tile|porcelain|ceramic',
-        'fabric': r'fabric|textile|upholstery|linen',
-        'leather': r'leather',
+        "wood": r"wood|oak|walnut|maple|cherry|timber|veneer",
+        "stone": r"stone|granite|marble|limestone|travertine|slate",
+        "metal": r"metal|steel|bronze|brass|copper|aluminum",
+        "glass": r"glass|glazing|window|skylight",
+        "concrete": r"concrete|cement",
+        "tile": r"tile|porcelain|ceramic",
+        "fabric": r"fabric|textile|upholstery|linen",
+        "leather": r"leather",
     }
 
-    DIMENSION_PATTERN = re.compile(
-        r"(\d+(?:\.\d+)?)\s*[\'\"]?\s*(?:x|×|by)\s*(\d+(?:\.\d+)?)\s*[\'\"]?",
-        re.IGNORECASE
-    )
+    DIMENSION_PATTERN = re.compile(r"(\d+(?:\.\d+)?)\s*[\'\"]?\s*(?:x|×|by)\s*(\d+(?:\.\d+)?)\s*[\'\"]?", re.IGNORECASE)
 
     def __init__(self, output_dir: Path = None):
         """Initialize extractor."""
@@ -176,31 +176,31 @@ class ArchitecturalContextExtractor:
     def _extract_project_name(self, filename: str) -> str:
         """Extract project name from filename."""
         # Remove common prefixes/suffixes
-        name = re.sub(r'^\d+[\._-]\s*', '', filename)  # Remove leading numbers
-        name = re.sub(r'[-_]', ' ', name)
-        name = re.sub(r'\s+', ' ', name).strip()
+        name = re.sub(r"^\d+[\._-]\s*", "", filename)  # Remove leading numbers
+        name = re.sub(r"[-_]", " ", name)
+        name = re.sub(r"\s+", " ", name).strip()
         return name
 
     def _extract_metadata(self, context: ProjectContext, metadata: dict):
         """Extract PDF metadata."""
         if metadata:
-            if 'title' in metadata and metadata['title']:
-                context.project_name = metadata['title']
-            if 'subject' in metadata and metadata['subject']:
+            if "title" in metadata and metadata["title"]:
+                context.project_name = metadata["title"]
+            if "subject" in metadata and metadata["subject"]:
                 # Often contains project number or address
-                subject = metadata['subject']
-                project_num_match = re.search(r'\b(\d{5,}(?:\.\d+)?)\b', subject)
+                subject = metadata["subject"]
+                project_num_match = re.search(r"\b(\d{5,}(?:\.\d+)?)\b", subject)
                 if project_num_match:
                     context.project_number = project_num_match.group(1)
 
     def _extract_project_info(self, context: ProjectContext, first_page_text: str):
         """Extract project information from title block."""
-        lines = first_page_text.split('\n')
+        lines = first_page_text.split("\n")
 
         # Look for project number
         for line in lines[:30]:  # Check first 30 lines
             if not context.project_number:
-                proj_match = re.search(r'(?:project|job)\s*#?\s*:?\s*(\d{5,}(?:\.\d+)?)', line, re.I)
+                proj_match = re.search(r"(?:project|job)\s*#?\s*:?\s*(\d{5,}(?:\.\d+)?)", line, re.I)
                 if proj_match:
                     context.project_number = proj_match.group(1)
 
@@ -208,13 +208,15 @@ class ArchitecturalContextExtractor:
             if not context.address:
                 # Match street addresses
                 addr_match = re.search(
-                    r'\d+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:\s+(?:Street|St|Avenue|Ave|Lane|Ln|Road|Rd|Drive|Dr|Way|Court|Ct))', line)
+                    r"\d+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:\s+(?:Street|St|Avenue|Ave|Lane|Ln|Road|Rd|Drive|Dr|Way|Court|Ct))",
+                    line,
+                )
                 if addr_match:
                     context.address = addr_match.group(0)
 
             # Look for architect
             if not context.architect:
-                arch_match = re.search(r'(?:architect|designer)\s*:?\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)', line, re.I)
+                arch_match = re.search(r"(?:architect|designer)\s*:?\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)", line, re.I)
                 if arch_match:
                     context.architect = arch_match.group(1)
 
@@ -223,11 +225,11 @@ class ArchitecturalContextExtractor:
         for page_num, text in page_texts:
             # Detect floor level
             floor_level = None
-            if re.search(r'(?:1st|first)\s+floor', text, re.I):
+            if re.search(r"(?:1st|first)\s+floor", text, re.I):
                 floor_level = "1st Floor"
-            elif re.search(r'(?:2nd|second)\s+floor', text, re.I):
+            elif re.search(r"(?:2nd|second)\s+floor", text, re.I):
                 floor_level = "2nd Floor"
-            elif re.search(r'(?:ground|main)\s+floor', text, re.I):
+            elif re.search(r"(?:ground|main)\s+floor", text, re.I):
                 floor_level = "Ground Floor"
 
             if floor_level and floor_level not in context.floors:
@@ -247,10 +249,7 @@ class ArchitecturalContextExtractor:
                     room_key = f"{room_type}_{len([r for r in context.rooms.keys() if r.startswith(room_type)])}"
 
                     if room_key not in context.rooms:
-                        room = RoomContext(
-                            name=room_name,
-                            floor_level=floor_level
-                        )
+                        room = RoomContext(name=room_name, floor_level=floor_level)
 
                         # Extract dimensions
                         dim_match = self.DIMENSION_PATTERN.search(room_context_text)
@@ -263,7 +262,7 @@ class ArchitecturalContextExtractor:
                                 pass
 
                         # Extract ceiling height
-                        height_match = re.search(r'(\d+(?:\.\d+)?)\s*[\'\"]?\s*(?:ceiling|clg|ht)', room_context_text, re.I)
+                        height_match = re.search(r"(\d+(?:\.\d+)?)\s*[\'\"]?\s*(?:ceiling|clg|ht)", room_context_text, re.I)
                         if height_match:
                             try:
                                 room.ceiling_height = float(height_match.group(1))
@@ -290,13 +289,13 @@ class ArchitecturalContextExtractor:
         text_lower = context.raw_text.lower()
 
         style_indicators = {
-            'Modern': ['modern', 'contemporary', 'minimalist', 'clean lines'],
-            'Traditional': ['traditional', 'classic', 'colonial', 'crown molding'],
-            'Transitional': ['transitional', 'blend', 'timeless'],
-            'Mediterranean': ['mediterranean', 'spanish', 'tile roo', 'stucco'],
-            'Craftsman': ['craftsman', 'bungalow', 'exposed beams'],
-            'Industrial': ['industrial', 'exposed', 'concrete', 'metal'],
-            'Luxury Estate': ['estate', 'luxury', 'grand', 'palatial'],
+            "Modern": ["modern", "contemporary", "minimalist", "clean lines"],
+            "Traditional": ["traditional", "classic", "colonial", "crown molding"],
+            "Transitional": ["transitional", "blend", "timeless"],
+            "Mediterranean": ["mediterranean", "spanish", "tile roo", "stucco"],
+            "Craftsman": ["craftsman", "bungalow", "exposed beams"],
+            "Industrial": ["industrial", "exposed", "concrete", "metal"],
+            "Luxury Estate": ["estate", "luxury", "grand", "palatial"],
         }
 
         style_scores = {}
@@ -340,19 +339,19 @@ class ArchitecturalContextExtractor:
 
         # Convert to dict (handle RoomContext objects)
         context_dict = {
-            'project_name': context.project_name,
-            'project_number': context.project_number,
-            'address': context.address,
-            'architect': context.architect,
-            'total_sqft': context.total_sqft,
-            'floors': context.floors,
-            'rooms': {k: asdict(v) for k, v in context.rooms.items()},
-            'materials_palette': context.materials_palette,
-            'design_style': context.design_style,
-            'extracted_images': context.extracted_images,
+            "project_name": context.project_name,
+            "project_number": context.project_number,
+            "address": context.address,
+            "architect": context.architect,
+            "total_sqft": context.total_sqft,
+            "floors": context.floors,
+            "rooms": {k: asdict(v) for k, v in context.rooms.items()},
+            "materials_palette": context.materials_palette,
+            "design_style": context.design_style,
+            "extracted_images": context.extracted_images,
         }
 
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             json.dump(context_dict, f, indent=2)
 
         print(f"\n✓ Context saved: {output_path}")
@@ -364,25 +363,25 @@ class ArchitecturalContextExtractor:
         if not context_path.exists():
             return None
 
-        with open(context_path, 'r') as f:
+        with open(context_path, "r") as f:
             data = json.load(f)
 
         # Reconstruct RoomContext objects
         rooms = {}
-        for room_key, room_data in data.get('rooms', {}).items():
+        for room_key, room_data in data.get("rooms", {}).items():
             rooms[room_key] = RoomContext(**room_data)
 
         context = ProjectContext(
-            project_name=data['project_name'],
-            project_number=data.get('project_number'),
-            address=data.get('address'),
-            architect=data.get('architect'),
-            total_sqft=data.get('total_sqft'),
-            floors=data.get('floors', []),
+            project_name=data["project_name"],
+            project_number=data.get("project_number"),
+            address=data.get("address"),
+            architect=data.get("architect"),
+            total_sqft=data.get("total_sqft"),
+            floors=data.get("floors", []),
             rooms=rooms,
-            materials_palette=data.get('materials_palette', []),
-            design_style=data.get('design_style'),
-            extracted_images=data.get('extracted_images', []),
+            materials_palette=data.get("materials_palette", []),
+            design_style=data.get("design_style"),
+            extracted_images=data.get("extracted_images", []),
         )
 
         return context
@@ -392,14 +391,12 @@ def main():
     """CLI for architectural context extraction."""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description='Extract architectural context from construction documents'
+    parser = argparse.ArgumentParser(description="Extract architectural context from construction documents")
+    parser.add_argument("pd", type=Path, help="PDF file to analyze")
+    parser.add_argument(
+        "--output", "-o", type=Path, default=Path("extracted_context"), help="Output directory for extracted context"
     )
-    parser.add_argument('pd', type=Path, help='PDF file to analyze')
-    parser.add_argument('--output', '-o', type=Path, default=Path('extracted_context'),
-                        help='Output directory for extracted context')
-    parser.add_argument('--verbose', '-v', action='store_true',
-                        help='Verbose output')
+    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
 
     args = parser.parse_args()
 
@@ -437,5 +434,5 @@ def main():
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     exit(main())

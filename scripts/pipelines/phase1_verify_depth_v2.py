@@ -22,10 +22,7 @@ import torch
 from PIL import Image
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -73,11 +70,7 @@ def test_depth_estimation(processor, model, test_image_path=None):
         # Find a test image
         if test_image_path is None:
             # Look for 750 Picacho images
-            test_dirs = [
-                "input_images/750_picacho",
-                "data/sample_images",
-                "input_images"
-            ]
+            test_dirs = ["input_images/750_picacho", "data/sample_images", "input_images"]
 
             for test_dir in test_dirs:
                 if Path(test_dir).exists():
@@ -89,10 +82,10 @@ def test_depth_estimation(processor, model, test_image_path=None):
         if test_image_path is None or not Path(test_image_path).exists():
             # Create a simple test image
             logger.info("  Creating synthetic test image (512x512)")
-            test_image = Image.new('RGB', (512, 512), color='gray')
+            test_image = Image.new("RGB", (512, 512), color="gray")
         else:
             logger.info(f"  Loading test image: {test_image_path}")
-            test_image = Image.open(test_image_path).convert('RGB')
+            test_image = Image.open(test_image_path).convert("RGB")
 
         # Resize to reasonable size for testing
         if test_image.width > 1024:
@@ -143,6 +136,7 @@ def test_depth_estimation(processor, model, test_image_path=None):
     except Exception as e:
         logger.error(f"  ✗ Depth estimation failed: {e}")
         import traceback
+
         traceback.print_exc()
         return None
 
@@ -153,10 +147,12 @@ def test_pipeline_integration():
 
     try:
         from luxury_estate_master_pipeline import LuxuryEstatePipeline
+
         logger.info("  ✓ Pipeline imports successfully")
 
         # Check that depth is available
         from luxury_estate_master_pipeline import DEPTH_PIPELINE_AVAILABLE
+
         if DEPTH_PIPELINE_AVAILABLE:
             logger.info("  ✓ Depth pipeline marked as available")
         else:

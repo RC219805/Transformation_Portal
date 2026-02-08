@@ -45,23 +45,18 @@ from PIL import Image
 from tqdm import tqdm
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    datefmt='%H:%M:%S'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
 log = logging.getLogger("pro_pipeline")
 
 # Typer app for CLI
 app = typer.Typer(
-    name="pro-pipeline",
-    help="Transformation Portal - Fully-Integrated Professional Pipeline",
-    add_completion=False
+    name="pro-pipeline", help="Transformation Portal - Fully-Integrated Professional Pipeline", add_completion=False
 )
 
 
 class PipelinePreset(str, Enum):
     """Pre-configured pipeline presets for common use cases."""
+
     ARCHITECTURAL_HERO = "architectural-hero"
     INTERIOR_DRAMATIC = "interior-dramatic"
     EXTERIOR_GOLDEN_HOUR = "exterior-golden-hour"
@@ -77,6 +72,7 @@ class PipelinePreset(str, Enum):
 @dataclass
 class PipelineStage:
     """Configuration for a single pipeline stage."""
+
     name: str
     enabled: bool = True
     config: Dict[str, Any] = field(default_factory=dict)
@@ -203,9 +199,10 @@ class ProPipeline:
         """Auto-detect the best available device."""
         try:
             import torch
+
             if torch.cuda.is_available():
                 return "cuda"
-            elif hasattr(torch, 'backends') and hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            elif hasattr(torch, "backends") and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
                 return "mps"
         except (ImportError, AttributeError):
             # Torch not installed or not fully available, fall back to CPU
@@ -221,6 +218,7 @@ class ProPipeline:
             try:
                 # Try installed package import first (correct for editable installs)
                 from transformation_portal.depth.pipeline import ArchitecturalDepthPipeline
+
                 config_path = Path("config/interior_preset.yaml")
                 if config_path.exists():
                     self._depth_pipeline = ArchitecturalDepthPipeline.from_config(str(config_path))
@@ -242,6 +240,7 @@ class ProPipeline:
             try:
                 # Try installed package import first (correct for editable installs)
                 from transformation_portal.pipelines.lux_render_pipeline import apply_material_response_finishing  # noqa: F401
+
                 self._ai_pipeline = "available"
                 log.info("AI enhancement pipeline loaded")
             except ImportError as e:
@@ -256,6 +255,7 @@ class ProPipeline:
             try:
                 # Import from root level module (material_response.py in repo root)
                 import material_response  # noqa: F401
+
                 self._material_response = "available"
                 log.info("Material Response system loaded")
             except ImportError as e:
@@ -511,11 +511,7 @@ class ProPipeline:
 
                 # Convert sRGB to linear
                 img_float = img_array.astype(np.float32) / 255.0
-                linear_array = np.where(
-                    img_float <= 0.04045,
-                    img_float / 12.92,
-                    np.power((img_float + 0.055) / 1.055, 2.4)
-                )
+                linear_array = np.where(img_float <= 0.04045, img_float / 12.92, np.power((img_float + 0.055) / 1.055, 2.4))
 
                 # Scale to bit depth
                 if self.config.bit_depth == 16:
@@ -527,11 +523,7 @@ class ProPipeline:
 
                 # Save with tifffile
                 tifffile.imwrite(
-                    output_path,
-                    output_array,
-                    compression='deflate',
-                    photometric='rgb',
-                    metadata={'colorspace': 'linear'}
+                    output_path, output_array, compression="deflate", photometric="rgb", metadata={"colorspace": "linear"}
                 )
 
                 log.info(f"  ✓ Saved as {self.config.bit_depth}-bit linear TIFF")
@@ -634,32 +626,25 @@ class ProPipeline:
 # CLI Commands
 # ============================================================================
 
+
 @app.command()
 def process(
     input_path: Path = typer.Argument(..., help="Input image path"),
     output_dir: Path = typer.Option("./output", "--out", "-o", help="Output directory"),
-    preset: PipelinePreset = typer.Option(
-        PipelinePreset.ARCHITECTURAL_HERO,
-        "--preset", "-p",
-        help="Pipeline preset to use"
-    ),
-
+    preset: PipelinePreset = typer.Option(PipelinePreset.ARCHITECTURAL_HERO, "--preset", "-p", help="Pipeline preset to use"),
     # Stage toggles
     depth_aware: bool = typer.Option(True, "--depth-aware/--no-depth", help="Enable depth-aware processing"),
     ai_enhance: bool = typer.Option(True, "--ai-enhance/--no-ai", help="Enable AI enhancement"),
     material_response: bool = typer.Option(True, "--material-response/--no-material", help="Enable Material Response"),
     color_grading: bool = typer.Option(True, "--color-grading/--no-grading", help="Enable color grading"),
     finishing: bool = typer.Option(True, "--finishing/--no-finishing", help="Enable finishing"),
-
     # Output options
     output_format: str = typer.Option("tif", "--format", "-", help="Output format (jpg, png, tiff)"),
     bit_depth: int = typer.Option(16, "--bits", help="Bit depth for TIFF (8, 16, 32)"),
     linear_output: bool = typer.Option(True, "--linear/--gamma", help="Save in linear colorspace (recommended)"),
-
     # Performance
     device: str = typer.Option("auto", "--device", help="Device to use (auto, cpu, cuda, mps)"),
     quality: str = typer.Option("high", "--quality", "-q", help="Processing quality (draft, standard, high, ultra)"),
-
     # Other
     keep_intermediates: bool = typer.Option(False, "--keep-intermediates", help="Keep intermediate outputs"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be done without processing"),
@@ -719,25 +704,18 @@ def process(
 def batch(
     input_dir: Path = typer.Argument(..., help="Input directory with images"),
     output_dir: Path = typer.Option("./output", "--out", "-o", help="Output directory"),
-    preset: PipelinePreset = typer.Option(
-        PipelinePreset.ARCHITECTURAL_HERO,
-        "--preset", "-p",
-        help="Pipeline preset to use"
-    ),
+    preset: PipelinePreset = typer.Option(PipelinePreset.ARCHITECTURAL_HERO, "--preset", "-p", help="Pipeline preset to use"),
     pattern: str = typer.Option("*.{jpg,jpeg,png,tiff,tif}", "--pattern", help="File pattern to match"),
-
     # Same options as process command
     depth_aware: bool = typer.Option(True, "--depth-aware/--no-depth"),
     ai_enhance: bool = typer.Option(True, "--ai-enhance/--no-ai"),
     material_response: bool = typer.Option(True, "--material-response/--no-material"),
     color_grading: bool = typer.Option(True, "--color-grading/--no-grading"),
     finishing: bool = typer.Option(True, "--finishing/--no-finishing"),
-
     output_format: str = typer.Option("tif", "--format", "-"),
     bit_depth: int = typer.Option(16, "--bits"),
     device: str = typer.Option("auto", "--device"),
     quality: str = typer.Option("high", "--quality", "-q"),
-
     num_workers: int = typer.Option(4, "--workers", "-w", help="Number of parallel workers"),
     keep_intermediates: bool = typer.Option(False, "--keep-intermediates"),
     dry_run: bool = typer.Option(False, "--dry-run"),

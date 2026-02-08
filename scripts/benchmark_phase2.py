@@ -12,27 +12,25 @@ Usage:
     python scripts/benchmark_phase2.py --synthetic --num-images 100
 """
 from __future__ import annotations
+
 import argparse
-import time
-import tempfile
-import shutil
-from pathlib import Path
-from typing import List, Dict, Any
 import json
-import sys
 import logging
+import shutil
+import sys
+import tempfile
+import time
+from pathlib import Path
+from typing import Any, Dict, List
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
-from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
+from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -66,11 +64,7 @@ def create_synthetic_images(output_dir: Path, count: int) -> List[Path]:
     return images
 
 
-def benchmark_sequential(
-    orchestrator: EnhanceOrchestrator,
-    image_paths: List[Path],
-    input_root: Path
-) -> Dict[str, Any]:
+def benchmark_sequential(orchestrator: EnhanceOrchestrator, image_paths: List[Path], input_root: Path) -> Dict[str, Any]:
     """Benchmark sequential processing.
 
     Args:
@@ -92,26 +86,23 @@ def benchmark_sequential(
             results.append(result)
         except Exception as e:
             logger.error(f"Failed {img_path}: {e}")
-            results.append({'status': 'error', 'error': str(e)})
+            results.append({"status": "error", "error": str(e)})
 
     elapsed = time.time() - start_time
 
-    successful = sum(1 for r in results if r.get('status') == 'ok')
+    successful = sum(1 for r in results if r.get("status") == "ok")
 
     return {
-        'mode': 'sequential',
-        'total_images': len(image_paths),
-        'successful': successful,
-        'elapsed_seconds': elapsed,
-        'throughput_images_per_second': successful / elapsed if elapsed > 0 else 0,
+        "mode": "sequential",
+        "total_images": len(image_paths),
+        "successful": successful,
+        "elapsed_seconds": elapsed,
+        "throughput_images_per_second": successful / elapsed if elapsed > 0 else 0,
     }
 
 
 def benchmark_parallel(
-    orchestrator: EnhanceOrchestrator,
-    image_paths: List[Path],
-    input_root: Path,
-    workers: int
+    orchestrator: EnhanceOrchestrator, image_paths: List[Path], input_root: Path, workers: int
 ) -> Dict[str, Any]:
     """Benchmark parallel processing.
 
@@ -133,22 +124,20 @@ def benchmark_parallel(
 
     elapsed = time.time() - start_time
 
-    successful = sum(1 for r in results if r.get('status') == 'ok')
+    successful = sum(1 for r in results if r.get("status") == "ok")
 
     return {
-        'mode': 'parallel',
-        'workers': workers,
-        'total_images': len(image_paths),
-        'successful': successful,
-        'elapsed_seconds': elapsed,
-        'throughput_images_per_second': successful / elapsed if elapsed > 0 else 0,
+        "mode": "parallel",
+        "workers": workers,
+        "total_images": len(image_paths),
+        "successful": successful,
+        "elapsed_seconds": elapsed,
+        "throughput_images_per_second": successful / elapsed if elapsed > 0 else 0,
     }
 
 
 def benchmark_cache_effectiveness(
-    orchestrator: EnhanceOrchestrator,
-    image_paths: List[Path],
-    input_root: Path
+    orchestrator: EnhanceOrchestrator, image_paths: List[Path], input_root: Path
 ) -> Dict[str, Any]:
     """Benchmark depth cache effectiveness.
 
@@ -163,7 +152,7 @@ def benchmark_cache_effectiveness(
     logger.info("=== Cache Effectiveness Benchmark ===")
 
     if not orchestrator.depth_cache:
-        return {'mode': 'cache', 'error': 'Cache not enabled'}
+        return {"mode": "cache", "error": "Cache not enabled"}
 
     # First pass: populate cache
     logger.info("First pass: populating cache...")
@@ -185,22 +174,19 @@ def benchmark_cache_effectiveness(
     speedup = elapsed_pass1 / elapsed_pass2 if elapsed_pass2 > 0 else 0
 
     return {
-        'mode': 'cache',
-        'total_images': len(image_paths),
-        'pass1_elapsed_seconds': elapsed_pass1,
-        'pass2_elapsed_seconds': elapsed_pass2,
-        'speedup_ratio': speedup,
-        'cache_entries_after_pass1': cache_stats_after_pass1['entry_count'],
-        'cache_entries_after_pass2': cache_stats_after_pass2['entry_count'],
-        'cache_size_gb': cache_stats_after_pass2['size_gb'],
+        "mode": "cache",
+        "total_images": len(image_paths),
+        "pass1_elapsed_seconds": elapsed_pass1,
+        "pass2_elapsed_seconds": elapsed_pass2,
+        "speedup_ratio": speedup,
+        "cache_entries_after_pass1": cache_stats_after_pass1["entry_count"],
+        "cache_entries_after_pass2": cache_stats_after_pass2["entry_count"],
+        "cache_size_gb": cache_stats_after_pass2["size_gb"],
     }
 
 
 def benchmark_worker_scalability(
-    output_dir: Path,
-    image_paths: List[Path],
-    input_root: Path,
-    worker_counts: List[int]
+    output_dir: Path, image_paths: List[Path], input_root: Path, worker_counts: List[int]
 ) -> List[Dict[str, Any]]:
     """Benchmark scalability across different worker counts.
 
@@ -240,14 +226,13 @@ def benchmark_worker_scalability(
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Benchmark Phase 2 parallelization')
-    parser.add_argument('--input-dir', type=Path, help='Directory with test images')
-    parser.add_argument('--synthetic', action='store_true', help='Use synthetic images')
-    parser.add_argument('--num-images', type=int, default=20, help='Number of synthetic images')
-    parser.add_argument('--workers', type=int, nargs='+', default=[1, 2, 4],
-                        help='Worker counts to test (default: 1 2 4)')
-    parser.add_argument('--test-cache', action='store_true', help='Test cache effectiveness')
-    parser.add_argument('--output', type=Path, help='Output directory for results')
+    parser = argparse.ArgumentParser(description="Benchmark Phase 2 parallelization")
+    parser.add_argument("--input-dir", type=Path, help="Directory with test images")
+    parser.add_argument("--synthetic", action="store_true", help="Use synthetic images")
+    parser.add_argument("--num-images", type=int, default=20, help="Number of synthetic images")
+    parser.add_argument("--workers", type=int, nargs="+", default=[1, 2, 4], help="Worker counts to test (default: 1 2 4)")
+    parser.add_argument("--test-cache", action="store_true", help="Test cache effectiveness")
+    parser.add_argument("--output", type=Path, help="Output directory for results")
 
     args = parser.parse_args()
 
@@ -255,7 +240,7 @@ def main():
     if args.output:
         output_base = args.output
     else:
-        output_base = Path(tempfile.mkdtemp(prefix='phase2_benchmark_'))
+        output_base = Path(tempfile.mkdtemp(prefix="phase2_benchmark_"))
 
     output_base.mkdir(parents=True, exist_ok=True)
     logger.info(f"Output directory: {output_base}")
@@ -267,11 +252,11 @@ def main():
         input_root = synthetic_dir
     elif args.input_dir:
         input_root = args.input_dir
-        extensions = ['.jpg', '.jpeg', '.png']
+        extensions = [".jpg", ".jpeg", ".png"]
         image_paths = []
         for ext in extensions:
-            image_paths.extend(input_root.rglob(f'*{ext}'))
-            image_paths.extend(input_root.rglob(f'*{ext.upper()}'))
+            image_paths.extend(input_root.rglob(f"*{ext}"))
+            image_paths.extend(input_root.rglob(f"*{ext.upper()}"))
         logger.info(f"Found {len(image_paths)} images in {input_root}")
     else:
         logger.error("Must specify --input-dir or --synthetic")
@@ -284,7 +269,7 @@ def main():
     all_results = []
 
     # Benchmark 1: Sequential processing
-    logger.info("\n" + "="*60)
+    logger.info("\n" + "=" * 60)
     seq_output = output_base / "sequential"
     seq_config = EnhanceConfig(
         model_variant=ModelVariant.METRIC_LARGE,
@@ -298,10 +283,8 @@ def main():
     logger.info(f"Sequential: {seq_results['throughput_images_per_second']:.2f} images/sec")
 
     # Benchmark 2: Parallel processing with different worker counts
-    logger.info("\n" + "="*60)
-    scalability_results = benchmark_worker_scalability(
-        output_base, image_paths, input_root, args.workers
-    )
+    logger.info("\n" + "=" * 60)
+    scalability_results = benchmark_worker_scalability(output_base, image_paths, input_root, args.workers)
     all_results.extend(scalability_results)
 
     for result in scalability_results:
@@ -313,7 +296,7 @@ def main():
 
     # Benchmark 3: Cache effectiveness (optional)
     if args.test_cache:
-        logger.info("\n" + "="*60)
+        logger.info("\n" + "=" * 60)
         cache_output = output_base / "cache_test"
         cache_config = EnhanceConfig(
             model_variant=ModelVariant.METRIC_LARGE,
@@ -331,18 +314,22 @@ def main():
         logger.info(f"Cache entries: {cache_results.get('cache_entries_after_pass2', 0)}")
 
     # Write summary
-    logger.info("\n" + "="*60)
+    logger.info("\n" + "=" * 60)
     logger.info("=== Benchmark Summary ===")
     summary_path = output_base / "benchmark_summary.json"
-    with open(summary_path, 'w') as f:
-        json.dump({
-            'config': {
-                'num_images': len(image_paths),
-                'worker_counts_tested': args.workers,
-                'cache_tested': args.test_cache,
+    with open(summary_path, "w") as f:
+        json.dump(
+            {
+                "config": {
+                    "num_images": len(image_paths),
+                    "worker_counts_tested": args.workers,
+                    "cache_tested": args.test_cache,
+                },
+                "results": all_results,
             },
-            'results': all_results,
-        }, f, indent=2)
+            f,
+            indent=2,
+        )
 
     logger.info(f"Results saved to: {summary_path}")
     logger.info(f"Output directory: {output_base}")
@@ -350,5 +337,5 @@ def main():
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

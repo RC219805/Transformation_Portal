@@ -5,13 +5,14 @@ Fix TIFF 16-bit Saving Issue
 Proper method to save 16-bit TIFFs with full quality preservation.
 """
 
-import numpy as np
-from PIL import Image
-import tifffile
 from pathlib import Path
 
+import numpy as np
+import tifffile
+from PIL import Image
 
-def save_16bit_tiff_pil(image_array: np.ndarray, output_path: Path, compression='lzw'):
+
+def save_16bit_tiff_pil(image_array: np.ndarray, output_path: Path, compression="lzw"):
     """
     Save 16-bit TIFF using PIL (proper method).
 
@@ -40,11 +41,11 @@ def save_16bit_tiff_pil(image_array: np.ndarray, output_path: Path, compression=
         save_16bit_tiff_tifffile(array_16bit, output_path, compression)
     else:
         # Grayscale - PIL can handle this
-        img = Image.fromarray(array_16bit, mode='I;16')
+        img = Image.fromarray(array_16bit, mode="I;16")
         img.save(output_path, compression=compression)
 
 
-def save_16bit_tiff_tifffile(image_array: np.ndarray, output_path: Path, compression='lzw'):
+def save_16bit_tiff_tifffile(image_array: np.ndarray, output_path: Path, compression="lzw"):
     """
     Save 16-bit TIFF using tifffile (RECOMMENDED for RGB).
 
@@ -66,22 +67,16 @@ def save_16bit_tiff_tifffile(image_array: np.ndarray, output_path: Path, compres
         raise ValueError(f"Unsupported dtype: {image_array.dtype}")
 
     # Map compression parameter
-    compress_map = {
-        'lzw': 'lzw',
-        'tiff_deflate': 'deflate',
-        'deflate': 'deflate',
-        'zstd': 'zstd',
-        None: None
-    }
+    compress_map = {"lzw": "lzw", "tiff_deflate": "deflate", "deflate": "deflate", "zstd": "zstd", None: None}
     compress = compress_map.get(compression, compression)
 
     # Save with tifffile
     tifffile.imwrite(
         output_path,
         array_16bit,
-        photometric='rgb' if array_16bit.ndim == 3 else 'minisblack',
+        photometric="rgb" if array_16bit.ndim == 3 else "minisblack",
         compression=compress,
-        metadata={'axes': 'YXC' if array_16bit.ndim == 3 else 'YX'}
+        metadata={"axes": "YXC" if array_16bit.ndim == 3 else "YX"},
     )
 
     print(f"✅ Saved 16-bit TIFF: {output_path.name}")

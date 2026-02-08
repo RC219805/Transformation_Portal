@@ -6,10 +6,12 @@ Confirms that all pipelines use the optimal tifffile.imwrite() method
 for 16-bit RGB TIFF saving.
 """
 
-import numpy as np
 from pathlib import Path
-from PIL import Image
+
+import numpy as np
 import tifffile
+from PIL import Image
+
 
 def test_tiff_quality():
     """Test that our TIFF saving preserves 16-bit quality."""
@@ -27,7 +29,7 @@ def test_tiff_quality():
     from fix_tiff_16bit import save_16bit_tiff_tifffile
 
     print("\n1. Testing save_16bit_tiff_tifffile()...")
-    save_16bit_tiff_tifffile(test_array, test_path, compression='lzw')
+    save_16bit_tiff_tifffile(test_array, test_path, compression="lzw")
 
     # Verify
     loaded = tifffile.imread(test_path)
@@ -81,6 +83,7 @@ def test_tiff_quality():
     print("\n✅ All 750 Picacho TIFFs will maintain maximum quality")
 
     return True
+
 
 if __name__ == "__main__":
     success = test_tiff_quality()

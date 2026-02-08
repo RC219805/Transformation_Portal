@@ -5,8 +5,8 @@ Part of DOC-001: Documentation consolidation.
 """
 
 import os
-from pathlib import Path
 from datetime import datetime, timedelta
+from pathlib import Path
 
 # Deprecation date: 30 days from now
 deprecation_date = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
@@ -65,6 +65,6 @@ def add_deprecation_notice(filepath: str, canonical: str):
 if __name__ == "__main__":
     for filepath, canonical in DUPLICATES:
         add_deprecation_notice(filepath, canonical)
-    
+
     print(f"\nDeprecated {len(DUPLICATES)} files")
     print(f"Removal scheduled for: {deprecation_date}")

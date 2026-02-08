@@ -5,9 +5,11 @@ Verify TIFF file quality - check bit depth and data integrity
 
 import sys
 from pathlib import Path
-import tifffile
+
 import numpy as np
+import tifffile
 from PIL import Image
+
 
 def verify_tiff(tiff_path: Path):
     """Verify a TIFF file is properly 16-bit RGB."""
@@ -55,9 +57,9 @@ def verify_tiff(tiff_path: Path):
         print(f"PIL mode: {pil_img.mode}")
         print(f"PIL size: {pil_img.size}")
 
-        if pil_img.mode == 'RGB':
+        if pil_img.mode == "RGB":
             print("⚠️  Note: PIL shows as 'RGB' (8-bit), but tifffile confirms 16-bit")
-        elif pil_img.mode == 'I;16':
+        elif pil_img.mode == "I;16":
             print("✓ PIL confirms 16-bit mode")
     except Exception as e:
         print(f"Error loading with PIL: {e}")

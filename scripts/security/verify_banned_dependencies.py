@@ -14,7 +14,6 @@ from typing import List, Set
 
 import tomli
 
-
 # Banned packages (security/license/quality concerns)
 BANNED_PACKAGES = {
     "realesrgan": "Unmaintained, use local implementation",
@@ -70,7 +69,7 @@ def check_requirements_files() -> List[str]:
     banned_lower = {b.lower(): BANNED_PACKAGES[b] for b in BANNED_PACKAGES}
 
     for req_file in req_dir.glob("*.txt"):
-        is_constraints = (req_file.name == "constraints.txt")
+        is_constraints = req_file.name == "constraints.txt"
 
         with open(req_file, encoding="utf-8") as f:
             for line_num, raw_line in enumerate(f, 1):

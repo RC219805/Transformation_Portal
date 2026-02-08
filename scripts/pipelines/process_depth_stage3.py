@@ -24,7 +24,7 @@ print("Applying depth-guided enhancements...")
 
 # Convert to arrays
 img_array = np.array(image).astype(float) / 255.0
-depth_array = np.array(depth_map.convert('L')).astype(float) / 255.0
+depth_array = np.array(depth_map.convert("L")).astype(float) / 255.0
 
 # Zone-based processing (5 depth zones)
 zones = []

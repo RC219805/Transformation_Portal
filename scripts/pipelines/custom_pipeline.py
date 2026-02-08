@@ -32,12 +32,7 @@ try:
         DepthGuidedFilters,
         ZoneToneMapping,
     )
-    from transformation_portal.depth.utils import (
-        depth_statistics,
-        load_image,
-        save_image,
-        visualize_depth,
-    )
+    from transformation_portal.depth.utils import depth_statistics, load_image, save_image, visualize_depth
 except ImportError as e:
     print("ERROR: Could not import transformation_portal package.")
     print(f"Details: {e}")
@@ -75,7 +70,7 @@ def main():
     # 3. Estimate depth
     print("\n[3/6] Estimating depth...")
     depth_result = model.estimate_depth(image)
-    depth = depth_result['depth']
+    depth = depth_result["depth"]
     print(f"      Inference time: {depth_result['metadata']['inference_time_ms']:.1f}ms")
 
     # Print depth statistics
@@ -96,12 +91,12 @@ def main():
     tone_mapper = ZoneToneMapping(
         num_zones=4,
         zone_params=[
-            {'contrast': 1.3, 'saturation': 1.15, 'exposure': 0.0},
-            {'contrast': 1.15, 'saturation': 1.08, 'exposure': 0.0},
-            {'contrast': 1.0, 'saturation': 1.0, 'exposure': 0.0},
-            {'contrast': 0.9, 'saturation': 0.85, 'exposure': -0.1},
+            {"contrast": 1.3, "saturation": 1.15, "exposure": 0.0},
+            {"contrast": 1.15, "saturation": 1.08, "exposure": 0.0},
+            {"contrast": 1.0, "saturation": 1.0, "exposure": 0.0},
+            {"contrast": 0.9, "saturation": 0.85, "exposure": -0.1},
         ],
-        method='agx'
+        method="agx",
     )
 
     atmosphere = AtmosphericEffects(
@@ -141,7 +136,7 @@ def main():
 
     # Save depth visualization
     depth_viz_path = output_dir / f"{stem}_depth.png"
-    visualize_depth(depth, colormap='turbo', save_path=str(depth_viz_path))
+    visualize_depth(depth, colormap="turbo", save_path=str(depth_viz_path))
     print(f"      Depth viz: {depth_viz_path}")
 
     # 6. Done
@@ -149,5 +144,5 @@ def main():
     print("=" * 60)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

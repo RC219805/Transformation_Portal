@@ -8,7 +8,8 @@ files are not accidentally excluded.
 
 import sys
 from pathlib import Path
-from typing import List, Dict
+from typing import Dict, List
+
 import yaml
 
 

@@ -27,6 +27,7 @@ from PIL import Image
 @dataclass
 class RenderingStrategy:
     """Rendering strategy derived from architectural context."""
+
     room_type: str
     primary_materials: List[str]
     lighting_style: str  # natural, dramatic, soft, ambient
@@ -44,58 +45,54 @@ class ContextAwareRenderingPipeline:
 
     # Room-specific rendering strategies
     ROOM_STRATEGIES = {
-        'kitchen': RenderingStrategy(
-            room_type='kitchen',
-            primary_materials=['metal', 'stone', 'wood', 'glass'],
-            lighting_style='bright',
-            depth_emphasis='balanced',
-            color_temperature='neutral',
+        "kitchen": RenderingStrategy(
+            room_type="kitchen",
+            primary_materials=["metal", "stone", "wood", "glass"],
+            lighting_style="bright",
+            depth_emphasis="balanced",
+            color_temperature="neutral",
             enhancement_strength=0.75,
-            lut_preset='signature_estate',
+            lut_preset="signature_estate",
         ),
-        'bathroom': RenderingStrategy(
-            room_type='bathroom',
-            primary_materials=['stone', 'glass', 'metal', 'tile'],
-            lighting_style='soft',
-            depth_emphasis='balanced',
-            color_temperature='neutral',
+        "bathroom": RenderingStrategy(
+            room_type="bathroom",
+            primary_materials=["stone", "glass", "metal", "tile"],
+            lighting_style="soft",
+            depth_emphasis="balanced",
+            color_temperature="neutral",
             enhancement_strength=0.7,
-            lut_preset='serene_spa',
+            lut_preset="serene_spa",
         ),
-        'bedroom': RenderingStrategy(
-            room_type='bedroom',
-            primary_materials=['wood', 'fabric', 'leather'],
-            lighting_style='soft',
-            depth_emphasis='atmospheric',
-            color_temperature='warm',
+        "bedroom": RenderingStrategy(
+            room_type="bedroom",
+            primary_materials=["wood", "fabric", "leather"],
+            lighting_style="soft",
+            depth_emphasis="atmospheric",
+            color_temperature="warm",
             enhancement_strength=0.6,
-            lut_preset='warm_invitation',
+            lut_preset="warm_invitation",
         ),
-        'living': RenderingStrategy(
-            room_type='living',
-            primary_materials=['wood', 'fabric', 'stone', 'leather'],
-            lighting_style='ambient',
-            depth_emphasis='balanced',
-            color_temperature='warm',
+        "living": RenderingStrategy(
+            room_type="living",
+            primary_materials=["wood", "fabric", "stone", "leather"],
+            lighting_style="ambient",
+            depth_emphasis="balanced",
+            color_temperature="warm",
             enhancement_strength=0.7,
-            lut_preset='golden_hour_interior',
+            lut_preset="golden_hour_interior",
         ),
-        'outdoor': RenderingStrategy(
-            room_type='outdoor',
-            primary_materials=['stone', 'concrete', 'wood', 'metal'],
-            lighting_style='natural',
-            depth_emphasis='atmospheric',
-            color_temperature='neutral',
+        "outdoor": RenderingStrategy(
+            room_type="outdoor",
+            primary_materials=["stone", "concrete", "wood", "metal"],
+            lighting_style="natural",
+            depth_emphasis="atmospheric",
+            color_temperature="neutral",
             enhancement_strength=0.8,
-            lut_preset='golden_hour_courtyard',
+            lut_preset="golden_hour_courtyard",
         ),
     }
 
-    def __init__(
-        self,
-        project_context: ProjectContext,
-        output_dir: Path = None
-    ):
+    def __init__(self, project_context: ProjectContext, output_dir: Path = None):
         """
         Initialize context-aware pipeline.
 
@@ -135,11 +132,11 @@ class ContextAwareRenderingPipeline:
 
         # Alias matching
         aliases = {
-            'kitchen': ['kitch', 'cook'],
-            'bathroom': ['bath', 'powder'],
-            'bedroom': ['bed', 'master', 'primary'],
-            'living': ['great room', 'living', 'family'],
-            'outdoor': ['pool', 'patio', 'deck', 'terrace', 'courtyard', 'exterior'],
+            "kitchen": ["kitch", "cook"],
+            "bathroom": ["bath", "powder"],
+            "bedroom": ["bed", "master", "primary"],
+            "living": ["great room", "living", "family"],
+            "outdoor": ["pool", "patio", "deck", "terrace", "courtyard", "exterior"],
         }
 
         for room_key, alias_list in aliases.items():
@@ -174,11 +171,11 @@ class ContextAwareRenderingPipeline:
             print(f"⚠ Could not identify room type from: {image_path.name}")
             print("  Using balanced default strategy")
             return RenderingStrategy(
-                room_type='unknown',
-                primary_materials=self.context.materials_palette[:4] if self.context.materials_palette else ['wood', 'stone'],
-                lighting_style='ambient',
-                depth_emphasis='balanced',
-                color_temperature='neutral',
+                room_type="unknown",
+                primary_materials=self.context.materials_palette[:4] if self.context.materials_palette else ["wood", "stone"],
+                lighting_style="ambient",
+                depth_emphasis="balanced",
+                color_temperature="neutral",
                 enhancement_strength=0.7,
             )
 
@@ -193,21 +190,18 @@ class ContextAwareRenderingPipeline:
         # Adjust materials based on project palette
         if self.context.materials_palette:
             # Prioritize materials that appear in both strategy and project
-            matched_materials = [
-                mat for mat in base_strategy.primary_materials
-                if mat in self.context.materials_palette
-            ]
+            matched_materials = [mat for mat in base_strategy.primary_materials if mat in self.context.materials_palette]
             if matched_materials:
                 base_strategy.primary_materials = matched_materials
 
         # Adjust based on design style
         if self.context.design_style:
             style_lower = self.context.design_style.lower()
-            if 'modern' in style_lower or 'contemporary' in style_lower:
-                base_strategy.color_temperature = 'neutral'
+            if "modern" in style_lower or "contemporary" in style_lower:
+                base_strategy.color_temperature = "neutral"
                 base_strategy.enhancement_strength = min(base_strategy.enhancement_strength + 0.1, 1.0)
-            elif 'traditional' in style_lower:
-                base_strategy.color_temperature = 'warm'
+            elif "traditional" in style_lower:
+                base_strategy.color_temperature = "warm"
                 base_strategy.enhancement_strength = max(base_strategy.enhancement_strength - 0.1, 0.5)
 
         print(f"\n✓ Derived strategy for {room_type}:")
@@ -222,52 +216,49 @@ class ContextAwareRenderingPipeline:
     def generate_depth_config(self, strategy: RenderingStrategy) -> Dict:
         """Generate depth pipeline configuration from strategy."""
         base_config = {
-            'model_size': 'small',
-            'device': 'mps',  # Apple Silicon
+            "model_size": "small",
+            "device": "mps",  # Apple Silicon
         }
 
         # Depth emphasis
-        if strategy.depth_emphasis == 'foreground':
-            base_config['zone_weights'] = {
-                'foreground': 1.0,
-                'midground': 0.6,
-                'background': 0.3,
+        if strategy.depth_emphasis == "foreground":
+            base_config["zone_weights"] = {
+                "foreground": 1.0,
+                "midground": 0.6,
+                "background": 0.3,
             }
-        elif strategy.depth_emphasis == 'atmospheric':
-            base_config['zone_weights'] = {
-                'foreground': 0.6,
-                'midground': 0.8,
-                'background': 1.0,
+        elif strategy.depth_emphasis == "atmospheric":
+            base_config["zone_weights"] = {
+                "foreground": 0.6,
+                "midground": 0.8,
+                "background": 1.0,
             }
         else:  # balanced
-            base_config['zone_weights'] = {
-                'foreground': 0.8,
-                'midground': 1.0,
-                'background': 0.8,
+            base_config["zone_weights"] = {
+                "foreground": 0.8,
+                "midground": 1.0,
+                "background": 0.8,
             }
 
         # Tone mapping based on lighting style
         tone_map_operators = {
-            'bright': 'reinhard',
-            'soft': 'hable',
-            'dramatic': 'filmic',
-            'natural': 'agx',
-            'ambient': 'agx',
+            "bright": "reinhard",
+            "soft": "hable",
+            "dramatic": "filmic",
+            "natural": "agx",
+            "ambient": "agx",
         }
-        base_config['tone_map'] = tone_map_operators.get(
-            strategy.lighting_style,
-            'agx'
-        )
+        base_config["tone_map"] = tone_map_operators.get(strategy.lighting_style, "agx")
 
         return base_config
 
     def generate_material_config(self, strategy: RenderingStrategy) -> Dict:
         """Generate material response configuration from strategy."""
         config = {
-            'enabled_surfaces': strategy.primary_materials,
-            'global_strength': strategy.enhancement_strength,
-            'preserve_highlights': True,
-            'micro_contrast': 0.15,
+            "enabled_surfaces": strategy.primary_materials,
+            "global_strength": strategy.enhancement_strength,
+            "preserve_highlights": True,
+            "micro_contrast": 0.15,
         }
 
         # Per-material strengths
@@ -277,25 +268,25 @@ class ContextAwareRenderingPipeline:
             strength = strategy.enhancement_strength * (1.0 - i * 0.1)
             material_strengths[material] = max(strength, 0.5)
 
-        config['material_strengths'] = material_strengths
+        config["material_strengths"] = material_strengths
 
         return config
 
     def generate_color_config(self, strategy: RenderingStrategy) -> Dict:
         """Generate color grading configuration from strategy."""
         config = {
-            'lut_preset': strategy.lut_preset,
-            'lut_strength': 0.7,
+            "lut_preset": strategy.lut_preset,
+            "lut_strength": 0.7,
         }
 
         # Temperature adjustments
         temp_adjustments = {
-            'warm': {'saturation': 1.08, 'tint': 5},
-            'neutral': {'saturation': 1.05, 'tint': 0},
-            'cool': {'saturation': 1.03, 'tint': -5},
+            "warm": {"saturation": 1.08, "tint": 5},
+            "neutral": {"saturation": 1.05, "tint": 0},
+            "cool": {"saturation": 1.03, "tint": -5},
         }
 
-        adjustments = temp_adjustments.get(strategy.color_temperature, temp_adjustments['neutral'])
+        adjustments = temp_adjustments.get(strategy.color_temperature, temp_adjustments["neutral"])
         config.update(adjustments)
 
         return config
@@ -333,21 +324,25 @@ class ContextAwareRenderingPipeline:
 
         # Save strategy and configs
         strategy_path = self.output_dir / f"{image_path.stem}_strategy.json"
-        with open(strategy_path, 'w') as f:
-            json.dump({
-                'strategy': {
-                    'room_type': strategy.room_type,
-                    'primary_materials': strategy.primary_materials,
-                    'lighting_style': strategy.lighting_style,
-                    'depth_emphasis': strategy.depth_emphasis,
-                    'color_temperature': strategy.color_temperature,
-                    'enhancement_strength': strategy.enhancement_strength,
-                    'lut_preset': strategy.lut_preset,
+        with open(strategy_path, "w") as f:
+            json.dump(
+                {
+                    "strategy": {
+                        "room_type": strategy.room_type,
+                        "primary_materials": strategy.primary_materials,
+                        "lighting_style": strategy.lighting_style,
+                        "depth_emphasis": strategy.depth_emphasis,
+                        "color_temperature": strategy.color_temperature,
+                        "enhancement_strength": strategy.enhancement_strength,
+                        "lut_preset": strategy.lut_preset,
+                    },
+                    "depth_config": depth_config,
+                    "material_config": material_config,
+                    "color_config": color_config,
                 },
-                'depth_config': depth_config,
-                'material_config': material_config,
-                'color_config': color_config,
-            }, f, indent=2)
+                f,
+                indent=2,
+            )
 
         print(f"\n✓ Strategy saved: {strategy_path}")
 
@@ -370,20 +365,13 @@ def main():
     """CLI for context-aware rendering."""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description='Context-aware architectural rendering'
-    )
-    parser.add_argument('image', type=Path, help='Rendering to process')
-    parser.add_argument('--context', '-c', type=Path, required=True,
-                        help='Path to extracted context JSON or PDF')
-    parser.add_argument('--output', '-o', type=Path, default=Path('output_context_aware'),
-                        help='Output directory')
-    parser.add_argument('--no-depth', action='store_true',
-                        help='Skip depth processing')
-    parser.add_argument('--no-material', action='store_true',
-                        help='Skip material response')
-    parser.add_argument('--no-color', action='store_true',
-                        help='Skip color grading')
+    parser = argparse.ArgumentParser(description="Context-aware architectural rendering")
+    parser.add_argument("image", type=Path, help="Rendering to process")
+    parser.add_argument("--context", "-c", type=Path, required=True, help="Path to extracted context JSON or PDF")
+    parser.add_argument("--output", "-o", type=Path, default=Path("output_context_aware"), help="Output directory")
+    parser.add_argument("--no-depth", action="store_true", help="Skip depth processing")
+    parser.add_argument("--no-material", action="store_true", help="Skip material response")
+    parser.add_argument("--no-color", action="store_true", help="Skip color grading")
 
     args = parser.parse_args()
 
@@ -392,36 +380,34 @@ def main():
         return 1
 
     # Load or extract context
-    if args.context.suffix == '.pdf':
+    if args.context.suffix == ".pdf":
         print(f"Extracting context from PDF: {args.context}")
         extractor = ArchitecturalContextExtractor()
         context = extractor.extract_from_pdf(args.context)
-    elif args.context.suffix == '.json':
+    elif args.context.suffix == ".json":
         print(f"Loading context: {args.context}")
-        with open(args.context, 'r') as f:
+        with open(args.context, "r") as f:
             context_data = json.load(f)
         # Reconstruct context (simplified)
         from architectural_context_extractor import RoomContext
+
         rooms = {}
-        for room_key, room_data in context_data.get('rooms', {}).items():
+        for room_key, room_data in context_data.get("rooms", {}).items():
             rooms[room_key] = RoomContext(**room_data)
         context = ProjectContext(
-            project_name=context_data['project_name'],
-            project_number=context_data.get('project_number'),
-            address=context_data.get('address'),
+            project_name=context_data["project_name"],
+            project_number=context_data.get("project_number"),
+            address=context_data.get("address"),
             rooms=rooms,
-            materials_palette=context_data.get('materials_palette', []),
-            design_style=context_data.get('design_style'),
+            materials_palette=context_data.get("materials_palette", []),
+            design_style=context_data.get("design_style"),
         )
     else:
         print(f"✗ Context must be PDF or JSON: {args.context}")
         return 1
 
     # Initialize pipeline
-    pipeline = ContextAwareRenderingPipeline(
-        project_context=context,
-        output_dir=args.output
-    )
+    pipeline = ContextAwareRenderingPipeline(project_context=context, output_dir=args.output)
 
     # Process render
     output = pipeline.process_render(
@@ -437,5 +423,5 @@ def main():
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     exit(main())

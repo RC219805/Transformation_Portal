@@ -23,10 +23,7 @@ if (_repo_root / "src").exists():
         sys.path.insert(0, _src_path)
 
 # Re-export all public functions for backward compatibility
-from transformation_portal.pipelines.lux_render_pipeline import (  # noqa: E402
-    apply_material_response_finishing,
-    main,
-)
+from transformation_portal.pipelines.lux_render_pipeline import apply_material_response_finishing, main  # noqa: E402
 
 # Make linting happy - these are intentionally re-exported
 __all__ = [

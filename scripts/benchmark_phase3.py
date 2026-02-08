@@ -10,10 +10,10 @@ Tests performance of:
 """
 
 import argparse
-import time
 import json
-from pathlib import Path
 import sys
+import time
+from pathlib import Path
 
 import numpy as np
 
@@ -23,17 +23,18 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 def benchmark_coreml():
     """Benchmark CoreML vs PyTorch MPS for depth inference."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("Benchmark 1: CoreML ANE vs PyTorch MPS (Depth Inference)")
-    print("="*80)
+    print("=" * 80)
 
     import platform
+
     if platform.system() != "Darwin" or platform.machine() != "arm64":
         print("⚠️  Skipped: CoreML only available on Apple Silicon")
         return None
 
     try:
-        from transformation_portal.lux_depth_v3.config import DeviceConfig, DA3Config
+        from transformation_portal.lux_depth_v3.config import DA3Config, DeviceConfig
         from transformation_portal.lux_depth_v3.inference import DA3InferenceEngine
     except ImportError as e:
         print(f"⚠️  Skipped: {e}")
@@ -62,7 +63,7 @@ def benchmark_coreml():
 
         avg_time = np.mean(times)
         print(f"  PyTorch MPS: {avg_time:.1f}ms/image (avg of 5 runs)")
-        results['pytorch_mps_ms'] = avg_time
+        results["pytorch_mps_ms"] = avg_time
     except Exception as e:
         print(f"  PyTorch MPS failed: {e}")
 
@@ -86,12 +87,12 @@ def benchmark_coreml():
 
         avg_time = np.mean(times)
         print(f"  CoreML ANE: {avg_time:.1f}ms/image (avg of 5 runs)")
-        results['coreml_ane_ms'] = avg_time
+        results["coreml_ane_ms"] = avg_time
 
-        if 'pytorch_mps_ms' in results:
-            speedup = results['pytorch_mps_ms'] / avg_time
+        if "pytorch_mps_ms" in results:
+            speedup = results["pytorch_mps_ms"] / avg_time
             print(f"\n  ✓ Speedup: {speedup:.1f}x")
-            results['speedup'] = speedup
+            results["speedup"] = speedup
     except ImportError:
         print("  ⚠️  CoreML skipped: coremltools not installed")
     except Exception as e:
@@ -102,14 +103,12 @@ def benchmark_coreml():
 
 def benchmark_pbr_batching(num_images=10):
     """Benchmark PBR GPU batching vs sequential."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print(f"Benchmark 2: PBR GPU Batching vs Sequential ({num_images} images)")
-    print("="*80)
+    print("=" * 80)
 
     try:
-        from transformation_portal.lux_depth_v3.pbr import (
-            PBRConfig, generate_pbr_maps, generate_pbr_maps_batched
-        )
+        from transformation_portal.lux_depth_v3.pbr import PBRConfig, generate_pbr_maps, generate_pbr_maps_batched
     except ImportError as e:
         print(f"⚠️  Skipped: {e}")
         return None
@@ -126,7 +125,7 @@ def benchmark_pbr_batching(num_images=10):
     seq_results = [generate_pbr_maps(depth, config) for depth in depths]
     seq_time = (time.time() - start) * 1000
     print(f"  Sequential: {seq_time:.1f}ms total ({seq_time/num_images:.1f}ms/image)")
-    results['sequential_ms'] = seq_time
+    results["sequential_ms"] = seq_time
 
     # Batched (CPU)
     print("\nTesting batched PBR generation (CPU)...")
@@ -134,7 +133,7 @@ def benchmark_pbr_batching(num_images=10):
     batch_results = generate_pbr_maps_batched(depths, config, device="cpu")
     batch_time = (time.time() - start) * 1000
     print(f"  Batched (CPU): {batch_time:.1f}ms total ({batch_time/num_images:.1f}ms/image)")
-    results['batched_cpu_ms'] = batch_time
+    results["batched_cpu_ms"] = batch_time
 
     speedup_cpu = seq_time / batch_time
     print(f"  CPU speedup: {speedup_cpu:.2f}x")
@@ -142,28 +141,29 @@ def benchmark_pbr_batching(num_images=10):
     # Batched (GPU) if available
     try:
         import torch
+
         if torch.backends.mps.is_available():
             print("\nTesting batched PBR generation (MPS)...")
             start = time.time()
             batch_results_gpu = generate_pbr_maps_batched(depths, config, device="mps")
             batch_time_gpu = (time.time() - start) * 1000
             print(f"  Batched (MPS): {batch_time_gpu:.1f}ms total ({batch_time_gpu/num_images:.1f}ms/image)")
-            results['batched_mps_ms'] = batch_time_gpu
+            results["batched_mps_ms"] = batch_time_gpu
 
             speedup_gpu = seq_time / batch_time_gpu
             print(f"\n  ✓ MPS speedup: {speedup_gpu:.2f}x")
-            results['speedup'] = speedup_gpu
+            results["speedup"] = speedup_gpu
         elif torch.cuda.is_available():
             print("\nTesting batched PBR generation (CUDA)...")
             start = time.time()
             batch_results_gpu = generate_pbr_maps_batched(depths, config, device="cuda")
             batch_time_gpu = (time.time() - start) * 1000
             print(f"  Batched (CUDA): {batch_time_gpu:.1f}ms total ({batch_time_gpu/num_images:.1f}ms/image)")
-            results['batched_cuda_ms'] = batch_time_gpu
+            results["batched_cuda_ms"] = batch_time_gpu
 
             speedup_gpu = seq_time / batch_time_gpu
             print(f"\n  ✓ CUDA speedup: {speedup_gpu:.2f}x")
-            results['speedup'] = speedup_gpu
+            results["speedup"] = speedup_gpu
         else:
             print("\n  ⚠️  No GPU available for batching test")
     except ImportError:
@@ -174,9 +174,9 @@ def benchmark_pbr_batching(num_images=10):
 
 def benchmark_msgpack(num_manifests=1000):
     """Benchmark MessagePack vs JSON for manifests."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print(f"Benchmark 3: MessagePack vs JSON ({num_manifests} manifests)")
-    print("="*80)
+    print("=" * 80)
 
     try:
         from transformation_portal.lux_depth_v3.manifest import CombinedManifest, InputMetadata
@@ -194,7 +194,7 @@ def benchmark_msgpack(num_manifests=1000):
             image_path=f"/test/images/image_{i:04d}.jpg",
             image_sha256="abc123def456" * 5,
             image_size_bytes=1024000,
-            image_dimensions=(1920, 1080)
+            image_dimensions=(1920, 1080),
         )
         manifest.start_time = "2024-01-01T00:00:00Z"
         manifest.end_time = "2024-01-01T00:01:00Z"
@@ -217,8 +217,8 @@ def benchmark_msgpack(num_manifests=1000):
 
         json_size = sum(f.stat().st_size for f in json_files)
         print(f"  JSON write: {json_write_time:.1f}ms, size: {json_size/1024/1024:.2f}MB")
-        results['json_write_ms'] = json_write_time
-        results['json_size_mb'] = json_size / 1024 / 1024
+        results["json_write_ms"] = json_write_time
+        results["json_size_mb"] = json_size / 1024 / 1024
 
         # JSON read
         start = time.time()
@@ -226,7 +226,7 @@ def benchmark_msgpack(num_manifests=1000):
             _ = CombinedManifest.load(json_path)
         json_read_time = (time.time() - start) * 1000
         print(f"  JSON read: {json_read_time:.1f}ms")
-        results['json_read_ms'] = json_read_time
+        results["json_read_ms"] = json_read_time
 
         # MessagePack
         try:
@@ -243,8 +243,8 @@ def benchmark_msgpack(num_manifests=1000):
 
             msgpack_size = sum(f.stat().st_size for f in msgpack_files)
             print(f"  MessagePack write: {msgpack_write_time:.1f}ms, size: {msgpack_size/1024/1024:.2f}MB")
-            results['msgpack_write_ms'] = msgpack_write_time
-            results['msgpack_size_mb'] = msgpack_size / 1024 / 1024
+            results["msgpack_write_ms"] = msgpack_write_time
+            results["msgpack_size_mb"] = msgpack_size / 1024 / 1024
 
             # MessagePack read
             start = time.time()
@@ -252,15 +252,15 @@ def benchmark_msgpack(num_manifests=1000):
                 _ = CombinedManifest.load_msgpack(msgpack_path)
             msgpack_read_time = (time.time() - start) * 1000
             print(f"  MessagePack read: {msgpack_read_time:.1f}ms")
-            results['msgpack_read_ms'] = msgpack_read_time
+            results["msgpack_read_ms"] = msgpack_read_time
 
             # Comparison
             size_reduction = (1 - msgpack_size / json_size) * 100
             read_speedup = json_read_time / msgpack_read_time
             print(f"\n  ✓ Size reduction: {size_reduction:.1f}%")
             print(f"  ✓ Read speedup: {read_speedup:.1f}x")
-            results['size_reduction_pct'] = size_reduction
-            results['read_speedup'] = read_speedup
+            results["size_reduction_pct"] = size_reduction
+            results["read_speedup"] = read_speedup
         except ImportError:
             print("\n  ⚠️  msgpack not available")
 
@@ -269,17 +269,15 @@ def benchmark_msgpack(num_manifests=1000):
 
 def benchmark_xxhash(num_operations=10000):
     """Benchmark xxHash vs SHA-1 for output keys."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print(f"Benchmark 4: xxHash vs SHA-1 ({num_operations} operations)")
-    print("="*80)
+    print("=" * 80)
 
     import hashlib
 
     # Test data
     test_paths = [
-        f"photos/scene{i:04d}/subfolder/image_{j:04d}.jpg".encode()
-        for i in range(10)
-        for j in range(num_operations // 10)
+        f"photos/scene{i:04d}/subfolder/image_{j:04d}.jpg".encode() for i in range(10) for j in range(num_operations // 10)
     ]
 
     results = {}
@@ -291,7 +289,7 @@ def benchmark_xxhash(num_operations=10000):
         _ = hashlib.sha1(path).hexdigest()[:8]
     sha1_time = (time.time() - start) * 1000
     print(f"  SHA-1: {sha1_time:.1f}ms ({sha1_time/num_operations*1000:.2f}µs/op)")
-    results['sha1_ms'] = sha1_time
+    results["sha1_ms"] = sha1_time
 
     # xxHash
     try:
@@ -303,11 +301,11 @@ def benchmark_xxhash(num_operations=10000):
             _ = xxhash.xxh64(path).hexdigest()[:8]
         xxhash_time = (time.time() - start) * 1000
         print(f"  xxHash: {xxhash_time:.1f}ms ({xxhash_time/num_operations*1000:.2f}µs/op)")
-        results['xxhash_ms'] = xxhash_time
+        results["xxhash_ms"] = xxhash_time
 
         speedup = sha1_time / xxhash_time
         print(f"\n  ✓ Speedup: {speedup:.1f}x")
-        results['speedup'] = speedup
+        results["speedup"] = speedup
     except ImportError:
         print("\n  ⚠️  xxhash not available")
 
@@ -335,27 +333,27 @@ def main():
     if args.all or args.coreml:
         results = benchmark_coreml()
         if results:
-            all_results['coreml'] = results
+            all_results["coreml"] = results
 
     if args.all or args.pbr_batch:
         results = benchmark_pbr_batching(num_images=args.test_images)
         if results:
-            all_results['pbr_batching'] = results
+            all_results["pbr_batching"] = results
 
     if args.all or args.msgpack:
         results = benchmark_msgpack(num_manifests=1000)
         if results:
-            all_results['msgpack'] = results
+            all_results["msgpack"] = results
 
     if args.all or args.xxhash:
         results = benchmark_xxhash(num_operations=10000)
         if results:
-            all_results['xxhash'] = results
+            all_results["xxhash"] = results
 
     # Summary
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("SUMMARY")
-    print("="*80)
+    print("=" * 80)
 
     for category, results in all_results.items():
         print(f"\n{category.upper()}:")
@@ -368,7 +366,7 @@ def main():
     # Save results
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        with open(args.output, 'w') as f:
+        with open(args.output, "w") as f:
             json.dump(all_results, f, indent=2)
         print(f"\n✓ Results saved to {args.output}")
 
