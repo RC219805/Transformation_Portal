@@ -26,7 +26,7 @@ Phase 2.1 successfully hardened dependency validation by requiring both `torch` 
 **Acceptance Criteria:**
 - [ ] `torch` always required for non-dry-run execution
 - [ ] `transformers` only required when backend uses HuggingFace models
-- [ ] Import failures (`ImportError`/`OSError`) produce single, actionable `RuntimeError`
+- [ ] Import-time failures (any exception raised while importing ML dependencies, e.g., `ImportError`/`OSError`/`RuntimeError`) produce a single, actionable `RuntimeError`
 - [ ] Unit tests cover:
   - [ ] Broken `torch` install → "missing/broken torch"
   - [ ] Backend not requiring `transformers` → doesn't demand it
@@ -75,7 +75,7 @@ Phase 2.1 successfully hardened dependency validation by requiring both `torch` 
 **Acceptance Criteria:**
 - [ ] 2+ weeks of nightly data collected
 - [ ] Performance budgets documented in `docs/apex/phase3/PERFORMANCE_BUDGETS.md`
-- [ ] Thresholds encoded in `scripts/apex_gate_evaluator.py` (or config)
+- [ ] Thresholds encoded in `src/transformation_portal/metrics/gate.py` and `scripts/apex_enforce_gate.py` (or config)
 - [ ] At least one "would-block" scenario tested in shadow mode
 
 ---
@@ -122,7 +122,7 @@ Phase 2.1 successfully hardened dependency validation by requiring both `torch` 
 - [Phase 2 Completion Report](../apex/phase2/COMPLETION_REPORT.md)
 - [Phase 2.1 Hardening Summary](../apex/phase2/PHASE2.1_HARDENING_SUMMARY.md)
 - [APEX Real Pipeline Integration](../apex/phase2/REAL_PIPELINE_INTEGRATION.md)
-- [Performance Contract](../apex/PERFORMANCE_CONTRACT.md)
+- [Performance Contract](../apex/APEX_CONTRACT.md)
 
 ---
 
