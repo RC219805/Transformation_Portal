@@ -45,7 +45,10 @@ jobs:
       - name: Install dependencies
         run: |
           set -euo pipefail
-          pip install -e .
+          # Install package with all core dependencies
+          # Note: Upgrade build tools to ensure dependencies are properly resolved
+          pip install --upgrade pip setuptools wheel
+          pip install -e . --no-cache-dir
 
       - name: Run APEX Matrix (Shadow Mode)
         env:
