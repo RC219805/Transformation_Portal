@@ -67,6 +67,10 @@ def auto_detect_device() -> str:
 
     Returns:
         "mps" if Apple Silicon available, "cuda" if NVIDIA GPU available, else "cpu"
+
+    Note:
+        Catches all exceptions (not just ImportError) to handle broken torch installs
+        (e.g., CUDA driver mismatches, corrupted shared libs). Degrades to CPU.
     """
     try:
         import torch
@@ -76,19 +80,23 @@ def auto_detect_device() -> str:
         if torch.cuda.is_available():
             return "cuda"
         return "cpu"
-    except ImportError:
-        # Torch not available, default to CPU
+    except Exception as e:
+        # Torch not available or broken, default to CPU
+        logger.debug(f"Torch import/check failed ({e}), falling back to CPU")
         return "cpu"
 
 
-def check_ml_dependencies(require_torch: bool = False) -> tuple[bool, list[str]]:
-    """Check availability of ML dependencies.
+def check_ml_dependencies() -> tuple[bool, list[str]]:
+    """Check availability of ML dependencies for real pipeline execution.
 
-    Args:
-        require_torch: If True, fail if torch is not available
+    For Phase 2 real runs, both torch and transformers are required.
 
     Returns:
         (all_available, missing_packages)
+
+    Note:
+        Simplified from earlier version - real pipeline requires both deps,
+        so no point in having a confusing require_torch flag.
     """
     missing = []
 
@@ -103,10 +111,6 @@ def check_ml_dependencies(require_torch: bool = False) -> tuple[bool, list[str]]
         missing.append("transformers")
 
     all_available = len(missing) == 0
-
-    if require_torch and "torch" in missing:
-        return False, missing
-
     return all_available, missing
 
 
@@ -166,12 +170,12 @@ def run_apex_for_config(
         raise ValueError(f"Input directory required for real execution: {input_dir}")
 
     # Check ML dependencies early (fail fast with clear message)
-    ml_available, missing = check_ml_dependencies(require_torch=True)
+    ml_available, missing = check_ml_dependencies()
     if not ml_available:
         error_msg = (
             f"Real execution requires ML dependencies: {', '.join(missing)}\n\n"
             "Install with:\n"
-            "  pip install torch transformers\n\n"
+            "  pip install -e .[ml]\n\n"
             "Or use --dry-run for synthetic testing without ML deps."
         )
         raise RuntimeError(error_msg)

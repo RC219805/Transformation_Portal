@@ -493,7 +493,7 @@ def generate_pr_comment(
     if is_synthetic:
         lines.append("# 🎯 APEX Performance Report [SYNTHETIC DATA]\n")
         lines.append("> ⚠️ **This report uses mock data (dry-run mode)**  \n")
-        lines.append("> Real pipeline integration tracked in `docs/APEX_REAL_PIPELINE_INTEGRATION.md`\n")
+        lines.append("> Real pipeline integration tracked in `docs/apex/phase2/REAL_PIPELINE_INTEGRATION.md`\n")
     else:
         lines.append("# 🎯 APEX Performance Report\n")
 

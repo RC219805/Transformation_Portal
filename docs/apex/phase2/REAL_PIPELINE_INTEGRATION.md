@@ -71,11 +71,11 @@ Real pipeline execution is implemented in `scripts/apex_matrix_runner.py` with e
 Real execution validates ML dependencies before any processing:
 
 ```python
-ml_available, missing = check_ml_dependencies(require_torch=True)
+ml_available, missing = check_ml_dependencies()
 if not ml_available:
     raise RuntimeError(
         f"Real execution requires: {', '.join(missing)}\n"
-        "Install with: pip install torch transformers\n"
+        "Install with: pip install -e .[ml]\n"
         "Or use --dry-run for synthetic testing."
     )
 ```
@@ -84,6 +84,8 @@ if not ml_available:
 - `torch` not available
 - `transformers` not available
 - Input directory missing/empty
+
+**Note:** Manual real runs may require workflow approval depending on GitHub repository settings (workflow permissions, first-time contributors, or `workflow_dispatch` triggers).
 
 ### Device Auto-Detection
 
