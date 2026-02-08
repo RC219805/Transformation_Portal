@@ -38,8 +38,18 @@ def aggregate_ledger(
         with sqlite3.connect(db_path) as conn:
             conn.row_factory = sqlite3.Row
 
-            # Load all capsules from ledger
-            cursor = conn.execute("SELECT capsule_json FROM performance_capsules")
+            # Load capsules for this run only (scoped by run_id if available)
+            # Schema-aware: check if run_id column exists
+            cursor = conn.execute("PRAGMA table_info(performance_capsules)")
+            columns = [row[1] for row in cursor.fetchall()]
+
+            if "run_id" in columns:
+                cursor = conn.execute("SELECT capsule_json FROM performance_capsules WHERE run_id = ?", (run_id,))
+            else:
+                # Fallback: load all (legacy schema or first run)
+                logger.warning("run_id column not found; loading all capsules (may be incorrect for multi-run DB)")
+                cursor = conn.execute("SELECT capsule_json FROM performance_capsules")
+
             rows = cursor.fetchall()
 
             if not rows:

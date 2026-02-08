@@ -444,9 +444,41 @@ def generate_v1_v2_comparison(
     return "\n".join(lines)
 
 
+def check_for_synthetic_data(run_id: str, commit_sha: str, ledger_db: Path) -> bool:
+    """Check if run contains synthetic/dry-run data.
+
+    Returns:
+        True if synthetic data detected
+    """
+    try:
+        with sqlite3.connect(ledger_db) as conn:
+            # Check if any capsule has synthetic metadata
+            cursor = conn.execute(
+                """
+                SELECT capsule_json FROM performance_capsules
+                WHERE run_id = ? LIMIT 1
+                """,
+                (run_id,)
+            )
+            row = cursor.fetchone()
+
+            if row:
+                import json
+                capsule_data = json.loads(row[0])
+                metadata = capsule_data.get("metadata", {})
+                return metadata.get("synthetic", False) or metadata.get("dry_run", False)
+
+            return False
+
+    except Exception as e:
+        logger.warning(f"Could not check for synthetic data: {e}")
+        return False
+
+
 def generate_pr_comment(
     run_id: str,
     commit_sha: str,
+    ledger_db: Path,
     v1_stats: List[Dict[str, Any]],
     v2_stats: List[Dict[str, Any]],
     v1_judgement: Optional[Judgement] = None,
@@ -459,6 +491,7 @@ def generate_pr_comment(
     Args:
         run_id: Run identifier
         commit_sha: Git commit SHA
+        ledger_db: Path to performance ledger
         v1_stats: V1 raw stats from database
         v2_stats: V2 raw stats from database
         v1_judgement: V1 workflow judgement (optional)
@@ -470,7 +503,18 @@ def generate_pr_comment(
         Markdown comment string
     """
     lines = []
-    lines.append("# 🎯 APEX Performance Report\n")
+
+    # --- SYNTHETIC DATA WARNING (if dry-run) ---
+    # Check if this run contains synthetic data
+    is_synthetic = check_for_synthetic_data(run_id, commit_sha, ledger_db)
+
+    if is_synthetic:
+        lines.append("# ⚠️  APEX Performance Report (SYNTHETIC DATA)\n")
+        lines.append("> **Note:** This report is generated from dry-run/scaffolding mode with mock data.\n")
+        lines.append("> Real pipeline integration is tracked in: [docs/APEX_REAL_PIPELINE_INTEGRATION.md](../docs/APEX_REAL_PIPELINE_INTEGRATION.md)\n")
+        lines.append("")
+    else:
+        lines.append("# 🎯 APEX Performance Report\n")
 
     # Overall gate verdict at top
     overall_status = worst_status(v2_stats or v1_stats)
@@ -574,6 +618,7 @@ def main() -> int:
     parser.add_argument("--ledger-db", type=Path, required=True, help="Ledger database")
     parser.add_argument("--output", type=Path, required=True, help="Output markdown file")
     parser.add_argument("--summary-file", type=Path, help="Optional summary.json from matrix runner")
+    parser.add_argument("--synthetic", action="store_true", help="Mark report as synthetic (dry-run) data")
 
     args = parser.parse_args()
 
@@ -647,6 +692,7 @@ def main() -> int:
         comment = generate_pr_comment(
             run_id=args.run_id,
             commit_sha=args.commit_sha,
+            ledger_db=args.ledger_db,
             v1_stats=v1_stats,
             v2_stats=v2_stats,
             v1_judgement=v1_judgement,

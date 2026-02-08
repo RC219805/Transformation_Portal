@@ -42,8 +42,13 @@ def backfill_capsule_metadata(
     return capsule_dict
 
 
-def rebuild_ledger(input_dir: Path, db_path: Path) -> int:
+def rebuild_ledger(input_dir: Path, db_path: Path, clean: bool = False) -> int:
     """Rebuild ledger from observation JSON files.
+
+    Args:
+        input_dir: Directory containing observation_*.json files
+        db_path: Path to ledger database
+        clean: If True, truncate existing performance_capsules before ingesting
 
     Returns:
         Exit code (0=success, 2=no files, 3=no capsules, 4=failures)
@@ -56,6 +61,15 @@ def rebuild_ledger(input_dir: Path, db_path: Path) -> int:
     if not ledger.ensure_ready():
         logger.error("Ledger initialization failed")
         return 1
+
+    # Clean rebuild: truncate existing capsules to avoid duplicates
+    if clean:
+        import sqlite3
+
+        logger.warning("CLEAN MODE: Truncating performance_capsules table")
+        with sqlite3.connect(db_path) as conn:
+            conn.execute("DELETE FROM performance_capsules")
+            conn.commit()
 
     # Find all observation files
     files = sorted(input_dir.glob("**/observation_*.json"))
@@ -130,6 +144,11 @@ def main():
         default=Path("apex_performance.db"),
         help="Path to ledger database (default: apex_performance.db)",
     )
+    parser.add_argument(
+        "--clean",
+        action="store_true",
+        help="Truncate existing capsules before ingesting (deterministic rebuild)",
+    )
 
     args = parser.parse_args()
 
@@ -137,7 +156,7 @@ def main():
         logger.error(f"Input directory does not exist: {args.input_dir}")
         sys.exit(1)
 
-    sys.exit(rebuild_ledger(args.input_dir, args.ledger_db))
+    sys.exit(rebuild_ledger(args.input_dir, args.ledger_db, clean=args.clean))
 
 
 if __name__ == "__main__":
