@@ -21,11 +21,12 @@ class TestGate:
         p95: float,
         threshold_p95: float = 15.0,
         pass_fail: str = "pass",
+        count: int = 25,  # Default to above min_samples threshold
     ) -> BucketStats:
         """Helper to create test BucketStats."""
         return BucketStats(
             bucket_name=name,
-            count=10,
+            count=count,
             p50=p95 * 0.7,
             p95=p95,
             p99=p95 * 1.1,

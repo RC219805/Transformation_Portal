@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Dict, Literal, Optional, Tuple
+from typing import Any, Dict, Literal, Optional, Tuple
 
 from transformation_portal.metrics.contracts import Judgement
 
@@ -109,7 +109,7 @@ def evaluate_gate(
     max_regression_threshold: float = 0.15,
     mode: Literal["enforce", "shadow", "disabled"] = "enforce",
     min_samples: int = 20,
-) -> Tuple[str, str]:
+) -> GateResult:
     """Evaluate full gate logic with detailed results.
 
     Gate rules (evaluated in order):
@@ -132,8 +132,7 @@ def evaluate_gate(
         min_samples: Minimum samples required for statistical validity (default: 20)
 
     Returns:
-        Tuple of (verdict, explanation)
-        verdict: "pass", "warn", "fail", "insufficient_data"
+        GateResult with verdict and detailed reasoning
     """
     reasons = []
 
@@ -142,12 +141,21 @@ def evaluate_gate(
         bucket_stats = judgement.bucket_stats
         regression_report = judgement.regression_report
         worst_zone_p95 = judgement.worst_zone_p95
+        worst_zone_name = getattr(judgement, "worst_zone_name", None)
     else:
         worst_zone_p95 = None
+        worst_zone_name = None
 
     # Rule 0: Disabled mode always passes
     if mode == "disabled":
-        return "pass", "Gate is disabled"
+        return GateResult(
+            should_block=False,
+            mode=mode,
+            reasons=[],
+            explanation="Gate is disabled",
+            worst_zone_p95=worst_zone_p95,
+            worst_zone_name=worst_zone_name,
+        )
 
     # Rule 1: Check minimum sample size for statistical validity
     if bucket_stats:
@@ -158,7 +166,14 @@ def evaluate_gate(
                 f"need n>={min_samples} for reliable percentiles"
             )
             logger.warning(explanation)
-            return "insufficient_data", explanation
+            return GateResult(
+                should_block=False,
+                mode=mode,
+                reasons=[],
+                explanation=explanation,
+                worst_zone_p95=worst_zone_p95,
+                worst_zone_name=worst_zone_name,
+            )
 
     # Rule 2: Check bucket threshold violations
     failing_buckets = []
@@ -173,9 +188,8 @@ def evaluate_gate(
     # Rule 3: Check worst-zone p95
     if worst_zone_p95_threshold is not None and worst_zone_p95 is not None:
         if worst_zone_p95 > worst_zone_p95_threshold:
-            reasons.append(
-                f"Worst-zone p95 exceeded: {worst_zone_p95:.2f}s > {worst_zone_p95_threshold:.2f}s"
-            )
+            zone_info = f" (zone: {worst_zone_name})" if worst_zone_name else ""
+            reasons.append(f"Worst-zone p95 exceeded: {worst_zone_p95:.2f}s > {worst_zone_p95_threshold:.2f}s{zone_info}")
 
     # Rule 4: Check regression threshold
     if regression_report is not None:
@@ -185,14 +199,26 @@ def evaluate_gate(
                 f"{max_regression_threshold * 100:.1f}% (bucket: {regression_report.max_regression_bucket})"
             )
 
-    # Determine verdict based on mode
+    # Determine verdict and should_block based on mode
     if len(reasons) > 0:
         if mode == "enforce":
-            return "fail", f"Gate BLOCKED: {'; '.join(reasons)}"
+            should_block = True
+            explanation = f"Gate BLOCKED: {'; '.join(reasons)}"
         else:  # shadow
-            return "warn", f"Gate SHADOW (would block): {'; '.join(reasons)}"
+            should_block = False
+            explanation = f"Gate SHADOW (would block): {'; '.join(reasons)}"
+    else:
+        should_block = False
+        explanation = "Gate PASSED"
 
-    return "pass", "Gate PASSED"
+    return GateResult(
+        should_block=should_block,
+        mode=mode,
+        reasons=reasons,
+        explanation=explanation,
+        worst_zone_p95=worst_zone_p95,
+        worst_zone_name=worst_zone_name,
+    )
 
 
 def should_block_v1_v2_comparison(

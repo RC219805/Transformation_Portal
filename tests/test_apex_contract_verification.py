@@ -133,19 +133,16 @@ class TestMinimumSampleSize:
         }
 
         # Evaluate gate
-        verdict, explanation = evaluate_gate(
+        result = evaluate_gate(
             bucket_stats=bucket_stats,
             regression_report=None,
             mode="enforce",
         )
 
-        # With n=1, should get insufficient_data or warn (not PASS)
-        assert verdict in (
-            "insufficient_data",
-            "warn",
-        ), f"Expected insufficient_data/warn for n=1, got {verdict}"
+        # With n=1, should get insufficient_data (should_block=False)
+        assert not result.should_block, f"Should not block with only n=1 samples"
         assert (
-            "sample" in explanation.lower() or "insufficient" in explanation.lower()
+            "sample" in result.explanation.lower() or "insufficient" in result.explanation.lower()
         ), "Explanation should mention sample size"
 
     def test_sufficient_data_for_large_n(self):
@@ -166,14 +163,15 @@ class TestMinimumSampleSize:
             )
         }
 
-        verdict, explanation = evaluate_gate(
+        result = evaluate_gate(
             bucket_stats=bucket_stats,
             regression_report=None,
             mode="enforce",
         )
 
         # With n=25 and p95 < threshold, should PASS
-        assert verdict == "pass", f"Expected pass for n=25, got {verdict}"
+        assert not result.should_block, f"Should not block when p95 < threshold with sufficient samples"
+        assert len(result.reasons) == 0, "Should have no blocking reasons"
 
     @pytest.mark.parametrize("n", [1, 5, 10, 15, 19])
     def test_boundary_cases_below_minimum(self, n):
@@ -194,14 +192,14 @@ class TestMinimumSampleSize:
             )
         }
 
-        verdict, _ = evaluate_gate(
+        result = evaluate_gate(
             bucket_stats=bucket_stats,
             regression_report=None,
             mode="enforce",
         )
 
         # All should trigger protection
-        assert verdict != "fail", f"Should not FAIL with only n={n} samples"
+        assert not result.should_block, f"Should not block with only n={n} samples (insufficient data)"
 
 
 class TestSyntheticIsolation:
