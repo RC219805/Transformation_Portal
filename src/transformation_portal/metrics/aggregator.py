@@ -121,36 +121,37 @@ def compute_bucket_stats(
     )
 
 
-def validate_single_run_capsules(
+def validate_workflow_version_consistency(
     capsules: List[PerformanceCapsule],
     expected_run_context: Optional[str] = None,
     *,
     strict: bool = True,
 ) -> None:
-    """Validate that all capsules belong to the same logical run context.
+    """Validate workflow version consistency within zones (proxy for run contamination).
 
-    In APEX v1.0, aggregation assumes a single-run ledger (CI creates fresh DB
-    per workflow execution). This validator detects violations of that assumption.
+    Checks that each zone contains capsules from only one workflow version (v1 OR v2).
+    Mixed workflow versions within a zone may indicate multi-run ledger contamination.
 
     Args:
         capsules: List of performance capsules to validate
         expected_run_context: Optional expected context identifier (unused, deprecated)
-        strict: If True, raises ValueError on contamination (default).
+        strict: If True, raises ValueError on mixed versions (default).
                 If False, logs warning only (for forensic analysis).
 
     Raises:
-        ValueError: If strict=True and capsules from multiple runs detected
+        ValueError: If strict=True and mixed workflow versions detected in any zone
 
     Design note:
-        Current implementation uses workflow_version + zone as contamination proxy.
-        This is a HEURISTIC - stronger invariant would be commit_sha or run_id.
-        Future schema evolution should add run_id/commit_sha to capsules for
-        robust contamination detection. For now, workflow_version mixing is
-        sufficient to catch common contamination scenarios in CI.
+        This function validates workflow_version + zone consistency as a HEURISTIC
+        for detecting multi-run contamination. Stronger invariants (commit_sha, run_id)
+        require schema evolution to add those fields to performance_capsules table.
 
-        In CI: DB is intended to be ephemeral per job (unique temp/workspace path),
-        so contamination should not occur unless DB path or artifacts are reused
-        across jobs. Locally: pass strict=False and filter by commit/run explicitly.
+        Current approach is sufficient for common CI contamination scenarios where
+        mixed workflow versions indicate accidental data mixing from separate runs.
+
+        In CI: DB is ephemeral per job (unique temp/workspace path), so contamination
+        should not occur unless DB path or artifacts are reused across jobs.
+        Locally: pass strict=False and filter by commit/run explicitly in queries.
     """
     if not capsules:
         return
@@ -196,8 +197,8 @@ def compute_per_zone_stats(
     if buckets is None:
         buckets = DEFAULT_BUCKETS
 
-    # Validate single-run assumption (logs warning if violated)
-    validate_single_run_capsules(capsules)
+    # Validate workflow version consistency (raises on contamination in strict mode, warns otherwise)
+    validate_workflow_version_consistency(capsules)
 
     # Group capsules by zone
     capsules_by_zone: Dict[str, List[PerformanceCapsule]] = {}

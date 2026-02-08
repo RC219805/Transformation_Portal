@@ -213,8 +213,8 @@ class TestAggregator:
         assert stats_zone_a.count == 1  # Only zone A capsule matched
 
 
-class TestValidateSingleRun:
-    """Test single-run validation for contamination detection."""
+class TestValidateWorkflowVersionConsistency:
+    """Test workflow version consistency validation for contamination detection."""
 
     def create_capsule(
         self,
@@ -247,7 +247,7 @@ class TestValidateSingleRun:
         """Test that strict=True raises ValueError on mixed workflow versions in same zone."""
         import pytest
 
-        from transformation_portal.metrics.aggregator import validate_single_run_capsules
+        from transformation_portal.metrics.aggregator import validate_workflow_version_consistency
 
         capsules = [
             self.create_capsule("img1", workflow_version="v1", zone="local"),
@@ -255,13 +255,13 @@ class TestValidateSingleRun:
         ]
 
         with pytest.raises(ValueError, match="mixed workflow versions"):
-            validate_single_run_capsules(capsules, strict=True)
+            validate_workflow_version_consistency(capsules, strict=True)
 
     def test_non_strict_warns_on_mixed_workflow_versions(self, caplog):
         """Test that strict=False logs warning but doesn't raise on contamination."""
         import logging
 
-        from transformation_portal.metrics.aggregator import validate_single_run_capsules
+        from transformation_portal.metrics.aggregator import validate_workflow_version_consistency
 
         capsules = [
             self.create_capsule("img1", workflow_version="v1", zone="local"),
@@ -270,14 +270,14 @@ class TestValidateSingleRun:
 
         # Should not raise
         with caplog.at_level(logging.WARNING):
-            validate_single_run_capsules(capsules, strict=False)
+            validate_workflow_version_consistency(capsules, strict=False)
 
         # Should have logged warning
         assert "mixed workflow versions" in caplog.text.lower()
 
     def test_happy_path_single_workflow_no_raise(self):
         """Test that clean single-workflow data doesn't raise or warn."""
-        from transformation_portal.metrics.aggregator import validate_single_run_capsules
+        from transformation_portal.metrics.aggregator import validate_workflow_version_consistency
 
         capsules = [
             self.create_capsule("img1", workflow_version="v1", zone="local"),
@@ -286,11 +286,11 @@ class TestValidateSingleRun:
         ]
 
         # Should not raise (no assertion needed - test passes if no exception)
-        validate_single_run_capsules(capsules, strict=True)
+        validate_workflow_version_consistency(capsules, strict=True)
 
     def test_multi_zone_same_workflow_allowed(self):
         """Test that different zones with same workflow version is allowed."""
-        from transformation_portal.metrics.aggregator import validate_single_run_capsules
+        from transformation_portal.metrics.aggregator import validate_workflow_version_consistency
 
         capsules = [
             self.create_capsule("img1", workflow_version="v1", zone="zone-a"),
@@ -299,10 +299,10 @@ class TestValidateSingleRun:
         ]
 
         # Should not raise - multiple zones is expected for matrix runs
-        validate_single_run_capsules(capsules, strict=True)
+        validate_workflow_version_consistency(capsules, strict=True)
 
     def test_empty_capsules_no_raise(self):
         """Test that empty capsule list doesn't raise."""
-        from transformation_portal.metrics.aggregator import validate_single_run_capsules
+        from transformation_portal.metrics.aggregator import validate_workflow_version_consistency
 
-        validate_single_run_capsules([], strict=True)
+        validate_workflow_version_consistency([], strict=True)

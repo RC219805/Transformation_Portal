@@ -58,6 +58,34 @@ from transformation_portal.metrics.performance_capsule import PerformanceCapsule
 
 __version__ = "1.0.0"
 
+
+def _get_pipeline_version() -> str:
+    """Get pipeline version from package metadata or fallback to git SHA.
+
+    Returns:
+        Version string (e.g., "0.1.0" or "git-abc123")
+    """
+    try:
+        from importlib.metadata import version
+
+        return version("transformation-portal")
+    except Exception:
+        # Fallback to git SHA if package not installed
+        try:
+            import subprocess
+
+            result = subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=2,
+            )
+            return f"git-{result.stdout.strip()}"
+        except Exception:
+            return "unknown"
+
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -207,8 +235,12 @@ def run_apex_for_config(
 
                 # Extract metadata from result
                 if result and result.get("status") == "ok":
-                    # Compute input hash
-                    input_hash = hashlib.sha256(image_path.read_bytes()).hexdigest()[:16]
+                    # Compute input hash for reproducibility (chunked to handle large files)
+                    h = hashlib.sha256()
+                    with image_path.open("rb") as f:
+                        while chunk := f.read(8192):
+                            h.update(chunk)
+                    input_hash = h.hexdigest()[:16]
 
                     # Get enforced shape from result or use original
                     enforced_shape = result.get("enforced_shape", original_shape)
@@ -231,7 +263,7 @@ def run_apex_for_config(
                         workflow_version=run_spec.workflow_version,
                         zone=zone,
                         scene_type=run_spec.scene_type,
-                        pipeline_version="2.0.0",
+                        pipeline_version=_get_pipeline_version(),
                         is_synthetic=False,  # Real data
                     )
 
