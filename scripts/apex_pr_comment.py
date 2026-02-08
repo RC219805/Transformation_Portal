@@ -485,12 +485,12 @@ def generate_pr_comment(
 
     # Gate verdict details
     if gate_result_v1:
-        v1_verdict = "PASSED ✅" if not gate_result_v1.should_block else "BLOCKED ❌"
+        v1_verdict = "PASSED ✅" if not gate_result_v1["should_block"] else "BLOCKED ❌"
         lines.append(f"**V1 Gate:** {v1_verdict}")
 
     if gate_result_v2:
-        v2_verdict = "PASSED ✅" if not gate_result_v2.should_block else "BLOCKED ❌"
-        lines.append(f"**V2 Gate:** {v2_verdict} (mode: {gate_result_v2.mode})")
+        v2_verdict = "PASSED ✅" if not gate_result_v2["should_block"] else "BLOCKED ❌"
+        lines.append(f"**V2 Gate:** {v2_verdict} (mode: {gate_result_v2['mode']})")
 
     lines.append("")
 
@@ -643,11 +643,21 @@ def main() -> int:
 
         if v1_judgement:
             verdict, explanation = evaluate_gate(v1_judgement, mode="enforce")
-            gate_result_v1 = {"verdict": verdict, "explanation": explanation, "mode": "enforce"}
+            gate_result_v1 = {
+                "verdict": verdict,
+                "explanation": explanation,
+                "mode": "enforce",
+                "should_block": verdict == "fail",  # Add should_block for consistency
+            }
 
         if v2_judgement:
             verdict, explanation = evaluate_gate(v2_judgement, mode="shadow")
-            gate_result_v2 = {"verdict": verdict, "explanation": explanation, "mode": "shadow"}
+            gate_result_v2 = {
+                "verdict": verdict,
+                "explanation": explanation,
+                "mode": "shadow",
+                "should_block": verdict == "fail",  # Add should_block for consistency
+            }
 
         # Generate comment with new signature
         comment = generate_pr_comment(
