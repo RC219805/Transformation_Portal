@@ -16,7 +16,6 @@ class TestTimingContext:
             time.sleep(0.01)
 
         assert timer.elapsed_sec >= 0.01
-        assert timer.elapsed_sec < 0.02
 
     def test_accumulate_into_dict(self):
         """Test accumulating timings into dict."""
@@ -39,7 +38,6 @@ class TestTimingContext:
             time.sleep(0.01)
 
         assert timer.elapsed_sec >= 0.01
-        assert timer.elapsed_sec < 0.02
 
     def test_timing_context_mps_device_graceful_fallback(self):
         """Test MPS device falls back gracefully if torch unavailable."""

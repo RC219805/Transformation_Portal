@@ -241,14 +241,15 @@ python -m transformation_portal.metrics.ledger prune \
 
 ## Schema Stability
 
-The `PerformanceCapsule` schema is **contract-stable** (v1.0.0).
+The `PerformanceCapsule` schema is **contract-stable** (current baseline: v3.0.0).
+Capsules serialized with earlier schema versions (e.g., v1.0.0, v2.0.0) remain supported via explicit, versioned migration.
 
-Breaking changes require:
+Breaking changes to the capsule schema require:
 - Version bump
 - Migration plan
 - Contract test updates
 
-See `tests/test_performance_capsule_contract.py` for enforced invariants.
+See `tests/test_performance_capsule_contract.py` for enforced invariants, including migration behavior.
 
 ## Examples
 

@@ -27,9 +27,6 @@ tools:
   - file_system
   - bash
 
-context_repositories:
-  - /Users/rc/Projects/Transformation_Portal
-
 instructions: |
   You are the APEX Workflow Orchestrator, a senior expert in depth-aware rendering pipelines
   for luxury real estate and architectural visualization.

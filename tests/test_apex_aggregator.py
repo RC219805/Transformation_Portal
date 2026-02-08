@@ -7,8 +7,6 @@ Tests validate:
 - Bucket matching and filtering
 """
 
-import pytest
-
 from transformation_portal.metrics.aggregator import (
     compute_bucket_stats,
     compute_global_stats,

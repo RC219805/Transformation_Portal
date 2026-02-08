@@ -42,7 +42,7 @@ import json
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 __version__ = "1.0.0"
 
@@ -64,7 +64,7 @@ def generate_dashboard_data(db_path: Path, days: int = 90) -> Dict[str, Any]:
 
         # Query trends using pre-aggregated view (Phase 3 optimization)
         trends_query = """
-            SELECT 
+            SELECT
                 date,
                 bucket_name,
                 zone,
@@ -85,7 +85,7 @@ def generate_dashboard_data(db_path: Path, days: int = 90) -> Dict[str, Any]:
 
         # Query regressions (warnings and failures)
         regressions_query = """
-            SELECT 
+            SELECT
                 timestamp,
                 commit_sha,
                 bucket_name,
@@ -107,7 +107,7 @@ def generate_dashboard_data(db_path: Path, days: int = 90) -> Dict[str, Any]:
         # Query worst offenders (all time, by max ratio)
         # Using optimized composite index on bucket_name, zone, timestamp
         worst_query = """
-            SELECT 
+            SELECT
                 bucket_name,
                 zone,
                 workflow_version,
@@ -127,7 +127,7 @@ def generate_dashboard_data(db_path: Path, days: int = 90) -> Dict[str, Any]:
 
         # Latest run summary (using timestamp DESC index)
         latest_query = """
-            SELECT 
+            SELECT
                 run_id,
                 commit_sha,
                 timestamp,
@@ -185,7 +185,7 @@ def generate_index_html(data: Dict[str, Any], output_dir: Path) -> None:
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-        body {{ 
+        body {{
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", sans-serif;
             line-height: 1.6;
             color: #24292e;
@@ -274,12 +274,12 @@ def generate_index_html(data: Dict[str, Any], output_dir: Path) -> None:
         <header>
             <h1>🎯 APEX Performance Dashboard</h1>
             <p class="subtitle">
-                Generated: {data['generated_at']} UTC | 
+                Generated: {data['generated_at']} UTC |
                 Showing last {data['days']} days |
                 <a href="latest.html">Latest Run →</a>
             </p>
         </header>
-        
+
         <div class="metrics">
             <div class="metric-card">
                 <div class="metric-value">{total_runs}</div>
@@ -294,44 +294,44 @@ def generate_index_html(data: Dict[str, Any], output_dir: Path) -> None:
                 <div class="metric-label">Problem Buckets</div>
             </div>
         </div>
-        
+
         <div class="chart-section">
             <h2>📈 Performance Trends (p95 Latency)</h2>
             <canvas id="trendsChart"></canvas>
         </div>
-        
+
         <div class="chart-section">
             <h2>🔥 Worst Offenders (Max p95/Threshold Ratio)</h2>
             <canvas id="worstChart"></canvas>
         </div>
-        
+
         <div class="chart-section">
             <h2>⚠️ Recent Regressions</h2>
             <canvas id="regressionsChart"></canvas>
         </div>
-        
+
         <div class="footer">
             <p>
-                APEX Performance Observability Platform v1.0 | 
+                APEX Performance Observability Platform v1.0 |
                 <a href="data.json">Download Raw Data</a>
             </p>
         </div>
     </div>
-    
+
     <script>
         const trendsData = {trends_json};
         const worstData = {worst_json};
         const regressionsData = {json.dumps(data['regressions'])};
-        
+
         // ========================================
         // Trends Chart (Time Series)
         // ========================================
         const trendsCtx = document.getElementById('trendsChart').getContext('2d');
-        
+
         // Group by bucket and prepare datasets
         const buckets = [...new Set(trendsData.map(d => d.bucket_name))];
         const dates = [...new Set(trendsData.map(d => d.date))].sort().reverse();
-        
+
         const datasets = buckets.map((bucket, idx) => {{
             const bucketData = trendsData.filter(d => d.bucket_name === bucket);
             const colors = [
@@ -341,7 +341,7 @@ def generate_index_html(data: Dict[str, Any], output_dir: Path) -> None:
                 'rgb(255, 206, 86)',
                 'rgb(153, 102, 255)',
             ];
-            
+
             return {{
                 label: bucket,
                 data: dates.map(date => {{
@@ -354,7 +354,7 @@ def generate_index_html(data: Dict[str, Any], output_dir: Path) -> None:
                 fill: false,
             }};
         }});
-        
+
         new Chart(trendsCtx, {{
             type: 'line',
             data: {{
@@ -393,12 +393,12 @@ def generate_index_html(data: Dict[str, Any], output_dir: Path) -> None:
                 }}
             }}
         }});
-        
+
         // ========================================
         // Worst Offenders Chart (Horizontal Bar)
         // ========================================
         const worstCtx = document.getElementById('worstChart').getContext('2d');
-        
+
         new Chart(worstCtx, {{
             type: 'bar',
             data: {{
@@ -409,7 +409,7 @@ def generate_index_html(data: Dict[str, Any], output_dir: Path) -> None:
                 datasets: [{{
                     label: 'Max p95/threshold ratio',
                     data: worstData.map(d => d.max_ratio),
-                    backgroundColor: worstData.map(d => 
+                    backgroundColor: worstData.map(d =>
                         d.max_ratio > 1.5 ? 'rgb(220, 38, 38)' : 'rgb(251, 146, 60)'
                     ),
                 }}]
@@ -444,12 +444,12 @@ def generate_index_html(data: Dict[str, Any], output_dir: Path) -> None:
                 }}
             }}
         }});
-        
+
         // ========================================
         // Regressions Timeline (Scatter)
         // ========================================
         const regressionsCtx = document.getElementById('regressionsChart').getContext('2d');
-        
+
         const regressionPoints = regressionsData.map(d => ({{
             x: d.timestamp,
             y: d.p95 / d.threshold_p95,
@@ -457,7 +457,7 @@ def generate_index_html(data: Dict[str, Any], output_dir: Path) -> None:
             zone: d.zone || 'global',
             status: d.pass_fail
         }}));
-        
+
         new Chart(regressionsCtx, {{
             type: 'scatter',
             data: {{
@@ -626,7 +626,7 @@ def generate_latest_html(data: Dict[str, Any], output_dir: Path) -> None:
                 <a href="index.html">← Back to Dashboard</a>
             </p>
         </header>
-        
+
         <table>
             <thead>
                 <tr>
@@ -644,7 +644,7 @@ def generate_latest_html(data: Dict[str, Any], output_dir: Path) -> None:
                 {rows_html}
             </tbody>
         </table>
-        
+
         <div class="footer">
             <p>
                 APEX Performance Observability Platform v1.0 |

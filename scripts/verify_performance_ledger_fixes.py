@@ -8,7 +8,6 @@ Run this to verify the implementation.
 from transformation_portal.metrics import (
     PerformanceBucket,
     PerformanceCapsule,
-    compute_specificity,
     get_bucket_for_capsule,
     timing_context,
     DEFAULT_BUCKETS,

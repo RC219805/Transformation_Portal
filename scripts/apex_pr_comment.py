@@ -25,14 +25,11 @@ Version: 1.0.0
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import sqlite3
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-
-from transformation_portal.metrics.aggregator import compute_worst_zone_p95
 from transformation_portal.metrics.comparator import query_baseline_stats
 from transformation_portal.metrics.contracts import BucketStats, Judgement
 from transformation_portal.metrics.gate import evaluate_gate
@@ -129,7 +126,7 @@ def fetch_run_stats(
     """
     query_base = """
         SELECT bucket_name, zone, p50, p95, p99, count,
-               pass_fail, threshold_p95
+               pass_fail, threshold_p95, workflow_version
         FROM apex_runs
         WHERE run_id = ? AND workflow_version = ?
     """

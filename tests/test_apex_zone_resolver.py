@@ -11,8 +11,6 @@ Tests validate:
 import os
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from transformation_portal.metrics.zone_resolver import ZoneResolver
 
 

@@ -8,8 +8,6 @@ Tests validate:
 - Bucket threshold gating
 """
 
-import pytest
-
 from transformation_portal.metrics.contracts import (
     BucketStats,
     Judgement,

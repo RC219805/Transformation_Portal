@@ -13,21 +13,19 @@ from __future__ import annotations
 
 import json
 import sqlite3
-import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
 from transformation_portal.metrics.ledger import PerformanceLedger
-from transformation_portal.metrics.performance_capsule import PerformanceCapsule
 
 
 @pytest.fixture
 def sample_ledger(tmp_path: Path) -> Path:
     """Create a ledger with sample APEX run data."""
     db_path = tmp_path / "test_apex.db"
-    ledger = PerformanceLedger(db_path)
+    PerformanceLedger(db_path)
 
     # Verify apex_runs table and apex_trends view exist
     with sqlite3.connect(db_path) as conn:
@@ -325,7 +323,7 @@ def test_empty_ledger_handling(tmp_path: Path) -> None:
     from scripts.apex_dashboard_generator import generate_dashboard_data
 
     db_path = tmp_path / "empty.db"
-    ledger = PerformanceLedger(db_path)
+    PerformanceLedger(db_path)
 
     # Should not crash
     data = generate_dashboard_data(db_path, days=30)
@@ -369,7 +367,7 @@ def test_ledger_migration_v2_to_v3(tmp_path: Path) -> None:
         conn.commit()
 
     # Initialize ledger (should trigger migration)
-    ledger = PerformanceLedger(db_path)
+    PerformanceLedger(db_path)
 
     # Verify v3 schema elements exist
     with sqlite3.connect(db_path) as conn:

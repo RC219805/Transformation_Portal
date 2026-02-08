@@ -124,11 +124,26 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh pr comment "${{ github.event.pull_request.number }}" \
-            --edit-last \
-            --body-file apex_comment.md || \
-          gh pr comment "${{ github.event.pull_request.number }}" \
-            --body-file apex_comment.md
+          set -euo pipefail
+
+          pr_number="${{ github.event.pull_request.number }}"
+          repo="${{ github.repository }}"
+
+          # Find existing APEX comment by unique header
+          marker="# 🎯 APEX Performance Report"
+
+          comment_id=$(gh api "repos/$repo/issues/$pr_number/comments" --paginate \
+            | jq -r --arg marker "$marker" '[.[] | select(.body | startswith($marker))][0].id // empty')
+
+          if [ -n "$comment_id" ]; then
+            echo "Updating existing APEX comment (id=$comment_id)"
+            gh api "repos/$repo/issues/comments/$comment_id" \
+              --method PATCH \
+              -F body=@apex_comment.md
+          else
+            echo "Creating new APEX comment"
+            gh pr comment "$pr_number" --body-file apex_comment.md
+          fi
 
       - name: Enforce Gate (fail if V2 FAIL)
         run: |

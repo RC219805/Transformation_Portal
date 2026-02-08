@@ -5,7 +5,7 @@ Breaking changes here require explicit version bumps and migration plans.
 """
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime
 
 import pytest
 

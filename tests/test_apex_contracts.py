@@ -7,8 +7,6 @@ Tests validate:
 - BucketStats and RegressionReport
 """
 
-from datetime import datetime, timezone
-
 import pytest
 
 from transformation_portal.metrics.contracts import (
