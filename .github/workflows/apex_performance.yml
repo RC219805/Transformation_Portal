@@ -45,7 +45,17 @@ jobs:
       - name: Install dependencies
         run: |
           set -euo pipefail
-          pip install -e .
+          # Install package with all core dependencies
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e .
+
+      - name: Verify core dependencies
+        run: |
+          set -euo pipefail
+          # Fail fast if critical imports are broken
+          python -c "import yaml; print('✅ PyYAML OK')"
+          python -c "import numpy; print('✅ NumPy OK')"
+          pip check
 
       - name: Run APEX Matrix (Shadow Mode)
         env:
@@ -97,7 +107,14 @@ jobs:
       - name: Install dependencies
         run: |
           set -euo pipefail
-          pip install -e .
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e .
+
+      - name: Verify core dependencies
+        run: |
+          set -euo pipefail
+          python -c "import yaml; print('✅ PyYAML OK')"
+          pip check
 
       - name: Download Results
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
