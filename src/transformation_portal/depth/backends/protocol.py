@@ -213,7 +213,7 @@ class DepthBackend(Protocol):
         """Return list of required import module names for this backend.
 
         Returns module names (not pip package names) that must be importable
-        for this backend to function. For example: ["transformers", "torch"].
+        for this backend to function. For example: ["transformers"].
 
         Note: torch is always required by the APEX runner for real execution;
         backends should only list additional dependencies beyond torch.

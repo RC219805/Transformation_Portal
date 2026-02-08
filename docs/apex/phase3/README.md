@@ -61,9 +61,9 @@ Exported `get_registry()` from backends module for testing/inspection:
 - Backward compatible (existing HF backends still require transformers)
 
 ⏳ **Test Coverage** (Partial):
-- Created `tests/test_apex_backend_deps.py` with 8 test cases
-- 3/8 tests currently passing (mock setup needs refinement)
-- Test refinement tracked in Issue #875 checklist
+- Created `tests/test_apex_backend_deps.py` with 8 self-contained unit tests
+- All tests passing (backend-aware dependency resolution validated)
+- Tests cover: HF backends, non-HF backends, broken installs, unknown backends
 
 ## Example Usage
 
@@ -120,4 +120,4 @@ tests/test_apex_backend_deps.py (new)                  +167 -0
 - ✅ Python syntax checks pass
 - ✅ Existing APEX tests pass (30 passed, 1 skipped)
 - ✅ No regressions in contract verification or aggregation tests
-- ⏳ New backend dependency tests need mock refinement (tracked in #875)
+- ✅ New backend dependency tests pass (8/8)
