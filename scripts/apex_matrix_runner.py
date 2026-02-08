@@ -58,10 +58,7 @@ from transformation_portal.metrics.performance_capsule import PerformanceCapsule
 
 __version__ = "1.0.0"
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -115,16 +112,12 @@ def run_apex_for_config(
     # - New V2 pipeline (V2)
     # Both should emit PerformanceCapsules
 
-    raise NotImplementedError(
-        "Actual pipeline integration not yet implemented. Use --dry-run for testing."
-    )
+    raise NotImplementedError("Actual pipeline integration not yet implemented. Use --dry-run for testing.")
 
 
 def main() -> int:
     """Main entry point."""
-    parser = argparse.ArgumentParser(
-        description="APEX matrix runner for CI orchestration"
-    )
+    parser = argparse.ArgumentParser(description="APEX matrix runner for CI orchestration")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
     # Run identification
@@ -137,43 +130,25 @@ def main() -> int:
         nargs="+",
         default=["v1", "v2"],
         choices=["v1", "v2"],
-        help="Workflow versions to run (default: v1 v2)"
+        help="Workflow versions to run (default: v1 v2)",
     )
-    parser.add_argument(
-        "--zones",
-        nargs="+",
-        default=["local"],
-        help="Zones to run across (default: local)"
-    )
+    parser.add_argument("--zones", nargs="+", default=["local"], help="Zones to run across (default: local)")
     parser.add_argument("--device", default="mps", help="Device (default: mps)")
     parser.add_argument("--backend-id", default="da3", help="Backend (default: da3)")
     parser.add_argument("--scene-type", help="Optional scene type filter")
 
     # Output
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        required=True,
-        help="Output directory for results"
-    )
+    parser.add_argument("--output-dir", type=Path, required=True, help="Output directory for results")
     parser.add_argument(
         "--ledger-db",
         type=Path,
         default=Path("./apex_performance.db"),
-        help="Ledger database path (default: ./apex_performance.db)"
+        help="Ledger database path (default: ./apex_performance.db)",
     )
 
     # Execution control
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Dry run (skip actual execution, use mock data)"
-    )
-    parser.add_argument(
-        "--continue-on-error",
-        action="store_true",
-        help="Continue running even if some configurations fail"
-    )
+    parser.add_argument("--dry-run", action="store_true", help="Dry run (skip actual execution, use mock data)")
+    parser.add_argument("--continue-on-error", action="store_true", help="Continue running even if some configurations fail")
 
     args = parser.parse_args()
 

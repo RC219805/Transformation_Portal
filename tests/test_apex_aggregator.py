@@ -144,9 +144,8 @@ class TestAggregator:
 
         assert "pool_medium_mps" in global_stats
         assert global_stats["pool_medium_mps"].count == 4
-        # Median of [8, 10, 12, 14] is (10+12)/2 = 11.0, but our implementation takes n//2 index
-        # which is index 2, giving us 12.0
-        assert global_stats["pool_medium_mps"].p50 == 12.0  # Corrected expectation
+        # Median of [8, 10, 12, 14] is (10+12)/2 = 11.0 (correct median for even-sized sample)
+        assert global_stats["pool_medium_mps"].p50 == 11.0
 
     def test_compute_worst_zone_p95(self):
         """Test worst-zone p95 detection."""
