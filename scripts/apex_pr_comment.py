@@ -658,18 +658,18 @@ def main() -> int:
         if v1_judgement:
             gate_obj = evaluate_gate(v1_judgement, mode="enforce")
             gate_result_v1 = {
-                "verdict": gate_obj.verdict,
+                "verdict": "fail" if gate_obj.should_block else ("warn" if gate_obj.reasons else "pass"),
                 "explanation": gate_obj.explanation,
-                "mode": "enforce",
+                "mode": gate_obj.mode,
                 "should_block": gate_obj.should_block,
             }
 
         if v2_judgement:
             gate_obj = evaluate_gate(v2_judgement, mode="shadow")
             gate_result_v2 = {
-                "verdict": gate_obj.verdict,
+                "verdict": "fail" if gate_obj.should_block else ("warn" if gate_obj.reasons else "pass"),
                 "explanation": gate_obj.explanation,
-                "mode": "shadow",
+                "mode": gate_obj.mode,
                 "should_block": gate_obj.should_block,
             }
 
