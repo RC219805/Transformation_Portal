@@ -67,6 +67,7 @@ def run_apex_for_config(
     zone: str,
     output_dir: Path,
     dry_run: bool = False,
+    synthetic: bool = False,
     input_dir: Optional[Path] = None,
     sample_size: Optional[int] = None,
 ) -> Observation:
@@ -77,6 +78,7 @@ def run_apex_for_config(
         zone: Zone identifier
         output_dir: Output directory for capsules
         dry_run: If True, skip actual execution
+        synthetic: If True, mark observations as synthetic
         input_dir: Directory containing test images
         sample_size: Number of images to process (None = all)
 
@@ -232,7 +234,7 @@ def run_apex_for_config(
                         zone=zone,
                         scene_type=run_spec.scene_type,
                         pipeline_version="2.0.0",
-                        is_synthetic=False,  # Real data
+                        is_synthetic=synthetic,  # Respects --synthetic flag
                     )
 
                     capsules.append(capsule)
@@ -364,6 +366,7 @@ def main() -> int:
                     zone=zone,
                     output_dir=args.output_dir,
                     dry_run=args.dry_run,
+                    synthetic=args.synthetic,
                     input_dir=args.input_dir,
                     sample_size=args.sample_size,
                 )
