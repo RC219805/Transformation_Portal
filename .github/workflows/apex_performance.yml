@@ -46,8 +46,8 @@ jobs:
         run: |
           set -euo pipefail
           # Install package with all core dependencies
-          pip install --upgrade pip setuptools wheel
-          pip install -e . --no-cache-dir
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e .
 
       - name: Verify core dependencies
         run: |
@@ -107,8 +107,8 @@ jobs:
       - name: Install dependencies
         run: |
           set -euo pipefail
-          pip install --upgrade pip setuptools wheel
-          pip install -e . --no-cache-dir
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e .
 
       - name: Verify core dependencies
         run: |
