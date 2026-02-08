@@ -51,6 +51,7 @@ jobs:
         env:
           APEX_ZONE: ${{ matrix.zone }}
         run: |
+          set -euo pipefail
           # NOTE: Running in dry-run mode (synthetic data) until ML infrastructure ready.
           # Real pipeline integration complete but requires torch/transformers/models (~5GB).
           # Dry-run validates schema, contracts, and reporting without ML dependencies.
@@ -59,10 +60,11 @@ jobs:
             --commit-sha "${{ env.APEX_COMMIT_SHA }}" \
             --workflow-versions ${{ matrix.workflow_version }} \
             --zones ${{ matrix.zone }} \
-            --output-dir ./apex_results \
-            --ledger-db ./apex_performance.db \
+            --output-dir "${{ env.APEX_RESULTS_DIR }}" \
+            --ledger-db "${{ env.APEX_LEDGER_DB }}" \
             --device cpu \
-            --dry-run
+            --dry-run \
+            --synthetic
 
       - name: Upload Results
         if: always()
@@ -122,12 +124,14 @@ jobs:
       - name: Generate PR Comment
         if: always()
         run: |
+          set -euo pipefail
           # Always create apex_comment.md (even on error) to prevent downstream failures
           : > apex_comment.md
           python scripts/apex_pr_comment.py \
             --run-id "${{ env.APEX_RUN_ID }}" \
             --commit-sha "${{ env.APEX_COMMIT_SHA }}" \
-            --ledger-db apex_performance.db \
+            --ledger-db "${{ env.APEX_LEDGER_DB }}" \
+            --synthetic \
             --output apex_comment.md || {
             cat > apex_comment.md <<'ERREOF'
           # 🎯 APEX Performance Report [ERROR]
@@ -154,11 +158,11 @@ jobs:
           pr_number="${{ github.event.pull_request.number }}"
           repo="${{ github.repository }}"
 
-          # Find existing APEX comment by unique header
+          # Find existing APEX comment by unique header (pagination-safe)
           marker="# 🎯 APEX Performance Report"
 
           comment_id=$(gh api "repos/$repo/issues/$pr_number/comments" --paginate \
-            | jq -r --arg marker "$marker" '[.[] | select(.body | startswith($marker))][0].id // empty')
+            | jq -s 'add | map(select(.body | startswith("'"$marker"'"))) | .[0].id // empty')
 
           if [ -n "$comment_id" ]; then
             echo "Updating existing APEX comment (id=$comment_id)"
@@ -172,6 +176,7 @@ jobs:
 
       - name: Enforce Gate (Shadow Mode - Informational Only)
         run: |
+          set -euo pipefail
           # NOTE: Gate is in SHADOW MODE for initial real-data rollout.
           # Reports failures but does not block merge. Switch to enforcing once baseline is stable.
           python scripts/apex_enforce_gate.py \

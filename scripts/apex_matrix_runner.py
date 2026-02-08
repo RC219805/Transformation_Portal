@@ -298,9 +298,17 @@ def main() -> int:
 
     # Execution control
     parser.add_argument("--dry-run", action="store_true", help="Dry run (skip actual execution, use mock data)")
+    parser.add_argument(
+        "--synthetic", action="store_true", help="Mark observations as synthetic (auto-enabled with --dry-run)"
+    )
     parser.add_argument("--continue-on-error", action="store_true", help="Continue running even if some configurations fail")
 
     args = parser.parse_args()
+
+    # Auto-enable synthetic flag when dry-run is used
+    if args.dry_run and not args.synthetic:
+        args.synthetic = True
+        logger.info("Auto-enabled --synthetic (paired with --dry-run)")
 
     # Validate input requirements for real execution
     if not args.dry_run:
