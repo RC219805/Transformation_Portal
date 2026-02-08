@@ -211,3 +211,122 @@ class TestAggregator:
 
         assert stats_zone_a is not None
         assert stats_zone_a.count == 1  # Only zone A capsule matched
+
+
+class TestValidateSingleRun:
+    """Test single-run validation for contamination detection."""
+
+    def create_capsule(
+        self,
+        image_id: str,
+        workflow_version: str = "v1",
+        zone: str = "local",
+        run_id: str | None = None,
+        commit_sha: str | None = None,
+    ) -> PerformanceCapsule:
+        """Helper to create test capsule with run metadata."""
+        # Note: PerformanceCapsule doesn't have image_metadata field
+        # Run context is detected from workflow_version + zone patterns
+        return PerformanceCapsule(
+            image_id=image_id,
+            image_path=f"/path/to/{image_id}.jpg",
+            input_hash=f"hash_{image_id}",
+            original_shape=(3000, 4000),
+            enforced_shape=(3000, 4000),
+            pixel_count=10_000_000,
+            dimension_adjustment="exact",
+            timings={"total": 10.0},
+            workflow_version=workflow_version,
+            zone=zone,
+            scene_type="pool",
+            device="cpu",
+            backend_id="da3",
+        )
+
+    def test_strict_raises_on_mixed_workflow_versions(self):
+        """Test that strict=True raises ValueError on mixed workflow versions in same zone."""
+        import pytest
+
+        from transformation_portal.metrics.aggregator import validate_single_run_capsules
+
+        capsules = [
+            self.create_capsule("img1", workflow_version="v1", zone="local"),
+            self.create_capsule("img2", workflow_version="v2", zone="local"),  # Mixed!
+        ]
+
+        with pytest.raises(ValueError, match="mixed workflow versions"):
+            validate_single_run_capsules(capsules, strict=True)
+
+    def test_non_strict_warns_on_mixed_workflow_versions(self):
+        """Test that strict=False logs warning but doesn't raise on contamination."""
+        import logging
+
+        from transformation_portal.metrics.aggregator import validate_single_run_capsules
+
+        capsules = [
+            self.create_capsule("img1", workflow_version="v1", zone="local"),
+            self.create_capsule("img2", workflow_version="v2", zone="local"),
+        ]
+
+        # Should not raise
+        with caplog_context(logging.WARNING) as records:
+            validate_single_run_capsules(capsules, strict=False)
+
+        # Should have logged warning
+        assert any("mixed workflow versions" in rec.message.lower() for rec in records)
+
+    def test_happy_path_single_workflow_no_raise(self):
+        """Test that clean single-workflow data doesn't raise or warn."""
+        from transformation_portal.metrics.aggregator import validate_single_run_capsules
+
+        capsules = [
+            self.create_capsule("img1", workflow_version="v1", zone="local"),
+            self.create_capsule("img2", workflow_version="v1", zone="local"),
+            self.create_capsule("img3", workflow_version="v1", zone="local"),
+        ]
+
+        # Should not raise (no assertion needed - test passes if no exception)
+        validate_single_run_capsules(capsules, strict=True)
+
+    def test_multi_zone_same_workflow_allowed(self):
+        """Test that different zones with same workflow version is allowed."""
+        from transformation_portal.metrics.aggregator import validate_single_run_capsules
+
+        capsules = [
+            self.create_capsule("img1", workflow_version="v1", zone="zone-a"),
+            self.create_capsule("img2", workflow_version="v1", zone="zone-b"),
+            self.create_capsule("img3", workflow_version="v1", zone="zone-c"),
+        ]
+
+        # Should not raise - multiple zones is expected for matrix runs
+        validate_single_run_capsules(capsules, strict=True)
+
+    def test_empty_capsules_no_raise(self):
+        """Test that empty capsule list doesn't raise."""
+        from transformation_portal.metrics.aggregator import validate_single_run_capsules
+
+        validate_single_run_capsules([], strict=True)
+
+
+def caplog_context(level):
+    """Helper context manager to capture log records."""
+    import logging
+
+    class LogCapture:
+        def __init__(self, level):
+            self.level = level
+            self.records = []
+            self.handler = None
+
+        def __enter__(self):
+            self.handler = logging.Handler()
+            self.handler.setLevel(self.level)
+            self.handler.emit = lambda record: self.records.append(record)
+            logging.getLogger().addHandler(self.handler)
+            return self.records
+
+        def __exit__(self, *args):
+            if self.handler:
+                logging.getLogger().removeHandler(self.handler)
+
+    return LogCapture(level)
