@@ -126,6 +126,12 @@ Phase 2.1 successfully hardened dependency validation by requiring both `torch` 
 
 ---
 
-**Status:** 📋 Planning (not yet started)
+**Status:** 📋 Planning (Issue #875 created)
 **Estimated Effort:** 3–4 PRs over 2–4 weeks (backend refactor + nightly CI + calibration analysis)
 **Blocking Dependencies:** None (Phase 2.1 complete)
+
+---
+
+## Tracking
+
+- **Backend-Aware Validation:** #875
