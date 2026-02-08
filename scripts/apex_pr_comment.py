@@ -620,22 +620,10 @@ def main() -> int:
             commit_sha=args.commit_sha,
         )
 
-        # Determine if data is synthetic by checking capsule metadata
+        # Determine if data is synthetic from explicit flag only
+        # Schema does not currently have is_synthetic column in apex_runs,
+        # so we rely on caller to pass --synthetic when using --dry-run
         is_synthetic = args.synthetic
-        if not is_synthetic and (v1_stats or v2_stats):
-            # Check if any capsules are marked as synthetic
-            # This is a safety check in case --synthetic flag wasn't passed
-            import sqlite3
-
-            try:
-                with sqlite3.connect(args.ledger_db) as conn:
-                    cursor = conn.execute("SELECT is_synthetic FROM apex_runs WHERE run_id = ? LIMIT 1", [args.run_id])
-                    row = cursor.fetchone()
-                    if row and len(row) > 0:
-                        is_synthetic = bool(row[0])
-            except (sqlite3.Error, IndexError):
-                # Column might not exist in older schema, default to False
-                pass
 
         # Also query using existing baseline stats API (for judgements)
         v1_bucket_stats = query_baseline_stats(
