@@ -74,7 +74,7 @@ echo "✅ Main branch updated"
 echo ""
 
 # Check branch exists
-if ! git rev-parse --verify feat/apex-real-pipeline-integration >/dev/null 2>&1; then
+if ! git show-ref --verify --quiet refs/heads/feat/apex-real-pipeline-integration; then
     echo "❌ Error: Branch feat/apex-real-pipeline-integration not found"
     exit 1
 fi
@@ -95,6 +95,11 @@ echo "🧪 Running fast-lane validation (not ml, not slow)..."
 python -m pytest tests/ -q -m "not ml and not slow" --tb=no --maxfail=5
 
 echo "✅ Fast-lane validation passed"
+echo ""
+
+# Capture the verified commit SHA while still on feature branch
+FASTLANE_SHA="$(git rev-parse HEAD)"
+echo "📌 Verified commit: ${FASTLANE_SHA}"
 echo ""
 
 # Show diff summary
@@ -129,14 +134,14 @@ Key Features:
 - Weekly automated backups
 - Shadow mode enforcement
 
-Truth Properties Verified:
-✅ Event gating airtight (lines 105-111)
-✅ Dependency gating airtight (lines 76-80)
+Evidence:
+✅ Event gating validated
+✅ Dependency gating validated
 ✅ Metadata/provenance complete
 ✅ Semantic honesty in PR comments
 ✅ Artifact durability multi-tier
 
-Test Coverage: 1504/1504 passing (100% in fast CI lane, commit d71dd209)
+Test Coverage: Fast-lane suite passed locally (verified at commit ${FASTLANE_SHA})
 Net Change: -591 lines (cleanup)
 
 Phase: Phase 2 Real Pipeline Integration
