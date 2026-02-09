@@ -1,0 +1,395 @@
+# APEX Workload Suites
+# Version: 1.0.0
+# Last Updated: 2026-02-09
+
+# This file defines canonical test workloads for APEX performance testing.
+# Workloads are governed: changes require review and approval.
+
+schema_version: "1.0.0"
+
+# ============================================================================
+# Golden Suite: Stable Baseline Workload
+# ============================================================================
+
+golden_suite:
+  description: "Stable, representative images for baseline establishment. Never changes without explicit review."
+  
+  fixture_dir: "tests/fixtures/apex_golden"
+  
+  # Fixed image set (governance: changes require ADR + 30-day notice)
+  images:
+    - name: "pool_luxury_4k.jpg"
+      scene_type: "pool"
+      dimensions: [3840, 2160]
+      pixel_count: 8294400
+      characteristics:
+        - "Specular highlights"
+        - "Water reflections"
+        - "High dynamic range"
+      rationale: "Representative luxury pool scene, common use case"
+    
+    - name: "aerial_estate_6k.jpg"
+      scene_type: "aerial"
+      dimensions: [6000, 3600]
+      pixel_count: 21600000
+      characteristics:
+        - "High-frequency texture"
+        - "Large dimensions"
+        - "Complex geometry"
+      rationale: "Stress test for large aerial scenes"
+    
+    - name: "interior_livingroom_3k.jpg"
+      scene_type: "interior"
+      dimensions: [3072, 2048]
+      pixel_count: 6291456
+      characteristics:
+        - "Mixed lighting"
+        - "Furniture details"
+        - "Standard resolution"
+      rationale: "Typical interior architectural visualization"
+  
+  # Change policy
+  change_policy:
+    requires_adr: true                  # ADR required for any changes
+    min_notice_days: 30                 # 30-day notice before change
+    approval: "transformation-portal-architect"
+    rationale: |
+      Golden suite is the baseline anchor. Changes invalidate historical comparisons.
+      Require ADR and notice to ensure impact is understood and planned.
+  
+  # Usage patterns
+  usage:
+    - "PR lane (synthetic or minimal real execution)"
+    - "Nightly baseline establishment"
+    - "Regression detection reference"
+    - "Cross-zone comparison anchor"
+  
+  # Expected run characteristics
+  expected_runtime:
+    pr_lane_synthetic: "< 30 seconds"
+    pr_lane_real_cpu: "< 2 minutes"
+    nightly_real_mps: "< 1 minute"
+  
+  notes: |
+    Golden suite images are:
+    - Version-controlled in git (not downloaded)
+    - Small enough for fast CI (total <50MB)
+    - Diverse enough to cover key buckets (pool, aerial, interior)
+    - Stable content (no updates unless justified by ADR)
+
+# ============================================================================
+# Canary Suite: Representative Workload
+# ============================================================================
+
+canary_suite:
+  description: "Broader, more realistic workload. Evolves slowly based on production usage patterns."
+  
+  fixture_dir: "tests/fixtures/apex_canary"
+  
+  # Size and composition
+  size: 20  # Number of images
+  
+  # Selection criteria (governance: maintain diversity)
+  selection_criteria:
+    - "Diverse scene types (pool, aerial, interior, exterior)"
+    - "Realistic dimensions (2K-8K, matching production workloads)"
+    - "Various EXIF metadata (different cameras, settings)"
+    - "Representative of actual customer uploads (sanitized)"
+    - "Include edge cases (extreme aspect ratios, unusual lighting)"
+  
+  # Composition breakdown
+  composition:
+    pool: 5       # 25% - common use case
+    aerial: 5     # 25% - high-value, performance-critical
+    interior: 6   # 30% - most common
+    exterior: 4   # 20% - architectural facades
+  
+  # Change policy
+  change_policy:
+    requires_pr: true
+    requires_adr: false  # PR is sufficient for canary
+    approval: "transformation-portal-specialist"
+    max_change_frequency: "monthly"
+    rationale: |
+      Canary suite can evolve to match production patterns.
+      Changes require review but not full ADR process.
+  
+  # Usage patterns
+  usage:
+    - "Nightly deep runs (full suite)"
+    - "Weekly comprehensive analysis"
+    - "Pre-release validation"
+    - "Backend comparison (DA3 vs Depth Pro)"
+  
+  # Expected run characteristics
+  expected_runtime:
+    nightly_real_cpu_da3: "< 10 minutes"
+    nightly_real_mps_da3: "< 5 minutes"
+    weekly_real_cpu_all_backends: "< 30 minutes"
+  
+  notes: |
+    Canary suite images:
+    - May be downloaded from cloud storage (URLs in manifest)
+    - Larger total size allowed (< 500MB)
+    - Updated monthly based on production insights
+    - Include sanitized customer data (PII removed, permissions obtained)
+
+# ============================================================================
+# Fuzz Suite: Stress Test Workload
+# ============================================================================
+
+fuzz_suite:
+  description: "Synthetic stress tests and pathological inputs. Generated programmatically."
+  
+  generation_script: "scripts/generate_fuzz_workload.py"
+  
+  # Fuzz scenarios (governance: scenarios are stable, generated images may vary)
+  scenarios:
+    - name: "max_dimensions"
+      description: "Maximum supported dimensions (16K+)"
+      generator: "create_solid_color_image"
+      parameters:
+        dimensions: [16000, 9000]
+        color: [128, 128, 128]
+      count: 3
+      rationale: "Stress test memory and tiling logic"
+    
+    - name: "weird_exif"
+      description: "Unusual EXIF metadata"
+      generator: "inject_exif_metadata"
+      parameters:
+        base_image: "tests/fixtures/base.jpg"
+        exif_variants:
+          - "orientation_rotated_270"
+          - "missing_datetime"
+          - "corrupt_thumbnail"
+      count: 3
+      rationale: "Test EXIF handling robustness"
+    
+    - name: "high_frequency"
+      description: "Texture-heavy images (synthetic checkerboards)"
+      generator: "create_checkerboard_pattern"
+      parameters:
+        dimensions: [4096, 4096]
+        tile_size: 8  # Small tiles = high frequency
+      count: 3
+      rationale: "Stress test depth inference on high-frequency content"
+    
+    - name: "minimal_content"
+      description: "Solid colors and gradients"
+      generator: "create_solid_gradient_image"
+      parameters:
+        dimensions: [3840, 2160]
+        gradient: "vertical"
+      count: 3
+      rationale: "Test behavior on minimal texture (ambiguous depth)"
+    
+    - name: "extreme_aspect_ratios"
+      description: "Very wide or very tall images"
+      generator: "create_extreme_aspect_image"
+      parameters:
+        dimensions:
+          - [8192, 512]   # 16:1 wide
+          - [512, 8192]   # 1:16 tall
+      count: 2
+      rationale: "Test tiling and dimension handling edge cases"
+  
+  # Change policy
+  change_policy:
+    requires_pr: true
+    requires_adr: false
+    approval: "transformation-portal-specialist"
+    scenario_changes_require_review: true
+    generation_logic_requires_tests: true
+    rationale: |
+      Fuzz scenarios are stable (part of test contract).
+      Generated images may vary (deterministic generation preferred).
+  
+  # Usage patterns
+  usage:
+    - "Weekly stress tests"
+    - "Pre-release validation"
+    - "Regression hunting (bisect with fuzz suite)"
+    - "Performance fuzzing (per PERUN methodology)"
+  
+  # Expected run characteristics
+  expected_runtime:
+    weekly_real_cpu: "< 15 minutes"
+    weekly_real_mps: "< 10 minutes"
+  
+  notes: |
+    Fuzz suite:
+    - Generated on-demand (not stored in git)
+    - Deterministic generation (seeded RNG for reproducibility)
+    - Aligned with PERUN performance fuzzing concepts
+    - Finds edge cases that real images don't cover
+
+# ============================================================================
+# CI Lane Mapping: Workload → Lane
+# ============================================================================
+
+ci_lanes:
+  pr_fast:
+    workload: "golden_suite"
+    mode: "synthetic"  # Or minimal real (3 images) if fast enough
+    max_duration_min: 2
+    backends: ["mock"]
+    description: "Fast PR lane - validates contracts, not performance"
+    notes: |
+      PR lane must stay < 2 minutes.
+      Use synthetic data or minimal golden suite (3 images).
+      No heavy ML dependencies installed.
+  
+  pr_real_optional:
+    workload: "golden_suite"
+    mode: "real"
+    sample_size: 3  # Subset of golden suite
+    max_duration_min: 5
+    backends: ["da3"]
+    device: "cpu"
+    trigger: "workflow_dispatch"  # Manual only
+    description: "Optional real execution for PR validation"
+    notes: |
+      Triggered manually via workflow_dispatch.
+      Uses CPU backend (no GPU runner dependency).
+      Quick smoke test with real execution.
+  
+  nightly_baseline:
+    workload: "golden_suite"
+    mode: "real"
+    sample_size: "full"  # All golden images
+    backends: ["da3"]
+    device: "cpu"  # Then "mps" when macOS runners available
+    description: "Nightly baseline establishment"
+    notes: |
+      Establishes authoritative baseline for regression detection.
+      Runs full golden suite with real execution.
+      Results stored in ledger for long-term tracking.
+  
+  nightly_comprehensive:
+    workload: "canary_suite"
+    mode: "real"
+    sample_size: "full"
+    backends: ["da3", "depth_pro"]
+    device: "cpu"
+    description: "Comprehensive nightly analysis"
+    notes: |
+      Broader workload coverage.
+      Multi-backend comparison (DA3 vs Depth Pro).
+      Detects backend-specific regressions.
+  
+  weekly_stress:
+    workload: "fuzz_suite"
+    mode: "real"
+    sample_size: "full"
+    backends: ["da3"]
+    device: "cpu"
+    description: "Weekly stress testing"
+    notes: |
+      Runs all fuzz scenarios.
+      Detects edge case regressions.
+      Longer runtime acceptable (weekly schedule).
+
+# ============================================================================
+# Workload Validation
+# ============================================================================
+
+validation:
+  description: "Automated checks to ensure workload integrity"
+  
+  checks:
+    - name: "golden_suite_unchanged"
+      description: "Ensure golden suite images have not been modified"
+      method: "SHA256 checksum validation"
+      frequency: "every PR"
+      failure_action: "block merge"
+    
+    - name: "canary_suite_complete"
+      description: "Ensure canary suite has expected composition"
+      method: "Count images per scene_type"
+      frequency: "every PR that touches canary suite"
+      failure_action: "block merge"
+    
+    - name: "fuzz_generation_deterministic"
+      description: "Ensure fuzz generation is reproducible"
+      method: "Generate twice with same seed, compare outputs"
+      frequency: "when generation script changes"
+      failure_action: "block merge"
+  
+  notes: |
+    Validation ensures workload governance is enforced mechanically.
+    Golden suite checksums stored in git.
+    Canary composition tracked in manifest.
+    Fuzz generation tested for determinism.
+
+# ============================================================================
+# Migration and Evolution
+# ============================================================================
+
+migration:
+  current_state: "Phase 1 - Initial definition"
+  
+  next_steps:
+    - "Create golden suite fixtures (3 images as specified)"
+    - "Populate canary suite (download/sanitize 20 images)"
+    - "Implement fuzz generation script"
+    - "Add validation checks to CI"
+    - "Update APEX runner to support suite selection"
+  
+  rollout_plan:
+    phase_1:
+      description: "Create golden suite only"
+      timeline: "Week 1"
+      milestone: "Golden suite in git, checksums validated"
+    
+    phase_2:
+      description: "Populate canary suite"
+      timeline: "Week 2-3"
+      milestone: "Canary manifest complete, images downloadable"
+    
+    phase_3:
+      description: "Implement fuzz generation"
+      timeline: "Week 4"
+      milestone: "Fuzz script functional, deterministic"
+    
+    phase_4:
+      description: "Integrate with CI lanes"
+      timeline: "Week 5-6"
+      milestone: "All lanes using governed workloads"
+
+# ============================================================================
+# Governance Review
+# ============================================================================
+
+review:
+  golden_suite_review_frequency: "annually"  # Or when ADR justifies change
+  canary_suite_review_frequency: "quarterly"
+  fuzz_suite_review_frequency: "quarterly"
+  
+  next_review_date: "2026-05-09"
+  
+  review_questions:
+    - "Does golden suite still represent production workloads?"
+    - "Is canary composition aligned with actual usage patterns?"
+    - "Are fuzz scenarios finding real issues?"
+    - "Should new scenarios be added based on recent bugs?"
+
+---
+# Appendix: Workload Governance Philosophy
+
+# Inspired by PERUN (arXiv:2207.12900):
+# - Performance testing requires governed, versioned workloads
+# - Workloads are first-class artifacts (like code)
+# - Changes to workloads invalidate historical comparisons
+# - Performance fuzzing can reveal issues traditional benchmarks miss
+
+# Three-tier approach:
+# - Golden: Stable anchor for long-term baselines
+# - Canary: Representative of production, evolves carefully
+# - Fuzz: Stress tests and edge cases, generated programmatically
+
+# Governance ensures:
+# - Reproducibility (same workload → same results)
+# - Traceability (know what changed and why)
+# - Representativeness (workloads match real usage)
+# - Completeness (cover key scenarios and edge cases)

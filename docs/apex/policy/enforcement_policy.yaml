@@ -1,0 +1,226 @@
+# APEX Enforcement Policy
+# Version: 1.0.0
+# Last Updated: 2026-02-09
+
+# This file defines statistical methods and evidence quality gates for APEX enforcement.
+# Changes require ADR approval for methodology shifts.
+
+schema_version: "1.0.0"
+
+# Evidence quality gates
+# Different enforcement modes have different evidence requirements
+evidence_gates:
+  shadow_mode:
+    description: "Informational only, never blocks merge"
+    min_sample_size: 1
+    allow_synthetic_data: true
+    notes: |
+      Shadow mode is for calibration and baseline establishment.
+      Accept any data quality to maximize learning.
+  
+  enforce_mode:
+    description: "Blocks merge on policy violations - requires strong evidence"
+    min_sample_size: 20
+    allow_synthetic_data: false
+    required_baseline_age_days: 30
+    confidence_level: 0.95
+    notes: |
+      Enforce mode gates merges. Requires:
+      - Real (non-synthetic) execution data
+      - Sufficient samples for statistical validity (n≥20)
+      - Baseline established over 30+ days
+      - 95% confidence in regression detection
+
+# Statistical methods configuration
+statistical_methods:
+  # Distribution comparison method
+  distribution_comparison:
+    method: "mann_whitney_u"  # Non-parametric, robust to outliers
+    alpha: 0.05  # Significance level (5% false positive rate)
+    notes: |
+      Mann-Whitney U test selected for:
+      - Non-parametric (no normality assumption)
+      - Robust to outliers and skewed distributions
+      - Industry-standard for performance comparison
+      
+      Alternative: "bootstrap_ci" for median confidence intervals
+  
+  # Outlier detection method
+  outlier_detection:
+    method: "median_mad"  # Median Absolute Deviation
+    threshold: 3.0  # MAD units (equivalent to ~3 standard deviations for normal dist)
+    notes: |
+      Median + MAD chosen over mean + stddev for:
+      - Robustness to outliers (median is resistant)
+      - Better for skewed distributions (common in performance data)
+      - Modified z-score = 0.6745 * (x - median) / MAD
+      
+      Threshold of 3.0 MAD units ≈ 3 sigma for normal distributions
+      but more conservative for long-tailed performance distributions.
+
+# Sample size requirements per percentile
+# Based on statistical validity research (need sufficient data to estimate tail behavior)
+sample_size_requirements:
+  p50: 10   # Median: relatively stable with small n
+  p95: 20   # 95th percentile: requires more samples for reliability
+  p99: 50   # 99th percentile: very sensitive to sample size
+  notes: |
+    These requirements ensure percentile estimates are meaningful.
+    - p50 (median): 10 samples minimum
+    - p95: 20 samples minimum (rule of thumb: 20/0.05 = acceptable estimate)
+    - p99: 50 samples minimum (rule of thumb: 50/0.01 = 2 samples in tail)
+    
+    If sample size < required: verdict is "insufficient_data" (shadow mode only).
+
+# Regression tolerance levels
+regression_tolerance:
+  pass_max_pct: 10.0   # ≤10% regression → PASS
+  warn_max_pct: 15.0   # 10-15% regression → WARN
+  fail_min_pct: 15.0   # >15% regression → FAIL (blocks in enforce mode)
+  notes: |
+    Tolerance levels aligned with APEX_CONTRACT.md:
+    - ≤10%: Expected variance from measurement noise, algorithm changes
+    - 10-15%: Warning zone - investigate but don't block
+    - >15%: Blocking regression - requires fix or waiver
+
+# Confidence intervals and effect sizes
+confidence_intervals:
+  use_bootstrap: true
+  bootstrap_iterations: 10000
+  percentile_method: "bca"  # Bias-corrected and accelerated
+  notes: |
+    Bootstrap confidence intervals provide robust uncertainty estimates:
+    - BCA method corrects for bias and skewness
+    - 10,000 iterations for stable estimates
+    - Used when comparing distributions for regression detection
+
+effect_size:
+  method: "cliffs_delta"  # Non-parametric effect size
+  thresholds:
+    negligible: 0.147   # |δ| < 0.147
+    small: 0.33         # 0.147 ≤ |δ| < 0.33
+    medium: 0.474       # 0.33 ≤ |δ| < 0.474
+    large: 0.474        # |δ| ≥ 0.474
+  notes: |
+    Cliff's Delta: Non-parametric effect size measure
+    - Range: -1 to +1 (like correlation)
+    - Interpretation: Probability that random sample from A > random sample from B
+    - Robust to outliers and distribution shape
+    - Preferred over Cohen's d for performance data
+
+# Variance stabilization
+variance_handling:
+  log_transform: false  # Don't log-transform by default (preserves interpretability)
+  trimmed_mean: false   # Use median instead
+  winsorize: false      # Use MAD outlier detection instead
+  notes: |
+    Prefer robust statistics over transformations:
+    - Use median instead of trimmed mean
+    - Use MAD instead of winsorization
+    - Preserve raw units for interpretability
+
+# Multi-zone handling
+multi_zone:
+  aggregation_method: "worst_zone"  # Use worst p95 across zones
+  zone_specific_baselines: true     # Each zone has its own baseline
+  notes: |
+    Worst-zone semantics align with user experience:
+    - User experience defined by slowest zone
+    - Gate on max(zone1_p95, zone2_p95, ...)
+    - Zone-specific baselines allow detecting zone-specific regressions
+
+# Minimum detectable effect (MDE)
+# Smallest regression we can reliably detect given sample sizes
+minimum_detectable_effect:
+  target_mde_pct: 15.0  # Aim to detect ≥15% regressions reliably
+  power: 0.80           # 80% power (industry standard)
+  notes: |
+    With n=20 per group and α=0.05, Mann-Whitney U can detect:
+    - ~15% shift in median with 80% power
+    - Larger shifts (>20%) with >90% power
+    
+    This aligns with our fail_min_pct=15% threshold.
+
+# False positive and false negative control
+error_control:
+  false_positive_rate_target: 0.05  # 5% FPR (α level)
+  false_negative_rate_target: 0.20  # 20% FNR (β level, giving 80% power)
+  notes: |
+    Type I error (false positive): Incorrectly flagging a non-regression
+    - Controlled by α = 0.05 (statistical significance level)
+    - Means 5% of clean PRs may trigger false alarm
+    
+    Type II error (false negative): Missing a real regression
+    - Controlled by β = 0.20 (giving power = 1-β = 0.80)
+    - Means 20% of real regressions may slip through
+    
+    These are standard industry values balancing sensitivity and specificity.
+
+# Adaptive enforcement (future enhancement)
+adaptive_enforcement:
+  enabled: false  # Not yet implemented
+  description: "Adjust thresholds based on observed variance"
+  notes: |
+    Future enhancement: Automatically adjust thresholds based on:
+    - Historical variance in measurements
+    - Stability tier (stable vs canary vs experimental)
+    - Recent trend direction
+    
+    Requires more data collection and validation before enabling.
+
+# Calibration and baseline updates
+calibration:
+  baseline_refresh_frequency_days: 90  # Quarterly baseline refresh
+  require_review_for_baseline_update: true
+  notes: |
+    Baselines should be refreshed quarterly to account for:
+    - Infrastructure changes (OS updates, hardware)
+    - Intentional algorithm improvements
+    - Dependency version updates
+    
+    Baseline updates require policy change review (evidence + approval).
+
+# Enforcement transition plan
+transition_plan:
+  phase_1_shadow:
+    duration_days: 30
+    description: "Collect data, refine thresholds, no blocking"
+  
+  phase_2_enforce_nightly:
+    duration_days: 14
+    description: "Enforce on nightly runs, PR lane still shadow"
+  
+  phase_3_enforce_pr:
+    description: "Full enforcement on PR lane (optional, may stay shadow)"
+  
+  notes: |
+    Gradual rollout prevents premature enforcement:
+    1. Shadow mode (30 days): Learn variance, set budgets
+    2. Enforce nightly (14 days): Test enforcement without PR impact
+    3. Enforce PR (optional): Only if nightly is stable
+
+# Review and governance
+review:
+  methodology_review_frequency: "quarterly"
+  require_adr_for_method_changes: true
+  notes: |
+    Statistical methodology changes require:
+    - ADR approval (Architect authority)
+    - Evidence of improvement (lower FPR, better MDE)
+    - Migration plan if breaking change
+
+---
+# Appendix: Statistical Foundations
+
+# References:
+# - Mann-Whitney U test: Wilcoxon (1945), Mann & Whitney (1947)
+# - Cliff's Delta: Cliff (1993), Romano et al. (2006)
+# - Median Absolute Deviation: Hampel (1974)
+# - Bootstrap CI: Efron & Tibshirani (1993)
+# - PERUN performance testing framework: arXiv:2207.12900
+
+# Sample size justification:
+# - Rule of thumb for percentiles: n ≥ 20/(1-p) for p-th percentile
+# - p95 requires n ≥ 20/0.05 = 400 ideally, but 20 is practical minimum
+# - With n=20, p95 estimate has ~±10% uncertainty
+# - This uncertainty is acceptable given regression tolerance of 15%
