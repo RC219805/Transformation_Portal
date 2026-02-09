@@ -593,12 +593,17 @@ class DA3InferenceEngine:
         Returns:
             DepthResult with depth map and metadata
         """
-        # Load image from path (handles both standard and RAW formats)
-        if is_raw_file(image_path):
-            logger.debug(f"Loading RAW file for inference: {image_path.name}")
-            image = load_raw_as_pil(image_path, use_camera_wb=True, half_size=False)
-        else:
+        # PIL-first fallback pattern: try PIL, fallback to RAW only if needed
+        try:
             image = Image.open(image_path).convert("RGB")
+        except (Image.UnidentifiedImageError, OSError, ValueError):
+            # PIL failed - try RAW only if extension suggests RAW and rawpy available
+            if is_raw_file(image_path):
+                logger.debug(f"PIL failed, loading as RAW for inference: {image_path.name}")
+                image = load_raw_as_pil(image_path, use_camera_wb=True, half_size=False)
+            else:
+                # Re-raise original error if not a RAW file
+                raise
 
         image_np = np.array(image)
 

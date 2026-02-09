@@ -95,16 +95,21 @@ def discover_images(input_dir: Path, config: DiscoveryConfig, image_extensions: 
     logger.debug(f"Exclude path patterns: {config.exclude_path_patterns}")
     logger.debug(f"Exclude stem suffixes: {config.exclude_stem_suffixes}")
 
-    # Collect all candidate files (use set to avoid duplicates from overlapping extensions)
-    candidates_set = set()
-    for ext in image_extensions:
-        candidates_set.update(input_dir.rglob(f"*{ext}"))
-        candidates_set.update(input_dir.rglob(f"*{ext.upper()}"))
+    # Normalize extensions to lowercase set for O(1) lookup
+    allowed_exts = {ext.lower() for ext in image_extensions}
 
     valid_images = []
     excluded_artifacts = []
 
-    for candidate in sorted(candidates_set):
+    # Single traversal: iterate all files once
+    for candidate in input_dir.rglob("*"):
+        if not candidate.is_file():
+            continue
+
+        # Check extension (case-insensitive)
+        if candidate.suffix.lower() not in allowed_exts:
+            continue
+
         # Check for hidden files/directories
         if config.exclude_hidden and any(part.startswith(".") for part in candidate.parts):
             reason = "hidden file/directory"
@@ -156,4 +161,4 @@ def discover_images(input_dir: Path, config: DiscoveryConfig, image_extensions: 
             logger.error(f"  ... and {len(excluded_artifacts) - 10} more")
         raise ValueError(error_msg)
 
-    return valid_images
+    return sorted(valid_images)

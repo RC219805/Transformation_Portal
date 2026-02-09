@@ -6,11 +6,10 @@ Supported formats:
 - Canon: .CR2, .CRW
 - Nikon: .NEF, .NRW
 - Sony: .ARW, .SRF, .SR2
-- Adobe: .DNG
+- Adobe: .DNG (TIFF-based RAW format)
 - Olympus: .ORF
 - Fujifilm: .RAF
 - Pentax: .PEF
-- TIFF: .TIF, .TIFF (when used as RAW container)
 
 Design principles:
 - Optional dependency: graceful ImportError if rawpy not installed
@@ -59,9 +58,8 @@ RAW_EXTENSIONS = {
     ".iiq",
     # Hasselblad
     ".3fr",
-    # TIFF as RAW container
-    ".tif",
-    ".tiff",
+    # Note: DNG is TIFF-based RAW format (included above).
+    # Standard TIFF (.tif/.tiff) is NOT RAW and handled via PIL.
 }
 
 

@@ -119,12 +119,17 @@ def preprocess_image(
     if isinstance(image, (str, Path)):
         image_path = validate_image_format(image)
 
-        # Load RAW files using rawpy, standard images using PIL
-        if is_raw_file(image_path):
-            logger.debug(f"Loading RAW file: {image_path.name}")
-            pil_img = load_raw_as_pil(image_path, use_camera_wb=True, half_size=False)
-        else:
-            pil_img = Image.open(image_path)
+        # PIL-first fallback pattern: try PIL, fallback to RAW only if needed
+        try:
+            pil_img = Image.open(image_path).convert("RGB")
+        except (Image.UnidentifiedImageError, OSError, ValueError):
+            # PIL failed - try RAW only if extension suggests RAW and rawpy available
+            if is_raw_file(image_path):
+                logger.debug(f"PIL failed, loading as RAW: {image_path.name}")
+                pil_img = load_raw_as_pil(image_path, use_camera_wb=True, half_size=False)
+            else:
+                # Re-raise original error if not a RAW file
+                raise
     elif isinstance(image, np.ndarray):
         # Convert numpy array to PIL for consistent processing
         if image.ndim == 2:
