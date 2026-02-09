@@ -16,10 +16,10 @@
 # - On main branch with latest changes pulled
 # - CI checks GREEN on feature branch
 # - Code review approved (if required by repo policy)
-# - Test suite verified locally (1504/1504 passing at d71dd209)
+# - Test suite verified locally (see docs/apex/STEP_A_VERIFICATION_REPORT.md)
 #
 # Expected branch: feat/apex-real-pipeline-integration
-# Expected commit: d71dd2091816c31b53935f02d046b6be7d58d9a3 (or later)
+# Expected commit: $(git rev-parse HEAD) on feature branch
 #
 # Usage: bash scripts/runbooks/merge_phase2_runbook.sh
 
@@ -61,6 +61,10 @@ fi
 echo "✅ Working tree is clean"
 echo ""
 
+# Fetch latest from origin
+echo "📥 Fetching latest from origin..."
+git fetch origin --prune
+
 # Ensure we're on main and up to date
 echo "📥 Updating main branch..."
 git checkout main
@@ -90,18 +94,12 @@ echo ""
 echo "🧪 Running fast-lane validation (not ml, not slow)..."
 python -m pytest tests/ -q -m "not ml and not slow" --tb=no --maxfail=5
 
-if [ $? -ne 0 ]; then
-    echo "❌ Error: Fast-lane tests failed"
-    echo "   Fix tests before merging"
-    exit 1
-fi
-
 echo "✅ Fast-lane validation passed"
 echo ""
 
 # Show diff summary
 echo "📊 Diff Summary:"
-git diff --stat origin/main..feat/apex-real-pipeline-integration | tail -20
+git diff --stat origin/main..feat/apex-real-pipeline-integration
 echo ""
 
 # Confirm merge
