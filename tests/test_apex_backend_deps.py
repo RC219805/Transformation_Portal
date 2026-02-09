@@ -64,7 +64,7 @@ def test_da3_backend_requires_torch_and_transformers(mock_backend_registry):
 
     with patch("transformation_portal.depth.backends.get_registry", return_value=mock_backend_registry):
         with patch("importlib.util.find_spec", side_effect=find_spec_side_effect):
-            with patch("importlib.import_module", side_effect=import_module_side_effect):
+            with patch("scripts.apex_matrix_runner.importlib.import_module", side_effect=import_module_side_effect):
                 all_available, missing = check_ml_dependencies("da3")
 
                 assert all_available is True
@@ -87,7 +87,7 @@ def test_da3_backend_fails_when_transformers_missing(mock_backend_registry):
 
     with patch("transformation_portal.depth.backends.get_registry", return_value=mock_backend_registry):
         with patch("importlib.util.find_spec", side_effect=find_spec_side_effect):
-            with patch("importlib.import_module", side_effect=import_module_side_effect):
+            with patch("scripts.apex_matrix_runner.importlib.import_module", side_effect=import_module_side_effect):
                 all_available, missing = check_ml_dependencies("da3")
 
                 assert all_available is False
@@ -116,7 +116,8 @@ def test_non_hf_backend_does_not_require_transformers(mock_backend_registry):
 
     with patch("transformation_portal.depth.backends.get_registry", return_value=mock_backend_registry):
         with patch("importlib.util.find_spec", side_effect=find_spec_side_effect):
-            with patch("importlib.import_module", side_effect=import_module_side_effect):
+            # Patch at the point of use, not the definition
+            with patch("scripts.apex_matrix_runner.importlib.import_module", side_effect=import_module_side_effect):
                 all_available, missing = check_ml_dependencies("onnx")
 
                 # Should pass because ONNX backend doesn't require transformers
@@ -140,7 +141,7 @@ def test_torch_always_required(mock_backend_registry):
 
     with patch("transformation_portal.depth.backends.get_registry", return_value=mock_backend_registry):
         with patch("importlib.util.find_spec", side_effect=find_spec_side_effect):
-            with patch("importlib.import_module", side_effect=import_module_side_effect):
+            with patch("scripts.apex_matrix_runner.importlib.import_module", side_effect=import_module_side_effect):
                 all_available, missing = check_ml_dependencies("mock")
 
                 assert all_available is False
@@ -165,7 +166,7 @@ def test_torch_broken_install_treated_as_missing(mock_backend_registry):
 
     with patch("transformation_portal.depth.backends.get_registry", return_value=mock_backend_registry):
         with patch("importlib.util.find_spec", side_effect=find_spec_side_effect):
-            with patch("importlib.import_module", side_effect=import_module_side_effect):
+            with patch("scripts.apex_matrix_runner.importlib.import_module", side_effect=import_module_side_effect):
                 all_available, missing = check_ml_dependencies("mock")
 
                 assert all_available is False
@@ -188,7 +189,7 @@ def test_backend_specific_dep_missing_reported_correctly(mock_backend_registry):
 
     with patch("transformation_portal.depth.backends.get_registry", return_value=mock_backend_registry):
         with patch("importlib.util.find_spec", side_effect=find_spec_side_effect):
-            with patch("importlib.import_module", side_effect=import_module_side_effect):
+            with patch("scripts.apex_matrix_runner.importlib.import_module", side_effect=import_module_side_effect):
                 all_available, missing = check_ml_dependencies("onnx")
 
                 assert all_available is False
@@ -211,7 +212,7 @@ def test_unknown_backend_fallback_strict_check(mock_backend_registry):
 
     with patch("transformation_portal.depth.backends.get_registry", return_value=mock_backend_registry):
         with patch("importlib.util.find_spec", side_effect=find_spec_side_effect):
-            with patch("importlib.import_module", side_effect=import_module_side_effect):
+            with patch("scripts.apex_matrix_runner.importlib.import_module", side_effect=import_module_side_effect):
                 all_available, missing = check_ml_dependencies("unknown_backend")
 
                 assert all_available is False
@@ -230,7 +231,7 @@ def test_minimal_backend_requires_only_torch(mock_backend_registry):
 
     with patch("transformation_portal.depth.backends.get_registry", return_value=mock_backend_registry):
         with patch("importlib.util.find_spec", side_effect=find_spec_side_effect):
-            with patch("importlib.import_module", side_effect=import_module_side_effect):
+            with patch("scripts.apex_matrix_runner.importlib.import_module", side_effect=import_module_side_effect):
                 # Mock backend declares no extra requirements
                 all_available, missing = check_ml_dependencies("mock")
 
