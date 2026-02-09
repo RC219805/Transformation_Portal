@@ -201,11 +201,11 @@ def test_backend_specific_dep_missing_reported_correctly(mock_backend_registry):
 
 
 def test_unknown_backend_fails_fast_with_clear_message(mock_backend_registry):
-    """Test that unknown backend raises ValueError with available backends listed."""
-    from scripts.apex_matrix_runner import check_ml_dependencies
+    """Test that unknown backend raises ApexConfigError with available backends listed."""
+    from scripts.apex_matrix_runner import ApexConfigError, check_ml_dependencies
 
     with patch("transformation_portal.depth.backends.get_registry", return_value=mock_backend_registry):
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(ApexConfigError) as exc_info:
             check_ml_dependencies("unknown_backend")
 
         error_msg = str(exc_info.value)

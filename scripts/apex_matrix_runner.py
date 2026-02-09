@@ -61,6 +61,16 @@ from transformation_portal.metrics.performance_capsule import PerformanceCapsule
 __version__ = "1.0.0"
 
 
+class ApexConfigError(ValueError):
+    """Configuration error (invalid flags, unknown backend_id, etc.).
+
+    This exception indicates user configuration problems, not execution failures.
+    Should result in exit code 1 (configuration error).
+    """
+
+    pass
+
+
 def _get_pipeline_version() -> str:
     """Get pipeline version from package metadata or fallback to git SHA.
 
@@ -128,6 +138,10 @@ def check_ml_dependencies(backend_id: str) -> tuple[bool, list[str]]:
     Returns:
         (all_available, missing_packages)
 
+    Raises:
+        ApexConfigError: When backend_id is unknown (configuration error).
+        RuntimeError: When backend fails to declare dependencies (backend bug).
+
     Note:
         Catches all exceptions (not just ImportError) to handle broken installs
         (e.g., missing CUDA libraries, corrupted shared libraries). Treats broken
@@ -143,7 +157,7 @@ def check_ml_dependencies(backend_id: str) -> tuple[bool, list[str]]:
         # Unknown backend: fail fast with clear guidance
         available = registry.available_backend_ids()
         available_str = ", ".join(available) if available else "(none)"
-        raise ValueError(
+        raise ApexConfigError(
             f"Unknown backend_id '{backend_id}'.\n"
             f"Available backends: {available_str}\n\n"
             f"Fix: choose a valid backend_id or register the backend.\n"
@@ -537,6 +551,10 @@ def main() -> int:
                 obs_file.write_text(json.dumps(observation.to_dict(), indent=2))
                 logger.info(f"Wrote observation to {obs_file}")
 
+            except ApexConfigError as e:
+                # Configuration errors should fail fast with clear message
+                logger.error(f"❌ Configuration error: {e}")
+                return 1
             except Exception as e:
                 error_msg = f"Failed to run {workflow_version} in zone {zone}: {e}"
                 logger.error(error_msg)
