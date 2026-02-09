@@ -87,6 +87,38 @@ class DepthBackendRegistry:
             for name, cls in self._backends.items()
         }
 
+    def get_backend_class(self, backend_id: str) -> Optional[Type[DepthBackend]]:
+        """Get backend class by ID without instantiation.
+
+        Public API for introspection/dependency checking without creating instances.
+
+        Args:
+            backend_id: Backend identifier (e.g., "da3", "depth_pro").
+
+        Returns:
+            Backend class if registered, None otherwise.
+        """
+        return self._backends.get(backend_id)
+
+    def available_backend_ids(self) -> list[str]:
+        """Get list of all registered backend IDs.
+
+        Returns:
+            Sorted list of backend identifiers.
+        """
+        return sorted(self._backends.keys())
+
+    def has_backend(self, backend_id: str) -> bool:
+        """Check if backend is registered.
+
+        Args:
+            backend_id: Backend identifier to check.
+
+        Returns:
+            True if backend is registered.
+        """
+        return backend_id in self._backends
+
     def get_backend(
         self,
         backend_name: str,

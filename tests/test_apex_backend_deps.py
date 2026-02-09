@@ -42,11 +42,15 @@ def mock_backend_registry():
             return []
 
     registry = MagicMock()
+    # Support both old _backends access and new public API
     registry._backends = {
         "da3": MockDA3,
         "onnx": MockONNX,
         "mock": MockMinimal,
     }
+    registry.get_backend_class = lambda backend_id: registry._backends.get(backend_id)
+    registry.available_backend_ids = lambda: sorted(registry._backends.keys())
+    registry.has_backend = lambda backend_id: backend_id in registry._backends
     return registry
 
 
@@ -196,27 +200,20 @@ def test_backend_specific_dep_missing_reported_correctly(mock_backend_registry):
                 assert "onnxruntime" in missing
 
 
-def test_unknown_backend_fallback_strict_check(mock_backend_registry):
-    """Test that unknown backend falls back to strict torch+transformers check."""
+def test_unknown_backend_fails_fast_with_clear_message(mock_backend_registry):
+    """Test that unknown backend raises ValueError with available backends listed."""
     from scripts.apex_matrix_runner import check_ml_dependencies
 
-    def find_spec_side_effect(name):
-        if name == "transformers":
-            return None  # transformers not found
-        return MagicMock()  # Other packages exist
-
-    def import_module_side_effect(name):
-        if name == "torch":
-            return MagicMock()
-        raise ModuleNotFoundError(f"No module named '{name}'")
-
     with patch("transformation_portal.depth.backends.get_registry", return_value=mock_backend_registry):
-        with patch("importlib.util.find_spec", side_effect=find_spec_side_effect):
-            with patch("scripts.apex_matrix_runner.importlib.import_module", side_effect=import_module_side_effect):
-                all_available, missing = check_ml_dependencies("unknown_backend")
+        with pytest.raises(ValueError) as exc_info:
+            check_ml_dependencies("unknown_backend")
 
-                assert all_available is False
-                assert "transformers" in missing
+        error_msg = str(exc_info.value)
+        assert "Unknown backend_id 'unknown_backend'" in error_msg
+        assert "Available backends:" in error_msg
+        assert "da3" in error_msg  # Should list available backends
+        assert "onnx" in error_msg
+        assert "mock" in error_msg
 
 
 def test_minimal_backend_requires_only_torch(mock_backend_registry):
