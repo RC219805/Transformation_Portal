@@ -4,6 +4,8 @@ Multi-backend support following V2 architecture patterns:
 - PyTorch (CPU/MPS for development)
 - CoreML (ANE optimization if V3 models exist)
 - Auto-detection of optimal backend for hardware
+
+Supports standard image formats (JPG, PNG, TIFF) and RAW camera files (CR2, NEF, ARW, DNG).
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ import numpy as np
 from PIL import Image
 
 from .config import DA3Config, ModelVariant  # noqa: F401 - Used in docstring examples
+from .raw_loader import is_raw_file, load_raw_as_pil
 
 if TYPE_CHECKING:
     from .input_manager import ImageInput
@@ -582,14 +585,26 @@ class DA3InferenceEngine:
     def infer_from_path(self, image_path: Path) -> DepthResult:
         """Run depth inference on an image file.
 
+        Supports standard image formats (JPG, PNG, TIFF) and RAW camera files (CR2, NEF, ARW, DNG).
+
         Args:
-            image_path: Path to input image
+            image_path: Path to input image (standard or RAW format)
 
         Returns:
             DepthResult with depth map and metadata
         """
-        # Load image from path
-        image = Image.open(image_path).convert("RGB")
+        # PIL-first fallback pattern: try PIL, fallback to RAW only if needed
+        try:
+            image = Image.open(image_path).convert("RGB")
+        except (Image.UnidentifiedImageError, OSError, ValueError):
+            # PIL failed - try RAW only if extension suggests RAW and rawpy available
+            if is_raw_file(image_path):
+                logger.debug(f"PIL failed, loading as RAW for inference: {image_path.name}")
+                image = load_raw_as_pil(image_path, use_camera_wb=True, half_size=False)
+            else:
+                # Re-raise original error if not a RAW file
+                raise
+
         image_np = np.array(image)
 
         # Run inference

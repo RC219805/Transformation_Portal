@@ -349,9 +349,13 @@ def main(
 
     # Discover images using same hygiene filters as orchestrator
     from .input_discovery import DiscoveryConfig, discover_images
+    from .raw_loader import RAW_EXTENSIONS
 
     logger.info(f"Discovering images in: {input_dir}")
-    image_extensions = [".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp", ".bmp"]
+    # Standard image formats + RAW camera formats (CR2, NEF, ARW, DNG, etc.)
+    standard_exts = [".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp", ".bmp"]
+    raw_exts = sorted(RAW_EXTENSIONS)
+    image_extensions = sorted(set(standard_exts + raw_exts))
 
     discovery_config = DiscoveryConfig(strict_mode=strict_inputs)
     try:
