@@ -40,6 +40,8 @@ Version: 1.0.0
 from __future__ import annotations
 
 import argparse
+import importlib
+import importlib.util
 import json
 import logging
 import sys
@@ -114,10 +116,14 @@ def auto_detect_device() -> str:
         return "cpu"
 
 
-def check_ml_dependencies() -> tuple[bool, list[str]]:
+def check_ml_dependencies(backend_id: str) -> tuple[bool, list[str]]:
     """Check availability of ML dependencies for real pipeline execution.
 
-    For Phase 2 real runs, both torch and transformers are required.
+    Validates dependencies for the selected backend. torch is ALWAYS required
+    for real execution; additional deps (transformers, etc.) are backend-specific.
+
+    Args:
+        backend_id: Backend identifier (e.g., "da3", "depth_pro", "mock").
 
     Returns:
         (all_available, missing_packages)
@@ -127,19 +133,64 @@ def check_ml_dependencies() -> tuple[bool, list[str]]:
         (e.g., missing CUDA libraries, corrupted shared libraries). Treats broken
         dependencies as missing to provide clear error messages.
     """
+    from transformation_portal.depth.backends import get_registry
+
+    # Get backend from registry
+    registry = get_registry()
+    try:
+        backend_cls = registry._backends.get(backend_id)
+        if backend_cls is None:
+            available = ", ".join(sorted(registry._backends.keys())) or "(none)"
+            logger.warning(
+                f"Unknown backend '{backend_id}'; available: {available}. "
+                "Defaulting to strict dependency check (torch + transformers)."
+            )
+            # Fallback: require both torch and transformers
+            required = ["torch", "transformers"]
+        else:
+            # torch always required + backend-specific packages
+            # Get requirements from backend class (no instantiation needed)
+            backend_packages: list[str] = []
+            if hasattr(backend_cls, "required_packages") and callable(backend_cls.required_packages):
+                try:
+                    backend_packages = list(backend_cls.required_packages())
+                except Exception as e:
+                    logger.error(
+                        "Failed to get requirements for backend '%s': %s. "
+                        "Falling back to strict check (torch + transformers).",
+                        backend_id,
+                        e,
+                    )
+                    raise
+
+            required = ["torch"] + backend_packages
+            # Dedupe while preserving order
+            required = list(dict.fromkeys(required))
+
+        logger.debug(f"Backend '{backend_id}' requires: {required}")
+
+    except Exception as e:
+        logger.error(f"Failed to determine backend requirements: {e}")
+        # Fallback to strict check
+        required = ["torch", "transformers"]
+
+    # Check all required packages
     missing = []
-
-    try:
-        import torch  # noqa: F401
-    except Exception as e:
-        logger.debug(f"torch import failed ({e}), treating as missing")
-        missing.append("torch")
-
-    try:
-        import transformers  # noqa: F401
-    except Exception as e:
-        logger.debug(f"transformers import failed ({e}), treating as missing")
-        missing.append("transformers")
+    for pkg in required:
+        try:
+            # Use importlib to check if package can be imported
+            # This properly detects both missing and broken installs
+            spec = importlib.util.find_spec(pkg)
+            if spec is None:
+                logger.debug(f"{pkg} not found (spec is None)")
+                missing.append(pkg)
+            else:
+                # Try actual import to catch broken installs (missing .so files, etc.)
+                # Use importlib.import_module instead of __import__ for better testability
+                importlib.import_module(pkg)
+        except Exception as e:
+            logger.debug(f"{pkg} import failed ({type(e).__name__}: {e}), treating as missing")
+            missing.append(pkg)
 
     all_available = len(missing) == 0
     return all_available, missing
@@ -201,10 +252,10 @@ def run_apex_for_config(
         raise ValueError(f"Input directory required for real execution: {input_dir}")
 
     # Check ML dependencies early (fail fast with clear message)
-    ml_available, missing = check_ml_dependencies()
+    ml_available, missing = check_ml_dependencies(run_spec.backend_id)
     if not ml_available:
         error_msg = (
-            f"Real execution requires ML dependencies: {', '.join(missing)}\n\n"
+            f"Backend '{run_spec.backend_id}' requires ML dependencies: {', '.join(missing)}\n\n"
             "Install with:\n"
             "  pip install -e .[ml]\n\n"
             "Or use --dry-run for synthetic testing without ML deps."
