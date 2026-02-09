@@ -131,7 +131,8 @@ class DA3Backend:
 
         logger.debug("DA3 backend dependencies available")
 
-    def required_packages(self) -> list[str]:
+    @classmethod
+    def required_packages(cls) -> list[str]:
         """Return required import module names for DA3 backend.
 
         DA3 requires transformers (HuggingFace Transformers) for model inference.

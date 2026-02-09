@@ -149,20 +149,19 @@ def check_ml_dependencies(backend_id: str) -> tuple[bool, list[str]]:
             required = ["torch", "transformers"]
         else:
             # torch always required + backend-specific packages
-            # Create a temporary instance to get required packages
-            # (backends may need config, but required_packages() shouldn't)
-            try:
-                temp_backend = backend_cls()
-                backend_packages = temp_backend.required_packages()
-            except Exception as e:
-                logger.debug(f"Could not instantiate {backend_id} to get requirements ({e}), using ensure_available")
-                # Fallback: use class method if it exists
-                backend_packages = []
-                if hasattr(backend_cls, "required_packages"):
-                    try:
-                        backend_packages = backend_cls.required_packages(backend_cls())
-                    except Exception:
-                        pass
+            # Get requirements from backend class (no instantiation needed)
+            backend_packages: list[str] = []
+            if hasattr(backend_cls, "required_packages") and callable(backend_cls.required_packages):
+                try:
+                    backend_packages = list(backend_cls.required_packages())
+                except Exception as e:
+                    logger.error(
+                        "Failed to get requirements for backend '%s': %s. "
+                        "Falling back to strict check (torch + transformers).",
+                        backend_id,
+                        e,
+                    )
+                    raise
 
             required = ["torch"] + backend_packages
             # Dedupe while preserving order

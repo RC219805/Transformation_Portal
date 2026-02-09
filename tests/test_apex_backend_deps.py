@@ -21,21 +21,24 @@ def mock_backend_registry():
     class MockDA3:
         name = "da3"
 
-        def required_packages(self):
+        @classmethod
+        def required_packages(cls):
             return ["transformers"]
 
     # Mock non-HF backend class (e.g., ONNX)
     class MockONNX:
         name = "onnx"
 
-        def required_packages(self):
+        @classmethod
+        def required_packages(cls):
             return ["onnxruntime"]
 
     # Mock minimal backend (no extra deps)
     class MockMinimal:
         name = "mock"
 
-        def required_packages(self):
+        @classmethod
+        def required_packages(cls):
             return []
 
     registry = MagicMock()

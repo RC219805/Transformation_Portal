@@ -151,7 +151,8 @@ class DepthProBackend:
                 f"  - Env: TRANSFORMATION_PORTAL_DEPTH_PRO_CHECKPOINT='path/to/checkpoint.pt'"
             )
 
-    def required_packages(self) -> list[str]:
+    @classmethod
+    def required_packages(cls) -> list[str]:
         """Return required import module names for Depth Pro backend.
 
         Depth Pro has its own package that wraps torch dependencies.
