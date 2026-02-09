@@ -385,8 +385,9 @@ emergency:
     max_duration_days: 7
     auto_reverts: false  # Must manually re-enable
 
----
-# Notes:
+# ============================================================================
+# Notes
+# ============================================================================
 # - Waivers add friction intentionally (prevent policy erosion)
 # - Budget changes require evidence (prevent "fix CI by raising limits")
 # - Incidents ensure accountability (regressions don't slip through silently)

@@ -374,8 +374,9 @@ review:
     - "Are fuzz scenarios finding real issues?"
     - "Should new scenarios be added based on recent bugs?"
 
----
+# ============================================================================
 # Appendix: Workload Governance Philosophy
+# ============================================================================
 
 # Inspired by PERUN (arXiv:2207.12900):
 # - Performance testing requires governed, versioned workloads

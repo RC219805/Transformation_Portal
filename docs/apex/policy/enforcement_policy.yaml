@@ -209,8 +209,9 @@ review:
     - Evidence of improvement (lower FPR, better MDE)
     - Migration plan if breaking change
 
----
+# ============================================================================
 # Appendix: Statistical Foundations
+# ============================================================================
 
 # References:
 # - Mann-Whitney U test: Wilcoxon (1945), Mann & Whitney (1947)
