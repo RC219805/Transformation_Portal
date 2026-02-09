@@ -16,7 +16,7 @@ on:
           - synthetic
           - real
       backend_id:
-        description: 'Depth backend (da3, depth_pro, mock)'
+        description: 'Depth backend (da3, mock)'
         required: false
         default: 'da3'
         type: string

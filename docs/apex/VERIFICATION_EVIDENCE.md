@@ -83,7 +83,7 @@ fi
 - name: Install dependencies (ML tier)
   if: github.event.inputs.mode == 'real' || github.event_name == 'schedule'
   run: |
-    python -m pip install -e .[ml]
+    python -m pip install -e ".[ml]"
 ```
 
 **Verdict:** ✅ **Airtight by design** (not yet runtime-verified)

@@ -143,7 +143,7 @@ _save_with_meta(
 # Access depth map
 if result["depth"] is not None:
     depth_map = result["depth"]  # numpy array (H, W) in [0, 1]
-    
+
 # Check metrics
 print(f"Total time: {result['metrics']['total_ms']}ms")
 print(f"Depth estimation: {result['metrics']['depth_estimation_ms']}ms")
@@ -278,7 +278,7 @@ pip install -e ".[ml]"
 If Material Response is unavailable, a simplified fallback is used:
 
 ```
-[WARN] Material Response not available - install with pip install -e .[ml]
+[WARN] Material Response not available - install with pip install -e ".[ml]"
 ```
 
 This uses local contrast enhancement instead of full Material Response.

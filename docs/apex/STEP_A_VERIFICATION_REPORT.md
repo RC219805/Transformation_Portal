@@ -45,7 +45,7 @@ fi
 - name: Install dependencies (ML tier)
   if: github.event.inputs.mode == 'real' || github.event_name == 'schedule'
   run: |
-    python -m pip install -e .[ml]
+    python -m pip install -e ".[ml]"
 ```
 
 **Verdict:** ✅ **AIRTIGHT**
@@ -241,7 +241,7 @@ fi
    - No bypass paths
 
 2. **Dependency Installation**
-   - Standard `pip install -e .[ml]` pattern
+   - Standard `pip install -e ".[ml]"` pattern
    - Conditional step with clear guard
    - Works in current CI (verified)
 
