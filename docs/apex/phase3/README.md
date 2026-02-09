@@ -121,3 +121,4 @@ tests/test_apex_backend_deps.py (new)                  +167 -0
 - ✅ Existing APEX tests pass (30 passed, 1 skipped)
 - ✅ No regressions in contract verification or aggregation tests
 - ✅ New backend dependency tests pass (8/8)
+- ✅ Local and CI test suite green after classmethod fix
