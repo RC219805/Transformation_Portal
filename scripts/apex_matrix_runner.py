@@ -61,6 +61,16 @@ from transformation_portal.metrics.performance_capsule import PerformanceCapsule
 __version__ = "1.0.0"
 
 
+class ApexConfigError(ValueError):
+    """Configuration error (invalid flags, unknown backend_id, etc.).
+
+    This exception indicates user configuration problems, not execution failures.
+    Should result in exit code 1 (configuration error).
+    """
+
+    pass
+
+
 def _get_pipeline_version() -> str:
     """Get pipeline version from package metadata or fallback to git SHA.
 
@@ -128,6 +138,10 @@ def check_ml_dependencies(backend_id: str) -> tuple[bool, list[str]]:
     Returns:
         (all_available, missing_packages)
 
+    Raises:
+        ApexConfigError: When backend_id is unknown (configuration error).
+        RuntimeError: When backend fails to declare dependencies (backend bug).
+
     Note:
         Catches all exceptions (not just ImportError) to handle broken installs
         (e.g., missing CUDA libraries, corrupted shared libraries). Treats broken
@@ -135,44 +149,43 @@ def check_ml_dependencies(backend_id: str) -> tuple[bool, list[str]]:
     """
     from transformation_portal.depth.backends import get_registry
 
-    # Get backend from registry
+    # Get backend from registry using public API
     registry = get_registry()
-    try:
-        backend_cls = registry._backends.get(backend_id)
-        if backend_cls is None:
-            available = ", ".join(sorted(registry._backends.keys())) or "(none)"
-            logger.warning(
-                f"Unknown backend '{backend_id}'; available: {available}. "
-                "Defaulting to strict dependency check (torch + transformers)."
+
+    backend_cls = registry.get_backend_class(backend_id)
+    if backend_cls is None:
+        # Unknown backend: fail fast with clear guidance
+        available = registry.available_backend_ids()
+        available_str = ", ".join(available) if available else "(none)"
+        raise ApexConfigError(
+            f"Unknown backend_id '{backend_id}'.\n"
+            f"Available backends: {available_str}\n\n"
+            f"Fix: choose a valid backend_id or register the backend.\n"
+            f"See: docs/apex/phase3/README.md for backend registration."
+        )
+
+    # torch always required + backend-specific packages
+    # Get requirements from backend class (no instantiation needed)
+    backend_packages: list[str] = []
+    if hasattr(backend_cls, "required_packages") and callable(backend_cls.required_packages):
+        try:
+            backend_packages = list(backend_cls.required_packages())
+        except Exception as e:
+            logger.error(
+                "Failed to get requirements for backend '%s': %s. " "This is a backend implementation error.",
+                backend_id,
+                e,
             )
-            # Fallback: require both torch and transformers
-            required = ["torch", "transformers"]
-        else:
-            # torch always required + backend-specific packages
-            # Get requirements from backend class (no instantiation needed)
-            backend_packages: list[str] = []
-            if hasattr(backend_cls, "required_packages") and callable(backend_cls.required_packages):
-                try:
-                    backend_packages = list(backend_cls.required_packages())
-                except Exception as e:
-                    logger.error(
-                        "Failed to get requirements for backend '%s': %s. "
-                        "Falling back to strict check (torch + transformers).",
-                        backend_id,
-                        e,
-                    )
-                    raise
+            raise RuntimeError(
+                f"Backend '{backend_id}' failed to declare dependencies: {e}\n"
+                f"This is a backend implementation bug; please report it."
+            ) from e
 
-            required = ["torch"] + backend_packages
-            # Dedupe while preserving order
-            required = list(dict.fromkeys(required))
+    required = ["torch"] + backend_packages
+    # Dedupe while preserving order
+    required = list(dict.fromkeys(required))
 
-        logger.debug(f"Backend '{backend_id}' requires: {required}")
-
-    except Exception as e:
-        logger.error(f"Failed to determine backend requirements: {e}")
-        # Fallback to strict check
-        required = ["torch", "transformers"]
+    logger.debug(f"Backend '{backend_id}' requires: {required}")
 
     # Check all required packages
     missing = []
@@ -538,6 +551,10 @@ def main() -> int:
                 obs_file.write_text(json.dumps(observation.to_dict(), indent=2))
                 logger.info(f"Wrote observation to {obs_file}")
 
+            except ApexConfigError as e:
+                # Configuration errors should fail fast with clear message
+                logger.error(f"❌ Configuration error: {e}")
+                return 1
             except Exception as e:
                 error_msg = f"Failed to run {workflow_version} in zone {zone}: {e}"
                 logger.error(error_msg)

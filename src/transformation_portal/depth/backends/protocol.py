@@ -209,7 +209,8 @@ class DepthBackend(Protocol):
         """
         ...
 
-    def required_packages(self) -> list[str]:
+    @classmethod
+    def required_packages(cls) -> list[str]:
         """Return list of required import module names for this backend.
 
         Returns module names (not pip package names) that must be importable
@@ -222,8 +223,7 @@ class DepthBackend(Protocol):
             List of import module names (e.g., ["transformers"]).
 
         Example:
-            >>> backend = DA3Backend()
-            >>> backend.required_packages()
+            >>> DA3Backend.required_packages()
             ['transformers']
         """
         ...
