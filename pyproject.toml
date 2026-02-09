@@ -54,6 +54,10 @@ ml = [
 coreml = [
     "coremltools>=7.0",
 ]
+# RAW camera file support (CR2, NEF, ARW, DNG, etc.)
+raw = [
+    "rawpy>=0.18.0",
+]
 # Development tools - see requirements/dev.in for pinned versions
 dev = [
     "pytest>=8.0,<10",
@@ -79,7 +83,7 @@ ci = [
 ]
 # All dependencies combined
 all = [
-    "transformation-portal[ml,dev,ci]",
+    "transformation-portal[ml,dev,ci,raw]",
 ]
 
 [project.scripts]
