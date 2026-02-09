@@ -281,6 +281,7 @@ def run_apex_for_config(
     from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
     from transformation_portal.lux_depth_v3.input_discovery import DiscoveryConfig, discover_images
     from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+    from transformation_portal.lux_depth_v3.raw_loader import RAW_EXTENSIONS
     from transformation_portal.metrics.timing import timing_context
 
     # Timeout handler for long-running operations
@@ -290,9 +291,13 @@ def run_apex_for_config(
     def timeout_handler(signum, frame):
         raise TimeoutError("Image processing timeout")
 
-    # Discover input images
+    # Discover input images (standard + RAW formats)
     discovery_config = DiscoveryConfig(strict_mode=False)
-    images = discover_images(input_dir, discovery_config, [".jpg", ".jpeg", ".png"])
+    # Include standard image formats + RAW camera formats
+    standard_exts = [".jpg", ".jpeg", ".png"]
+    raw_exts = sorted(RAW_EXTENSIONS)
+    all_extensions = standard_exts + raw_exts
+    images = discover_images(input_dir, discovery_config, all_extensions)
 
     if not images:
         raise ValueError(f"No images found in {input_dir}")

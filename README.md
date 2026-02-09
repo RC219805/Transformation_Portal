@@ -165,6 +165,39 @@ See [ADR-019: Backend Registry Integration](docs/architecture/decisions/ADR-019-
 
 ## Optional Dependencies
 
+### RAW Camera File Support
+
+Enable processing of RAW camera files (CR2, NEF, ARW, DNG, etc.) from professional cameras.
+
+**Installation:**
+```bash
+pip install rawpy
+# Or install with the RAW extras group:
+pip install -e ".[raw]"
+```
+
+**Supported RAW Formats:**
+- Canon (CR2, CRW), Nikon (NEF, NRW), Sony (ARW, SRF, SR2)
+- Adobe DNG, Olympus ORF, Fujifilm RAF, Pentax PEF
+- Panasonic RW2, Phase One IIQ, Hasselblad 3FR
+
+**Usage:**
+```bash
+# Process RAW files just like standard images
+lux-depth-v3 --input-dir ./raw_images --output-dir ./output
+
+# RAW files are automatically detected and converted to RGB
+# High-quality settings: camera white balance, full resolution, sRGB color space
+```
+
+**Technical Details:**
+- RAW → RGB conversion uses LibRaw via rawpy
+- Default settings: camera white balance, full resolution, AHD demosaic
+- Output: 8-bit sRGB (standard pipeline input)
+- Graceful fallback: clear error message if rawpy not installed
+
+---
+
 ### Depth Pro (Experimental)
 
 Apple's Depth Pro model for metric depth estimation. **Experimental tier** - for research and evaluation only.
@@ -366,8 +399,30 @@ workflows/    # Workflow artifacts / operational workflow utilities
 
 ## Supported File Formats (summary)
 
-**Images:**
-- PNG, JPEG, TIFF/TIF, WebP, BMP (case-insensitive)
+### Input Formats
+
+**Standard Image Formats:**
+- PNG, JPEG (`.jpg`, `.jpeg`)
+- TIFF/TIF (`.tif`, `.tiff`)
+- WebP, BMP (case-insensitive)
+
+**RAW Camera Formats** (requires `rawpy` - optional):
+- Canon: `.cr2`, `.crw`
+- Nikon: `.nef`, `.nrw`
+- Sony: `.arw`, `.srf`, `.sr2`
+- Adobe: `.dng` (Digital Negative)
+- Olympus: `.orf`
+- Fujifilm: `.raf`
+- Pentax: `.pef`
+- Panasonic: `.rw2`
+- Phase One, Hasselblad, and more
+
+To enable RAW support:
+```bash
+pip install rawpy
+# Or install with optional extras:
+pip install -e ".[raw]"
+```
 
 **Video:**
 - MP4, MOV, AVI, MKV (codec/container dependent)

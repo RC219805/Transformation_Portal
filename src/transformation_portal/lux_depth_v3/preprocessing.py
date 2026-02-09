@@ -19,10 +19,12 @@ from typing import Optional, Tuple, Union
 import numpy as np
 from PIL import Image
 
+from .raw_loader import RAW_EXTENSIONS, is_raw_file, load_raw_as_pil
+
 logger = logging.getLogger(__name__)
 
-# Supported image formats
-SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp", ".bmp"}
+# Supported image formats (standard + RAW)
+SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff", ".tif", ".webp", ".bmp"} | RAW_EXTENSIONS
 
 # Depth Anything V3 requires dimensions to be multiples of 14
 DIMENSION_MULTIPLE = 14
@@ -61,13 +63,24 @@ def validate_image_format(image_path: Union[str, Path]) -> Path:
 
     # Verify image integrity
     try:
-        # Open and verify (checks file structure)
-        with Image.open(image_path) as img:
-            img.verify()
+        # RAW files require different validation (PIL can't open them)
+        if is_raw_file(image_path):
+            # For RAW, just check file is readable
+            # Full validation happens during load_raw_as_pil()
+            with open(image_path, "rb") as f:
+                # Read first few bytes to ensure file is readable
+                header = f.read(16)
+                if len(header) < 16:
+                    raise ValueError("RAW file too small or empty")
+        else:
+            # Standard image validation for non-RAW
+            # Open and verify (checks file structure)
+            with Image.open(image_path) as img:
+                img.verify()
 
-        # verify() invalidates the image object, reopen to test pixel load
-        with Image.open(image_path) as img:
-            img.load()  # Force load pixel data
+            # verify() invalidates the image object, reopen to test pixel load
+            with Image.open(image_path) as img:
+                img.load()  # Force load pixel data
 
     except Exception as e:
         raise ValueError(f"Image file corrupt or invalid: {image_path}") from e
@@ -105,7 +118,13 @@ def preprocess_image(
     # Load image
     if isinstance(image, (str, Path)):
         image_path = validate_image_format(image)
-        pil_img = Image.open(image_path)
+
+        # Load RAW files using rawpy, standard images using PIL
+        if is_raw_file(image_path):
+            logger.debug(f"Loading RAW file: {image_path.name}")
+            pil_img = load_raw_as_pil(image_path, use_camera_wb=True, half_size=False)
+        else:
+            pil_img = Image.open(image_path)
     elif isinstance(image, np.ndarray):
         # Convert numpy array to PIL for consistent processing
         if image.ndim == 2:
