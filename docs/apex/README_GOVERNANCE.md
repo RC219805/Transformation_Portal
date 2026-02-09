@@ -28,7 +28,7 @@ This directory contains the complete systems-engineering plan for APEX performan
 
 3. **[STEP_A_VERIFICATION_REPORT.md](./STEP_A_VERIFICATION_REPORT.md)**
    - Truth properties verification (5 checks ✅)
-   - Test suite results (77/78 passing)
+   - Test suite results (77 passed, 1 skipped - APEX subset)
    - Architect approval for Phase 2 merge
    - Pre/post-merge checklists
 
@@ -39,7 +39,7 @@ This directory contains the complete systems-engineering plan for APEX performan
    - Task 3: Fix dependency updater
    - Task 4: Close performance monitor PR
 
-5. **[../../merge_phase2.sh](../../merge_phase2.sh)** 🚀 **EXECUTABLE**
+5. **[scripts/runbooks/merge_phase2_runbook.sh](../../scripts/runbooks/merge_phase2_runbook.sh)** 🚀 **EXECUTABLE**
    - One-command merge script
    - Validation + rebase + merge + push
    - Interactive prompts with safety checks
@@ -60,7 +60,7 @@ This directory contains the complete systems-engineering plan for APEX performan
 ```bash
 # Step 1: Merge Phase 2 (10 min)
 cd /path/to/Transformation_Portal
-./merge_phase2.sh
+./scripts/runbooks/merge_phase2_runbook.sh
 
 # Step 2: Trigger manual real run (5 min)
 gh workflow run apex_performance.yml \
@@ -289,7 +289,7 @@ All systems are go for Week 1 execution:
 - ✅ Risks assessed
 - ✅ Architect approval
 
-**Start with:** [EXECUTIVE_SUMMARY.md](./EXECUTIVE_SUMMARY.md) or run `./merge_phase2.sh`
+**Start with:** [EXECUTIVE_SUMMARY.md](./EXECUTIVE_SUMMARY.md) or run `./scripts/runbooks/merge_phase2_runbook.sh`
 
 ---
 

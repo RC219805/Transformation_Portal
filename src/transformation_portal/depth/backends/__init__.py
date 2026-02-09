@@ -36,12 +36,13 @@ See Also:
 
 from .cache import DepthCacheWriter
 from .protocol import DepthBackend, DepthResult, LicenseRestrictionError, LicenseType
-from .registry import DepthBackendRegistry
+from .registry import DepthBackendRegistry, get_registry
 
 __all__ = [
     "DepthBackend",
     "DepthResult",
     "DepthBackendRegistry",
+    "get_registry",
     "LicenseType",
     "LicenseRestrictionError",
     "DepthCacheWriter",

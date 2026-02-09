@@ -69,15 +69,9 @@ jobs:
       - name: Install dependencies (core)
         run: |
           set -euo pipefail
+          # Install package with all core dependencies
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install -e .
-
-      - name: Install dependencies (ML tier)
-        if: github.event.inputs.mode == 'real' || github.event_name == 'schedule'
-        run: |
-          set -euo pipefail
-          # Real execution requires ML dependencies (torch + transformers + backend-specific)
-          python -m pip install -e .[ml]
 
       - name: Verify core dependencies
         run: |
@@ -85,7 +79,14 @@ jobs:
           # Fail fast if critical imports are broken
           python -c "import yaml; print('✅ PyYAML OK')"
           python -c "import numpy; print('✅ NumPy OK')"
-          python -m pip check
+          pip check
+
+      - name: Install dependencies (ML tier)
+        if: github.event.inputs.mode == 'real' || github.event_name == 'schedule'
+        run: |
+          set -euo pipefail
+          # Real execution requires ML dependencies (torch + transformers + backend-specific)
+          python -m pip install -e ".[ml]"
 
       - name: Run APEX Matrix
         env:
@@ -165,7 +166,14 @@ jobs:
       - name: Install dependencies
         run: |
           set -euo pipefail
-          pip install -e .
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e .
+
+      - name: Verify core dependencies
+        run: |
+          set -euo pipefail
+          python -c "import yaml; print('✅ PyYAML OK')"
+          pip check
 
       - name: Download Results
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8

@@ -34,7 +34,7 @@ This guide explains when to use each mode and how to interpret results.
 * Scheduled nightly runs (Sundays 00:00 UTC)
 
 **Characteristics**:
-* Requires ML dependencies (`pip install -e .[ml]` ~5GB)
+* Requires ML dependencies (`pip install -e ".[ml]"` ~5GB)
 * Uses actual orchestrator/depth backends/enhancement pipeline
 * Real timing measurements (variable, environment-dependent)
 * Produces non-synthetic performance capsules
@@ -84,7 +84,7 @@ python scripts/apex_matrix_runner.py \
 
 **Prerequisites**:
 ```bash
-pip install -e .[ml]  # Install torch + transformers + backend deps
+pip install -e ".[ml]"  # Install torch + transformers + backend deps
 ```
 
 ---
@@ -172,7 +172,7 @@ unknown         2.11s    2.09s    -0.9%     ✅ Improved
 
 **Fix**:
 ```bash
-pip install -e .[ml]
+pip install -e ".[ml]"
 ```
 
 **Why**: Real mode requires torch + backend-specific packages. Synthetic mode does not.
@@ -233,7 +233,7 @@ A: For contracts/schema: 100%. For performance: 0% (it's mock data). Use real mo
 
 **Q: Can I run real mode locally without ML deps?**
 
-A: No. Real mode requires `pip install -e .[ml]`. Use `--dry-run` if you want to test without ML.
+A: No. Real mode requires `pip install -e ".[ml]"`. Use `--dry-run` if you want to test without ML.
 
 **Q: What backends are supported?**
 

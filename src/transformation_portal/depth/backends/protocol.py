@@ -208,3 +208,22 @@ class DepthBackend(Protocol):
             FileNotFoundError: If checkpoint is missing.
         """
         ...
+
+    @classmethod
+    def required_packages(cls) -> list[str]:
+        """Return list of required import module names for this backend.
+
+        Returns module names (not pip package names) that must be importable
+        for this backend to function. For example: ["transformers"].
+
+        Note: torch is always required by the APEX runner for real execution;
+        backends should only list additional dependencies beyond torch.
+
+        Returns:
+            List of import module names (e.g., ["transformers"]).
+
+        Example:
+            >>> DA3Backend.required_packages()
+            ['transformers']
+        """
+        ...

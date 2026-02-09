@@ -49,30 +49,51 @@ python scripts/apex_matrix_runner.py \
 ### 2. Dependency Validation (Fail-Fast) ✅
 
 **What:**
-- Added `check_ml_dependencies()` function
-- Validates torch/transformers availability before execution
-- Raises clear `RuntimeError` with installation instructions
+- Added `check_ml_dependencies(backend_id)` function with backend-aware dependency checking
+- Validates backend-specific dependencies (torch always required; transformers/other deps per backend)
+- Uses backend registry API for introspection
+- Raises clear `RuntimeError` or `ApexConfigError` with installation instructions
 - Prevents confusing mid-run import errors
 
 **Implementation:**
 ```python
-def check_ml_dependencies(require_torch: bool = False) -> tuple[bool, list[str]]:
-    """Check availability of ML dependencies."""
+def check_ml_dependencies(backend_id: str) -> tuple[bool, list[str]]:
+    """Check availability of ML dependencies for real pipeline execution.
+
+    Validates dependencies for the selected backend. torch is ALWAYS required
+    for real execution; additional deps (transformers, etc.) are backend-specific.
+    """
+    from transformation_portal.depth.backends import get_registry
+
+    registry = get_registry()
+    backend_cls = registry.get_backend_class(backend_id)
+
+    # Get backend-specific packages via required_packages() method
+    backend_packages = list(backend_cls.required_packages())
+    required = ["torch"] + backend_packages
+
+    # Check all required packages (catches missing + broken installs)
     missing = []
-    try:
-        import torch  # noqa: F401
-    except ImportError:
-        missing.append("torch")
-    # ... similar for transformers
+    for pkg in required:
+        try:
+            spec = importlib.util.find_spec(pkg)
+            if spec is None:
+                missing.append(pkg)
+            else:
+                importlib.import_module(pkg)  # Catch broken installs
+        except Exception as e:
+            logger.debug(f"{pkg} import failed, treating as missing")
+            missing.append(pkg)
+
     return len(missing) == 0, missing
 ```
 
 **Error Message:**
 ```
-RuntimeError: Real execution requires ML dependencies: torch, transformers
+RuntimeError: Backend 'da3' requires ML dependencies: torch, transformers
 
 Install with:
-  pip install torch transformers
+  pip install -e ".[ml]"
 
 Or use --dry-run for synthetic testing without ML deps.
 ```
@@ -310,7 +331,7 @@ Keeping PR CI in dry-run mode until:
 **Mitigation:** Fallback to CPU always safe. Explicit override (`--device`) still supported.
 
 ### Risk: Dependency check too strict
-**Mitigation:** Only torch required for real execution. Transformers optional (backend-dependent). Clear error messages guide users.
+**Mitigation:** Both torch and transformers are required for Phase 2 real execution (current HuggingFace-based backends). Broad exception handling (not just ImportError) catches broken installs. Clear error messages guide users to `pip install -e ".[ml]"`.
 
 ### Risk: Real execution timing noise in CI
 **Mitigation:** Not running real execution in PR CI yet. Nightly/manual runs will use stable hardware or self-hosted runners.

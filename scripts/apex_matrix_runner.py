@@ -40,6 +40,8 @@ Version: 1.0.0
 from __future__ import annotations
 
 import argparse
+import importlib
+import importlib.util
 import json
 import logging
 import sys
@@ -57,6 +59,16 @@ from transformation_portal.metrics.contracts import Observation, RunSpec
 from transformation_portal.metrics.performance_capsule import PerformanceCapsule
 
 __version__ = "1.0.0"
+
+
+class ApexConfigError(ValueError):
+    """Configuration error (invalid flags, unknown backend_id, etc.).
+
+    This exception indicates user configuration problems, not execution failures.
+    Should result in exit code 1 (configuration error).
+    """
+
+    pass
 
 
 def _get_pipeline_version() -> str:
@@ -114,29 +126,84 @@ def auto_detect_device() -> str:
         return "cpu"
 
 
-def check_ml_dependencies() -> tuple[bool, list[str]]:
+def check_ml_dependencies(backend_id: str) -> tuple[bool, list[str]]:
     """Check availability of ML dependencies for real pipeline execution.
 
-    For Phase 2 real runs, both torch and transformers are required.
+    Validates dependencies for the selected backend. torch is ALWAYS required
+    for real execution; additional deps (transformers, etc.) are backend-specific.
+
+    Args:
+        backend_id: Backend identifier (e.g., "da3", "depth_pro", "mock").
 
     Returns:
         (all_available, missing_packages)
 
+    Raises:
+        ApexConfigError: When backend_id is unknown (configuration error).
+        RuntimeError: When backend fails to declare dependencies (backend bug).
+
     Note:
-        Simplified from earlier version - real pipeline requires both deps,
-        so no point in having a confusing require_torch flag.
+        Catches all exceptions (not just ImportError) to handle broken installs
+        (e.g., missing CUDA libraries, corrupted shared libraries). Treats broken
+        dependencies as missing to provide clear error messages.
     """
+    from transformation_portal.depth.backends import get_registry
+
+    # Get backend from registry using public API
+    registry = get_registry()
+
+    backend_cls = registry.get_backend_class(backend_id)
+    if backend_cls is None:
+        # Unknown backend: fail fast with clear guidance
+        available = registry.available_backend_ids()
+        available_str = ", ".join(available) if available else "(none)"
+        raise ApexConfigError(
+            f"Unknown backend_id '{backend_id}'.\n"
+            f"Available backends: {available_str}\n\n"
+            f"Fix: choose a valid backend_id or register the backend.\n"
+            f"See: docs/apex/phase3/README.md for backend registration."
+        )
+
+    # torch always required + backend-specific packages
+    # Get requirements from backend class (no instantiation needed)
+    backend_packages: list[str] = []
+    if hasattr(backend_cls, "required_packages") and callable(backend_cls.required_packages):
+        try:
+            backend_packages = list(backend_cls.required_packages())
+        except Exception as e:
+            logger.error(
+                "Failed to get requirements for backend '%s': %s. " "This is a backend implementation error.",
+                backend_id,
+                e,
+            )
+            raise RuntimeError(
+                f"Backend '{backend_id}' failed to declare dependencies: {e}\n"
+                f"This is a backend implementation bug; please report it."
+            ) from e
+
+    required = ["torch"] + backend_packages
+    # Dedupe while preserving order
+    required = list(dict.fromkeys(required))
+
+    logger.debug(f"Backend '{backend_id}' requires: {required}")
+
+    # Check all required packages
     missing = []
-
-    try:
-        import torch  # noqa: F401
-    except ImportError:
-        missing.append("torch")
-
-    try:
-        import transformers  # noqa: F401
-    except ImportError:
-        missing.append("transformers")
+    for pkg in required:
+        try:
+            # Use importlib to check if package can be imported
+            # This properly detects both missing and broken installs
+            spec = importlib.util.find_spec(pkg)
+            if spec is None:
+                logger.debug(f"{pkg} not found (spec is None)")
+                missing.append(pkg)
+            else:
+                # Try actual import to catch broken installs (missing .so files, etc.)
+                # Use importlib.import_module instead of __import__ for better testability
+                importlib.import_module(pkg)
+        except Exception as e:
+            logger.debug(f"{pkg} import failed ({type(e).__name__}: {e}), treating as missing")
+            missing.append(pkg)
 
     all_available = len(missing) == 0
     return all_available, missing
@@ -198,12 +265,12 @@ def run_apex_for_config(
         raise ValueError(f"Input directory required for real execution: {input_dir}")
 
     # Check ML dependencies early (fail fast with clear message)
-    ml_available, missing = check_ml_dependencies()
+    ml_available, missing = check_ml_dependencies(run_spec.backend_id)
     if not ml_available:
         error_msg = (
-            f"Real execution requires ML dependencies: {', '.join(missing)}\n\n"
+            f"Backend '{run_spec.backend_id}' requires ML dependencies: {', '.join(missing)}\n\n"
             "Install with:\n"
-            "  pip install -e .[ml]\n\n"
+            '  pip install -e ".[ml]"\n\n'
             "Or use --dry-run for synthetic testing without ML deps."
         )
         raise RuntimeError(error_msg)
@@ -484,6 +551,10 @@ def main() -> int:
                 obs_file.write_text(json.dumps(observation.to_dict(), indent=2))
                 logger.info(f"Wrote observation to {obs_file}")
 
+            except ApexConfigError as e:
+                # Configuration errors should fail fast with clear message
+                logger.error(f"❌ Configuration error: {e}")
+                return 1
             except Exception as e:
                 error_msg = f"Failed to run {workflow_version} in zone {zone}: {e}"
                 logger.error(error_msg)
