@@ -75,7 +75,7 @@ ml_available, missing = check_ml_dependencies()
 if not ml_available:
     raise RuntimeError(
         f"Real execution requires: {', '.join(missing)}\n"
-        "Install with: pip install -e .[ml]\n"
+        "Install with: pip install -e ".[ml]"\n"
         "Or use --dry-run for synthetic testing."
     )
 ```

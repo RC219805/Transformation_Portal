@@ -270,7 +270,7 @@ def run_apex_for_config(
         error_msg = (
             f"Backend '{run_spec.backend_id}' requires ML dependencies: {', '.join(missing)}\n\n"
             "Install with:\n"
-            "  pip install -e .[ml]\n\n"
+            '  pip install -e ".[ml]"\n\n'
             "Or use --dry-run for synthetic testing without ML deps."
         )
         raise RuntimeError(error_msg)
