@@ -120,8 +120,8 @@ def test_non_hf_backend_does_not_require_transformers(mock_backend_registry):
 
     with patch("transformation_portal.depth.backends.get_registry", return_value=mock_backend_registry):
         with patch("importlib.util.find_spec", side_effect=find_spec_side_effect):
-            # Patch importlib at module level where check_ml_dependencies uses it
-            with patch("importlib.import_module", side_effect=import_module_side_effect):
+            # Patch importlib.import_module where it's USED (in apex_matrix_runner namespace)
+            with patch("scripts.apex_matrix_runner.importlib.import_module", side_effect=import_module_side_effect):
                 all_available, missing = check_ml_dependencies("onnx")
 
                 # Should pass because ONNX backend doesn't require transformers
