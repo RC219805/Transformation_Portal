@@ -6,6 +6,30 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Execution mode'
+        required: true
+        default: 'synthetic'
+        type: choice
+        options:
+          - synthetic
+          - real
+      backend_id:
+        description: 'Depth backend (da3, depth_pro, mock)'
+        required: false
+        default: 'da3'
+        type: string
+      sample_size:
+        description: 'Number of test images'
+        required: false
+        default: '3'
+        type: string
+      device:
+        description: 'Device (cpu, cuda, mps)'
+        required: false
+        default: 'cpu'
+        type: string
   schedule:
     - cron: "0 0 * * 0" # Weekly on Sunday 00:00 UTC
 
@@ -42,29 +66,73 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      - name: Install dependencies
+      - name: Install dependencies (core)
         run: |
           set -euo pipefail
-          pip install -e .
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e .
 
-      - name: Run APEX Matrix (Shadow Mode)
+      - name: Install dependencies (ML tier)
+        if: github.event.inputs.mode == 'real' || github.event_name == 'schedule'
+        run: |
+          set -euo pipefail
+          # Real execution requires ML dependencies (torch + transformers + backend-specific)
+          python -m pip install -e .[ml]
+
+      - name: Verify core dependencies
+        run: |
+          set -euo pipefail
+          # Fail fast if critical imports are broken
+          python -c "import yaml; print('✅ PyYAML OK')"
+          python -c "import numpy; print('✅ NumPy OK')"
+          python -m pip check
+
+      - name: Run APEX Matrix
         env:
           APEX_ZONE: ${{ matrix.zone }}
         run: |
           set -euo pipefail
-          # NOTE: Running in dry-run mode (synthetic data) until ML infrastructure ready.
-          # Real pipeline integration complete but requires torch/transformers/models (~5GB).
-          # Dry-run validates schema, contracts, and reporting without ML dependencies.
-          python scripts/apex_matrix_runner.py \
-            --run-id "${{ env.APEX_RUN_ID }}" \
-            --commit-sha "${{ env.APEX_COMMIT_SHA }}" \
-            --workflow-versions ${{ matrix.workflow_version }} \
-            --zones ${{ matrix.zone }} \
-            --output-dir "${{ env.APEX_RESULTS_DIR }}" \
-            --ledger-db "${{ env.APEX_LEDGER_DB }}" \
-            --device cpu \
-            --dry-run \
-            --synthetic
+          # Determine execution mode based on event type
+          MODE="${{ github.event.inputs.mode || 'synthetic' }}"
+          BACKEND_ID="${{ github.event.inputs.backend_id || 'da3' }}"
+          SAMPLE_SIZE="${{ github.event.inputs.sample_size || '3' }}"
+          DEVICE="${{ github.event.inputs.device || 'cpu' }}"
+          INPUT_DIR="./tests/fixtures/apex_images"
+
+          # PR/push events: always synthetic (fast, deterministic)
+          # workflow_dispatch with mode=real: real execution (manual testing)
+          # schedule (nightly): real execution (continuous monitoring)
+          if [[ "${{ github.event_name }}" == "pull_request" ]] || [[ "${{ github.event_name }}" == "push" ]]; then
+            MODE="synthetic"
+            echo "ℹ️ PR/push lane: forcing synthetic mode (fast validation)"
+          elif [[ "${{ github.event_name }}" == "schedule" ]]; then
+            MODE="real"
+            echo "ℹ️ Scheduled run: using real execution (nightly monitoring)"
+          fi
+
+          # Build command with conditional flags
+          CMD=(
+            python scripts/apex_matrix_runner.py
+            --run-id "${{ env.APEX_RUN_ID }}"
+            --commit-sha "${{ env.APEX_COMMIT_SHA }}"
+            --workflow-versions ${{ matrix.workflow_version }}
+            --zones ${{ matrix.zone }}
+            --output-dir "${{ env.APEX_RESULTS_DIR }}"
+            --ledger-db "${{ env.APEX_LEDGER_DB }}"
+            --device "${DEVICE}"
+            --backend-id "${BACKEND_ID}"
+          )
+
+          if [[ "${MODE}" == "synthetic" ]]; then
+            CMD+=(--dry-run --synthetic)
+            echo "🔹 Running in SYNTHETIC mode (no ML deps required)"
+          else
+            CMD+=(--input-dir "${INPUT_DIR}" --sample-size "${SAMPLE_SIZE}")
+            echo "🔸 Running in REAL mode (backend=${BACKEND_ID}, samples=${SAMPLE_SIZE})"
+          fi
+
+          # Execute
+          "${CMD[@]}"
 
       - name: Upload Results
         if: always()
@@ -127,13 +195,30 @@ jobs:
           set -euo pipefail
           # Always create apex_comment.md (even on error) to prevent downstream failures
           : > apex_comment.md
-          # NOTE: --synthetic flag marks dry-run data (no auto-detection from schema)
-          python scripts/apex_pr_comment.py \
-            --run-id "${{ env.APEX_RUN_ID }}" \
-            --commit-sha "${{ env.APEX_COMMIT_SHA }}" \
-            --ledger-db "${{ env.APEX_LEDGER_DB }}" \
-            --synthetic \
-            --output apex_comment.md || {
+
+          # Determine if run was synthetic based on event type
+          MODE="${{ github.event.inputs.mode || 'synthetic' }}"
+          if [[ "${{ github.event_name }}" == "pull_request" ]] || [[ "${{ github.event_name }}" == "push" ]]; then
+            MODE="synthetic"
+          elif [[ "${{ github.event_name }}" == "schedule" ]]; then
+            MODE="real"
+          fi
+
+          # Build comment generation command with conditional --synthetic flag
+          CMD=(
+            python scripts/apex_pr_comment.py
+            --run-id "${{ env.APEX_RUN_ID }}"
+            --commit-sha "${{ env.APEX_COMMIT_SHA }}"
+            --ledger-db "${{ env.APEX_LEDGER_DB }}"
+            --output apex_comment.md
+          )
+
+          if [[ "${MODE}" == "synthetic" ]]; then
+            CMD+=(--synthetic)
+          fi
+
+          # Execute with fallback on error
+          "${CMD[@]}" || {
             cat > apex_comment.md <<'ERREOF'
           # 🎯 APEX Performance Report [ERROR]
 
