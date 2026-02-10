@@ -19,7 +19,9 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List
+from typing import List, Optional
+
+from .raw_loader import RAW_EXTENSIONS
 
 logger = logging.getLogger(__name__)
 
@@ -63,13 +65,16 @@ class DiscoveryConfig:
     strict_mode: bool = False  # Fail on excluded files if True
 
 
-def discover_images(input_dir: Path, config: DiscoveryConfig, image_extensions: List[str] | None = None) -> List[Path]:
+def discover_images(
+    input_dir: Path, config: DiscoveryConfig, image_extensions: List[str] | None = None, output_dir: Optional[Path] = None
+) -> List[Path]:
     """Discover valid RGB input images while excluding depth artifacts and outputs.
 
     Args:
         input_dir: Directory to scan for images (recursive).
         config: Discovery configuration with exclusion patterns.
-        image_extensions: File extensions to include (default: common image formats).
+        image_extensions: File extensions to include (default: standard + RAW formats).
+        output_dir: Output directory to explicitly exclude (if subdirectory of input_dir).
 
     Returns:
         List of valid image paths to process.
@@ -79,26 +84,56 @@ def discover_images(input_dir: Path, config: DiscoveryConfig, image_extensions: 
 
     Example:
         >>> config = DiscoveryConfig(strict_mode=False)
-        >>> images = discover_images(Path("./input"), config)
+        >>> images = discover_images(Path("./input"), config, output_dir=Path("./input/output"))
         INFO: Discovered 17 images, excluded 3 artifacts
     """
     if image_extensions is None:
-        image_extensions = [".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp", ".bmp"]
+        # Default: standard image formats + RAW camera formats
+        # Use set to avoid duplicates (.tif/.tiff appear in both standard and RAW)
+        standard_exts = [".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp", ".bmp"]
+        raw_exts = sorted(RAW_EXTENSIONS)
+        image_extensions = sorted(set(standard_exts + raw_exts))
 
     logger.debug(f"Scanning {input_dir} for images with extensions: {image_extensions}")
     logger.debug(f"Exclude path patterns: {config.exclude_path_patterns}")
     logger.debug(f"Exclude stem suffixes: {config.exclude_stem_suffixes}")
 
-    # Collect all candidate files
-    candidates = []
-    for ext in image_extensions:
-        candidates.extend(input_dir.rglob(f"*{ext}"))
-        candidates.extend(input_dir.rglob(f"*{ext.upper()}"))
+    # ROBUSTNESS FIX (#6): Explicitly exclude output directory if it's a subdirectory of input
+    output_dir_normalized = None
+    if output_dir:
+        try:
+            output_dir_normalized = output_dir.resolve().as_posix().lower()
+            logger.debug(f"Output directory to exclude: {output_dir_normalized}")
+        except Exception as e:
+            logger.warning(f"Failed to normalize output_dir: {e}")
+
+    # Normalize extensions to lowercase set for O(1) lookup
+    allowed_exts = {ext.lower() for ext in image_extensions}
 
     valid_images = []
     excluded_artifacts = []
 
-    for candidate in sorted(candidates):
+    # Single traversal: iterate all files once
+    for candidate in input_dir.rglob("*"):
+        if not candidate.is_file():
+            continue
+
+        # CRITICAL FIX (#6): Check if file is in output directory before other checks
+        if output_dir_normalized:
+            try:
+                candidate_normalized = candidate.resolve().as_posix().lower()
+                if candidate_normalized.startswith(output_dir_normalized):
+                    reason = "in output directory"
+                    excluded_artifacts.append((candidate, reason))
+                    logger.debug(f"Skipped artifact: {candidate.name} (matched: {reason})")
+                    continue
+            except Exception as e:
+                logger.debug(f"Failed to check output dir for {candidate}: {e}")
+
+        # Check extension (case-insensitive)
+        if candidate.suffix.lower() not in allowed_exts:
+            continue
+
         # Check for hidden files/directories
         if config.exclude_hidden and any(part.startswith(".") for part in candidate.parts):
             reason = "hidden file/directory"
@@ -150,4 +185,4 @@ def discover_images(input_dir: Path, config: DiscoveryConfig, image_extensions: 
             logger.error(f"  ... and {len(excluded_artifacts) - 10} more")
         raise ValueError(error_msg)
 
-    return valid_images
+    return sorted(valid_images)

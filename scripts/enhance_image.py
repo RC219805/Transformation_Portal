@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
-"""V2 Enhancement Script Entrypoint (Placeholder).
+"""V2 Enhancement Script Entrypoint.
 
-Pass-through implementation:
-- Copies input image to output directory
-- Writes report JSON for pipeline continuity
+Real V2 enhancement implementation:
+- Applies depth-aware perceptual finishing
+- Material-specific processing
+- Clarity and tone mapping enhancements
+- Writes comprehensive report JSON
 
 Design goals:
 - Fail-fast validation (no silent errors)
 - Safer path handling (avoid traversal + collisions)
 - Atomic report writing
 - Clear status indication
+- Reuses existing EnhancementStage for core logic
+
+Architecture: V2_ENHANCEMENT_ARCHITECTURAL_GUIDANCE.md
 """
 
 from __future__ import annotations
@@ -17,11 +22,14 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import shutil
 import sys
 import time
 from pathlib import Path
 from typing import Any
+
+# Import V2 enhancement implementation
+from transformation_portal.lux_depth_v3.v2_enhance import V2EnhancementError, enhance_image, find_depth_map
+from transformation_portal.lux_depth_v3.v2_presets import V2EnhancementConfig
 
 logger = logging.getLogger("lux_depth_v2_enhance")
 
@@ -92,7 +100,7 @@ def atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Lux Depth V2 Enhancement Script (Placeholder Implementation)",
+        description="Lux Depth V2 Enhancement Script - Depth-Aware Perceptual Finishing",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
@@ -144,7 +152,7 @@ def configure_logging(verbose: bool, quiet: bool, log_file: Path | None) -> None
     )
 
 
-def enhance_image_passthrough(
+def run_v2_enhancement(
     input_path: Path,
     depth_dir: Path | None,
     output_dir: Path,
@@ -152,8 +160,24 @@ def enhance_image_passthrough(
     device: str,
     upscaler: str,
 ) -> dict[str, Any]:
-    start = time.perf_counter()
+    """Run V2 depth-aware enhancement.
 
+    Args:
+        input_path: Input image path
+        depth_dir: Directory containing depth maps (optional)
+        output_dir: Output directory
+        preset: Enhancement preset name
+        device: Processing device (cpu/cuda/mps)
+        upscaler: Upscaler backend (currently unused, reserved for future)
+
+    Returns:
+        Dict containing enhancement report
+
+    Raises:
+        FileNotFoundError: If input not found
+        ValueError: If validation fails
+        V2EnhancementError: If enhancement fails
+    """
     input_path = validate_input_path(input_path)
     depth_dir = validate_depth_dir(depth_dir)
     output_dir = validate_output_dir(output_dir)
@@ -165,26 +189,37 @@ def enhance_image_passthrough(
     if input_path == output_path:
         raise ValueError(f"Input and output paths are identical: {input_path}")
 
-    logger.info("Passthrough copy: %s -> %s", input_path.name, output_dir)
+    logger.info("V2 Enhancement: %s with preset '%s'", input_path.name, preset)
 
-    # Copy (overwrites if exists)
-    shutil.copy2(input_path, output_path)
+    # Load enhancement configuration from preset
+    try:
+        config = V2EnhancementConfig.from_preset(preset)
+    except ValueError as e:
+        logger.error("Invalid preset: %s", e)
+        raise
 
-    runtime_s = time.perf_counter() - start
+    # Find depth map if depth_dir provided
+    depth_map_path = None
+    if depth_dir:
+        depth_map_path = find_depth_map(depth_dir, input_path.stem)
+        if depth_map_path:
+            logger.info("Using depth map: %s", depth_map_path.name)
+        else:
+            logger.warning("No depth map found in %s for %s", depth_dir, input_path.stem)
 
-    return {
-        "status": "passthrough",
-        "implementation": "placeholder",
-        "input": str(input_path),
-        "output": str(output_path),
-        "depth_dir": str(depth_dir) if depth_dir else None,
-        "preset": preset,
-        "device": device,
-        "upscaler": upscaler,
-        "runtime_s": runtime_s,
-        "timestamp": time.time(),
-        "message": "Placeholder implementation: input copied to output.",
-    }
+    # Run enhancement
+    report = enhance_image(
+        input_path=input_path,
+        output_path=output_path,
+        depth_map_path=depth_map_path,
+        config=config,
+        device=device,
+    )
+
+    # Add upscaler info to report (currently unused but maintained for compatibility)
+    report["upscaler"] = upscaler
+
+    return report
 
 
 def main() -> int:
@@ -204,7 +239,7 @@ def main() -> int:
         report_path = out_dir / f"{Path(args.input_path).stem}_report.json"
 
     try:
-        report = enhance_image_passthrough(
+        report = run_v2_enhancement(
             input_path=args.input_path,
             depth_dir=args.depth_dir,
             output_dir=args.output_dir,
@@ -217,12 +252,38 @@ def main() -> int:
             logger.info("Writing report: %s", report_path)
             atomic_write_json(report_path, report)
 
-        # INTENTIONAL: This is a passthrough mode for testing/validation workflows.
-        # Real enhancement logic delegates to the installed transformation_portal package.
-        # This script serves as a CLI entry point and config validator only.
-        # See ADR-019 for context on CLI-to-package delegation pattern.
-        logger.warning("Running in passthrough mode (copies input to output for validation)")
+        # Log success
+        if report.get("status") == "passthrough":
+            logger.info("Enhancement skipped (preset='none' or zero strength)")
+        else:
+            logger.info("Enhancement completed successfully in %.2fs", report.get("runtime_s", 0))
+
         return 0
+
+    except V2EnhancementError as e:
+        logger.error("V2 enhancement failed: %s", e)
+
+        if report_path:
+            error_report = {
+                "status": "error",
+                "implementation": "v2_enhance",
+                "input": str(_resolve_path(Path(args.input_path))),
+                "output": None,
+                "depth_dir": str(_resolve_path(args.depth_dir)) if args.depth_dir else None,
+                "preset": args.preset,
+                "device": args.device,
+                "upscaler": args.upscaler,
+                "timestamp": time.time(),
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+            }
+            try:
+                atomic_write_json(report_path, error_report)
+            except Exception:
+                # Last resort: don't mask the original failure
+                pass
+
+        return 1
 
     except Exception as e:
         logger.exception("Enhancement failed: %s", e)

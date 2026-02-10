@@ -56,7 +56,7 @@ try:
     _HAVE_MR = True
 except ImportError:
     _HAVE_MR = False
-    _warn("Material Response not available - install with pip install -e .[ml]")
+    _warn('Material Response not available - install with pip install -e ".[ml]"')
 
 
 # ==================== Constants ====================

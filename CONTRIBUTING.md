@@ -128,7 +128,7 @@ black --line-length=127 src/ tests/
 isort --profile=black --line-length=127 src/ tests/
 
 # Run security scans
-bandit -r src/ -ll
+./scripts/security_scan.sh  # Uses CI-aligned flags: -ll -ii
 
 # Run all tests with coverage
 pytest -v tests/ -m "not slow" \

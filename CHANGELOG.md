@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **CRITICAL: Lux Depth V3 Pipeline Bug Fixes (6 issues):**
+  - **Fix #1:** Double EXIF rotation in v2_enhance.py - Strip EXIF data after `exif_transpose()` to prevent viewers from rotating twice (pixels already rotated + EXIF tag says rotate again)
+  - **Fix #2:** Dimension mismatch in preprocessing/orchestrator - Resize depth maps back to original dimensions after multiple-of-14 padding/cropping required by Depth Anything V3
+  - **Fix #3:** Quadratic complexity in batch_stats.py - Pre-compute median once for outlier detection (O(n²) → O(n log n) for large batches)
+  - **Fix #4:** Redundant processing in parallel mode - Pass pre-computed paths to avoid duplicate manifest reads and hash computation (~15-20% I/O reduction)
+  - **Fix #5:** Alpha channel safety in v2_enhance.py - Resize alpha channel if V2 processing changes resolution to prevent shape mismatch crashes
+  - **Fix #6:** Output directory trap in input_discovery.py - Explicitly exclude output_dir when scanning to prevent processing own outputs
+  - Impact: Data integrity (EXIF, dimensions, alpha), performance (batch stats, parallel I/O), robustness (output exclusion)
+  - Tests: 15 new regression tests, all 83 lux_depth_v3 tests passing
+  - See: [CRITICAL_FIXES_SUMMARY.md](CRITICAL_FIXES_SUMMARY.md)
+
 ### Added
 - **Performance Ledger v1.7 Upgrade:** Major enhancement with backward compatibility
   - **Optional NumPy Dependency:** Pure Python fallback for environments without NumPy

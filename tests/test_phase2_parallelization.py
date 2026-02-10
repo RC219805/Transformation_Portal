@@ -201,7 +201,7 @@ class TestParallelProcessing:
             img.path.touch()
 
         # Mock enhance_image to fail for some images
-        def mock_enhance(img, input_root):
+        def mock_enhance(img, input_root, _precomputed_paths=None):
             if "test_2" in str(img.path):
                 raise RuntimeError("Simulated failure")
             return {"status": "ok", "image": str(img.path)}

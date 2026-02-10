@@ -25,17 +25,22 @@ logger = logging.getLogger(__name__)
 
 
 def test_depth_processing_on_real_image():
-    """Test depth processing on actual 750 Picacho image."""
+    """Test depth processing on synthetic test fixture."""
 
     logger.info("=" * 70)
     logger.info("Phase 1 Complete Test: 750 Picacho Great Room")
     logger.info("=" * 70)
 
-    # Load test image
-    test_image_path = "projects/750_picacho_lane/Final_Production_UltraQuality/750Picacho_GreatRoom_UltraQuality.tif"
+    # Repository-scoped paths for fixtures
+    REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+    FIXTURE_PATH = REPO_ROOT / "tests" / "fixtures" / "pipelines" / "750_picacho_lane" / "input"
+    test_image_path = FIXTURE_PATH / "750Picacho_GreatRoom_UltraQuality.tif"
 
-    if not Path(test_image_path).exists():
-        logger.error(f"Test image not found: {test_image_path}")
+    if not test_image_path.exists():
+        logger.error(f"Test fixture not found: {test_image_path}")
+        logger.error("\nTo create fixtures, run:")
+        logger.error("  python scripts/utilities/create_test_fixtures.py")
+        logger.error("\nSee tests/fixtures/pipelines/README.md for details.")
         return False
 
     logger.info(f"\n✓ Loading test image: {test_image_path}")

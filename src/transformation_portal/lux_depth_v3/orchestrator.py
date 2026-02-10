@@ -45,7 +45,7 @@ from ..depth.backends.protocol import LicenseRestrictionError
 
 # Backend registry for depth estimation
 from ..depth.backends.registry import DepthBackendRegistry
-from .batch_stats import compute_batch_runtime_stats
+from .batch_stats import compute_batch_runtime_stats, detect_runtime_outliers
 
 # Note: Imports adjusted to relative for package context compatibility
 from .config import DA3Config, EnhanceConfig, ModelVariant
@@ -273,10 +273,15 @@ class EnhanceOrchestrator:
         self.v2_dir = self.output_root / "v2"
         self.manifests_dir = self.output_root / "manifests"
         self.logs_dir = self.output_root / "logs"
+        # zones/ directory reserved for future zone-based processing
+        # Only created when zoning features are enabled
         self.zones_dir = self.output_root / "zones"
 
-        for d in [self.depth_dir, self.v2_dir, self.manifests_dir, self.logs_dir, self.zones_dir]:
+        for d in [self.depth_dir, self.v2_dir, self.manifests_dir, self.logs_dir]:
             d.mkdir(parents=True, exist_ok=True)
+
+        # Note: zones_dir intentionally NOT created here
+        # Will be created on-demand when zoning features are implemented
 
         # Initialize V3 Configuration (Priority: User Override > Preset > Default)
         if config.preset is not None:
@@ -395,20 +400,28 @@ class EnhanceOrchestrator:
                     status = "fallback"
                 except (ImportError, FileNotFoundError) as fallback_error:
                     # DA3 also unavailable (likely test environment without ML dependencies)
-                    # Create a mock backend that will fail gracefully if actually used
-                    logger.warning(f"DA3 fallback also unavailable: {fallback_error}. " f"Using mock backend for testing.")
-                    from unittest.mock import Mock
+                    # Check if synthetic fallback is explicitly allowed
+                    if not self.config.allow_synthetic_fallback:
+                        # Check environment variable override (for CI)
+                        import os
 
-                    backend = Mock()
-                    backend.name = "mock"
-                    backend.compute = Mock(
-                        side_effect=ImportError(
-                            "Mock backend used - ML dependencies not installed. " "This orchestrator cannot process images."
-                        )
+                        if not os.getenv("TP_ALLOW_SYNTHETIC_FALLBACK") == "1":
+                            raise RuntimeError(
+                                f"No depth backend available: {fallback_error}. "
+                                "Install ML dependencies (torch, transformers) or explicitly enable "
+                                "synthetic fallback for testing (config.allow_synthetic_fallback=True "
+                                "or TP_ALLOW_SYNTHETIC_FALLBACK=1)."
+                            ) from fallback_error
+
+                    # Synthetic fallback explicitly allowed
+                    logger.warning(
+                        f"DA3 fallback also unavailable: {fallback_error}. "
+                        f"Using synthetic backend for testing (no ML dependencies)."
                     )
-                    resolved = "mock"
-                    status = "test_mode"
-                    reason = f"Test environment (no ML dependencies): {fallback_error}"
+                    backend = registry.get_backend("synthetic", self.config)
+                    resolved = "synthetic"
+                    status = "synthetic_fallback"
+                    reason = f"Test environment - using synthetic depth: {fallback_error}"
             else:
                 resolved = requested
                 status = "success"
@@ -743,6 +756,26 @@ class EnhanceOrchestrator:
                 if cached_depth is None:
                     result = self.postprocessor.process(result)
 
+                # CRITICAL FIX (#2): Resize depth map back to original dimensions
+                # preprocessing.py pads/crops to multiple of 14, but depth must match original source
+                depth_map = result.depth_map if hasattr(result, "depth_map") else result.depth
+                current_shape = depth_map.shape[:2]  # (H, W)
+
+                if current_shape != original_shape:
+                    from PIL import Image as PILImage
+
+                    logger.debug(f"Resizing depth map from {current_shape} back to original {original_shape}")
+                    # Convert to PIL for high-quality resize
+                    depth_pil = PILImage.fromarray((depth_map * 65535).astype(np.uint16), mode="I;16")
+                    # Resize to original dimensions (H, W) -> PIL expects (W, H)
+                    depth_pil_resized = depth_pil.resize((original_shape[1], original_shape[0]), PILImage.Resampling.LANCZOS)
+                    depth_map = np.array(depth_pil_resized, dtype=np.float32) / 65535.0
+                    # Update result object
+                    if hasattr(result, "depth_map"):
+                        result.depth_map = depth_map
+                    else:
+                        result.depth = depth_map
+
                 depth_runtime_s = time.time() - t0
 
                 # 3. Write quantized depth (PNG 16-bit)
@@ -1033,7 +1066,9 @@ class EnhanceOrchestrator:
         )
         manifest.write(manifest_path)
 
-    def enhance_image(self, image_input: ImageInput, input_root: Optional[Path] = None) -> Dict[str, Any]:
+    def enhance_image(
+        self, image_input: ImageInput, input_root: Optional[Path] = None, _precomputed_paths: Optional[Dict[str, Path]] = None
+    ) -> Dict[str, Any]:
         """Run full enhancement pipeline on a single image.
 
         Orchestrates the depth computation, PBR generation, V2 enhancement,
@@ -1043,6 +1078,7 @@ class EnhanceOrchestrator:
         Args:
             image_input: Input image information
             input_root: Base directory for relative path calculation
+            _precomputed_paths: Internal - pre-computed paths from parallel preprocessing
 
         Returns:
             Dictionary with processing status and output paths
@@ -1050,19 +1086,32 @@ class EnhanceOrchestrator:
         # Capture start time for accurate timestamps
         pipeline_start_time = time.time()
 
-        # Generate output key for consistent artifact naming
-        use_xxhash = getattr(self.config, "use_xxhash", False)
-        output_key = (
-            make_output_key(image_input.path, input_root, use_xxhash=use_xxhash)
-            if input_root
-            else Path(sanitize_file_stem(image_input.path.stem))
-        )
-        logger.info(f"Processing {output_key}...")
+        # PERFORMANCE FIX (#4): Use pre-computed paths from parallel batch if available
+        if _precomputed_paths:
+            output_key = _precomputed_paths["output_key"]
+            depth_path = _precomputed_paths["depth_path"]
+            manifest_path = _precomputed_paths["manifest_path"]
+            skip_depth = _precomputed_paths.get("should_skip", False)
+            logger.info(f"Processing {output_key} (using precomputed paths)...")
+        else:
+            # Generate output key for consistent artifact naming
+            use_xxhash = getattr(self.config, "use_xxhash", False)
+            output_key = (
+                make_output_key(image_input.path, input_root, use_xxhash=use_xxhash)
+                if input_root
+                else Path(sanitize_file_stem(image_input.path.stem))
+            )
+            logger.info(f"Processing {output_key}...")
 
-        # Define output paths
-        depth_path = self.depth_dir / output_key.parent / f"{output_key.name}_depth.png"
+            # Define output paths
+            depth_path = self.depth_dir / output_key.parent / f"{output_key.name}_depth.png"
+            manifest_path = self.manifests_dir / output_key.parent / f"{output_key.name}_combined.json"
+
+            # Determine skip logic
+            skip_depth = not self.config.force_depth and self.should_skip_depth(depth_path, manifest_path, image_input)
+
+        # Always compute these paths (not part of skip logic)
         float_depth_path = self.depth_dir / output_key.parent / f"{output_key.name}_depth.npy"
-        manifest_path = self.manifests_dir / output_key.parent / f"{output_key.name}_combined.json"
         v2_log_path = self.logs_dir / output_key.parent / f"v2_{output_key.name}.log"
 
         # Ensure output directories exist
@@ -1070,7 +1119,7 @@ class EnhanceOrchestrator:
             p.parent.mkdir(parents=True, exist_ok=True)
 
         # Determine skip logic BEFORE preprocessing (lazy evaluation)
-        skip_depth = not self.config.force_depth and self.should_skip_depth(depth_path, manifest_path, image_input)
+        # (skip_depth already computed above for both paths)
 
         # --- STAGE A: DEPTH COMPUTATION ---
         depth_metadata, depth_runtime_s, pbr_assets = self._compute_depth_stage(
@@ -1278,6 +1327,7 @@ class EnhanceOrchestrator:
         preprocessed = self._parallel_preprocess_batch(image_inputs, input_root)
 
         # Phase 2: Sequential depth inference (GPU-bound, avoid contention)
+        # PERFORMANCE FIX (#4): Pass precomputed paths to avoid redundant I/O
         results = []
         for item in preprocessed:
             if item["status"] == "error":
@@ -1285,7 +1335,14 @@ class EnhanceOrchestrator:
                 continue
 
             try:
-                result = self.enhance_image(item["image_input"], input_root)
+                # Extract precomputed paths and pass to enhance_image
+                precomputed = {
+                    "output_key": item["output_key"],
+                    "depth_path": item["depth_path"],
+                    "manifest_path": item["manifest_path"],
+                    "should_skip": item["should_skip"],
+                }
+                result = self.enhance_image(item["image_input"], input_root, _precomputed_paths=precomputed)
                 results.append(result)
             except Exception as e:
                 logger.error(f"Enhancement failed for {item['image_input'].path}: {e}")
@@ -1328,8 +1385,9 @@ class EnhanceOrchestrator:
         self._backend_metadata = backend_metadata
 
         # Use input discovery to exclude depth artifacts and derived outputs
+        # ROBUSTNESS FIX (#6): Pass output_root to explicitly exclude output directory
         discovery_config = DiscoveryConfig(strict_mode=self.config.strict_inputs)
-        images = discover_images(input_dir, discovery_config, image_extensions)
+        images = discover_images(input_dir, discovery_config, image_extensions, output_dir=self.output_root)
 
         # Phase 2: Use parallel batch processing if enabled
         image_inputs = [ImageInput(img) for img in sorted(images)]
@@ -1355,13 +1413,99 @@ class EnhanceOrchestrator:
         # Extract runtime_s from successful results for statistics computation
         runtimes = [r.get("runtime_s", 0.0) for r in results if r.get("status") == "ok"]
         runtime_stats = compute_batch_runtime_stats(runtimes)
+
+        # Detect runtime outliers (images taking >5× median time)
+        # PERFORMANCE FIX (#3): Compute median once, pass to all outlier checks (O(n) instead of O(n²))
+        median_runtime = runtime_stats.get("median", 0.0)
+        outliers = []
+        for r in results:
+            if r.get("status") == "ok":
+                runtime_s = r.get("runtime_s", 0.0)
+                image_name = r.get("image", "unknown")
+                outlier_result = detect_runtime_outliers(image_name, runtime_s, runtimes, median=median_runtime)
+                if outlier_result:
+                    warning_msg, outlier_meta = outlier_result
+                    outliers.append(
+                        {
+                            "image": image_name,
+                            "metadata": outlier_meta,
+                        }
+                    )
+
         bm = BatchManifest(
             batch_id=batch_id,
             start_time=batch_start_utc,
             end_time=batch_end_utc,
             config={"model": self.config.model_variant.value.name},
             results=results,
-            stats={**runtime_stats, "total_images": len(results), "batch_runtime_seconds": batch_end_time - batch_start_time},
+            stats={
+                **runtime_stats,
+                "total_images": len(results),
+                "batch_runtime_seconds": batch_end_time - batch_start_time,
+                "outliers": outliers if outliers else [],
+            },
         )
         bm.write(self.manifests_dir / f"batch_{batch_id}.json")
+
+        # Emit run card if enabled
+        if self.config.emit_run_card:
+            self._emit_run_card(batch_id, batch_start_utc, batch_end_utc, results, runtime_stats, outliers)
+
         return results
+
+    def _emit_run_card(
+        self,
+        batch_id: str,
+        start_time: str,
+        end_time: str,
+        results: List[Dict[str, Any]],
+        runtime_stats: Dict[str, Any],
+        outliers: List[Dict[str, Any]],
+    ) -> None:
+        """Emit run card for batch reproducibility.
+
+        Creates a human-readable and machine-parseable run card with:
+        - Configuration fingerprint
+        - Runtime statistics
+        - Outlier warnings
+        - Environment metadata
+
+        Args:
+            batch_id: Unique batch identifier
+            start_time: Batch start time (ISO 8601 UTC)
+            end_time: Batch end time (ISO 8601 UTC)
+            results: List of per-image processing results
+            runtime_stats: Aggregated runtime statistics
+            outliers: List of detected runtime outliers
+        """
+        run_card_path = self.output_root / f"run_card_{batch_id}.json"
+
+        run_card = {
+            "batch_id": batch_id,
+            "start_time": start_time,
+            "end_time": end_time,
+            "config_fingerprint": self.compute_config_fingerprint(),
+            "backend_selection": {
+                "requested": self._backend_metadata.requested_backend or "auto",
+                "resolved": self._backend_metadata.resolved_backend,
+                "device": self._backend_metadata.device,
+                "model_id": self._backend_metadata.model_id,
+            },
+            "environment": self.environment,
+            "git_revision": {
+                "v3": self.v3_git,
+                "v2": self.v2_git,
+            },
+            "runtime_stats": runtime_stats,
+            "outliers": outliers,
+            "total_images": len(results),
+            "success_count": sum(1 for r in results if r.get("status") == "ok"),
+            "error_count": sum(1 for r in results if r.get("status") == "error"),
+        }
+
+        try:
+            with open(run_card_path, "w") as f:
+                json.dump(run_card, f, indent=2)
+            logger.info(f"✅ Run card emitted: {run_card_path}")
+        except Exception as e:
+            logger.warning(f"Failed to emit run card: {e}")

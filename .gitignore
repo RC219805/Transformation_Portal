@@ -96,6 +96,8 @@ test_artifacts/
 # Large image files (exclude binary outputs)
 *.tif
 *.tiff
+!tests/fixtures/pipelines/**/*.tif
+!tests/fixtures/pipelines/**/*.tiff
 !input_images/.gitkeep
 !data/sample_images/.gitkeep
 
@@ -215,9 +217,21 @@ outputs/
 archive/experiments/
 archive/deprecated/
 archive/legacy/
+archive/*.jpg
+archive/*.jpeg
+archive/*.png
 !archive/README.md
 !archive/*/.gitkeep
 venv_py311/
+
+# Projects directory (client-specific production files - not for version control)
+# Ignore contents but keep directory structure
+projects/*
+!projects/.gitkeep
+
+# Binary executables (install via CI/package managers)
+actionlint
+*.exe
 
 # Security - prevent sensitive local backups
 .local_backup/
@@ -237,6 +251,11 @@ Continue
 SKIP
 INVESTIGATE
 =
+.empty-commit-trigger
+.pr-branch-marker
+.pr-marker-*
+.branch_cleanup_backup/
+.events/
 
 # pytest cache
 .pytest_cache/
@@ -248,3 +267,13 @@ Archive.zip
 tests.zip
 extracted_context/
 docs/api/_build/
+
+# Local automation helpers
+.execute_fix.sh
+.temp_fix_pr.py
+
+# Local debug artifacts
+debug_after_white_balance.jpg
+
+# Local RAW test inputs (never commit)
+input_images/Richard-Raw-Test/
