@@ -500,7 +500,6 @@ def enhance_image(
                     enhanced_image,
                     photometric="rgb",
                     compression="lzw",  # Lossless compression
-                    metadata={"BitsPerSample": 16},
                 )
                 logger.info(f"Saved 16-bit TIFF: {output_path}")
 
