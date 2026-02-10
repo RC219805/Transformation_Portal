@@ -31,7 +31,6 @@ from transformation_portal.lux_depth_v3.provenance import (
     get_toolchain_versions,
 )
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -47,17 +46,22 @@ def sample_tiff_image(tmp_path: Path) -> Path:
     # Create a simple 100x100 RGB image
     img = Image.new("RGB", (100, 100), color=(128, 128, 128))
 
-    # Add some EXIF data
-    exif_dict = {
-        # Use standard Pillow EXIF tags
-        0x0132: "2026:02:10 12:00:00",  # DateTime
-        0x010F: "Test Camera",  # Make
-        0x0110: "Test Model",  # Model
-    }
+    # For TIFF, we need to use tiffinfo parameter instead of exif
+    # Create TIFF tags dictionary
+    from PIL.TiffTags import TAGS_V2
 
-    # Save as TIFF with EXIF
     tiff_path = tmp_path / "test_image.tif"
-    img.save(tiff_path, format="TIFF", exif=img.getexif())
+
+    # Save with basic TIFF info - exiftool will read these tags
+    img.save(
+        tiff_path,
+        format="TIFF",
+        # Use tiffinfo for TIFF-specific tags
+        tiffinfo={
+            270: "Test Image Description",  # ImageDescription
+            305: "Transformation Portal Test",  # Software
+        },
+    )
 
     return tiff_path
 
@@ -400,13 +404,13 @@ class TestProvenanceMetadataValidation:
         self,
         valid_provenance_metadata: ProvenanceMetadata,
     ):
-        """Test validation fails when exiftool_version missing."""
+        """Test validation allows missing exiftool_version (policy-driven, not schema-enforced)."""
+        # exiftool_version is no longer strictly required at validation time
+        # It's enforced via require_exiftool parameter in capture_provenance()
         valid_provenance_metadata.toolchain["exiftool_version"] = None
 
-        with pytest.raises(MissingRequiredFieldError) as exc_info:
-            valid_provenance_metadata.validate_required_fields()
-
-        assert "exiftool_version" in str(exc_info.value).lower()
+        # Should NOT raise - validation is relaxed
+        valid_provenance_metadata.validate_required_fields()
 
     def test_validate_required_fields_wrong_schema_version(
         self,
@@ -620,12 +624,10 @@ class TestProvenanceCapture:
         mock_exiftool_json_output,
     ):
         """Test successful end-to-end provenance capture."""
-        with patch("subprocess.run") as mock_run:
-            # Mock exiftool extraction
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout=json.dumps(mock_exiftool_json_output),
-            )
+        # Mock extract_exif_metadata to avoid subprocess mocking conflicts
+        with patch("transformation_portal.lux_depth_v3.provenance.extract_exif_metadata") as mock_extract:
+            # Return mock EXIF data
+            mock_extract.return_value = mock_exiftool_json_output[0]
 
             config_fingerprint = "sha256:" + "f" * 64
 
@@ -656,11 +658,11 @@ class TestProvenanceCapture:
                 config_fingerprint="sha256:abc123",
             )
 
-    def test_capture_provenance_exiftool_not_available(
+    def test_capture_provenance_exiftool_not_available_with_require(
         self,
         sample_tiff_image: Path,
     ):
-        """Test provenance capture fails when exiftool not available."""
+        """Test provenance capture fails when exiftool not available and required."""
         with patch(
             "transformation_portal.lux_depth_v3.provenance._check_exiftool_available",
             return_value=False,
@@ -669,7 +671,27 @@ class TestProvenanceCapture:
                 capture_provenance(
                     image_path=sample_tiff_image,
                     config_fingerprint="sha256:abc123",
+                    require_exiftool=True,  # Hard-fail when required
                 )
+
+    def test_capture_provenance_exiftool_not_available_without_require(
+        self,
+        sample_tiff_image: Path,
+    ):
+        """Test provenance capture succeeds when exiftool not available but not required."""
+        with patch(
+            "transformation_portal.lux_depth_v3.provenance._check_exiftool_available",
+            return_value=False,
+        ):
+            # Should succeed with empty EXIF
+            provenance = capture_provenance(
+                image_path=sample_tiff_image,
+                config_fingerprint="sha256:abc123",
+                require_exiftool=False,  # Best-effort mode
+            )
+
+            assert provenance.exif == {}  # No EXIF extracted
+            assert provenance.input.file_sha256  # But hash still computed
 
     def test_capture_provenance_deterministic_hash(
         self,
@@ -678,11 +700,8 @@ class TestProvenanceCapture:
         mock_exiftool_json_output,
     ):
         """Test that file hash is deterministic."""
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout=json.dumps(mock_exiftool_json_output),
-            )
+        with patch("transformation_portal.lux_depth_v3.provenance.extract_exif_metadata") as mock_extract:
+            mock_extract.return_value = mock_exiftool_json_output[0]
 
             config_fingerprint = "sha256:test"
 
@@ -712,9 +731,7 @@ class TestRealTIFFProvenance:
     @pytest.fixture
     def real_tiff_fixture(self) -> Path:
         """Path to real TIFF fixture if available."""
-        fixture_path = Path(
-            "tests/fixtures/pipelines/750_picacho_lane/input/750Picacho_GreatRoom_UltraQuality.tif"
-        )
+        fixture_path = Path("tests/fixtures/pipelines/750_picacho_lane/input/750Picacho_GreatRoom_UltraQuality.tif")
         if not fixture_path.exists():
             pytest.skip("Real TIFF fixture not available")
         return fixture_path

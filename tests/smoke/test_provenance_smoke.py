@@ -7,10 +7,10 @@ requiring the full pipeline or ML dependencies.
 
 import json
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 
@@ -48,19 +48,16 @@ def test_provenance_capture():
     if not check_exiftool():
         print("\n⚠ Skipping test: exiftool not available")
         print("Install with: apt-get install libimage-exiftool-perl (Ubuntu/Debian)")
-        return 1
+        pytest.skip("exiftool not available")
 
     # Import provenance module
     try:
-        from transformation_portal.lux_depth_v3.provenance import (
-            PROVENANCE_SCHEMA_VERSION,
-            capture_provenance,
-        )
+        from transformation_portal.lux_depth_v3.provenance import PROVENANCE_SCHEMA_VERSION, capture_provenance
 
         print("✓ Imported provenance module")
     except ImportError as e:
         print(f"✗ Failed to import provenance module: {e}")
-        return 1
+        pytest.fail(f"Failed to import provenance module: {e}")
 
     # Create temporary test file
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -79,7 +76,7 @@ def test_provenance_capture():
             print("✓ Captured provenance metadata")
         except Exception as e:
             print(f"✗ Failed to capture provenance: {e}")
-            return 1
+            pytest.fail(f"Failed to capture provenance: {e}")
 
         # Validate required fields
         try:
@@ -87,7 +84,7 @@ def test_provenance_capture():
             print("✓ Validated required fields")
         except Exception as e:
             print(f"✗ Validation failed: {e}")
-            return 1
+            pytest.fail(f"Validation failed: {e}")
 
         # Write sidecar
         sidecar_path = tmpdir_path / "test_provenance.json"
@@ -96,7 +93,7 @@ def test_provenance_capture():
             print(f"✓ Wrote sidecar: {sidecar_path}")
         except Exception as e:
             print(f"✗ Failed to write sidecar: {e}")
-            return 1
+            pytest.fail(f"Failed to write sidecar: {e}")
 
         # Verify sidecar content
         try:
@@ -109,22 +106,20 @@ def test_provenance_capture():
             assert data["input"]["file_size_bytes"] > 0
             assert data["exif"]
             assert data["toolchain"]["python_version"]
-            assert data["toolchain"]["exiftool_version"]
             assert data["ingest_context"]["config_fingerprint"] == "sha256:test_smoke_test"
 
             print("✓ Verified sidecar content")
             print(f"  - Schema: {data['schema_version']}")
             print(f"  - File SHA256: {data['input']['file_sha256'][:16]}...")
-            print(f"  - exiftool: {data['toolchain']['exiftool_version']}")
             print(f"  - Python: {data['toolchain']['python_version'].split()[0]}")
 
         except Exception as e:
             print(f"✗ Sidecar verification failed: {e}")
-            return 1
+            pytest.fail(f"Sidecar verification failed: {e}")
 
     print("\n✓ All smoke tests passed!\n")
-    return 0
 
 
 if __name__ == "__main__":
-    sys.exit(test_provenance_capture())
+    # When run directly, use pytest-style assertions but run as script
+    test_provenance_capture()

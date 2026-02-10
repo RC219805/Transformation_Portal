@@ -36,14 +36,14 @@ def minimal_enhance_config(tmp_path: Path) -> EnhanceConfig:
 @pytest.fixture
 def orchestrator_with_provenance(minimal_enhance_config: EnhanceConfig, tmp_path: Path) -> EnhanceOrchestrator:
     """Create orchestrator configured for provenance testing."""
-    output_dir = tmp_path / "output"
-    
+    output_root = tmp_path / "output"
+
     orchestrator = EnhanceOrchestrator(
         config=minimal_enhance_config,
-        output_dir=output_dir,
-        enable_cache=False,  # Disable cache for clean testing
+        output_root=output_root,
+        verify_outputs=False,  # Disable output verification for faster testing
     )
-    
+
     return orchestrator
 
 
@@ -70,9 +70,7 @@ class TestProvenanceIntegration:
             pytest.skip("exiftool not available")
 
         # Use real TIFF fixture
-        fixture_path = Path(
-            "tests/fixtures/pipelines/750_picacho_lane/input/750Picacho_GreatRoom_UltraQuality.tif"
-        )
+        fixture_path = Path("tests/fixtures/pipelines/750_picacho_lane/input/750Picacho_GreatRoom_UltraQuality.tif")
         if not fixture_path.exists():
             pytest.skip("Real TIFF fixture not available")
 
@@ -144,9 +142,7 @@ class TestProvenanceIntegration:
     ):
         """Test that processing hard-fails when exiftool is not available."""
         # Use real TIFF fixture
-        fixture_path = Path(
-            "tests/fixtures/pipelines/750_picacho_lane/input/750Picacho_Pool_UltraQuality.tif"
-        )
+        fixture_path = Path("tests/fixtures/pipelines/750_picacho_lane/input/750Picacho_Pool_UltraQuality.tif")
         if not fixture_path.exists():
             pytest.skip("Real TIFF fixture not available")
 
@@ -199,9 +195,7 @@ class TestProvenanceIntegration:
             pytest.skip("exiftool not available")
 
         # Use real TIFF fixture
-        fixture_path = Path(
-            "tests/fixtures/pipelines/750_picacho_lane/input/750Picacho_GreatRoom_UltraQuality.tif"
-        )
+        fixture_path = Path("tests/fixtures/pipelines/750_picacho_lane/input/750Picacho_GreatRoom_UltraQuality.tif")
         if not fixture_path.exists():
             pytest.skip("Real TIFF fixture not available")
 
@@ -213,11 +207,11 @@ class TestProvenanceIntegration:
 
         for run_num in range(2):
             # Create fresh orchestrator for each run
-            output_dir = tmp_path / f"output_run{run_num}"
+            output_root = tmp_path / f"output_run{run_num}"
             orchestrator = EnhanceOrchestrator(
                 config=orchestrator_with_provenance.config,
-                output_dir=output_dir,
-                enable_cache=False,
+                output_root=output_root,
+                verify_outputs=False,
             )
 
             # Mock depth backend

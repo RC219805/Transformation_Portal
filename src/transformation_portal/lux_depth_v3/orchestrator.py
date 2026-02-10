@@ -67,14 +67,10 @@ from .manifest import (
     compute_file_sha256,
     get_git_revision,
 )
-from .provenance import (
-    ExiftoolNotFoundError,
-    ProvenanceError,
-    capture_provenance,
-)
 from .pbr import generate_pbr_maps
 from .pbr_writer import write_pbr_maps
 from .postprocessing import Postprocessor
+from .provenance import ExiftoolNotFoundError, ProvenanceError, capture_provenance
 from .security import HashMode, sanitize_file_stem, sanitize_path_component_nonlossy
 from .v2_runner import V2Runner, find_v2_report
 
@@ -1019,32 +1015,44 @@ class EnhanceOrchestrator:
         # Capture provenance sidecar for RAW/TIFF inputs at ingestion point
         # This runs BEFORE manifest write to ensure we have complete metadata
         provenance_sidecar_path = manifest_path.parent / f"{manifest_path.stem}_provenance.json"
-        
+
+        # Determine if this is an audit-grade input (RAW or TIFF)
+        # Only RAW/TIFF require exiftool for audit trail
+        from .raw_loader import is_raw_file
+
+        is_audit_input = is_raw_file(image_input.path) or image_input.path.suffix.lower() in {".tif", ".tiff"}
+
         try:
             # Get config fingerprint for provenance
             config_fp = self.compute_config_fingerprint()
             config_fp_str = f"sha256:{config_fp.to_sha256()}"
-            
+
             # Capture CLI args from environment if available (set by CLI runner)
-            cli_args = os.environ.get("TP_CLI_ARGS", "").split() if os.environ.get("TP_CLI_ARGS") else None
-            
+            # Use shlex for proper shell-quoting aware parsing
+            import shlex
+
+            cli_args = shlex.split(os.environ.get("TP_CLI_ARGS", "")) if "TP_CLI_ARGS" in os.environ else None
+
             # Capture provenance metadata
+            # For RAW/TIFF: require exiftool (audit-grade)
+            # For JPG/PNG: best-effort (no exiftool requirement)
             provenance = capture_provenance(
                 image_path=image_input.path,
                 config_fingerprint=config_fp_str,
                 cli_args=cli_args,
                 repo_root=Path.cwd(),  # Repository root for git SHA
+                require_exiftool=is_audit_input,
             )
-            
+
             # Write provenance sidecar
             provenance.write_sidecar(provenance_sidecar_path)
             logger.info(f"Wrote provenance sidecar: {provenance_sidecar_path}")
-            
+
         except ExiftoolNotFoundError as e:
-            # Hard fail if exiftool is not available (audit requirement)
-            logger.error(f"Provenance capture failed: exiftool not available")
+            # Hard fail if exiftool is not available for RAW/TIFF (audit requirement)
+            logger.error(f"Provenance capture failed: exiftool not available for RAW/TIFF input")
             raise RuntimeError(
-                f"Provenance capture requires exiftool to be installed. "
+                f"Audit-grade provenance for RAW/TIFF requires exiftool. "
                 f"Install with: apt-get install libimage-exiftool-perl (Ubuntu/Debian) "
                 f"or brew install exiftool (macOS)"
             ) from e
