@@ -223,6 +223,17 @@ class EnhanceConfig:
     # Quality tier and Materials V3
     quality_tier: str = "standard"  # Options: standard, premium, apex
     enable_materials_v3: bool = False  # Materials V3 surface-aware finishing
+    apply_pixel_ops: bool = True  # Apply pixel operations in Materials V3 (requires enable_materials_v3=True)
+
+    # Materials V3 configuration
+    refinement_strategy: str = "canary"  # EfficientSAM refinement strategy (canary, disabled)
+    min_coverage_px: int = 500  # Minimum material coverage in pixels
+    min_mean_conf: float = 0.2  # Minimum mean confidence for material detection
+    glass_response_enabled: bool = True  # Enable glass material response
+
+    # Materials V3 segmentation backend (Phase 3)
+    enable_material_segmentation: bool = False  # Enable automatic material segmentation
+    material_segmentation_backend: str = "stub"  # Options: stub, efficientsam
 
     # Emit flags (deliverables)
     emit_master16: bool = False  # Emit master 16-bit output

@@ -22,29 +22,50 @@ def decide_pixel_ops(
     config: Any,
     registry: Dict[str, Dict[str, Any]] | None = None,
 ) -> Dict[str, Any]:
-    """Return normalized decision state for pixel ops."""
+    """Return normalized decision state for pixel ops.
+
+    Args:
+        material_key: Material identifier (e.g., "glass", "water")
+        stats: Material statistics including coverage_px, mean_conf, edge_conf
+        config: Configuration object with min_coverage_px threshold
+        registry: Pixel operations registry (defaults to OP_REGISTRY)
+
+    Returns:
+        Decision state dict with eligible, enabled, implemented, will_apply, etc.
+    """
     registry = registry or OP_REGISTRY
     ops_for_material = registry.get(material_key, {})
     recommended_ops = list(ops_for_material.keys())
+    # Check if this material has any implemented operations in the registry
     implemented = bool(ops_for_material) and any(op.implemented for op in ops_for_material.values())
 
     eligible = False
     reason = "no_implementation"
     should_apply = False
 
-    if material_key == "glass":
-        eligible = stats["coverage_px"] >= 1000
-        if not eligible:
-            reason = "below_coverage_threshold"
-        else:
-            if stats["mean_conf"] < 0.80:
-                should_apply = True
-                reason = "low_mean_confidence"
-            elif stats.get("edge_conf", 1.0) < 0.55:
-                should_apply = True
-                reason = "low_edge_confidence"
+    # If material has implemented operations in registry, evaluate eligibility
+    if implemented:
+        # Coverage threshold check - respect config.min_coverage_px instead of hard-coded value
+        min_coverage = getattr(config, "min_coverage_px", 500)  # Default to 500 if not set
+        if stats["coverage_px"] >= min_coverage:
+            eligible = True
+            # Material-specific recommendation logic
+            if material_key == "glass":
+                if stats["mean_conf"] < 0.80:
+                    should_apply = True
+                    reason = "low_mean_confidence"
+                elif stats.get("edge_conf", 1.0) < 0.55:
+                    should_apply = True
+                    reason = "low_edge_confidence"
+                else:
+                    reason = "confidence_already_high"
             else:
-                reason = "confidence_already_high"
+                # For other materials (stone, water, foliage), apply if present
+                should_apply = True
+                reason = "material_present_with_coverage"
+        else:
+            eligible = False
+            reason = "below_coverage_threshold"
     else:
         eligible = False
         reason = "no_implementation"
