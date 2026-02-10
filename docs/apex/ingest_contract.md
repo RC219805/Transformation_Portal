@@ -1,8 +1,8 @@
 # Ingest Contract Documentation (v1.0.0)
 
-**Status:** Official Contract  
-**Effective Date:** 2026-02-10  
-**Schema Version:** 1.0.0  
+**Status:** Official Contract
+**Effective Date:** 2026-02-10
+**Schema Version:** 1.0.0
 
 ---
 
@@ -12,7 +12,7 @@ This document defines the **formal contract** for the Phase I linear ingest pipe
 
 The ingest contract ensures:
 - **Audit-grade traceability**: Every RAW/TIFF file ingested has a complete, immutable provenance record
-- **Deterministic outputs**: Repeated ingest of the same file produces identical sidecar (except run_id UUID)
+- **Deterministic file-derived fields**: File hash, size, EXIF metadata are stable across runs
 - **Schema enforcement**: Hard-fail on missing required fields, type mismatches, or schema drift
 - **Quality firewall**: Block 8-bit conversions, gamma corrections, and dtype/range violations
 
@@ -109,7 +109,22 @@ Complete, lossless provenance record for every ingested file.
 
 **Determinism Guarantee:**
 
-All fields are deterministic **except** `run_id` (which is a UUID v4 by design). Repeated ingest of the same file with the same config produces byte-identical JSON (when sorted).
+**File-derived fields** are deterministic (stable across runs):
+- `file_integrity`: SHA256, size, path (content-addressed)
+- `exif`: Complete EXIF metadata via exiftool (file-intrinsic)
+- `pipeline_config.config_sha256`: Config fingerprint (input-derived)
+
+**Run metadata fields** vary across runs (non-deterministic by design):
+- `run_id`: UUID v4 per ingest operation
+- `timestamps`: Ingest start/end times
+- `host`: Hostname, OS version, Python version
+- `toolchain`: Versions of exiftool, ImageMagick, etc. (environment-dependent)
+- `git_commit`: Git SHA at ingest time (repo state)
+
+This split enables:
+- **Content verification**: Use file_integrity SHA256 to validate input
+- **Provenance audit**: Full run context captured for compliance
+- **Diff-friendly**: File-derived fields stable; run metadata expected to vary
 
 **Immutability:**
 
@@ -357,18 +372,32 @@ print(f"File SHA256: {sidecar.file_integrity.sha256[:8]}...")
 
 ## Determinism Guarantees
 
-### Deterministic Fields
+The provenance sidecar is split semantically into **file-derived** and **run metadata** sections.
 
-All fields except `run_id` are deterministic. Repeated ingest produces:
-- Identical SHA256 hash
-- Identical EXIF metadata (from exiftool)
-- Identical toolchain versions
-- Identical config fingerprint
-- Identical timestamps **IF** using fixed time source
+### File-Derived Fields (Deterministic)
 
-### Non-Deterministic Field
+These fields are **stable across runs** for the same input file:
 
-**`run_id`**: UUID v4 generated per ingest run. This is intentional to distinguish separate ingest operations.
+- `file_integrity.sha256`: Content-addressed hash (bitwise deterministic)
+- `file_integrity.size_bytes`: File size
+- `file_integrity.path`: Input path (relative or absolute)
+- `exif.all_tags`: Complete EXIF metadata from exiftool (file-intrinsic)
+- `pipeline_config.config_sha256`: Config fingerprint (if config unchanged)
+
+**Use case:** Content verification, duplicate detection, cache invalidation.
+
+### Run Metadata Fields (Non-Deterministic)
+
+These fields **vary across runs** (environment and time-dependent):
+
+- `run_id`: UUID v4 per ingest run (distinguishes operations)
+- `timestamps.ingest_start`, `timestamps.ingest_end`: Wall clock times
+- `host.hostname`, `host.os_version`: Execution environment
+- `host.python_version`, `host.arch`: Runtime versions
+- `toolchain[].version`: Installed tool versions (e.g., exiftool 12.50 vs 12.76)
+- `git_commit`: Git SHA at ingest time (repo state)
+
+**Use case:** Audit trail, reproducibility analysis, environment debugging.
 
 ### JSON Serialization
 
@@ -379,16 +408,28 @@ All fields except `run_id` are deterministic. Repeated ingest produces:
 - UTF-8 encoding (no ASCII escapes)
 
 **Example:**
+
 ```python
-sidecar1 = capture_provenance(...)
-sidecar2 = capture_provenance(...)  # Same file, different run_id
+sidecar1 = capture_provenance(input_file)
+sidecar2 = capture_provenance(input_file)  # Different run
 
-json1 = sidecar1.to_json_deterministic()
-json2 = sidecar2.to_json_deterministic()
+# File-derived fields are identical
+assert sidecar1.file_integrity.sha256 == sidecar2.file_integrity.sha256
+assert sidecar1.exif.all_tags == sidecar2.exif.all_tags
 
-# Only difference is run_id field
-assert json1.replace(sidecar1.run_id, "") == json2.replace(sidecar2.run_id, "")
+# Run metadata differs
+assert sidecar1.run_id != sidecar2.run_id
+assert sidecar1.timestamps.ingest_start != sidecar2.timestamps.ingest_start
 ```
+
+### Future: Determinism Mode
+
+For testing and reproducibility, a future enhancement could add:
+- `DETERMINISM_MODE=true`: Inject fixed timestamps, hostname, versions
+- Enables byte-identical outputs for contract tests
+- Not currently implemented (P3 roadmap item)
+
+---
 
 ---
 
@@ -479,6 +520,6 @@ Changes to this contract require:
 - Version bump
 - Migration guide
 
-**Contract Authority:** Transformation Portal Governance  
-**Effective Date:** 2026-02-10  
+**Contract Authority:** Transformation Portal Governance
+**Effective Date:** 2026-02-10
 **Next Review:** 2026-05-10 (quarterly)

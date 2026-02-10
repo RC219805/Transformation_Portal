@@ -80,9 +80,22 @@ class IngestTimestamps(BaseModel):
 
     @validator("ingest_start", "ingest_end")
     def validate_iso_format(cls, v):
-        """Ensure timestamps are valid ISO 8601 format."""
+        """Ensure timestamps are valid ISO 8601 format with timezone.
+
+        Rejects naive timestamps (no timezone).
+        Requires either 'Z' suffix or explicit offset (e.g., '+00:00', '-08:00').
+        """
         try:
-            datetime.datetime.fromisoformat(v.replace("Z", "+00:00"))
+            # Parse timestamp
+            dt = datetime.datetime.fromisoformat(v.replace("Z", "+00:00"))
+
+            # Reject naive timestamps (no timezone info)
+            if dt.tzinfo is None:
+                raise ValueError(
+                    f"Naive timestamp not allowed (missing timezone): {v}. "
+                    f"Use 'Z' suffix or explicit offset (e.g., '+00:00')"
+                )
+
         except ValueError as e:
             raise ValueError(f"Invalid ISO 8601 timestamp: {v}") from e
         return v

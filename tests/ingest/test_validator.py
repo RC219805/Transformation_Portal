@@ -247,33 +247,41 @@ class TestValidateLinearGamma:
     """Tests for gamma correction detection."""
 
     def test_linear_image(self):
-        """Test linear image passes validation."""
+        """Test linear image passes validation (deterministic fixture)."""
         try:
             import numpy as np
         except ImportError:
             pytest.skip("numpy not available")
 
-        # Create linear image with more data in shadows
-        img = np.random.power(0.5, size=(1000, 1000)).astype(np.float32)
+        # Create deterministic linear-like histogram
+        # Linear images have more pixels in shadows (first 3 bins > 20%)
+        img = np.zeros((100, 100), dtype=np.float32)
+        img[:30, :] = 0.1  # 30% of pixels in shadows (bins 0-1)
+        img[30:60, :] = 0.3  # 30% in lower-mids
+        img[60:80, :] = 0.6  # 20% in upper-mids
+        img[80:, :] = 0.9  # 20% in highlights
 
         error = validate_linear_gamma(img)
-        # May or may not pass depending on random distribution
-        # Just ensure it doesn't crash
-        assert error is None or isinstance(error, str)
+        # Must pass: shadow_ratio = 60% (well above 20% threshold)
+        assert error is None
 
     def test_gamma_corrected_image(self):
-        """Test gamma-corrected image is detected."""
+        """Test gamma-corrected image is detected (deterministic fixture)."""
         try:
             import numpy as np
         except ImportError:
             pytest.skip("numpy not available")
 
-        # Create gamma-corrected image with more data in midtones
-        linear = np.random.random(size=(1000, 1000)).astype(np.float32)
-        gamma_corrected = np.power(linear, 1 / 2.2)  # Apply gamma
+        # Create deterministic gamma-corrected histogram
+        # Gamma images have few pixels in shadows (first 3 bins < 15%)
+        img = np.zeros((100, 100), dtype=np.float32)
+        img[:10, :] = 0.1  # Only 10% in shadows
+        img[10:50, :] = 0.5  # 40% in midtones (gamma shift)
+        img[50:80, :] = 0.7  # 30% in upper-mids
+        img[80:, :] = 0.95  # 20% in highlights
 
-        error = validate_linear_gamma(gamma_corrected)
-        # Should detect gamma correction
+        error = validate_linear_gamma(img)
+        # Must fail: shadow_ratio = 10% (below 15% = 20% - 5% tolerance)
         assert error is not None
         assert "gamma" in error.lower()
 
