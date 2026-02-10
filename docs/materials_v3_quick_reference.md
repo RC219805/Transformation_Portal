@@ -110,7 +110,7 @@ from transformation_portal.lux_depth_v3.config import EnhanceConfig
 config = EnhanceConfig(
     enable_materials_v3=True,
     enable_material_segmentation=True,  # NEW
-    material_segmentation_backend="stub",  # Options: stub, efficientam
+    material_segmentation_backend="stub",  # Options: stub, efficientsam
 )
 ```
 
@@ -126,7 +126,7 @@ config.material_segmentation_backend = "stub"
 
 #### EfficientSAM Backend (Future)
 ```python
-config.material_segmentation_backend = "efficientam"
+config.material_segmentation_backend = "efficientsam"
 ```
 - Not yet implemented
 - Falls back to stub with warning
@@ -147,7 +147,7 @@ masks = segment_materials(image, config)
 python -m transformation_portal.lux_depth_v3 enhance \
   --enable-materials-v3 \
   --enable-material-segmentation \
-  --material-segmentation-backend efficientam \
+  --material-segmentation-backend efficientsam \
   input.jpg output/
 ```
 
@@ -366,4 +366,6 @@ This is expected. EfficientSAM integration is future work. Use `backend="stub"` 
 3. **Plan EfficientSAM:** Review future integration requirements
 4. **Expand Ops:** Implement wood, metal, fabric, stucco operations
 
-For questions or issues, see: `docs/materials_v3_enhancements_summary.md`
+For questions or issues, see:
+- `docs/MATERIALS_V3_COMPLETION_REPORT.md` - Overall completion status
+- `docs/materials_v3_enhancements_summary.md` - Phase-by-phase implementation details

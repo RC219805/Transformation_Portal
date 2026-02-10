@@ -829,6 +829,13 @@ class EnhanceOrchestrator:
 
                                 # Write enhanced image to temporary file for V2 stage
                                 # V2 subprocess requires a file path, not an array
+                                #
+                                # NOTE: 8-bit PNG conversion is intentional:
+                                # - V2 subprocess expects standard image formats (PNG/JPG, not 16-bit TIFF)
+                                # - working_image is already tone-mapped/perceptually encoded (not linear)
+                                # - V2 operates in perceptual color space, not linear
+                                # - This matches what V2 receives when Materials V3 is disabled (original 8-bit input)
+                                # - Temporary file is cleaned up after V2 completes (see line ~1352)
                                 import tempfile
 
                                 from PIL import Image as PILImage

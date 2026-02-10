@@ -139,8 +139,8 @@ segmentation_result = {"materials": {}}
 **Materials Currently Supported:**
 - Glass (✅ 2 ops implemented)
 - Stone (✅ 1 op implemented)
-- Water (framework ready, no ops yet)
-- Foliage (framework ready, no ops yet)
+- Water (✅ 1 op implemented - reflection_enhance)
+- Foliage (✅ 1 op implemented - vibrance_boost)
 
 **Reason:** Canary-set-first approach per Materials V3 design
 
@@ -217,8 +217,7 @@ python -m transformation_portal.lux_depth_v3 \
 
 ### High Priority
 1. **Integrate EfficientSAM** - Enable real material segmentation
-2. **Expand Canary Set** - Add water + foliage pixel ops
-3. **Expose Material Masks** - Wire to V2 enhancement for material-aware tone mapping
+2. **Expose Material Masks to V2 Subprocess** - Wire material masks to V2 enhancement subprocess for material-aware tone mapping (currently only works in-process)
 
 ### Medium Priority
 4. **Material-Aware PBR** - Adjust PBR parameters based on material type
