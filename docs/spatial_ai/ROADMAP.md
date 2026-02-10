@@ -1,4 +1,3 @@
-```markdown
 # Spatial AI Foundation Roadmap (Architectural Constitution)
 
 **Path:** `docs/spatial_ai/ROADMAP.md`  
@@ -386,4 +385,3 @@ You cannot train a High Dynamic Range model on Low Dynamic Range data. If you st
 - **Longitudinal Multi-Visit:** Repeated captures of the same property across time, enabling arrow-of-time learning.
 
 ---
-```
