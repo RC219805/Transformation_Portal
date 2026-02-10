@@ -254,6 +254,229 @@ def _enforce_dimension_multiple(img_array: np.ndarray, multiple: int) -> np.ndar
     return img_array
 
 
+def preprocess_image_linear(
+    image: Union[np.ndarray, Path, str],
+    target_size: Optional[int] = None,
+    verify_linearity: bool = True,
+    apex_strict_formats: bool = True,
+) -> Tuple[np.ndarray, Tuple[int, int]]:
+    """Preprocess image with linear light preservation for APEX pipeline.
+
+    This is the APEX-compliant preprocessing path that enforces:
+    - Deterministic format boundary (RAW + TIFF only by default)
+    - Linear light preservation (no gamma encoding)
+    - Floating point dtype (no uint8/uint16 leakage)
+    - Value range validation [0, 1]
+    - 16-bit precision preservation for RAW/TIFF
+
+    Per Spatial AI Foundation ROADMAP (Section I: Data Fidelity is Sacred):
+    "Training inputs MUST preserve linear-light relationships."
+
+    Processing steps:
+    1. Validate format boundary (RAW + TIFF only unless apex_strict_formats=False)
+    2. Load/validate image (RAW → linear uint16, TIFF → preserve bit depth)
+    3. Convert to linear float32 [0, 1] preserving precision
+    4. Validate linearity (dtype, range, gamma detection)
+    5. Optionally resize to target_size (long edge)
+    6. Enforce multiple-of-14 dimensions
+    7. Return validated linear image + original shape
+
+    Args:
+        image: Input as numpy array, Path, or str
+               For RAW: must be RAW file (linear output enforced)
+               For TIFF: must be linear (gamma-encoded rejected)
+               For JPEG/PNG: rejected by default (set apex_strict_formats=False to allow)
+        target_size: Optional target size for long edge (maintains aspect)
+        verify_linearity: Whether to run linear verification checks (default True)
+        apex_strict_formats: Whether to enforce RAW + TIFF only (default True).
+                            Set to False only if you understand the data-fidelity tradeoffs.
+
+    Returns:
+        Tuple of:
+            - Processed image (float32, HxWx3, [0, 1], linear light)
+            - Original shape (H, W) before any resizing
+
+    Raises:
+        FileNotFoundError: If path doesn't exist
+        ValueError: If image invalid, gamma-encoded, unsupported format, or violates format boundary
+        DtypeViolationError: If dtype is uint8/uint16 after conversion
+        RangeViolationError: If values outside [0, 1]
+        LinearityViolationError: If gamma encoding detected
+
+    Example:
+        >>> # Load linear RAW file (default behavior)
+        >>> img, orig_shape = preprocess_image_linear("photo.CR2")
+        >>> # img is float32 [0, 1] linear light, verified
+
+        >>> # Load 16-bit linear TIFF (default behavior)
+        >>> img, orig_shape = preprocess_image_linear("render.tif")
+        >>> # img is float32 [0, 1] linear light, preserving TIFF precision
+
+        >>> # JPEG rejected by default (format boundary enforcement)
+        >>> img, orig_shape = preprocess_image_linear("photo.jpg")
+        >>> # → ValueError: APEX linear ingest only supports RAW + TIFF inputs
+
+        >>> # Explicit escape hatch (discouraged)
+        >>> img, orig_shape = preprocess_image_linear("photo.jpg", apex_strict_formats=False)
+        >>> # Allowed but may violate linear-light preservation
+    """
+    from .linear_verify import DtypeViolationError, LinearityViolationError, RangeViolationError, verify_linear_ingest
+    from .raw_loader import load_raw_as_rgb
+
+    # Load image preserving bit depth and linearity
+    if isinstance(image, (str, Path)):
+        image_path = validate_image_format(image)
+
+        # APEX ingest boundary: deterministic by format
+        # Training ingest must be scene-referred by construction.
+        # RAW files are inherently linear (sensor data).
+        # TIFF files preserve bit depth and can carry linear data.
+        # JPEG/PNG are display-referred and typically gamma-encoded.
+        ext = image_path.suffix.lower()
+        is_tiff = ext in {".tif", ".tiff"}
+
+        if apex_strict_formats and (not is_raw_file(image_path)) and (not is_tiff):
+            raise ValueError(
+                f"APEX linear ingest only supports RAW + TIFF inputs. "
+                f"Got: {ext or '<no extension>'}.\n"
+                "Reason: JPEG/PNG are typically gamma-encoded (display-referred), "
+                "violating linear-light preservation requirements.\n"
+                "Use preprocess_image() for JPEG/PNG, or explicitly set "
+                "apex_strict_formats=False if you understand the data-fidelity tradeoffs."
+            )
+
+        # Handle RAW files with linear output
+        if is_raw_file(image_path):
+            logger.debug(f"Loading RAW file with linear output: {image_path.name}")
+            # load_raw_as_rgb with output_linear=True (default) gives uint16 linear
+            rgb_array = load_raw_as_rgb(
+                image_path,
+                use_camera_wb=True,
+                half_size=False,
+                output_bps=16,  # 16-bit for precision
+                output_linear=True,  # Linear RGB (enforced)
+            )
+            original_h, original_w = rgb_array.shape[:2]
+
+            # Convert uint16 [0, 65535] → float32 [0, 1] preserving linearity
+            img_array = rgb_array.astype(np.float32) / 65535.0
+
+        else:
+            # Handle standard formats (TIFF, PNG, JPEG)
+            # Use tifffile for TIFF to preserve 16-bit
+            if image_path.suffix.lower() in {".tif", ".tiff"}:
+                try:
+                    import tifffile
+                except ImportError as e:
+                    raise ImportError(
+                        "tifffile is required for linear TIFF processing in APEX pipeline. "
+                        "Install with: pip install tifffile\n"
+                        "Or: pip install -e '.[tiff]'"
+                    ) from e
+
+                # Load TIFF preserving bit depth
+                tiff_array = tifffile.imread(str(image_path))
+                original_h, original_w = tiff_array.shape[0], tiff_array.shape[1]  # NumPy: (H, W, C)
+
+                # Normalize based on dtype
+                if tiff_array.dtype == np.uint8:
+                    img_array = tiff_array.astype(np.float32) / 255.0
+                elif tiff_array.dtype == np.uint16:
+                    img_array = tiff_array.astype(np.float32) / 65535.0
+                elif tiff_array.dtype in [np.float32, np.float64]:
+                    img_array = tiff_array.astype(np.float32)
+                    # Assume already in [0, 1] if float
+                else:
+                    raise ValueError(f"Unsupported TIFF dtype: {tiff_array.dtype}")
+
+                # Ensure 3 channels
+                if img_array.ndim == 2:
+                    img_array = np.stack([img_array] * 3, axis=-1)
+                elif img_array.ndim == 3 and img_array.shape[2] == 4:
+                    # Drop alpha
+                    img_array = img_array[:, :, :3]
+            else:
+                # Use PIL for other formats (JPEG, PNG, etc.)
+                pil_img = Image.open(image_path).convert("RGB")
+                original_w, original_h = pil_img.size  # PIL returns (W, H)
+                img_array = np.array(pil_img, dtype=np.float32) / 255.0
+
+    elif isinstance(image, np.ndarray):
+        # Handle numpy array input
+        original_h, original_w = image.shape[0], image.shape[1]  # NumPy: (H, W, C)
+
+        if image.dtype == np.uint8:
+            img_array = image.astype(np.float32) / 255.0
+        elif image.dtype == np.uint16:
+            img_array = image.astype(np.float32) / 65535.0
+        elif image.dtype in [np.float32, np.float64]:
+            img_array = image.astype(np.float32)
+        else:
+            raise ValueError(f"Unsupported array dtype: {image.dtype}")
+
+        # Ensure 3 channels
+        if img_array.ndim == 2:
+            img_array = np.stack([img_array] * 3, axis=-1)
+        elif img_array.ndim == 3 and img_array.shape[2] == 4:
+            img_array = img_array[:, :, :3]
+        elif img_array.ndim != 3 or img_array.shape[2] != 3:
+            raise ValueError(f"Unsupported array shape: {image.shape}")
+    else:
+        raise TypeError(f"Image must be np.ndarray, Path, or str. Got: {type(image)}")
+
+    # Verify linearity before any further processing
+    if verify_linearity:
+        try:
+            verify_linear_ingest(img_array)
+            logger.debug("Linear ingest verification passed")
+        except (DtypeViolationError, RangeViolationError, LinearityViolationError):
+            # Let typed exceptions propagate for downstream orchestration
+            raise
+        except Exception as e:
+            raise ValueError(
+                f"Linear ingest verification failed: {e}\n"
+                f"Image: {image if isinstance(image, (str, Path)) else 'numpy array'}\n"
+                f"This indicates the input is gamma-encoded, has incorrect dtype, or invalid range."
+            ) from e
+
+    # Optional resize to target size (long edge)
+    if target_size is not None:
+        h, w = img_array.shape[:2]
+        if h > w:
+            new_h = target_size
+            new_w = int(w * (target_size / h))
+        else:
+            new_w = target_size
+            new_h = int(h * (target_size / w))
+
+        # Resize using high-quality interpolation
+        # Use cv2 to avoid lossy float32→uint8→float32 conversion
+        try:
+            import cv2
+        except ImportError as e:
+            raise ImportError(
+                "OpenCV (cv2) is required for resizing in linear space for APEX pipeline. "
+                "Install with: pip install opencv-python\n"
+                "Or: pip install -e '.[cv2]'"
+            ) from e
+
+        # cv2.resize preserves dtype (float32 stays float32)
+        # Use INTER_LANCZOS4 for high-quality resampling
+        img_array = cv2.resize(img_array, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4)
+
+        # Clip to [0, 1] after resize (interpolation can introduce small out-of-range values)
+        img_array = np.clip(img_array, 0.0, 1.0)
+
+    # Enforce multiple-of-14 dimensions
+    img_array = _enforce_dimension_multiple(img_array, DIMENSION_MULTIPLE)
+
+    # Final verification after all processing
+    if verify_linearity:
+        verify_linear_ingest(img_array)
+
+    return img_array, (original_h, original_w)
+
+
 # Keep legacy stubs for backward compatibility (not yet used by V3 orchestrator)
 
 

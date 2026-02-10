@@ -153,8 +153,8 @@ class TestRawToRgbConversion:
         except ImportError:
             pytest.skip("rawpy not installed")
 
-    def test_raw_to_rgb_conversion_mocked(self, tmp_path):
-        """Mock rawpy conversion to test interface."""
+    def test_raw_to_rgb_conversion_linear_output(self, tmp_path):
+        """Test linear output (default, APEX compliant)."""
         try:
             import rawpy  # noqa: F401
         except ImportError:
@@ -163,13 +163,76 @@ class TestRawToRgbConversion:
         raw_file = tmp_path / "test.cr2"
         raw_file.write_bytes(b"fake raw data")
 
-        # Create fake RGB array that will be returned
-        fake_rgb = np.random.randint(0, 255, (4000, 6000, 3), dtype=np.uint8)
+        # Create fake 16-bit linear RGB array (small size for tests)
+        fake_rgb = np.random.randint(0, 65536, (16, 16, 3), dtype=np.uint16)
 
         # Mock rawpy.imread to return a context manager
         mock_raw_context = MagicMock()
         mock_raw_obj = MagicMock()
-        mock_raw_obj.raw_image.shape = (4000, 6000)
+        mock_raw_obj.raw_image.shape = (16, 16)
+        mock_raw_obj.camera_iso_speed = 400
+        mock_raw_obj.postprocess.return_value = fake_rgb
+
+        # Setup __enter__ and __exit__ for context manager
+        mock_raw_context.__enter__.return_value = mock_raw_obj
+        mock_raw_context.__exit__.return_value = None
+
+        with patch("rawpy.imread", return_value=mock_raw_context):
+            rgb = load_raw_as_rgb(raw_file, output_linear=True, output_bps=16)
+
+            # Verify output shape and dtype (16-bit linear)
+            assert rgb.shape == (16, 16, 3)
+            assert rgb.dtype == np.uint16
+            assert np.array_equal(rgb, fake_rgb)
+
+            # Verify postprocess was called with linear settings
+            mock_raw_obj.postprocess.assert_called_once()
+            call_kwargs = mock_raw_obj.postprocess.call_args[1]
+            assert call_kwargs["output_bps"] == 16
+            assert call_kwargs["gamma"] == (1, 1)  # Linear gamma
+
+    def test_raw_to_rgb_gamma_output_allowed(self, tmp_path):
+        """Gamma-encoded output is allowed for legacy compatibility."""
+        try:
+            import rawpy  # noqa: F401
+        except ImportError:
+            pytest.skip("rawpy not installed")
+
+        raw_file = tmp_path / "test.cr2"
+        raw_file.write_bytes(b"fake raw data")
+
+        # Create fake 8-bit gamma RGB array
+        fake_rgb = np.random.randint(0, 256, (16, 16, 3), dtype=np.uint8)
+
+        # Mock rawpy.imread
+        mock_raw_context = MagicMock()
+        mock_raw_obj = MagicMock()
+        mock_raw_obj.postprocess.return_value = fake_rgb
+        mock_raw_context.__enter__.return_value = mock_raw_obj
+        mock_raw_context.__exit__.return_value = None
+
+        with patch("rawpy.imread", return_value=mock_raw_context):
+            # Gamma output should work (legacy compatibility)
+            rgb = load_raw_as_rgb(raw_file, output_linear=False, output_bps=8)
+            assert rgb.dtype == np.uint8
+
+    def test_raw_to_rgb_conversion_mocked(self, tmp_path):
+        """Mock rawpy conversion to test interface (legacy test)."""
+        try:
+            import rawpy  # noqa: F401
+        except ImportError:
+            pytest.skip("rawpy not installed")
+
+        raw_file = tmp_path / "test.cr2"
+        raw_file.write_bytes(b"fake raw data")
+
+        # Create fake RGB array (8-bit gamma for legacy default, small size for tests)
+        fake_rgb = np.random.randint(0, 256, (16, 16, 3), dtype=np.uint8)
+
+        # Mock rawpy.imread to return a context manager
+        mock_raw_context = MagicMock()
+        mock_raw_obj = MagicMock()
+        mock_raw_obj.raw_image.shape = (16, 16)
         mock_raw_obj.camera_iso_speed = 400
         mock_raw_obj.postprocess.return_value = fake_rgb
 
@@ -180,8 +243,8 @@ class TestRawToRgbConversion:
         with patch("rawpy.imread", return_value=mock_raw_context):
             rgb = load_raw_as_rgb(raw_file)
 
-            # Verify output shape and dtype
-            assert rgb.shape == (4000, 6000, 3)
+            # Verify output shape and dtype (legacy default is 8-bit gamma)
+            assert rgb.shape == (16, 16, 3)
             assert rgb.dtype == np.uint8
             assert np.array_equal(rgb, fake_rgb)
 
@@ -195,8 +258,8 @@ class TestRawToRgbConversion:
         raw_file = tmp_path / "test.nef"
         raw_file.write_bytes(b"fake raw data")
 
-        # Create fake RGB array
-        fake_rgb = np.random.randint(0, 255, (100, 150, 3), dtype=np.uint8)
+        # Create fake 8-bit RGB array (legacy default, small size)
+        fake_rgb = np.random.randint(0, 256, (16, 24, 3), dtype=np.uint8)
 
         # Mock rawpy.imread
         mock_raw_context = MagicMock()
@@ -212,7 +275,7 @@ class TestRawToRgbConversion:
             # Verify output is PIL Image
             assert isinstance(pil_img, Image.Image)
             assert pil_img.mode == "RGB"
-            assert pil_img.size == (150, 100)  # PIL uses (W, H)
+            assert pil_img.size == (24, 16)  # PIL uses (W, H)
 
     def test_file_not_found_error(self):
         """FileNotFoundError for missing RAW file."""
