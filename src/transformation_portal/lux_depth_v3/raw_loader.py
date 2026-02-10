@@ -22,13 +22,9 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import numpy as np
 from PIL import Image
-
-if TYPE_CHECKING:
-    import rawpy
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +95,7 @@ def load_raw_as_rgb(
     Returns:
         RGB numpy array (uint8 or uint16 depending on output_bps)
         Shape: (H, W, 3)
-        
+
         If output_linear=True: Linear RGB (scene-referred)
         If output_linear=False: Gamma-encoded sRGB (display-referred)
 
@@ -114,7 +110,7 @@ def load_raw_as_rgb(
         >>> rgb = load_raw_as_rgb(Path("IMG_1234.CR2"), output_linear=True)
         >>> print(rgb.shape, rgb.dtype)
         (4000, 6000, 3) uint16
-        
+
         >>> # Gamma-encoded output (blocked for APEX)
         >>> rgb = load_raw_as_rgb(Path("IMG_1234.CR2"), output_linear=False)
         ValueError: Gamma-encoded output not allowed for APEX pipeline
@@ -128,7 +124,7 @@ def load_raw_as_rgb(
 
     if not raw_path.exists():
         raise FileNotFoundError(f"RAW file not found: {raw_path}")
-    
+
     # APEX compliance check: block gamma-encoded output
     if not output_linear:
         raise ValueError(
@@ -160,7 +156,7 @@ def load_raw_as_rgb(
                 # This path is unreachable due to check above, but kept for clarity
                 output_color = rawpy.ColorSpace.sRGB
                 gamma = (2.2, 4.5)  # sRGB gamma (for reference)
-            
+
             # High-quality postprocessing with linear-preserving settings
             rgb = raw.postprocess(
                 use_camera_wb=use_camera_wb,  # Use embedded camera WB (vs. auto)
@@ -220,7 +216,7 @@ def load_raw_as_pil(
     """
     # Use 16-bit for linear (preserve precision), 8-bit for gamma (legacy)
     output_bps = 16 if output_linear else 8
-    
+
     rgb = load_raw_as_rgb(
         raw_path,
         use_camera_wb=use_camera_wb,
@@ -228,14 +224,13 @@ def load_raw_as_pil(
         output_bps=output_bps,
         output_linear=output_linear,
     )
-    
+
     # Convert to PIL Image with appropriate mode
     if rgb.dtype == np.uint16:
-        # PIL doesn't have native 16-bit RGB mode, so we keep as numpy for now
-        # and convert via float32 intermediate to preserve precision
-        # This will be handled in preprocessing.py for APEX pipeline
-        # For now, return 8-bit PIL for compatibility
-        rgb_8bit = (rgb / 256).astype(np.uint8)  # Scale 16-bit → 8-bit
+        # PIL doesn't have native 16-bit RGB mode, so we scale to 8-bit
+        # Use proper scaling: 65535 / 255 ≈ 257 (not 256)
+        # This preserves the full dynamic range without truncation
+        rgb_8bit = (rgb / 257).astype(np.uint8)
         return Image.fromarray(rgb_8bit, mode="RGB")
     else:
         # 8-bit RGB (legacy path, should not be reached for APEX)

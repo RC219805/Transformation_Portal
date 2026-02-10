@@ -260,16 +260,16 @@ def preprocess_image_linear(
     verify_linearity: bool = True,
 ) -> Tuple[np.ndarray, Tuple[int, int]]:
     """Preprocess image with linear light preservation for APEX pipeline.
-    
+
     This is the APEX-compliant preprocessing path that enforces:
     - Linear light preservation (no gamma encoding)
     - Floating point dtype (no uint8/uint16 leakage)
     - Value range validation [0, 1]
     - 16-bit precision preservation for RAW/TIFF
-    
+
     Per Spatial AI Foundation ROADMAP (Section I: Data Fidelity is Sacred):
     "Training inputs MUST preserve linear-light relationships."
-    
+
     Processing steps:
     1. Load/validate image (RAW → linear uint16, TIFF → preserve bit depth)
     2. Convert to linear float32 [0, 1] preserving precision
@@ -277,42 +277,42 @@ def preprocess_image_linear(
     4. Optionally resize to target_size (long edge)
     5. Enforce multiple-of-14 dimensions
     6. Return validated linear image + original shape
-    
+
     Args:
         image: Input as numpy array, Path, or str
                For RAW: must be RAW file (linear output enforced)
                For TIFF: must be linear (gamma-encoded rejected)
         target_size: Optional target size for long edge (maintains aspect)
         verify_linearity: Whether to run linear verification checks (default True)
-    
+
     Returns:
         Tuple of:
             - Processed image (float32, HxWx3, [0, 1], linear light)
             - Original shape (H, W) before any resizing
-    
+
     Raises:
         FileNotFoundError: If path doesn't exist
         ValueError: If image invalid, gamma-encoded, or unsupported format
         DtypeViolationError: If dtype is uint8/uint16 after conversion
         RangeViolationError: If values outside [0, 1]
         LinearityViolationError: If gamma encoding detected
-    
+
     Example:
         >>> # Load linear RAW file
         >>> img, orig_shape = preprocess_image_linear("photo.CR2")
         >>> # img is float32 [0, 1] linear light, verified
-        
+
         >>> # Load 16-bit linear TIFF
         >>> img, orig_shape = preprocess_image_linear("render.tif")
         >>> # img is float32 [0, 1] linear light, preserving TIFF precision
     """
     from .linear_verify import verify_linear_ingest
     from .raw_loader import load_raw_as_rgb
-    
+
     # Load image preserving bit depth and linearity
     if isinstance(image, (str, Path)):
         image_path = validate_image_format(image)
-        
+
         # Handle RAW files with linear output
         if is_raw_file(image_path):
             logger.debug(f"Loading RAW file with linear output: {image_path.name}")
@@ -325,10 +325,10 @@ def preprocess_image_linear(
                 output_linear=True,  # Linear RGB (enforced)
             )
             original_h, original_w = rgb_array.shape[:2]
-            
+
             # Convert uint16 [0, 65535] → float32 [0, 1] preserving linearity
             img_array = rgb_array.astype(np.float32) / 65535.0
-            
+
         else:
             # Handle standard formats (TIFF, PNG, JPEG)
             # Use tifffile for TIFF to preserve 16-bit
@@ -337,8 +337,8 @@ def preprocess_image_linear(
                     import tifffile
                     # Load TIFF preserving bit depth
                     tiff_array = tifffile.imread(str(image_path))
-                    original_h, original_w = tiff_array.shape[:2]
-                    
+                    original_h, original_w = tiff_array.shape[0], tiff_array.shape[1]  # NumPy: (H, W, C)
+
                     # Normalize based on dtype
                     if tiff_array.dtype == np.uint8:
                         img_array = tiff_array.astype(np.float32) / 255.0
@@ -349,29 +349,29 @@ def preprocess_image_linear(
                         # Assume already in [0, 1] if float
                     else:
                         raise ValueError(f"Unsupported TIFF dtype: {tiff_array.dtype}")
-                    
+
                     # Ensure 3 channels
                     if img_array.ndim == 2:
                         img_array = np.stack([img_array] * 3, axis=-1)
                     elif img_array.ndim == 3 and img_array.shape[2] == 4:
                         # Drop alpha
                         img_array = img_array[:, :, :3]
-                        
+
                 except ImportError:
                     logger.warning("tifffile not available, falling back to PIL (may lose 16-bit precision)")
                     pil_img = Image.open(image_path).convert("RGB")
-                    original_h, original_w = pil_img.size[1], pil_img.size[0]
+                    original_w, original_h = pil_img.size  # PIL returns (W, H)
                     img_array = np.array(pil_img, dtype=np.float32) / 255.0
             else:
                 # Use PIL for other formats (JPEG, PNG, etc.)
                 pil_img = Image.open(image_path).convert("RGB")
-                original_h, original_w = pil_img.size[1], pil_img.size[0]
+                original_w, original_h = pil_img.size  # PIL returns (W, H)
                 img_array = np.array(pil_img, dtype=np.float32) / 255.0
-                
+
     elif isinstance(image, np.ndarray):
         # Handle numpy array input
-        original_h, original_w = image.shape[:2]
-        
+        original_h, original_w = image.shape[0], image.shape[1]  # NumPy: (H, W, C)
+
         if image.dtype == np.uint8:
             img_array = image.astype(np.float32) / 255.0
         elif image.dtype == np.uint16:
@@ -380,7 +380,7 @@ def preprocess_image_linear(
             img_array = image.astype(np.float32)
         else:
             raise ValueError(f"Unsupported array dtype: {image.dtype}")
-        
+
         # Ensure 3 channels
         if img_array.ndim == 2:
             img_array = np.stack([img_array] * 3, axis=-1)
@@ -390,7 +390,7 @@ def preprocess_image_linear(
             raise ValueError(f"Unsupported array shape: {image.shape}")
     else:
         raise TypeError(f"Image must be np.ndarray, Path, or str. Got: {type(image)}")
-    
+
     # Verify linearity before any further processing
     if verify_linearity:
         try:
@@ -402,7 +402,7 @@ def preprocess_image_linear(
                 f"Image: {image if isinstance(image, (str, Path)) else 'numpy array'}\n"
                 f"This indicates the input is gamma-encoded, has incorrect dtype, or invalid range."
             ) from e
-    
+
     # Optional resize to target size (long edge)
     if target_size is not None:
         h, w = img_array.shape[:2]
@@ -412,21 +412,30 @@ def preprocess_image_linear(
         else:
             new_w = target_size
             new_h = int(h * (target_size / w))
-        
+
         # Resize using high-quality interpolation
-        # Convert to PIL for resize, then back to numpy
-        img_uint8 = (np.clip(img_array, 0, 1) * 255).astype(np.uint8)
-        pil_img = Image.fromarray(img_uint8, mode="RGB")
-        pil_img = pil_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
-        img_array = np.array(pil_img, dtype=np.float32) / 255.0
-    
+        # Use cv2 to avoid lossy float32→uint8→float32 conversion
+        try:
+            import cv2
+            # cv2.resize preserves dtype (float32 stays float32)
+            # Use INTER_LANCZOS4 for high-quality resampling
+            img_array = cv2.resize(img_array, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4)
+        except ImportError:
+            # Fallback to PIL if cv2 not available
+            # Note: This introduces quantization via uint8 conversion
+            logger.warning("cv2 not available for resize, using PIL (may lose precision)")
+            img_uint8 = (np.clip(img_array, 0, 1) * 255).astype(np.uint8)
+            pil_img = Image.fromarray(img_uint8, mode="RGB")
+            pil_img = pil_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+            img_array = np.array(pil_img, dtype=np.float32) / 255.0
+
     # Enforce multiple-of-14 dimensions
     img_array = _enforce_dimension_multiple(img_array, DIMENSION_MULTIPLE)
-    
+
     # Final verification after all processing
     if verify_linearity:
         verify_linear_ingest(img_array)
-    
+
     return img_array, (original_h, original_w)
 
 

@@ -113,7 +113,6 @@ class TestLinearPreprocessing:
 class TestTiffLinearIngest:
     """Test TIFF file linear ingest (requires tifffile)."""
 
-    @pytest.mark.skipif(True, reason="tifffile import tested separately")
     def test_16bit_tiff_preserves_precision(self, tmp_path):
         """16-bit TIFF should preserve precision through conversion."""
         # Skip if tifffile not available
