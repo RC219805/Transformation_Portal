@@ -185,6 +185,7 @@ class EnhanceConfig:
     # Fallback configuration
     depth_fallback: str = "fail"  # Options: "fail", "skip", "v2-auto"
     v2_timeout: int = 300
+    allow_synthetic_fallback: bool = False  # Allow synthetic depth backend when no ML deps (test/CI only)
 
     # Hash mode
     hash_mode: HashMode = HashMode.IF_MANIFEST_EXISTS

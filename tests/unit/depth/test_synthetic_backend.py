@@ -5,7 +5,6 @@ ML frameworks, making it ideal for CI environments and fast tests.
 """
 
 import numpy as np
-import pytest
 from PIL import Image
 
 from transformation_portal.depth.backends.protocol import LicenseType
@@ -159,3 +158,25 @@ class TestSyntheticBackendFallbackPolicy:
         assert result.metadata["synthetic"] is True
         assert result.metadata["backend"] == "synthetic"
         assert "method" in result.metadata  # Should document method used
+
+    def test_synthetic_fallback_requires_explicit_opt_in(self):
+        """Test that synthetic fallback requires explicit configuration."""
+        config = EnhanceConfig(allow_synthetic_fallback=False)
+        assert config.allow_synthetic_fallback is False, "Default should require opt-in"
+
+    def test_float_array_normalization(self):
+        """Test that float arrays in [0, 1] are correctly normalized."""
+        backend = SyntheticDepthBackend()
+
+        # Float array in [0, 1] range
+        float_img = np.random.rand(50, 50, 3).astype(np.float32)
+        result = backend.compute(float_img)
+
+        # Should produce valid depth map
+        assert result.depth_map.shape == (50, 50)
+        assert result.depth_map.dtype == np.float32
+        assert 0.0 <= result.depth_map.min() <= 1.0
+        assert 0.0 <= result.depth_map.max() <= 1.0
+
+        # Depth should vary (not collapsed to constant)
+        assert result.depth_map.std() > 0.01, "Depth should have variation"
