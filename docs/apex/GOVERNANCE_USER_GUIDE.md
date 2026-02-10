@@ -1,7 +1,7 @@
 # APEX Governance User Guide
 
-**Version:** 1.0.0  
-**Last Updated:** 2026-02-09  
+**Version:** 1.0.0
+**Last Updated:** 2026-02-09
 **Audience:** Developers, Maintainers, Architects
 
 ---
@@ -55,7 +55,7 @@ APEX operates in three modes:
 | **Enforce** | Blocks merge on policy violations | Production enforcement (after calibration) |
 | **Disabled** | Gate not executed | Temporary suspension (requires justification) |
 
-**Current status:** Shadow mode (as of 2026-02-09)  
+**Current status:** Shadow mode (as of 2026-02-09)
 **Transition plan:** See [enforcement_policy.yaml](../policy/enforcement_policy.yaml)
 
 ---
@@ -92,7 +92,7 @@ python scripts/apex_matrix_runner.py \
   --workflow-versions v2 \
   --zones local \
   --backend-id da3 \
-  --input-dir ./tests/fixtures/apex_golden \
+  --input-dir ./tests/fixtures/apex_images \
   --output-dir ./apex_results \
   --ledger-db ./apex_performance.db \
   --device cpu
@@ -480,7 +480,7 @@ python scripts/apex_matrix_runner.py \
   --workflow-versions v2 \
   --zones local \
   --backend-id da3 \
-  --input-dir ./tests/fixtures/apex_golden \
+  --input-dir ./tests/fixtures/apex_images \
   --output-dir ./apex_results \
   --ledger-db ./apex_performance.db \
   --device cpu
@@ -510,6 +510,6 @@ Add `--dry-run --synthetic` for fast validation (no ML deps).
 
 ---
 
-**Last Updated:** 2026-02-09  
-**Version:** 1.0.0  
+**Last Updated:** 2026-02-09
+**Version:** 1.0.0
 **Next Review:** 2026-05-09 (quarterly)

@@ -22,21 +22,21 @@ schema_performance_budgets:
       type: string
       pattern: "^\\d+\\.\\d+\\.\\d+$"
       description: "Semantic version of this policy schema"
-    
+
     effective_date:
       type: string
       format: date
       description: "When this policy becomes active (ISO 8601 date)"
-    
+
     review_date:
       type: string
       format: date
       description: "When this policy must be reviewed (quarterly recommended)"
-    
+
     policy_owner:
       type: string
       description: "GitHub username responsible for this policy"
-    
+
     baseline:
       type: object
       properties:
@@ -50,7 +50,7 @@ schema_performance_budgets:
           type: number
           minimum: 0.0
           maximum: 1.0
-    
+
     budgets:
       type: array
       items:
@@ -65,15 +65,15 @@ schema_performance_budgets:
           workflow_version:
             type: string
             enum: ["v1", "v2"]
-          
+
           bucket_name:
             type: string
             description: "Must match bucket names in DEFAULT_BUCKETS"
-          
+
           stability_tier:
             type: string
             enum: ["stable", "canary", "experimental"]
-          
+
           thresholds:
             type: object
             required:
@@ -93,7 +93,7 @@ schema_performance_budgets:
               warn_regression_pct:
                 type: number
                 minimum: 0
-          
+
           enforcement:
             type: object
             required:
@@ -108,11 +108,11 @@ schema_performance_budgets:
                 format: date
               review_required:
                 type: boolean
-          
+
           notes:
             type: string
             description: "Optional rationale and evidence links"
-    
+
     tier_policies:
       type: object
       properties:
@@ -159,7 +159,7 @@ schema_enforcement_policy:
     schema_version:
       type: string
       pattern: "^\\d+\\.\\d+\\.\\d+$"
-    
+
     evidence_gates:
       type: object
       properties:
@@ -167,7 +167,7 @@ schema_enforcement_policy:
           $ref: "#/definitions/evidence_gate"
         enforce_mode:
           $ref: "#/definitions/evidence_gate"
-    
+
     statistical_methods:
       type: object
       properties:
@@ -181,7 +181,7 @@ schema_enforcement_policy:
               type: number
               minimum: 0.0
               maximum: 1.0
-        
+
         outlier_detection:
           type: object
           properties:
@@ -191,7 +191,7 @@ schema_enforcement_policy:
             threshold:
               type: number
               minimum: 0.0
-    
+
     sample_size_requirements:
       type: object
       properties:
@@ -243,7 +243,7 @@ schema_governance_rules:
     schema_version:
       type: string
       pattern: "^\\d+\\.\\d+\\.\\d+$"
-    
+
     waivers:
       type: object
       required:
@@ -257,12 +257,12 @@ schema_governance_rules:
           items:
             type: string
             enum: ["single_bucket", "single_zone", "workflow_version"]
-        
+
         required_fields:
           type: array
           items:
             type: string
-        
+
         labels:
           type: object
           properties:
@@ -270,7 +270,7 @@ schema_governance_rules:
               type: string
             tracking_label:
               type: string
-        
+
         expiry:
           type: object
           properties:
@@ -282,7 +282,7 @@ schema_governance_rules:
               minimum: 1
             auto_close_on_expiry:
               type: boolean
-    
+
     budget_changes:
       type: object
       properties:
@@ -305,7 +305,7 @@ schema_governance_rules:
               type: boolean
             adr_required_for_major_changes:
               type: boolean
-    
+
     incidents:
       type: object
       properties:
@@ -321,7 +321,7 @@ schema_governance_rules:
                 enum: ["low", "medium", "high", "critical"]
               auto_create_issue:
                 type: boolean
-        
+
         issue_template:
           type: object
           properties:
@@ -351,16 +351,16 @@ schema_workload_suites:
     schema_version:
       type: string
       pattern: "^\\d+\\.\\d+\\.\\d+$"
-    
+
     golden_suite:
       $ref: "#/definitions/workload_suite"
-    
+
     canary_suite:
       $ref: "#/definitions/workload_suite"
-    
+
     fuzz_suite:
       $ref: "#/definitions/fuzz_suite"
-    
+
     ci_lanes:
       type: object
       additionalProperties:
@@ -397,7 +397,37 @@ definitions:
       images:
         type: array
         items:
-          type: string
+          oneOf:
+            - type: string  # Simple path (e.g., for canary/fuzz suites)
+            - type: object  # Structured metadata (e.g., for golden suite)
+              required:
+                - name
+                - path
+              properties:
+                name:
+                  type: string
+                  description: "Image identifier (e.g., pool_luxury_4k.jpg)"
+                path:
+                  type: string
+                  description: "Relative path from fixture_dir"
+                scene_type:
+                  type: string
+                  description: "Scene category (e.g., pool, aerial, interior)"
+                dimensions:
+                  type: array
+                  items:
+                    type: integer
+                  minItems: 2
+                  maxItems: 2
+                pixel_count:
+                  type: integer
+                  minimum: 1
+                characteristics:
+                  type: array
+                  items:
+                    type: string
+                rationale:
+                  type: string
       size:
         type: integer
         minimum: 1
@@ -421,7 +451,7 @@ definitions:
         type: array
         items:
           type: string
-  
+
   fuzz_suite:
     type: object
     required:

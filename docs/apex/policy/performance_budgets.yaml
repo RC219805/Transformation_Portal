@@ -127,29 +127,8 @@ budgets:
       Catch-all for unclassified scenarios.
       Very lenient thresholds; enforcement disabled.
 
-# Stability tier policies
-tier_policies:
-  stable:
-    description: "Production-safe, backward-compatible workflows"
-    required_baseline_days: 30
-    min_sample_size: 20
-    max_change_frequency: "quarterly"
-  
-  canary:
-    description: "Production trial workflows"
-    required_baseline_days: 14
-    min_sample_size: 10
-    max_change_frequency: "monthly"
-  
-  experimental:
-    description: "Research workflows"
-    required_baseline_days: 7
-    min_sample_size: 5
-    max_change_frequency: "weekly"
-
-# V1 baseline budgets (for comparison purposes)
-# V1 budgets set to match V2 initially; will diverge as V2 optimizations land
-v1_budgets:
+  # V1 baseline budgets (for comparison purposes)
+  # V1 budgets set to match V2 initially; will diverge as V2 optimizations land
   - workflow_version: "v1"
     bucket_name: "aerial_large_mps"
     stability_tier: "stable"
@@ -188,6 +167,26 @@ v1_budgets:
       mode: "shadow"
       effective_from: "2026-02-15"
       review_required: true
+
+# Stability tier policies
+tier_policies:
+  stable:
+    description: "Production-safe, backward-compatible workflows"
+    required_baseline_days: 30
+    min_sample_size: 20
+    max_change_frequency: "quarterly"
+
+  canary:
+    description: "Production trial workflows"
+    required_baseline_days: 14
+    min_sample_size: 10
+    max_change_frequency: "monthly"
+
+  experimental:
+    description: "Research workflows"
+    required_baseline_days: 7
+    min_sample_size: 5
+    max_change_frequency: "weekly"
 
 # Migration notes:
 # 1. Current budgets mirror DEFAULT_BUCKETS (v1.0.0 baseline)
