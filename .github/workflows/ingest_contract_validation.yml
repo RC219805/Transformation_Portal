@@ -1,0 +1,105 @@
+name: Ingest Contract Validation
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  validate-ingest-contract:
+    name: Validate Ingest Contract
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      
+      - name: Install exiftool
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libimage-exiftool-perl
+          exiftool -ver
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest
+      
+      - name: Run ingest contract validation
+        run: |
+          python scripts/validate_ingest_contract.py --test-dir tests/fixtures/ingest --strict
+        continue-on-error: false
+      
+      - name: Run ingest contract tests
+        run: |
+          pytest tests/ingest/ -v --tb=short -m "not ml and not slow"
+        continue-on-error: false
+
+  schema-drift-detection:
+    name: Schema Drift Detection
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      
+      - name: Check for schema version changes
+        run: |
+          # Check if schema files were modified
+          git fetch origin ${{ github.base_ref }}
+          
+          SCHEMA_FILES="src/transformation_portal/ingest/schemas.py"
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}..HEAD)
+          
+          for file in $SCHEMA_FILES; do
+            if echo "$CHANGED_FILES" | grep -q "$file"; then
+              echo "⚠️  Schema file modified: $file"
+              echo "   Please ensure:"
+              echo "   1. Schema version is bumped if breaking changes"
+              echo "   2. Migration guide is provided in docs/"
+              echo "   3. Contract tests are updated"
+              echo "   4. CHANGELOG.md is updated"
+              exit 1
+            fi
+          done
+          
+          echo "✅ No schema files modified"
+      
+      - name: Verify schema version consistency
+        run: |
+          # Ensure all schema versions are consistent
+          python -c "
+          from transformation_portal.ingest.schemas import ProvenanceSidecar, IngestManifest
+          
+          prov_version = ProvenanceSidecar.model_fields['schema_version'].default
+          manifest_version = IngestManifest.model_fields['schema_version'].default
+          
+          if prov_version != manifest_version:
+              print(f'❌ Schema version mismatch:')
+              print(f'   ProvenanceSidecar: {prov_version}')
+              print(f'   IngestManifest: {manifest_version}')
+              exit(1)
+          
+          print(f'✅ Schema versions consistent: {prov_version}')
+          "

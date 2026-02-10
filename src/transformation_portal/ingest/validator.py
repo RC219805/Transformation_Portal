@@ -70,8 +70,8 @@ def _detect_unknown_fields(
     """
     unknown = []
     
-    # Get valid fields from schema
-    valid_fields = set(schema_class.__fields__.keys())
+    # Get valid fields from schema (Pydantic v2)
+    valid_fields = set(schema_class.model_fields.keys())
     
     for key, value in data.items():
         field_path = f"{path}.{key}" if path else key
@@ -80,12 +80,14 @@ def _detect_unknown_fields(
             unknown.append(field_path)
         elif isinstance(value, dict):
             # Recursively check nested objects
-            field_info = schema_class.__fields__[key]
-            if hasattr(field_info.type_, "__fields__"):
+            field_info = schema_class.model_fields[key]
+            # Pydantic v2: use annotation instead of type_
+            field_type = field_info.annotation
+            if hasattr(field_type, "model_fields"):
                 # Nested Pydantic model
                 nested_unknown = _detect_unknown_fields(
                     value,
-                    field_info.type_,
+                    field_type,
                     field_path,
                 )
                 unknown.extend(nested_unknown)

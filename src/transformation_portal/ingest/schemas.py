@@ -18,7 +18,7 @@ Schema version: 1.0.0
 from __future__ import annotations
 
 import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Literal
 
 from pydantic import BaseModel, Field, validator
 
@@ -204,7 +204,7 @@ class ProvenanceSidecar(BaseModel):
         run_id: Unique run identifier (UUID v4) - non-deterministic by design
     """
     
-    schema_version: str = Field(default="1.0.0", const=True)
+    schema_version: Literal["1.0.0"] = "1.0.0"
     
     file_integrity: FileIntegrity
     exif: ExifMetadata
@@ -250,7 +250,7 @@ class ProvenanceSidecar(BaseModel):
         """
         import json
         return json.dumps(
-            self.dict(),
+            self.model_dump(),
             sort_keys=True,
             indent=2,
             separators=(",", ": "),
@@ -274,7 +274,7 @@ class IngestManifest(BaseModel):
         ingest_duration_sec: Total ingest duration in seconds
     """
     
-    schema_version: str = Field(default="1.0.0", const=True)
+    schema_version: Literal["1.0.0"] = "1.0.0"
     
     input_file: FileIntegrity
     output_file: Optional[FileIntegrity] = None
@@ -312,7 +312,7 @@ class IngestManifest(BaseModel):
         """
         import json
         return json.dumps(
-            self.dict(),
+            self.model_dump(),
             sort_keys=True,
             indent=2,
             separators=(",", ": "),
