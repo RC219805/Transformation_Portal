@@ -215,9 +215,21 @@ outputs/
 archive/experiments/
 archive/deprecated/
 archive/legacy/
+archive/*.jpg
+archive/*.jpeg
+archive/*.png
 !archive/README.md
 !archive/*/.gitkeep
 venv_py311/
+
+# Projects directory (client-specific production files - not for version control)
+projects/
+!projects/.gitkeep
+
+# Binary executables (install via CI/package managers)
+actionlint
+*.exe
+!*.py
 
 # Security - prevent sensitive local backups
 .local_backup/
@@ -237,6 +249,11 @@ Continue
 SKIP
 INVESTIGATE
 =
+.empty-commit-trigger
+.pr-branch-marker
+.pr-marker-*
+.branch_cleanup_backup/
+.events/
 
 # pytest cache
 .pytest_cache/
