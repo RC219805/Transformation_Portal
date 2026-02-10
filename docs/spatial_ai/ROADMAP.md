@@ -1,5 +1,6 @@
 # Spatial AI Foundation Roadmap (Architectural Constitution)
 
+
 **Path:** `docs/spatial_ai/ROADMAP.md`  
 **Status:** Draft (normative)  
 **Owner:** Spatial AI / Data Foundation maintainers  
