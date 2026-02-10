@@ -4,7 +4,6 @@ Tests that Materials V3 Engine is properly wired into the orchestrator
 and processes images when enabled.
 """
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -128,29 +127,18 @@ def test_materials_v3_manifest_integration(tmp_path, mock_depth_backend, mock_da
 
 
 def test_materials_v3_disabled_returns_empty(tmp_path, mock_depth_backend, mock_da3_available):
-    """Test that Materials V3 returns empty dict when disabled."""
+    """Test that Materials V3 engine is not initialized when disabled."""
     config = EnhanceConfig(
-        enable_materials_v3=True,  # Engine initialized
+        enable_materials_v3=False,  # Materials V3 disabled
         apply_pixel_ops=True,
         depth_device="cpu",
         enable_v2=False,
     )
 
-    # Override config.enabled at runtime
-    config.enabled = False
-
     orchestrator = EnhanceOrchestrator(config, tmp_path)
 
-    image = np.ones((256, 256, 3), dtype=np.uint8) * 128
-    segmentation_result = {"materials": {}}
-    depth_map = np.ones((256, 256), dtype=np.float32) * 0.5
-
-    result = orchestrator.materials_v3_engine.process(
-        image=image, segmentation_result=segmentation_result, depth_map=depth_map
-    )
-
-    # When config.enabled=False, should return empty dict
-    assert result == {}
+    # When enable_materials_v3=False, the engine should not be initialized
+    assert orchestrator.materials_v3_engine is None
 
 
 def test_materials_v3_masks_exposed_to_v2():

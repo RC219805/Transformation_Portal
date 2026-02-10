@@ -2,7 +2,7 @@
 
 **Date:** 2026-02-10
 **Status:** ✅ COMPLETE
-**Test Coverage:** 11/11 tests passing (100%)
+**Test Coverage:** 16/16 tests passing (100%)
 
 ---
 
@@ -20,11 +20,12 @@ Materials V3 is **functionally complete** and production-ready. All core compone
 |-----------|--------|---------|
 | **MaterialsV3Engine** | ✅ Complete | Main entry point with process() method |
 | **Response Planning** | ✅ Complete | Edge signal computation, refinement decisions |
-| **Pixel Operations Registry** | ✅ Complete | Glass (2 ops) + Stone (1 op) fully implemented |
+| **Pixel Operations Registry** | ✅ Complete | 4 materials, 5 ops fully implemented |
 | **Orchestrator Integration** | ✅ Complete | Wired into orchestrator after depth inference |
+| **Enhanced Image Flow** | ✅ Complete | Materials V3 output flows to V2 stage |
 | **Manifest Output** | ✅ Complete | Schema v3.1 with response plan + pixel ops telemetry |
 | **Configuration** | ✅ Complete | EnhanceConfig.enable_materials_v3 + CLI flag |
-| **Tests** | ✅ Complete | 11 tests covering engine, orchestrator, pixel ops |
+| **Tests** | ✅ Complete | 16 tests covering engine, orchestrator, pixel ops |
 
 ### 📊 Pixel Operations Implemented
 
@@ -34,6 +35,14 @@ Materials V3 is **functionally complete** and production-ready. All core compone
 
 **Stone Material:**
 - ✅ `microcontrast` - Subtle texture enhancement for stone surfaces
+
+**Water Material:**
+- ✅ `reflection_enhance` - Enhance reflections and clarity for water surfaces
+
+**Foliage Material:**
+- ✅ `vibrance_boost` - Boost green channel vibrance for vegetation
+
+**Total:** 4 materials, 5 operations, all implemented and tested
 
 ---
 
@@ -95,8 +104,13 @@ tests/materials/test_materials_v3_pixel_ops_smoke.py
   ✅ test_compute_delta_stats_handles_mask_shapes
   ✅ test_stone_microcontrast_implementation
   ✅ test_stone_ops_in_registry
+  ✅ test_water_reflection_enhance_implementation
+  ✅ test_water_ops_in_registry
+  ✅ test_foliage_vibrance_boost_implementation
+  ✅ test_foliage_ops_in_registry
+  ✅ test_all_registered_ops_are_implemented
 
-Total: 11/11 passing (100%)
+Total: 16/16 passing (100%)
 ```
 
 ---

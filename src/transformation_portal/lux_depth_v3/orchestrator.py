@@ -689,7 +689,7 @@ class EnhanceOrchestrator:
         float_depth_path: Path,
         manifest_path: Path,
         skip_depth: bool,
-    ) -> tuple[Optional[Any], float, Optional[dict], Optional[dict], float]:
+    ) -> tuple[Optional[Any], float, Optional[dict], Optional[dict], float, Optional[Path]]:
         """Stage A: Depth computation with caching and PBR generation.
 
         Args:
@@ -701,13 +701,15 @@ class EnhanceOrchestrator:
             skip_depth: Whether to skip depth computation
 
         Returns:
-            Tuple of (depth_metadata, depth_runtime_s, pbr_assets, materials_v3_result, materials_v3_runtime_s)
+            Tuple of (depth_metadata, depth_runtime_s, pbr_assets, materials_v3_result,
+                     materials_v3_runtime_s, enhanced_image_path)
         """
         depth_runtime_s = 0.0
         depth_metadata = None
         pbr_assets = None
         materials_v3_result = None
         materials_v3_runtime_s = 0.0
+        enhanced_image_path = None  # Will be set if Materials V3 produces enhanced_image
 
         if not skip_depth:
             # Lazy preprocessing: Only validate and preprocess if we're running depth
@@ -731,6 +733,9 @@ class EnhanceOrchestrator:
                     raise ValueError(f"Image failed strict verification: {validated_path}") from e
 
             preprocessed_array, original_shape = preprocess_image(validated_path)
+
+            # Initialize working_image - this will be updated by Materials V3 if enabled
+            working_image = preprocessed_array
 
             logger.info(f"Stage A: Generating depth for {output_key}...")
             t0 = time.time()
@@ -817,6 +822,37 @@ class EnhanceOrchestrator:
                         )
                         materials_v3_runtime_s = time.time() - t_materials_start
                         if materials_v3_result:
+                            # CRITICAL FIX: Use enhanced_image from Materials V3 for downstream processing
+                            enhanced_image = materials_v3_result.get("enhanced_image")
+                            if enhanced_image is not None:
+                                working_image = enhanced_image
+
+                                # Write enhanced image to temporary file for V2 stage
+                                # V2 subprocess requires a file path, not an array
+                                import tempfile
+
+                                from PIL import Image as PILImage
+
+                                # Create temp file in output directory to avoid cross-filesystem issues
+                                temp_dir = self.output_root / "temp"
+                                temp_dir.mkdir(parents=True, exist_ok=True)
+
+                                # Convert working_image (float32 [0,1]) to uint8 for saving
+                                enhanced_uint8 = (np.clip(working_image, 0, 1) * 255).astype(np.uint8)
+                                enhanced_pil = PILImage.fromarray(enhanced_uint8)
+
+                                # Save with output_key stem to make it identifiable
+                                enhanced_image_path = temp_dir / f"{output_key.stem}_materials_v3_enhanced.png"
+                                enhanced_pil.save(enhanced_image_path)
+
+                                logger.info(
+                                    f"Materials V3 enhanced image with "
+                                    f"{len(materials_v3_result.get('materials_v3_pixel_ops', {}).get('applied', []))} "
+                                    f"pixel operations - saved to {enhanced_image_path} for V2 stage"
+                                )
+                            else:
+                                logger.debug("Materials V3 did not return enhanced_image, using original image")
+
                             logger.info(
                                 f"Materials V3 completed in {materials_v3_runtime_s:.3f}s: "
                                 f"{len(materials_v3_result.get('materials_v3_pixel_ops', {}).get('applied', []))} "
@@ -893,21 +929,36 @@ class EnhanceOrchestrator:
                 if self.config.depth_fallback == "fail":
                     raise
                 elif self.config.depth_fallback == "skip":
-                    return None, 0.0, None, None, 0.0
+                    return None, 0.0, None, None, 0.0, None
                 elif self.config.depth_fallback == "v2-auto":
                     logger.info("V2 fallback mode: V3 failed, will attempt V2 with independent depth")
                     if depth_path.exists():
                         depth_path.unlink()
-                    return None, 0.0, None, None, 0.0
+                    return None, 0.0, None, None, 0.0, None
                 else:
                     raise ValueError(f"Unsupported depth_fallback mode: {self.config.depth_fallback}") from e
         else:
             # Depth was skipped - load from cache
+            # CRITICAL FIX: Preserve Materials V3 metadata from previous run
             if manifest_path.exists():
                 try:
                     m = CombinedManifest.load(manifest_path)
                     depth_metadata = m.depth
                     pbr_assets = getattr(m, "pbr_assets", None)
+
+                    # Preserve Materials V3 result from previous run
+                    if hasattr(m, "materials_v3") and m.materials_v3:
+                        logger.info("Preserving Materials V3 metadata from previous run (depth was cached)")
+                        materials_v3_result = {
+                            "materials_v3_response_plan": m.materials_v3.response_plan,
+                            "materials_v3_pixel_ops": m.materials_v3.pixel_ops,
+                            "materials_v3_metadata": {"version": m.materials_v3.version},
+                            # Note: enhanced_image and material_masks are not persisted to manifest
+                            # This is intentional - only the response plan and telemetry are preserved
+                        }
+                        materials_v3_runtime_s = (
+                            m.materials_v3.runtime_seconds if hasattr(m.materials_v3, "runtime_seconds") else 0.0
+                        )
                 except Exception as e:
                     logger.debug(f"Failed to load previous manifest metadata: {e}")
 
@@ -921,7 +972,7 @@ class EnhanceOrchestrator:
                 except Exception as pbr_error:
                     logger.warning(f"PBR generation from cache failed: {pbr_error}")
 
-        return depth_metadata, depth_runtime_s, pbr_assets, materials_v3_result, materials_v3_runtime_s
+        return depth_metadata, depth_runtime_s, pbr_assets, materials_v3_result, materials_v3_runtime_s, enhanced_image_path
 
     def _generate_pbr_stage(self, depth: Any, output_key: Path) -> Optional[dict]:
         """Generate PBR maps from depth data.
@@ -1257,7 +1308,14 @@ class EnhanceOrchestrator:
         # (skip_depth already computed above for both paths)
 
         # --- STAGE A: DEPTH COMPUTATION ---
-        depth_metadata, depth_runtime_s, pbr_assets, materials_v3_result, materials_v3_runtime_s = self._compute_depth_stage(
+        (
+            depth_metadata,
+            depth_runtime_s,
+            pbr_assets,
+            materials_v3_result,
+            materials_v3_runtime_s,
+            enhanced_image_path,
+        ) = self._compute_depth_stage(
             image_input=image_input,
             output_key=output_key,
             depth_path=depth_path,
@@ -1272,8 +1330,13 @@ class EnhanceOrchestrator:
                 return {"status": "skipped", "reason": "Depth computation failed", "image": str(image_input.path)}
 
         # --- STAGE B: V2 ENHANCEMENT ---
+        # Use enhanced image from Materials V3 if available, otherwise use original
+        v2_input_path = enhanced_image_path if enhanced_image_path else image_input.path
+        if enhanced_image_path:
+            logger.info(f"V2 stage using Materials V3 enhanced image: {enhanced_image_path}")
+
         v2_result, v2_runtime_s, v2_report_path = self._run_v2_stage(
-            image_input=image_input,
+            image_input=ImageInput(path=v2_input_path) if enhanced_image_path else image_input,
             depth_path=depth_path if depth_metadata else None,
             output_key=output_key,
             v2_log_path=v2_log_path,
@@ -1284,6 +1347,14 @@ class EnhanceOrchestrator:
 
         # Capture end time for accurate timestamps
         pipeline_end_time = time.time()
+
+        # Clean up temporary enhanced image file if it was created
+        if enhanced_image_path and enhanced_image_path.exists():
+            try:
+                enhanced_image_path.unlink()
+                logger.debug(f"Cleaned up temporary enhanced image: {enhanced_image_path}")
+            except Exception as e:
+                logger.warning(f"Failed to clean up temporary enhanced image: {e}")
 
         # --- MANIFEST WRITING ---
         self._write_manifest(

@@ -37,12 +37,8 @@ class MaterialsV3Engine:
         self, image: np.ndarray, segmentation_result: Dict[str, Any], depth_map: Optional[np.ndarray] = None
     ) -> Dict[str, Any]:
         """Main entry point."""
-        # Check if Materials V3 is enabled (support both .enabled and .enable_materials_v3)
-        is_enabled = getattr(self.config, "enabled", None)
-        if is_enabled is None:
-            is_enabled = getattr(self.config, "enable_materials_v3", False)
-
-        if not is_enabled:
+        # Check if Materials V3 is enabled
+        if not getattr(self.config, "enable_materials_v3", False):
             return {}
 
         # 1. Stats
@@ -65,9 +61,10 @@ class MaterialsV3Engine:
                 del per_class_stats[mat_key]["mask"]
 
         # 3. Execution (Pixel Ops)
-        _, pixel_ops = apply_pixel_ops(image, segmentation_result, response_plan, self.config)
+        enhanced_image, pixel_ops = apply_pixel_ops(image, segmentation_result, response_plan, self.config)
 
         return {
+            "enhanced_image": enhanced_image,  # Modified image with pixel ops applied
             "materials_v3_response_plan": response_plan,
             "materials_v3_pixel_ops": pixel_ops,
             "materials_v3_metadata": {"version": "3.1"},

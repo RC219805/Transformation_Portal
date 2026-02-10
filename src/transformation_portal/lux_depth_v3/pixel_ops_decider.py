@@ -32,19 +32,28 @@ def decide_pixel_ops(
     reason = "no_implementation"
     should_apply = False
 
-    if material_key == "glass":
-        eligible = stats["coverage_px"] >= 1000
-        if not eligible:
-            reason = "below_coverage_threshold"
-        else:
-            if stats["mean_conf"] < 0.80:
-                should_apply = True
-                reason = "low_mean_confidence"
-            elif stats.get("edge_conf", 1.0) < 0.55:
-                should_apply = True
-                reason = "low_edge_confidence"
+    # If material has implemented operations in registry, evaluate eligibility
+    if implemented:
+        # Coverage threshold check (minimum pixels required)
+        if stats["coverage_px"] >= 1000:
+            eligible = True
+            # Material-specific recommendation logic
+            if material_key == "glass":
+                if stats["mean_conf"] < 0.80:
+                    should_apply = True
+                    reason = "low_mean_confidence"
+                elif stats.get("edge_conf", 1.0) < 0.55:
+                    should_apply = True
+                    reason = "low_edge_confidence"
+                else:
+                    reason = "confidence_already_high"
             else:
-                reason = "confidence_already_high"
+                # For other materials (stone, water, foliage), apply if present
+                should_apply = True
+                reason = "material_present_with_coverage"
+        else:
+            eligible = False
+            reason = "below_coverage_threshold"
     else:
         eligible = False
         reason = "no_implementation"

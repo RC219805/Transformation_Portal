@@ -16,7 +16,7 @@ EfficientSAM Integration (Future Work):
 - License: Apache 2.0 (commercial use allowed)
 - Model size: ~30-40MB (vs 2.4GB for SAM)
 - Performance: 10-20x faster than original SAM
-- Dependency: pip install segment-anything efficientam
+- Dependency: pip install segment-anything efficientsam
 - Implementation: Prompt-based segmentation with material classifiers
 
 For now, Materials V3 operates with manually provided masks or empty segmentation.
@@ -43,7 +43,7 @@ def segment_materials(image: np.ndarray, config) -> Dict[str, np.ndarray]:
         image: Input image as numpy array (H, W, 3) in RGB
         config: EnhanceConfig instance with segmentation settings
             - enable_material_segmentation: Enable/disable segmentation
-            - material_segmentation_backend: Backend to use ("stub" or "efficientam")
+            - material_segmentation_backend: Backend to use ("stub" or "efficientsam")
 
     Returns:
         Dict mapping material names to binary masks (H, W) with values 0.0-1.0
@@ -72,22 +72,24 @@ def segment_materials(image: np.ndarray, config) -> Dict[str, np.ndarray]:
         logger.debug("Using stub segmentation backend (returns empty masks)")
         return {}
 
-    elif backend == "efficientam":
+    elif backend == "efficientsam":
         # Future: EfficientSAM integration
+        # Fail-safe: log warning and fall back to stub (don't crash)
         logger.warning(
             "EfficientSAM backend not yet implemented. "
             "Falling back to stub backend (empty masks). "
-            "This is expected - EfficientSAM integration is future work."
+            "This is expected - EfficientSAM integration is future work. "
+            "See docs/materials_v3_quick_reference.md for integration plan."
         )
         return {}
 
     else:
-        logger.error(f"Unknown segmentation backend: {backend}. Using stub backend.")
+        logger.error(f"Unknown segmentation backend: {backend}. Falling back to stub backend.")
         return {}
 
 
 # Future: EfficientSAM integration placeholder
-def _segment_with_efficientam(image: np.ndarray, config) -> Dict[str, np.ndarray]:
+def _segment_with_efficientsam(image: np.ndarray, config) -> Dict[str, np.ndarray]:
     """EfficientSAM-based material segmentation (not yet implemented).
 
     Future implementation would:
@@ -107,5 +109,5 @@ def _segment_with_efficientam(image: np.ndarray, config) -> Dict[str, np.ndarray
         NotImplementedError: This is a placeholder for future work
     """
     raise NotImplementedError(
-        "EfficientSAM backend not yet implemented. " "See docs/architecture/materials_v3_design.md for integration plan."
+        "EfficientSAM backend not yet implemented. " "See docs/materials_v3_quick_reference.md for integration plan."
     )
