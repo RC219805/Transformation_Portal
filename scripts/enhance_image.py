@@ -114,6 +114,11 @@ def parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument("--upscaler", default="default", help="Upscaler backend (default: %(default)s)")
     parser.add_argument("--log-file", type=Path, default=None, help="Optional log file path")
+    parser.add_argument(
+        "--allow-8bit",
+        action="store_true",
+        help="Allow 16-bit → 8-bit downgrade (bypasses Quality Firewall)",
+    )
 
     verbosity = parser.add_mutually_exclusive_group()
     verbosity.add_argument("--verbose", "-v", action="store_true", help="Enable verbose logging")
@@ -159,6 +164,7 @@ def run_v2_enhancement(
     preset: str,
     device: str,
     upscaler: str,
+    allow_8bit: bool = False,
 ) -> dict[str, Any]:
     """Run V2 depth-aware enhancement.
 
@@ -169,6 +175,7 @@ def run_v2_enhancement(
         preset: Enhancement preset name
         device: Processing device (cpu/cuda/mps)
         upscaler: Upscaler backend (currently unused, reserved for future)
+        allow_8bit: Allow 16-bit → 8-bit downgrade (Quality Firewall bypass)
 
     Returns:
         Dict containing enhancement report
@@ -214,6 +221,7 @@ def run_v2_enhancement(
         depth_map_path=depth_map_path,
         config=config,
         device=device,
+        allow_8bit_output=allow_8bit,
     )
 
     # Add upscaler info to report (currently unused but maintained for compatibility)
@@ -246,6 +254,7 @@ def main() -> int:
             preset=args.preset,
             device=args.device,
             upscaler=args.upscaler,
+            allow_8bit=args.allow_8bit,
         )
 
         if report_path:

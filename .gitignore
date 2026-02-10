@@ -277,3 +277,4 @@ debug_after_white_balance.jpg
 
 # Local RAW test inputs (never commit)
 input_images/Richard-Raw-Test/
+depth_maps_apex/

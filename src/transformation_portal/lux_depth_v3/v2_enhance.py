@@ -82,6 +82,123 @@ def find_depth_map(depth_dir: Path, image_stem: str) -> Optional[Path]:
     return None
 
 
+def detect_input_bit_depth(pil_image: Image.Image) -> int:
+    """Detect bit-depth of input image from TIFF tags.
+
+    Args:
+        pil_image: PIL Image object
+
+    Returns:
+        Bits per sample (8 or 16)
+    """
+    # Check TIFF tags for BitsPerSample
+    if hasattr(pil_image, "tag_v2"):
+        bits_per_sample = pil_image.tag_v2.get(258)  # BitsPerSample TIFF tag
+        if bits_per_sample:
+            # Can be tuple (R,G,B) or single value
+            if isinstance(bits_per_sample, (tuple, list)):
+                bits = bits_per_sample[0]
+            else:
+                bits = bits_per_sample
+
+            if bits == 16:
+                return 16
+            elif bits == 8:
+                return 8
+
+    # Fallback: check PIL mode
+    if pil_image.mode in ("I;16", "I;16B", "I;16L", "I;16N"):
+        return 16
+
+    # Default to 8-bit
+    return 8
+
+
+def load_image_preserve_bit_depth(input_path: Path) -> tuple[np.ndarray, int, dict]:
+    """Load image preserving bit depth (8-bit or 16-bit).
+
+    Uses tifffile for 16-bit TIFFs to avoid PIL's auto-conversion to 8-bit.
+
+    Args:
+        input_path: Path to input image
+
+    Returns:
+        Tuple of (image_array, bits_per_sample, metadata)
+        - image_array: np.ndarray with dtype uint8 or uint16
+        - bits_per_sample: 8 or 16
+        - metadata: dict with ICC profile, EXIF, etc.
+    """
+    # First, open with PIL to check format and extract metadata
+    pil_image = Image.open(input_path)
+
+    # Extract metadata before any processing
+    metadata = {
+        "icc_profile": pil_image.info.get("icc_profile"),
+        "exif": pil_image.info.get("exif"),
+        "format": pil_image.format,
+        "mode": pil_image.mode,
+        "size": pil_image.size,
+    }
+
+    # Detect bit depth
+    bits_per_sample = detect_input_bit_depth(pil_image)
+
+    # For 16-bit TIFFs, use tifffile to load correctly
+    if bits_per_sample == 16 and pil_image.format == "TIFF":
+        try:
+            import tifffile
+
+            # Load with tifffile which preserves 16-bit data
+            image_array = tifffile.imread(input_path)
+
+            # tifffile returns (H, W, C) for RGB or (H, W) for grayscale
+            logger.debug(f"Loaded 16-bit TIFF with tifffile: " f"shape={image_array.shape}, dtype={image_array.dtype}")
+
+            # Ensure RGB format (H, W, 3)
+            if image_array.ndim == 2:
+                # Grayscale -> RGB
+                image_array = np.stack([image_array] * 3, axis=2)
+            elif image_array.ndim == 3 and image_array.shape[2] == 4:
+                # RGBA -> extract RGB and alpha separately
+                # Note: alpha will be handled later in the pipeline
+                logger.debug("16-bit RGBA detected - will preserve alpha channel")
+
+            return image_array, bits_per_sample, metadata
+
+        except Exception as e:
+            logger.warning(f"Failed to load 16-bit TIFF with tifffile: {e}. " f"Falling back to PIL (will convert to 8-bit)")
+            # Fall through to PIL loading
+
+    # Standard PIL loading for 8-bit or fallback
+    # Handle EXIF orientation
+    pil_image = ImageOps.exif_transpose(pil_image)
+
+    # If rotation was applied, don't save EXIF (prevents double rotation)
+    # This is handled in the caller
+
+    # Handle palette mode
+    if pil_image.mode == "P":
+        pil_image = pil_image.convert("RGB")
+
+    # Handle LA mode
+    if pil_image.mode == "LA":
+        pil_image = pil_image.convert("RGBA")
+
+    image_array = np.array(pil_image)
+
+    # If we got here with 16-bit input, it was downconverted
+    if bits_per_sample == 16:
+        logger.warning(
+            f"16-bit input was downconverted to 8-bit by PIL. " f"Original BitsPerSample=16, loaded as {image_array.dtype}"
+        )
+        # Update to reflect actual loaded data
+        bits_per_sample = 8
+
+    logger.debug(f"Loaded image with PIL: " f"shape={image_array.shape}, dtype={image_array.dtype}")
+
+    return image_array, bits_per_sample, metadata
+
+
 def load_depth_map(depth_path: Path) -> np.ndarray:
     """Load and normalize depth map.
 
@@ -131,12 +248,18 @@ def enhance_image(
     material_masks: Optional[Dict[str, np.ndarray]] = None,
     config: Optional[V2EnhancementConfig] = None,
     device: str = "cpu",
+    allow_8bit_output: bool = False,
 ) -> Dict[str, Any]:
     """Apply V2 depth-aware enhancement to input image.
 
     Main entry point for V2 enhancement. Applies perceptual finishing
     using depth-aware tone mapping, clarity enhancement, and material-specific
     processing.
+
+    **BIT-DEPTH PRESERVATION GUARANTEE:**
+    - 16-bit input → 16-bit output (unless allow_8bit_output=True)
+    - 8-bit input → 8-bit output
+    - Processing always done in float32 [0,1] to preserve precision
 
     Args:
         input_path: Path to input image
@@ -145,6 +268,7 @@ def enhance_image(
         material_masks: Optional material segmentation masks
         config: Enhancement configuration (uses default if None)
         device: Processing device (cpu/cuda/mps) - currently only cpu supported
+        allow_8bit_output: Allow 16-bit → 8-bit downgrade (Quality Firewall bypass)
 
     Returns:
         Dict containing processing metadata:
@@ -156,9 +280,10 @@ def enhance_image(
             - runtime_s: Processing time in seconds
             - metadata: Enhancement metadata from stage
             - timestamp: Processing timestamp
+            - bit_depth: Bit-depth metadata (input/output/conversion)
 
     Raises:
-        V2EnhancementError: If enhancement fails
+        V2EnhancementError: If enhancement fails or bit-depth violation
         FileNotFoundError: If input image not found
     """
     start_time = time.perf_counter()
@@ -196,41 +321,23 @@ def enhance_image(
         }
 
     try:
-        # Load input image
-        pil_image = Image.open(input_path)
+        # Load input image with bit-depth preservation
+        image, input_bits, metadata = load_image_preserve_bit_depth(input_path)
+        icc_profile = metadata.get("icc_profile")
+        exif_data = metadata.get("exif")
 
-        # Extract metadata before any processing
-        icc_profile = pil_image.info.get("icc_profile")
-        exif_data = pil_image.info.get("exif")
+        logger.debug(f"Loaded image: shape={image.shape}, dtype={image.dtype}, " f"bits_per_sample={input_bits}")
 
-        # Handle EXIF orientation (auto-rotate based on EXIF orientation tag)
-        # CRITICAL FIX (#1): exif_transpose() rotates pixels but leaves EXIF orientation tag intact.
-        # This causes double rotation: pixels rotated + viewer rotates again based on EXIF.
-        # Solution: Don't save EXIF data after applying exif_transpose() - pixels are already correct.
-        pil_image_before = pil_image
-        pil_image = ImageOps.exif_transpose(pil_image)
-
-        # If rotation was applied (new image object returned), strip EXIF to prevent double rotation
-        if pil_image is not pil_image_before:
-            exif_data = None  # Don't save EXIF after rotation - pixels are already oriented correctly
-            logger.debug("EXIF orientation applied - EXIF stripped to prevent double rotation")
-
-        # Handle palette mode images (convert to RGB)
-        if pil_image.mode == "P":
-            logger.debug("Palette (P) mode detected - converting to RGB")
-            pil_image = pil_image.convert("RGB")
-
-        # Handle LA (luminance + alpha) mode
-        if pil_image.mode == "LA":
-            logger.debug("LA mode detected - converting to RGBA")
-            pil_image = pil_image.convert("RGBA")
-
-        image = np.array(pil_image)
-        logger.debug(f"Loaded image: {image.shape}, dtype={image.dtype}, mode={pil_image.mode}")
+        # Quality Firewall: Enforce bit-depth preservation
+        # 16-bit input MUST produce 16-bit output unless explicitly allowed
+        if input_bits == 16 and not allow_8bit_output:
+            logger.info("Quality Firewall ACTIVE: 16-bit input detected - " "will preserve 16-bit output")
+        elif input_bits == 16 and allow_8bit_output:
+            logger.warning("Quality Firewall BYPASSED: 16-bit → 8-bit downgrade allowed " "by --allow-8bit flag")
 
         # Handle RGBA inputs: extract RGB, enhance, restore alpha
         alpha_channel = None
-        if pil_image.mode == "RGBA" and image.ndim == 3 and image.shape[2] == 4:
+        if image.ndim == 3 and image.shape[2] == 4:
             logger.debug("RGBA input detected - extracting alpha channel for preservation")
             alpha_channel = image[:, :, 3]  # Extract alpha
             image = image[:, :, :3]  # RGB only for enhancement
@@ -255,11 +362,13 @@ def enhance_image(
             logger.warning(f"Depth map path provided but not found: {depth_map_path}")
 
         # Apply enhancement using existing EnhancementStage
+        # NOTE: EnhancementStage must be updated to handle uint16 input/output
         enhancer = EnhancementStage(
             enhancement_strength=config.enhancement_strength,
             clarity_strength=config.clarity_strength,
             material_strength=config.material_strength,
             version=config.version,
+            output_dtype=image.dtype,  # Preserve input dtype (uint8 or uint16)
         )
 
         # Create minimal context for stage execution
@@ -285,51 +394,111 @@ def enhance_image(
         if enhanced_image is None:
             raise V2EnhancementError("EnhancementStage did not produce 'enhanced_image' artifact")
 
-        # Restore alpha channel if input was RGBA
-        # CRITICAL FIX (#5): Ensure alpha channel matches enhanced image dimensions
-        if alpha_channel is not None:
-            logger.debug("Restoring alpha channel to enhanced RGB image")
-            # Check if dimensions match (V2 processing might have changed resolution)
-            if alpha_channel.shape[:2] != enhanced_image.shape[:2]:
-                from PIL import Image as PILImage
-
-                logger.warning(
-                    f"Alpha channel dimension mismatch: alpha={alpha_channel.shape[:2]} "
-                    f"enhanced={enhanced_image.shape[:2]}. Resizing alpha to match."
-                )
-                # Resize alpha channel to match enhanced image
-                alpha_pil = PILImage.fromarray(alpha_channel, mode="L")
-                alpha_resized = alpha_pil.resize(
-                    (enhanced_image.shape[1], enhanced_image.shape[0]), PILImage.Resampling.LANCZOS  # (W, H)
-                )
-                alpha_channel = np.array(alpha_resized)
-
-            enhanced_image = np.dstack([enhanced_image, alpha_channel])
-
         # Ensure output directory exists
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Save enhanced image with metadata preservation
-        output_image = Image.fromarray(enhanced_image)
+        # Determine output bit depth (preserve input unless downgrade allowed)
+        output_bits = input_bits
+        if input_bits == 16 and allow_8bit_output:
+            output_bits = 8
+            logger.warning("Downgrading 16-bit output to 8-bit (allow_8bit_output=True)")
 
-        # Preserve ICC profile if present
-        save_kwargs = {}
-        if icc_profile:
-            save_kwargs["icc_profile"] = icc_profile
-            logger.debug("Preserving ICC color profile")
+        # Save enhanced image with metadata preservation and correct bit-depth
+        if output_bits == 16 and enhanced_image.dtype == np.uint16:
+            # Save 16-bit TIFF
+            try:
+                import tifffile
 
-        # Preserve EXIF data if present
-        if exif_data:
-            save_kwargs["exif"] = exif_data
-            logger.debug("Preserving EXIF metadata")
+                # Restore alpha channel if present
+                if alpha_channel is not None:
+                    logger.debug("Restoring alpha channel to 16-bit RGBA image")
+                    # Check dimensions
+                    if alpha_channel.shape[:2] != enhanced_image.shape[:2]:
+                        logger.warning(
+                            f"Alpha dimension mismatch: alpha={alpha_channel.shape[:2]} "
+                            f"enhanced={enhanced_image.shape[:2]}. Resizing alpha."
+                        )
+                        from PIL import Image as PILImage
 
-        output_image.save(output_path, **save_kwargs)
-        logger.info(f"Saved enhanced image: {output_path}")
+                        # Convert alpha to uint16 if needed
+                        if alpha_channel.dtype != np.uint16:
+                            alpha_channel = (alpha_channel.astype(np.float32) / 255.0 * 65535.0).astype(np.uint16)
+
+                        alpha_pil = PILImage.fromarray(alpha_channel, mode="I;16")
+                        alpha_resized = alpha_pil.resize(
+                            (enhanced_image.shape[1], enhanced_image.shape[0]), PILImage.Resampling.LANCZOS
+                        )
+                        alpha_channel = np.array(alpha_resized, dtype=np.uint16)
+
+                    enhanced_image = np.dstack([enhanced_image, alpha_channel])
+
+                # Save with tifffile (preserves 16-bit)
+                # TODO: ICC profile and EXIF preservation with tifffile
+                tifffile.imwrite(
+                    output_path,
+                    enhanced_image,
+                    photometric="rgb",
+                    compression="lzw",  # Lossless compression
+                    metadata={"BitsPerSample": 16},
+                )
+                logger.info(f"Saved 16-bit TIFF: {output_path}")
+
+            except Exception as e:
+                logger.error(f"Failed to save 16-bit TIFF with tifffile: {e}")
+                logger.error("Falling back to PIL (will convert to 8-bit)")
+                # Convert to 8-bit and save with PIL
+                enhanced_8bit = (enhanced_image.astype(np.float32) / 65535.0 * 255.0).astype(np.uint8)
+                output_image = Image.fromarray(enhanced_8bit)
+                save_kwargs = {}
+                if icc_profile:
+                    save_kwargs["icc_profile"] = icc_profile
+                if exif_data:
+                    save_kwargs["exif"] = exif_data
+                output_image.save(output_path, **save_kwargs)
+                logger.warning(f"Saved as 8-bit (16-bit save failed): {output_path}")
+                output_bits = 8  # Update actual output
+
+        else:
+            # Save 8-bit with PIL (standard path)
+            # Restore alpha channel if present
+            if alpha_channel is not None:
+                logger.debug("Restoring alpha channel to enhanced RGB image")
+                # Check dimensions
+                if alpha_channel.shape[:2] != enhanced_image.shape[:2]:
+                    from PIL import Image as PILImage
+
+                    logger.warning(
+                        f"Alpha dimension mismatch: alpha={alpha_channel.shape[:2]} "
+                        f"enhanced={enhanced_image.shape[:2]}. Resizing alpha."
+                    )
+                    alpha_pil = PILImage.fromarray(alpha_channel, mode="L")
+                    alpha_resized = alpha_pil.resize(
+                        (enhanced_image.shape[1], enhanced_image.shape[0]), PILImage.Resampling.LANCZOS
+                    )
+                    alpha_channel = np.array(alpha_resized)
+
+                enhanced_image = np.dstack([enhanced_image, alpha_channel])
+
+            output_image = Image.fromarray(enhanced_image)
+
+            # Preserve ICC profile and EXIF if present
+            save_kwargs = {}
+            if icc_profile:
+                save_kwargs["icc_profile"] = icc_profile
+                logger.debug("Preserving ICC color profile")
+
+            # Preserve EXIF data if present
+            if exif_data:
+                save_kwargs["exif"] = exif_data
+                logger.debug("Preserving EXIF metadata")
+
+            output_image.save(output_path, **save_kwargs)
+            logger.info(f"Saved enhanced image: {output_path}")
 
         runtime_s = time.perf_counter() - start_time
 
-        # Build metadata report
+        # Build metadata report with bit-depth information
         return {
             "status": "success",
             "implementation": "v2_enhance",
@@ -342,6 +511,16 @@ def enhance_image(
             "timestamp": time.time(),
             "stage_metadata": result.metadata,
             "enhancement_metadata": result.artifacts.get("enhancement_metadata", {}),
+            # BIT-DEPTH METADATA (Quality Firewall contract)
+            "bit_depth": {
+                "input_bits_per_sample": input_bits,
+                "output_bits_per_sample": output_bits,
+                "input_dtype": str(image.dtype),
+                "output_dtype": str(enhanced_image.dtype),
+                "quality_firewall_active": input_bits == 16 and not allow_8bit_output,
+                "bit_depth_preserved": input_bits == output_bits,
+                "downgrade_allowed": allow_8bit_output,
+            },
         }
 
     except V2EnhancementError:

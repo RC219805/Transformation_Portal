@@ -11,7 +11,7 @@ Applies material-aware enhancements including:
 from __future__ import annotations
 
 import hashlib
-from typing import Dict
+from typing import Dict, Optional
 
 import numpy as np
 
@@ -31,6 +31,7 @@ class EnhancementStage(Stage):
         clarity_strength: float = 0.5,
         material_strength: float = 0.6,
         version: str = "1.0.0",
+        output_dtype: Optional[np.dtype] = None,
     ):
         """
         Initialize enhancement stage.
@@ -40,11 +41,13 @@ class EnhancementStage(Stage):
             clarity_strength: Clarity enhancement strength [0, 1]
             material_strength: Material enhancement strength [0, 1]
             version: Stage version for cache invalidation
+            output_dtype: Output dtype (np.uint8 or np.uint16). If None, defaults to uint8.
         """
         super().__init__(name="enhancement", version=version)
         self.enhancement_strength = enhancement_strength
         self.clarity_strength = clarity_strength
         self.material_strength = material_strength
+        self.output_dtype = output_dtype if output_dtype is not None else np.dtype("uint8")
 
     def get_dependencies(self) -> list:
         """Depends on depth and materials for best results."""
@@ -152,19 +155,24 @@ class EnhancementStage(Stage):
         Apply material-aware enhancements.
 
         Args:
-            image: Input image (H, W, 3)
+            image: Input image (H, W, 3) - uint8 or uint16
             depth_map: Optional depth map (H, W)
             material_masks: Dict of material masks
 
         Returns:
-            Enhanced image (H, W, 3)
+            Enhanced image (H, W, 3) - same dtype as input (controlled by output_dtype)
         """
-        # Start with input
+        # Detect input range for normalization
+        input_dtype = image.dtype
+        is_16bit = input_dtype == np.uint16
+        max_value = 65535.0 if is_16bit else 255.0
+
+        # Start with input - convert to float32 [0, 1] for processing
         enhanced = image.copy().astype(np.float32)
 
-        # Normalize to [0, 1] if needed
+        # Normalize to [0, 1] preserving precision
         if enhanced.max() > 1.0:
-            enhanced = enhanced / 255.0
+            enhanced = enhanced / max_value
 
         # Apply global tone mapping
         enhanced = self._apply_tone_mapping(enhanced, depth_map)
@@ -177,32 +185,88 @@ class EnhancementStage(Stage):
         if material_masks and self.material_strength > 0:
             enhanced = self._apply_material_enhancements(enhanced, material_masks, self.material_strength)
 
-        # Convert back to uint8
-        enhanced = np.clip(enhanced * 255, 0, 255).astype(np.uint8)
+        # Convert back to original dtype (uint8 or uint16)
+        # Use output_dtype if specified, otherwise match input
+        target_dtype = self.output_dtype if hasattr(self, "output_dtype") else input_dtype
+
+        if target_dtype == np.uint16:
+            # 16-bit output
+            enhanced = np.clip(enhanced * 65535.0, 0, 65535).astype(np.uint16)
+        else:
+            # 8-bit output (default)
+            enhanced = np.clip(enhanced * 255.0, 0, 255).astype(np.uint8)
 
         return enhanced
 
     def _apply_tone_mapping(self, image: np.ndarray, depth_map: np.ndarray | None) -> np.ndarray:
-        """Apply depth-aware tone mapping."""
+        """Apply depth-aware tone mapping.
+
+        CRITICAL: Depth maps from Depth Pro use INVERSE DEPTH representation:
+        - HIGH depth values = FAR objects (sky, distant background)
+        - LOW depth values = NEAR objects (foreground architecture, people)
+
+        After p01-p99 normalization to [0,1]:
+        - Distribution is heavily skewed toward low values (median ~0.18-0.25)
+        - Far objects (sky) are typically 0.4-1.0
+        - Near objects (architecture) are typically 0.0-0.2
+
+        For luxury real estate:
+        - NEAR objects (LOW depth) should be enhanced (boosted)
+        - FAR objects (HIGH depth) should be subtle (compressed)
+
+        Uses adaptive depth-based adjustment centered on actual data distribution.
+        """
         if depth_map is None or self.enhancement_strength == 0:
             return image
 
-        # Simple zone-based tone mapping
-        # Foreground: slight boost
-        # Background: slight compression
+        # Adaptive depth-based tone mapping
+        # Use percentiles to adapt to actual depth distribution
+        depth_median = float(np.median(depth_map))
+        depth_p75 = float(np.percentile(depth_map, 75))
 
-        foreground = depth_map > 0.7
-        background = depth_map < 0.3
+        # Center the adjustment curve at the 75th percentile
+        # This ensures that most architectural elements (< p75) get boosted
+        # and distant elements (> p75) get compressed
+        center_point = depth_p75
 
-        result = image.copy()
+        # Normalize depth relative to center point
+        # depth < center → negative (boost)
+        # depth > center → positive (compress)
+        depth_normalized = (depth_map - center_point) / (1.0 - center_point + 1e-6)
+        depth_normalized = np.clip(depth_normalized, -1.0, 1.0)
 
-        # Boost foreground
-        fg_boost = 1.0 + (0.15 * self.enhancement_strength)
-        result[foreground] = result[foreground] * fg_boost
+        # Apply smooth sigmoid for gradual transition
+        depth_factor = np.tanh(depth_normalized * 2.0)  # Sharper curve
 
-        # Compress background slightly
-        bg_compress = 1.0 - (0.1 * self.enhancement_strength)
-        result[background] = result[background] * bg_compress
+        # Calculate adjustment factor
+        # depth_factor = -1 (near) → adjustment = 1.12 (boost)
+        # depth_factor = 0 (mid) → adjustment = 1.0 (neutral)
+        # depth_factor = +1 (far) → adjustment = 0.92 (compress)
+        max_boost = 0.12 * self.enhancement_strength
+        max_compress = -0.08 * self.enhancement_strength
+
+        # Map depth_factor [-1, +1] to adjustment [1+max_compress, 1+max_boost]
+        # depth_factor = -1 (near) → adjustment = 1 + max_boost (boost)
+        # depth_factor = 0 (mid) → adjustment = 1.0 (neutral)
+        # depth_factor = +1 (far) → adjustment = 1 + max_compress (compress)
+        if depth_factor.ndim == 0:  # Scalar
+            if depth_factor < 0:
+                # Near objects: boost
+                adjustment = 1.0 - depth_factor * max_boost
+            else:
+                # Far objects: compress
+                adjustment = 1.0 - depth_factor * abs(max_compress)
+        else:  # Array
+            adjustment = np.ones_like(depth_factor)
+            near_mask = depth_factor < 0
+            far_mask = depth_factor >= 0
+            adjustment[near_mask] = 1.0 - depth_factor[near_mask] * max_boost
+            adjustment[far_mask] = 1.0 - depth_factor[far_mask] * abs(max_compress)
+
+        adjustment = np.clip(adjustment, 1.0 + max_compress, 1.0 + max_boost)
+
+        # Apply adjustment (broadcast to RGB)
+        result = image * adjustment[:, :, np.newaxis]
 
         return np.clip(result, 0, 1)
 
