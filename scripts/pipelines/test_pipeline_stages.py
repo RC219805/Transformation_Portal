@@ -2,17 +2,33 @@
 """
 Test each pipeline stage to find where blue cast is introduced.
 """
+import sys
+from pathlib import Path
+
 import numpy as np
 import tifffile
 from PIL import Image
+
+# Repository-scoped paths for fixtures
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+FIXTURE_PATH = REPO_ROOT / "tests" / "fixtures" / "pipelines" / "750_picacho_lane" / "input"
 
 print("=" * 80)
 print("PIPELINE STAGE-BY-STAGE COLOR TRACKING")
 print("=" * 80)
 
 # Load source
-print("\nLoading source image...")
-source = tifffile.imread("projects/750_picacho_lane/Final_Production_UltraQuality/750Picacho_Pool_UltraQuality.tif")
+test_image_path = FIXTURE_PATH / "750Picacho_Pool_UltraQuality.tif"
+print(f"\nLoading source image: {test_image_path}")
+
+if not test_image_path.exists():
+    print(f"\n❌ ERROR: Test fixture not found: {test_image_path}")
+    print("\nTo create fixtures, run:")
+    print("  python scripts/utilities/create_test_fixtures.py")
+    print("\nSee tests/fixtures/pipelines/README.md for details.")
+    sys.exit(1)
+
+source = tifffile.imread(test_image_path)
 image_linear = source.astype(np.float32) / 65535.0
 
 

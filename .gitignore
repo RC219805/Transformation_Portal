@@ -96,6 +96,8 @@ test_artifacts/
 # Large image files (exclude binary outputs)
 *.tif
 *.tiff
+!tests/fixtures/pipelines/**/*.tif
+!tests/fixtures/pipelines/**/*.tiff
 !input_images/.gitkeep
 !data/sample_images/.gitkeep
 
