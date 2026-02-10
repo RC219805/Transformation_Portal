@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from .raw_loader import RAW_EXTENSIONS
 
@@ -65,13 +65,16 @@ class DiscoveryConfig:
     strict_mode: bool = False  # Fail on excluded files if True
 
 
-def discover_images(input_dir: Path, config: DiscoveryConfig, image_extensions: List[str] | None = None) -> List[Path]:
+def discover_images(
+    input_dir: Path, config: DiscoveryConfig, image_extensions: List[str] | None = None, output_dir: Optional[Path] = None
+) -> List[Path]:
     """Discover valid RGB input images while excluding depth artifacts and outputs.
 
     Args:
         input_dir: Directory to scan for images (recursive).
         config: Discovery configuration with exclusion patterns.
         image_extensions: File extensions to include (default: standard + RAW formats).
+        output_dir: Output directory to explicitly exclude (if subdirectory of input_dir).
 
     Returns:
         List of valid image paths to process.
@@ -81,7 +84,7 @@ def discover_images(input_dir: Path, config: DiscoveryConfig, image_extensions: 
 
     Example:
         >>> config = DiscoveryConfig(strict_mode=False)
-        >>> images = discover_images(Path("./input"), config)
+        >>> images = discover_images(Path("./input"), config, output_dir=Path("./input/output"))
         INFO: Discovered 17 images, excluded 3 artifacts
     """
     if image_extensions is None:
@@ -95,6 +98,15 @@ def discover_images(input_dir: Path, config: DiscoveryConfig, image_extensions: 
     logger.debug(f"Exclude path patterns: {config.exclude_path_patterns}")
     logger.debug(f"Exclude stem suffixes: {config.exclude_stem_suffixes}")
 
+    # ROBUSTNESS FIX (#6): Explicitly exclude output directory if it's a subdirectory of input
+    output_dir_normalized = None
+    if output_dir:
+        try:
+            output_dir_normalized = output_dir.resolve().as_posix().lower()
+            logger.debug(f"Output directory to exclude: {output_dir_normalized}")
+        except Exception as e:
+            logger.warning(f"Failed to normalize output_dir: {e}")
+
     # Normalize extensions to lowercase set for O(1) lookup
     allowed_exts = {ext.lower() for ext in image_extensions}
 
@@ -105,6 +117,18 @@ def discover_images(input_dir: Path, config: DiscoveryConfig, image_extensions: 
     for candidate in input_dir.rglob("*"):
         if not candidate.is_file():
             continue
+
+        # CRITICAL FIX (#6): Check if file is in output directory before other checks
+        if output_dir_normalized:
+            try:
+                candidate_normalized = candidate.resolve().as_posix().lower()
+                if candidate_normalized.startswith(output_dir_normalized):
+                    reason = "in output directory"
+                    excluded_artifacts.append((candidate, reason))
+                    logger.debug(f"Skipped artifact: {candidate.name} (matched: {reason})")
+                    continue
+            except Exception as e:
+                logger.debug(f"Failed to check output dir for {candidate}: {e}")
 
         # Check extension (case-insensitive)
         if candidate.suffix.lower() not in allowed_exts:

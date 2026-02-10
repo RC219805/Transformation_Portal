@@ -48,16 +48,21 @@ def detect_runtime_outliers(
     runtime_s: float,
     runtimes: List[float],
     threshold_multiplier: float = 5.0,
+    median: Optional[float] = None,
 ) -> Optional[Tuple[str, Dict[str, Any]]]:
     """Detect if an image runtime is an outlier compared to batch median.
 
     Logs a warning if runtime exceeds threshold_multiplier × median.
 
+    PERFORMANCE FIX (#3): Accept pre-computed median to avoid O(n²) complexity.
+    Caller should compute stats once and pass median for all outlier checks.
+
     Args:
         image_name: Name of the image being processed
         runtime_s: Runtime for this specific image
-        runtimes: List of all runtimes in the batch (for median calculation)
+        runtimes: List of all runtimes in the batch (for median calculation if needed)
         threshold_multiplier: Multiplier for outlier threshold (default: 5.0x)
+        median: Pre-computed median runtime (optional, computed if None)
 
     Returns:
         Tuple of (warning_message, outlier_metadata) if outlier detected, None otherwise
@@ -65,8 +70,10 @@ def detect_runtime_outliers(
     if not runtimes or len(runtimes) < 2:
         return None  # Need at least 2 samples for meaningful comparison
 
-    stats = compute_batch_runtime_stats(runtimes)
-    median = stats["median"]
+    # Use pre-computed median if provided, otherwise compute (for backward compatibility)
+    if median is None:
+        stats = compute_batch_runtime_stats(runtimes)
+        median = stats["median"]
 
     if median == 0:
         return None  # Avoid division by zero

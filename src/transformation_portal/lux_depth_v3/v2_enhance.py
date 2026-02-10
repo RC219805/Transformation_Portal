@@ -204,7 +204,16 @@ def enhance_image(
         exif_data = pil_image.info.get("exif")
 
         # Handle EXIF orientation (auto-rotate based on EXIF orientation tag)
+        # CRITICAL FIX (#1): exif_transpose() rotates pixels but leaves EXIF orientation tag intact.
+        # This causes double rotation: pixels rotated + viewer rotates again based on EXIF.
+        # Solution: Don't save EXIF data after applying exif_transpose() - pixels are already correct.
+        pil_image_before = pil_image
         pil_image = ImageOps.exif_transpose(pil_image)
+
+        # If rotation was applied (new image object returned), strip EXIF to prevent double rotation
+        if pil_image is not pil_image_before:
+            exif_data = None  # Don't save EXIF after rotation - pixels are already oriented correctly
+            logger.debug("EXIF orientation applied - EXIF stripped to prevent double rotation")
 
         # Handle palette mode images (convert to RGB)
         if pil_image.mode == "P":
@@ -277,8 +286,24 @@ def enhance_image(
             raise V2EnhancementError("EnhancementStage did not produce 'enhanced_image' artifact")
 
         # Restore alpha channel if input was RGBA
+        # CRITICAL FIX (#5): Ensure alpha channel matches enhanced image dimensions
         if alpha_channel is not None:
             logger.debug("Restoring alpha channel to enhanced RGB image")
+            # Check if dimensions match (V2 processing might have changed resolution)
+            if alpha_channel.shape[:2] != enhanced_image.shape[:2]:
+                from PIL import Image as PILImage
+
+                logger.warning(
+                    f"Alpha channel dimension mismatch: alpha={alpha_channel.shape[:2]} "
+                    f"enhanced={enhanced_image.shape[:2]}. Resizing alpha to match."
+                )
+                # Resize alpha channel to match enhanced image
+                alpha_pil = PILImage.fromarray(alpha_channel, mode="L")
+                alpha_resized = alpha_pil.resize(
+                    (enhanced_image.shape[1], enhanced_image.shape[0]), PILImage.Resampling.LANCZOS  # (W, H)
+                )
+                alpha_channel = np.array(alpha_resized)
+
             enhanced_image = np.dstack([enhanced_image, alpha_channel])
 
         # Ensure output directory exists
