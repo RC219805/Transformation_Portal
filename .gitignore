@@ -225,7 +225,8 @@ archive/*.png
 venv_py311/
 
 # Projects directory (client-specific production files - not for version control)
-projects/
+# Ignore contents but keep directory structure
+projects/*
 !projects/.gitkeep
 
 # Binary executables (install via CI/package managers)
