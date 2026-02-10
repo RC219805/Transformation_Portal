@@ -1,0 +1,65 @@
+{
+  "exif": {
+    "all_tags": {
+      "EXIF:Make": "Canon",
+      "File:FileType": "CR2"
+    },
+    "aperture": null,
+    "bit_depth": null,
+    "camera_make": "Canon",
+    "camera_model": "EOS 5D Mark IV",
+    "color_space": null,
+    "datetime_original": null,
+    "focal_length": null,
+    "gps_latitude": null,
+    "gps_longitude": null,
+    "height": 4480,
+    "iso": 400,
+    "lens_model": null,
+    "shutter_speed": null,
+    "white_balance": null,
+    "width": 6720
+  },
+  "file_integrity": {
+    "mime_type": "image/x-canon-cr2",
+    "path": "/input/test.cr2",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "size_bytes": 1024000
+  },
+  "git_commit": "1234567890abcdef1234567890abcdef12345678",
+  "host": {
+    "arch": "x86_64",
+    "hostname": "test-host",
+    "os": "Linux",
+    "os_version": "5.10.0",
+    "python_version": "3.11.7"
+  },
+  "pipeline_config": {
+    "cli_args": [
+      "--preset",
+      "luxury"
+    ],
+    "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "custom_params": null,
+    "preset": "luxury"
+  },
+  "run_id": "550e8400-e29b-41d4-a716-446655440000",
+  "schema_version": "1.0.0",
+  "timestamps": {
+    "exiftool_extract_duration_sec": 2.3,
+    "ingest_end": "2026-02-10T12:05:00+00:00",
+    "ingest_start": "2026-02-10T12:00:00+00:00"
+  },
+  "toolchain": [
+    {
+      "name": "exiftool",
+      "path": null,
+      "version": "12.50"
+    },
+    {
+      "name": "python",
+      "path": "/usr/bin/python",
+      "version": "3.11.7"
+    }
+  ]
+}
