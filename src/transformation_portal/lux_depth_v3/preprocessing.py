@@ -320,7 +320,7 @@ def preprocess_image_linear(
         >>> img, orig_shape = preprocess_image_linear("photo.jpg", apex_strict_formats=False)
         >>> # Allowed but may violate linear-light preservation
     """
-    from .linear_verify import verify_linear_ingest
+    from .linear_verify import DtypeViolationError, LinearityViolationError, RangeViolationError, verify_linear_ingest
     from .raw_loader import load_raw_as_rgb
 
     # Load image preserving bit depth and linearity
@@ -332,10 +332,13 @@ def preprocess_image_linear(
         # RAW files are inherently linear (sensor data).
         # TIFF files preserve bit depth and can carry linear data.
         # JPEG/PNG are display-referred and typically gamma-encoded.
-        if apex_strict_formats and (not is_raw_file(image_path)) and (image_path.suffix.lower() not in {".tif", ".tiff"}):
+        ext = image_path.suffix.lower()
+        is_tiff = ext in {".tif", ".tiff"}
+
+        if apex_strict_formats and (not is_raw_file(image_path)) and (not is_tiff):
             raise ValueError(
                 f"APEX linear ingest only supports RAW + TIFF inputs. "
-                f"Got: {image_path.suffix.lower()}.\n"
+                f"Got: {ext or '<no extension>'}.\n"
                 "Reason: JPEG/PNG are typically gamma-encoded (display-referred), "
                 "violating linear-light preservation requirements.\n"
                 "Use preprocess_image() for JPEG/PNG, or explicitly set "
@@ -426,6 +429,9 @@ def preprocess_image_linear(
         try:
             verify_linear_ingest(img_array)
             logger.debug("Linear ingest verification passed")
+        except (DtypeViolationError, RangeViolationError, LinearityViolationError):
+            # Let typed exceptions propagate for downstream orchestration
+            raise
         except Exception as e:
             raise ValueError(
                 f"Linear ingest verification failed: {e}\n"

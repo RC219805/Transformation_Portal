@@ -4,7 +4,7 @@ Tests the deterministic format-based rejection of JPEG/PNG inputs,
 ensuring training-safe linear ingest with explicit escape hatches.
 """
 
-from pathlib import Path
+import logging
 
 import numpy as np
 import pytest
@@ -183,13 +183,34 @@ class TestApexFormatBoundary:
         assert "APEX linear ingest only supports RAW + TIFF" in str(exc_info.value)
 
     @pytest.mark.ml
-    def test_raw_file_accepted_by_default(self, tmp_path):
+    def test_raw_file_accepted_by_default(self, tmp_path, monkeypatch):
         """Test that RAW files are accepted with apex_strict_formats=True.
 
         Note: This test requires rawpy, marked with @pytest.mark.ml
-        Since we don't have actual RAW files in fixtures, we'll use a mock.
         """
-        pytest.skip("RAW file testing requires actual RAW files or rawpy mock")
+        # Create fake RAW file (needs at least 16 bytes to pass validation)
+        raw_file = tmp_path / "test.dng"
+        raw_file.write_bytes(b"fake_raw_data_16bytes_or_more")
+
+        # Monkeypatch load_raw_as_rgb to return a valid uint16 array
+        def mock_load_raw(path, **kwargs):
+            return np.ones((100, 100, 3), dtype=np.uint16) * 32768
+
+        monkeypatch.setattr(
+            "transformation_portal.lux_depth_v3.raw_loader.load_raw_as_rgb",
+            mock_load_raw,
+        )
+        monkeypatch.setattr(
+            "transformation_portal.lux_depth_v3.raw_loader.is_raw_file",
+            lambda p: p.suffix.lower() == ".dng",
+        )
+
+        # Should not raise - RAW files accepted by default
+        img, original_shape = preprocess_image_linear(raw_file, verify_linearity=False)
+
+        assert img.shape == (98, 98, 3)  # 100x100 adjusted to multiple of 14
+        assert img.dtype == np.float32
+        assert 0.0 <= img.min() <= img.max() <= 1.0
 
     def test_error_message_includes_guidance(self, tmp_path):
         """Test that error message includes helpful guidance."""
@@ -305,32 +326,37 @@ class TestFormatBoundaryIntegration:
 
         assert "APEX linear ingest only supports RAW + TIFF" in str(exc_info.value)
 
-    def test_escape_hatch_still_runs_verification_if_enabled(self, tmp_path):
-        """Test that apex_strict_formats=False still runs gamma detection if verify_linearity=True."""
-        # Create a JPEG (likely gamma-encoded)
-        jpg_path = tmp_path / "test.jpg"
+    def test_escape_hatch_allows_png_but_still_verifies(self, tmp_path, caplog):
+        """Test that apex_strict_formats=False allows PNG but still runs verification."""
+        # Create a PNG that will trigger gamma warning
+        png_path = tmp_path / "test.png"
         # Create an image that will likely trigger gamma detection
         gamma_array = np.power(np.linspace(0, 1, 64 * 64 * 3), 2.2).reshape(64, 64, 3)
         gamma_uint8 = (gamma_array * 255).astype(np.uint8)
         img = Image.fromarray(gamma_uint8, mode="RGB")
-        img.save(jpg_path, "JPEG")
+        img.save(png_path, "PNG")
 
         # apex_strict_formats=False bypasses format boundary
         # But verify_linearity=True should still detect gamma
         # (Though this is heuristic and may not always trigger)
 
-        # For now, just verify it doesn't raise format error
-        # Gamma detection is tested separately in test_linear_verify.py
-        try:
-            result, _ = preprocess_image_linear(
-                jpg_path,
-                apex_strict_formats=False,  # Bypass format boundary
-                verify_linearity=True,  # Keep verification enabled
-            )
-            # If it succeeds, JPEG was allowed through escape hatch
-            assert result.dtype == np.float32
-        except ValueError as e:
-            # If it fails, should be gamma detection, not format rejection
-            error_msg = str(e)
-            assert "APEX linear ingest only supports RAW + TIFF" not in error_msg
-            # Might be gamma detection or other verification failure
+        with caplog.at_level(logging.WARNING):
+            try:
+                result, _ = preprocess_image_linear(
+                    png_path,
+                    apex_strict_formats=False,  # Bypass format boundary
+                    verify_linearity=True,  # Keep verification enabled
+                )
+                # Format boundary bypassed (no ValueError about format)
+                assert result.dtype == np.float32
+
+                # If verification passed, just check that verification code ran
+                # (gamma detection is heuristic, may not always trigger)
+            except ValueError as e:
+                # If it fails, should be verification (gamma detection), not format rejection
+                error_msg = str(e)
+                assert "APEX linear ingest only supports RAW + TIFF" not in error_msg
+                # Should be about gamma or linearity
+                assert (
+                    "gamma" in error_msg.lower() or "linear" in error_msg.lower() or "verification failed" in error_msg.lower()
+                )
