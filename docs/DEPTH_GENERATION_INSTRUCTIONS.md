@@ -189,8 +189,10 @@ python scripts/enhance_image.py \
 **Output format:** 16-bit PNG (single channel, grayscale)
 
 **Value range:**
-- 0 = far (background)
-- 65535 = near (foreground)
+- 0 = near (foreground, closest objects)
+- 65535 = far (background, farthest objects)
+- Normalized internally to [0.0, 1.0] for processing (after p01-p99 clipping)
+- Higher normalized depth values represent greater distance
 
 **Normalized internally to [0.0, 1.0] for processing.**
 

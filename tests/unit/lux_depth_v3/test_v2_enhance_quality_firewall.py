@@ -59,6 +59,7 @@ class TestQualityFirewallLoad:
 
     def test_tifffile_load_failure_blocks_when_firewall_active(self, temp_16bit_tiff, tmp_path):
         """tifffile load failure raises when input is 16-bit and --allow-8bit not set."""
+        pytest.importorskip("tifffile")
         # Patch tifffile where it's imported (locally in the function)
         with patch("tifffile.imread") as mock_imread:
             mock_imread.side_effect = RuntimeError("Mock tifffile load failure")
@@ -73,6 +74,7 @@ class TestQualityFirewallLoad:
 
     def test_tifffile_load_failure_allowed_with_flag(self, temp_16bit_tiff, tmp_path):
         """tifffile load failure falls back to PIL when --allow-8bit is set."""
+        pytest.importorskip("tifffile")
         # Patch tifffile where it's imported
         with patch("tifffile.imread") as mock_imread:
             mock_imread.side_effect = RuntimeError("Mock tifffile load failure")

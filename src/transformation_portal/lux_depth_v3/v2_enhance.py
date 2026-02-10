@@ -133,22 +133,31 @@ def load_image_preserve_bit_depth(input_path: Path, allow_8bit_output: bool = Fa
         V2EnhancementError: If Quality Firewall blocks downconversion
     """
     # First, open with PIL to check format and extract metadata
-    pil_image = Image.open(input_path)
+    with Image.open(input_path) as pil_image:
+        # Extract metadata before any processing
+        metadata = {
+            "icc_profile": pil_image.info.get("icc_profile"),
+            "exif": pil_image.info.get("exif"),
+            "format": pil_image.format,
+            "mode": pil_image.mode,
+            "size": pil_image.size,
+        }
 
-    # Extract metadata before any processing
-    metadata = {
-        "icc_profile": pil_image.info.get("icc_profile"),
-        "exif": pil_image.info.get("exif"),
-        "format": pil_image.format,
-        "mode": pil_image.mode,
-        "size": pil_image.size,
-    }
+        # Detect bit depth FIRST (before any loading)
+        detected_input_bits = detect_input_bit_depth(pil_image)
+        image_format = pil_image.format
 
-    # Detect bit depth FIRST (before any loading)
-    detected_input_bits = detect_input_bit_depth(pil_image)
+        # Extract EXIF orientation for tifffile path (needed later)
+        exif_orientation = None
+        try:
+            if hasattr(pil_image, "getexif"):
+                exif = pil_image.getexif()
+                exif_orientation = exif.get(0x0112)  # Orientation tag
+        except Exception as e:
+            logger.debug(f"Could not extract EXIF orientation: {e}")
 
     # For 16-bit TIFFs, use tifffile to load correctly
-    if detected_input_bits == 16 and pil_image.format == "TIFF":
+    if detected_input_bits == 16 and image_format == "TIFF":
         try:
             import tifffile
 
@@ -160,24 +169,17 @@ def load_image_preserve_bit_depth(input_path: Path, allow_8bit_output: bool = Fa
 
             # Handle EXIF orientation for tifffile path
             # tifffile doesn't apply EXIF orientation automatically
-            try:
-                if hasattr(pil_image, "getexif"):
-                    exif = pil_image.getexif()
-                    orientation = exif.get(0x0112)  # Orientation tag
+            if exif_orientation and exif_orientation != 1:
+                # Apply rotation to numpy array
+                if exif_orientation == 3:
+                    image_array = np.rot90(image_array, 2)
+                elif exif_orientation == 6:
+                    image_array = np.rot90(image_array, -1)
+                elif exif_orientation == 8:
+                    image_array = np.rot90(image_array, 1)
+                # orientations 2, 4, 5, 7 involve flips (rare, skip for now)
 
-                    if orientation and orientation != 1:
-                        # Apply rotation to numpy array
-                        if orientation == 3:
-                            image_array = np.rot90(image_array, 2)
-                        elif orientation == 6:
-                            image_array = np.rot90(image_array, -1)
-                        elif orientation == 8:
-                            image_array = np.rot90(image_array, 1)
-                        # orientations 2, 4, 5, 7 involve flips (rare, skip for now)
-
-                        logger.info(f"Applied EXIF orientation {orientation} to 16-bit TIFF")
-            except Exception as e:
-                logger.warning(f"Could not process EXIF orientation for tifffile: {e}")
+                logger.info(f"Applied EXIF orientation {exif_orientation} to 16-bit TIFF")
 
             # Ensure RGB format (H, W, 3)
             if image_array.ndim == 2:
@@ -203,21 +205,33 @@ def load_image_preserve_bit_depth(input_path: Path, allow_8bit_output: bool = Fa
             # Fall through to PIL loading
 
     # Standard PIL loading for 8-bit or fallback
-    # Handle EXIF orientation
-    pil_image = ImageOps.exif_transpose(pil_image)
+    with Image.open(input_path) as pil_image:
+        # Handle EXIF orientation
+        pil_image = ImageOps.exif_transpose(pil_image)
 
-    # If rotation was applied, don't save EXIF (prevents double rotation)
-    # This is handled in the caller
+        # After applying exif_transpose, normalize EXIF to avoid double-rotation:
+        # - pixels have been rotated already
+        # - EXIF Orientation must not request additional rotation in viewers
+        try:
+            exif = pil_image.getexif()
+        except Exception:
+            exif = None
 
-    # Handle palette mode
-    if pil_image.mode == "P":
-        pil_image = pil_image.convert("RGB")
+        if exif:
+            # Pillow typically normalizes orientation to 1 after transpose
+            metadata["exif"] = exif.tobytes()
+        else:
+            metadata["exif"] = None
 
-    # Handle LA mode
-    if pil_image.mode == "LA":
-        pil_image = pil_image.convert("RGBA")
+        # Handle palette mode
+        if pil_image.mode == "P":
+            pil_image = pil_image.convert("RGB")
 
-    image_array = np.array(pil_image)
+        # Handle LA mode
+        if pil_image.mode == "LA":
+            pil_image = pil_image.convert("RGBA")
+
+        image_array = np.array(pil_image)
 
     # Track actual loaded bits
     actual_bits = detected_input_bits
@@ -486,7 +500,6 @@ def enhance_image(
                     enhanced_image,
                     photometric="rgb",
                     compression="lzw",  # Lossless compression
-                    metadata={"BitsPerSample": 16},
                 )
                 logger.info(f"Saved 16-bit TIFF: {output_path}")
 

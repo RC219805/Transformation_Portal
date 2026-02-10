@@ -25,8 +25,10 @@ def main():
     # Ensure output directory exists
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
-    # Build command for depth_pro_export.py
-    cmd = [sys.executable, "scripts/depth_pro_export.py", str(args.input)]
+    # Build command for depth_pro_export.py (resolve path to be CWD-independent)
+    script_dir = Path(__file__).resolve().parent
+    export_script = script_dir / "depth_pro_export.py"
+    cmd = [sys.executable, str(export_script), str(args.input)]
 
     # Add device flag
     if args.device.lower() == "cpu":
