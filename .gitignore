@@ -248,3 +248,13 @@ Archive.zip
 tests.zip
 extracted_context/
 docs/api/_build/
+
+# Local automation helpers
+.execute_fix.sh
+.temp_fix_pr.py
+
+# Local debug artifacts
+debug_after_white_balance.jpg
+
+# Local RAW test inputs (never commit)
+input_images/Richard-Raw-Test/
