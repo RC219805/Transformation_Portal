@@ -63,6 +63,15 @@ class DepthBackendRegistry:
         except ImportError:
             logger.debug("DepthProBackend not available (missing dependencies)")
 
+        # Synthetic backend is always available (no ML dependencies)
+        try:
+            from .synthetic import SyntheticDepthBackend
+
+            if "synthetic" not in self._backends:
+                self._backends["synthetic"] = SyntheticDepthBackend
+        except ImportError:
+            logger.debug("SyntheticDepthBackend not available (unexpected)")
+
     @classmethod
     def register_backend(cls, backend_class: Type[DepthBackend]) -> None:
         """Register a depth backend class.
