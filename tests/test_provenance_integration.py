@@ -11,9 +11,11 @@ import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pytest
 
-from transformation_portal.lux_depth_v3.config import DA3Config, EnhanceConfig, ModelVariant
+from transformation_portal.depth.backends.protocol import DepthResult
+from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 from transformation_portal.lux_depth_v3.provenance import PROVENANCE_SCHEMA_VERSION
@@ -77,28 +79,40 @@ class TestProvenanceIntegration:
         # Create ImageInput
         image_input = ImageInput(path=fixture_path)
 
+        # Create real numpy arrays for depth backend mock (avoid shape errors)
+        fake_depth = np.ones((100, 100), dtype=np.float32)
+        fake_img = np.zeros((100, 100, 3), dtype=np.uint8)
+        fake_result = DepthResult(
+            depth_map=fake_depth,
+            original_image=fake_img,
+            metadata={"cached": False},
+        )
+
+        # Create a proper mock backend with required attributes
+        mock_backend = MagicMock()
+        mock_backend.compute.return_value = fake_result
+        mock_backend.name = "test_backend"
+        mock_backend.license_type = MagicMock(value="commercial")
+
         # Process image (this should trigger provenance capture)
         # Mock the depth backend to avoid ML dependencies
-        with patch.object(
-            orchestrator_with_provenance,
-            "depth_backend",
-            MagicMock(
-                name="synthetic",
-                compute=MagicMock(
-                    return_value=MagicMock(
-                        depth_map=MagicMock(shape=(100, 100)),
-                        depth=MagicMock(shape=(100, 100)),
-                        metadata={"cached": False},
-                    )
-                ),
-            ),
-        ):
-            try:
-                result = orchestrator_with_provenance.enhance_image(image_input)
-            except Exception as e:
-                # We expect this might fail due to synthetic backend,
-                # but provenance should still be captured
-                pytest.fail(f"Unexpected error during processing: {e}")
+        # Also patch preprocessing to avoid huge TIFF resize
+        with patch("transformation_portal.lux_depth_v3.preprocessing.preprocess_image") as mock_pre:
+            mock_pre.return_value = (
+                np.zeros((100, 100, 3), dtype=np.float32),
+                (100, 100),
+            )
+            with patch.object(
+                orchestrator_with_provenance,
+                "depth_backend",
+                mock_backend,
+            ):
+                try:
+                    result = orchestrator_with_provenance.enhance_image(image_input)
+                except Exception as e:
+                    # We expect this might fail due to synthetic backend,
+                    # but provenance should still be captured
+                    pytest.fail(f"Unexpected error during processing: {e}")
 
         # Verify provenance sidecar was created
         manifests_dir = orchestrator_with_provenance.manifests_dir
@@ -149,32 +163,43 @@ class TestProvenanceIntegration:
         # Create ImageInput
         image_input = ImageInput(path=fixture_path)
 
+        # Create real numpy arrays for depth backend mock
+        fake_depth = np.ones((100, 100), dtype=np.float32)
+        fake_img = np.zeros((100, 100, 3), dtype=np.uint8)
+        fake_result = DepthResult(
+            depth_map=fake_depth,
+            original_image=fake_img,
+            metadata={"cached": False},
+        )
+
+        # Create a proper mock backend with required attributes
+        mock_backend = MagicMock()
+        mock_backend.compute.return_value = fake_result
+        mock_backend.name = "test_backend"
+        mock_backend.license_type = MagicMock(value="commercial")
+
         # Mock exiftool to not be available
         with patch(
             "transformation_portal.lux_depth_v3.provenance._check_exiftool_available",
             return_value=False,
         ):
-            # Mock depth backend
-            with patch.object(
-                orchestrator_with_provenance,
-                "depth_backend",
-                MagicMock(
-                    name="synthetic",
-                    compute=MagicMock(
-                        return_value=MagicMock(
-                            depth_map=MagicMock(shape=(100, 100)),
-                            depth=MagicMock(shape=(100, 100)),
-                            metadata={"cached": False},
-                        )
-                    ),
-                ),
-            ):
-                # Should raise RuntimeError about missing exiftool
-                with pytest.raises(RuntimeError) as exc_info:
-                    orchestrator_with_provenance.enhance_image(image_input)
+            # Mock depth backend and preprocessing
+            with patch("transformation_portal.lux_depth_v3.preprocessing.preprocess_image") as mock_pre:
+                mock_pre.return_value = (
+                    np.zeros((100, 100, 3), dtype=np.float32),
+                    (100, 100),
+                )
+                with patch.object(
+                    orchestrator_with_provenance,
+                    "depth_backend",
+                    mock_backend,
+                ):
+                    # Should raise RuntimeError about missing exiftool
+                    with pytest.raises(RuntimeError) as exc_info:
+                        orchestrator_with_provenance.enhance_image(image_input)
 
-                assert "exiftool" in str(exc_info.value).lower()
-                assert "install" in str(exc_info.value).lower()
+                    assert "exiftool" in str(exc_info.value).lower()
+                    assert "install" in str(exc_info.value).lower()
 
     def test_provenance_sidecar_deterministic(
         self,
@@ -202,6 +227,21 @@ class TestProvenanceIntegration:
         # Create ImageInput
         image_input = ImageInput(path=fixture_path)
 
+        # Create real numpy arrays for depth backend mock
+        fake_depth = np.ones((100, 100), dtype=np.float32)
+        fake_img = np.zeros((100, 100, 3), dtype=np.uint8)
+        fake_result = DepthResult(
+            depth_map=fake_depth,
+            original_image=fake_img,
+            metadata={"cached": False},
+        )
+
+        # Create a proper mock backend with required attributes
+        mock_backend = MagicMock()
+        mock_backend.compute.return_value = fake_result
+        mock_backend.name = "test_backend"
+        mock_backend.license_type = MagicMock(value="commercial")
+
         # Process twice with same config
         provenance_files = []
 
@@ -214,25 +254,21 @@ class TestProvenanceIntegration:
                 verify_outputs=False,
             )
 
-            # Mock depth backend
-            with patch.object(
-                orchestrator,
-                "depth_backend",
-                MagicMock(
-                    name="synthetic",
-                    compute=MagicMock(
-                        return_value=MagicMock(
-                            depth_map=MagicMock(shape=(100, 100)),
-                            depth=MagicMock(shape=(100, 100)),
-                            metadata={"cached": False},
-                        )
-                    ),
-                ),
-            ):
-                try:
-                    orchestrator.enhance_image(image_input)
-                except Exception:
-                    pass  # Ignore processing errors
+            # Mock depth backend and preprocessing
+            with patch("transformation_portal.lux_depth_v3.preprocessing.preprocess_image") as mock_pre:
+                mock_pre.return_value = (
+                    np.zeros((100, 100, 3), dtype=np.float32),
+                    (100, 100),
+                )
+                with patch.object(
+                    orchestrator,
+                    "depth_backend",
+                    mock_backend,
+                ):
+                    try:
+                        orchestrator.enhance_image(image_input)
+                    except Exception:
+                        pass  # Ignore processing errors
 
             # Find provenance file
             manifests_dir = orchestrator.manifests_dir

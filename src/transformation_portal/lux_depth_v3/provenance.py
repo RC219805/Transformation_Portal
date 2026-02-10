@@ -119,19 +119,21 @@ def extract_exif_metadata(image_path: Path) -> Dict[str, Any]:
         Dictionary with complete metadata (all tags + groups)
 
     Raises:
-        ExiftoolNotFoundError: If exiftool is not available
         FileNotFoundError: If image file doesn't exist
+        ExiftoolNotFoundError: If exiftool is not available
         ProvenanceError: If metadata extraction fails
     """
+    # Pure precondition: file must exist (check first)
+    if not image_path.exists():
+        raise FileNotFoundError(f"Image file not found: {image_path}")
+
+    # Policy constraint: tool must be available (check second)
     if not _check_exiftool_available():
         raise ExiftoolNotFoundError(
             "exiftool not found in PATH. "
             "Install with: apt-get install libimage-exiftool-perl (Ubuntu/Debian) "
             "or brew install exiftool (macOS)"
         )
-
-    if not image_path.exists():
-        raise FileNotFoundError(f"Image file not found: {image_path}")
 
     try:
         # Use -G (show group names) and -j (JSON output) for complete metadata
