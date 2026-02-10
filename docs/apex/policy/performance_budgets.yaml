@@ -1,0 +1,195 @@
+# APEX Performance Budgets
+# Version: 1.0.0
+# Last Updated: 2026-02-09
+# Status: Initial baseline (shadow mode)
+
+# This file defines performance thresholds for APEX enforcement.
+# Changes require evidence, review, and approval (see docs/apex/policy/README.md).
+
+schema_version: "1.0.0"
+effective_date: "2026-02-15"
+review_date: "2026-05-15"  # Quarterly review
+policy_owner: "transformation-portal-architect"
+
+# Baseline configuration
+baseline:
+  source: "synthetic"  # Will transition to "ledger" after 30-day real-run collection
+  minimum_sample_size: 20
+  confidence_level: 0.95
+
+# Budget definitions
+# NOTE: Currently aligned with DEFAULT_BUCKETS in performance_capsule.py
+# Migration to policy-driven thresholds planned for v2.0.0
+
+budgets:
+  # Aerial scenes - large images on Apple Silicon
+  - workflow_version: "v2"
+    bucket_name: "aerial_large_mps"
+    stability_tier: "stable"
+    thresholds:
+      p50_sec: 8.5
+      p95_sec: 12.0
+      max_regression_pct: 10.0
+      warn_regression_pct: 5.0
+    enforcement:
+      mode: "shadow"
+      effective_from: "2026-02-15"
+      review_required: true
+    notes: |
+      Baseline from DEFAULT_BUCKETS analysis.
+      Large aerial scenes (6000×3600+) with high-frequency texture.
+      Real baseline establishment pending (Phase 4 Tier 4).
+
+  # Pool scenes - medium images on Apple Silicon
+  - workflow_version: "v2"
+    bucket_name: "pool_medium_mps"
+    stability_tier: "stable"
+    thresholds:
+      p50_sec: 11.0
+      p95_sec: 15.0
+      max_regression_pct: 10.0
+      warn_regression_pct: 5.0
+    enforcement:
+      mode: "shadow"
+      effective_from: "2026-02-15"
+      review_required: true
+    notes: |
+      Baseline from DEFAULT_BUCKETS analysis.
+      Pool scenes with specular highlights and reflections.
+      Realistic workload for luxury real estate rendering.
+
+  # Interior scenes - standard resolution on Apple Silicon
+  - workflow_version: "v2"
+    bucket_name: "interior_standard_mps"
+    stability_tier: "stable"
+    thresholds:
+      p50_sec: 7.0
+      p95_sec: 10.0
+      max_regression_pct: 10.0
+      warn_regression_pct: 5.0
+    enforcement:
+      mode: "shadow"
+      effective_from: "2026-02-15"
+      review_required: true
+    notes: |
+      Baseline from DEFAULT_BUCKETS analysis.
+      Standard interior scenes (<15MP).
+      Common use case for architectural visualization.
+
+  # Generic large - fallback for large images (device-agnostic)
+  - workflow_version: "v2"
+    bucket_name: "generic_large"
+    stability_tier: "canary"
+    thresholds:
+      p50_sec: 10.0
+      p95_sec: 15.0
+      max_regression_pct: 15.0
+      warn_regression_pct: 10.0
+    enforcement:
+      mode: "shadow"
+      effective_from: "2026-02-15"
+      review_required: true
+    notes: |
+      Fallback bucket for large images (>20MP).
+      Higher regression tolerance due to device variance.
+
+  # Generic medium - fallback for medium images (device-agnostic)
+  - workflow_version: "v2"
+    bucket_name: "generic_medium"
+    stability_tier: "canary"
+    thresholds:
+      p50_sec: 6.0
+      p95_sec: 10.0
+      max_regression_pct: 15.0
+      warn_regression_pct: 10.0
+    enforcement:
+      mode: "shadow"
+      effective_from: "2026-02-15"
+      review_required: true
+    notes: |
+      Fallback bucket for medium images (5-20MP).
+      Higher regression tolerance due to device variance.
+
+  # Unknown - catch-all with very lenient thresholds
+  - workflow_version: "v2"
+    bucket_name: "unknown"
+    stability_tier: "experimental"
+    thresholds:
+      p50_sec: 60.0
+      p95_sec: 120.0
+      max_regression_pct: 50.0
+      warn_regression_pct: 25.0
+    enforcement:
+      mode: "disabled"  # Never enforce for unknown workloads
+      effective_from: "2026-02-15"
+      review_required: false
+    notes: |
+      Catch-all for unclassified scenarios.
+      Very lenient thresholds; enforcement disabled.
+
+  # V1 baseline budgets (for comparison purposes)
+  # V1 budgets set to match V2 initially; will diverge as V2 optimizations land
+  - workflow_version: "v1"
+    bucket_name: "aerial_large_mps"
+    stability_tier: "stable"
+    thresholds:
+      p50_sec: 8.5
+      p95_sec: 12.0
+      max_regression_pct: 10.0
+      warn_regression_pct: 5.0
+    enforcement:
+      mode: "shadow"
+      effective_from: "2026-02-15"
+      review_required: true
+
+  - workflow_version: "v1"
+    bucket_name: "pool_medium_mps"
+    stability_tier: "stable"
+    thresholds:
+      p50_sec: 11.0
+      p95_sec: 15.0
+      max_regression_pct: 10.0
+      warn_regression_pct: 5.0
+    enforcement:
+      mode: "shadow"
+      effective_from: "2026-02-15"
+      review_required: true
+
+  - workflow_version: "v1"
+    bucket_name: "interior_standard_mps"
+    stability_tier: "stable"
+    thresholds:
+      p50_sec: 7.0
+      p95_sec: 10.0
+      max_regression_pct: 10.0
+      warn_regression_pct: 5.0
+    enforcement:
+      mode: "shadow"
+      effective_from: "2026-02-15"
+      review_required: true
+
+# Stability tier policies
+tier_policies:
+  stable:
+    description: "Production-safe, backward-compatible workflows"
+    required_baseline_days: 30
+    min_sample_size: 20
+    max_change_frequency: "quarterly"
+
+  canary:
+    description: "Production trial workflows"
+    required_baseline_days: 14
+    min_sample_size: 10
+    max_change_frequency: "monthly"
+
+  experimental:
+    description: "Research workflows"
+    required_baseline_days: 7
+    min_sample_size: 5
+    max_change_frequency: "weekly"
+
+# Migration notes:
+# 1. Current budgets mirror DEFAULT_BUCKETS (v1.0.0 baseline)
+# 2. After 30 days of real nightly runs, update budgets with actual baseline data
+# 3. Evidence: Link to ledger query results in PR that updates budgets
+# 4. Transition enforcement from shadow → enforce only after calibration complete

@@ -347,3 +347,15 @@ Changes to this contract require:
 **Contract Authority:** Transformation Portal Governance
 **Effective Date:** 2026-02-08
 **Next Review:** 2026-05-08 (quarterly)
+
+---
+
+## Related Governance Documents
+
+- **[APEX Governance Framework (ADR-026)](../architecture/decisions/ADR-026-APEX-governance-framework.md)** - Architectural design for policy-as-code
+- **[Governance User Guide](GOVERNANCE_USER_GUIDE.md)** - How to interact with APEX governance (waivers, budget changes, incidents)
+- **[Governance Status](GOVERNANCE_STATUS.md)** - Implementation status and next steps
+- **[Performance Budgets Policy](policy/performance_budgets.yaml)** - Performance thresholds (versioned)
+- **[Enforcement Policy](policy/enforcement_policy.yaml)** - Statistical methods and evidence gates
+- **[Governance Rules](policy/governance_rules.yaml)** - Waivers, incidents, budget evolution
+- **[Workload Suites](policy/workload_suites.yaml)** - Canonical test workloads (Golden/Canary/Fuzz)

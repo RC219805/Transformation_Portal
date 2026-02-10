@@ -1,0 +1,394 @@
+# APEX Governance Rules
+# Version: 1.0.0
+# Last Updated: 2026-02-09
+
+# This file defines governance workflows for APEX performance management:
+# - Waiver mechanism (justified exceptions)
+# - Performance incident workflow (regression response)
+# - Budget evolution process (policy updates)
+
+schema_version: "1.0.0"
+
+# ============================================================================
+# Waiver Mechanism
+# ============================================================================
+
+waivers:
+  description: |
+    Waivers allow merging PRs despite APEX failures when justified.
+    Waivers add friction (intentional) to prevent policy erosion.
+  
+  # Allowed waiver scopes (prevents global/unbounded waivers)
+  allowed_scopes:
+    - "single_bucket"       # Waive failure for specific bucket only
+    - "single_zone"         # Waive failure for specific zone only
+    - "workflow_version"    # Waive failure for specific workflow (v1 or v2)
+  
+  # Required fields in waiver template
+  required_fields:
+    - justification          # Why is this regression acceptable?
+    - scope_definition       # Which bucket/zone/workflow?
+    - expiry_date           # When does waiver expire? (ISO 8601 date)
+    - mitigation_plan       # What will be done to address this?
+    - approver              # Who approved this waiver?
+  
+  # GitHub labels for waiver tracking
+  labels:
+    pr_label: "apex-waiver"             # Apply to PR requesting waiver
+    tracking_label: "apex-waiver-tracking"  # Auto-applied to tracking issue
+    expired_label: "apex-waiver-expired"    # Auto-applied when waiver expires
+  
+  # Waiver expiry configuration
+  expiry:
+    default_days: 30        # Default waiver duration
+    max_days: 90            # Maximum allowed waiver duration
+    auto_close_on_expiry: true  # Automatically close tracking issues on expiry
+    warning_days: 7         # Warn X days before expiry
+  
+  # Approval requirements
+  approval:
+    required_approvers: 1   # Minimum number of approvals
+    authorized_approvers:
+      - "transformation-portal-architect"
+    require_comment_approval: true  # Approver must comment on PR
+  
+  # Template for PR waiver request
+  pr_template: |
+    ## APEX Waiver Request
+    
+    **Justification:** [Required - why is this regression acceptable?]
+    
+    **Scope:**
+    - Bucket: `<bucket_name>`
+    - Zone: `<zone>`
+    - Workflow: `<workflow_version>`
+    
+    **Expiry Date:** YYYY-MM-DD (max 90 days from now)
+    
+    **Mitigation Plan:** [What will be done to address this?]
+    
+    **Evidence:** [Link to analysis, profiling, investigation]
+    
+    **Approver:** @transformation-portal-architect
+  
+  # Template for tracking issue (auto-created)
+  tracking_issue_template: |
+    # APEX Waiver Tracking: {bucket_name} in {zone}
+    
+    **Original PR:** #{pr_number}
+    **Workflow:** {workflow_version}
+    **Granted:** {grant_date}
+    **Expires:** {expiry_date}
+    
+    ## Regression Summary
+    - Current p95: {current_p95}s
+    - Baseline p95: {baseline_p95}s
+    - Regression: +{regression_pct}%
+    
+    ## Justification
+    {justification}
+    
+    ## Mitigation Plan
+    {mitigation_plan}
+    
+    ## Resolution Checklist
+    - [ ] Root cause analysis completed
+    - [ ] Fix implemented or permanent budget adjustment justified
+    - [ ] Verification run clean
+    - [ ] Waiver tracking issue closed
+    
+    **Auto-close date:** {expiry_date}
+
+# ============================================================================
+# Budget Changes
+# ============================================================================
+
+budget_changes:
+  description: |
+    Budget changes (threshold adjustments) require evidence and review.
+    This prevents "raise thresholds to fix CI" anti-pattern.
+  
+  # Required evidence for budget change PR
+  required_evidence:
+    - ledger_query_results      # Query showing baseline shift
+    - baseline_shift_analysis   # Statistical analysis of shift
+    - attribution_investigation # Which commits caused shift?
+  
+  # Required review process
+  required_review:
+    label: "apex-policy-change"
+    min_approvers: 1
+    authorized_approvers:
+      - "transformation-portal-architect"
+    require_evidence_links: true  # PR must link to evidence
+  
+  # Documentation requirements
+  documentation:
+    changelog_required: true  # Update CHANGELOG.md
+    adr_required_for_major_changes: true  # Major changes need ADR
+    update_review_date: true  # Update review_date in policy file
+  
+  # Major vs minor change classification
+  major_change_criteria:
+    threshold_increase_pct: 20  # >20% increase = major
+    stability_tier_change: true # Changing tier = major
+    enforcement_mode_change: true  # shadow→enforce = major
+  
+  # PR template for budget changes
+  pr_template: |
+    ## APEX Performance Budget Change
+    
+    **Budget:** `{bucket_name}` (workflow: {workflow_version})
+    
+    **Current Thresholds:**
+    - p50: {current_p50}s
+    - p95: {current_p95}s
+    
+    **Proposed Thresholds:**
+    - p50: {proposed_p50}s (+{p50_delta}%)
+    - p95: {proposed_p95}s (+{p95_delta}%)
+    
+    **Evidence:**
+    - Ledger query: [link to query results]
+    - Baseline shift analysis: [link to analysis]
+    - Sample size: n={sample_size} over {days} days
+    
+    **Attribution:**
+    - Root cause: [algorithm change / dependency update / measurement variance]
+    - Responsible commits: [commit SHAs or range]
+    
+    **Justification:**
+    [Why is this budget change acceptable?]
+    
+    **Stability Tier:** {stability_tier}
+    **Change Type:** [Minor / Major]
+    
+    **Review Required:** @transformation-portal-architect
+
+# ============================================================================
+# Performance Incidents
+# ============================================================================
+
+incidents:
+  description: |
+    When APEX detects a regression in enforce mode, an incident workflow is triggered.
+    Incidents ensure regressions are tracked and resolved, not ignored.
+  
+  # Triggers for automatic incident creation
+  triggers:
+    - condition: "regression_pct > max_regression_pct"
+      severity: "high"
+      auto_create_issue: true
+      description: "Regression exceeds maximum allowed threshold"
+    
+    - condition: "p95 > threshold_p95 * 1.15"
+      severity: "medium"
+      auto_create_issue: true
+      description: "p95 exceeds threshold by >15%"
+    
+    - condition: "failure_rate > 0.0"
+      severity: "low"
+      auto_create_issue: false  # Don't spam for pipeline failures
+      description: "Pipeline failures detected"
+  
+  # Incident severity levels
+  severity_levels:
+    critical:
+      description: "Regression >50% or complete failure"
+      sla_hours: 4
+      escalate_to: ["transformation-portal-architect"]
+    
+    high:
+      description: "Regression >15% (blocking)"
+      sla_hours: 24
+      escalate_to: ["transformation-portal-architect"]
+    
+    medium:
+      description: "Regression 10-15% (warning)"
+      sla_hours: 72
+      escalate_to: []
+    
+    low:
+      description: "Minor issues, no blocking"
+      sla_hours: 168  # 1 week
+      escalate_to: []
+  
+  # GitHub issue template for incidents
+  issue_template:
+    title_format: "[APEX] Performance Regression: {bucket_name} in {zone} ({severity})"
+    
+    labels:
+      - "performance"
+      - "apex-incident"
+      - "needs-triage"
+    
+    assignees:
+      - "transformation-portal-architect"
+    
+    body: |
+      # Performance Regression Detected
+      
+      **Severity:** {severity}  
+      **Detected:** {timestamp} UTC  
+      **Run ID:** {run_id}  
+      **Commit:** {commit_sha}  
+      
+      ## Regression Summary
+      - **Bucket:** `{bucket_name}`
+      - **Zone:** `{zone}`
+      - **Workflow:** `{workflow_version}`
+      - **Current p95:** {current_p95}s
+      - **Baseline p95:** {baseline_p95}s
+      - **Regression:** +{regression_pct}% (threshold: {threshold_pct}%)
+      
+      ## Evidence
+      - **Ledger query:** [Link to run details]
+      - **Distribution comparison:** {statistical_test}, p={p_value}
+      - **Effect size:** {effect_size} ({effect_interpretation})
+      - **Sample size:** current n={current_n}, baseline n={baseline_n}
+      
+      ## Top Contributing Stages
+      (from instrumentation, if available)
+      {stage_attribution}
+      
+      ## Suggested Actions
+      - [ ] Reproduce locally: `{reproduce_command}`
+      - [ ] Profile suspect stage with cProfile or py-spy
+      - [ ] Check recent dependency changes: `git diff {baseline_commit} {current_commit} -- requirements/`
+      - [ ] Bisect commits if needed: `git bisect start {current_commit} {baseline_commit}`
+      
+      ## Resolution Workflow
+      - [ ] Investigation assigned
+      - [ ] Root cause identified
+      - [ ] Fix implemented OR waiver requested
+      - [ ] Verification run clean
+      - [ ] Incident closed
+      
+      ---
+      **Auto-generated by APEX Governance Engine**
+  
+  # Resolution tracking
+  resolution:
+    require_verification_run: true  # Must run APEX again after fix
+    require_root_cause: true        # Must document root cause
+    auto_close_on_fix: false        # Manual close required (prevents premature closure)
+
+# ============================================================================
+# Escalation Paths
+# ============================================================================
+
+escalation:
+  description: |
+    Escalation paths for when standard workflows are insufficient.
+  
+  # When to escalate
+  escalate_conditions:
+    - "Waiver request rejected twice"
+    - "Incident unresolved for > SLA"
+    - "Budget change request stalled > 14 days"
+    - "Statistical methodology dispute"
+  
+  # Escalation targets
+  escalation_targets:
+    technical_disputes:
+      - "transformation-portal-architect"
+    
+    policy_disputes:
+      - "transformation-portal-architect"
+    
+    methodology_disputes:
+      - "transformation-portal-architect"
+      - "Create ADR for resolution"
+
+# ============================================================================
+# Audit and Reporting
+# ============================================================================
+
+audit:
+  description: |
+    All governance decisions are logged for auditability.
+  
+  # What gets logged
+  logged_events:
+    - "waiver_granted"
+    - "waiver_denied"
+    - "waiver_expired"
+    - "incident_created"
+    - "incident_resolved"
+    - "budget_changed"
+    - "enforcement_mode_changed"
+  
+  # Retention policy
+  retention:
+    ledger_days: 90          # Performance data
+    incidents_days: 365      # Incident history
+    waivers_days: 365        # Waiver history
+    policy_changes: "indefinite"  # Policy git history
+  
+  # Reporting
+  reports:
+    weekly_summary:
+      enabled: false  # Future enhancement
+      recipients: ["transformation-portal-architect"]
+    
+    monthly_metrics:
+      enabled: false  # Future enhancement
+      metrics:
+        - "waiver_rate"            # % PRs requiring waivers
+        - "false_positive_rate"    # % clean PRs flagged incorrectly
+        - "mean_time_to_resolution"  # Incident MTTR
+        - "budget_change_frequency"  # Changes per month
+
+# ============================================================================
+# Review and Maintenance
+# ============================================================================
+
+review:
+  governance_review_frequency: "quarterly"
+  next_review_date: "2026-05-09"
+  
+  review_checklist:
+    - "Waiver approval rate reasonable (<10%)"
+    - "Incident resolution SLA met (>80%)"
+    - "Budget changes justified and documented"
+    - "No policy drift (code vs policy files in sync)"
+    - "False positive rate acceptable (<5%)"
+
+# ============================================================================
+# Emergency Procedures
+# ============================================================================
+
+emergency:
+  description: |
+    Emergency procedures for when APEX blocks critical work incorrectly.
+  
+  # Emergency override (use sparingly)
+  override:
+    method: "Add 'APEX-EMERGENCY-OVERRIDE' in PR description"
+    requires_explanation: true
+    requires_post_mortem: true
+    auto_creates_incident: true
+    
+    template: |
+      ## APEX EMERGENCY OVERRIDE
+      
+      **Reason:** [Critical production issue / security fix / etc.]
+      **Expected Impact:** [What regression is being accepted?]
+      **Follow-up Plan:** [How will this be addressed post-merge?]
+      **Authorized By:** @transformation-portal-architect
+  
+  # Temporary enforcement suspension
+  suspension:
+    method: "Set enforcement.mode = 'disabled' in performance_budgets.yaml"
+    requires_pr: true
+    requires_justification: true
+    max_duration_days: 7
+    auto_reverts: false  # Must manually re-enable
+
+# ============================================================================
+# Notes
+# ============================================================================
+# - Waivers add friction intentionally (prevent policy erosion)
+# - Budget changes require evidence (prevent "fix CI by raising limits")
+# - Incidents ensure accountability (regressions don't slip through silently)
+# - All decisions logged (auditability and learning)
