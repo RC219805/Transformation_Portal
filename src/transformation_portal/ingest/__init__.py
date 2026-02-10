@@ -23,24 +23,31 @@ __all__ = [
     "load_sidecar",
 ]
 
+
 # Lazy imports to avoid circular dependencies
 def __getattr__(name: str):
     if name == "IngestManifest":
         from .schemas import IngestManifest
+
         return IngestManifest
     elif name == "ProvenanceSidecar":
         from .schemas import ProvenanceSidecar
+
         return ProvenanceSidecar
     elif name == "validate_schema":
         from .validator import validate_schema
+
         return validate_schema
     elif name == "capture_provenance":
         from .provenance import capture_provenance
+
         return capture_provenance
     elif name == "write_sidecar":
         from .sidecar import write_sidecar
+
         return write_sidecar
     elif name == "load_sidecar":
         from .sidecar import load_sidecar
+
         return load_sidecar
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
