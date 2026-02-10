@@ -37,7 +37,12 @@ class MaterialsV3Engine:
         self, image: np.ndarray, segmentation_result: Dict[str, Any], depth_map: Optional[np.ndarray] = None
     ) -> Dict[str, Any]:
         """Main entry point."""
-        if not self.config.enabled:
+        # Check if Materials V3 is enabled (support both .enabled and .enable_materials_v3)
+        is_enabled = getattr(self.config, "enabled", None)
+        if is_enabled is None:
+            is_enabled = getattr(self.config, "enable_materials_v3", False)
+
+        if not is_enabled:
             return {}
 
         # 1. Stats
@@ -66,12 +71,5 @@ class MaterialsV3Engine:
             "materials_v3_response_plan": response_plan,
             "materials_v3_pixel_ops": pixel_ops,
             "materials_v3_metadata": {"version": "3.1"},
+            "material_masks": segmentation_result.get("materials", {}),
         }
-
-    def apply_glass_response_if_enabled(self, image, segmentation_result, response_plan):
-        """Placeholder for Glass Pixel Ops."""
-        return image, {"applied": False}
-
-    def apply_stone_response_if_enabled(self, image, segmentation_result, response_plan):
-        """Placeholder for Stone Pixel Ops (PR-4D)."""
-        return image, {"applied": False, "reason": "PR4C_report_only"}

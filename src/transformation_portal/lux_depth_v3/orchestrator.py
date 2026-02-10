@@ -60,6 +60,7 @@ from .manifest import (
     ConfigFingerprint,
     DepthMetadata,
     InputMetadata,
+    MaterialsV3Metadata,
     ReproMetadata,
     TimingMetadata,
     V2Metadata,
@@ -304,6 +305,15 @@ class EnhanceOrchestrator:
 
         # Initialize Postprocessor (FIX: Ensures refine_edges/bilateral settings from preset are applied)
         self.postprocessor = Postprocessor(da3_config.postprocessing)
+
+        # Initialize Materials V3 Engine (if enabled)
+        if config.enable_materials_v3:
+            from .materials_v3 import MaterialsV3Engine
+
+            self.materials_v3_engine = MaterialsV3Engine(config)
+            logger.info("Materials V3 surface-aware finishing enabled")
+        else:
+            self.materials_v3_engine = None
 
         # Initialize V2 Runner and Environment (with fail-fast validation)
         if config.enable_v2 and config.v2_preset is not None:
@@ -679,7 +689,7 @@ class EnhanceOrchestrator:
         float_depth_path: Path,
         manifest_path: Path,
         skip_depth: bool,
-    ) -> tuple[Optional[Any], float, Optional[dict]]:
+    ) -> tuple[Optional[Any], float, Optional[dict], Optional[dict], float]:
         """Stage A: Depth computation with caching and PBR generation.
 
         Args:
@@ -691,11 +701,13 @@ class EnhanceOrchestrator:
             skip_depth: Whether to skip depth computation
 
         Returns:
-            Tuple of (depth_metadata, depth_runtime_s, pbr_assets)
+            Tuple of (depth_metadata, depth_runtime_s, pbr_assets, materials_v3_result, materials_v3_runtime_s)
         """
         depth_runtime_s = 0.0
         depth_metadata = None
         pbr_assets = None
+        materials_v3_result = None
+        materials_v3_runtime_s = 0.0
 
         if not skip_depth:
             # Lazy preprocessing: Only validate and preprocess if we're running depth
@@ -779,6 +791,42 @@ class EnhanceOrchestrator:
 
                 depth_runtime_s = time.time() - t0
 
+                # 2b. Materials V3 Processing (if enabled)
+                materials_v3_result = None
+                materials_v3_runtime_s = 0.0
+                if self.materials_v3_engine:
+                    logger.info("Running Materials V3 surface-aware finishing...")
+                    t_materials_start = time.time()
+                    try:
+                        # Material segmentation (configurable backend)
+                        # Current: stub backend (returns empty masks)
+                        # Future: EfficientSAM integration for real material detection
+                        from .segmentation_backend import segment_materials
+
+                        segmentation_result = {"materials": segment_materials(preprocessed_array, self.config)}
+
+                        # Log segmentation result if materials were detected
+                        if segmentation_result.get("materials"):
+                            logger.info(
+                                f"Material segmentation: {len(segmentation_result['materials'])} "
+                                f"materials detected using {self.config.material_segmentation_backend} backend"
+                            )
+
+                        materials_v3_result = self.materials_v3_engine.process(
+                            image=preprocessed_array, segmentation_result=segmentation_result, depth_map=depth_map
+                        )
+                        materials_v3_runtime_s = time.time() - t_materials_start
+                        if materials_v3_result:
+                            logger.info(
+                                f"Materials V3 completed in {materials_v3_runtime_s:.3f}s: "
+                                f"{len(materials_v3_result.get('materials_v3_pixel_ops', {}).get('applied', []))} "
+                                f"operations applied"
+                            )
+                    except Exception as e:
+                        logger.warning(f"Materials V3 processing failed: {e}", exc_info=True)
+                        materials_v3_result = None
+                        materials_v3_runtime_s = time.time() - t_materials_start
+
                 # 3. Write quantized depth (PNG 16-bit)
                 _, _, depth_stats = atomic_write_depth_u16_png_with_stats(
                     depth_path,
@@ -845,12 +893,12 @@ class EnhanceOrchestrator:
                 if self.config.depth_fallback == "fail":
                     raise
                 elif self.config.depth_fallback == "skip":
-                    return None, 0.0, None
+                    return None, 0.0, None, None, 0.0
                 elif self.config.depth_fallback == "v2-auto":
                     logger.info("V2 fallback mode: V3 failed, will attempt V2 with independent depth")
                     if depth_path.exists():
                         depth_path.unlink()
-                    return None, 0.0, None
+                    return None, 0.0, None, None, 0.0
                 else:
                     raise ValueError(f"Unsupported depth_fallback mode: {self.config.depth_fallback}") from e
         else:
@@ -873,7 +921,7 @@ class EnhanceOrchestrator:
                 except Exception as pbr_error:
                     logger.warning(f"PBR generation from cache failed: {pbr_error}")
 
-        return depth_metadata, depth_runtime_s, pbr_assets
+        return depth_metadata, depth_runtime_s, pbr_assets, materials_v3_result, materials_v3_runtime_s
 
     def _generate_pbr_stage(self, depth: Any, output_key: Path) -> Optional[dict]:
         """Generate PBR maps from depth data.
@@ -942,6 +990,7 @@ class EnhanceOrchestrator:
         v2_log_path: Path,
         manifest_path: Path,
         skip_depth: bool,
+        materials_v3_result: Optional[dict] = None,
     ) -> tuple[dict, float, Optional[Path]]:
         """Stage B: V2 enhancement subprocess.
 
@@ -952,6 +1001,9 @@ class EnhanceOrchestrator:
             v2_log_path: Path for V2 subprocess log
             manifest_path: Path for manifest JSON
             skip_depth: Whether depth was skipped
+            materials_v3_result: Materials V3 result with material_masks (optional)
+                Note: Material masks are available but not currently passed to subprocess.
+                Future: Implement mask serialization for V2 subprocess integration.
 
         Returns:
             Tuple of (v2_result, v2_runtime_s, v2_report_path)
@@ -967,6 +1019,16 @@ class EnhanceOrchestrator:
         if skip_v2:
             logger.info("V2 outputs valid, skipping.")
             return {"status": "ok"}, 0.0, v2_report_path
+
+        # Note: material_masks from materials_v3_result are available but not passed to subprocess
+        # V2Runner is a subprocess wrapper - material masks would require serialization to disk
+        # Future enhancement: Serialize masks to temporary directory and pass path to V2
+        # For now, infrastructure is ready (MaterialsV3Engine.process returns material_masks)
+        if materials_v3_result and materials_v3_result.get("material_masks"):
+            logger.debug(
+                f"Materials V3 masks available ({len(materials_v3_result['material_masks'])} materials) "
+                f"but not passed to V2 subprocess (requires serialization - future work)"
+            )
 
         # V2 runner: depth_dir=None triggers independent depth generation in V2
         v2_result = self.v2_runner.run(
@@ -996,6 +1058,8 @@ class EnhanceOrchestrator:
         v2_runtime_s: float,
         pipeline_start_time: float,
         pipeline_end_time: float,
+        materials_v3_result: Optional[dict] = None,
+        materials_v3_runtime_s: float = 0.0,
     ) -> None:
         """Write combined manifest with all pipeline metadata.
 
@@ -1010,6 +1074,8 @@ class EnhanceOrchestrator:
             v2_runtime_s: V2 stage runtime
             pipeline_start_time: Pipeline start timestamp
             pipeline_end_time: Pipeline end timestamp
+            materials_v3_result: Materials V3 result (optional)
+            materials_v3_runtime_s: Materials V3 runtime (optional)
         """
         # --- PROVENANCE CAPTURE (audit-grade) ---
         # Capture provenance sidecar for RAW/TIFF inputs at ingestion point
@@ -1075,6 +1141,19 @@ class EnhanceOrchestrator:
             error_message=v2_result.get("error"),
         )
 
+        # Materials V3 metadata
+        materials_v3_metadata = None
+        if materials_v3_result:
+            from .manifest import MaterialsV3Metadata
+
+            materials_v3_metadata = MaterialsV3Metadata(
+                enabled=True,
+                version=materials_v3_result.get("materials_v3_metadata", {}).get("version", "3.1"),
+                response_plan=materials_v3_result.get("materials_v3_response_plan"),
+                pixel_ops=materials_v3_result.get("materials_v3_pixel_ops"),
+                runtime_seconds=materials_v3_runtime_s,
+            )
+
         # Compute input hash respecting HashMode
         manifest_exists = manifest_path.exists()
         saved_hash = None
@@ -1099,6 +1178,7 @@ class EnhanceOrchestrator:
             ),
             depth=depth_metadata,
             v2=v2_metadata,
+            materials_v3=materials_v3_metadata,
             timing=TimingMetadata(
                 depth_seconds=depth_runtime_s,
                 v2_seconds=v2_runtime_s,
@@ -1177,7 +1257,7 @@ class EnhanceOrchestrator:
         # (skip_depth already computed above for both paths)
 
         # --- STAGE A: DEPTH COMPUTATION ---
-        depth_metadata, depth_runtime_s, pbr_assets = self._compute_depth_stage(
+        depth_metadata, depth_runtime_s, pbr_assets, materials_v3_result, materials_v3_runtime_s = self._compute_depth_stage(
             image_input=image_input,
             output_key=output_key,
             depth_path=depth_path,
@@ -1199,6 +1279,7 @@ class EnhanceOrchestrator:
             v2_log_path=v2_log_path,
             manifest_path=manifest_path,
             skip_depth=skip_depth,
+            materials_v3_result=materials_v3_result,
         )
 
         # Capture end time for accurate timestamps
@@ -1216,6 +1297,8 @@ class EnhanceOrchestrator:
             v2_runtime_s=v2_runtime_s,
             pipeline_start_time=pipeline_start_time,
             pipeline_end_time=pipeline_end_time,
+            materials_v3_result=materials_v3_result,
+            materials_v3_runtime_s=materials_v3_runtime_s,
         )
 
         return {

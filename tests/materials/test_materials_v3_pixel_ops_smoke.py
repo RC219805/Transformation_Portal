@@ -6,7 +6,12 @@ import numpy as np
 
 from transformation_portal.lux_depth_v3.pixel_ops_decider import decide_pixel_ops
 from transformation_portal.lux_depth_v3.pixel_ops_executor import _compute_delta_stats, apply_pixel_ops
-from transformation_portal.lux_depth_v3.pixel_ops_registry import OP_REGISTRY
+from transformation_portal.lux_depth_v3.pixel_ops_registry import (
+    OP_REGISTRY,
+    foliage_vibrance_boost,
+    stone_microcontrast,
+    water_reflection_enhance,
+)
 
 
 @dataclass
@@ -78,3 +83,116 @@ def test_compute_delta_stats_handles_mask_shapes():
     assert isinstance(stats_2d["outside_mask_mean_abs"], float)
     assert isinstance(stats_3d["inside_mask_mean_abs"], float)
     assert isinstance(stats_3d["outside_mask_mean_abs"], float)
+
+
+def test_stone_microcontrast_implementation():
+    """Test that stone microcontrast is implemented and works."""
+    # Create test image with variation (not flat gray)
+    image = np.ones((32, 32, 3), dtype=np.uint8) * 100
+    # Add some variation in the center
+    image[8:24, 8:24] = 150
+
+    mask = np.zeros((32, 32), dtype=np.float32)
+    mask[8:24, 8:24] = 1.0
+
+    # Apply stone microcontrast
+    params = {"strength": 0.12}
+    result = stone_microcontrast(image, mask, params)
+
+    # Check result shape and dtype
+    assert result.shape == image.shape
+    assert result.dtype == image.dtype
+
+    # Check that operation was applied (result differs from input within mask)
+    # The contrast operation should enhance the difference from midpoint
+    assert not np.array_equal(result[8:24, 8:24], image[8:24, 8:24])
+
+    # Check that areas outside mask are unchanged
+    assert np.array_equal(result[0:8, 0:8], image[0:8, 0:8])
+
+
+def test_stone_ops_in_registry():
+    """Test that stone ops are properly registered and marked as implemented."""
+    assert "stone" in OP_REGISTRY
+    assert "microcontrast" in OP_REGISTRY["stone"]
+
+    stone_op = OP_REGISTRY["stone"]["microcontrast"]
+    assert stone_op.implemented is True
+    assert stone_op.op == stone_microcontrast
+    assert "texture" in stone_op.description.lower() or "stone" in stone_op.description.lower()
+
+
+def test_water_reflection_implementation():
+    """Test that water reflection enhancement is implemented and works."""
+    # Create test image with variation
+    image = np.ones((32, 32, 3), dtype=np.uint8) * 100
+    # Add brighter area in center (simulating water surface)
+    image[8:24, 8:24] = 120
+
+    mask = np.zeros((32, 32), dtype=np.float32)
+    mask[8:24, 8:24] = 1.0
+
+    # Apply water reflection enhance
+    params = {"strength": 0.10}
+    result = water_reflection_enhance(image, mask, params)
+
+    # Check result shape and dtype
+    assert result.shape == image.shape
+    assert result.dtype == image.dtype
+
+    # Check that operation was applied (result differs from input within mask)
+    assert not np.array_equal(result[8:24, 8:24], image[8:24, 8:24])
+
+    # Check that areas outside mask are unchanged
+    assert np.array_equal(result[0:8, 0:8], image[0:8, 0:8])
+
+
+def test_water_ops_in_registry():
+    """Test that water ops are properly registered and marked as implemented."""
+    assert "water" in OP_REGISTRY
+    assert "reflection_enhance" in OP_REGISTRY["water"]
+
+    water_op = OP_REGISTRY["water"]["reflection_enhance"]
+    assert water_op.implemented is True
+    assert water_op.op == water_reflection_enhance
+    assert "reflection" in water_op.description.lower() or "water" in water_op.description.lower()
+
+
+def test_foliage_vibrance_implementation():
+    """Test that foliage vibrance boost is implemented and works."""
+    # Create test image with green-ish tones
+    image = np.ones((32, 32, 3), dtype=np.uint8)
+    image[..., 0] = 50  # Red
+    image[..., 1] = 120  # Green
+    image[..., 2] = 60  # Blue
+    # Add variation in center
+    image[8:24, 8:24, 1] = 140
+
+    mask = np.zeros((32, 32), dtype=np.float32)
+    mask[8:24, 8:24] = 1.0
+
+    # Apply foliage vibrance boost
+    params = {"strength": 0.08}
+    result = foliage_vibrance_boost(image, mask, params)
+
+    # Check result shape and dtype
+    assert result.shape == image.shape
+    assert result.dtype == image.dtype
+
+    # Check that operation was applied (result differs from input within mask)
+    # Green channel should be enhanced
+    assert not np.array_equal(result[8:24, 8:24, 1], image[8:24, 8:24, 1])
+
+    # Check that areas outside mask are unchanged
+    assert np.array_equal(result[0:8, 0:8], image[0:8, 0:8])
+
+
+def test_foliage_ops_in_registry():
+    """Test that foliage ops are properly registered and marked as implemented."""
+    assert "foliage" in OP_REGISTRY
+    assert "vibrance_boost" in OP_REGISTRY["foliage"]
+
+    foliage_op = OP_REGISTRY["foliage"]["vibrance_boost"]
+    assert foliage_op.implemented is True
+    assert foliage_op.op == foliage_vibrance_boost
+    assert "vibrance" in foliage_op.description.lower() or "foliage" in foliage_op.description.lower()
