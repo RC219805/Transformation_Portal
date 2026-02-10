@@ -400,20 +400,28 @@ class EnhanceOrchestrator:
                     status = "fallback"
                 except (ImportError, FileNotFoundError) as fallback_error:
                     # DA3 also unavailable (likely test environment without ML dependencies)
-                    # Create a mock backend that will fail gracefully if actually used
-                    logger.warning(f"DA3 fallback also unavailable: {fallback_error}. " f"Using mock backend for testing.")
-                    from unittest.mock import Mock
+                    # Check if synthetic fallback is explicitly allowed
+                    if not self.config.allow_synthetic_fallback:
+                        # Check environment variable override (for CI)
+                        import os
 
-                    backend = Mock()
-                    backend.name = "mock"
-                    backend.compute = Mock(
-                        side_effect=ImportError(
-                            "Mock backend used - ML dependencies not installed. " "This orchestrator cannot process images."
-                        )
+                        if not os.getenv("TP_ALLOW_SYNTHETIC_FALLBACK") == "1":
+                            raise RuntimeError(
+                                f"No depth backend available: {fallback_error}. "
+                                "Install ML dependencies (torch, transformers) or explicitly enable "
+                                "synthetic fallback for testing (config.allow_synthetic_fallback=True "
+                                "or TP_ALLOW_SYNTHETIC_FALLBACK=1)."
+                            ) from fallback_error
+
+                    # Synthetic fallback explicitly allowed
+                    logger.warning(
+                        f"DA3 fallback also unavailable: {fallback_error}. "
+                        f"Using synthetic backend for testing (no ML dependencies)."
                     )
-                    resolved = "mock"
-                    status = "test_mode"
-                    reason = f"Test environment (no ML dependencies): {fallback_error}"
+                    backend = registry.get_backend("synthetic", self.config)
+                    resolved = "synthetic"
+                    status = "synthetic_fallback"
+                    reason = f"Test environment - using synthetic depth: {fallback_error}"
             else:
                 resolved = requested
                 status = "success"

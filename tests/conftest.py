@@ -28,6 +28,19 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import pytest
+
+
+def pytest_configure(config):
+    """Configure pytest session.
+
+    Allow synthetic depth backend fallback during tests to avoid requiring
+    heavyweight ML dependencies (torch, transformers) in all test environments.
+    """
+    # Enable synthetic backend fallback for tests (safety guard for production)
+    os.environ["TP_ALLOW_SYNTHETIC_FALLBACK"] = "1"
+
+
 import numpy as np
 import pytest
 from PIL import Image

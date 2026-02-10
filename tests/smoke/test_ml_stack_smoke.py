@@ -259,12 +259,12 @@ def test_torch_cuda_compatibility():
 @pytest.mark.ml
 def test_ml_stack_imports():
     """Test that all major ML packages can be imported without errors."""
-    import pkg_resources
+    from importlib.metadata import PackageNotFoundError, version
 
     def get_version(package_name):
         try:
-            return pkg_resources.get_distribution(package_name).version
-        except pkg_resources.DistributionNotFound:
+            return version(package_name)
+        except PackageNotFoundError:
             return None
 
     # Always check torch (required for ML tests to run)
