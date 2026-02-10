@@ -45,7 +45,7 @@ from ..depth.backends.protocol import LicenseRestrictionError
 
 # Backend registry for depth estimation
 from ..depth.backends.registry import DepthBackendRegistry
-from .batch_stats import compute_batch_runtime_stats
+from .batch_stats import compute_batch_runtime_stats, detect_runtime_outliers
 
 # Note: Imports adjusted to relative for package context compatibility
 from .config import DA3Config, EnhanceConfig, ModelVariant
@@ -273,10 +273,15 @@ class EnhanceOrchestrator:
         self.v2_dir = self.output_root / "v2"
         self.manifests_dir = self.output_root / "manifests"
         self.logs_dir = self.output_root / "logs"
+        # zones/ directory reserved for future zone-based processing
+        # Only created when zoning features are enabled
         self.zones_dir = self.output_root / "zones"
 
-        for d in [self.depth_dir, self.v2_dir, self.manifests_dir, self.logs_dir, self.zones_dir]:
+        for d in [self.depth_dir, self.v2_dir, self.manifests_dir, self.logs_dir]:
             d.mkdir(parents=True, exist_ok=True)
+
+        # Note: zones_dir intentionally NOT created here
+        # Will be created on-demand when zoning features are implemented
 
         # Initialize V3 Configuration (Priority: User Override > Preset > Default)
         if config.preset is not None:
@@ -1355,13 +1360,97 @@ class EnhanceOrchestrator:
         # Extract runtime_s from successful results for statistics computation
         runtimes = [r.get("runtime_s", 0.0) for r in results if r.get("status") == "ok"]
         runtime_stats = compute_batch_runtime_stats(runtimes)
+
+        # Detect runtime outliers (images taking >5× median time)
+        outliers = []
+        for r in results:
+            if r.get("status") == "ok":
+                runtime_s = r.get("runtime_s", 0.0)
+                image_name = r.get("image", "unknown")
+                outlier_result = detect_runtime_outliers(image_name, runtime_s, runtimes)
+                if outlier_result:
+                    warning_msg, outlier_meta = outlier_result
+                    outliers.append(
+                        {
+                            "image": image_name,
+                            "metadata": outlier_meta,
+                        }
+                    )
+
         bm = BatchManifest(
             batch_id=batch_id,
             start_time=batch_start_utc,
             end_time=batch_end_utc,
             config={"model": self.config.model_variant.value.name},
             results=results,
-            stats={**runtime_stats, "total_images": len(results), "batch_runtime_seconds": batch_end_time - batch_start_time},
+            stats={
+                **runtime_stats,
+                "total_images": len(results),
+                "batch_runtime_seconds": batch_end_time - batch_start_time,
+                "outliers": outliers if outliers else [],
+            },
         )
         bm.write(self.manifests_dir / f"batch_{batch_id}.json")
+
+        # Emit run card if enabled
+        if self.config.emit_run_card:
+            self._emit_run_card(batch_id, batch_start_utc, batch_end_utc, results, runtime_stats, outliers)
+
         return results
+
+    def _emit_run_card(
+        self,
+        batch_id: str,
+        start_time: str,
+        end_time: str,
+        results: List[Dict[str, Any]],
+        runtime_stats: Dict[str, Any],
+        outliers: List[Dict[str, Any]],
+    ) -> None:
+        """Emit run card for batch reproducibility.
+
+        Creates a human-readable and machine-parseable run card with:
+        - Configuration fingerprint
+        - Runtime statistics
+        - Outlier warnings
+        - Environment metadata
+
+        Args:
+            batch_id: Unique batch identifier
+            start_time: Batch start time (ISO 8601 UTC)
+            end_time: Batch end time (ISO 8601 UTC)
+            results: List of per-image processing results
+            runtime_stats: Aggregated runtime statistics
+            outliers: List of detected runtime outliers
+        """
+        run_card_path = self.output_root / f"run_card_{batch_id}.json"
+
+        run_card = {
+            "batch_id": batch_id,
+            "start_time": start_time,
+            "end_time": end_time,
+            "config_fingerprint": self.compute_config_fingerprint(),
+            "backend_selection": {
+                "requested": self._backend_metadata.requested_backend or "auto",
+                "resolved": self._backend_metadata.resolved_backend,
+                "device": self._backend_metadata.device,
+                "model_id": self._backend_metadata.model_id,
+            },
+            "environment": self.environment,
+            "git_revision": {
+                "v3": self.v3_git,
+                "v2": self.v2_git,
+            },
+            "runtime_stats": runtime_stats,
+            "outliers": outliers,
+            "total_images": len(results),
+            "success_count": sum(1 for r in results if r.get("status") == "ok"),
+            "error_count": sum(1 for r in results if r.get("status") == "error"),
+        }
+
+        try:
+            with open(run_card_path, "w") as f:
+                json.dump(run_card, f, indent=2)
+            logger.info(f"✅ Run card emitted: {run_card_path}")
+        except Exception as e:
+            logger.warning(f"Failed to emit run card: {e}")
