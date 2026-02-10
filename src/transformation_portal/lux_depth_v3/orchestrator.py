@@ -400,20 +400,15 @@ class EnhanceOrchestrator:
                     status = "fallback"
                 except (ImportError, FileNotFoundError) as fallback_error:
                     # DA3 also unavailable (likely test environment without ML dependencies)
-                    # Create a mock backend that will fail gracefully if actually used
-                    logger.warning(f"DA3 fallback also unavailable: {fallback_error}. " f"Using mock backend for testing.")
-                    from unittest.mock import Mock
-
-                    backend = Mock()
-                    backend.name = "mock"
-                    backend.compute = Mock(
-                        side_effect=ImportError(
-                            "Mock backend used - ML dependencies not installed. " "This orchestrator cannot process images."
-                        )
+                    # Fall back to synthetic backend for testing
+                    logger.warning(
+                        f"DA3 fallback also unavailable: {fallback_error}. "
+                        f"Using synthetic backend for testing (no ML dependencies)."
                     )
-                    resolved = "mock"
-                    status = "test_mode"
-                    reason = f"Test environment (no ML dependencies): {fallback_error}"
+                    backend = registry.get_backend("synthetic", self.config)
+                    resolved = "synthetic"
+                    status = "synthetic_fallback"
+                    reason = f"Test environment - using synthetic depth: {fallback_error}"
             else:
                 resolved = requested
                 status = "success"

@@ -130,35 +130,45 @@ class ZoneResolver:
         """Resolve AWS EC2 availability zone from instance metadata.
 
         Uses IMDSv2 (token-based) for security.
+        Uses http.client instead of urllib.request.urlopen to satisfy Bandit B310.
 
         Returns:
             Availability zone (e.g., "us-west-2a") or None
         """
         try:
-            import urllib.error
-            import urllib.request
+            import http.client
 
             # IMDSv2: Get token first
-            token_url = "http://169.254.169.254/latest/api/token"
-            token_req = urllib.request.Request(
-                token_url, headers={"X-aws-ec2-metadata-token-ttl-seconds": "21600"}, method="PUT"
-            )
-
+            # Note: IP hardcoded (not variable) to prevent SSRF/scheme injection (Bandit B310).
+            # Expand only with explicit provider support (e.g., GCP metadata.google.internal).
+            conn = http.client.HTTPConnection("169.254.169.254", timeout=1)
             try:
-                with urllib.request.urlopen(token_req, timeout=1) as response:
-                    token = response.read().decode()
-            except (urllib.error.URLError, TimeoutError):
-                # Not running on EC2 or IMDSv2 not available
+                conn.request("PUT", "/latest/api/token", headers={"X-aws-ec2-metadata-token-ttl-seconds": "21600"})
+                resp = conn.getresponse()
+                if resp.status >= 400:
+                    # Not running on EC2 or IMDSv2 not available
+                    return None
+                token = resp.read().decode()
+            except (OSError, TimeoutError):
+                # Network error or timeout
                 return None
+            finally:
+                conn.close()
 
             # Get availability zone using token
-            az_url = "http://169.254.169.254/latest/meta-data/placement/availability-zone"
-            az_req = urllib.request.Request(az_url, headers={"X-aws-ec2-metadata-token": token})
-
-            with urllib.request.urlopen(az_req, timeout=1) as response:
-                az = response.read().decode().strip()
+            conn = http.client.HTTPConnection("169.254.169.254", timeout=1)
+            try:
+                conn.request(
+                    "GET", "/latest/meta-data/placement/availability-zone", headers={"X-aws-ec2-metadata-token": token}
+                )
+                resp = conn.getresponse()
+                if resp.status >= 400:
+                    return None
+                az = resp.read().decode().strip()
                 if az:
                     return az
+            finally:
+                conn.close()
 
         except Exception as e:
             logger.debug(f"Failed to resolve AWS zone: {e}")

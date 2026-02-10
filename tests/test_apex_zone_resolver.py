@@ -103,35 +103,35 @@ class TestZoneResolver:
 
         assert zone == "us-east-1b"
 
-    @patch("urllib.request.urlopen")
-    def test_aws_zone_detection(self, mock_urlopen):
+    @patch("http.client.HTTPConnection")
+    def test_aws_zone_detection(self, mock_http_connection):
         """Test AWS EC2 zone detection via IMDSv2."""
-        # Mock token request
-        token_response = MagicMock()
-        token_response.read.return_value = b"test-token-12345"
-        token_response.__enter__ = MagicMock(return_value=token_response)
-        token_response.__exit__ = MagicMock(return_value=False)
+        # Mock responses for token and AZ requests
+        mock_token_response = MagicMock()
+        mock_token_response.status = 200
+        mock_token_response.read.return_value = b"test-token-12345"
 
-        # Mock AZ request
-        az_response = MagicMock()
-        az_response.read.return_value = b"us-west-2c"
-        az_response.__enter__ = MagicMock(return_value=az_response)
-        az_response.__exit__ = MagicMock(return_value=False)
+        mock_az_response = MagicMock()
+        mock_az_response.status = 200
+        mock_az_response.read.return_value = b"us-west-2c"
 
-        mock_urlopen.side_effect = [token_response, az_response]
+        # Mock connection instance
+        mock_conn = MagicMock()
+        mock_conn.getresponse.side_effect = [mock_token_response, mock_az_response]
+        mock_http_connection.return_value = mock_conn
 
         ZoneResolver.clear_cache()
         zone = ZoneResolver.resolve()
 
         assert zone == "us-west-2c"
 
-    @patch("urllib.request.urlopen")
-    def test_aws_detection_timeout(self, mock_urlopen):
+    @patch("http.client.HTTPConnection")
+    def test_aws_detection_timeout(self, mock_http_connection):
         """Test AWS detection gracefully handles timeout."""
-        from urllib.error import URLError
-
         # Simulate timeout
-        mock_urlopen.side_effect = URLError("timeout")
+        mock_conn = MagicMock()
+        mock_conn.request.side_effect = TimeoutError("timeout")
+        mock_http_connection.return_value = mock_conn
 
         ZoneResolver.clear_cache()
         zone = ZoneResolver.resolve()
