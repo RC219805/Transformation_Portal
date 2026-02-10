@@ -18,31 +18,33 @@ Schema version: 1.0.0
 from __future__ import annotations
 
 import datetime
-from typing import Any, Dict, List, Optional, Literal
+from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, validator
 
 
 class ToolchainVersion(BaseModel):
     """Toolchain version metadata for reproducibility.
-    
+
     Attributes:
         name: Tool name (e.g., "exiftool", "ImageMagick", "libraw")
         version: Semantic version or commit SHA
         path: Optional path to binary
     """
-    
+
     name: str
     version: str
     path: Optional[str] = None
-    
-    class Config:
-        frozen = True  # Immutable for audit integrity
+
+    model_config = ConfigDict(
+        frozen=True,  # Immutable for audit integrity
+        extra="forbid",  # Reject unknown fields (schema drift detection)
+    )
 
 
 class HostEnvironment(BaseModel):
     """Host environment metadata.
-    
+
     Attributes:
         hostname: System hostname
         os: Operating system (e.g., "Linux", "Darwin", "Windows")
@@ -50,30 +52,32 @@ class HostEnvironment(BaseModel):
         python_version: Python interpreter version
         arch: CPU architecture (e.g., "x86_64", "arm64")
     """
-    
+
     hostname: str
     os: str
     os_version: str
     python_version: str
     arch: str
-    
-    class Config:
-        frozen = True
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
 
 
 class IngestTimestamps(BaseModel):
     """Ingest timing metadata (all UTC).
-    
+
     Attributes:
         ingest_start: ISO 8601 timestamp when ingest began
         ingest_end: ISO 8601 timestamp when ingest completed
         exiftool_extract_duration_sec: Time spent in exiftool extraction
     """
-    
+
     ingest_start: str  # ISO 8601 with timezone
     ingest_end: str
     exiftool_extract_duration_sec: Optional[float] = None
-    
+
     @validator("ingest_start", "ingest_end")
     def validate_iso_format(cls, v):
         """Ensure timestamps are valid ISO 8601 format."""
@@ -82,42 +86,46 @@ class IngestTimestamps(BaseModel):
         except ValueError as e:
             raise ValueError(f"Invalid ISO 8601 timestamp: {v}") from e
         return v
-    
-    class Config:
-        frozen = True
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
 
 
 class FileIntegrity(BaseModel):
     """File integrity metadata.
-    
+
     Attributes:
         sha256: SHA256 hash of input file
         size_bytes: File size in bytes
         path: Relative or absolute path to file
         mime_type: MIME type detected (e.g., "image/tiff", "image/x-canon-cr2")
     """
-    
+
     sha256: str
     size_bytes: int
     path: str
     mime_type: Optional[str] = None
-    
+
     @validator("sha256")
     def validate_sha256(cls, v):
         """Ensure SHA256 is 64 hex characters."""
         if not (len(v) == 64 and all(c in "0123456789abcdef" for c in v.lower())):
             raise ValueError(f"Invalid SHA256 hash: {v}")
         return v.lower()
-    
-    class Config:
-        frozen = True
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
 
 
 class ExifMetadata(BaseModel):
     """Complete EXIF metadata extracted via exiftool.
-    
+
     All fields are optional as EXIF availability varies by format and camera.
-    
+
     Attributes:
         all_tags: Complete exiftool JSON output (all groups + tags)
         camera_make: Camera manufacturer (e.g., "Canon", "Nikon")
@@ -136,9 +144,9 @@ class ExifMetadata(BaseModel):
         gps_latitude: GPS latitude if available
         gps_longitude: GPS longitude if available
     """
-    
+
     all_tags: Dict[str, Any]  # Full exiftool JSON
-    
+
     # Commonly used fields (extracted for convenience)
     camera_make: Optional[str] = None
     camera_model: Optional[str] = None
@@ -155,43 +163,47 @@ class ExifMetadata(BaseModel):
     datetime_original: Optional[str] = None
     gps_latitude: Optional[float] = None
     gps_longitude: Optional[float] = None
-    
-    class Config:
-        frozen = True
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
 
 
 class PipelineConfig(BaseModel):
     """Pipeline configuration fingerprint.
-    
+
     Attributes:
         config_sha256: SHA256 hash of config dict (for determinism)
         cli_args: Command-line arguments used
         preset: Preset name if used
         custom_params: Custom parameter overrides
     """
-    
+
     config_sha256: str
     cli_args: Optional[List[str]] = None
     preset: Optional[str] = None
     custom_params: Optional[Dict[str, Any]] = None
-    
+
     @validator("config_sha256")
     def validate_sha256(cls, v):
         """Ensure config SHA256 is valid."""
         if not (len(v) == 64 and all(c in "0123456789abcdef" for c in v.lower())):
             raise ValueError(f"Invalid config SHA256: {v}")
         return v.lower()
-    
-    class Config:
-        frozen = True
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
 
 
 class ProvenanceSidecar(BaseModel):
     """Provenance sidecar schema (v1.0.0).
-    
+
     Complete, lossless provenance record for audit-grade traceability.
     Emitted deterministically for every ingested RAW/TIFF file.
-    
+
     Attributes:
         schema_version: Schema version (semantic versioning)
         file_integrity: File hash, size, and path
@@ -203,9 +215,9 @@ class ProvenanceSidecar(BaseModel):
         git_commit: Git commit SHA at ingest time
         run_id: Unique run identifier (UUID v4) - non-deterministic by design
     """
-    
+
     schema_version: Literal["1.0.0"] = "1.0.0"
-    
+
     file_integrity: FileIntegrity
     exif: ExifMetadata
     toolchain: List[ToolchainVersion]
@@ -214,17 +226,14 @@ class ProvenanceSidecar(BaseModel):
     pipeline_config: PipelineConfig
     git_commit: Optional[str] = None
     run_id: str  # UUID v4 (only non-deterministic field by design)
-    
+
     @validator("schema_version")
     def validate_schema_version(cls, v):
         """Ensure schema version is supported."""
         if v != "1.0.0":
-            raise ValueError(
-                f"Unsupported ProvenanceSidecar schema version: {v}. "
-                f"This code supports version 1.0.0 only."
-            )
+            raise ValueError(f"Unsupported ProvenanceSidecar schema version: {v}. " f"This code supports version 1.0.0 only.")
         return v
-    
+
     @validator("git_commit")
     def validate_git_commit(cls, v):
         """Validate git commit SHA format if present."""
@@ -233,22 +242,25 @@ class ProvenanceSidecar(BaseModel):
                 raise ValueError(f"Invalid git commit SHA: {v}")
             return v.lower()
         return v
-    
-    class Config:
-        frozen = True  # Immutable for audit integrity
-        
+
+    model_config = ConfigDict(
+        frozen=True,  # Immutable for audit integrity
+        extra="forbid",  # Reject unknown fields (schema drift detection)
+    )
+
     def to_json_deterministic(self) -> str:
         """Serialize to deterministic JSON.
-        
+
         Guarantees:
         - Sorted keys
         - Normalized whitespace
         - No non-deterministic fields except run_id (explicitly allowed)
-        
+
         Returns:
             JSON string with sorted keys and 2-space indentation
         """
         import json
+
         return json.dumps(
             self.model_dump(),
             sort_keys=True,
@@ -260,10 +272,10 @@ class ProvenanceSidecar(BaseModel):
 
 class IngestManifest(BaseModel):
     """Ingest manifest schema (v1.0.0).
-    
+
     Output contract for the ingest stage.
     Lighter-weight than ProvenanceSidecar (summary only).
-    
+
     Attributes:
         schema_version: Schema version (semantic versioning)
         input_file: Input file path and integrity
@@ -273,26 +285,23 @@ class IngestManifest(BaseModel):
         provenance_sidecar_path: Path to full provenance sidecar JSON
         ingest_duration_sec: Total ingest duration in seconds
     """
-    
+
     schema_version: Literal["1.0.0"] = "1.0.0"
-    
+
     input_file: FileIntegrity
     output_file: Optional[FileIntegrity] = None
     status: str  # "success", "error", "skipped"
     error_message: Optional[str] = None
     provenance_sidecar_path: str
     ingest_duration_sec: float
-    
+
     @validator("schema_version")
     def validate_schema_version(cls, v):
         """Ensure schema version is supported."""
         if v != "1.0.0":
-            raise ValueError(
-                f"Unsupported IngestManifest schema version: {v}. "
-                f"This code supports version 1.0.0 only."
-            )
+            raise ValueError(f"Unsupported IngestManifest schema version: {v}. " f"This code supports version 1.0.0 only.")
         return v
-    
+
     @validator("status")
     def validate_status(cls, v):
         """Ensure status is one of allowed values."""
@@ -300,17 +309,20 @@ class IngestManifest(BaseModel):
         if v not in allowed:
             raise ValueError(f"Invalid status: {v}. Must be one of {allowed}")
         return v
-    
-    class Config:
-        frozen = True
-        
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+    )
+
     def to_json_deterministic(self) -> str:
         """Serialize to deterministic JSON.
-        
+
         Returns:
             JSON string with sorted keys and 2-space indentation
         """
         import json
+
         return json.dumps(
             self.model_dump(),
             sort_keys=True,
