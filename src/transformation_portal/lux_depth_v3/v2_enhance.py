@@ -22,6 +22,7 @@ Reference: V2_ENHANCEMENT_ARCHITECTURAL_GUIDANCE.md
 from __future__ import annotations
 
 import logging
+import shutil
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -81,6 +82,8 @@ def find_depth_map(depth_dir: Path, image_stem: str) -> Optional[Path]:
 def load_depth_map(depth_path: Path) -> np.ndarray:
     """Load and normalize depth map.
 
+    Preserves 16-bit precision by using fixed-scale normalization for uint16 depth.
+
     Args:
         depth_path: Path to depth map image
 
@@ -93,15 +96,20 @@ def load_depth_map(depth_path: Path) -> np.ndarray:
     try:
         depth_image = Image.open(depth_path)
 
-        # Convert to grayscale if needed
-        if depth_image.mode != "L" and depth_image.mode != "I" and depth_image.mode != "F":
-            depth_image = depth_image.convert("L")
+        # Handle 16-bit depth maps explicitly to preserve precision
+        if depth_image.mode in ("I;16", "I;16B", "I;16L", "I;16N"):
+            # Convert to uint16 array and normalize via fixed scale
+            depth_map = np.array(depth_image, dtype=np.uint16).astype(np.float32) / 65535.0
+        else:
+            # Convert to grayscale if needed
+            if depth_image.mode != "L" and depth_image.mode != "I" and depth_image.mode != "F":
+                depth_image = depth_image.convert("L")
 
-        depth_map = np.array(depth_image, dtype=np.float32)
+            depth_map = np.array(depth_image, dtype=np.float32)
 
-        # Normalize to [0, 1]
-        if depth_map.max() > 1.0:
-            depth_map = depth_map / depth_map.max()
+            # Normalize to [0, 1]
+            if depth_map.max() > 1.0:
+                depth_map = depth_map / depth_map.max()
 
         return depth_map
 
@@ -164,8 +172,10 @@ def enhance_image(
         config.enhancement_strength == 0.0 and config.clarity_strength == 0.0 and config.material_strength == 0.0
     ):
         logger.info("Preset 'none' - skipping enhancement (passthrough)")
-        # Just copy input to output
-        Image.open(input_path).save(output_path)
+        # True passthrough: preserve metadata and pixel data exactly (no re-encoding)
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(input_path, output_path)
         return {
             "status": "passthrough",
             "implementation": "v2_enhance",
@@ -180,8 +190,23 @@ def enhance_image(
 
     try:
         # Load input image
-        image = np.array(Image.open(input_path))
-        logger.debug(f"Loaded image: {image.shape}, dtype={image.dtype}")
+        pil_image = Image.open(input_path)
+        image = np.array(pil_image)
+        logger.debug(f"Loaded image: {image.shape}, dtype={image.dtype}, mode={pil_image.mode}")
+
+        # Handle RGBA inputs: extract RGB, enhance, restore alpha
+        alpha_channel = None
+        if pil_image.mode == "RGBA" and image.ndim == 3 and image.shape[2] == 4:
+            logger.debug("RGBA input detected - extracting alpha channel for preservation")
+            alpha_channel = image[:, :, 3]  # Extract alpha
+            image = image[:, :, :3]  # RGB only for enhancement
+
+        # Enforce RGB (H, W, 3) contract for EnhancementStage
+        if image.ndim == 2:
+            # Grayscale -> RGB
+            image = np.stack([image, image, image], axis=2)
+        elif image.ndim == 3 and image.shape[2] != 3:
+            raise V2EnhancementError(f"Unexpected image shape: {image.shape} (expected (H,W,3) RGB)")
 
         # Load depth map if provided
         depth_map = None
@@ -221,6 +246,11 @@ def enhance_image(
         enhanced_image = result.artifacts.get("enhanced_image")
         if enhanced_image is None:
             raise V2EnhancementError("EnhancementStage did not produce 'enhanced_image' artifact")
+
+        # Restore alpha channel if input was RGBA
+        if alpha_channel is not None:
+            logger.debug("Restoring alpha channel to enhanced RGB image")
+            enhanced_image = np.dstack([enhanced_image, alpha_channel])
 
         # Ensure output directory exists
         output_path = Path(output_path)

@@ -349,3 +349,45 @@ class TestEnhanceImage:
                 call_args = mock_stage.compute.call_args
                 context = call_args[0][0]
                 assert context.device == device
+
+    def test_enhance_image_rgba_preserves_alpha(self, tmp_path):
+        """Test that RGBA inputs preserve alpha channel byte-for-byte."""
+        input_path = tmp_path / "input.png"
+        output_path = tmp_path / "output.png"
+
+        # Create RGBA test image with distinct alpha channel
+        rgb = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
+        alpha = np.random.randint(0, 256, (100, 100), dtype=np.uint8)
+        rgba_image = np.dstack([rgb, alpha])
+        Image.fromarray(rgba_image, mode="RGBA").save(input_path)
+
+        # Mock EnhancementStage to return enhanced RGB
+        enhanced_rgb = np.clip(rgb.astype(np.float32) * 1.1, 0, 255).astype(np.uint8)
+
+        with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as mock_stage_cls:
+            mock_stage = Mock()
+            mock_stage_cls.return_value = mock_stage
+
+            mock_result = Mock()
+            mock_result.status = StageStatus.COMPLETED
+            mock_result.artifacts = {"enhanced_image": enhanced_rgb}
+            mock_result.metadata = {}
+            mock_stage.compute.return_value = mock_result
+
+            # Run enhancement
+            report = enhance_image(input_path, output_path)
+
+            # Verify output is RGBA
+            output_image = Image.open(output_path)
+            assert output_image.mode == "RGBA"
+
+            # Verify alpha channel preserved byte-for-byte
+            output_array = np.array(output_image)
+            assert output_array.shape[2] == 4
+            np.testing.assert_array_equal(output_array[:, :, 3], alpha, err_msg="Alpha channel not preserved byte-for-byte")
+
+            # Verify RGB was enhanced (EnhancementStage received RGB only)
+            call_args = mock_stage.compute.call_args
+            context = call_args[0][0]
+            input_to_stage = context.get_artifact("image")
+            assert input_to_stage.shape == (100, 100, 3)  # RGB only, no alpha
