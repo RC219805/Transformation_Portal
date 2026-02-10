@@ -229,7 +229,6 @@ projects/
 # Binary executables (install via CI/package managers)
 actionlint
 *.exe
-!*.py
 
 # Security - prevent sensitive local backups
 .local_backup/
