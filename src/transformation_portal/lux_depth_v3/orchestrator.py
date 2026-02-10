@@ -748,6 +748,26 @@ class EnhanceOrchestrator:
                 if cached_depth is None:
                     result = self.postprocessor.process(result)
 
+                # CRITICAL FIX (#2): Resize depth map back to original dimensions
+                # preprocessing.py pads/crops to multiple of 14, but depth must match original source
+                depth_map = result.depth_map if hasattr(result, "depth_map") else result.depth
+                current_shape = depth_map.shape[:2]  # (H, W)
+
+                if current_shape != original_shape:
+                    from PIL import Image as PILImage
+
+                    logger.debug(f"Resizing depth map from {current_shape} back to original {original_shape}")
+                    # Convert to PIL for high-quality resize
+                    depth_pil = PILImage.fromarray((depth_map * 65535).astype(np.uint16), mode="I;16")
+                    # Resize to original dimensions (H, W) -> PIL expects (W, H)
+                    depth_pil_resized = depth_pil.resize((original_shape[1], original_shape[0]), PILImage.Resampling.LANCZOS)
+                    depth_map = np.array(depth_pil_resized, dtype=np.float32) / 65535.0
+                    # Update result object
+                    if hasattr(result, "depth_map"):
+                        result.depth_map = depth_map
+                    else:
+                        result.depth = depth_map
+
                 depth_runtime_s = time.time() - t0
 
                 # 3. Write quantized depth (PNG 16-bit)
@@ -1038,7 +1058,9 @@ class EnhanceOrchestrator:
         )
         manifest.write(manifest_path)
 
-    def enhance_image(self, image_input: ImageInput, input_root: Optional[Path] = None) -> Dict[str, Any]:
+    def enhance_image(
+        self, image_input: ImageInput, input_root: Optional[Path] = None, _precomputed_paths: Optional[Dict[str, Path]] = None
+    ) -> Dict[str, Any]:
         """Run full enhancement pipeline on a single image.
 
         Orchestrates the depth computation, PBR generation, V2 enhancement,
@@ -1048,6 +1070,7 @@ class EnhanceOrchestrator:
         Args:
             image_input: Input image information
             input_root: Base directory for relative path calculation
+            _precomputed_paths: Internal - pre-computed paths from parallel preprocessing
 
         Returns:
             Dictionary with processing status and output paths
@@ -1055,19 +1078,32 @@ class EnhanceOrchestrator:
         # Capture start time for accurate timestamps
         pipeline_start_time = time.time()
 
-        # Generate output key for consistent artifact naming
-        use_xxhash = getattr(self.config, "use_xxhash", False)
-        output_key = (
-            make_output_key(image_input.path, input_root, use_xxhash=use_xxhash)
-            if input_root
-            else Path(sanitize_file_stem(image_input.path.stem))
-        )
-        logger.info(f"Processing {output_key}...")
+        # PERFORMANCE FIX (#4): Use pre-computed paths from parallel batch if available
+        if _precomputed_paths:
+            output_key = _precomputed_paths["output_key"]
+            depth_path = _precomputed_paths["depth_path"]
+            manifest_path = _precomputed_paths["manifest_path"]
+            skip_depth = _precomputed_paths.get("should_skip", False)
+            logger.info(f"Processing {output_key} (using precomputed paths)...")
+        else:
+            # Generate output key for consistent artifact naming
+            use_xxhash = getattr(self.config, "use_xxhash", False)
+            output_key = (
+                make_output_key(image_input.path, input_root, use_xxhash=use_xxhash)
+                if input_root
+                else Path(sanitize_file_stem(image_input.path.stem))
+            )
+            logger.info(f"Processing {output_key}...")
 
-        # Define output paths
-        depth_path = self.depth_dir / output_key.parent / f"{output_key.name}_depth.png"
+            # Define output paths
+            depth_path = self.depth_dir / output_key.parent / f"{output_key.name}_depth.png"
+            manifest_path = self.manifests_dir / output_key.parent / f"{output_key.name}_combined.json"
+
+            # Determine skip logic
+            skip_depth = not self.config.force_depth and self.should_skip_depth(depth_path, manifest_path, image_input)
+
+        # Always compute these paths (not part of skip logic)
         float_depth_path = self.depth_dir / output_key.parent / f"{output_key.name}_depth.npy"
-        manifest_path = self.manifests_dir / output_key.parent / f"{output_key.name}_combined.json"
         v2_log_path = self.logs_dir / output_key.parent / f"v2_{output_key.name}.log"
 
         # Ensure output directories exist
@@ -1075,7 +1111,7 @@ class EnhanceOrchestrator:
             p.parent.mkdir(parents=True, exist_ok=True)
 
         # Determine skip logic BEFORE preprocessing (lazy evaluation)
-        skip_depth = not self.config.force_depth and self.should_skip_depth(depth_path, manifest_path, image_input)
+        # (skip_depth already computed above for both paths)
 
         # --- STAGE A: DEPTH COMPUTATION ---
         depth_metadata, depth_runtime_s, pbr_assets = self._compute_depth_stage(
@@ -1283,6 +1319,7 @@ class EnhanceOrchestrator:
         preprocessed = self._parallel_preprocess_batch(image_inputs, input_root)
 
         # Phase 2: Sequential depth inference (GPU-bound, avoid contention)
+        # PERFORMANCE FIX (#4): Pass precomputed paths to avoid redundant I/O
         results = []
         for item in preprocessed:
             if item["status"] == "error":
@@ -1290,7 +1327,14 @@ class EnhanceOrchestrator:
                 continue
 
             try:
-                result = self.enhance_image(item["image_input"], input_root)
+                # Extract precomputed paths and pass to enhance_image
+                precomputed = {
+                    "output_key": item["output_key"],
+                    "depth_path": item["depth_path"],
+                    "manifest_path": item["manifest_path"],
+                    "should_skip": item["should_skip"],
+                }
+                result = self.enhance_image(item["image_input"], input_root, _precomputed_paths=precomputed)
                 results.append(result)
             except Exception as e:
                 logger.error(f"Enhancement failed for {item['image_input'].path}: {e}")
@@ -1333,8 +1377,9 @@ class EnhanceOrchestrator:
         self._backend_metadata = backend_metadata
 
         # Use input discovery to exclude depth artifacts and derived outputs
+        # ROBUSTNESS FIX (#6): Pass output_root to explicitly exclude output directory
         discovery_config = DiscoveryConfig(strict_mode=self.config.strict_inputs)
-        images = discover_images(input_dir, discovery_config, image_extensions)
+        images = discover_images(input_dir, discovery_config, image_extensions, output_dir=self.output_root)
 
         # Phase 2: Use parallel batch processing if enabled
         image_inputs = [ImageInput(img) for img in sorted(images)]
@@ -1362,12 +1407,14 @@ class EnhanceOrchestrator:
         runtime_stats = compute_batch_runtime_stats(runtimes)
 
         # Detect runtime outliers (images taking >5× median time)
+        # PERFORMANCE FIX (#3): Compute median once, pass to all outlier checks (O(n) instead of O(n²))
+        median_runtime = runtime_stats.get("median", 0.0)
         outliers = []
         for r in results:
             if r.get("status") == "ok":
                 runtime_s = r.get("runtime_s", 0.0)
                 image_name = r.get("image", "unknown")
-                outlier_result = detect_runtime_outliers(image_name, runtime_s, runtimes)
+                outlier_result = detect_runtime_outliers(image_name, runtime_s, runtimes, median=median_runtime)
                 if outlier_result:
                     warning_msg, outlier_meta = outlier_result
                     outliers.append(
