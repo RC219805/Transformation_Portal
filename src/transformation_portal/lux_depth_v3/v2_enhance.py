@@ -206,8 +206,19 @@ def load_image_preserve_bit_depth(input_path: Path, allow_8bit_output: bool = Fa
     # Handle EXIF orientation
     pil_image = ImageOps.exif_transpose(pil_image)
 
-    # If rotation was applied, don't save EXIF (prevents double rotation)
-    # This is handled in the caller
+    # After applying exif_transpose, normalize EXIF to avoid double-rotation:
+    # - pixels have been rotated already
+    # - EXIF Orientation must not request additional rotation in viewers
+    try:
+        exif = pil_image.getexif()
+    except Exception:
+        exif = None
+
+    if exif:
+        # Pillow typically normalizes orientation to 1 after transpose
+        metadata["exif"] = exif.tobytes()
+    else:
+        metadata["exif"] = None
 
     # Handle palette mode
     if pil_image.mode == "P":
