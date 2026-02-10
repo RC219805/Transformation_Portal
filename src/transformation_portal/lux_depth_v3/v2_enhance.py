@@ -114,19 +114,23 @@ def detect_input_bit_depth(pil_image: Image.Image) -> int:
     return 8
 
 
-def load_image_preserve_bit_depth(input_path: Path) -> tuple[np.ndarray, int, dict]:
+def load_image_preserve_bit_depth(input_path: Path, allow_8bit_output: bool = False) -> tuple[np.ndarray, int, dict]:
     """Load image preserving bit depth (8-bit or 16-bit).
 
     Uses tifffile for 16-bit TIFFs to avoid PIL's auto-conversion to 8-bit.
 
     Args:
         input_path: Path to input image
+        allow_8bit_output: If False, raises error if 16-bit input must be downconverted
 
     Returns:
         Tuple of (image_array, bits_per_sample, metadata)
         - image_array: np.ndarray with dtype uint8 or uint16
         - bits_per_sample: 8 or 16
         - metadata: dict with ICC profile, EXIF, etc.
+
+    Raises:
+        V2EnhancementError: If Quality Firewall blocks downconversion
     """
     # First, open with PIL to check format and extract metadata
     pil_image = Image.open(input_path)
@@ -140,11 +144,11 @@ def load_image_preserve_bit_depth(input_path: Path) -> tuple[np.ndarray, int, di
         "size": pil_image.size,
     }
 
-    # Detect bit depth
-    bits_per_sample = detect_input_bit_depth(pil_image)
+    # Detect bit depth FIRST (before any loading)
+    detected_input_bits = detect_input_bit_depth(pil_image)
 
     # For 16-bit TIFFs, use tifffile to load correctly
-    if bits_per_sample == 16 and pil_image.format == "TIFF":
+    if detected_input_bits == 16 and pil_image.format == "TIFF":
         try:
             import tifffile
 
@@ -153,6 +157,27 @@ def load_image_preserve_bit_depth(input_path: Path) -> tuple[np.ndarray, int, di
 
             # tifffile returns (H, W, C) for RGB or (H, W) for grayscale
             logger.debug(f"Loaded 16-bit TIFF with tifffile: " f"shape={image_array.shape}, dtype={image_array.dtype}")
+
+            # Handle EXIF orientation for tifffile path
+            # tifffile doesn't apply EXIF orientation automatically
+            try:
+                if hasattr(pil_image, "getexif"):
+                    exif = pil_image.getexif()
+                    orientation = exif.get(0x0112)  # Orientation tag
+
+                    if orientation and orientation != 1:
+                        # Apply rotation to numpy array
+                        if orientation == 3:
+                            image_array = np.rot90(image_array, 2)
+                        elif orientation == 6:
+                            image_array = np.rot90(image_array, -1)
+                        elif orientation == 8:
+                            image_array = np.rot90(image_array, 1)
+                        # orientations 2, 4, 5, 7 involve flips (rare, skip for now)
+
+                        logger.info(f"Applied EXIF orientation {orientation} to 16-bit TIFF")
+            except Exception as e:
+                logger.warning(f"Could not process EXIF orientation for tifffile: {e}")
 
             # Ensure RGB format (H, W, 3)
             if image_array.ndim == 2:
@@ -163,9 +188,17 @@ def load_image_preserve_bit_depth(input_path: Path) -> tuple[np.ndarray, int, di
                 # Note: alpha will be handled later in the pipeline
                 logger.debug("16-bit RGBA detected - will preserve alpha channel")
 
-            return image_array, bits_per_sample, metadata
+            return image_array, detected_input_bits, metadata
 
         except Exception as e:
+            # Check Quality Firewall before falling back to PIL
+            if detected_input_bits == 16 and not allow_8bit_output:
+                raise V2EnhancementError(
+                    f"Cannot load 16-bit TIFF with tifffile (error: {e}). "
+                    f"Fallback to PIL would downconvert to 8-bit, blocked by Quality Firewall. "
+                    f"Install tifffile correctly or use --allow-8bit to permit downgrade."
+                )
+
             logger.warning(f"Failed to load 16-bit TIFF with tifffile: {e}. " f"Falling back to PIL (will convert to 8-bit)")
             # Fall through to PIL loading
 
@@ -186,17 +219,18 @@ def load_image_preserve_bit_depth(input_path: Path) -> tuple[np.ndarray, int, di
 
     image_array = np.array(pil_image)
 
-    # If we got here with 16-bit input, it was downconverted
-    if bits_per_sample == 16:
+    # Track actual loaded bits
+    actual_bits = detected_input_bits
+    if detected_input_bits == 16:
+        # We got here via PIL fallback - input was downconverted
         logger.warning(
             f"16-bit input was downconverted to 8-bit by PIL. " f"Original BitsPerSample=16, loaded as {image_array.dtype}"
         )
-        # Update to reflect actual loaded data
-        bits_per_sample = 8
+        actual_bits = 8
 
     logger.debug(f"Loaded image with PIL: " f"shape={image_array.shape}, dtype={image_array.dtype}")
 
-    return image_array, bits_per_sample, metadata
+    return image_array, actual_bits, metadata
 
 
 def load_depth_map(depth_path: Path) -> np.ndarray:
@@ -322,7 +356,7 @@ def enhance_image(
 
     try:
         # Load input image with bit-depth preservation
-        image, input_bits, metadata = load_image_preserve_bit_depth(input_path)
+        image, input_bits, metadata = load_image_preserve_bit_depth(input_path, allow_8bit_output)
         icc_profile = metadata.get("icc_profile")
         exif_data = metadata.get("exif")
 
@@ -330,10 +364,16 @@ def enhance_image(
 
         # Quality Firewall: Enforce bit-depth preservation
         # 16-bit input MUST produce 16-bit output unless explicitly allowed
-        if input_bits == 16 and not allow_8bit_output:
-            logger.info("Quality Firewall ACTIVE: 16-bit input detected - " "will preserve 16-bit output")
-        elif input_bits == 16 and allow_8bit_output:
+        # Decide target dtype up front to ensure consistency throughout pipeline
+        if input_bits == 16 and allow_8bit_output:
+            target_dtype = np.uint8
+            target_bits = 8
             logger.warning("Quality Firewall BYPASSED: 16-bit → 8-bit downgrade allowed " "by --allow-8bit flag")
+        else:
+            target_dtype = image.dtype
+            target_bits = input_bits
+            if input_bits == 16:
+                logger.info("Quality Firewall ACTIVE: 16-bit input detected - " "will preserve 16-bit output")
 
         # Handle RGBA inputs: extract RGB, enhance, restore alpha
         alpha_channel = None
@@ -368,7 +408,7 @@ def enhance_image(
             clarity_strength=config.clarity_strength,
             material_strength=config.material_strength,
             version=config.version,
-            output_dtype=image.dtype,  # Preserve input dtype (uint8 or uint16)
+            output_dtype=target_dtype,  # Use consistent target dtype
         )
 
         # Create minimal context for stage execution
@@ -394,18 +434,24 @@ def enhance_image(
         if enhanced_image is None:
             raise V2EnhancementError("EnhancementStage did not produce 'enhanced_image' artifact")
 
+        # Ensure output dtype matches target (handle potential mismatches)
+        if enhanced_image.dtype != target_dtype:
+            logger.debug(f"Converting enhanced image from {enhanced_image.dtype} to {target_dtype}")
+            if target_dtype == np.uint8 and enhanced_image.dtype == np.uint16:
+                # 16-bit → 8-bit conversion with proper normalization
+                enhanced_image = (enhanced_image.astype(np.float32) / 65535.0 * 255.0).astype(np.uint8)
+            elif target_dtype == np.uint16 and enhanced_image.dtype == np.uint8:
+                # 8-bit → 16-bit conversion (unusual but handle it)
+                enhanced_image = (enhanced_image.astype(np.float32) / 255.0 * 65535.0).astype(np.uint16)
+            else:
+                raise V2EnhancementError(f"Unsupported dtype conversion: {enhanced_image.dtype} → {target_dtype}")
+
         # Ensure output directory exists
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Determine output bit depth (preserve input unless downgrade allowed)
-        output_bits = input_bits
-        if input_bits == 16 and allow_8bit_output:
-            output_bits = 8
-            logger.warning("Downgrading 16-bit output to 8-bit (allow_8bit_output=True)")
-
         # Save enhanced image with metadata preservation and correct bit-depth
-        if output_bits == 16 and enhanced_image.dtype == np.uint16:
+        if target_bits == 16 and enhanced_image.dtype == np.uint16:
             # Save 16-bit TIFF
             try:
                 import tifffile
@@ -445,8 +491,16 @@ def enhance_image(
                 logger.info(f"Saved 16-bit TIFF: {output_path}")
 
             except Exception as e:
-                logger.error(f"Failed to save 16-bit TIFF with tifffile: {e}")
-                logger.error("Falling back to PIL (will convert to 8-bit)")
+                # Check Quality Firewall before degrading
+                if input_bits == 16 and not allow_8bit_output:
+                    raise V2EnhancementError(
+                        f"Cannot save 16-bit output with tifffile (error: {e}). "
+                        f"Fallback to 8-bit blocked by Quality Firewall. "
+                        f"Use --allow-8bit to explicitly permit downgrade."
+                    )
+
+                # Only fall back to 8-bit if explicitly allowed
+                logger.warning(f"tifffile save failed, falling back to 8-bit PIL: {e}")
                 # Convert to 8-bit and save with PIL
                 enhanced_8bit = (enhanced_image.astype(np.float32) / 65535.0 * 255.0).astype(np.uint8)
                 output_image = Image.fromarray(enhanced_8bit)
@@ -457,7 +511,7 @@ def enhance_image(
                     save_kwargs["exif"] = exif_data
                 output_image.save(output_path, **save_kwargs)
                 logger.warning(f"Saved as 8-bit (16-bit save failed): {output_path}")
-                output_bits = 8  # Update actual output
+                # Note: target_bits stays 8 (was set via allow_8bit_output)
 
         else:
             # Save 8-bit with PIL (standard path)
@@ -514,11 +568,11 @@ def enhance_image(
             # BIT-DEPTH METADATA (Quality Firewall contract)
             "bit_depth": {
                 "input_bits_per_sample": input_bits,
-                "output_bits_per_sample": output_bits,
+                "output_bits_per_sample": target_bits,
                 "input_dtype": str(image.dtype),
                 "output_dtype": str(enhanced_image.dtype),
                 "quality_firewall_active": input_bits == 16 and not allow_8bit_output,
-                "bit_depth_preserved": input_bits == output_bits,
+                "bit_depth_preserved": input_bits == target_bits,
                 "downgrade_allowed": allow_8bit_output,
             },
         }

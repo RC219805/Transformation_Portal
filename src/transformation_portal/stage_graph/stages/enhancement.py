@@ -201,18 +201,22 @@ class EnhancementStage(Stage):
     def _apply_tone_mapping(self, image: np.ndarray, depth_map: np.ndarray | None) -> np.ndarray:
         """Apply depth-aware tone mapping.
 
-        CRITICAL: Depth maps from Depth Pro use INVERSE DEPTH representation:
-        - HIGH depth values = FAR objects (sky, distant background)
-        - LOW depth values = NEAR objects (foreground architecture, people)
+        CRITICAL: Depth maps from Depth Pro use normalized depth representation:
+        - HIGH depth values (closer to 1.0) = FAR objects (sky, distant background)
+        - LOW depth values (closer to 0.0) = NEAR objects (foreground architecture, people)
+
+        Note: This is sometimes called "inverse depth" in computer vision because
+        it's proportional to 1/distance, but we refer to it as "normalized depth"
+        to avoid confusion.
 
         After p01-p99 normalization to [0,1]:
         - Distribution is heavily skewed toward low values (median ~0.18-0.25)
         - Far objects (sky) are typically 0.4-1.0
         - Near objects (architecture) are typically 0.0-0.2
 
-        For luxury real estate:
-        - NEAR objects (LOW depth) should be enhanced (boosted)
-        - FAR objects (HIGH depth) should be subtle (compressed)
+        For luxury real estate rendering:
+        - NEAR objects (LOW depth values) should be enhanced (boosted)
+        - FAR objects (HIGH depth values) should be subtle (compressed)
 
         Uses adaptive depth-based adjustment centered on actual data distribution.
         """

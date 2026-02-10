@@ -55,7 +55,7 @@ def create_comparison(before_path, after_path, output_path, crop_sky_region=True
     # Try to use a better font if available
     try:
         font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 24)
-    except:
+    except Exception:
         font = ImageFont.load_default()
 
     # Labels

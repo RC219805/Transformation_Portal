@@ -13,9 +13,10 @@ set -euo pipefail
 # Configuration
 # ============================================================================
 
-INPUT_DIR="/Users/rc/Projects/Transformation_Portal/input_images/source_tiffs"
-OUTPUT_DIR="/Users/rc/Projects/Transformation_Portal/output_apex_v2_luxury"
-DEPTH_DIR="/Users/rc/Projects/Transformation_Portal/depth_maps_apex"  # Optional: for depth-aware processing
+# Use environment variables with repo-relative defaults
+INPUT_DIR="${INPUT_DIR:-input_images/source_tiffs}"
+OUTPUT_DIR="${OUTPUT_DIR:-output_apex_v2_luxury}"
+DEPTH_DIR="${DEPTH_DIR:-depth_maps_apex}"  # Optional: for depth-aware processing
 
 # Create output directories
 mkdir -p "${OUTPUT_DIR}"

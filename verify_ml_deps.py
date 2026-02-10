@@ -36,14 +36,34 @@ def check_dependencies():
 
     all_ok = True
 
+    # Import packaging for version comparisons
+    try:
+        from packaging import version
+    except ImportError:
+        print("  ⚠️  packaging module not available - using string comparisons")
+        version = None
+
     for category, deps in dependencies.items():
         print(f"{category} Libraries:")
         for module_name, display_name, expected_version in deps:
             try:
                 mod = __import__(module_name)
-                version = getattr(mod, "__version__", "unknown")
-                status = "✅" if version >= expected_version or version == "unknown" else "⚠️"
-                print(f"  {status} {display_name:20s} - v{version}")
+                mod_version = getattr(mod, "__version__", "unknown")
+
+                # Use proper version comparison if packaging available
+                if version and mod_version != "unknown":
+                    try:
+                        v_installed = version.parse(mod_version)
+                        v_expected = version.parse(expected_version)
+                        status = "✅" if v_installed >= v_expected else "⚠️"
+                    except Exception:
+                        # Fallback to string comparison
+                        status = "✅" if mod_version >= expected_version else "⚠️"
+                else:
+                    # Fallback for unknown versions
+                    status = "✅" if mod_version == "unknown" or mod_version >= expected_version else "⚠️"
+
+                print(f"  {status} {display_name:20s} - v{mod_version}")
             except ImportError:
                 print(f"  ❌ {display_name:20s} - NOT INSTALLED")
                 all_ok = False
@@ -69,14 +89,23 @@ def check_dependencies():
 
     print()
 
-    # Check device
-    import torch
+    # Check device - wrap torch import
+    try:
+        import torch
+
+        torch_available = True
+    except ImportError:
+        torch_available = False
+        torch = None
 
     print("Hardware Acceleration:")
-    mps = hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
-    print(f"  {'✅' if mps else '❌'} MPS (Apple Silicon)")
-    print(f"  {'✅' if torch.cuda.is_available() else '❌'} CUDA (NVIDIA)")
-    print(f"  ✅ CPU (always available)")
+    if torch_available:
+        mps = hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
+        print(f"  {'✅' if mps else '❌'} MPS (Apple Silicon)")
+        print(f"  {'✅' if torch.cuda.is_available() else '❌'} CUDA (NVIDIA)")
+        print(f"  ✅ CPU (always available)")
+    else:
+        print("  ❌ PyTorch not available - cannot check backends")
     print()
 
     if all_ok:
