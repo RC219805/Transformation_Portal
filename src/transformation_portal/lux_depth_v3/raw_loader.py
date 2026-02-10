@@ -75,45 +75,47 @@ def load_raw_as_rgb(
     raw_path: Path,
     use_camera_wb: bool = True,
     half_size: bool = False,
-    output_bps: int = 16,
-    output_linear: bool = True,
+    output_bps: int = 8,
+    output_linear: bool = False,
 ) -> np.ndarray:
     """Load RAW camera file and convert to RGB numpy array.
 
-    IMPORTANT: For APEX pipeline and Spatial AI Foundation compliance,
-    output_linear MUST be True to preserve linear-light relationships.
-    Gamma-encoded outputs violate the Data Fidelity requirement.
+    IMPORTANT: For APEX pipeline compliance, use output_linear=True with output_bps=16.
+    The defaults (8-bit gamma-encoded) are for legacy compatibility only.
 
     Args:
         raw_path: Path to RAW camera file
         use_camera_wb: Use camera white balance (vs. auto-calculated)
         half_size: Half-size interpolation (faster, lower quality)
-        output_bps: Output bits per sample (8 or 16, default 16 for fidelity)
+        output_bps: Output bits per sample (8 or 16, default 8 for legacy compatibility)
         output_linear: Output linear RGB (True) or gamma-encoded sRGB (False)
-                      Default True for linear light preservation (REQUIRED for APEX)
+                      Default False for legacy compatibility
+                      MUST be True for APEX pipeline
 
     Returns:
         RGB numpy array (uint8 or uint16 depending on output_bps)
         Shape: (H, W, 3)
 
         If output_linear=True: Linear RGB (scene-referred)
-        If output_linear=False: Gamma-encoded sRGB (display-referred)
+        If output_linear=False (default): Gamma-encoded sRGB (display-referred)
 
     Raises:
         ImportError: If rawpy not installed
         FileNotFoundError: If RAW file doesn't exist
-        ValueError: If RAW file cannot be parsed or if gamma-encoded output
-                   requested (output_linear=False is blocked for APEX)
+        ValueError: If RAW file cannot be parsed
 
     Example:
-        >>> # Linear output (APEX compliant)
-        >>> rgb = load_raw_as_rgb(Path("IMG_1234.CR2"), output_linear=True)
+        >>> # Legacy usage (8-bit gamma-encoded)
+        >>> rgb = load_raw_as_rgb(Path("IMG_1234.CR2"))
+        >>> print(rgb.shape, rgb.dtype)
+        (4000, 6000, 3) uint8
+
+        >>> # APEX usage (16-bit linear)
+        >>> rgb = load_raw_as_rgb(Path("IMG_1234.CR2"),
+        ...                       output_bps=16,
+        ...                       output_linear=True)
         >>> print(rgb.shape, rgb.dtype)
         (4000, 6000, 3) uint16
-
-        >>> # Gamma-encoded output (blocked for APEX)
-        >>> rgb = load_raw_as_rgb(Path("IMG_1234.CR2"), output_linear=False)
-        ValueError: Gamma-encoded output not allowed for APEX pipeline
     """
     try:
         import rawpy
@@ -125,16 +127,6 @@ def load_raw_as_rgb(
     if not raw_path.exists():
         raise FileNotFoundError(f"RAW file not found: {raw_path}")
 
-    # APEX compliance check: block gamma-encoded output
-    if not output_linear:
-        raise ValueError(
-            "Gamma-encoded RAW output (output_linear=False) is not allowed for APEX pipeline. "
-            "Per Spatial AI Foundation ROADMAP (Section I: Data Fidelity is Sacred), "
-            "training inputs MUST preserve linear-light relationships. "
-            "Use output_linear=True (default) to preserve linear RGB. "
-            "If display-referred output is needed, apply gamma in post-processing with explicit documentation."
-        )
-
     logger.debug(
         f"Loading RAW file: {raw_path.name} "
         f"(use_camera_wb={use_camera_wb}, half_size={half_size}, "
@@ -144,18 +136,15 @@ def load_raw_as_rgb(
     try:
         with rawpy.imread(str(raw_path)) as raw:
             # Determine color space based on output_linear flag
-            # Linear output uses rawpy.ColorSpace.raw (no gamma encoding)
-            # For gamma output (blocked above), would use rawpy.ColorSpace.sRGB
             if output_linear:
                 # Linear RGB output (scene-referred, no gamma)
-                # Note: rawpy.ColorSpace.raw gives linear sensor RGB
-                # We use rawpy.ColorSpace.raw for true linear output
+                # Use raw color space for true linear output
                 output_color = rawpy.ColorSpace.raw
                 gamma = (1, 1)  # Linear gamma curve (no encoding)
             else:
-                # This path is unreachable due to check above, but kept for clarity
+                # Gamma-encoded sRGB output (display-referred, legacy)
                 output_color = rawpy.ColorSpace.sRGB
-                gamma = (2.2, 4.5)  # sRGB gamma (for reference)
+                gamma = (2.2, 4.5)  # sRGB gamma
 
             # High-quality postprocessing with linear-preserving settings
             rgb = raw.postprocess(
@@ -189,30 +178,31 @@ def load_raw_as_pil(
     raw_path: Path,
     use_camera_wb: bool = True,
     half_size: bool = False,
-    output_linear: bool = True,
+    output_linear: bool = False,
 ) -> Image.Image:
     """Load RAW camera file and convert to PIL Image.
 
     Convenience wrapper around load_raw_as_rgb() that returns PIL Image
     instead of numpy array.
 
-    IMPORTANT: For APEX pipeline compliance, output_linear=True (default)
-    to preserve linear-light relationships.
+    IMPORTANT: For APEX pipeline compliance, use output_linear=True.
+    The default (False) is for legacy compatibility only.
 
     Args:
         raw_path: Path to RAW camera file
         use_camera_wb: Use camera white balance (vs. auto-calculated)
         half_size: Half-size interpolation (faster, lower quality)
         output_linear: Output linear RGB (True) or gamma-encoded sRGB (False)
-                      Default True for linear light preservation (REQUIRED for APEX)
+                      Default False for legacy compatibility
+                      MUST be True for APEX pipeline
 
     Returns:
-        PIL Image in RGB mode (uint16 for linear, uint8 for gamma)
+        PIL Image in RGB mode (uint8)
 
     Raises:
         ImportError: If rawpy not installed
         FileNotFoundError: If RAW file doesn't exist
-        ValueError: If RAW file cannot be parsed or gamma output requested
+        ValueError: If RAW file cannot be parsed
     """
     # Use 16-bit for linear (preserve precision), 8-bit for gamma (legacy)
     output_bps = 16 if output_linear else 8
@@ -233,5 +223,5 @@ def load_raw_as_pil(
         rgb_8bit = (rgb / 257).astype(np.uint8)
         return Image.fromarray(rgb_8bit, mode="RGB")
     else:
-        # 8-bit RGB (legacy path, should not be reached for APEX)
+        # 8-bit RGB (legacy path)
         return Image.fromarray(rgb, mode="RGB")

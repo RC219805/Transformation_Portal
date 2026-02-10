@@ -76,7 +76,7 @@ class TestVerifyDtypeFloat:
         arr = np.array([128], dtype=np.uint8)
         with pytest.raises(DtypeViolationError) as exc_info:
             verify_dtype_float(arr)
-        
+
         error_msg = str(exc_info.value)
         assert "float32" in error_msg
         assert "uint8" in error_msg.lower()
@@ -125,7 +125,7 @@ class TestVerifyRangeLinear:
         # Should fail with default range
         with pytest.raises(RangeViolationError):
             verify_range_linear(arr)
-        
+
         # Should pass with custom range
         verify_range_linear(arr, min_val=0.0, max_val=2.0)
 
@@ -134,7 +134,7 @@ class TestVerifyRangeLinear:
         arr = np.array([0.0, 0.5, 1.5], dtype=np.float32)
         with pytest.raises(RangeViolationError) as exc_info:
             verify_range_linear(arr)
-        
+
         error_msg = str(exc_info.value)
         assert "1.5" in error_msg  # Actual max value
         assert "0.0" in error_msg and "1.0" in error_msg  # Expected range
@@ -186,7 +186,7 @@ class TestVerifyNoGamma:
     def test_gamma_fixture_rejected_strict(self):
         """Gamma fixture should be rejected in strict mode."""
         gamma = create_gamma_encoded_fixture(shape=(50, 50, 3))
-        with pytest.raises(LinearityViolationError, match="Gamma-encoded input detected"):
+        with pytest.raises(LinearityViolationError, match="Image statistics suggest gamma encoding"):
             verify_no_gamma(gamma, strict=True)
 
     def test_gamma_fixture_warns_non_strict(self):
@@ -199,12 +199,13 @@ class TestVerifyNoGamma:
         """Error message should explain how to fix."""
         gamma = create_gamma_encoded_fixture(shape=(20, 20, 3))
         with pytest.raises(LinearityViolationError) as exc_info:
-            verify_no_gamma(gamma)
-        
+            verify_no_gamma(gamma, strict=True)
+
         error_msg = str(exc_info.value)
         assert "linear" in error_msg.lower()
         assert "RAW" in error_msg or "TIFF" in error_msg
-        assert "reject" in error_msg.lower()
+        # Updated: message now says "verify" instead of "reject"
+        assert "verify" in error_msg.lower() or "reject" in error_msg.lower()
 
 
 class TestVerifyLinearIngest:
@@ -227,11 +228,11 @@ class TestVerifyLinearIngest:
         with pytest.raises(RangeViolationError):
             verify_linear_ingest(arr)
 
-    def test_gamma_rejected(self):
-        """Gamma-encoded input should be rejected."""
+    def test_gamma_rejected_in_strict_mode(self):
+        """Gamma-encoded input should be rejected in strict mode."""
         gamma = create_gamma_encoded_fixture(shape=(30, 30, 3))
         with pytest.raises(LinearityViolationError):
-            verify_linear_ingest(gamma)
+            verify_linear_ingest(gamma, strict_gamma=True)
 
     def test_can_skip_individual_checks(self):
         """Individual checks can be disabled via flags."""
@@ -321,11 +322,11 @@ class TestCreateGammaEncodedFixture:
         is_gamma = detect_gamma_encoding(fixture)
         assert is_gamma, "Gamma fixture should be detected as gamma-encoded"
 
-    def test_fails_linear_verification(self):
-        """Gamma fixture SHOULD fail linear verification."""
+    def test_fails_linear_verification_strict(self):
+        """Gamma fixture SHOULD fail linear verification in strict mode."""
         fixture = create_gamma_encoded_fixture()
         with pytest.raises(LinearityViolationError):
-            verify_linear_ingest(fixture)
+            verify_linear_ingest(fixture, strict_gamma=True)
 
     def test_deterministic_with_seed(self):
         """Same seed should produce same gamma fixture."""
@@ -338,7 +339,7 @@ class TestCreateGammaEncodedFixture:
         # Higher gamma should shift values higher
         gamma_low = create_gamma_encoded_fixture(gamma=1.8, seed=42)
         gamma_high = create_gamma_encoded_fixture(gamma=2.8, seed=42)
-        
+
         # Higher gamma → more brightening
         assert gamma_high.mean() > gamma_low.mean()
 
@@ -349,32 +350,32 @@ class TestEndToEndLinearPreservation:
     def test_linear_fixture_roundtrip(self):
         """Linear fixture should remain linear through validation."""
         original = create_linear_test_fixture(seed=42)
-        
+
         # Verify it passes
         verify_linear_ingest(original)
-        
+
         # Should still be identical after check
         assert np.allclose(original, original)  # Tautology, but validates no mutation
 
-    def test_gamma_fixture_must_fail(self):
-        """Gamma-encoded fixture MUST fail end-to-end check."""
+    def test_gamma_fixture_must_fail_strict(self):
+        """Gamma-encoded fixture MUST fail end-to-end check in strict mode."""
         gamma = create_gamma_encoded_fixture(seed=42)
-        
-        # Must fail comprehensive check
+
+        # Must fail comprehensive check in strict mode
         with pytest.raises(LinearityViolationError):
-            verify_linear_ingest(gamma)
+            verify_linear_ingest(gamma, strict_gamma=True)
 
     def test_dtype_leakage_detected(self):
         """uint8/uint16 leakage must be detected and blocked."""
         # Simulate uint8 leakage
         uint8_arr = np.random.randint(0, 256, (50, 50, 3), dtype=np.uint8)
-        
+
         with pytest.raises(DtypeViolationError, match="uint8"):
             verify_linear_ingest(uint8_arr)
-        
+
         # Simulate uint16 leakage
         uint16_arr = np.random.randint(0, 65536, (50, 50, 3), dtype=np.uint16)
-        
+
         with pytest.raises(DtypeViolationError, match="uint16"):
             verify_linear_ingest(uint16_arr)
 
@@ -384,7 +385,7 @@ class TestEndToEndLinearPreservation:
         underflow = np.array([[[-0.1, 0.5, 0.5]]], dtype=np.float32)
         with pytest.raises(RangeViolationError):
             verify_linear_ingest(underflow)
-        
+
         # Overflow
         overflow = np.array([[[0.5, 0.5, 1.1]]], dtype=np.float32)
         with pytest.raises(RangeViolationError):

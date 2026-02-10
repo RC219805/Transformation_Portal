@@ -335,33 +335,34 @@ def preprocess_image_linear(
             if image_path.suffix.lower() in {".tif", ".tiff"}:
                 try:
                     import tifffile
-                    # Load TIFF preserving bit depth
-                    tiff_array = tifffile.imread(str(image_path))
-                    original_h, original_w = tiff_array.shape[0], tiff_array.shape[1]  # NumPy: (H, W, C)
+                except ImportError as e:
+                    raise ImportError(
+                        "tifffile is required for linear TIFF processing in APEX pipeline. "
+                        "Install with: pip install tifffile\n"
+                        "Or: pip install -e '.[tiff]'"
+                    ) from e
 
-                    # Normalize based on dtype
-                    if tiff_array.dtype == np.uint8:
-                        img_array = tiff_array.astype(np.float32) / 255.0
-                    elif tiff_array.dtype == np.uint16:
-                        img_array = tiff_array.astype(np.float32) / 65535.0
-                    elif tiff_array.dtype in [np.float32, np.float64]:
-                        img_array = tiff_array.astype(np.float32)
-                        # Assume already in [0, 1] if float
-                    else:
-                        raise ValueError(f"Unsupported TIFF dtype: {tiff_array.dtype}")
+                # Load TIFF preserving bit depth
+                tiff_array = tifffile.imread(str(image_path))
+                original_h, original_w = tiff_array.shape[0], tiff_array.shape[1]  # NumPy: (H, W, C)
 
-                    # Ensure 3 channels
-                    if img_array.ndim == 2:
-                        img_array = np.stack([img_array] * 3, axis=-1)
-                    elif img_array.ndim == 3 and img_array.shape[2] == 4:
-                        # Drop alpha
-                        img_array = img_array[:, :, :3]
+                # Normalize based on dtype
+                if tiff_array.dtype == np.uint8:
+                    img_array = tiff_array.astype(np.float32) / 255.0
+                elif tiff_array.dtype == np.uint16:
+                    img_array = tiff_array.astype(np.float32) / 65535.0
+                elif tiff_array.dtype in [np.float32, np.float64]:
+                    img_array = tiff_array.astype(np.float32)
+                    # Assume already in [0, 1] if float
+                else:
+                    raise ValueError(f"Unsupported TIFF dtype: {tiff_array.dtype}")
 
-                except ImportError:
-                    logger.warning("tifffile not available, falling back to PIL (may lose 16-bit precision)")
-                    pil_img = Image.open(image_path).convert("RGB")
-                    original_w, original_h = pil_img.size  # PIL returns (W, H)
-                    img_array = np.array(pil_img, dtype=np.float32) / 255.0
+                # Ensure 3 channels
+                if img_array.ndim == 2:
+                    img_array = np.stack([img_array] * 3, axis=-1)
+                elif img_array.ndim == 3 and img_array.shape[2] == 4:
+                    # Drop alpha
+                    img_array = img_array[:, :, :3]
             else:
                 # Use PIL for other formats (JPEG, PNG, etc.)
                 pil_img = Image.open(image_path).convert("RGB")
@@ -417,17 +418,19 @@ def preprocess_image_linear(
         # Use cv2 to avoid lossy float32→uint8→float32 conversion
         try:
             import cv2
-            # cv2.resize preserves dtype (float32 stays float32)
-            # Use INTER_LANCZOS4 for high-quality resampling
-            img_array = cv2.resize(img_array, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4)
-        except ImportError:
-            # Fallback to PIL if cv2 not available
-            # Note: This introduces quantization via uint8 conversion
-            logger.warning("cv2 not available for resize, using PIL (may lose precision)")
-            img_uint8 = (np.clip(img_array, 0, 1) * 255).astype(np.uint8)
-            pil_img = Image.fromarray(img_uint8, mode="RGB")
-            pil_img = pil_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
-            img_array = np.array(pil_img, dtype=np.float32) / 255.0
+        except ImportError as e:
+            raise ImportError(
+                "OpenCV (cv2) is required for resizing in linear space for APEX pipeline. "
+                "Install with: pip install opencv-python\n"
+                "Or: pip install -e '.[cv2]'"
+            ) from e
+
+        # cv2.resize preserves dtype (float32 stays float32)
+        # Use INTER_LANCZOS4 for high-quality resampling
+        img_array = cv2.resize(img_array, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4)
+
+        # Clip to [0, 1] after resize (interpolation can introduce small out-of-range values)
+        img_array = np.clip(img_array, 0.0, 1.0)
 
     # Enforce multiple-of-14 dimensions
     img_array = _enforce_dimension_multiple(img_array, DIMENSION_MULTIPLE)

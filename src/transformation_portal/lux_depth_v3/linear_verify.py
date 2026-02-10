@@ -34,6 +34,7 @@ class LinearityViolationError(ValueError):
     This is a blocking error - the pipeline cannot proceed with
     gamma-encoded or non-linear data.
     """
+
     pass
 
 
@@ -43,6 +44,7 @@ class DtypeViolationError(TypeError):
     uint8 and uint16 tensors indicate potential precision loss or
     gamma encoding. Only float32/float64 tensors are accepted.
     """
+
     pass
 
 
@@ -52,6 +54,7 @@ class RangeViolationError(ValueError):
     Linear light values must be in [0, 1] for normalized floating point
     or [0, 65535] for 16-bit linear representation.
     """
+
     pass
 
 
@@ -80,10 +83,7 @@ def verify_dtype_float(
         >>> verify_dtype_float(arr_uint8)  # Raises DtypeViolationError
     """
     if not isinstance(tensor, np.ndarray):
-        raise TypeError(
-            f"Expected numpy array, got {type(tensor).__name__}. "
-            "Linear verification requires numpy arrays."
-        )
+        raise TypeError(f"Expected numpy array, got {type(tensor).__name__}. " "Linear verification requires numpy arrays.")
 
     allowed_dtypes = [np.float32]
     if allow_float64:
@@ -118,7 +118,7 @@ def verify_range_linear(
         tolerance: Tolerance for floating point comparisons (default 1e-6)
 
     Raises:
-        RangeViolationError: If values are outside expected range
+        RangeViolationError: If values are outside expected range or contain NaN/Inf
 
     Example:
         >>> arr = np.array([0.0, 0.5, 1.0], dtype=np.float32)
@@ -127,6 +127,15 @@ def verify_range_linear(
         >>> arr_bad = np.array([-0.1, 0.5, 1.5], dtype=np.float32)
         >>> verify_range_linear(arr_bad)  # Raises RangeViolationError
     """
+    # CRITICAL: Check for NaN/Inf BEFORE range validation
+    # tensor.min()/max() comparisons with NaN are always False, so corrupted tensors would silently pass
+    if not np.isfinite(tensor).all():
+        raise RangeViolationError(
+            "Tensor contains NaN or Inf values. "
+            "This indicates numerical corruption during processing. "
+            "Check for division by zero, invalid operations, or corrupted input data."
+        )
+
     actual_min = tensor.min()
     actual_max = tensor.max()
 
@@ -190,10 +199,7 @@ def detect_gamma_encoding(
     # Linear images with typical scene content have mean ~0.3-0.5
     # Gamma-encoded scenes shift this higher
     if mean_val > (0.5 + threshold):
-        logger.warning(
-            f"Tensor mean {mean_val:.3f} suggests gamma encoding "
-            f"(linear expected ~0.3-0.5 for typical scenes)"
-        )
+        logger.warning(f"Tensor mean {mean_val:.3f} suggests gamma encoding " f"(linear expected ~0.3-0.5 for typical scenes)")
         return True
 
     # Additional check: median vs mean ratio
@@ -204,9 +210,7 @@ def detect_gamma_encoding(
     MEAN_MEDIAN_RATIO_THRESHOLD = 1.3
     median_val = np.median(tensor)
     if median_val > 0 and (mean_val / median_val) > MEAN_MEDIAN_RATIO_THRESHOLD:
-        logger.warning(
-            f"Mean/median ratio {mean_val/median_val:.3f} suggests gamma encoding"
-        )
+        logger.warning(f"Mean/median ratio {mean_val/median_val:.3f} suggests gamma encoding")
         return True
 
     return False
@@ -215,35 +219,38 @@ def detect_gamma_encoding(
 def verify_no_gamma(
     tensor: np.ndarray,
     threshold: float = 0.15,
-    strict: bool = True,
+    strict: bool = False,
 ) -> None:
     """Verify tensor is not gamma-encoded.
 
-    Uses statistical heuristics to detect and reject gamma-encoded data.
-    In strict mode (default), raises error on detection.
+    Uses statistical heuristics to detect and warn about gamma-encoded data.
+
+    IMPORTANT: Default is now warning-only (strict=False) to prevent false positives
+    on bright linear scenes (white interiors, snow, stucco). The heuristic cannot
+    reliably distinguish "bright linear" from "gamma-encoded" content.
 
     Args:
         tensor: Input tensor to validate
         threshold: Detection threshold (default 0.15)
-        strict: If True, raise error on detection; if False, log warning
+        strict: If True, raise error on detection; if False (default), log warning
 
     Raises:
-        LinearityViolationError: If gamma encoding detected (strict=True)
+        LinearityViolationError: If gamma encoding detected AND strict=True
 
     Example:
         >>> linear_arr = np.array([0.2, 0.4, 0.6], dtype=np.float32).reshape(1, 1, 3)
         >>> verify_no_gamma(linear_arr)  # Passes
         >>>
         >>> gamma_arr = np.array([0.5, 0.7, 0.8], dtype=np.float32).reshape(1, 1, 3)
-        >>> verify_no_gamma(gamma_arr)  # May raise LinearityViolationError
+        >>> verify_no_gamma(gamma_arr)  # Logs warning (default strict=False)
     """
     if detect_gamma_encoding(tensor, threshold=threshold):
         msg = (
-            "Gamma-encoded input detected. Linear light preservation requires "
-            "linear input data. If input is gamma-encoded (sRGB, Rec.709, etc.), "
-            "it must be explicitly rejected. "
-            "Use RAW files with linear output or pre-linearized TIFF files. "
-            "Do NOT apply inverse gamma - reject the input instead."
+            "Image statistics suggest gamma encoding (mean > threshold). "
+            "If issues occur, verify source is linear. "
+            "Note: Bright linear scenes (white interiors, snow, stucco) can trigger false positives. "
+            "Use RAW files with linear output or pre-linearized TIFF files for guaranteed linearity. "
+            "Proceeding with processing."
         )
         if strict:
             raise LinearityViolationError(msg)
@@ -257,14 +264,15 @@ def verify_linear_ingest(
     check_range: bool = True,
     check_gamma: bool = True,
     allow_float64: bool = True,
+    strict_gamma: bool = False,
 ) -> None:
     """Comprehensive linear ingest verification.
 
     Validates all correctness-critical invariants for linear light
     preservation:
     1. dtype is floating point (no uint8/uint16)
-    2. value range is [0, 1]
-    3. no gamma encoding detected
+    2. value range is [0, 1] with no NaN/Inf
+    3. gamma encoding detection (warning-only by default)
 
     This is the main entry point for linear verification.
 
@@ -274,11 +282,12 @@ def verify_linear_ingest(
         check_range: Whether to verify value range (default True)
         check_gamma: Whether to check for gamma encoding (default True)
         allow_float64: Whether to allow float64 dtype (default True)
+        strict_gamma: Whether to raise error on gamma detection (default False)
 
     Raises:
         DtypeViolationError: If dtype check fails
-        RangeViolationError: If range check fails
-        LinearityViolationError: If gamma encoding detected
+        RangeViolationError: If range check fails or NaN/Inf detected
+        LinearityViolationError: If gamma encoding detected AND strict_gamma=True
 
     Example:
         >>> arr = np.random.rand(100, 100, 3).astype(np.float32)
@@ -291,7 +300,7 @@ def verify_linear_ingest(
         verify_range_linear(tensor)
 
     if check_gamma:
-        verify_no_gamma(tensor, strict=True)
+        verify_no_gamma(tensor, strict=strict_gamma)
 
 
 def create_linear_test_fixture(
@@ -316,11 +325,11 @@ def create_linear_test_fixture(
         >>> fixture = create_linear_test_fixture(shape=(50, 50, 3), mean=0.4)
         >>> verify_linear_ingest(fixture)  # Should pass all checks
     """
-    if seed is not None:
-        np.random.seed(seed)
+    # Use local RNG to avoid mutating global state
+    rng = np.random.default_rng(seed)
 
     # Generate uniform random values
-    arr = np.random.rand(*shape).astype(np.float32)
+    arr = rng.random(shape, dtype=np.float32)
 
     # Adjust to target mean while staying in [0, 1]
     # This creates a linear gradient distribution
