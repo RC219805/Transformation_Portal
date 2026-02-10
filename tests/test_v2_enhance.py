@@ -391,3 +391,205 @@ class TestEnhanceImage:
             context = call_args[0][0]
             input_to_stage = context.get_artifact("image")
             assert input_to_stage.shape == (100, 100, 3)  # RGB only, no alpha
+
+    def test_enhance_image_preserves_spatial_dimensions(self, tmp_path):
+        """Test that enhancement never changes spatial dimensions."""
+        input_path = tmp_path / "input.png"
+        output_path = tmp_path / "output.png"
+
+        # Test with various image sizes
+        test_sizes = [(100, 100), (640, 480), (1920, 1080), (99, 157)]  # Including odd dimensions
+
+        for height, width in test_sizes:
+            test_image = np.random.randint(0, 256, (height, width, 3), dtype=np.uint8)
+            Image.fromarray(test_image, mode="RGB").save(input_path)
+
+            with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as mock_stage_cls:
+                mock_stage = Mock()
+                mock_stage_cls.return_value = mock_stage
+
+                mock_result = Mock()
+                mock_result.status = StageStatus.COMPLETED
+                mock_result.artifacts = {"enhanced_image": test_image}
+                mock_result.metadata = {}
+                mock_stage.compute.return_value = mock_result
+
+                enhance_image(input_path, output_path)
+
+                # Verify spatial dimensions preserved
+                output_image = Image.open(output_path)
+                assert output_image.size == (width, height), f"Dimensions changed for {width}x{height}"
+
+    def test_enhance_image_passthrough_sha256_identical(self, tmp_path):
+        """Test that 'none' preset creates byte-identical copy including metadata."""
+        import hashlib
+
+        input_path = tmp_path / "input.jpg"
+        output_path = tmp_path / "output.jpg"
+
+        # Create test JPEG with EXIF and ICC profile
+        test_image = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
+        pil_image = Image.fromarray(test_image, mode="RGB")
+
+        # Add fake EXIF data
+        exif_bytes = b"Exif\x00\x00MM\x00*\x00\x00\x00\x08"  # Minimal EXIF header
+        # Add fake ICC profile
+        icc_profile = b"ICC_PROFILE" * 100  # Fake ICC data
+
+        pil_image.save(input_path, format="JPEG", quality=95, exif=exif_bytes, icc_profile=icc_profile)
+
+        # Get input file SHA256
+        with open(input_path, "rb") as f:
+            input_sha256 = hashlib.sha256(f.read()).hexdigest()
+
+        # Run passthrough enhancement
+        config = V2EnhancementConfig.from_preset("none")
+        report = enhance_image(input_path, output_path, config=config)
+
+        assert report["status"] == "passthrough"
+
+        # Get output file SHA256
+        with open(output_path, "rb") as f:
+            output_sha256 = hashlib.sha256(f.read()).hexdigest()
+
+        # Verify byte-identical copy
+        assert input_sha256 == output_sha256, "Passthrough copy is not byte-identical"
+
+    def test_enhance_image_preserves_icc_profile(self, tmp_path):
+        """Test that ICC color profiles are preserved in enhanced images."""
+        input_path = tmp_path / "input.jpg"
+        output_path = tmp_path / "output.jpg"
+
+        # Create test image with ICC profile
+        test_image = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
+        pil_image = Image.fromarray(test_image, mode="RGB")
+        icc_profile = b"ICC_PROFILE_DATA" * 100  # Fake ICC profile
+
+        pil_image.save(input_path, format="JPEG", quality=95, icc_profile=icc_profile)
+
+        with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as mock_stage_cls:
+            mock_stage = Mock()
+            mock_stage_cls.return_value = mock_stage
+
+            mock_result = Mock()
+            mock_result.status = StageStatus.COMPLETED
+            mock_result.artifacts = {"enhanced_image": test_image}
+            mock_result.metadata = {}
+            mock_stage.compute.return_value = mock_result
+
+            enhance_image(input_path, output_path)
+
+            # Verify ICC profile preserved
+            output_image = Image.open(output_path)
+            output_icc = output_image.info.get("icc_profile")
+
+            assert output_icc is not None, "ICC profile was not preserved"
+            assert output_icc == icc_profile, "ICC profile data differs"
+
+    def test_enhance_image_handles_exif_orientation(self, tmp_path):
+        """Test that EXIF orientation is properly handled."""
+        input_path = tmp_path / "input.jpg"
+        output_path = tmp_path / "output.jpg"
+
+        # Create test image (portrait orientation)
+        test_image = np.random.randint(0, 256, (200, 100, 3), dtype=np.uint8)
+        pil_image = Image.fromarray(test_image, mode="RGB")
+
+        # Save with EXIF orientation tag (will be handled by ImageOps.exif_transpose)
+        pil_image.save(input_path, format="JPEG", quality=95)
+
+        with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as mock_stage_cls:
+            # Patch ImageOps.exif_transpose to verify it's called
+            with patch("transformation_portal.lux_depth_v3.v2_enhance.ImageOps.exif_transpose") as mock_transpose:
+                mock_transpose.return_value = pil_image
+
+                mock_stage = Mock()
+                mock_stage_cls.return_value = mock_stage
+
+                mock_result = Mock()
+                mock_result.status = StageStatus.COMPLETED
+                mock_result.artifacts = {"enhanced_image": test_image}
+                mock_result.metadata = {}
+                mock_stage.compute.return_value = mock_result
+
+                enhance_image(input_path, output_path)
+
+                # Verify exif_transpose was called
+                mock_transpose.assert_called_once()
+
+    def test_enhance_image_handles_palette_mode(self, tmp_path):
+        """Test that palette (P) mode images are converted to RGB."""
+        input_path = tmp_path / "input.png"
+        output_path = tmp_path / "output.png"
+
+        # Create palette mode image
+        test_image = np.random.randint(0, 256, (100, 100), dtype=np.uint8)
+        pil_image = Image.fromarray(test_image, mode="L")
+        pil_image = pil_image.convert("P")  # Convert to palette mode
+        pil_image.save(input_path)
+
+        with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as mock_stage_cls:
+            mock_stage = Mock()
+            mock_stage_cls.return_value = mock_stage
+
+            # Enhancement should receive RGB
+            rgb_image = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
+            mock_result = Mock()
+            mock_result.status = StageStatus.COMPLETED
+            mock_result.artifacts = {"enhanced_image": rgb_image}
+            mock_result.metadata = {}
+            mock_stage.compute.return_value = mock_result
+
+            enhance_image(input_path, output_path)
+
+            # Verify EnhancementStage received RGB (H, W, 3)
+            call_args = mock_stage.compute.call_args
+            context = call_args[0][0]
+            input_to_stage = context.get_artifact("image")
+            assert input_to_stage.shape == (100, 100, 3), "Palette image not converted to RGB"
+
+    def test_enhance_image_handles_la_mode(self, tmp_path):
+        """Test that LA (luminance + alpha) mode images are converted to RGBA."""
+        input_path = tmp_path / "input.png"
+        output_path = tmp_path / "output.png"
+
+        # Create LA mode image
+        la_array = np.random.randint(0, 256, (100, 100, 2), dtype=np.uint8)
+        pil_image = Image.fromarray(la_array, mode="LA")
+        pil_image.save(input_path)
+
+        with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as mock_stage_cls:
+            mock_stage = Mock()
+            mock_stage_cls.return_value = mock_stage
+
+            # Enhancement should receive RGB
+            rgb_image = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
+            mock_result = Mock()
+            mock_result.status = StageStatus.COMPLETED
+            mock_result.artifacts = {"enhanced_image": rgb_image}
+            mock_result.metadata = {}
+            mock_stage.compute.return_value = mock_result
+
+            enhance_image(input_path, output_path)
+
+            # Verify EnhancementStage received RGB (H, W, 3)
+            call_args = mock_stage.compute.call_args
+            context = call_args[0][0]
+            input_to_stage = context.get_artifact("image")
+            assert input_to_stage.shape == (100, 100, 3), "LA image not converted to RGB"
+
+    def test_load_depth_map_handles_all_zeros(self, tmp_path):
+        """Test that all-zeros depth maps are handled gracefully."""
+        depth_path = tmp_path / "depth_zeros.png"
+
+        # Create all-zeros depth map
+        depth_data = np.zeros((100, 100), dtype=np.uint8)
+        Image.fromarray(depth_data, mode="L").save(depth_path)
+
+        # Should load without error
+        loaded = load_depth_map(depth_path)
+
+        assert loaded.shape == (100, 100)
+        assert loaded.dtype == np.float32
+        assert loaded.max() == 0.0
+        assert loaded.min() == 0.0

@@ -25,9 +25,15 @@ class V2EnhancementConfig:
         enhancement_strength: Global enhancement strength [0, 1]
         clarity_strength: Clarity enhancement strength [0, 1]
         material_strength: Material-specific processing strength [0, 1]
-        depth_aware_tone_mapping: Enable depth-aware tone mapping
-        atmospheric_effects: Enable atmospheric effects (haze, light wrap, etc.)
+        depth_aware_tone_mapping: RESERVED - Currently always enabled when depth map provided
+        atmospheric_effects: RESERVED - Currently not separately controllable
         version: Stage version for cache invalidation
+
+    Note:
+        The depth_aware_tone_mapping and atmospheric_effects flags are reserved for
+        future use. Current implementation always applies depth-aware tone mapping when
+        a depth map is provided. To disable depth effects, use preset="none" or omit
+        the depth map.
     """
 
     preset: str = "default"

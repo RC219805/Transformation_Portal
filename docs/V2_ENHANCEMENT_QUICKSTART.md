@@ -10,7 +10,7 @@ V2 Enhancement is a **depth-aware perceptual finishing system** for luxury real 
 - **Atmospheric effects** (ambient occlusion, depth haze, light wrap)
 - **Color grading** for luxury aesthetic
 
-**Performance:** <2 seconds per image typical (400-600 images/hour)
+**Performance:** <2 seconds per image (end-to-end pipeline with depth maps)
 **Dependencies:** Image processing only (no ML models)
 **License:** Commercial-safe (BSD/MIT)
 
