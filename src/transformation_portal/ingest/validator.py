@@ -4,17 +4,19 @@ Provides hard-fail validation for:
 - Schema version compatibility
 - Required fields presence
 - Type correctness
-- Unknown fields detection (drift)
+- Unknown fields detection (drift via Pydantic extra="forbid")
 - 8-bit conversion detection
 - dtype/range violations
 - Gamma/non-linear ingest violations
 
 All failures are explicit and actionable (no silent fallbacks).
+Drift detection is handled automatically by Pydantic models configured
+with ConfigDict(extra="forbid").
 
 Usage:
     from transformation_portal.ingest import validate_schema
 
-    # Validate provenance sidecar
+    # Validate provenance sidecar (drift detection automatic)
     errors = validate_schema(sidecar_json, schema_type="provenance")
     if errors:
         raise ValueError(f"Schema validation failed: {errors}")
@@ -41,58 +43,6 @@ class SchemaValidationError(Exception):
         self.errors = errors
         message = "Schema validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
         super().__init__(message)
-
-
-class SchemaDriftError(Exception):
-    """Raised when schema drift is detected."""
-
-    def __init__(self, drift_type: str, details: str):
-        self.drift_type = drift_type
-        self.details = details
-        message = f"Schema drift detected ({drift_type}): {details}"
-        super().__init__(message)
-
-
-def _detect_unknown_fields(
-    data: Dict[str, Any],
-    schema_class: type,
-    path: str = "",
-) -> List[str]:
-    """Detect unknown fields not in schema (drift detection).
-
-    Args:
-        data: Dictionary to check
-        schema_class: Pydantic model class
-        path: Current path in nested structure (for error messages)
-
-    Returns:
-        List of unknown field paths
-    """
-    unknown = []
-
-    # Get valid fields from schema (Pydantic v2)
-    valid_fields = set(schema_class.model_fields.keys())
-
-    for key, value in data.items():
-        field_path = f"{path}.{key}" if path else key
-
-        if key not in valid_fields:
-            unknown.append(field_path)
-        elif isinstance(value, dict):
-            # Recursively check nested objects
-            field_info = schema_class.model_fields[key]
-            # Pydantic v2: use annotation instead of type_
-            field_type = field_info.annotation
-            if hasattr(field_type, "model_fields"):
-                # Nested Pydantic model
-                nested_unknown = _detect_unknown_fields(
-                    value,
-                    field_type,
-                    field_path,
-                )
-                unknown.extend(nested_unknown)
-
-    return unknown
 
 
 def validate_schema(
@@ -285,9 +235,8 @@ def validate_ingest_contract(
         strict_mode: If True, fail on unknown fields
 
     Raises:
-        SchemaValidationError: If schema validation fails
-        SchemaDriftError: If schema drift detected
-        ValueError: If other violations detected
+        SchemaValidationError: If schema validation fails (includes drift)
+        ValueError: If 8-bit conversion or gamma violations detected
     """
     # Validate sidecar schema
     errors = validate_schema(sidecar_path, schema_type="provenance", strict_mode=strict_mode)
