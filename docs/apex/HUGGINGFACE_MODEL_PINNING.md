@@ -2,10 +2,10 @@
 
 ## Purpose
 
-Phase 1.1 (Item 5) replaced nondeterministic `revision: main` references with pinned commit hashes for reproducibility.
+Phase 1.1 (Item 5) introduces a governance posture for pinning HuggingFace model revisions for reproducibility.
 
 **Why this matters:**
-- `main` can change between runs → different model weights → different outputs
+- `revision: main` can change between runs → different model weights → different outputs
 - Pinned commits ensure **provenance guarantees** and **reproducible research**
 - Aligns with "Spatial AI Foundation" determinism requirements
 
@@ -13,13 +13,17 @@ Phase 1.1 (Item 5) replaced nondeterministic `revision: main` references with pi
 
 ## Current Status
 
-All APEX Research presets now use placeholder commit hashes that require manual verification:
+Presets have two acceptable states:
+
+1. **Stable/canary presets** may omit `revision` (loader defaults to `main`) until a verified commit hash is provided.
+2. **Experimental presets** may use explicit placeholders to force manual verification before use.
 
 ```yaml
+# Experimental-only placeholder (must be replaced before real use)
 revision: "NEEDS_VERIFICATION_0000000000000000000000"
 ```
 
-**⚠️ These are NOT valid commits** — they are placeholders indicating manual verification is required.
+**⚠️ Placeholders are NOT valid commits** — they intentionally force manual verification.
 
 ---
 
@@ -66,19 +70,19 @@ revision: "a1b2c3d4e5f6789012345678901234567890abcd"
 
 After pinning to real commit hashes:
 
-1. **Run preset validation:**
+1. **Validate HuggingFace revisions policy:**
    ```bash
-   python scripts/validate_presets.py config/presets/
+   python scripts/validation/validate_hf_revisions.py
    ```
 
-2. **Test model download:**
+2. **Run full test suite:**
    ```bash
-   pytest tests/depth/backends/test_da3_backend.py -k download
+   pytest tests/spatial_ai/ingest/test_linear_decoder.py -v
    ```
 
-3. **Verify provenance determinism:**
+3. **Verify preset loading:**
    ```bash
-   pytest tests/spatial_ai/ingest/test_linear_decoder.py -k provenance
+   pytest tests/depth/backends/ -k preset -v
    ```
 
 ---
@@ -108,5 +112,6 @@ This aligns with the repository's governance-first positioning and scientific ri
 
 ## See Also
 
-- `docs/architecture/ADR-026-apex-research-ultra-phase1.md` (Spatial AI Foundation requirements)
+- `docs/architecture/ADR-026-apex-research-ultra.md` (Spatial AI Foundation requirements)
+- `scripts/validation/validate_hf_revisions.py` (CI enforcement script)
 - Phase 1.1 implementation plan (session checkpoints)

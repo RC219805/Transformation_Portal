@@ -12,7 +12,6 @@ Architecture: ADR-023 (Isolation), ADR-026 (APEX Research Ultra), Phase 1.1 (Ite
 from __future__ import annotations
 
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -20,7 +19,7 @@ import pytest
 # Add scripts to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts" / "security"))
 
-from verify_pipeline_isolation import check_imports_ast
+from verify_pipeline_isolation import check_imports_ast  # noqa: E402
 
 
 class TestIsolationCheckAST:
