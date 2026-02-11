@@ -72,6 +72,15 @@ class DepthBackendRegistry:
         except ImportError:
             logger.debug("SyntheticDepthBackend not available (unexpected)")
 
+        # Ensemble backend (ADR-026)
+        try:
+            from .ensemble import DepthEnsembleBackend
+
+            if "ensemble" not in self._backends:
+                self._backends["ensemble"] = DepthEnsembleBackend
+        except ImportError:
+            logger.debug("DepthEnsembleBackend not available (missing dependencies)")
+
     @classmethod
     def register_backend(cls, backend_class: Type[DepthBackend]) -> None:
         """Register a depth backend class.
@@ -211,6 +220,28 @@ class DepthBackendRegistry:
                     "  config = EnhanceConfig(\n"
                     "      non_commercial_ok=True,\n"
                     "      accept_apple_depth_pro_research_license=True,\n"
+                    "  )"
+                )
+
+        # Ensemble specific: require research tools license (ADR-026)
+        if backend_name == "ensemble":
+            if not getattr(config, "accept_research_tools_license", False):
+                raise LicenseRestrictionError(
+                    "Backend 'ensemble' requires APEX Research Ultra license acceptance.\n\n"
+                    "Set accept_research_tools_license=True to acknowledge:\n"
+                    "  - APEX Research Ultra (ADR-026) umbrella license\n"
+                    "  - Research and non-commercial use only\n"
+                    "  - Experimental workflow (subject to change)\n\n"
+                    "This enables multi-model ensemble with:\n"
+                    "  - Depth Pro (Apple AMLR)\n"
+                    "  - DA3 1.1 (CC BY-NC 4.0)\n"
+                    "  - DepthCrafter (Apache 2.0)\n\n"
+                    "See: docs/architecture/ADR-026-apex-research-ultra.md\n\n"
+                    "Required config:\n"
+                    "  config = EnhanceConfig(\n"
+                    "      non_commercial_ok=True,\n"
+                    "      accept_research_tools_license=True,\n"
+                    "      spatial_ai_linear_ingest=True,\n"
                     "  )"
                 )
 

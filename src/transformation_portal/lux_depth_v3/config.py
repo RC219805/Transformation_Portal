@@ -177,9 +177,13 @@ class EnhanceConfig:
 
     # License acceptance flags (for research-only models)
     accept_apple_depth_pro_research_license: bool = False  # Apple AMLR license for Depth Pro
+    accept_research_tools_license: bool = False  # Umbrella flag for APEX Research Ultra (ADR-026)
+
+    # Spatial AI Foundation (ADR-026 Phase I)
+    spatial_ai_linear_ingest: bool = False  # Enable linear light preservation (float32, gamma=1.0)
 
     # Depth backend selection
-    depth_backend: Optional[str] = None  # None = auto (DA3), or "depth_pro"
+    depth_backend: Optional[str] = None  # None = auto (DA3), "depth_pro", or "ensemble"
     depth_pro_checkpoint_path: Optional[str] = None  # Path to depth_pro.pt checkpoint
 
     # Fallback configuration
