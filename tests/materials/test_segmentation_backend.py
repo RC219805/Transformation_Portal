@@ -479,13 +479,15 @@ def test_confidence_scores_in_valid_range(sample_image):
 
 
 @pytest.mark.ml
-def test_heuristic_fallback_returns_medium_confidence(sample_image):
+def test_heuristic_fallback_returns_medium_confidence(sample_image, monkeypatch):
     """Heuristic fallback should return 0.5 confidence to indicate uncertainty."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    # Mock EFFICIENTVIT_AVAILABLE to force heuristic mode
+    monkeypatch.setattr(seg_module, "EFFICIENTVIT_AVAILABLE", False)
+
     backend = EfficientSAMBackend()
     backend.load(device="cpu")
-
-    # Don't initialize real models - force heuristic mode
-    backend._use_real_model = False
 
     results = backend.segment(sample_image)
 
@@ -496,7 +498,7 @@ def test_heuristic_fallback_returns_medium_confidence(sample_image):
 
 @pytest.mark.ml
 def test_confidence_logged_in_output(sample_image, caplog):
-    """Verify confidence scores appear in logs."""
+    """Verify confidence scores appear in logs when using real CLIP model."""
     backend = EfficientSAMBackend()
     backend.load(device="cpu")
 
@@ -508,10 +510,14 @@ def test_confidence_logged_in_output(sample_image, caplog):
     # Check log contains confidence percentages (from CLIP classification)
     log_text = caplog.text
 
-    # If materials were detected, should see confidence in logs
-    if len(results) > 0:
+    # If materials were detected and we're using the real model (CLIP), expect % in logs
+    # In heuristic mode, confidence is fixed at 0.5 and may not show % formatting
+    if len(results) > 0 and backend._use_real_model:
         # Look for percentage format in logs (e.g., "glass (87%)")
-        assert any("%" in line for line in log_text.split("\n")), "Logs should contain confidence percentages"
+        assert any("%" in line for line in log_text.split("\n")), "Logs should contain confidence percentages for CLIP mode"
+    elif len(results) > 0:
+        # Heuristic mode - just verify "confidence" is mentioned somewhere
+        assert "confidence" in log_text.lower() or "0.5" in log_text, "Logs should reference confidence scoring"
 
 
 @pytest.mark.ml

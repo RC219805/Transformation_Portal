@@ -8,7 +8,7 @@ must implement for Materials V3. This enables:
 - Consistent device handling (MPS/CUDA/CPU)
 - Lazy loading and model caching
 
-Protocol Version: 1.0.0
+Protocol Version: 2.0.0
 Compatible with: Materials V3
 
 Example
@@ -22,8 +22,12 @@ Example
         def load(self, device: str = "auto") -> None:
             ...
 
-        def segment(self, image: np.ndarray) -> Dict[str, np.ndarray]:
-            ...
+        def segment(self, image: np.ndarray) -> Dict[str, Tuple[np.ndarray, float]]:
+            # Returns material names mapped to (mask, confidence) tuples
+            return {
+                "glass": (mask_array, 0.87),
+                "water": (mask_array, 0.64),
+            }
 """
 
 from __future__ import annotations
@@ -38,7 +42,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 # Protocol version for compatibility checks
-SEGMENTATION_BACKEND_PROTOCOL_VERSION = "1.0.0"
+SEGMENTATION_BACKEND_PROTOCOL_VERSION = "2.0.0"
 
 
 @dataclass(frozen=True)
@@ -90,8 +94,12 @@ class SegmentationBackend(Protocol):
             def load(self, device: str = "auto") -> None:
                 # Load model weights...
 
-            def segment(self, image: np.ndarray) -> Dict[str, np.ndarray]:
-                # Run segmentation and return material masks...
+            def segment(self, image: np.ndarray) -> Dict[str, Tuple[np.ndarray, float]]:
+                # Run segmentation and return material masks with confidence scores
+                return {
+                    "glass": (mask_array, 0.87),  # 87% confidence
+                    "water": (mask_array, 0.64),  # 64% confidence
+                }
     """
 
     @property
