@@ -64,12 +64,12 @@ except ImportError:
 
 # V2 model dependencies (optional)
 try:
-    from efficientvit.sam_model_zoo import create_sam_model
+    from efficientsam.sam_model_zoo import create_efficientvit_sam_model
 
     EFFICIENTVIT_AVAILABLE = True
 except ImportError:
     EFFICIENTVIT_AVAILABLE = False
-    create_sam_model = None  # type: ignore
+    create_efficientvit_sam_model = None  # type: ignore
 
 try:
     import open_clip
@@ -281,7 +281,7 @@ class EfficientSAMBackend:
         """Load real EfficientSAM model (v2).
 
         Args:
-            weights_path: Optional local path to weights (future feature)
+            weights_path: Optional local path to weights
 
         Returns:
             Loaded EfficientSAM model on target device
@@ -290,18 +290,20 @@ class EfficientSAMBackend:
             RuntimeError: If model loading fails
         """
         if not EFFICIENTVIT_AVAILABLE:
-            raise RuntimeError("efficientvit not available. Install with: pip install efficientvit")
+            raise RuntimeError("efficientsam not available. Install with: pip install efficientsam")
 
         logger.info("Loading EfficientSAM model (l0 variant, ~50MB)...")
 
         try:
-            # Load EfficientSAM-l0 model
-            # Note: This will download weights on first run (~50MB)
-            # Future: Add weight caching + checksum validation
-            model = create_sam_model(
-                name="l0",  # Lightweight variant
-                weight_url=None,  # Use default weights
+            # Download or use cached weights
+            if weights_path is None:
+                weights_path = self._download_weights()
+
+            # Load model with weights
+            model = create_efficientvit_sam_model(
+                name="efficientvit-sam-l0",  # Lightweight variant
                 pretrained=True,
+                weight_url=str(weights_path),
             )
 
             # Move to target device and set eval mode
@@ -313,6 +315,39 @@ class EfficientSAMBackend:
 
         except Exception as e:
             raise RuntimeError(f"Failed to load EfficientSAM model: {e}") from e
+
+    def _download_weights(self) -> Path:
+        """Download EfficientSAM weights with caching.
+
+        Returns:
+            Path to downloaded weights file
+
+        Raises:
+            RuntimeError: If download fails
+        """
+        import urllib.request
+        from pathlib import Path
+
+        # Cache directory
+        cache_dir = Path.home() / ".cache" / "transformation_portal" / "segmentation"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
+        weight_file = cache_dir / "efficientvit_sam_l0.pt"
+
+        # Download if not cached
+        if not weight_file.exists():
+            logger.info("Downloading EfficientSAM-l0 weights (~50MB)...")
+            weight_url = "https://huggingface.co/mit-han-lab/efficientvit-sam/resolve/main/efficientvit_sam_l0.pt"
+
+            try:
+                urllib.request.urlretrieve(weight_url, weight_file)
+                logger.info(f"Weights downloaded to {weight_file}")
+            except Exception as e:
+                raise RuntimeError(f"Failed to download weights: {e}") from e
+        else:
+            logger.info(f"Using cached weights from {weight_file}")
+
+        return weight_file
 
     def _real_model_inference(self, image: np.ndarray) -> Dict[str, np.ndarray]:
         """Run real EfficientSAM + CLIP inference (v2).
