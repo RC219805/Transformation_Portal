@@ -56,23 +56,33 @@ def check_imports_ast(filepath: Path, forbidden_modules: List[str]) -> List[str]
         for node in ast.walk(tree):
             # Check "from X import Y" statements
             if isinstance(node, ast.ImportFrom):
-                # Build full module path from relative/absolute import
-                if node.level > 0:
-                    # Relative import: from ..spatial_ai import X
-                    # node.level is number of dots
-                    # node.module is the rest after dots
-                    rel_path = [".."] * node.level
-                    if node.module:
-                        rel_path.append(node.module)
-                    module_path = ".".join(rel_path)
-                else:
-                    # Absolute import: from transformation_portal.spatial_ai import X
-                    module_path = node.module or ""
+                # For relative imports, node.module contains the part after the dots
+                # For absolute imports, node.module is the full path
+                module_name = node.module or ""
 
                 # Check against forbidden patterns
                 for forbidden in forbidden_modules:
-                    if forbidden in module_path:
-                        import_stmt = ast.unparse(node) if hasattr(ast, "unparse") else f"from {module_path} import ..."
+                    # Match if:
+                    # 1. Module exactly equals forbidden (e.g., "spatial_ai")
+                    # 2. Module starts with forbidden as prefix (e.g., "spatial_ai.ingest")
+                    # 3. Forbidden appears as a path component (e.g., "transformation_portal.spatial_ai")
+                    is_match = (
+                        module_name == forbidden
+                        or module_name.startswith(forbidden + ".")
+                        or ("." + forbidden + ".") in ("." + module_name + ".")
+                    )
+
+                    if is_match:
+                        # Build display string for violation
+                        if node.level > 0:
+                            rel_path = ["."] * node.level
+                            if module_name:
+                                rel_path.append(module_name)
+                            display_path = "".join(rel_path)
+                        else:
+                            display_path = module_name
+
+                        import_stmt = ast.unparse(node) if hasattr(ast, "unparse") else f"from {display_path} import ..."
                         # Handle paths both inside and outside repo
                         try:
                             file_display = str(filepath.relative_to(REPO_ROOT))
@@ -84,7 +94,14 @@ def check_imports_ast(filepath: Path, forbidden_modules: List[str]) -> List[str]
             elif isinstance(node, ast.Import):
                 for alias in node.names:
                     for forbidden in forbidden_modules:
-                        if forbidden in alias.name:
+                        # Match using same logic as ImportFrom
+                        is_match = (
+                            alias.name == forbidden
+                            or alias.name.startswith(forbidden + ".")
+                            or ("." + forbidden + ".") in ("." + alias.name + ".")
+                        )
+
+                        if is_match:
                             import_stmt = ast.unparse(node) if hasattr(ast, "unparse") else f"import {alias.name}"
                             try:
                                 file_display = str(filepath.relative_to(REPO_ROOT))

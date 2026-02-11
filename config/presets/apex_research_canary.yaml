@@ -23,9 +23,9 @@ model:
   variant: depth-anything-v3-nested-giant-large-1.1
   source: huggingface
   hf_id: "depth-anything/DA3-NESTED-GIANT-LARGE-1.1"
-  # Pin to commit hash for reproducibility (Phase 1.1 Item 5)
-  # TODO: Verify current commit at https://huggingface.co/depth-anything/DA3-NESTED-GIANT-LARGE-1.1/commits/main
-  revision: "NEEDS_VERIFICATION_0000000000000000000000"  # Replace with actual commit SHA
+  # TODO(Phase 1.1): Pin revision to commit hash for reproducibility
+  # See: docs/apex/HUGGINGFACE_MODEL_PINNING.md
+  # Omitted until manual verification complete (will default to 'main' in loader)
   device: auto
 
 # Experimental PBR Tuning
