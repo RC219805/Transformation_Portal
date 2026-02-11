@@ -429,7 +429,9 @@ class TestCLIHelp:
 
     def test_segmentation_flags_in_help(self):
         """Test that segmentation flags appear in help output."""
-        result = runner.invoke(app, ["--help"])
+        # Use NO_COLOR to avoid ANSI escape sequences breaking string matching in CI
+        runner_no_color = CliRunner(env={"NO_COLOR": "1"})
+        result = runner_no_color.invoke(app, ["--help"])
         assert result.exit_code == 0
         assert "segmentation" in result.stdout.lower()
         assert "enable-segmentation" in result.stdout.lower()
