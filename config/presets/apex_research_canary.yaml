@@ -1,0 +1,50 @@
+# APEX Research Canary Preset
+# ⚠️  LICENSE: Research-Only (CC BY-NC 4.0)
+#
+# This is the CANARY preset for testing next-generation research models
+# before promotion to stable. May exhibit instability.
+#
+# Stability: CANARY (not production-ready)
+# Use apex-research-stable for validated research workflows.
+
+name: apex-research-canary
+description: "APEX Research (Canary): testing next-gen research models before stable promotion"
+tier: apex_research
+license_restriction: research_only
+stability: canary
+
+# Extends stable preset with overrides
+extends: apex_research
+
+# Override: Use DA3 1.1 Nested Giant Large (experimental, largest DA3 variant)
+depth_backend: da3_1.1_nested_giant_large
+
+model:
+  variant: depth-anything-v3-nested-giant-large-1.1
+  source: huggingface
+  hf_id: "depth-anything/DA3-NESTED-GIANT-LARGE-1.1"
+  revision: "main"  # TODO: Pin to specific commit after validation
+  device: auto
+
+# Experimental PBR Tuning
+processing:
+  pbr:
+    normal:
+      strength: 2.0             # Aggressive tuning (vs 1.5 stable)
+      high_frequency_detail: 0.5  # Maximum detail preservation
+
+    ao:
+      samples: 256              # Doubled sampling (vs 128 stable)
+      quality: experimental     # Experimental quality tier
+
+# Relaxed Quality Gates for Testing
+quality:
+  apex_gates:
+    mode: shadow              # Shadow mode: log but don't block (vs enforce stable)
+    min_samples: 10           # Lower bar for canary testing
+
+# Metadata
+metadata:
+  version: "1.0.0-canary"
+  last_updated: "2026-02-10"
+  stability_warning: "Canary preset may exhibit instability. Use apex-research-stable for validated workflows."
