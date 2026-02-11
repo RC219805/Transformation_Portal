@@ -115,12 +115,16 @@ class LinearDecoder:
         self,
         gamma: float = 1.0,
         bit_depth: int = 32,
+        strict_ingest: bool = False,
     ):
         """Initialize linear decoder.
 
         Args:
             gamma: Gamma for decode (must be 1.0 for linear).
             bit_depth: Output bit depth (32 for float32).
+            strict_ingest: If True, reject 8-bit inputs to prevent lossy normalization.
+                For research/training workflows requiring true linear preservation,
+                set strict_ingest=True to enforce >=16-bit inputs only.
 
         Raises:
             ValueError: If gamma != 1.0 (linear ingest contract).
@@ -133,6 +137,7 @@ class LinearDecoder:
 
         self.gamma = gamma
         self.bit_depth = bit_depth
+        self.strict_ingest = strict_ingest
 
     def decode(
         self,
@@ -252,6 +257,7 @@ class LinearDecoder:
             Tuple of (linear_rgb array, (height, width)).
 
         Raises:
+            ValueError: If strict_ingest validation fails.
             RuntimeError: If decode fails.
         """
         try:
@@ -259,6 +265,9 @@ class LinearDecoder:
                 return self._decode_exr(path)
             else:
                 return self._decode_pillow(path, format_str)
+        except ValueError:
+            # Let ValueError propagate directly (contract violations)
+            raise
         except Exception as e:
             raise RuntimeError(f"Failed to decode {path}: {e}") from e
 
@@ -321,6 +330,14 @@ class LinearDecoder:
         elif img_array.ndim == 3 and img_array.shape[2] == 4:
             # Drop alpha channel
             img_array = img_array[:, :, :3]
+
+        # Enforce strict ingest if requested
+        if self.strict_ingest and img_array.dtype == np.uint8:
+            raise ValueError(
+                f"strict_ingest=True rejects 8-bit inputs to prevent lossy collapse. "
+                f"Input {path.name} is uint8. Use >=16-bit TIFF/PNG or EXR for linear ingest. "
+                f"Set strict_ingest=False to allow 8-bit normalization (not recommended for training data)."
+            )
 
         # Convert to float32 and normalize to [0, 1] range initially
         if img_array.dtype == np.uint8:
@@ -466,6 +483,7 @@ def decode(
     input_path: Path | str,
     gamma: float = 1.0,
     bit_depth: int = 32,
+    strict_ingest: bool = False,
     output_dir: Optional[Path | str] = None,
     emit_exr: bool = False,
     emit_provenance: bool = False,
@@ -476,6 +494,7 @@ def decode(
         input_path: Path to input file.
         gamma: Gamma for decode (must be 1.0).
         bit_depth: Output bit depth (32 for float32).
+        strict_ingest: If True, reject 8-bit inputs.
         output_dir: Output directory (defaults to input directory).
         emit_exr: Save linear RGB as EXR.
         emit_provenance: Save provenance JSON.
@@ -488,7 +507,7 @@ def decode(
         >>> assert result.gamma == 1.0
         >>> assert result.linear_rgb.dtype == np.float32
     """
-    decoder = LinearDecoder(gamma=gamma, bit_depth=bit_depth)
+    decoder = LinearDecoder(gamma=gamma, bit_depth=bit_depth, strict_ingest=strict_ingest)
     return decoder.decode(
         input_path=input_path,
         output_dir=output_dir,

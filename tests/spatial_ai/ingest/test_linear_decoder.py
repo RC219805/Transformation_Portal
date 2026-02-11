@@ -267,6 +267,47 @@ class TestLinearDecoder:
         with pytest.raises(RuntimeError, match="emit_exr=True requires OpenEXR package"):
             decode(test_img_path, gamma=1.0, output_dir=tmp_path, emit_exr=True)
 
+    def test_strict_ingest_rejects_uint8(self, tmp_path: Path):
+        """Test that strict_ingest=True rejects 8-bit inputs."""
+        # Create 8-bit test image
+        test_img = (np.random.rand(50, 50, 3) * 255).astype(np.uint8)
+        test_img_path = tmp_path / "test_8bit.png"
+        Image.fromarray(test_img, mode="RGB").save(test_img_path)
+
+        # Attempt decode with strict_ingest=True should fail
+        with pytest.raises(ValueError, match="strict_ingest=True rejects 8-bit inputs"):
+            decode(test_img_path, gamma=1.0, strict_ingest=True)
+
+    def test_strict_ingest_allows_uint16(self, tmp_path: Path):
+        """Test that strict_ingest=True allows 16-bit inputs."""
+        # Create a true 16-bit grayscale image (PIL mode I;16)
+        test_img = (np.random.rand(50, 50) * 65535).astype(np.uint16)
+        test_img_path = tmp_path / "test_16bit.png"
+        img = Image.fromarray(test_img).convert("I;16")
+        img.save(test_img_path)
+
+        # Decode with strict_ingest=True should succeed (will convert gray->RGB)
+        result = decode(test_img_path, gamma=1.0, strict_ingest=True)
+        assert result.linear_rgb.dtype == np.float32
+        assert result.gamma == 1.0
+        assert result.linear_rgb.shape[2] == 3  # Converted to RGB
+
+    def test_non_strict_ingest_allows_uint8(self, tmp_path: Path):
+        """Test that strict_ingest=False (default) allows 8-bit inputs."""
+        # Create 8-bit test image
+        test_img = (np.random.rand(50, 50, 3) * 255).astype(np.uint8)
+        test_img_path = tmp_path / "test_8bit.png"
+        Image.fromarray(test_img, mode="RGB").save(test_img_path)
+
+        # Decode with strict_ingest=False should succeed
+        result = decode(test_img_path, gamma=1.0, strict_ingest=False)
+        assert result.linear_rgb.dtype == np.float32
+        assert result.gamma == 1.0
+
+        # Also test default behavior (strict_ingest not specified)
+        result_default = decode(test_img_path, gamma=1.0)
+        assert result_default.linear_rgb.dtype == np.float32
+
 
 class TestLinearIngestIntegration:
     """Integration tests for linear ingest with EnhanceConfig."""
