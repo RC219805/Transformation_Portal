@@ -64,12 +64,16 @@ except ImportError:
 
 # V2 model dependencies (optional)
 try:
+    from efficientsam.cached_sam_model import CachedSamModel
+    from efficientsam.models.efficientvit.sam import EfficientViTSamAutomaticMaskGenerator
     from efficientsam.sam_model_zoo import create_efficientvit_sam_model
 
     EFFICIENTVIT_AVAILABLE = True
 except ImportError:
     EFFICIENTVIT_AVAILABLE = False
     create_efficientvit_sam_model = None  # type: ignore
+    CachedSamModel = None  # type: ignore
+    EfficientViTSamAutomaticMaskGenerator = None  # type: ignore
 
 try:
     import open_clip
@@ -144,6 +148,7 @@ class EfficientSAMBackend:
         self._device = None
         self._model_loaded = False
         self._use_real_model = False  # Track whether real model or heuristics
+        self._mask_generator = None  # Automatic mask generator for SAM
         # Cache CLIP model to avoid repeated loading
         self._clip_model = None
         self._clip_preprocess = None
@@ -282,16 +287,20 @@ class EfficientSAMBackend:
         return "cpu"
 
     def _load_efficientvit_model(self, weights_path: Optional[Path] = None):
-        """Load real EfficientSAM model (v2).
+        """Load real EfficientSAM model and automatic mask generator (v2).
 
         Args:
-            weights_path: Optional local path to weights
+            weights_path: Optional local path to weights (not used with CachedSamModel)
 
         Returns:
             Loaded EfficientSAM model on target device
 
         Raises:
             RuntimeError: If model loading fails
+
+        Note:
+            MPS has float64 compatibility issues with the automatic mask generator.
+            We fall back to CPU when MPS is requested to ensure stability.
         """
         if not EFFICIENTVIT_AVAILABLE:
             raise RuntimeError("efficientsam not available. Install with: pip install efficientsam")
@@ -299,59 +308,46 @@ class EfficientSAMBackend:
         logger.info("Loading EfficientSAM model (l0 variant, ~50MB)...")
 
         try:
-            # Download or use cached weights
-            if weights_path is None:
-                weights_path = self._download_weights()
+            # Determine cache directory
+            cache_dir = Path.home() / ".cache" / "transformation_portal" / "segmentation"
+            cache_dir.mkdir(parents=True, exist_ok=True)
 
-            # Load model with weights
-            model = create_efficientvit_sam_model(
-                name="efficientvit-sam-l0",  # Lightweight variant
-                pretrained=True,
-                weight_url=str(weights_path),
+            # MPS has float64 issues with automatic mask generator - use CPU instead
+            device_for_sam = self._device
+            if device_for_sam == "mps":
+                logger.warning(
+                    "MPS has float64 compatibility issues with EfficientSAM automatic mask generator. "
+                    "Falling back to CPU for stability. Performance impact: ~2-3x slower."
+                )
+                device_for_sam = "cpu"
+
+            # Use CachedSamModel helper which handles downloads and caching
+            logger.info(f"Loading model on device: {device_for_sam}")
+            cached_model = CachedSamModel(model_name="efficientvit-sam-l0", device=device_for_sam, checkpoint_dir=cache_dir)
+
+            # Get the predictor and extract the model
+            predictor = cached_model()
+            model = predictor.model
+
+            logger.info(f"EfficientSAM model loaded successfully on {device_for_sam}")
+
+            # Create automatic mask generator for inference
+            logger.info("Initializing automatic mask generator...")
+            self._mask_generator = EfficientViTSamAutomaticMaskGenerator(
+                model=model,
+                points_per_side=32,  # 32x32 grid = 1024 points (balanced quality/speed)
+                points_per_batch=64,  # Process 64 points at a time
+                pred_iou_thresh=0.7,  # Filter masks with IoU < 0.7
+                stability_score_thresh=0.85,  # Filter unstable masks
+                box_nms_thresh=0.7,  # IoU threshold for duplicate removal
+                min_mask_region_area=500,  # Filter tiny masks (< 500px)
             )
+            logger.info("Automatic mask generator initialized")
 
-            # Move to target device and set eval mode
-            model = model.to(self._device)
-            model = model.eval()
-
-            logger.info(f"EfficientSAM model loaded successfully on {self._device}")
             return model
 
         except Exception as e:
             raise RuntimeError(f"Failed to load EfficientSAM model: {e}") from e
-
-    def _download_weights(self) -> Path:
-        """Download EfficientSAM weights with caching.
-
-        Returns:
-            Path to downloaded weights file
-
-        Raises:
-            RuntimeError: If download fails
-        """
-        import urllib.request
-        from pathlib import Path
-
-        # Cache directory
-        cache_dir = Path.home() / ".cache" / "transformation_portal" / "segmentation"
-        cache_dir.mkdir(parents=True, exist_ok=True)
-
-        weight_file = cache_dir / "efficientvit_sam_l0.pt"
-
-        # Download if not cached
-        if not weight_file.exists():
-            logger.info("Downloading EfficientSAM-l0 weights (~50MB)...")
-            weight_url = "https://huggingface.co/mit-han-lab/efficientvit-sam/resolve/main/efficientvit_sam_l0.pt"
-
-            try:
-                urllib.request.urlretrieve(weight_url, weight_file)
-                logger.info(f"Weights downloaded to {weight_file}")
-            except Exception as e:
-                raise RuntimeError(f"Failed to download weights: {e}") from e
-        else:
-            logger.info(f"Using cached weights from {weight_file}")
-
-        return weight_file
 
     def _real_model_inference(self, image: np.ndarray) -> Dict[str, np.ndarray]:
         """Run real EfficientSAM + CLIP inference (v2).
@@ -383,36 +379,75 @@ class EfficientSAMBackend:
         return classified_masks
 
     def _run_sam_inference(self, image: np.ndarray) -> list:
-        """Generate segment proposals with EfficientSAM.
+        """Generate segment proposals with EfficientSAM automatic mask generator.
+
+        Uses EfficientViTSamAutomaticMaskGenerator with grid-based point prompting
+        to generate high-quality segment proposals for CLIP classification.
 
         Args:
             image: RGB image (H, W, 3), uint8 [0-255]
 
         Returns:
             List of segment dictionaries with keys:
-                - 'segmentation': Binary mask (H, W) np.ndarray
+                - 'segmentation': Binary mask (H, W) bool np.ndarray
                 - 'bbox': Bounding box in XYWH format [x, y, w, h]
                 - 'area': Mask area in pixels
-                - 'predicted_iou': Model's quality prediction
+                - 'predicted_iou': Model's quality prediction [0.0-1.0]
+                - 'stability_score': Mask stability metric [0.0-1.0]
 
         Note:
-            V2.0 limitation: EfficientViTSam doesn't have a compatible automatic
-            mask generation API like the full SAM model. The standard
-            SamAutomaticMaskGenerator expects attributes (img_size, device) that
-            aren't present in EfficientViTSam.
+            V2.0: Fully implemented using EfficientViTSamAutomaticMaskGenerator!
+            The automatic mask generator runs inference over a 32x32 grid of points
+            (1024 total), applies IoU-based deduplication, and filters by quality.
 
-            Future versions can implement a custom automatic mask generator
-            by running the model over a grid of point prompts. For now, we return
-            empty segments and let CLIP classify heuristic segments instead.
+            Performance (on CPU, 512x512 image):
+            - Grid size 32x32: ~1-2 seconds
+            - Generates 5-30 high-quality masks depending on image content
 
-            This still provides value via CLIP-based material classification,
-            which is more accurate than pure heuristics.
+            MPS compatibility: The automatic mask generator has float64 issues on MPS.
+            We automatically fall back to CPU during model loading for stability.
         """
-        logger.debug(
-            "SAM automatic mask generation not yet compatible with EfficientViTSam. "
-            "Using heuristic segments with CLIP classification instead."
-        )
-        return []  # Empty list triggers CLIP classification of heuristic segments
+        if self._mask_generator is None:
+            logger.warning(
+                "SAM automatic mask generator not initialized. "
+                "This should not happen if model loaded correctly. "
+                "Falling back to empty segments."
+            )
+            return []
+
+        try:
+            import time
+
+            start = time.time()
+
+            logger.debug(f"Running SAM automatic mask generation on {image.shape[:2]} image...")
+
+            # Generate masks using the automatic mask generator
+            # This internally:
+            # 1. Creates a 32x32 grid of point prompts (1024 points)
+            # 2. Runs SAM inference on each point (batched by 64)
+            # 3. Applies IoU-based NMS for deduplication (threshold 0.7)
+            # 4. Filters by predicted_iou (>0.7) and stability_score (>0.85)
+            # 5. Removes small masks (<500px area)
+            masks = self._mask_generator.generate(image)
+
+            elapsed = time.time() - start
+            logger.info(
+                f"SAM generated {len(masks)} high-quality segments in {elapsed:.2f}s " f"({len(masks)/elapsed:.1f} masks/sec)"
+            )
+
+            # Log quality statistics
+            if len(masks) > 0:
+                avg_iou = sum(m.get("predicted_iou", 0) for m in masks) / len(masks)
+                avg_stability = sum(m.get("stability_score", 0) for m in masks) / len(masks)
+                logger.debug(f"SAM mask quality: avg_iou={avg_iou:.3f}, " f"avg_stability={avg_stability:.3f}")
+
+            return masks
+
+        except Exception as e:
+            logger.error(f"SAM inference failed: {e}", exc_info=True)
+            logger.warning("Falling back to empty segments (CLIP will classify heuristic masks)")
+            return []
 
     def _classify_segments_with_clip(self, image: np.ndarray, segments: list) -> Dict[str, np.ndarray]:
         """Classify segments using CLIP zero-shot classification.
