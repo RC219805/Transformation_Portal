@@ -68,7 +68,8 @@ def verify_no_spatial_imports_in_lux_depth() -> Tuple[bool, List[str]]:
         "from transformation_portal.spatial_ai",
         "import transformation_portal.spatial_ai",
         "from ..spatial_ai",
-        "from ... spatial_ai",  # relative imports
+        "from ...spatial_ai",  # 3-dot relative imports (fixed: no space)
+        "from ....spatial_ai",  # 4-dot relative imports
     ]
 
     violations = []

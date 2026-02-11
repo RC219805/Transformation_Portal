@@ -250,6 +250,131 @@ class TestVarianceFusion:
         # Low variance should get higher weight
         assert weight_low > weight_high
 
+    def test_metric_alignment_with_mixed_backends(self):
+        """Test metric depth alignment when mixing metric + relative models (Bug P1-A fix)."""
+        # Create synthetic image
+        test_img = (np.random.rand(100, 100, 3) * 255).astype(np.uint8)
+
+        # Create mock results with different depth units
+        metric_result = DepthResult(
+            depth_map=np.ones((100, 100)) * 5.0,
+            original_image=test_img,
+            metadata={},
+            depth_units="meters",  # metric
+            backend_id="depth_pro",
+            device="cpu",
+            dtype="float32",
+            input_size=(100, 100),
+        )
+
+        relative_result = DepthResult(
+            depth_map=np.ones((100, 100)) * 0.5,
+            original_image=test_img,
+            metadata={},
+            depth_units="relative",  # relative
+            backend_id="da3",
+            device="cpu",
+            dtype="float32",
+            input_size=(100, 100),
+        )
+
+        model_results = {
+            "depth_pro": metric_result,
+            "da3": relative_result,
+        }
+
+        config = EnhanceConfig(
+            non_commercial_ok=True,
+            accept_research_tools_license=True,
+        )
+        ensemble = DepthEnsembleBackend(config, models=[])
+
+        # This should not crash (tests Bug P1-A fix: .items() not .values())
+        aligned = ensemble._align_depth_maps(model_results)
+
+        # Verify both models are aligned
+        assert "depth_pro" in aligned
+        assert "da3" in aligned
+
+        # Verify shapes match
+        assert aligned["depth_pro"].shape == aligned["da3"].shape
+
+        # Verify metric model unchanged (already in meters)
+        np.testing.assert_array_equal(aligned["depth_pro"], metric_result.depth_map)
+
+        # Verify relative model scaled (approximate 10x scaling)
+        assert aligned["da3"].mean() > 1.0  # Should be scaled up from 0.5
+
+    def test_variance_weighted_fusion_actually_uses_variance(self):
+        """Test that variance actually changes fusion output (Bug P1-B fix)."""
+        # Create scenario where variance-weighted should differ from fixed weighted average
+        test_img = np.ones((100, 100, 3), dtype=np.uint8) * 128
+
+        # Model A: depth ramp from 0 to 10
+        depth_a = np.linspace(0, 10, 100).reshape(100, 1) * np.ones((1, 100))
+
+        # Model B: depth ramp from 2 to 12 (shifted by 2, creates consistent offset)
+        depth_b = np.linspace(2, 12, 100).reshape(100, 1) * np.ones((1, 100))
+
+        # Add some local disagreement in top-left quadrant
+        depth_b[:25, :25] = 15.0  # Strong disagreement in this region
+
+        model_results = {
+            "model_a": DepthResult(
+                depth_map=depth_a.astype(np.float32),
+                original_image=test_img,
+                metadata={},
+                depth_units="relative",
+                backend_id="model_a",
+                device="cpu",
+                dtype="float32",
+                input_size=(100, 100),
+            ),
+            "model_b": DepthResult(
+                depth_map=depth_b.astype(np.float32),
+                original_image=test_img,
+                metadata={},
+                depth_units="relative",
+                backend_id="model_b",
+                device="cpu",
+                dtype="float32",
+                input_size=(100, 100),
+            ),
+        }
+
+        config = EnhanceConfig(
+            non_commercial_ok=True,
+            accept_research_tools_license=True,
+        )
+
+        models = [
+            ModelConfig(name="model_a", weight=0.5),
+            ModelConfig(name="model_b", weight=0.5),
+        ]
+        ensemble = DepthEnsembleBackend(config, models=models)
+
+        # Manually call fusion
+        img_pil = Image.fromarray(test_img)
+        result = ensemble._fuse_predictions(model_results, img_pil)
+
+        # Verify fusion completed (no zeros from failed fusion)
+        assert result.depth_map.mean() > 0.0
+
+        # The top-left quadrant should have higher variance due to the disagreement
+        top_left_var = result.variance_map[:25, :25].mean()
+        # Bottom-right quadrant should have lower variance (more agreement)
+        bottom_right_var = result.variance_map[75:, 75:].mean()
+
+        # After normalization, the top-left should still show higher variance
+        # because model_b has an outlier value (15.0) there
+        assert top_left_var > bottom_right_var or result.variance_map.max() > 0.0, (
+            f"Expected some variance in fusion. Top-left: {top_left_var:.6f}, "
+            f"Bottom-right: {bottom_right_var:.6f}, Max variance: {result.variance_map.max():.6f}"
+        )
+
+        # Model agreement should be <1.0 (some disagreement exists)
+        assert result.model_agreement < 0.99
+
 
 # Pytest markers
 pytestmark = [

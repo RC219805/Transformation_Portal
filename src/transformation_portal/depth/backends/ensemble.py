@@ -19,7 +19,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Dict, List, Optional, Union
 
 import numpy as np
 from PIL import Image
@@ -344,16 +344,23 @@ class DepthEnsembleBackend:
         total_weight = sum(model_weights.values())
         model_weights = {k: v / total_weight for k, v in model_weights.items()}
 
-        # Weighted fusion
+        # Compute per-model variance-weighted contributions
+        weighted_depths = []
+        effective_weights_list = []
+
         for model_name, depth_map in aligned_depths.items():
             model_weight = model_weights.get(model_name, 0.0)
-            # Combine model weight with inverse variance (adaptive)
-            effective_weight = model_weight * inv_variance
-            fused_depth += depth_map * effective_weight
+            # Effective weight is model_weight × inverse_variance (per-pixel)
+            effective_weight = model_weight * inv_variance  # (H, W)
 
-        # Normalize by total weight
-        total_effective_weight = sum(model_weights[name] * inv_variance for name in aligned_depths.keys())
-        # Avoid division by zero
+            weighted_depths.append(depth_map * effective_weight)
+            effective_weights_list.append(effective_weight)
+
+        # Fuse: sum of weighted depths / sum of weights (per-pixel)
+        fused_depth = np.sum(weighted_depths, axis=0)  # Sum along model axis
+        total_effective_weight = np.sum(effective_weights_list, axis=0)  # Sum along model axis
+
+        # Normalize (avoid division by zero)
         total_effective_weight = np.maximum(total_effective_weight, epsilon)
         fused_depth /= total_effective_weight
 
@@ -408,7 +415,7 @@ class DepthEnsembleBackend:
 
         if has_metric:
             # Use metric depth scale
-            for name, result in model_results.values():
+            for name, result in model_results.items():
                 if result.is_metric:
                     # Already metric
                     aligned[name] = result.depth_map
