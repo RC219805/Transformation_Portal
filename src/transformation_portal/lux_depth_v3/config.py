@@ -234,6 +234,7 @@ class EnhanceConfig:
     # Materials V3 segmentation backend (Phase 3)
     enable_material_segmentation: bool = False  # Enable automatic material segmentation
     material_segmentation_backend: str = "stub"  # Options: stub, efficientsam
+    strict_backend: bool = False  # If True, raise on backend errors instead of falling back to stub
 
     # Emit flags (deliverables)
     emit_master16: bool = False  # Emit master 16-bit output

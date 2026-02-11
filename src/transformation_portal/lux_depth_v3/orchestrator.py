@@ -808,7 +808,9 @@ class EnhanceOrchestrator:
                         # Future: EfficientSAM integration for real material detection
                         from .segmentation_backend import segment_materials
 
-                        segmentation_result = {"materials": segment_materials(preprocessed_array, self.config)}
+                        # Convert preprocessed float32 [0,1] to uint8 [0,255] for segmentation backend
+                        preprocessed_uint8_for_seg = (np.clip(preprocessed_array, 0, 1) * 255).astype(np.uint8)
+                        segmentation_result = {"materials": segment_materials(preprocessed_uint8_for_seg, self.config)}
 
                         # Log segmentation result if materials were detected
                         if segmentation_result.get("materials"):

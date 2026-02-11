@@ -6,6 +6,7 @@ protocol for swappable, governed model execution.
 """
 
 from .depth_model import BackendCapability, BackendInfo, BackendRole, DepthModel, DepthModelRegistry
+from .segmentation_backend import SegmentationBackend, SegmentationBackendInfo
 
 __all__ = [
     "DepthModel",
@@ -13,4 +14,6 @@ __all__ = [
     "BackendCapability",
     "BackendInfo",
     "DepthModelRegistry",
+    "SegmentationBackend",
+    "SegmentationBackendInfo",
 ]

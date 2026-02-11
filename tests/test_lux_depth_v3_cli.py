@@ -308,6 +308,112 @@ class TestCLIConfiguration:
         assert captured_config.v2_preset is None
 
 
+class TestSegmentationCLI:
+    """Test material segmentation CLI flags."""
+
+    def test_invalid_segmentation_backend(self, tmp_path):
+        """Test that invalid segmentation backend is rejected."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+
+        result = runner.invoke(
+            app,
+            [
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(tmp_path / "output"),
+                "--materials-v3",
+                "on",
+                "--enable-segmentation",
+                "on",
+                "--segmentation-backend",
+                "invalid_backend",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "invalid" in result.stdout.lower() or "segmentation backend" in result.stdout.lower()
+
+    def test_segmentation_config_defaults(self, tmp_path):
+        """Test segmentation config with default values."""
+        from unittest.mock import MagicMock, patch
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "test.jpg").touch()
+
+        captured_config = None
+
+        def mock_orch_init(config, output_root):
+            nonlocal captured_config
+            captured_config = config
+            mock_orch = MagicMock()
+            mock_orch.enhance_batch.return_value = {"total": 0, "succeeded": 0}
+            return mock_orch
+
+        with patch(
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            side_effect=mock_orch_init,
+        ):
+            result = runner.invoke(
+                app,
+                [
+                    "--input-dir",
+                    str(input_dir),
+                    "--output-dir",
+                    str(tmp_path / "output"),
+                ],
+            )
+
+        assert captured_config is not None
+        assert captured_config.enable_material_segmentation is False
+        assert captured_config.material_segmentation_backend == "stub"
+        assert captured_config.strict_backend is False
+
+    def test_segmentation_config_enabled(self, tmp_path):
+        """Test segmentation config when enabled via CLI."""
+        from unittest.mock import MagicMock, patch
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "test.jpg").touch()
+
+        captured_config = None
+
+        def mock_orch_init(config, output_root):
+            nonlocal captured_config
+            captured_config = config
+            mock_orch = MagicMock()
+            mock_orch.enhance_batch.return_value = {"total": 0, "succeeded": 0}
+            return mock_orch
+
+        with patch(
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            side_effect=mock_orch_init,
+        ):
+            result = runner.invoke(
+                app,
+                [
+                    "--input-dir",
+                    str(input_dir),
+                    "--output-dir",
+                    str(tmp_path / "output"),
+                    "--materials-v3",
+                    "on",
+                    "--enable-segmentation",
+                    "on",
+                    "--segmentation-backend",
+                    "efficientsam",
+                    "--strict-segmentation",
+                ],
+            )
+
+        assert captured_config is not None
+        assert captured_config.enable_material_segmentation is True
+        assert captured_config.material_segmentation_backend == "efficientsam"
+        assert captured_config.strict_backend is True
+
+
 class TestCLIHelp:
     """Test CLI help output."""
 
@@ -320,6 +426,15 @@ class TestCLIHelp:
         assert "quality" in result.stdout.lower() and "tier" in result.stdout.lower()
         assert "materials" in result.stdout.lower()
         assert "non-commercial" in result.stdout.lower() or "non commercial" in result.stdout.lower()
+
+    def test_segmentation_flags_in_help(self):
+        """Test that segmentation flags appear in help output."""
+        result = runner.invoke(app, ["--help"])
+        assert result.exit_code == 0
+        assert "segmentation" in result.stdout.lower()
+        assert "enable-segmentation" in result.stdout.lower()
+        assert "segmentation-backend" in result.stdout.lower()
+        assert "strict-segmentation" in result.stdout.lower()
 
 
 if __name__ == "__main__":
