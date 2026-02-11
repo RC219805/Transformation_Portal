@@ -3,12 +3,20 @@
 Verifies argument parsing, validation, and non-commercial license checks.
 """
 
+import re
+
 import pytest
 from typer.testing import CliRunner
 
 from transformation_portal.lux_depth_v3.__main__ import _parse_bool_flag, app
 
 runner = CliRunner()
+
+
+def strip_ansi(text: str) -> str:
+    """Remove ANSI escape sequences from text."""
+    ansi_escape = re.compile(r"\x1b\[[0-9;]*[mGKHf]")
+    return ansi_escape.sub("", text)
 
 
 class TestBoolFlagParsing:
@@ -429,14 +437,14 @@ class TestCLIHelp:
 
     def test_segmentation_flags_in_help(self):
         """Test that segmentation flags appear in help output."""
-        # Use NO_COLOR to avoid ANSI escape sequences breaking string matching in CI
-        runner_no_color = CliRunner(env={"NO_COLOR": "1"})
-        result = runner_no_color.invoke(app, ["--help"])
+        result = runner.invoke(app, ["--help"])
         assert result.exit_code == 0
-        assert "segmentation" in result.stdout.lower()
-        assert "enable-segmentation" in result.stdout.lower()
-        assert "segmentation-backend" in result.stdout.lower()
-        assert "strict-segmentation" in result.stdout.lower()
+        # Strip ANSI codes to handle different terminal capabilities in CI
+        output = strip_ansi(result.stdout.lower())
+        assert "segmentation" in output
+        assert "enable-segmentation" in output
+        assert "segmentation-backend" in output
+        assert "strict-segmentation" in output
 
 
 if __name__ == "__main__":
