@@ -5,6 +5,8 @@ This script ensures that the spatial_ai and lux_depth_v3 pipelines
 maintain complete isolation in RAW decode logic, preventing silent
 cross-contamination between rendering and training data paths.
 
+Uses AST-based import parsing for precision (ignores comments/docstrings).
+
 Usage:
     python scripts/security/verify_pipeline_isolation.py
 
@@ -15,6 +17,7 @@ Exit codes:
 
 from __future__ import annotations
 
+import ast
 import sys
 from pathlib import Path
 from typing import List, Tuple
@@ -29,29 +32,93 @@ def find_python_files(directory: Path) -> List[Path]:
     return list(directory.rglob("*.py"))
 
 
-def check_imports(filepath: Path, forbidden_patterns: List[str]) -> List[str]:
-    """Check if file contains forbidden import patterns.
+def check_imports_ast(filepath: Path, forbidden_modules: List[str]) -> List[str]:
+    """Check if file contains forbidden imports using AST parsing.
+
+    This is more precise than string matching - only catches actual imports,
+    not comments or docstrings mentioning the module.
 
     Args:
         filepath: Path to Python file
-        forbidden_patterns: List of import patterns to reject
+        forbidden_modules: List of module patterns to reject (e.g., "spatial_ai", "lux_depth_v3.raw_loader")
 
     Returns:
-        List of violations (empty if none found)
+        List of violations with line numbers (empty if none found)
     """
     violations = []
 
     try:
         with open(filepath, "r", encoding="utf-8") as f:
-            content = f.read()
+            source = f.read()
 
-        for pattern in forbidden_patterns:
-            if pattern in content:
-                violations.append(f"{filepath.relative_to(REPO_ROOT)}: {pattern}")
+        tree = ast.parse(source, filename=str(filepath))
 
+        for node in ast.walk(tree):
+            # Check "from X import Y" statements
+            if isinstance(node, ast.ImportFrom):
+                # For relative imports, node.module contains the part after the dots
+                # For absolute imports, node.module is the full path
+                module_name = node.module or ""
+
+                # Check against forbidden patterns
+                for forbidden in forbidden_modules:
+                    # Match if:
+                    # 1. Module exactly equals forbidden (e.g., "spatial_ai")
+                    # 2. Module starts with forbidden as prefix (e.g., "spatial_ai.ingest")
+                    # 3. Forbidden appears as a path component (e.g., "transformation_portal.spatial_ai")
+                    is_match = (
+                        module_name == forbidden
+                        or module_name.startswith(forbidden + ".")
+                        or ("." + forbidden + ".") in ("." + module_name + ".")
+                    )
+
+                    if is_match:
+                        # Build display string for violation
+                        if node.level > 0:
+                            rel_path = ["."] * node.level
+                            if module_name:
+                                rel_path.append(module_name)
+                            display_path = "".join(rel_path)
+                        else:
+                            display_path = module_name
+
+                        import_stmt = ast.unparse(node) if hasattr(ast, "unparse") else f"from {display_path} import ..."
+                        # Handle paths both inside and outside repo
+                        try:
+                            file_display = str(filepath.relative_to(REPO_ROOT))
+                        except ValueError:
+                            file_display = str(filepath)
+                        violations.append(f"{file_display}:{node.lineno}: {import_stmt} (matches forbidden: {forbidden})")
+
+            # Check "import X" statements (less common but possible)
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    for forbidden in forbidden_modules:
+                        # Match using same logic as ImportFrom
+                        is_match = (
+                            alias.name == forbidden
+                            or alias.name.startswith(forbidden + ".")
+                            or ("." + forbidden + ".") in ("." + alias.name + ".")
+                        )
+
+                        if is_match:
+                            import_stmt = ast.unparse(node) if hasattr(ast, "unparse") else f"import {alias.name}"
+                            try:
+                                file_display = str(filepath.relative_to(REPO_ROOT))
+                            except ValueError:
+                                file_display = str(filepath)
+                            violations.append(f"{file_display}:{node.lineno}: {import_stmt} (matches forbidden: {forbidden})")
+
+    except SyntaxError as e:
+        # Syntax errors are real problems - report them
+        try:
+            file_display = str(filepath.relative_to(REPO_ROOT))
+        except ValueError:
+            file_display = str(filepath)
+        violations.append(f"{file_display}:{e.lineno}: SyntaxError: {e.msg}")
     except Exception as e:
-        # Non-blocking: warn but don't fail on read errors
-        print(f"Warning: Could not read {filepath}: {e}", file=sys.stderr)
+        # Other errors (e.g., encoding): warn but don't fail
+        print(f"Warning: Could not parse {filepath}: {e}", file=sys.stderr)
 
     return violations
 
@@ -64,17 +131,14 @@ def verify_no_spatial_imports_in_lux_depth() -> Tuple[bool, List[str]]:
         print(f"Warning: {lux_depth_dir} not found, skipping check", file=sys.stderr)
         return True, []
 
-    forbidden_patterns = [
-        "from transformation_portal.spatial_ai",
-        "import transformation_portal.spatial_ai",
-        "from ..spatial_ai",
-        "from ...spatial_ai",  # 3-dot relative imports (fixed: no space)
-        "from ....spatial_ai",  # 4-dot relative imports
+    # Forbidden module patterns (will match in import paths)
+    forbidden_modules = [
+        "spatial_ai",  # Catches both absolute and relative
     ]
 
     violations = []
     for filepath in find_python_files(lux_depth_dir):
-        violations.extend(check_imports(filepath, forbidden_patterns))
+        violations.extend(check_imports_ast(filepath, forbidden_modules))
 
     return len(violations) == 0, violations
 
@@ -88,19 +152,16 @@ def verify_no_lux_depth_decode_imports_in_spatial() -> Tuple[bool, List[str]]:
         print(f"Info: {spatial_ingest_dir} not found, skipping check", file=sys.stderr)
         return True, []
 
-    forbidden_patterns = [
-        "from transformation_portal.lux_depth_v3.raw_loader",
-        "import transformation_portal.lux_depth_v3.raw_loader",
-        "from ..lux_depth_v3.raw_loader",
-        "from ...lux_depth_v3.raw_loader",  # relative imports
-        # Also block other lux_depth_v3 internal imports (only contracts allowed)
-        "from transformation_portal.lux_depth_v3.preprocessing",
-        "from transformation_portal.lux_depth_v3.postprocessing",
+    # Forbidden module patterns
+    forbidden_modules = [
+        "lux_depth_v3.raw_loader",
+        "lux_depth_v3.preprocessing",
+        "lux_depth_v3.postprocessing",
     ]
 
     violations = []
     for filepath in find_python_files(spatial_ingest_dir):
-        violations.extend(check_imports(filepath, forbidden_patterns))
+        violations.extend(check_imports_ast(filepath, forbidden_modules))
 
     return len(violations) == 0, violations
 
@@ -118,7 +179,8 @@ def verify_allowed_shared_utilities() -> Tuple[bool, List[str]]:
         return True, []
 
     # If created, warn if it contains pixel decode keywords
-    # (Architect review required before this becomes enforced)
+    # For this check, we still use string matching since we're looking for
+    # function/variable names, not imports
     warning_patterns = [
         "postprocess",  # LibRaw postprocessing
         "dcraw_process",
@@ -128,11 +190,16 @@ def verify_allowed_shared_utilities() -> Tuple[bool, List[str]]:
     ]
 
     warnings = []
-    for pattern in warning_patterns:
-        violations = check_imports(utils_raw_metadata, [pattern])
-        if violations:
-            warnings.append(f"Warning: {utils_raw_metadata} may contain pixel decode logic (review required)")
-            break
+    try:
+        with open(utils_raw_metadata, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        for pattern in warning_patterns:
+            if pattern in content:
+                warnings.append(f"Warning: {utils_raw_metadata} may contain pixel decode logic (review required)")
+                break
+    except Exception as e:
+        print(f"Warning: Could not read {utils_raw_metadata}: {e}", file=sys.stderr)
 
     return True, warnings  # Don't fail, just warn
 
@@ -140,7 +207,7 @@ def verify_allowed_shared_utilities() -> Tuple[bool, List[str]]:
 def main() -> int:
     """Run all isolation checks."""
     print("=" * 70)
-    print("ADR-023: Pipeline Isolation Verification")
+    print("ADR-023: Pipeline Isolation Verification (AST-based)")
     print("=" * 70)
     print()
 

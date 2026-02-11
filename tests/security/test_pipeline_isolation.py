@@ -1,13 +1,12 @@
-"""Tests for ADR-023 pipeline isolation enforcement (Bug P2-C fix).
+"""Tests for ADR-023 pipeline isolation enforcement (AST-based).
 
 Tests cover:
-- Absolute spatial_ai import detection
-- 2-dot relative import detection
-- 3-dot relative import detection (Bug P2-C)
-- 4-dot relative import detection
-- Safe import patterns (no false positives)
+- Absolute spatial_ai import detection via AST
+- Relative import detection (2-dot, 3-dot, 4-dot)
+- No false positives on docstrings/comments
+- Import statement line number reporting
 
-Architecture: ADR-023 (Isolation), ADR-026 (APEX Research Ultra)
+Architecture: ADR-023 (Isolation), ADR-026 (APEX Research Ultra), Phase 1.1 (Item 4)
 """
 
 from __future__ import annotations
@@ -20,101 +19,151 @@ import pytest
 # Add scripts to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts" / "security"))
 
+from verify_pipeline_isolation import check_imports_ast  # noqa: E402
 
-class TestIsolationCheckRegex:
-    """Test that isolation check regex patterns work correctly."""
 
-    def test_pattern_matching_absolute_imports(self):
-        """Test that absolute spatial_ai import patterns match correctly."""
-        pattern = "from transformation_portal.spatial_ai"
+class TestIsolationCheckAST:
+    """Test that AST-based isolation check correctly detects real imports."""
 
-        # Should match
-        assert pattern in "from transformation_portal.spatial_ai import LinearDecoder"
-        assert pattern in "from transformation_portal.spatial_ai.ingest import decode"
+    def test_detects_absolute_imports(self, tmp_path: Path):
+        """Test that absolute spatial_ai imports are detected."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("from transformation_portal.spatial_ai import LinearDecoder\n")
 
-        # Should not match
-        assert pattern not in "from transformation_portal.depth import DepthBackend"
-        assert pattern not in "import numpy as np"
+        violations = check_imports_ast(test_file, ["spatial_ai"])
+        assert len(violations) == 1
+        assert "spatial_ai" in violations[0]
+        assert ":1:" in violations[0]  # Line number
 
-    def test_pattern_matching_two_dot_relative_imports(self):
-        """Test that 2-dot relative import patterns match correctly."""
-        pattern = "from ..spatial_ai"
+    def test_detects_two_dot_relative_imports(self, tmp_path: Path):
+        """Test that 2-dot relative imports are detected."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("from ..spatial_ai import LinearDecoder\n")
 
-        # Should match
-        assert pattern in "from ..spatial_ai import LinearDecoder"
-        assert pattern in "from ..spatial_ai.ingest import decode"
+        violations = check_imports_ast(test_file, ["spatial_ai"])
+        assert len(violations) == 1
+        assert "spatial_ai" in violations[0]
 
-        # Should not match
-        assert pattern not in "from ..depth import DepthBackend"
-        assert pattern not in "from ...spatial_ai import something"  # 3 dots
+    def test_detects_three_dot_relative_imports(self, tmp_path: Path):
+        """Test that 3-dot relative imports are detected (Bug P2-C context)."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("from ...spatial_ai import LinearDecoder\n")
 
-    def test_pattern_matching_three_dot_relative_imports(self):
-        """Test that 3-dot relative import patterns match correctly (Bug P2-C fix)."""
-        pattern = "from ...spatial_ai"  # Fixed: no space after dots
+        violations = check_imports_ast(test_file, ["spatial_ai"])
+        assert len(violations) == 1
+        assert "spatial_ai" in violations[0]
 
-        # Should match
-        assert pattern in "from ...spatial_ai import LinearDecoder"
-        assert pattern in "from ...spatial_ai.ingest import decode"
+    def test_detects_four_dot_relative_imports(self, tmp_path: Path):
+        """Test that 4-dot relative imports are detected."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("from ....spatial_ai import something\n")
 
-        # Should not match (wrong number of dots)
-        assert pattern not in "from ..spatial_ai import LinearDecoder"  # 2 dots
-        assert pattern not in "from ....spatial_ai import something"  # 4 dots
+        violations = check_imports_ast(test_file, ["spatial_ai"])
+        assert len(violations) == 1
+        assert "spatial_ai" in violations[0]
 
-        # Bug P2-C: The old pattern had a space and would NOT match
-        old_buggy_pattern = "from ... spatial_ai"  # Space between dots and module
-        assert old_buggy_pattern not in "from ...spatial_ai import LinearDecoder"
+    def test_detects_direct_import_statements(self, tmp_path: Path):
+        """Test that direct 'import X' statements are detected."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("import transformation_portal.spatial_ai\n")
 
-    def test_pattern_matching_four_dot_relative_imports(self):
-        """Test that 4-dot relative import patterns match correctly."""
-        pattern = "from ....spatial_ai"
+        violations = check_imports_ast(test_file, ["spatial_ai"])
+        assert len(violations) == 1
+        assert "spatial_ai" in violations[0]
 
-        # Should match
-        assert pattern in "from ....spatial_ai import something"
+    def test_ignores_docstring_mentions(self, tmp_path: Path):
+        """Test that docstring mentions of spatial_ai are ignored (AST precision)."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text(
+            '''"""This module does NOT import spatial_ai.
 
-        # Should not match
-        assert pattern not in "from ...spatial_ai import LinearDecoder"  # 3 dots
-        assert pattern not in "from ..spatial_ai import LinearDecoder"  # 2 dots
+WARNING: Do not import from ...spatial_ai here.
+"""
+import numpy as np
+'''
+        )
 
-    def test_safe_imports_not_flagged(self):
+        violations = check_imports_ast(test_file, ["spatial_ai"])
+        assert len(violations) == 0, "Docstring mentions should not be flagged"
+
+    def test_ignores_comment_mentions(self, tmp_path: Path):
+        """Test that comment mentions of spatial_ai are ignored."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text(
+            """# TODO: Consider using spatial_ai for this
+# from ...spatial_ai import LinearDecoder  # Commented out
+import numpy as np
+"""
+        )
+
+        violations = check_imports_ast(test_file, ["spatial_ai"])
+        assert len(violations) == 0, "Comment mentions should not be flagged"
+
+    def test_safe_imports_not_flagged(self, tmp_path: Path):
         """Test that non-spatial_ai imports are not flagged."""
-        forbidden_patterns = [
-            "from transformation_portal.spatial_ai",
-            "from ..spatial_ai",
-            "from ...spatial_ai",
-            "from ....spatial_ai",
-        ]
+        test_file = tmp_path / "test.py"
+        test_file.write_text(
+            """from transformation_portal.depth import DepthBackend
+import numpy as np
+from ..depth.backends import ensemble
+from ...lux_depth_v3 import config
+"""
+        )
 
-        safe_imports = [
-            "from transformation_portal.depth import DepthBackend",
-            "import numpy as np",
-            "from ..depth.backends import ensemble",
-            "from ...lux_depth_v3 import config",
-        ]
+        violations = check_imports_ast(test_file, ["spatial_ai"])
+        assert len(violations) == 0, "Safe imports should not be flagged"
 
-        for safe_import in safe_imports:
-            for pattern in forbidden_patterns:
-                assert pattern not in safe_import, f"Pattern '{pattern}' should not match safe import '{safe_import}'"
+    def test_detects_submodule_imports(self, tmp_path: Path):
+        """Test that submodule imports like lux_depth_v3.raw_loader are detected."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("from transformation_portal.lux_depth_v3.raw_loader import load_raw\n")
 
-    def test_comprehensive_pattern_coverage(self):
-        """Test that all forbidden patterns are correctly specified (no typos)."""
-        # These are the patterns that should be in verify_pipeline_isolation.py after Bug P2-C fix
-        forbidden_patterns = [
-            "from transformation_portal.spatial_ai",
-            "import transformation_portal.spatial_ai",
-            "from ..spatial_ai",
-            "from ...spatial_ai",  # Fixed: no space
-            "from ....spatial_ai",  # Added: 4-dot pattern
-        ]
+        violations = check_imports_ast(test_file, ["lux_depth_v3.raw_loader"])
+        assert len(violations) == 1
+        assert "raw_loader" in violations[0]
 
-        # Verify no typos (no spaces after dots)
-        for pattern in forbidden_patterns:
-            if "..." in pattern:
-                # Check that there's no space between dots and "spatial_ai"
-                assert "... spatial_ai" not in pattern, f"Pattern '{pattern}' has incorrect spacing (Bug P2-C)"
+    def test_reports_line_numbers(self, tmp_path: Path):
+        """Test that violations include line numbers for easy debugging."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text(
+            """import numpy as np
+
+from transformation_portal.spatial_ai import LinearDecoder
+
+import pandas as pd
+"""
+        )
+
+        violations = check_imports_ast(test_file, ["spatial_ai"])
+        assert len(violations) == 1
+        assert ":3:" in violations[0], "Should report line 3"
+
+    def test_handles_multiple_violations(self, tmp_path: Path):
+        """Test that multiple violations in same file are all reported."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text(
+            """from ..spatial_ai import LinearDecoder
+from ...spatial_ai.ingest import decode
+"""
+        )
+
+        violations = check_imports_ast(test_file, ["spatial_ai"])
+        assert len(violations) == 2
+        assert any(":1:" in v for v in violations)
+        assert any(":2:" in v for v in violations)
+
+    def test_handles_syntax_errors_gracefully(self, tmp_path: Path):
+        """Test that syntax errors are reported as violations."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("from ..spatial_ai import ( # unclosed paren\n")
+
+        violations = check_imports_ast(test_file, ["spatial_ai"])
+        assert len(violations) > 0
+        assert any("SyntaxError" in v for v in violations)
 
 
-# Pytest markers
+# Pytest markers (using registered markers from pyproject.toml)
 pytestmark = [
-    pytest.mark.apex_ultra,
-    pytest.mark.security,
+    pytest.mark.unit,
+    pytest.mark.regression,
 ]

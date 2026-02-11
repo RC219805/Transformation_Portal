@@ -27,14 +27,9 @@ class TestLinearDecoder:
     """Test suite for LinearDecoder."""
 
     def test_gamma_enforcement(self):
-        """Test that gamma != 1.0 is rejected by default."""
+        """Test that gamma != 1.0 is always rejected (no override possible)."""
         with pytest.raises(ValueError, match="gamma=1.0"):
-            LinearDecoder(gamma=2.2, validate_contract=True)
-
-    def test_gamma_override(self):
-        """Test that gamma != 1.0 can be allowed with validate_contract=False."""
-        decoder = LinearDecoder(gamma=2.2, validate_contract=False)
-        assert decoder.gamma == 2.2
+            LinearDecoder(gamma=2.2)
 
     def test_linear_decode_preserves_hdr(self, tmp_path: Path):
         """Test that linear ingest preserves HDR values >1.0."""
@@ -103,7 +98,19 @@ class TestLinearDecoder:
         assert len(prov["output"]["content_hash"]) == 64  # SHA-256 hex
 
     def test_exr_output(self, tmp_path: Path):
-        """Test that EXR output artifact is created."""
+        """Test that EXR output artifact is created when OpenEXR is available."""
+        # Check if OpenEXR is available
+        try:
+            import Imath
+            import OpenEXR
+
+            has_openexr = True
+        except ImportError:
+            has_openexr = False
+
+        if not has_openexr:
+            pytest.skip("OpenEXR not installed - skipping EXR export test")
+
         # Create test image
         test_img = (np.random.rand(100, 100, 3) * 255).astype(np.uint8)
         test_img_path = tmp_path / "test.png"
@@ -112,11 +119,10 @@ class TestLinearDecoder:
         # Decode with EXR emission
         result = decode(test_img_path, gamma=1.0, output_dir=tmp_path, emit_exr=True)
 
-        # Verify EXR file exists (or TIFF fallback if OpenEXR unavailable)
+        # Verify EXR file exists
         assert result.output_exr_path is not None
         assert result.output_exr_path.exists()
-        # File extension will be .exr or .tiff depending on OpenEXR availability
-        assert result.output_exr_path.suffix in [".exr", ".tiff"]
+        assert result.output_exr_path.suffix == ".exr"
 
     def test_contract_validation_rejects_non_float32(self, tmp_path: Path):
         """Test that LinearIngestResult rejects non-float32 arrays."""
@@ -239,6 +245,67 @@ class TestLinearDecoder:
         assert result.gamma == 1.0
         assert result.linear_rgb.dtype == np.float32
 
+    def test_exr_fail_loud_when_openexr_missing(self, tmp_path: Path):
+        """Test that requesting EXR export fails loudly when OpenEXR is unavailable."""
+        # Check if OpenEXR is available - if it is, skip this test
+        try:
+            import Imath
+            import OpenEXR
+
+            pytest.skip("OpenEXR is installed - cannot test missing OpenEXR behavior")
+        except ImportError:
+            pass  # Good - OpenEXR is missing, test should proceed
+
+        # Create a simple 8-bit PNG (sufficient to reach emit_exr failure path)
+        test_img = (np.random.rand(50, 50, 3) * 255).astype(np.uint8)
+        test_img_path = tmp_path / "test.png"
+        Image.fromarray(test_img, mode="RGB").save(test_img_path)
+
+        # Attempt decode with emit_exr=True should fail loudly
+        with pytest.raises(RuntimeError, match="emit_exr=True requires OpenEXR package"):
+            decode(test_img_path, gamma=1.0, output_dir=tmp_path, emit_exr=True)
+
+    def test_strict_ingest_rejects_uint8(self, tmp_path: Path):
+        """Test that strict_ingest=True rejects 8-bit inputs."""
+        # Create 8-bit test image
+        test_img = (np.random.rand(50, 50, 3) * 255).astype(np.uint8)
+        test_img_path = tmp_path / "test_8bit.png"
+        Image.fromarray(test_img, mode="RGB").save(test_img_path)
+
+        # Attempt decode with strict_ingest=True should fail
+        with pytest.raises(ValueError, match="strict_ingest=True rejects 8-bit inputs"):
+            decode(test_img_path, gamma=1.0, strict_ingest=True)
+
+    def test_strict_ingest_allows_uint16(self, tmp_path: Path):
+        """Test that strict_ingest=True allows 16-bit inputs."""
+        # Create a true 16-bit grayscale image (PIL mode I;16)
+        test_img = (np.random.rand(50, 50) * 65535).astype(np.uint16)
+        test_img_path = tmp_path / "test_16bit.png"
+        img = Image.fromarray(test_img).convert("I;16")
+        img.save(test_img_path)
+
+        # Decode with strict_ingest=True should succeed (will convert gray->RGB)
+        result = decode(test_img_path, gamma=1.0, strict_ingest=True)
+        assert result.linear_rgb.dtype == np.float32
+        assert result.gamma == 1.0
+        assert result.linear_rgb.shape[2] == 3  # Converted to RGB
+
+    def test_non_strict_ingest_allows_uint8(self, tmp_path: Path):
+        """Test that strict_ingest=False (default) allows 8-bit inputs."""
+        # Create 8-bit test image
+        test_img = (np.random.rand(50, 50, 3) * 255).astype(np.uint8)
+        test_img_path = tmp_path / "test_8bit.png"
+        Image.fromarray(test_img, mode="RGB").save(test_img_path)
+
+        # Decode with strict_ingest=False should succeed
+        result = decode(test_img_path, gamma=1.0, strict_ingest=False)
+        assert result.linear_rgb.dtype == np.float32
+        assert result.gamma == 1.0
+
+        # Also test default behavior (strict_ingest not specified)
+        result_default = decode(test_img_path, gamma=1.0)
+        assert result_default.linear_rgb.dtype == np.float32
+
 
 class TestLinearIngestIntegration:
     """Integration tests for linear ingest with EnhanceConfig."""
@@ -296,5 +363,5 @@ class TestADR023Compliance:
 
 # Pytest markers for organization
 pytestmark = [
-    pytest.mark.spatial_ai,
+    pytest.mark.unit,  # Fast unit tests for spatial_ai ingest layer
 ]

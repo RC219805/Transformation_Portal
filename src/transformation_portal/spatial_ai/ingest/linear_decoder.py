@@ -115,27 +115,29 @@ class LinearDecoder:
         self,
         gamma: float = 1.0,
         bit_depth: int = 32,
-        validate_contract: bool = True,
+        strict_ingest: bool = False,
     ):
         """Initialize linear decoder.
 
         Args:
             gamma: Gamma for decode (must be 1.0 for linear).
             bit_depth: Output bit depth (32 for float32).
-            validate_contract: Enforce SpatialCaptureV1 contract.
+            strict_ingest: If True, reject 8-bit inputs to prevent lossy normalization.
+                For research/training workflows requiring true linear preservation,
+                set strict_ingest=True to enforce >=16-bit inputs only.
 
         Raises:
-            ValueError: If gamma != 1.0 and validate_contract=True.
+            ValueError: If gamma != 1.0 (linear ingest contract).
         """
-        if validate_contract and abs(gamma - 1.0) > 1e-6:
+        if abs(gamma - 1.0) > 1e-6:
             raise ValueError(
                 f"Linear ingest requires gamma=1.0 (got {gamma}). "
-                "Set validate_contract=False to override (NOT recommended)."
+                "This is a non-negotiable contract for research/training data."
             )
 
         self.gamma = gamma
         self.bit_depth = bit_depth
-        self.validate_contract = validate_contract
+        self.strict_ingest = strict_ingest
 
     def decode(
         self,
@@ -255,6 +257,7 @@ class LinearDecoder:
             Tuple of (linear_rgb array, (height, width)).
 
         Raises:
+            ValueError: If strict_ingest validation fails.
             RuntimeError: If decode fails.
         """
         try:
@@ -262,6 +265,9 @@ class LinearDecoder:
                 return self._decode_exr(path)
             else:
                 return self._decode_pillow(path, format_str)
+        except ValueError:
+            # Let ValueError propagate directly (contract violations)
+            raise
         except Exception as e:
             raise RuntimeError(f"Failed to decode {path}: {e}") from e
 
@@ -324,6 +330,14 @@ class LinearDecoder:
         elif img_array.ndim == 3 and img_array.shape[2] == 4:
             # Drop alpha channel
             img_array = img_array[:, :, :3]
+
+        # Enforce strict ingest if requested
+        if self.strict_ingest and img_array.dtype == np.uint8:
+            raise ValueError(
+                f"strict_ingest=True rejects 8-bit inputs to prevent lossy collapse. "
+                f"Input {path.name} is uint8. Use >=16-bit TIFF/PNG or EXR for linear ingest. "
+                f"Set strict_ingest=False to allow 8-bit normalization (not recommended for training data)."
+            )
 
         # Convert to float32 and normalize to [0, 1] range initially
         if img_array.dtype == np.uint8:
@@ -410,6 +424,9 @@ class LinearDecoder:
 
         Returns:
             Path to saved EXR file.
+
+        Raises:
+            RuntimeError: If OpenEXR is not available (fail-loud for HDR preservation).
         """
         output_path = output_dir / f"{stem}_linear.exr"
 
@@ -432,20 +449,12 @@ class LinearDecoder:
             exr.writePixels({"R": r, "G": g, "B": b})
             exr.close()
 
-        except ImportError:
-            logger.warning("OpenEXR not available, using TIFF fallback for HDR output")
-            # Fallback: save as 32-bit float TIFF
-            output_path = output_dir / f"{stem}_linear.tiff"
-            # Convert to uint16 for TIFF (lossy for HDR >1.0)
-            # Note: This is NOT ideal for HDR preservation
-            # Recommend installing OpenEXR for proper HDR support
-            img_uint16 = np.clip(linear_rgb * 65535, 0, 65535).astype(np.uint16)
-            img = Image.fromarray(img_uint16, mode="RGB")
-            img.save(output_path, format="TIFF", compression="lzw")
-            logger.warning(
-                f"Saved as 16-bit TIFF (HDR values >1.0 clipped). "
-                f"Install OpenEXR for full HDR support: pip install OpenEXR"
-            )
+        except ImportError as e:
+            raise RuntimeError(
+                "emit_exr=True requires OpenEXR package for HDR preservation. "
+                "Install with: pip install OpenEXR Imath\n"
+                "Refusing to silently degrade to clipped 16-bit TIFF fallback."
+            ) from e
 
         logger.debug(f"Saved linear EXR: {output_path}")
         return output_path
@@ -474,6 +483,7 @@ def decode(
     input_path: Path | str,
     gamma: float = 1.0,
     bit_depth: int = 32,
+    strict_ingest: bool = False,
     output_dir: Optional[Path | str] = None,
     emit_exr: bool = False,
     emit_provenance: bool = False,
@@ -484,6 +494,7 @@ def decode(
         input_path: Path to input file.
         gamma: Gamma for decode (must be 1.0).
         bit_depth: Output bit depth (32 for float32).
+        strict_ingest: If True, reject 8-bit inputs.
         output_dir: Output directory (defaults to input directory).
         emit_exr: Save linear RGB as EXR.
         emit_provenance: Save provenance JSON.
@@ -496,7 +507,7 @@ def decode(
         >>> assert result.gamma == 1.0
         >>> assert result.linear_rgb.dtype == np.float32
     """
-    decoder = LinearDecoder(gamma=gamma, bit_depth=bit_depth)
+    decoder = LinearDecoder(gamma=gamma, bit_depth=bit_depth, strict_ingest=strict_ingest)
     return decoder.decode(
         input_path=input_path,
         output_dir=output_dir,
