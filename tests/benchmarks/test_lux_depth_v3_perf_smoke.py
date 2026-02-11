@@ -346,7 +346,11 @@ class TestLuxDepthV3PerformanceBaseline:
     @pytest.mark.benchmark
     def test_memory_baseline_peak_tracking(self, tmp_path, synthetic_images, mock_depth_backend, benchmark_config):
         """Establish baseline for peak memory usage (RSS tracking)."""
-        import psutil
+        try:
+            import psutil
+        except ImportError:
+            pytest.skip("psutil not available (requires ML dependencies)")
+
         import os
 
         process = psutil.Process(os.getpid())

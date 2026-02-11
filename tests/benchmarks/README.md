@@ -38,7 +38,7 @@ pytest tests/ -v -m "not benchmark"
 - `test_single_image_baseline_runtime`: Measures p50/p95 runtime for single images
 - `test_batch_processing_baseline`: Measures batch throughput
 - `test_output_invariants_smoke`: Validates output correctness
-- `test_memory_baseline_peak_tracking`: Tracks peak memory usage
+- `test_memory_baseline_peak_tracking`: Tracks peak memory usage (requires psutil, skips in core CI)
 - `test_no_model_reinitialization_guard`: Placeholder for backend singleton checks (L1.0)
 - `test_p95_latency_regression_threshold`: Regression guard (to be populated in L1.x)
 
@@ -48,6 +48,7 @@ pytest tests/ -v -m "not benchmark"
 - No model downloads (uses synthetic backend fallback)
 - No network calls
 - Fully deterministic synthetic fixtures
+- Memory tracking test requires `psutil` (skips gracefully if unavailable in core CI)
 
 ## Optimization Roadmap Integration
 
