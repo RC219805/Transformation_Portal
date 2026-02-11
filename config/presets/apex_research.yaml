@@ -152,7 +152,10 @@ fallback:
     variant: depth-anything-v3-nested-giant-large-1.1
     source: huggingface
     hf_id: "depth-anything/DA3-NESTED-GIANT-LARGE-1.1"
-    revision: "main"
+    # Pin to commit hash for reproducibility (Phase 1.1 Item 5)
+    # TODO: Verify current commit at https://huggingface.co/depth-anything/DA3-NESTED-GIANT-LARGE-1.1/commits/main
+    # and update this hash before production use. Placeholder below:
+    revision: "NEEDS_VERIFICATION_0000000000000000000000"  # Replace with actual commit SHA from HF repo
 
   # Fallback still requires non-commercial license
   license_restriction: research_only

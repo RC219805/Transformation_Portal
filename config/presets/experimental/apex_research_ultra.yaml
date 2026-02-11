@@ -75,7 +75,9 @@ depth:
     - name: da3_1.1_nested_giant_large
       weight: 0.3
       checkpoint: hf://depth-anything/DA3-NESTED-GIANT-LARGE-1.1
-      revision: main
+      # Pin to commit hash for reproducibility (Phase 1.1 Item 5)
+      # TODO: Verify at https://huggingface.co/depth-anything/DA3-NESTED-GIANT-LARGE-1.1/commits/main
+      revision: NEEDS_VERIFICATION_0000000000000000000000  # Replace with actual commit SHA
       license: cc_by_nc_4.0
       device: auto
 
