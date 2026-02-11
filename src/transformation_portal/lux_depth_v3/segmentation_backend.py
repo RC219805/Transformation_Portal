@@ -144,6 +144,10 @@ class EfficientSAMBackend:
         self._device = None
         self._model_loaded = False
         self._use_real_model = False  # Track whether real model or heuristics
+        # Cache CLIP model to avoid repeated loading
+        self._clip_model = None
+        self._clip_preprocess = None
+        self._clip_tokenizer = None
 
     @property
     def info(self) -> SegmentationBackendInfo:
@@ -385,39 +389,199 @@ class EfficientSAMBackend:
             image: RGB image (H, W, 3), uint8 [0-255]
 
         Returns:
-            List of segment proposals (each is a binary mask)
+            List of segment dictionaries with keys:
+                - 'segmentation': Binary mask (H, W) np.ndarray
+                - 'bbox': Bounding box in XYWH format [x, y, w, h]
+                - 'area': Mask area in pixels
+                - 'predicted_iou': Model's quality prediction
+
+        Note:
+            V2.0 limitation: EfficientViTSam doesn't have a compatible automatic
+            mask generation API like the full SAM model. The standard
+            SamAutomaticMaskGenerator expects attributes (img_size, device) that
+            aren't present in EfficientViTSam.
+
+            Future versions can implement a custom automatic mask generator
+            by running the model over a grid of point prompts. For now, we return
+            empty segments and let CLIP classify heuristic segments instead.
+
+            This still provides value via CLIP-based material classification,
+            which is more accurate than pure heuristics.
         """
-        # Convert to torch tensor
-        import torch
-
-        # EfficientSAM expects float32 [0-1] normalized RGB
-        img_float = image.astype(np.float32) / 255.0
-
-        # Convert to torch tensor (C, H, W) format
-        img_tensor = torch.from_numpy(img_float).permute(2, 0, 1).unsqueeze(0)
-        img_tensor = img_tensor.to(self._device)
-
-        # Run model inference
-        with torch.no_grad():
-            # EfficientSAM automatic mask generation
-            # Future: Use actual SAM API when available
-            # For now, return empty list to fall back to heuristics
-            logger.warning("Real SAM inference not yet fully implemented - using heuristic fallback")
-            return []
+        logger.debug(
+            "SAM automatic mask generation not yet compatible with EfficientViTSam. "
+            "Using heuristic segments with CLIP classification instead."
+        )
+        return []  # Empty list triggers CLIP classification of heuristic segments
 
     def _classify_segments_with_clip(self, image: np.ndarray, segments: list) -> Dict[str, np.ndarray]:
-        """Classify segments using CLIP text embeddings.
+        """Classify segments using CLIP zero-shot classification.
 
         Args:
             image: RGB image (H, W, 3), uint8 [0-255]
-            segments: List of segment masks
+            segments: List of segment dictionaries from SAM (may be empty)
 
         Returns:
-            Dict mapping material names to aggregated masks
+            Dict mapping material names to aggregated masks (H, W) float32 [0.0-1.0]
+
+        Note:
+            If segments list is empty (which happens when SAM doesn't run),
+            we first generate heuristic segments and then classify them with CLIP.
+            This provides better material detection than pure heuristics alone.
         """
-        # V2.1 implementation - not yet complete
-        logger.warning("CLIP classification not yet implemented - using heuristics")
-        return self._heuristic_segmentation(image)
+        # If no SAM segments, generate heuristic segments first
+        if not segments:
+            logger.debug("No SAM segments provided, generating heuristic segments for CLIP classification")
+            heuristic_masks = self._heuristic_segmentation(image)
+
+            # Convert heuristic masks to segment format for CLIP
+            segments = []
+            for material_name, mask in heuristic_masks.items():
+                # Find all connected components in this material mask
+                from scipy import ndimage
+
+                labeled, num_features = ndimage.label(mask > 0.5)
+
+                for region_id in range(1, num_features + 1):
+                    region_mask = labeled == region_id
+                    area = region_mask.sum()
+
+                    if area < 500:  # Skip small regions
+                        continue
+
+                    # Compute bounding box
+                    rows, cols = np.where(region_mask)
+                    if len(rows) == 0:
+                        continue
+
+                    x1, x2 = cols.min(), cols.max()
+                    y1, y2 = rows.min(), rows.max()
+                    bbox = [int(x1), int(y1), int(x2 - x1 + 1), int(y2 - y1 + 1)]
+
+                    segments.append(
+                        {
+                            "segmentation": region_mask,
+                            "bbox": bbox,
+                            "area": int(area),
+                            "heuristic_label": material_name,  # Keep for comparison
+                        }
+                    )
+
+        if not segments:
+            logger.debug("No segments to classify, using pure heuristics")
+            return self._heuristic_segmentation(image)
+
+        # Allow disabling CLIP for faster tests
+        import os
+
+        if os.getenv("SKIP_CLIP_INFERENCE", "").lower() in ("1", "true", "yes"):
+            logger.debug("SKIP_CLIP_INFERENCE set, using heuristics instead of CLIP")
+            return self._heuristic_segmentation(image)
+
+        try:
+            import open_clip
+            import torch
+            from PIL import Image
+
+            # Load CLIP model (cached at instance level to avoid repeated loading)
+            if self._clip_model is None:
+                logger.debug("Loading CLIP model for segment classification...")
+                model, _, preprocess = open_clip.create_model_and_transforms(
+                    "ViT-B-32",
+                    pretrained="openai",
+                    device=self._device,
+                )
+                tokenizer = open_clip.get_tokenizer("ViT-B-32")
+
+                # Cache for future calls
+                self._clip_model = model
+                self._clip_preprocess = preprocess
+                self._clip_tokenizer = tokenizer
+            else:
+                logger.debug("Using cached CLIP model")
+                model = self._clip_model
+                preprocess = self._clip_preprocess
+                tokenizer = self._clip_tokenizer
+
+            # Define material text prompts
+            material_prompts = {
+                "glass": "a photo of glass windows and reflective surfaces",
+                "water": "a photo of water, pools, and blue reflective surfaces",
+                "foliage": "a photo of plants, trees, and green foliage",
+                "stone": "a photo of stone, concrete, and gray surfaces",
+            }
+
+            # Tokenize text prompts
+            text_tokens = tokenizer(list(material_prompts.values())).to(self._device)
+
+            with torch.no_grad():
+                # Encode text prompts
+                text_features = model.encode_text(text_tokens)
+                text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+
+                # Initialize material masks
+                h, w = image.shape[:2]
+                material_masks = {name: np.zeros((h, w), dtype=np.float32) for name in material_prompts}
+
+                # Convert image to PIL for preprocessing
+                pil_image = Image.fromarray(image)
+
+                # Classify each segment
+                for seg_idx, segment in enumerate(segments):
+                    mask = segment["segmentation"]
+                    bbox = segment["bbox"]  # [x, y, w, h]
+
+                    # Extract segment region with some padding
+                    x, y, w_box, h_box = [int(v) for v in bbox]
+                    x1 = max(0, x - 10)
+                    y1 = max(0, y - 10)
+                    x2 = min(w, x + w_box + 10)
+                    y2 = min(h, y + h_box + 10)
+
+                    # Crop and preprocess region
+                    region = pil_image.crop((x1, y1, x2, y2))
+                    region_tensor = preprocess(region).unsqueeze(0).to(self._device)
+
+                    # Encode image region
+                    image_features = model.encode_image(region_tensor)
+                    image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+
+                    # Compute similarity scores
+                    similarities = (image_features @ text_features.T).squeeze(0)
+
+                    # Assign to best matching material
+                    best_idx = similarities.argmax().item()
+                    best_material = list(material_prompts.keys())[best_idx]
+                    best_score = similarities[best_idx].item()
+
+                    # Only add if confidence is reasonable (> 0.2)
+                    if best_score > 0.2:
+                        # Add segment mask to material (using max to handle overlaps)
+                        material_masks[best_material] = np.maximum(material_masks[best_material], mask.astype(np.float32))
+
+                        heuristic_label = segment.get("heuristic_label", "unknown")
+                        match_str = "✓" if heuristic_label == best_material else f"({heuristic_label}→{best_material})"
+                        logger.debug(
+                            f"Segment {seg_idx}: {best_material} {match_str} "
+                            f"score={best_score:.3f}, area={segment['area']}px"
+                        )
+
+                # Filter out empty masks
+                material_masks = {
+                    name: mask for name, mask in material_masks.items() if mask.sum() > 500  # Min coverage threshold
+                }
+
+                logger.info(
+                    f"CLIP classified {len(segments)} segments into {len(material_masks)} materials: {list(material_masks.keys())}"
+                )
+                return material_masks
+
+        except Exception as e:
+            logger.warning(f"CLIP classification failed: {e}, falling back to heuristics")
+            import traceback
+
+            logger.debug(f"CLIP error traceback: {traceback.format_exc()}")
+            return self._heuristic_segmentation(image)
 
     def _classify_segments_heuristic(self, image: np.ndarray, segments: list) -> Dict[str, np.ndarray]:
         """Classify segments using color/texture heuristics.
