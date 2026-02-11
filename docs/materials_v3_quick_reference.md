@@ -75,7 +75,7 @@ material_masks: Dict[str, np.ndarray]
 
 **Current:**
 - ✅ Masks captured in Materials V3 result
-- ✅ Passed to V2Runner (with logging)
+- ✅ Mask availability is logged before V2 subprocess; masks are not serialized/passed yet
 - ⚠️ Not serialized to V2 subprocess (requires disk serialization)
 
 **Future:**
@@ -348,7 +348,7 @@ This is expected. EfficientSAM integration is future work. Use `backend="stub"` 
 
 **Materials V3 Version:** 3.1
 **Schema Version:** 1.0
-**Implementation Date:** 2025-02-10
+**Implementation Date:** 2026-02-10
 
 **Changes in 3.1:**
 - Added water pixel operations
