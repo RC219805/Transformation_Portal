@@ -325,17 +325,30 @@ class DepthEnsembleBackend:
         # Step 1: Align depth maps to metric scale
         aligned_depths = self._align_depth_maps(model_results)
 
-        # Step 2: Compute per-pixel variance
-        depth_stack = np.stack(list(aligned_depths.values()), axis=0)  # (N, H, W)
+        # Step 2: Compute per-pixel statistics
+        # depth_stack: (N, H, W)
+        names = list(aligned_depths.keys())
+        depth_stack = np.stack([aligned_depths[n] for n in names], axis=0).astype(np.float32)
+        mean_map = np.mean(depth_stack, axis=0)  # (H, W)
         variance_map = np.var(depth_stack, axis=0)  # (H, W)
 
-        # Step 3: Compute adaptive weights (inverse variance)
-        # Add small epsilon to avoid division by zero
+        # Step 3: Compute per-model confidence maps (ACTUALLY adaptive)
+        #
+        # Key idea:
+        # - A single "inv_variance" map applied to every model cancels algebraically in the fusion ratio.
+        # - We need *per-model* per-pixel confidences that downweight outliers.
+        #
+        # We compute a normalized squared deviation (z^2) and convert it to a confidence:
+        #   z2_i = (d_i - mean)^2 / (var + eps)
+        #   conf_i = exp(-0.5 * z2_i)
+        #
+        # This yields:
+        #   fused = Σ(d_i * w_i * conf_i) / Σ(w_i * conf_i)
+        #
         epsilon = 1e-6
-        inv_variance = 1.0 / (variance_map + epsilon)
-
-        # Step 4: Fuse depth maps
-        fused_depth = np.zeros_like(next(iter(aligned_depths.values())))
+        denom = variance_map + epsilon
+        z2 = (depth_stack - mean_map[None, :, :]) ** 2 / denom[None, :, :]
+        conf = np.exp(-0.5 * z2).astype(np.float32)  # (N, H, W)
 
         # Get model weights from config
         model_weights = {m.name: m.weight for m in self._models if m.enabled and m.name in aligned_depths}
@@ -344,25 +357,16 @@ class DepthEnsembleBackend:
         total_weight = sum(model_weights.values())
         model_weights = {k: v / total_weight for k, v in model_weights.items()}
 
-        # Compute per-model variance-weighted contributions
-        weighted_depths = []
-        effective_weights_list = []
+        # Build base weight tensor aligned to the same model order
+        base_w = np.array([model_weights.get(n, 0.0) for n in names], dtype=np.float32)[:, None, None]  # (N,1,1)
 
-        for model_name, depth_map in aligned_depths.items():
-            model_weight = model_weights.get(model_name, 0.0)
-            # Effective weight is model_weight × inverse_variance (per-pixel)
-            effective_weight = model_weight * inv_variance  # (H, W)
+        # Effective per-pixel weights
+        w_eff = base_w * conf  # (N,H,W)
+        w_sum = np.sum(w_eff, axis=0)  # (H,W)
+        w_sum = np.maximum(w_sum, epsilon)
 
-            weighted_depths.append(depth_map * effective_weight)
-            effective_weights_list.append(effective_weight)
-
-        # Fuse: sum of weighted depths / sum of weights (per-pixel)
-        fused_depth = np.sum(weighted_depths, axis=0)  # Sum along model axis
-        total_effective_weight = np.sum(effective_weights_list, axis=0)  # Sum along model axis
-
-        # Normalize (avoid division by zero)
-        total_effective_weight = np.maximum(total_effective_weight, epsilon)
-        fused_depth /= total_effective_weight
+        # Fuse
+        fused_depth = np.sum(w_eff * depth_stack, axis=0) / w_sum  # (H,W)
 
         # Compute model agreement metric (0.0-1.0, higher is better)
         # Agreement = 1 / (1 + mean_variance)
@@ -371,6 +375,10 @@ class DepthEnsembleBackend:
 
         # Select primary model for metadata (Depth Pro if available)
         primary_result = model_results.get("depth_pro", next(iter(model_results.values())))
+
+        # Store a compact "effective weight" summary per model (scalar), for observability.
+        # This avoids huge per-pixel maps in the result while still showing who contributed.
+        per_model_effective_weight = {names[i]: float(np.mean(w_eff[i])) for i in range(len(names))}
 
         # Build ensemble result
         return EnsembleDepthResult(
@@ -391,7 +399,7 @@ class DepthEnsembleBackend:
             # Ensemble-specific fields
             variance_map=variance_map,
             per_model_depths=aligned_depths,
-            per_model_weights=model_weights,
+            per_model_weights=per_model_effective_weight,
             fusion_method=self._fusion_method,
             model_agreement=model_agreement,
         )

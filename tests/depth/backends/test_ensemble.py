@@ -117,25 +117,47 @@ class TestEnsembleBackend:
 
     def test_variance_weighted_fusion_synthetic(self):
         """Test variance-weighted fusion with synthetic backends."""
-        # Create synthetic image
-        test_img = (np.random.rand(100, 100, 3) * 255).astype(np.uint8)
+        # NOTE:
+        # Calling ensemble.compute() would route through _run_models() and registry backends.
+        # That path can silently collapse to a single model if names collide (dict overwrite),
+        # and it also depends on registry wiring. For fusion correctness we test _fuse_predictions()
+        # directly with two distinct model results.
+        test_img = (np.random.rand(64, 64, 3) * 255).astype(np.uint8)
         img_pil = Image.fromarray(test_img, mode="RGB")
 
-        # Use only synthetic backends (no ML deps required)
+        config = EnhanceConfig(non_commercial_ok=True, accept_research_tools_license=True)
         models = [
-            ModelConfig(name="synthetic", weight=0.5),
-            ModelConfig(name="synthetic", weight=0.5),
+            ModelConfig(name="model_a", weight=0.5),
+            ModelConfig(name="model_b", weight=0.5),
         ]
-
-        config = EnhanceConfig(
-            non_commercial_ok=True,
-            accept_research_tools_license=True,
-            allow_synthetic_fallback=True,
-        )
         ensemble = DepthEnsembleBackend(config, models=models)
 
-        # Compute ensemble depth
-        result = ensemble.compute(img_pil)
+        depth_a = np.ones((64, 64), dtype=np.float32) * 5.0
+        depth_b = np.ones((64, 64), dtype=np.float32) * 5.1
+        model_results = {
+            "model_a": DepthResult(
+                depth_map=depth_a,
+                original_image=test_img,
+                metadata={},
+                depth_units="relative",
+                backend_id="model_a",
+                device="cpu",
+                dtype="float32",
+                input_size=(64, 64),
+            ),
+            "model_b": DepthResult(
+                depth_map=depth_b,
+                original_image=test_img,
+                metadata={},
+                depth_units="relative",
+                backend_id="model_b",
+                device="cpu",
+                dtype="float32",
+                input_size=(64, 64),
+            ),
+        }
+
+        result = ensemble._fuse_predictions(model_results, img_pil)
 
         # Verify result type
         assert isinstance(result, EnsembleDepthResult)
@@ -146,10 +168,6 @@ class TestEnsembleBackend:
 
         # Verify variance map shape matches depth map
         assert result.variance_map.shape == result.depth_map.shape[:2]
-
-        # Verify per-model data is populated
-        assert len(result.per_model_depths) >= 1
-        assert len(result.per_model_weights) >= 1
 
     def test_cache_key_generation(self):
         """Test that cache keys are deterministic and unique."""
@@ -307,21 +325,24 @@ class TestVarianceFusion:
 
     def test_variance_weighted_fusion_actually_uses_variance(self):
         """Test that variance actually changes fusion output (Bug P1-B fix)."""
-        # Create scenario where variance-weighted should differ from fixed weighted average
+        # Goal:
+        # 1) Construct a region where model_b is a strong outlier.
+        # 2) Verify adaptive fusion deviates from fixed average and prefers model_a in that region.
+        #
+        # NOTE: Both models output "relative" depth, so _align_depth_maps will normalize each to [0,1].
+        # We need both to have some range so normalization doesn't collapse them to constants.
         test_img = np.ones((100, 100, 3), dtype=np.uint8) * 128
 
-        # Model A: depth ramp from 0 to 10
-        depth_a = np.linspace(0, 10, 100).reshape(100, 1) * np.ones((1, 100))
+        # Model A: gradient from 1.0 to 10.0
+        depth_a = np.linspace(1, 10, 10000).reshape(100, 100).astype(np.float32)
 
-        # Model B: depth ramp from 2 to 12 (shifted by 2, creates consistent offset)
-        depth_b = np.linspace(2, 12, 100).reshape(100, 1) * np.ones((1, 100))
-
-        # Add some local disagreement in top-left quadrant
-        depth_b[:25, :25] = 15.0  # Strong disagreement in this region
+        # Model B: same gradient, but with a strong outlier block in top-left
+        depth_b = np.linspace(1, 10, 10000).reshape(100, 100).astype(np.float32)
+        depth_b[:25, :25] = 50.0  # Strong outlier
 
         model_results = {
             "model_a": DepthResult(
-                depth_map=depth_a.astype(np.float32),
+                depth_map=depth_a,
                 original_image=test_img,
                 metadata={},
                 depth_units="relative",
@@ -331,7 +352,7 @@ class TestVarianceFusion:
                 input_size=(100, 100),
             ),
             "model_b": DepthResult(
-                depth_map=depth_b.astype(np.float32),
+                depth_map=depth_b,
                 original_image=test_img,
                 metadata={},
                 depth_units="relative",
@@ -342,37 +363,56 @@ class TestVarianceFusion:
             ),
         }
 
-        config = EnhanceConfig(
-            non_commercial_ok=True,
-            accept_research_tools_license=True,
+        config = EnhanceConfig(non_commercial_ok=True, accept_research_tools_license=True)
+        ensemble = DepthEnsembleBackend(
+            config,
+            models=[
+                ModelConfig(name="model_a", weight=0.5),
+                ModelConfig(name="model_b", weight=0.5),
+            ],
         )
 
-        models = [
-            ModelConfig(name="model_a", weight=0.5),
-            ModelConfig(name="model_b", weight=0.5),
-        ]
-        ensemble = DepthEnsembleBackend(config, models=models)
+        result = ensemble._fuse_predictions(model_results, Image.fromarray(test_img))
 
-        # Manually call fusion
-        img_pil = Image.fromarray(test_img)
-        result = ensemble._fuse_predictions(model_results, img_pil)
+        # After normalization, both models are in [0,1].
+        # Get aligned maps to compute proper baseline
+        aligned = ensemble._align_depth_maps(model_results)
+        fixed_avg = 0.5 * aligned["model_a"] + 0.5 * aligned["model_b"]
 
-        # Verify fusion completed (no zeros from failed fusion)
-        assert result.depth_map.mean() > 0.0
+        # Regions
+        outlier_region = (slice(0, 25), slice(0, 25))
+        normal_region = (slice(75, 100), slice(75, 100))
 
-        # The top-left quadrant should have higher variance due to the disagreement
-        top_left_var = result.variance_map[:25, :25].mean()
-        # Bottom-right quadrant should have lower variance (more agreement)
-        bottom_right_var = result.variance_map[75:, 75:].mean()
+        fused_outlier_mean = float(np.mean(result.depth_map[outlier_region]))
+        fixed_outlier_mean = float(np.mean(fixed_avg[outlier_region]))
+        a_outlier_mean = float(np.mean(aligned["model_a"][outlier_region]))
+        b_outlier_mean = float(np.mean(aligned["model_b"][outlier_region]))
 
-        # After normalization, the top-left should still show higher variance
-        # because model_b has an outlier value (15.0) there
-        assert top_left_var > bottom_right_var or result.variance_map.max() > 0.0, (
-            f"Expected some variance in fusion. Top-left: {top_left_var:.6f}, "
-            f"Bottom-right: {bottom_right_var:.6f}, Max variance: {result.variance_map.max():.6f}"
+        # In outlier region:
+        # model_b has normalized outlier values (close to 1.0), model_a has lower values
+        # Adaptive fusion should downweight the outlier model_b and be closer to model_a
+        assert abs(fused_outlier_mean - a_outlier_mean) < abs(fixed_outlier_mean - a_outlier_mean), (
+            f"Expected adaptive fusion to downweight outlier model_b. "
+            f"fused={fused_outlier_mean:.3f}, fixed={fixed_outlier_mean:.3f}, "
+            f"a={a_outlier_mean:.3f}, b={b_outlier_mean:.3f}"
         )
 
-        # Model agreement should be <1.0 (some disagreement exists)
+        # In normal region (agreement), fused should be close to fixed average
+        fused_normal_mean = float(np.mean(result.depth_map[normal_region]))
+        fixed_normal_mean = float(np.mean(fixed_avg[normal_region]))
+        assert np.isclose(fused_normal_mean, fixed_normal_mean, rtol=0.05), (
+            f"Expected agreement region to be close to weighted average. "
+            f"fused={fused_normal_mean:.6f}, fixed={fixed_normal_mean:.6f}"
+        )
+
+        # Variance map sanity: outlier region variance > normal region variance
+        outlier_var = float(np.mean(result.variance_map[outlier_region]))
+        normal_var = float(np.mean(result.variance_map[normal_region]))
+        assert (
+            outlier_var > normal_var
+        ), f"Expected higher variance in outlier block: outlier={outlier_var:.6f}, normal={normal_var:.6f}"
+
+        # Agreement should be < 1.0 due to disagreement
         assert result.model_agreement < 0.99
 
 
