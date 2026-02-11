@@ -45,22 +45,19 @@ echo "Starting pipeline..."
 echo ""
 
 # Run APEX pipeline with EfficientSAM enabled
-python -m transformation_portal.lux_depth_v3.cli \
+python -m transformation_portal.lux_depth_v3 \
   --input-dir "${INPUT_DIR}" \
   --output-dir "${OUTPUT_DIR}" \
   --preset "${PRESET}" \
   --depth-backend "da3" \
   --depth-device "auto" \
-  --enable-materials-v3 \
-  --enable-material-segmentation \
-  --material-segmentation-backend "efficientsam" \
-  --strict-backend \
-  --apply-pixel-ops \
-  --enable-v2 \
-  --enable-pbr \
-  --enable-provenance \
-  --use-depth-cache \
-  --parallel 1
+  --materials-v3 "on" \
+  --enable-segmentation "on" \
+  --segmentation-backend "efficientsam" \
+  --strict-segmentation \
+  --pbr "on" \
+  --enable-v2 "on" \
+  --cache-depth "on"
 
 echo ""
 echo "========================================="

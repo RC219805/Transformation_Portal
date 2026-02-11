@@ -48,21 +48,19 @@ logger = logging.getLogger(__name__)
 # Lazy imports for ML dependencies
 try:
     import torch
-    import torch.nn.functional as F
 
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
     torch = None  # type: ignore
-    F = None  # type: ignore
 
 try:
-    from torchvision import transforms
+    import torchvision
 
     TORCHVISION_AVAILABLE = True
 except ImportError:
     TORCHVISION_AVAILABLE = False
-    transforms = None  # type: ignore
+    torchvision = None  # type: ignore
 
 
 # =============================================================================
@@ -213,8 +211,6 @@ class EfficientSAMBackend:
         if image.dtype != np.uint8:
             raise ValueError(f"Expected uint8 image, got dtype {image.dtype}")
 
-        H, W = image.shape[:2]
-
         # TODO: Real EfficientSAM inference
         # For v1, use heuristic-based segmentation to demonstrate integration
         # In production, this would:
@@ -293,7 +289,6 @@ class EfficientSAMBackend:
         Returns:
             Dict of material masks (H, W), float32 [0.0-1.0]
         """
-        H, W = image.shape[:2]
         masks = {}
 
         # Convert to float for analysis
@@ -379,11 +374,7 @@ def _get_backend_instance(
         return backend
 
     else:
-        raise ValueError(
-            f"Unknown segmentation backend: {backend_name}\n"
-            f"Valid options: 'stub', 'efficientsam'\n"
-            f"Defaulting to 'stub'."
-        )
+        raise ValueError(f"Unknown segmentation backend: {backend_name}\n" f"Valid options: 'stub', 'efficientsam'")
 
 
 def segment_materials(

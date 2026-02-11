@@ -355,7 +355,7 @@ class TestSegmentationCLI:
             "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
             side_effect=mock_orch_init,
         ):
-            result = runner.invoke(
+            _result = runner.invoke(
                 app,
                 [
                     "--input-dir",
@@ -391,7 +391,7 @@ class TestSegmentationCLI:
             "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
             side_effect=mock_orch_init,
         ):
-            result = runner.invoke(
+            _result = runner.invoke(
                 app,
                 [
                     "--input-dir",

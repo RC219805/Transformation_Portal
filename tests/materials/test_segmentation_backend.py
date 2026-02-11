@@ -28,6 +28,18 @@ from transformation_portal.lux_depth_v3.segmentation_backend import (
     segment_materials,
 )
 
+# Safe torch availability checks for skipif decorators
+try:
+    import torch
+
+    TORCH_AVAILABLE = True
+    MPS_AVAILABLE = torch.backends.mps.is_available()
+    CUDA_AVAILABLE = torch.cuda.is_available()
+except ImportError:
+    TORCH_AVAILABLE = False
+    MPS_AVAILABLE = False
+    CUDA_AVAILABLE = False
+
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -194,7 +206,7 @@ def test_efficientsam_backend_cpu_device():
 
 @pytest.mark.ml
 @pytest.mark.skipif(
-    not __import__("torch").backends.mps.is_available(),
+    not MPS_AVAILABLE,
     reason="MPS not available",
 )
 def test_efficientsam_backend_mps_device():
@@ -208,7 +220,7 @@ def test_efficientsam_backend_mps_device():
 
 @pytest.mark.ml
 @pytest.mark.skipif(
-    not __import__("torch").cuda.is_available(),
+    not CUDA_AVAILABLE,
     reason="CUDA not available",
 )
 def test_efficientsam_backend_cuda_device():

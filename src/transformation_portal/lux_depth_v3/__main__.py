@@ -193,7 +193,7 @@ def main(
     segmentation_backend: str = typer.Option(
         "stub",
         "--segmentation-backend",
-        help="Segmentation backend: stub (default, heuristic), efficientsam (AI-powered)",
+        help="Segmentation backend: stub (default, no segmentation), efficientsam (heuristic v1)",
     ),
     strict_segmentation: bool = typer.Option(
         False, "--strict-segmentation", help="Fail on segmentation backend errors instead of falling back to stub"
