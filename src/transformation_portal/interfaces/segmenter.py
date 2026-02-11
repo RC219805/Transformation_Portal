@@ -13,7 +13,7 @@ import numpy as np
 # Type aliases for flexible segmentation output formats
 Mask = np.ndarray  # Binary mask (H, W) with values typically 0.0-1.0
 MaskWithConfidence = Tuple[np.ndarray, float]  # (mask, confidence_score)
-SegmentValue = Union[Mask, MaskWithConfidence]  # Backend can return either format
+SegmentResult = Dict[str, Union[Mask, MaskWithConfidence]]  # Backend can return either format
 
 
 class SegmentationError(Exception):
@@ -64,7 +64,7 @@ class Segmenter(ABC):
     """
 
     @abstractmethod
-    def segment(self, image: np.ndarray, **kwargs) -> Dict[str, SegmentValue]:
+    def segment(self, image: np.ndarray, **kwargs) -> SegmentResult:
         """
         Segment image into labeled regions.
 
@@ -73,12 +73,12 @@ class Segmenter(ABC):
             **kwargs: Segmenter-specific parameters
 
         Returns:
-            Dictionary mapping category names to either:
-            - Binary masks: (H, W) boolean/float arrays
-            - Tuple format: (mask, confidence) where confidence is float [0, 1]
+            Dictionary mapping category names to:
+            - Binary masks (H, W) boolean/float arrays, OR
+            - (mask, confidence) tuples where confidence is [0.0-1.0]
 
-            Implementations may return mask-only (legacy), tuple-only (modern),
-            or mixed formats. Consumers must handle both cases.
+            Modern backends MAY return confidence scores. Legacy backends
+            return masks only. Consumers MUST handle both formats.
 
         Raises:
             SegmentationError: If segmentation fails
@@ -140,7 +140,7 @@ class MaterialSegmenter(Segmenter):
         image: np.ndarray,
         materials: Optional[List[MaterialType]] = None,
         **kwargs,
-    ) -> Dict[MaterialType, SegmentValue]:
+    ) -> Dict[MaterialType, Union[Mask, MaskWithConfidence]]:
         """
         Segment image by material types.
 
@@ -195,7 +195,9 @@ class SemanticSegmenter(Segmenter):
     """
 
     @abstractmethod
-    def segment_semantic(self, image: np.ndarray, categories: Optional[List[str]] = None, **kwargs) -> Dict[str, SegmentValue]:
+    def segment_semantic(
+        self, image: np.ndarray, categories: Optional[List[str]] = None, **kwargs
+    ) -> Dict[str, Union[Mask, MaskWithConfidence]]:
         """
         Segment image by semantic categories.
 

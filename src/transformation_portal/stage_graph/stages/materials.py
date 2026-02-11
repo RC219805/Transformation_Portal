@@ -20,6 +20,59 @@ MaskWithConfidence = Tuple[np.ndarray, float]  # (mask, confidence_score)
 SegmentValue = Union[Mask, MaskWithConfidence]  # Flexible backend output
 
 
+def _coerce_mask_conf(value: SegmentValue) -> Tuple[np.ndarray, Optional[float]]:
+    """
+    Accept either mask or (mask, confidence) tuple.
+
+    Args:
+        value: Either a mask array or (mask, confidence) tuple
+
+    Returns:
+        (mask, confidence) where confidence is None if not provided
+
+    Raises:
+        ValueError: If value is not a valid mask or tuple format
+    """
+    if isinstance(value, tuple) and len(value) == 2:
+        mask, conf = value
+        if not isinstance(mask, np.ndarray):
+            raise ValueError(f"Invalid mask type in tuple: {type(mask)}")
+        return mask, float(conf)
+    elif isinstance(value, np.ndarray):
+        return value, None
+    else:
+        raise ValueError(f"Unexpected segmentation output format: {type(value)}")
+
+
+def _coerce_results(results: Dict[str, SegmentValue]) -> Tuple[Dict[str, np.ndarray], Dict[str, Optional[float]]]:
+    """
+    Normalize segmentation results to separate masks and confidences.
+
+    Args:
+        results: Dict mapping material names to masks or (mask, confidence) tuples
+
+    Returns:
+        (masks, confidences) tuple of dicts
+
+    Note:
+        Invalid entries are silently skipped. Consumers should validate
+        the results if completeness is required.
+    """
+    masks: Dict[str, np.ndarray] = {}
+    confidences: Dict[str, Optional[float]] = {}
+
+    for name, value in results.items():
+        try:
+            mask, conf = _coerce_mask_conf(value)
+            masks[name] = mask
+            confidences[name] = conf
+        except (ValueError, TypeError):
+            # Skip invalid entries silently - caller should log if needed
+            pass
+
+    return masks, confidences
+
+
 class MaterialSegmentationStage(Stage):
     """
     Material segmentation stage.
@@ -134,105 +187,6 @@ class MaterialSegmentationStage(Stage):
         self.logger.info(f"Using heuristic material segmenter on {device}")
         self._segmenter = "heuristic"
 
-    def _coerce_mask_conf(self, material_name: str, value: SegmentValue) -> Optional[Tuple[np.ndarray, Optional[float]]]:
-        """
-        Coerce segmentation output to (mask, confidence) format.
-
-        Handles multiple backend output formats:
-        - Tuple format: (mask, confidence) from modern backends
-        - Mask-only format: mask from legacy backends
-        - Invalid formats: logged and skipped
-
-        Args:
-            material_name: Material identifier (for logging)
-            value: Raw segmentation output (tuple or mask)
-
-        Returns:
-            (mask, confidence) tuple where confidence is None for mask-only outputs,
-            or None if the value is invalid
-
-        Examples:
-            >>> # Modern backend with confidence
-            >>> mask, conf = self._coerce_mask_conf("glass", (glass_mask, 0.87))
-            >>> assert conf == 0.87
-
-            >>> # Legacy backend without confidence
-            >>> mask, conf = self._coerce_mask_conf("wood", wood_mask)
-            >>> assert conf is None
-
-            >>> # Invalid value
-            >>> result = self._coerce_mask_conf("invalid", "not_a_mask")
-            >>> assert result is None
-        """
-        try:
-            # Modern backend: (mask, confidence) tuple
-            if isinstance(value, tuple) and len(value) == 2:
-                mask, confidence = value
-                confidence = float(confidence)
-                if not isinstance(mask, np.ndarray):
-                    self.logger.warning(f"Invalid mask type in tuple for {material_name}: {type(mask)}. Skipping.")
-                    return None
-                return (mask, confidence)
-
-            # Legacy backend: mask-only (no confidence)
-            elif isinstance(value, np.ndarray):
-                return (value, None)
-
-            # Invalid format
-            else:
-                self.logger.warning(f"Unexpected segmentation output format for {material_name}: {type(value)}. Skipping.")
-                return None
-
-        except (ValueError, TypeError) as e:
-            self.logger.warning(f"Failed to coerce segmentation output for {material_name}: {e}. Skipping.")
-            return None
-
-    def _coerce_results(self, results: Dict[str, SegmentValue]) -> Tuple[Dict[str, np.ndarray], Dict[str, Optional[float]]]:
-        """
-        Normalize segmentation results into separate masks and confidences.
-
-        This method provides defensive normalization for mixed-format segmentation
-        outputs, supporting gradual backend migration from mask-only to tuple formats.
-
-        Args:
-            results: Raw segmentation results from backend
-
-        Returns:
-            Tuple of (masks, confidences) where:
-            - masks: Dict[material_name -> mask as float32 ndarray]
-            - confidences: Dict[material_name -> confidence score or None]
-
-        Example:
-            >>> results = {
-            ...     "glass": (glass_mask, 0.87),  # Modern backend
-            ...     "wood": wood_mask,             # Legacy backend
-            ...     "invalid": "bad_value"         # Invalid (skipped)
-            ... }
-            >>> masks, confs = self._coerce_results(results)
-            >>> assert "glass" in masks and confs["glass"] == 0.87
-            >>> assert "wood" in masks and confs["wood"] is None
-            >>> assert "invalid" not in masks
-        """
-        masks: Dict[str, np.ndarray] = {}
-        confidences: Dict[str, Optional[float]] = {}
-
-        for material_name, value in results.items():
-            result = self._coerce_mask_conf(material_name, value)
-            if result is not None:
-                mask, confidence = result
-
-                # Convert mask to float32
-                masks[material_name] = mask.astype(np.float32)
-                confidences[material_name] = confidence
-
-                # Log confidence when available
-                if confidence is not None:
-                    self.logger.debug(f"{material_name}: {confidence:.0%} confidence")
-                else:
-                    self.logger.debug(f"{material_name}: detected (no confidence score)")
-
-        return masks, confidences
-
     def _segment_materials(
         self,
         image: np.ndarray,
@@ -290,9 +244,27 @@ class MaterialSegmentationStage(Stage):
             results = self._segmenter.segment(image)
 
             # Normalize outputs using helper functions
-            material_masks, _ = self._coerce_results(results)
+            # First, validate and log any invalid entries
+            for material_name, value in results.items():
+                try:
+                    _coerce_mask_conf(value)
+                except (ValueError, TypeError) as e:
+                    self.logger.warning(f"Unexpected segmentation output format for {material_name}: {e}. Skipping.")
 
-            return material_masks
+            material_masks, material_confidences = _coerce_results(results)
+
+            # Convert to float32 and log confidence
+            final_masks = {}
+            for material_name, mask in material_masks.items():
+                if isinstance(mask, np.ndarray):
+                    final_masks[material_name] = mask.astype(np.float32)
+                    conf = material_confidences.get(material_name)
+                    if conf is not None:
+                        self.logger.debug(f"{material_name}: {conf:.0%} confidence")
+                    else:
+                        self.logger.debug(f"{material_name}: detected (no confidence score)")
+
+            return final_masks
 
         except Exception as e:
             self.logger.error(f"Material segmentation failed: {e}")
