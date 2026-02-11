@@ -6,9 +6,14 @@ Base contract for material and semantic segmentation operations.
 
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
+
+# Type aliases for flexible segmentation output formats
+Mask = np.ndarray  # Binary mask (H, W) with values typically 0.0-1.0
+MaskWithConfidence = Tuple[np.ndarray, float]  # (mask, confidence_score)
+SegmentValue = Union[Mask, MaskWithConfidence]  # Backend can return either format
 
 
 class SegmentationError(Exception):
@@ -44,13 +49,22 @@ class Segmenter(ABC):
 
     Contract Specifications:
     - **Input**: numpy array (H, W, C) in [0, 1] float32 or [0, 255] uint8
-    - **Output**: Dictionary mapping categories to binary masks
-    - **Masks**: Binary masks as boolean arrays, shape (H, W)
+    - **Output**: Dictionary mapping categories to masks or (mask, confidence) tuples
+    - **Masks**: Binary masks as boolean or float arrays, shape (H, W)
     - **Coverage**: Masks may overlap or have gaps (depend on algorithm)
+
+    Output Format Flexibility:
+    Implementations may return either:
+    1. Dict[str, np.ndarray] - Legacy format (mask-only)
+    2. Dict[str, Tuple[np.ndarray, float]] - Modern format (mask + confidence)
+    3. Dict[str, Union[...]] - Mixed format (gradual migration)
+
+    Consumers MUST handle both formats defensively to support
+    backward compatibility and gradual backend migration.
     """
 
     @abstractmethod
-    def segment(self, image: np.ndarray, **kwargs) -> Dict[str, np.ndarray]:
+    def segment(self, image: np.ndarray, **kwargs) -> Dict[str, SegmentValue]:
         """
         Segment image into labeled regions.
 
@@ -59,15 +73,35 @@ class Segmenter(ABC):
             **kwargs: Segmenter-specific parameters
 
         Returns:
-            Dictionary mapping category names to binary masks (H, W) boolean arrays
+            Dictionary mapping category names to either:
+            - Binary masks: (H, W) boolean/float arrays
+            - Tuple format: (mask, confidence) where confidence is float [0, 1]
+
+            Implementations may return mask-only (legacy), tuple-only (modern),
+            or mixed formats. Consumers must handle both cases.
 
         Raises:
             SegmentationError: If segmentation fails
 
-        Example:
+        Example (legacy backend):
             >>> masks = segmenter.segment(image)
-            >>> wood_mask = masks['wood']  # boolean array (H, W)
-            >>> wood_pixels = image[wood_mask]  # Extract wood pixels
+            >>> wood_mask = masks['wood']  # np.ndarray
+            >>> wood_pixels = image[wood_mask]
+
+        Example (modern backend):
+            >>> results = segmenter.segment(image)
+            >>> wood_mask, confidence = results['wood']  # Tuple
+            >>> if confidence > 0.7:
+            ...     wood_pixels = image[wood_mask]
+
+        Example (consumer handling both):
+            >>> results = segmenter.segment(image)
+            >>> for material, value in results.items():
+            ...     if isinstance(value, tuple):
+            ...         mask, conf = value
+            ...     else:
+            ...         mask, conf = value, None
+            ...     process_material(mask, conf)
         """
         pass
 
@@ -106,7 +140,7 @@ class MaterialSegmenter(Segmenter):
         image: np.ndarray,
         materials: Optional[List[MaterialType]] = None,
         **kwargs,
-    ) -> Dict[MaterialType, np.ndarray]:
+    ) -> Dict[MaterialType, SegmentValue]:
         """
         Segment image by material types.
 
@@ -116,10 +150,24 @@ class MaterialSegmenter(Segmenter):
             **kwargs: Segmenter-specific parameters
 
         Returns:
-            Dictionary mapping MaterialType to binary masks (H, W) boolean arrays
+            Dictionary mapping MaterialType to either:
+            - Binary masks: (H, W) boolean/float arrays (legacy format)
+            - Tuple format: (mask, confidence) where confidence is [0, 1] (modern format)
+
+            Implementations may use either format. Consumers must handle both.
 
         Raises:
             SegmentationError: If segmentation fails
+
+        Example (handling both formats):
+            >>> results = segmenter.segment_materials(image)
+            >>> for material, value in results.items():
+            ...     if isinstance(value, tuple):
+            ...         mask, confidence = value
+            ...         print(f"{material}: {confidence:.0%} confidence")
+            ...     else:
+            ...         mask = value
+            ...         print(f"{material}: detected (no confidence)")
         """
         pass
 
@@ -147,7 +195,7 @@ class SemanticSegmenter(Segmenter):
     """
 
     @abstractmethod
-    def segment_semantic(self, image: np.ndarray, categories: Optional[List[str]] = None, **kwargs) -> Dict[str, np.ndarray]:
+    def segment_semantic(self, image: np.ndarray, categories: Optional[List[str]] = None, **kwargs) -> Dict[str, SegmentValue]:
         """
         Segment image by semantic categories.
 
@@ -157,7 +205,9 @@ class SemanticSegmenter(Segmenter):
             **kwargs: Segmenter-specific parameters
 
         Returns:
-            Dictionary mapping category names to binary masks
+            Dictionary mapping category names to either:
+            - Binary masks: (H, W) boolean/float arrays (legacy)
+            - Tuple format: (mask, confidence) (modern)
 
         Raises:
             SegmentationError: If segmentation fails
