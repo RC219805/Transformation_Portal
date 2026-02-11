@@ -422,6 +422,7 @@ class TestVarianceFusion:
 
 # Pytest markers
 pytestmark = [
-    pytest.mark.apex_ultra,
-    pytest.mark.depth,
+    # Repo runs pytest with --strict-markers; only use markers registered in pyproject.toml
+    pytest.mark.unit,
+    pytest.mark.regression,
 ]

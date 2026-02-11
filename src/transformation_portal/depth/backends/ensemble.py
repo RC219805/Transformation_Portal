@@ -509,10 +509,11 @@ class DepthEnsembleBackend:
 
     @classmethod
     def required_packages(cls) -> list[str]:
-        """Return required import modules for ensemble.
+        """Return additional required import modules for ensemble.
 
-        Ensemble requires at least torch + transformers (for DA3).
-        Depth Pro is optional (graceful degradation).
+        Per the DepthBackend protocol, torch is assumed and should not be listed here.
+        The ensemble additionally requires ``transformers`` (for DA3). Depth Pro remains
+        optional and will degrade gracefully if its backend is unavailable.
 
         Returns:
             List of required module names.
