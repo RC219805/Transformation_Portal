@@ -31,8 +31,15 @@ sentence-transformers>=2.2.0,<3
 # Additional ML support
 accelerate>=0.20.0,<2      # improves model loading speed
 
-# Segmentation models (Materials V3 EfficientSAM backend)
+# Segmentation models (Materials V3 EfficientSAM backend v2)
+# V2 dependencies for real model-backed segmentation (optional)
+# Install with: pip install efficientvit open-clip-torch
+
 # EfficientSAM - lightweight Segment Anything Model variant (MIT license, commercial-safe)
-# Note: Install from GitHub until PyPI package is available
-# pip install git+https://github.com/yformer/EfficientSAM.git
-# For now, we'll use direct model loading via timm + custom weights
+# efficientvit>=0.1.0,<1       # EfficientVIT SAM model zoo (v2 feature)
+
+# CLIP - material classification via text embeddings (MIT license, commercial-safe)
+# open-clip-torch>=2.20.0,<3   # OpenCLIP for zero-shot material classification (v2 feature)
+
+# Note: V1 (heuristic-based) works without these dependencies
+# V2 (model-backed) auto-activates when dependencies installed
