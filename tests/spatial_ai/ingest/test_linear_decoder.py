@@ -256,12 +256,10 @@ class TestLinearDecoder:
         except ImportError:
             pass  # Good - OpenEXR is missing, test should proceed
 
-        # Create test image
-        test_img = np.random.rand(50, 50, 3).astype(np.float32)
-        test_img_path = tmp_path / "test.tiff"
-        img_uint16 = (test_img * 65535).astype(np.uint16)
-        img = Image.fromarray(img_uint16, mode="RGB")
-        img.save(test_img_path, format="TIFF")
+        # Create a simple 8-bit PNG (sufficient to reach emit_exr failure path)
+        test_img = (np.random.rand(50, 50, 3) * 255).astype(np.uint8)
+        test_img_path = tmp_path / "test.png"
+        Image.fromarray(test_img, mode="RGB").save(test_img_path)
 
         # Attempt decode with emit_exr=True should fail loudly
         with pytest.raises(RuntimeError, match="emit_exr=True requires OpenEXR package"):
