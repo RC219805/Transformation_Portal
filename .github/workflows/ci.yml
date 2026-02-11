@@ -1,4 +1,4 @@
-name: CI Quality Firewall
+name: CI Quality Firewall (push)
 
 on:
   push:
