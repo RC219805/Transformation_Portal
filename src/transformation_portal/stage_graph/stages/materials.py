@@ -8,6 +8,7 @@ for material-aware enhancement.
 from __future__ import annotations
 
 import hashlib
+import math
 from typing import Dict, Optional, Tuple, Union
 
 import numpy as np
@@ -28,7 +29,10 @@ def _coerce_mask_conf(value: SegmentValue) -> Tuple[np.ndarray, Optional[float]]
         value: Either a mask array or (mask, confidence) tuple
 
     Returns:
-        (mask, confidence) where confidence is None if not provided
+        (mask, confidence) where confidence is:
+        - None if not provided
+        - None if invalid (non-finite or outside [0,1])
+        - float in [0.0, 1.0] if valid
 
     Raises:
         ValueError: If value is not a valid mask or tuple format
@@ -37,7 +41,17 @@ def _coerce_mask_conf(value: SegmentValue) -> Tuple[np.ndarray, Optional[float]]
         mask, conf = value
         if not isinstance(mask, np.ndarray):
             raise ValueError(f"Invalid mask type in tuple: {type(mask)}")
-        return mask, float(conf)
+
+        # Validate confidence is finite and in [0,1]
+        try:
+            conf_float = float(conf)
+            # Invalid confidence: keep mask, discard confidence
+            if not (0.0 <= conf_float <= 1.0 and math.isfinite(conf_float)):
+                return mask, None
+            return mask, conf_float
+        except (ValueError, TypeError):
+            # Invalid confidence type: keep mask, discard confidence
+            return mask, None
     elif isinstance(value, np.ndarray):
         return value, None
     else:
@@ -133,7 +147,7 @@ class MaterialSegmentationStage(Stage):
             self._load_segmenter(context.device)
 
         # Compute segmentation
-        material_masks = self._segment_materials(image, depth_map, context.device)
+        material_masks = self._segment_materials(image, depth_map, context)
 
         duration_ms = (time.time() - start) * 1000
 
@@ -191,7 +205,7 @@ class MaterialSegmentationStage(Stage):
         self,
         image: np.ndarray,
         depth_map: np.ndarray | None,
-        device: str,
+        context: StageContext,
     ) -> Dict[str, np.ndarray]:
         """
         Segment image into material types.
@@ -204,15 +218,16 @@ class MaterialSegmentationStage(Stage):
         Args:
             image: Input image (H, W, 3)
             depth_map: Optional depth map (H, W)
-            device: Device to use
+            context: Stage context for config access
 
         Returns:
             Dict mapping material names to binary masks (float32)
 
         Raises:
-            Exception: Propagates backend failures (fail-fast, no silent drops)
+            Exception: Propagates backend failures if strict mode enabled
         """
         h, w = image.shape[:2]
+        device = context.device
 
         if self._segmenter == "heuristic":
             # Use color-based heuristics
@@ -268,7 +283,17 @@ class MaterialSegmentationStage(Stage):
 
         except Exception as e:
             self.logger.error(f"Material segmentation failed: {e}")
-            raise  # Fail-fast instead of silently returning empty dict
+
+            # Default to soft failure (pipeline continues) unless strict mode enabled
+            strict = context.get_config("materials_segmentation_strict", False)
+            if strict:
+                raise  # Hard failure: stop pipeline
+            else:
+                # Soft failure: log + return empty, pipeline continues
+                self.logger.warning(
+                    "Returning empty materials (soft failure). " "Set materials_segmentation_strict=True to make this fatal."
+                )
+                return {}
 
     @staticmethod
     def _rgb_to_hsv(rgb: np.ndarray) -> np.ndarray:
