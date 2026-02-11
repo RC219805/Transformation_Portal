@@ -27,14 +27,9 @@ class TestLinearDecoder:
     """Test suite for LinearDecoder."""
 
     def test_gamma_enforcement(self):
-        """Test that gamma != 1.0 is rejected by default."""
+        """Test that gamma != 1.0 is always rejected (no override possible)."""
         with pytest.raises(ValueError, match="gamma=1.0"):
-            LinearDecoder(gamma=2.2, validate_contract=True)
-
-    def test_gamma_override(self):
-        """Test that gamma != 1.0 can be allowed with validate_contract=False."""
-        decoder = LinearDecoder(gamma=2.2, validate_contract=False)
-        assert decoder.gamma == 2.2
+            LinearDecoder(gamma=2.2)
 
     def test_linear_decode_preserves_hdr(self, tmp_path: Path):
         """Test that linear ingest preserves HDR values >1.0."""

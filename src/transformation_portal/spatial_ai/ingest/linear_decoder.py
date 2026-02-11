@@ -115,27 +115,24 @@ class LinearDecoder:
         self,
         gamma: float = 1.0,
         bit_depth: int = 32,
-        validate_contract: bool = True,
     ):
         """Initialize linear decoder.
 
         Args:
             gamma: Gamma for decode (must be 1.0 for linear).
             bit_depth: Output bit depth (32 for float32).
-            validate_contract: Enforce SpatialCaptureV1 contract.
 
         Raises:
-            ValueError: If gamma != 1.0 and validate_contract=True.
+            ValueError: If gamma != 1.0 (linear ingest contract).
         """
-        if validate_contract and abs(gamma - 1.0) > 1e-6:
+        if abs(gamma - 1.0) > 1e-6:
             raise ValueError(
                 f"Linear ingest requires gamma=1.0 (got {gamma}). "
-                "Set validate_contract=False to override (NOT recommended)."
+                "This is a non-negotiable contract for research/training data."
             )
 
         self.gamma = gamma
         self.bit_depth = bit_depth
-        self.validate_contract = validate_contract
 
     def decode(
         self,
