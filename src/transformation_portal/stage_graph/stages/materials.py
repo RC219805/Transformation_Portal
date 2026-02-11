@@ -177,19 +177,43 @@ class MaterialSegmentationStage(Stage):
             # Use actual segmenter
             results = self._segmenter.segment(image)
 
-            # Convert to standard format (extract masks from tuples)
+            # Normalize outputs: handle both (mask, confidence) tuples and mask-only
             material_masks = {}
-            for material_name, (mask, confidence) in results.items():
-                if isinstance(mask, np.ndarray):
-                    material_masks[material_name] = mask.astype(np.float32)
-                    self.logger.debug(f"{material_name}: {confidence:.0%} confidence")
+            for material_name, value in results.items():
+                try:
+                    # Coerce value into (mask, confidence) pair
+                    if isinstance(value, tuple) and len(value) == 2:
+                        mask, confidence = value
+                        confidence = float(confidence)
+                    elif isinstance(value, np.ndarray):
+                        # Legacy backend: mask-only (no confidence)
+                        mask = value
+                        confidence = None
+                    else:
+                        self.logger.warning(
+                            f"Unexpected segmentation output format for {material_name}: {type(value)}. Skipping."
+                        )
+                        continue
+
+                    # Validate and store mask
+                    if isinstance(mask, np.ndarray):
+                        material_masks[material_name] = mask.astype(np.float32)
+                        if confidence is not None:
+                            self.logger.debug(f"{material_name}: {confidence:.0%} confidence")
+                        else:
+                            self.logger.debug(f"{material_name}: detected (no confidence score)")
+                    else:
+                        self.logger.warning(f"Invalid mask type for {material_name}: {type(mask)}. Skipping.")
+
+                except (ValueError, TypeError) as e:
+                    self.logger.warning(f"Failed to process segmentation output for {material_name}: {e}. Skipping.")
+                    continue
 
             return material_masks
 
         except Exception as e:
             self.logger.error(f"Material segmentation failed: {e}")
-            # Return empty dict on failure
-            return {}
+            raise  # Fail-fast instead of silently returning empty dict
 
     @staticmethod
     def _rgb_to_hsv(rgb: np.ndarray) -> np.ndarray:
