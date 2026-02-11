@@ -30,3 +30,9 @@ sentence-transformers>=2.2.0,<3
 
 # Additional ML support
 accelerate>=0.20.0,<2      # improves model loading speed
+
+# Segmentation models (Materials V3 EfficientSAM backend)
+# EfficientSAM - lightweight Segment Anything Model variant (MIT license, commercial-safe)
+# Note: Install from GitHub until PyPI package is available
+# pip install git+https://github.com/yformer/EfficientSAM.git
+# For now, we'll use direct model loading via timm + custom weights

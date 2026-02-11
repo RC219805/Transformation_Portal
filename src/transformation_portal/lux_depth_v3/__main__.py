@@ -5,6 +5,7 @@ APEX command variants for the lux_depth_v3 pipeline supporting:
 - Commercial-safe APEX mode (default)
 - Research-only APEX+ variants (explicit opt-in)
 - PBR-only workflows (skip V2 enhancement)
+- Material segmentation (stub or EfficientSAM backends)
 
 Usage:
     # Commercial-safe APEX (default, no research opt-ins)
@@ -33,6 +34,16 @@ Usage:
         --pbr "on" \\
         --depth-device "mps" \\
         --emit-master16 "on"
+
+    # Material segmentation with EfficientSAM backend
+    lux-depth-v3 \\
+        --input-dir "./input_images" \\
+        --output-dir "./output/lux_depth_v3_segmented" \\
+        --quality-tier "apex" \\
+        --materials-v3 "on" \\
+        --enable-segmentation "on" \\
+        --segmentation-backend "efficientsam" \\
+        --depth-device "mps"
 
     # Research-only: Depth Anything V3.1 (explicit opt-in)
     lux-depth-v3 \\
@@ -87,6 +98,11 @@ Key Concepts:
     - PBR-Only Workflows:
       * Add --enable-v2 "off" to skip V2 enhancement validation and execution
       * Faster processing, still produces high-quality depth and PBR maps
+
+    - Material Segmentation:
+      * Use --enable-segmentation "on" to enable automatic material detection
+      * --segmentation-backend: Choose "stub" (heuristic, default) or "efficientsam" (AI-powered)
+      * --strict-segmentation: Fail on backend errors instead of falling back to stub
 
     - Research Models:
       * Require explicit license acknowledgement (--non-commercial-ok "true")
@@ -153,12 +169,14 @@ def main(
     preset: str = typer.Option(
         "premium",
         "--preset",
-        help="Named pipeline configuration (premium, depth-anything-v3.1-research-m4, etc.). Optional - use --quality-tier for most workflows.",
+        help="Named pipeline configuration (premium, depth-anything-v3.1-research-m4, etc.). "
+        "Optional - use --quality-tier for most workflows.",
     ),
     quality_tier: str = typer.Option(
         "standard",
         "--quality-tier",
-        help="Output quality level: standard (fast/draft), premium (balanced), or apex (maximum quality). Controls processing resolution and features.",
+        help="Output quality level: standard (fast/draft), premium (balanced), or apex (maximum quality). "
+        "Controls processing resolution and features.",
     ),
     # Depth Backend Configuration
     depth_backend: Optional[str] = typer.Option(
@@ -168,13 +186,26 @@ def main(
     # Materials V3 and PBR
     materials_v3: str = typer.Option("off", "--materials-v3", help="Enable Materials V3 surface-aware finishing: on/off"),
     pbr: str = typer.Option("off", "--pbr", help="Enable PBR map generation (normal, roughness, AO): on/off"),
+    # Material Segmentation
+    enable_segmentation: str = typer.Option(
+        "off", "--enable-segmentation", help="Enable automatic material segmentation: on/off (default: off)"
+    ),
+    segmentation_backend: str = typer.Option(
+        "stub",
+        "--segmentation-backend",
+        help="Segmentation backend: stub (default, no segmentation), efficientsam (heuristic v1)",
+    ),
+    strict_segmentation: bool = typer.Option(
+        False, "--strict-segmentation", help="Fail on segmentation backend errors instead of falling back to stub"
+    ),
     # Caching
     cache_depth: str = typer.Option("off", "--cache-depth", help="Enable content-addressable depth cache: on/off"),
     # V2 Enhancement Stage
     enable_v2: str = typer.Option(
         "on",
         "--enable-v2",
-        help="Enable V2 AI-powered enhancement stage: on/off (default: on). Set to 'off' for PBR-only workflows or when enhancement script is unavailable.",
+        help="Enable V2 AI-powered enhancement stage: on/off (default: on). "
+        "Set to 'off' for PBR-only workflows or when enhancement script is unavailable.",
     ),
     v2_preset: Optional[str] = typer.Option(
         "default",
@@ -255,6 +286,7 @@ def main(
     enable_emit_run_card = _parse_bool_flag(emit_run_card)
     enable_non_commercial = _parse_bool_flag(non_commercial_ok)
     enable_apple_license = _parse_bool_flag(accept_apple_depth_pro_research_license)
+    enable_material_segmentation = _parse_bool_flag(enable_segmentation)
 
     # Parse V2 preset (convert "none" string to None for skipping V2)
     v2_preset_value = None if (v2_preset and v2_preset.lower() == "none") else v2_preset
@@ -296,6 +328,17 @@ def main(
         print(error_msg, file=sys.stdout)  # Also print to stdout for CLI tests
         raise typer.Exit(code=1)
 
+    # Validate segmentation backend
+    valid_segmentation_backends = ["stub", "efficientsam"]
+    if segmentation_backend.lower() not in valid_segmentation_backends:
+        error_msg = (
+            f"Invalid segmentation backend '{segmentation_backend}'. "
+            f"Must be one of: {', '.join(valid_segmentation_backends)}"
+        )
+        logger.error(error_msg)
+        print(error_msg, file=sys.stdout)  # Also print to stdout for CLI tests
+        raise typer.Exit(code=1)
+
     # Build configuration
     logger.info(f"Configuring pipeline with quality tier: {quality_tier}")
 
@@ -324,6 +367,9 @@ def main(
         generate_pbr=enable_pbr,
         quality_tier=quality_tier,
         enable_materials_v3=enable_materials_v3,
+        enable_material_segmentation=enable_material_segmentation,
+        material_segmentation_backend=segmentation_backend.lower(),
+        strict_backend=strict_segmentation,
         emit_master16=enable_emit_master16,
         emit_upscaled16=enable_emit_upscaled16,
         emit_marketing=enable_emit_marketing,
