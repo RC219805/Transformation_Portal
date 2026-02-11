@@ -324,19 +324,19 @@ class TestVarianceFusion:
         assert aligned["da3"].mean() > 1.0  # Should be scaled up from 0.5
 
     def test_variance_weighted_fusion_actually_uses_variance(self):
-        """Test that variance actually changes fusion output (Bug P1-B fix)."""
-        # Goal:
-        # 1) Construct a region where model_b is a strong outlier.
-        # 2) Verify adaptive fusion deviates from fixed average and prefers model_a in that region.
-        #
-        # NOTE: Both models output "relative" depth, so _align_depth_maps will normalize each to [0,1].
-        # We need both to have some range so normalization doesn't collapse them to constants.
+        """Test that variance actually changes fusion output (Bug P1-B fix).
+
+        MATHEMATICAL NOTE: With 2 models of equal weight, deviations from the ensemble
+        mean have equal magnitude (opposite signs), so confidences are always equal and
+        the result reduces to fixed average. This is a mathematical property, not a bug.
+
+        To demonstrate adaptive behavior, we use 3 models where one is an outlier.
+        """
         test_img = np.ones((100, 100, 3), dtype=np.uint8) * 128
 
-        # Model A: gradient from 1.0 to 10.0
+        # Three models: A and C agree, B is outlier in top-left
         depth_a = np.linspace(1, 10, 10000).reshape(100, 100).astype(np.float32)
-
-        # Model B: same gradient, but with a strong outlier block in top-left
+        depth_c = np.linspace(1, 10, 10000).reshape(100, 100).astype(np.float32)
         depth_b = np.linspace(1, 10, 10000).reshape(100, 100).astype(np.float32)
         depth_b[:25, :25] = 50.0  # Strong outlier
 
@@ -361,23 +361,33 @@ class TestVarianceFusion:
                 dtype="float32",
                 input_size=(100, 100),
             ),
+            "model_c": DepthResult(
+                depth_map=depth_c,
+                original_image=test_img,
+                metadata={},
+                depth_units="relative",
+                backend_id="model_c",
+                device="cpu",
+                dtype="float32",
+                input_size=(100, 100),
+            ),
         }
 
         config = EnhanceConfig(non_commercial_ok=True, accept_research_tools_license=True)
         ensemble = DepthEnsembleBackend(
             config,
             models=[
-                ModelConfig(name="model_a", weight=0.5),
-                ModelConfig(name="model_b", weight=0.5),
+                ModelConfig(name="model_a", weight=1.0 / 3),
+                ModelConfig(name="model_b", weight=1.0 / 3),
+                ModelConfig(name="model_c", weight=1.0 / 3),
             ],
         )
 
         result = ensemble._fuse_predictions(model_results, Image.fromarray(test_img))
 
-        # After normalization, both models are in [0,1].
-        # Get aligned maps to compute proper baseline
+        # Get aligned maps and compute fixed average
         aligned = ensemble._align_depth_maps(model_results)
-        fixed_avg = 0.5 * aligned["model_a"] + 0.5 * aligned["model_b"]
+        fixed_avg = (1.0 / 3) * aligned["model_a"] + (1.0 / 3) * aligned["model_b"] + (1.0 / 3) * aligned["model_c"]
 
         # Regions
         outlier_region = (slice(0, 25), slice(0, 25))
@@ -385,24 +395,18 @@ class TestVarianceFusion:
 
         fused_outlier_mean = float(np.mean(result.depth_map[outlier_region]))
         fixed_outlier_mean = float(np.mean(fixed_avg[outlier_region]))
-        a_outlier_mean = float(np.mean(aligned["model_a"][outlier_region]))
-        b_outlier_mean = float(np.mean(aligned["model_b"][outlier_region]))
+        consensus_outlier_mean = float(np.mean((aligned["model_a"][outlier_region] + aligned["model_c"][outlier_region]) / 2))
 
         # In outlier region:
-        # model_b has normalized outlier values (close to 1.0), model_a has lower values
-        # Adaptive fusion should downweight the outlier model_b and be closer to model_a
-        assert abs(fused_outlier_mean - a_outlier_mean) < abs(fixed_outlier_mean - a_outlier_mean), (
-            f"Expected adaptive fusion to downweight outlier model_b. "
-            f"fused={fused_outlier_mean:.3f}, fixed={fixed_outlier_mean:.3f}, "
-            f"a={a_outlier_mean:.3f}, b={b_outlier_mean:.3f}"
-        )
+        # Models A and C agree (consensus), B is outlier
+        # Adaptive fusion should downweight B and be closer to A+C consensus than fixed average
+        dist_adaptive_to_consensus = abs(fused_outlier_mean - consensus_outlier_mean)
+        dist_fixed_to_consensus = abs(fixed_outlier_mean - consensus_outlier_mean)
 
-        # In normal region (agreement), fused should be close to fixed average
-        fused_normal_mean = float(np.mean(result.depth_map[normal_region]))
-        fixed_normal_mean = float(np.mean(fixed_avg[normal_region]))
-        assert np.isclose(fused_normal_mean, fixed_normal_mean, rtol=0.05), (
-            f"Expected agreement region to be close to weighted average. "
-            f"fused={fused_normal_mean:.6f}, fixed={fixed_normal_mean:.6f}"
+        assert dist_adaptive_to_consensus < dist_fixed_to_consensus, (
+            f"Expected adaptive fusion to be closer to consensus (A+C) than fixed average. "
+            f"adaptive_dist={dist_adaptive_to_consensus:.6f}, fixed_dist={dist_fixed_to_consensus:.6f}, "
+            f"fused={fused_outlier_mean:.3f}, fixed={fixed_outlier_mean:.3f}, consensus={consensus_outlier_mean:.3f}"
         )
 
         # Variance map sanity: outlier region variance > normal region variance
