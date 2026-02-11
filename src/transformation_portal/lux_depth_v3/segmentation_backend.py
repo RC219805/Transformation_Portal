@@ -36,7 +36,7 @@ from __future__ import annotations
 import logging
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 
@@ -111,7 +111,7 @@ class StubBackend:
         """No-op load for stub backend."""
         logger.debug("StubBackend.load() called - no model to load")
 
-    def segment(self, image: np.ndarray) -> Dict[str, np.ndarray]:
+    def segment(self, image: np.ndarray) -> Dict[str, Tuple[np.ndarray, float]]:
         """Return empty masks dict."""
         logger.debug("StubBackend.segment() returning empty masks")
         return {}
@@ -349,7 +349,7 @@ class EfficientSAMBackend:
         except Exception as e:
             raise RuntimeError(f"Failed to load EfficientSAM model: {e}") from e
 
-    def _real_model_inference(self, image: np.ndarray) -> Dict[str, np.ndarray]:
+    def _real_model_inference(self, image: np.ndarray) -> Dict[str, Tuple[np.ndarray, float]]:
         """Run real EfficientSAM + CLIP inference (v2).
 
         Three-step pipeline:
@@ -361,7 +361,9 @@ class EfficientSAMBackend:
             image: RGB image (H, W, 3), uint8 [0-255]
 
         Returns:
-            Dict[material_name, mask] where mask is (H, W) float32 [0.0-1.0]
+            Dict[material_name, (mask, confidence)] where:
+            - mask: (H, W) float32 [0.0-1.0]
+            - confidence: CLIP similarity or heuristic score [0.0-1.0]
         """
         # Step 1: Run EfficientSAM to generate segment proposals
         segments = self._run_sam_inference(image)
@@ -449,7 +451,7 @@ class EfficientSAMBackend:
             logger.warning("Falling back to empty segments (CLIP will classify heuristic masks)")
             return []
 
-    def _classify_segments_with_clip(self, image: np.ndarray, segments: list) -> Dict[str, np.ndarray]:
+    def _classify_segments_with_clip(self, image: np.ndarray, segments: list) -> Dict[str, Tuple[np.ndarray, float]]:
         """Classify segments using CLIP zero-shot classification.
 
         Args:
@@ -457,7 +459,9 @@ class EfficientSAMBackend:
             segments: List of segment dictionaries from SAM (may be empty)
 
         Returns:
-            Dict mapping material names to aggregated masks (H, W) float32 [0.0-1.0]
+            Dict mapping material names to (mask, confidence) tuples:
+            - mask: Aggregated binary mask (H, W) float32 [0.0-1.0]
+            - confidence: Average CLIP similarity score [0.0-1.0]
 
         Note:
             If segments list is empty (which happens when SAM doesn't run),
@@ -467,11 +471,12 @@ class EfficientSAMBackend:
         # If no SAM segments, generate heuristic segments first
         if not segments:
             logger.debug("No SAM segments provided, generating heuristic segments for CLIP classification")
-            heuristic_masks = self._heuristic_segmentation(image)
+            heuristic_results = self._heuristic_segmentation(image)
 
             # Convert heuristic masks to segment format for CLIP
+            # Note: heuristic_results is Dict[str, Tuple[np.ndarray, float]]
             segments = []
-            for material_name, mask in heuristic_masks.items():
+            for material_name, (mask, _) in heuristic_results.items():  # Unpack tuple
                 # Find all connected components in this material mask
                 from scipy import ndimage
 
@@ -554,9 +559,11 @@ class EfficientSAMBackend:
                 text_features = model.encode_text(text_tokens)
                 text_features = text_features / text_features.norm(dim=-1, keepdim=True)
 
-                # Initialize material masks
+                # Initialize material masks with tracking for confidence scores
                 h, w = image.shape[:2]
-                material_masks = {name: np.zeros((h, w), dtype=np.float32) for name in material_prompts}
+                material_data = {
+                    name: {"mask": np.zeros((h, w), dtype=np.float32), "scores": [], "areas": []} for name in material_prompts
+                }
 
                 # Convert image to PIL for preprocessing
                 pil_image = Image.fromarray(image)
@@ -591,8 +598,14 @@ class EfficientSAMBackend:
 
                     # Only add if confidence is reasonable (> 0.2)
                     if best_score > 0.2:
+                        # Track confidence score and segment area for weighted averaging
+                        material_data[best_material]["scores"].append(best_score)
+                        material_data[best_material]["areas"].append(segment["area"])
+
                         # Add segment mask to material (using max to handle overlaps)
-                        material_masks[best_material] = np.maximum(material_masks[best_material], mask.astype(np.float32))
+                        material_data[best_material]["mask"] = np.maximum(
+                            material_data[best_material]["mask"], mask.astype(np.float32)
+                        )
 
                         heuristic_label = segment.get("heuristic_label", "unknown")
                         match_str = "✓" if heuristic_label == best_material else f"({heuristic_label}→{best_material})"
@@ -601,13 +614,27 @@ class EfficientSAMBackend:
                             f"score={best_score:.3f}, area={segment['area']}px"
                         )
 
-                # Filter out empty masks
-                material_masks = {
-                    name: mask for name, mask in material_masks.items() if mask.sum() > 500  # Min coverage threshold
-                }
+                # Compute aggregate confidence per material (area-weighted average)
+                material_masks = {}
+                for name, data in material_data.items():
+                    mask = data["mask"]
+                    scores = data["scores"]
+                    areas = data["areas"]
+
+                    # Only include materials with sufficient coverage
+                    if mask.sum() > 500:
+                        if scores:
+                            # Area-weighted average of CLIP scores for this material
+                            total_area = sum(areas)
+                            weighted_conf = sum(s * a for s, a in zip(scores, areas)) / total_area
+                            material_masks[name] = (mask, float(weighted_conf))
+                        else:
+                            # No scores (shouldn't happen, but handle gracefully)
+                            material_masks[name] = (mask, 0.5)
 
                 logger.info(
-                    f"CLIP classified {len(segments)} segments into {len(material_masks)} materials: {list(material_masks.keys())}"
+                    f"CLIP classified {len(segments)} segments into {len(material_masks)} materials: "
+                    f"{', '.join(f'{m} ({c:.0%})' for m, (_, c) in material_masks.items())}"
                 )
                 return material_masks
 
@@ -618,7 +645,7 @@ class EfficientSAMBackend:
             logger.debug(f"CLIP error traceback: {traceback.format_exc()}")
             return self._heuristic_segmentation(image)
 
-    def _classify_segments_heuristic(self, image: np.ndarray, segments: list) -> Dict[str, np.ndarray]:
+    def _classify_segments_heuristic(self, image: np.ndarray, segments: list) -> Dict[str, Tuple[np.ndarray, float]]:
         """Classify segments using color/texture heuristics.
 
         Args:
@@ -626,7 +653,7 @@ class EfficientSAMBackend:
             segments: List of segment masks
 
         Returns:
-            Dict mapping material names to aggregated masks
+            Dict mapping material names to (mask, confidence) tuples with confidence=0.5
         """
         # Fall back to existing heuristic method
         return self._heuristic_segmentation(image)
@@ -651,7 +678,7 @@ class EfficientSAMBackend:
 
         return PlaceholderModel(self._device)
 
-    def _heuristic_segmentation(self, image: np.ndarray) -> Dict[str, np.ndarray]:
+    def _heuristic_segmentation(self, image: np.ndarray) -> Dict[str, Tuple[np.ndarray, float]]:
         """Heuristic-based material segmentation (v1 placeholder).
 
         This is a simplified implementation to demonstrate integration.
@@ -667,7 +694,9 @@ class EfficientSAMBackend:
             image: RGB image (H, W, 3), uint8
 
         Returns:
-            Dict of material masks (H, W), float32 [0.0-1.0]
+            Dict of (mask, confidence) tuples:
+            - mask: Material mask (H, W), float32 [0.0-1.0]
+            - confidence: Fixed at 0.5 to indicate heuristic classification
         """
         masks = {}
 
@@ -679,25 +708,25 @@ class EfficientSAMBackend:
         blue_tint = (img_float[..., 2] > img_float[..., 0]) & (img_float[..., 2] > img_float[..., 1])
         glass_mask = (brightness > 0.6) & blue_tint
         if glass_mask.sum() > 500:  # Min coverage threshold
-            masks["glass"] = glass_mask.astype(np.float32)
+            masks["glass"] = (glass_mask.astype(np.float32), 0.5)
 
         # Water detection: Blue-dominant regions
         blue_dominant = (img_float[..., 2] > img_float[..., 0] + 0.1) & (img_float[..., 2] > img_float[..., 1] + 0.1)
         water_mask = blue_dominant & (brightness > 0.2) & (brightness < 0.8)
         if water_mask.sum() > 500:
-            masks["water"] = water_mask.astype(np.float32)
+            masks["water"] = (water_mask.astype(np.float32), 0.5)
 
         # Foliage detection: Green-dominant regions
         green_dominant = (img_float[..., 1] > img_float[..., 0] + 0.1) & (img_float[..., 1] > img_float[..., 2] + 0.05)
         foliage_mask = green_dominant & (brightness > 0.2)
         if foliage_mask.sum() > 500:
-            masks["foliage"] = foliage_mask.astype(np.float32)
+            masks["foliage"] = (foliage_mask.astype(np.float32), 0.5)
 
         # Stone detection: Gray/neutral regions (low color saturation)
         rgb_std = img_float.std(axis=2)
         stone_mask = (rgb_std < 0.15) & (brightness > 0.3) & (brightness < 0.7)
         if stone_mask.sum() > 500:
-            masks["stone"] = stone_mask.astype(np.float32)
+            masks["stone"] = (stone_mask.astype(np.float32), 0.5)
 
         return masks
 
@@ -806,7 +835,11 @@ def segment_materials(
         backend = _get_backend_instance(backend_name, device=device, strict=strict_backend)
 
         # Run segmentation
-        masks = backend.segment(image)
+        results = backend.segment(image)
+
+        # Extract masks from (mask, confidence) tuples for backward compatibility
+        # The public API returns Dict[str, np.ndarray] while backends return Dict[str, Tuple[np.ndarray, float]]
+        masks = {material: mask for material, (mask, confidence) in results.items()}
 
         logger.debug(
             f"Segmentation completed using {backend.info.name}: " f"{len(masks)} materials detected: {list(masks.keys())}"

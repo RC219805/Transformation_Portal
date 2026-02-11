@@ -31,7 +31,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional, Protocol, runtime_checkable
+from typing import Dict, Optional, Protocol, Tuple, runtime_checkable
 
 import numpy as np
 
@@ -127,15 +127,22 @@ class SegmentationBackend(Protocol):
         """
         ...
 
-    def segment(self, image: np.ndarray) -> Dict[str, np.ndarray]:
+    def segment(self, image: np.ndarray) -> Dict[str, Tuple[np.ndarray, float]]:
         """Run material segmentation on an image.
 
         Args:
             image: Input RGB image as numpy array (H, W, 3), uint8 [0-255]
 
         Returns:
-            Dict mapping material names to binary masks (H, W) with values 0.0-1.0
-            Example: {"glass": mask1, "water": mask2, "foliage": mask3, "stone": mask4}
+            Dict mapping material names to (mask, confidence) tuples:
+            - mask: Binary mask (H, W) with values 0.0-1.0
+            - confidence: Classification confidence score [0.0-1.0]
+
+            Example: {
+                "glass": (mask1, 0.87),  # 87% confidence
+                "water": (mask2, 0.34),  # Low confidence - might filter
+                "foliage": (mask3, 0.76),
+            }
 
             For stub backend, returns empty dict.
             For real backends, returns detected materials only (omits non-detected).

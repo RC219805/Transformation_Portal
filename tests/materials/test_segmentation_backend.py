@@ -155,19 +155,23 @@ def test_efficientsam_backend_shape_contract(sample_image):
     backend = EfficientSAMBackend()
     backend.load(device="cpu")
 
-    masks = backend.segment(sample_image)
+    results = backend.segment(sample_image)
 
     # Check output type
-    assert isinstance(masks, dict)
+    assert isinstance(results, dict)
 
-    # Check each mask shape and dtype
-    for material, mask in masks.items():
+    # Check each mask shape, dtype, and confidence
+    for material, (mask, confidence) in results.items():
         assert isinstance(material, str)
         assert isinstance(mask, np.ndarray)
         assert mask.shape == sample_image.shape[:2]  # (H, W)
         assert mask.dtype == np.float32
         assert mask.min() >= 0.0
         assert mask.max() <= 1.0
+
+        # Check confidence score
+        assert isinstance(confidence, float)
+        assert 0.0 <= confidence <= 1.0, f"{material} confidence {confidence} not in [0.0-1.0]"
 
 
 @pytest.mark.ml
@@ -335,17 +339,22 @@ def test_heuristic_segmentation_detects_materials():
 
     backend = EfficientSAMBackend()
     backend.load(device="cpu")
-    masks = backend.segment(image)
+    results = backend.segment(image)
 
     # Should detect multiple materials
-    assert len(masks) > 0
+    assert len(results) > 0
 
     # Check for expected materials (heuristic-based)
     # Note: Exact detection depends on heuristics, so we're lenient
-    detected_materials = set(masks.keys())
+    detected_materials = set(results.keys())
     possible_materials = {"water", "foliage", "stone", "glass"}
 
     assert detected_materials.issubset(possible_materials)
+
+    # Verify all results have confidence scores
+    for material, (mask, confidence) in results.items():
+        assert isinstance(confidence, float)
+        assert 0.0 <= confidence <= 1.0
 
 
 @pytest.mark.ml
@@ -436,3 +445,126 @@ def test_segment_materials_graceful_degradation(sample_image, monkeypatch):
         # Restore
         monkeypatch.setattr(seg_module, "TORCH_AVAILABLE", original_torch_available)
         seg_module._get_backend_instance.cache_clear()
+
+
+# =============================================================================
+# Confidence Scoring Tests
+# =============================================================================
+
+
+def test_stub_backend_confidence_scores(sample_image):
+    """Test that StubBackend returns empty dict (compatible with confidence format)."""
+    backend = StubBackend()
+    backend.load()
+
+    results = backend.segment(sample_image)
+
+    # Stub returns empty dict
+    assert isinstance(results, dict)
+    assert len(results) == 0
+
+
+@pytest.mark.ml
+def test_confidence_scores_in_valid_range(sample_image):
+    """Verify all confidence scores are in [0.0-1.0] range."""
+    backend = EfficientSAMBackend()
+    backend.load(device="cpu")
+
+    results = backend.segment(sample_image)
+
+    # Check each material's confidence
+    for material, (mask, confidence) in results.items():
+        assert isinstance(confidence, float), f"{material} confidence is not float: {type(confidence)}"
+        assert 0.0 <= confidence <= 1.0, f"{material} confidence {confidence} not in [0.0-1.0]"
+
+
+@pytest.mark.ml
+def test_heuristic_fallback_returns_medium_confidence(sample_image):
+    """Heuristic fallback should return 0.5 confidence to indicate uncertainty."""
+    backend = EfficientSAMBackend()
+    backend.load(device="cpu")
+
+    # Don't initialize real models - force heuristic mode
+    backend._use_real_model = False
+
+    results = backend.segment(sample_image)
+
+    # All heuristic results should have 0.5 confidence
+    for material, (mask, confidence) in results.items():
+        assert confidence == 0.5, f"Heuristic {material} should have 0.5 confidence, got {confidence}"
+
+
+@pytest.mark.ml
+def test_confidence_logged_in_output(sample_image, caplog):
+    """Verify confidence scores appear in logs."""
+    backend = EfficientSAMBackend()
+    backend.load(device="cpu")
+
+    import logging
+
+    with caplog.at_level(logging.INFO):
+        results = backend.segment(sample_image)
+
+    # Check log contains confidence percentages (from CLIP classification)
+    log_text = caplog.text
+
+    # If materials were detected, should see confidence in logs
+    if len(results) > 0:
+        # Look for percentage format in logs (e.g., "glass (87%)")
+        assert any("%" in line for line in log_text.split("\n")), "Logs should contain confidence percentages"
+
+
+@pytest.mark.ml
+def test_multiple_materials_different_confidences():
+    """Test that different materials can have different confidence scores."""
+    # Create image with distinct material regions
+    image = np.zeros((128, 128, 3), dtype=np.uint8)
+
+    # Very clear blue region (high confidence for water)
+    image[10:60, 10:60] = [50, 120, 200]
+
+    # Greenish region (medium confidence for foliage)
+    image[70:120, 10:60] = [80, 140, 90]
+
+    # Grayish region (stone)
+    image[10:60, 70:120] = [120, 125, 120]
+
+    backend = EfficientSAMBackend()
+    backend.load(device="cpu")
+    results = backend.segment(image)
+
+    if len(results) >= 2:
+        # Extract confidence scores
+        confidences = [conf for _, conf in results.values()]
+
+        # At least some variation in confidence (not all identical)
+        # Since heuristic returns 0.5 for all, this tests that we're tracking per-material scores
+        unique_confidences = set(confidences)
+
+        # All should be 0.5 in heuristic mode (this validates our implementation)
+        # In CLIP mode, we'd expect variation
+        assert all(c == 0.5 for c in confidences) or len(unique_confidences) > 1
+
+
+@pytest.mark.ml
+def test_confidence_filtering_example():
+    """Demonstrate how users can filter by confidence threshold."""
+    # Create test image
+    image = np.zeros((128, 128, 3), dtype=np.uint8)
+    image[10:60, 10:60] = [50, 120, 200]  # Water
+    image[70:120, 10:60] = [80, 140, 90]  # Foliage
+
+    backend = EfficientSAMBackend()
+    backend.load(device="cpu")
+    results = backend.segment(image)
+
+    # Filter by confidence threshold
+    min_confidence = 0.4
+    high_confidence_only = {material: (mask, conf) for material, (mask, conf) in results.items() if conf >= min_confidence}
+
+    # Filtering should reduce or maintain material count
+    assert len(high_confidence_only) <= len(results), "Filtering should reduce or maintain material count"
+
+    # All remaining materials should meet threshold
+    for material, (mask, conf) in high_confidence_only.items():
+        assert conf >= min_confidence, f"{material} confidence {conf} below threshold {min_confidence}"

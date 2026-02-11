@@ -175,13 +175,14 @@ class MaterialSegmentationStage(Stage):
 
         try:
             # Use actual segmenter
-            masks = self._segmenter.segment(image)
+            results = self._segmenter.segment(image)
 
-            # Convert to standard format
+            # Convert to standard format (extract masks from tuples)
             material_masks = {}
-            for material_name, mask in masks.items():
+            for material_name, (mask, confidence) in results.items():
                 if isinstance(mask, np.ndarray):
                     material_masks[material_name] = mask.astype(np.float32)
+                    self.logger.debug(f"{material_name}: {confidence:.0%} confidence")
 
             return material_masks
 
