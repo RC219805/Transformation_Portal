@@ -407,6 +407,9 @@ class LinearDecoder:
 
         Returns:
             Path to saved EXR file.
+
+        Raises:
+            RuntimeError: If OpenEXR is not available (fail-loud for HDR preservation).
         """
         output_path = output_dir / f"{stem}_linear.exr"
 
@@ -429,20 +432,12 @@ class LinearDecoder:
             exr.writePixels({"R": r, "G": g, "B": b})
             exr.close()
 
-        except ImportError:
-            logger.warning("OpenEXR not available, using TIFF fallback for HDR output")
-            # Fallback: save as 32-bit float TIFF
-            output_path = output_dir / f"{stem}_linear.tiff"
-            # Convert to uint16 for TIFF (lossy for HDR >1.0)
-            # Note: This is NOT ideal for HDR preservation
-            # Recommend installing OpenEXR for proper HDR support
-            img_uint16 = np.clip(linear_rgb * 65535, 0, 65535).astype(np.uint16)
-            img = Image.fromarray(img_uint16, mode="RGB")
-            img.save(output_path, format="TIFF", compression="lzw")
-            logger.warning(
-                f"Saved as 16-bit TIFF (HDR values >1.0 clipped). "
-                f"Install OpenEXR for full HDR support: pip install OpenEXR"
-            )
+        except ImportError as e:
+            raise RuntimeError(
+                "emit_exr=True requires OpenEXR package for HDR preservation. "
+                "Install with: pip install OpenEXR Imath\n"
+                "Refusing to silently degrade to clipped 16-bit TIFF fallback."
+            ) from e
 
         logger.debug(f"Saved linear EXR: {output_path}")
         return output_path

@@ -98,7 +98,19 @@ class TestLinearDecoder:
         assert len(prov["output"]["content_hash"]) == 64  # SHA-256 hex
 
     def test_exr_output(self, tmp_path: Path):
-        """Test that EXR output artifact is created."""
+        """Test that EXR output artifact is created when OpenEXR is available."""
+        # Check if OpenEXR is available
+        try:
+            import Imath
+            import OpenEXR
+
+            has_openexr = True
+        except ImportError:
+            has_openexr = False
+
+        if not has_openexr:
+            pytest.skip("OpenEXR not installed - skipping EXR export test")
+
         # Create test image
         test_img = (np.random.rand(100, 100, 3) * 255).astype(np.uint8)
         test_img_path = tmp_path / "test.png"
@@ -107,11 +119,10 @@ class TestLinearDecoder:
         # Decode with EXR emission
         result = decode(test_img_path, gamma=1.0, output_dir=tmp_path, emit_exr=True)
 
-        # Verify EXR file exists (or TIFF fallback if OpenEXR unavailable)
+        # Verify EXR file exists
         assert result.output_exr_path is not None
         assert result.output_exr_path.exists()
-        # File extension will be .exr or .tiff depending on OpenEXR availability
-        assert result.output_exr_path.suffix in [".exr", ".tiff"]
+        assert result.output_exr_path.suffix == ".exr"
 
     def test_contract_validation_rejects_non_float32(self, tmp_path: Path):
         """Test that LinearIngestResult rejects non-float32 arrays."""
@@ -234,6 +245,28 @@ class TestLinearDecoder:
         assert result.gamma == 1.0
         assert result.linear_rgb.dtype == np.float32
 
+    def test_exr_fail_loud_when_openexr_missing(self, tmp_path: Path):
+        """Test that requesting EXR export fails loudly when OpenEXR is unavailable."""
+        # Check if OpenEXR is available - if it is, skip this test
+        try:
+            import Imath
+            import OpenEXR
+
+            pytest.skip("OpenEXR is installed - cannot test missing OpenEXR behavior")
+        except ImportError:
+            pass  # Good - OpenEXR is missing, test should proceed
+
+        # Create test image
+        test_img = np.random.rand(50, 50, 3).astype(np.float32)
+        test_img_path = tmp_path / "test.tiff"
+        img_uint16 = (test_img * 65535).astype(np.uint16)
+        img = Image.fromarray(img_uint16, mode="RGB")
+        img.save(test_img_path, format="TIFF")
+
+        # Attempt decode with emit_exr=True should fail loudly
+        with pytest.raises(RuntimeError, match="emit_exr=True requires OpenEXR package"):
+            decode(test_img_path, gamma=1.0, output_dir=tmp_path, emit_exr=True)
+
 
 class TestLinearIngestIntegration:
     """Integration tests for linear ingest with EnhanceConfig."""
@@ -291,5 +324,5 @@ class TestADR023Compliance:
 
 # Pytest markers for organization
 pytestmark = [
-    pytest.mark.spatial_ai,
+    pytest.mark.unit,  # Fast unit tests for spatial_ai ingest layer
 ]
