@@ -247,7 +247,25 @@ class Executor:
             logger.info(f"Executing stage: {node.stage_id}")
 
             # Resolve stage inputs
-            stage_inputs = self._resolve_inputs(node, inputs, stage_outputs)
+            try:
+                stage_inputs = self._resolve_inputs(node, inputs, stage_outputs)
+            except ValueError as e:
+                if node.optional:
+                    logger.warning(f"Skipping optional stage '{node.stage_id}': {e}")
+                    stage_results.append(
+                        StageExecutionResult(
+                            stage_id=node.stage_id,
+                            outputs={},
+                            cache_hit=True,
+                            execution_time_ms=0.0,
+                            cache_key="SKIPPED",
+                            provenance=None,
+                        )
+                    )
+                    stage_outputs[node.stage_id] = {}
+                    stages_cached += 1  # Count skipped as cached
+                    continue
+                raise
 
             # Compute cache key
             cache_key = node.stage.compute_cache_key(stage_inputs, context)
@@ -419,13 +437,6 @@ class Executor:
 
         # Get versions
         numpy_version = np.__version__
-        torch_version = None
-        try:
-            import torch
-
-            torch_version = torch.__version__
-        except ImportError:
-            pass
 
         return ProvenanceMetadata(
             cache_key=cache_key,
@@ -437,7 +448,7 @@ class Executor:
             hostname=platform.node(),
             python_version=sys.version,
             numpy_version=numpy_version,
-            torch_version=torch_version,
+            torch_version=context.config.get("torch_version"),  # Get from config if provided
             device=context.device,
             model_repo_id=context.config.get("repo_id"),
             model_revision=context.config.get("revision"),

@@ -364,17 +364,32 @@ class ExecutionGraph:
         Design notes:
         - Called during plan() to fail-fast on configuration errors.
         - Checks that all "stage_id.output_name" references are valid.
+        - Allows root inputs (dotless refs) which are validated at runtime.
         """
         for node in self._stages.values():
             for input_name, source_ref in node.inputs.items():
-                # Parse "stage_id.output_name"
-                parts = source_ref.split(".")
-                if len(parts) < 2:
+                # Validate reference is not empty or whitespace-only
+                if not source_ref or source_ref.strip() != source_ref:
                     raise GraphError(
-                        f"Stage '{node.stage_id}' has invalid input reference: "
-                        f"'{source_ref}' (expected 'stage_id.output_name')"
+                        f"Stage '{node.stage_id}' has invalid input reference for '{input_name}': " f"'{source_ref}'"
                     )
 
+                # Parse "stage_id.output_name" or "root_input"
+                parts = source_ref.split(".")
+
+                if len(parts) == 1:
+                    # Root input reference (validated at runtime against executor inputs)
+                    continue
+
+                # Dotted ref: must be stage_id.output_name (output_name can contain dots)
                 source_stage = parts[0]
+                output_name = ".".join(parts[1:])
+
+                if not source_stage or not output_name:
+                    raise GraphError(
+                        f"Stage '{node.stage_id}' has invalid input reference: '{source_ref}' "
+                        "(expected 'stage_id.output_name' or 'root_input')"
+                    )
+
                 if source_stage not in self._stages:
                     raise GraphError(f"Stage '{node.stage_id}' depends on non-existent stage: " f"'{source_stage}'")

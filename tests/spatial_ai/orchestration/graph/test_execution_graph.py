@@ -200,11 +200,36 @@ class TestExecutionGraph:
         """Test validation detects invalid input reference format."""
         graph = ExecutionGraph()
 
-        # Invalid format (missing ".output_name")
-        graph.add_stage("stage1", MockStage("stage1"), inputs={"input": "invalid_format"})
+        # Add stage that provides output
+        graph.add_stage("upstream", MockStage("upstream"), inputs={})
+
+        # Test invalid dotted ref (stage with empty output name)
+        graph.add_stage("downstream", MockStage("downstream"), inputs={"input": "upstream."})
 
         with pytest.raises(GraphError, match="invalid input reference"):
             graph.plan()
+
+    def test_invalid_input_reference_empty_stage(self):
+        """Test validation detects empty stage in dotted reference."""
+        graph = ExecutionGraph()
+
+        # Test invalid dotted ref (empty stage name)
+        graph.add_stage("stage1", MockStage("stage1"), inputs={"input": ".output"})
+
+        with pytest.raises(GraphError, match="invalid input reference"):
+            graph.plan()
+
+    def test_root_input_reference(self):
+        """Test that root inputs (dotless refs) are allowed."""
+        graph = ExecutionGraph()
+
+        # Root input (dotless ref) should be allowed in validation
+        # (actual validation happens at runtime in executor)
+        graph.add_stage("stage1", MockStage("stage1"), inputs={"input": "root_input"})
+
+        # Should not raise during graph validation
+        plan = graph.plan()
+        assert len(plan.stages) == 1
 
     def test_resource_aggregation_sequential(self):
         """Test resource aggregation for sequential pipeline."""

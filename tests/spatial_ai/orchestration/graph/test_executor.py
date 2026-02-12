@@ -347,6 +347,67 @@ class TestExecutor:
                 output_dir=output_dir,
             )
 
+    def test_optional_stage_skipped_on_missing_input(self, executor_no_cache: Executor, output_dir: Path):
+        """Test optional stage is skipped when input is missing."""
+        graph = ExecutionGraph()
+
+        # Add required stage that uses root input
+        graph.add_stage("required", MockStage("required"), inputs={})
+
+        # Add optional stage that depends on missing root input
+        graph.add_stage(
+            "optional",
+            MockStage("optional"),
+            inputs={"missing_input": "missing_root"},
+            optional=True,
+        )
+
+        # Execute - optional stage should be skipped
+        result = executor_no_cache.execute(
+            graph=graph,
+            inputs={"value": 10},  # "missing_root" is not provided
+            output_dir=output_dir,
+        )
+
+        # Verify execution completed
+        assert len(result.stage_results) == 2
+
+        # Find the results by stage_id
+        required_result = next(r for r in result.stage_results if r.stage_id == "required")
+        optional_result = next(r for r in result.stage_results if r.stage_id == "optional")
+
+        # Required stage executed
+        assert required_result.cache_hit is False
+
+        # Optional stage skipped
+        assert optional_result.cache_key == "SKIPPED"
+        assert optional_result.outputs == {}
+        assert optional_result.execution_time_ms == 0.0
+
+        # Only required stage counted as executed
+        assert result.stages_executed == 1
+        assert result.stages_cached == 1  # Skipped stage marked as cache hit
+
+    def test_non_optional_stage_fails_on_missing_input(self, executor_no_cache: Executor, output_dir: Path):
+        """Test non-optional stage fails when input is missing."""
+        graph = ExecutionGraph()
+
+        # Add non-optional stage that depends on missing root input
+        graph.add_stage(
+            "non_optional",
+            MockStage("non_optional"),
+            inputs={"missing_input": "missing_root"},
+            optional=False,
+        )
+
+        # Should raise ValueError during input resolution
+        with pytest.raises(ValueError, match="requires root input 'missing_root'"):
+            executor_no_cache.execute(
+                graph=graph,
+                inputs={"value": 10},
+                output_dir=output_dir,
+            )
+
     def test_execution_result_statistics(self, executor: Executor, output_dir: Path):
         """Test execution result contains accurate statistics."""
         graph = ExecutionGraph()
