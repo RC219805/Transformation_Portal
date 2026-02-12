@@ -55,6 +55,7 @@ class TestMaterialClassifierInitialization:
 class TestMaterialClassifierAvailability:
     """Test CLIP availability checking."""
 
+    @pytest.mark.ml
     def test_is_available_with_clip(self):
         """Test availability check when CLIP is installed."""
         with patch("transformers.CLIPModel"):
@@ -165,6 +166,7 @@ class TestMaterialClassifierClassifyMasks:
         assert results[0] == (None, None)
         assert results[1] == (None, None)
 
+    @pytest.mark.ml
     @patch("transformers.CLIPModel")
     @patch("transformers.CLIPProcessor")
     @patch("torch.no_grad")
@@ -209,6 +211,7 @@ class TestMaterialClassifierClassifyMasks:
         assert results[0][0] is not None  # Label assigned
         assert results[0][1] is not None  # Confidence assigned
 
+    @pytest.mark.ml
     @patch("transformers.CLIPModel")
     @patch("transformers.CLIPProcessor")
     @patch("torch.no_grad")
@@ -271,6 +274,7 @@ class TestMaterialClassifierClassifyMasks:
 class TestMaterialClassifierModelLoading:
     """Test model loading behavior."""
 
+    @pytest.mark.ml
     @patch("transformers.CLIPModel")
     @patch("transformers.CLIPProcessor")
     def test_model_loads_successfully(self, mock_processor_class, mock_model_class):
@@ -292,6 +296,7 @@ class TestMaterialClassifierModelLoading:
         assert classifier._model is not None
         assert classifier._processor is not None
 
+    @pytest.mark.ml
     @patch("transformers.CLIPModel")
     @patch("transformers.CLIPProcessor")
     def test_model_loads_only_once(self, mock_processor_class, mock_model_class):
