@@ -72,7 +72,7 @@ class TestPipelineConfig:
 
     def test_all_valid_stages_accepted(self):
         """Test all valid stages are accepted."""
-        valid_stages = ["ingest", "segment", "materials", "reconstruct"]
+        valid_stages = ["ingest", "segment", "materials", "reconstruction"]
         config = PipelineConfig(
             tier="apex_research",
             stages=valid_stages,
@@ -99,24 +99,24 @@ class TestPipelineConfig:
         with pytest.raises(ValueError, match="research tier.*3DGS"):
             PipelineConfig(
                 tier="standard",
-                stages=["ingest", "reconstruct"],
+                stages=["ingest", "reconstruction"],
             )
 
     def test_reconstruction_allowed_in_research_tier(self):
         """Test reconstruction is allowed in research tier."""
         config = PipelineConfig(
             tier="apex_research",
-            stages=["ingest", "reconstruct"],
+            stages=["ingest", "reconstruction"],
         )
-        assert "reconstruct" in config.stages
+        assert "reconstruction" in config.stages
 
     def test_reconstruction_allowed_in_experimental_tier(self):
         """Test reconstruction is allowed in experimental tier."""
         config = PipelineConfig(
             tier="experimental",
-            stages=["reconstruct"],
+            stages=["reconstruction"],
         )
-        assert "reconstruct" in config.stages
+        assert "reconstruction" in config.stages
 
     @given(
         tier=st.sampled_from(["standard", "apex_research", "experimental"]),
@@ -645,7 +645,7 @@ class TestSpatialAIPipelineReconstructionStage:
         """Test reconstruction raises NotImplementedError for single-view."""
         config = PipelineConfig(
             tier="apex_research",
-            stages=["reconstruct"],
+            stages=["reconstruction"],
         )
         pipeline = SpatialAIPipeline(config)
 

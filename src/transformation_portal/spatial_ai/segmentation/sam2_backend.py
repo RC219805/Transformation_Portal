@@ -34,7 +34,7 @@ from typing import Literal, Optional
 
 import numpy as np
 
-from transformation_portal.spatial_ai.segmentation.contracts import MaskMetadata, SegmentationInput, SegmentationResult
+from transformation_portal.spatial_ai.segmentation.contracts import SegmentationInput, SegmentationResult
 
 logger = logging.getLogger(__name__)
 
@@ -135,22 +135,12 @@ class SAM2Backend:
 
     def segment(
         self,
-        image: np.ndarray,
-        gamma: float,
-        mode: Literal["auto", "points", "bbox", "video"] = "auto",
-        prompts: Optional[list] = None,
-        prev_masks: Optional[np.ndarray] = None,
-        frame_idx: Optional[int] = None,
+        seg_input: SegmentationInput,
     ) -> SegmentationResult:
         """Segment image with SAM2.
 
         Args:
-            image: Linear RGB image (H, W, 3) float32.
-            gamma: Gamma value (must be 1.0).
-            mode: Segmentation mode.
-            prompts: Optional prompts for interactive modes.
-            prev_masks: Previous masks for video tracking.
-            frame_idx: Frame index for video mode.
+            seg_input: Validated segmentation input contract.
 
         Returns:
             SegmentationResult with masks, scores, and metadata.
@@ -159,28 +149,20 @@ class SAM2Backend:
             ValueError: If input contract violated.
             RuntimeError: If inference fails.
         """
-        # Validate input via contract
-        seg_input = SegmentationInput(
-            image=image,
-            gamma=gamma,
-            mode=mode,
-            prompts=prompts,
-            prev_masks=prev_masks,
-            frame_idx=frame_idx,
-        )
+        # Contract is already validated in SegmentationInput.__post_init__
 
         # Lazy load model
         self._load_model()
 
         # Execute segmentation based on mode
-        if mode == "auto":
+        if seg_input.mode == "auto":
             return self._segment_auto(seg_input)
-        elif mode in ["points", "bbox"]:
+        elif seg_input.mode in ["points", "bbox"]:
             return self._segment_prompted(seg_input)
-        elif mode == "video":
+        elif seg_input.mode == "video":
             return self._segment_video(seg_input)
         else:
-            raise ValueError(f"Unsupported mode: {mode}")
+            raise ValueError(f"Unsupported mode: {seg_input.mode}")
 
     def _segment_auto(self, seg_input: SegmentationInput) -> SegmentationResult:
         """Automatic mask generation (entire image).
@@ -190,60 +172,26 @@ class SAM2Backend:
 
         Returns:
             SegmentationResult with all detected masks.
+
+        Raises:
+            NotImplementedError: SAM2 auto mode not yet integrated.
         """
-        import torch
+        # SAM2 auto mode requires integration with the official automatic mask generator
+        # The transformers AutoModel API does not expose this functionality directly
+        #
+        # To implement:
+        # 1. Use SAM2's native automatic mask generator API
+        # 2. Or implement custom grid-based prompting with the transformers model
+        # 3. Ensure output format matches SegmentationResult contract
+        #
+        # For Phase 2.1 scaffolding, this remains unimplemented to prevent runtime crashes
+        # on untested placeholder code.
 
-        # Convert linear RGB to uint8 sRGB for SAM2 preprocessing
-        # SAM2 expects display-ready images, so apply gamma correction
-        image_srgb = self._linear_to_srgb(seg_input.image)
-
-        # Preprocess image
-        inputs = self._processor(images=image_srgb, return_tensors="pt")
-        inputs = {k: v.to(self._model.device) for k, v in inputs.items()}
-
-        # Run inference
-        with torch.no_grad():
-            outputs = self._model(**inputs)
-
-        # Extract masks and scores
-        # Note: SAM2 API may vary, this is a placeholder structure
-        # Real implementation should use SAM2's automatic mask generator
-        masks = outputs.pred_masks.cpu().numpy()  # (N, H, W)
-        scores = outputs.iou_scores.cpu().numpy()  # (N,)
-
-        # Convert to boolean masks
-        masks_bool = masks > 0.5
-
-        # Generate metadata for each mask
-        metadata = []
-        for i, mask in enumerate(masks_bool):
-            area = int(mask.sum())
-            if area == 0:
-                continue  # Skip empty masks
-
-            # Compute bounding box
-            ys, xs = np.where(mask)
-            x1, x2 = xs.min(), xs.max()
-            y1, y2 = ys.min(), ys.max()
-            bbox = (int(x1), int(y1), int(x2 - x1 + 1), int(y2 - y1 + 1))
-
-            metadata.append(
-                MaskMetadata(
-                    area=area,
-                    bbox=bbox,
-                    stability_score=float(scores[i]),
-                )
-            )
-
-        # Filter out empty masks
-        valid_indices = [i for i, m in enumerate(masks_bool) if m.sum() > 0]
-        masks_bool = masks_bool[valid_indices]
-        scores = scores[valid_indices]
-
-        return SegmentationResult(
-            masks=masks_bool,
-            scores=scores.astype(np.float32),
-            metadata=metadata,
+        raise NotImplementedError(
+            "SAM2 automatic mask generation not yet integrated with official mask generator. "
+            "The transformers AutoModel does not guarantee 'pred_masks' or 'iou_scores' attributes. "
+            "Use prompted segmentation (mode='points' or mode='bbox') or integrate SAM2's native "
+            "automatic mask generator API for production use."
         )
 
     def _segment_prompted(self, seg_input: SegmentationInput) -> SegmentationResult:

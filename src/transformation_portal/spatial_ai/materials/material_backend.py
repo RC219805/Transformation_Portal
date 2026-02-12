@@ -22,7 +22,12 @@ from typing import Literal, Optional
 
 import numpy as np
 
-from transformation_portal.spatial_ai.materials.contracts import MaterialGenerationConfig, MaterialProperties
+from transformation_portal.spatial_ai.materials.contracts import (
+    MaterialGenerationConfig,
+    MaterialInput,
+    MaterialProperties,
+    PBRTextures,
+)
 from transformation_portal.spatial_ai.materials.heuristic_fallback import HeuristicFallback
 
 
@@ -63,6 +68,47 @@ class MaterialBackend:
 
         # Heuristic fallback (always available)
         self._heuristic = HeuristicFallback()
+
+    def generate(self, mat_input: MaterialInput) -> PBRTextures:
+        """Generate PBR textures from MaterialInput contract.
+
+        Args:
+            mat_input: Validated material input contract.
+
+        Returns:
+            PBRTextures contract with all texture maps.
+
+        Raises:
+            ValueError: If input contract violated.
+            RuntimeError: If generation fails.
+        """
+        # Contract is already validated in MaterialInput.__post_init__
+
+        # Create config if not using default
+        config = MaterialGenerationConfig(
+            backend=self.backend,
+            device=self.device,
+        )
+
+        # Call generate_pbr_textures with unwrapped arguments
+        albedo, normal, roughness, metallic, ao, height, properties = self.generate_pbr_textures(
+            rgb=mat_input.image,
+            mask=mat_input.mask,
+            depth=mat_input.depth,
+            material_hint=mat_input.material_hint,
+            config=config,
+        )
+
+        # Wrap into PBRTextures contract
+        return PBRTextures(
+            albedo=albedo,
+            normal=normal,
+            roughness=roughness,
+            metallic=metallic,
+            ambient_occlusion=ao,
+            height=height,
+            properties=properties,
+        )
 
     def generate_pbr_textures(
         self,

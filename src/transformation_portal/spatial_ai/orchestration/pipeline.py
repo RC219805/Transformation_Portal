@@ -43,8 +43,7 @@ import yaml
 from transformation_portal.spatial_ai.ingest.linear_decoder import LinearDecoder, LinearIngestResult
 from transformation_portal.spatial_ai.materials.contracts import MaterialInput, PBRTextures
 from transformation_portal.spatial_ai.materials.material_backend import MaterialBackend
-from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams, ReconstructionInput, Scene3D
-from transformation_portal.spatial_ai.reconstruction.scene_builder import SceneBuilder
+from transformation_portal.spatial_ai.reconstruction.contracts import Scene3D
 from transformation_portal.spatial_ai.segmentation.contracts import SegmentationInput, SegmentationResult
 from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
 
@@ -81,7 +80,7 @@ class PipelineConfig:
 
     def __post_init__(self):
         """Validate configuration."""
-        VALID_STAGES = ["ingest", "segment", "segmentation", "materials", "reconstruct"]
+        VALID_STAGES = ["ingest", "segment", "segmentation", "materials", "reconstruction"]
         for stage in self.stages:
             if stage not in VALID_STAGES:
                 raise ValueError(f"Invalid stage '{stage}'. Valid: {VALID_STAGES}")
@@ -92,7 +91,7 @@ class PipelineConfig:
             raise ValueError(f"Invalid tier '{self.tier}'. Valid: {VALID_TIERS}")
 
         # Reconstruction requires research tier
-        if "reconstruct" in self.stages and self.tier not in ["apex_research", "apex_research_ultra", "experimental"]:
+        if "reconstruction" in self.stages and self.tier not in ["apex_research", "apex_research_ultra", "experimental"]:
             raise ValueError(f"Reconstruction requires research tier, got '{self.tier}' " "(Inria 3DGS license restriction)")
 
 
@@ -303,14 +302,14 @@ class SpatialAIPipeline:
                     result.stages_completed.append("materials")
 
                 # Phase 2.3: Reconstruction
-                if "reconstruct" in self.config.stages:
+                if "reconstruction" in self.config.stages:
                     if result.linear_image is None:
-                        raise PipelineError("reconstruct", "Ingest stage required before reconstruction")
+                        raise PipelineError("reconstruction", "Ingest stage required before reconstruction")
 
                     result.scene_3d = self._run_reconstruction(
                         result.linear_image, result.segmentation, output_dir, save_intermediates
                     )
-                    result.stages_completed.append("reconstruct")
+                    result.stages_completed.append("reconstruction")
 
             # Complete
             result.execution_time = self.progress_tracker._get_elapsed_time()
@@ -615,7 +614,7 @@ class SpatialAIPipeline:
             This is a placeholder for single-view reconstruction.
             Full multi-view 3DGS requires camera poses and multiple views.
         """
-        self.progress_tracker.start_stage("reconstruct", "3D Reconstruction")
+        self.progress_tracker.start_stage("reconstruction", "3D Reconstruction")
 
         try:
             # For single-view, we can't do full 3DGS
@@ -627,8 +626,8 @@ class SpatialAIPipeline:
             )
 
         except Exception as e:
-            self.progress_tracker.complete_stage("reconstruct", success=False, error_message=str(e))
-            raise PipelineError("reconstruct", f"Reconstruction failed: {e}", original_error=e) from e
+            self.progress_tracker.complete_stage("reconstruction", success=False, error_message=str(e))
+            raise PipelineError("reconstruction", f"Reconstruction failed: {e}", original_error=e) from e
 
     @staticmethod
     def _load_preset(preset_name: str) -> PipelineConfig:
@@ -683,6 +682,35 @@ class SpatialAIPipeline:
         # Extract pipeline section
         pipeline_data = data.get("pipeline", {})
 
+        # Parse resource limits if provided
+        resource_limits = None
+        if "resource_limits" in data:
+            limits_data = data["resource_limits"]
+            resource_limits = ResourceLimits(
+                max_gpu_memory_gb=limits_data.get("max_gpu_memory_gb", 16.0),
+                max_models_loaded=limits_data.get("max_models_loaded", 3),
+                batch_size=limits_data.get("batch_size", 1),
+                device_preference=limits_data.get("device_preference", ["cuda", "mps", "cpu"]),
+            )
+
+        # Parse error strategy if provided
+        error_strategy = ErrorRecoveryStrategy.RETRY  # Default
+        if "error_strategy" in data:
+            strategy_str = data["error_strategy"]
+            # Map string to enum
+            strategy_map = {
+                "retry": ErrorRecoveryStrategy.RETRY,
+                "retry_cpu_fallback": ErrorRecoveryStrategy.RETRY_WITH_CPU_FALLBACK,
+                "retry_with_cpu_fallback": ErrorRecoveryStrategy.RETRY_WITH_CPU_FALLBACK,
+                "skip_stage": ErrorRecoveryStrategy.SKIP_STAGE,
+                "fail_fast": ErrorRecoveryStrategy.FAIL_FAST,
+                "return_partial": ErrorRecoveryStrategy.RETURN_PARTIAL,
+            }
+            if strategy_str in strategy_map:
+                error_strategy = strategy_map[strategy_str]
+            else:
+                logger.warning(f"Unknown error strategy '{strategy_str}', using RETRY")
+
         # Build config
         config = PipelineConfig(
             tier=data.get("tier", "standard"),
@@ -691,6 +719,8 @@ class SpatialAIPipeline:
             segmentation=pipeline_data.get("segmentation", {}),
             materials=pipeline_data.get("materials", {}),
             reconstruction=pipeline_data.get("reconstruction", {}),
+            resource_limits=resource_limits,
+            error_strategy=error_strategy,
         )
 
         return config

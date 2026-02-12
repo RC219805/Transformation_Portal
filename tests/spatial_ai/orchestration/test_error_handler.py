@@ -353,10 +353,6 @@ class TestErrorHandlerRetry:
 
 
 class TestErrorHandlerCPUFallback:
-    """Test RETRY_WITH_CPU_FALLBACK strategy."""
-
-
-class TestErrorHandlerCPUFallback:
     """Test RETRY_WITH_CPU_FALLBACK strategy.
 
     Note: The current implementation has a limitation - CPU fallback updates

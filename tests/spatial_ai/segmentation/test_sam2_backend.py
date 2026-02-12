@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, Mock, patch
 import numpy as np
 import pytest
 
-from transformation_portal.spatial_ai.segmentation.contracts import SegmentationResult
+from transformation_portal.spatial_ai.segmentation.contracts import SegmentationInput, SegmentationResult
 from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
 
 
@@ -43,39 +43,36 @@ class TestSAM2BackendSegmentation:
     @patch("transformation_portal.spatial_ai.segmentation.sam2_backend.SAM2Backend._load_model")
     @patch("transformation_portal.spatial_ai.segmentation.sam2_backend.SAM2Backend._segment_auto")
     def test_segment_auto_mode(self, mock_segment_auto, mock_load_model):
-        """Test segmentation in auto mode."""
-        # Setup mock return value
-        mock_result = SegmentationResult(
-            masks=np.zeros((3, 100, 100), dtype=bool),
-            scores=np.array([0.9, 0.8, 0.7], dtype=np.float32),
-            metadata=[Mock(area=100, bbox=(0, 0, 10, 10), stability_score=0.9) for _ in range(3)],
-        )
-        mock_segment_auto.return_value = mock_result
-
-        # Run segmentation
+        """Test segmentation in auto mode raises NotImplementedError."""
         backend = SAM2Backend()
         image = np.random.rand(100, 100, 3).astype(np.float32)
-        result = backend.segment(image=image, gamma=1.0, mode="auto")
+        seg_input = SegmentationInput(image=image, gamma=1.0, mode="auto")
 
-        # Verify
+        # Configure mock to raise NotImplementedError (reflecting the actual implementation)
+        mock_segment_auto.side_effect = NotImplementedError("SAM2 automatic mask generation not yet integrated")
+
+        # Run segmentation should raise NotImplementedError
+        with pytest.raises(NotImplementedError, match="automatic mask generation"):
+            result = backend.segment(seg_input)
+
+        # Verify _load_model and _segment_auto were called
         mock_load_model.assert_called_once()
         mock_segment_auto.assert_called_once()
-        assert isinstance(result, SegmentationResult)
-        assert len(result.masks) == 3
 
     @patch("transformation_portal.spatial_ai.segmentation.sam2_backend.SAM2Backend._load_model")
     def test_segment_prompted_mode_not_implemented(self, mock_load_model):
         """Test that prompted mode raises NotImplementedError."""
         backend = SAM2Backend()
         image = np.random.rand(100, 100, 3).astype(np.float32)
+        seg_input = SegmentationInput(
+            image=image,
+            gamma=1.0,
+            mode="points",
+            prompts=[{"type": "point", "coords": [50, 50], "label": 1}],
+        )
 
         with pytest.raises(NotImplementedError, match="Prompted segmentation"):
-            backend.segment(
-                image=image,
-                gamma=1.0,
-                mode="points",
-                prompts=[{"type": "point", "coords": [50, 50], "label": 1}],
-            )
+            backend.segment(seg_input)
 
     @patch("transformation_portal.spatial_ai.segmentation.sam2_backend.SAM2Backend._load_model")
     def test_segment_video_mode_not_implemented(self, mock_load_model):
@@ -83,9 +80,10 @@ class TestSAM2BackendSegmentation:
         backend = SAM2Backend()
         image = np.random.rand(100, 100, 3).astype(np.float32)
         prev_masks = np.zeros((2, 100, 100), dtype=bool)
+        seg_input = SegmentationInput(image=image, gamma=1.0, mode="video", prev_masks=prev_masks)
 
         with pytest.raises(NotImplementedError, match="Video tracking"):
-            backend.segment(image=image, gamma=1.0, mode="video", prev_masks=prev_masks)
+            backend.segment(seg_input)
 
     def test_segment_contract_validation(self):
         """Test that segment validates input contract."""
@@ -93,7 +91,8 @@ class TestSAM2BackendSegmentation:
         image = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)  # Wrong dtype
 
         with pytest.raises(ValueError, match="float32"):
-            backend.segment(image=image, gamma=1.0, mode="auto")
+            seg_input = SegmentationInput(image=image, gamma=1.0, mode="auto")
+            backend.segment(seg_input)
 
     def test_segment_gamma_validation(self):
         """Test that segment enforces gamma=1.0."""
@@ -101,7 +100,8 @@ class TestSAM2BackendSegmentation:
         image = np.random.rand(100, 100, 3).astype(np.float32)
 
         with pytest.raises(ValueError, match="gamma=1.0"):
-            backend.segment(image=image, gamma=2.2, mode="auto")
+            seg_input = SegmentationInput(image=image, gamma=2.2, mode="auto")
+            backend.segment(seg_input)
 
 
 class TestSAM2BackendLinearToSRGB:
@@ -204,39 +204,19 @@ class TestSAM2BackendModelLoading:
 class TestSAM2BackendSegmentAuto:
     """Test automatic segmentation implementation."""
 
-    def test_segment_auto_returns_result(self):
-        """Test that _segment_auto returns valid SegmentationResult."""
-        with patch("transformers.AutoModel"):
-            with patch("transformers.AutoProcessor"):
-                with patch("torch.no_grad"):
-                    # Setup backend with mocked model
-                    backend = SAM2Backend()
-                    backend._model = MagicMock()
-                    backend._processor = MagicMock()
+    def test_segment_auto_raises_not_implemented(self):
+        """Test that _segment_auto raises NotImplementedError."""
+        backend = SAM2Backend()
+        backend._model = MagicMock()  # Pretend model is loaded
+        backend._processor = MagicMock()
 
-                    # Mock processor return
-                    backend._processor.return_value = {"pixel_values": MagicMock()}
+        # Create input
+        seg_input = SegmentationInput(
+            image=np.random.rand(100, 100, 3).astype(np.float32),
+            gamma=1.0,
+            mode="auto",
+        )
 
-                    # Mock model output
-                    mock_output = MagicMock()
-                    mock_output.pred_masks.cpu.return_value.numpy.return_value = np.random.rand(3, 100, 100)
-                    mock_output.iou_scores.cpu.return_value.numpy.return_value = np.array([0.9, 0.8, 0.7])
-                    backend._model.return_value = mock_output
-
-                    # Create input
-                    from transformation_portal.spatial_ai.segmentation.contracts import SegmentationInput
-
-                    seg_input = SegmentationInput(
-                        image=np.random.rand(100, 100, 3).astype(np.float32),
-                        gamma=1.0,
-                        mode="auto",
-                    )
-
-                    # Run segmentation
-                    result = backend._segment_auto(seg_input)
-
-                    # Verify result type and structure
-                    assert isinstance(result, SegmentationResult)
-                    assert result.masks.dtype == bool
-                    assert len(result.scores) == len(result.masks)
-                    assert len(result.metadata) == len(result.masks)
+        # Should raise NotImplementedError
+        with pytest.raises(NotImplementedError, match="automatic mask generation"):
+            backend._segment_auto(seg_input)

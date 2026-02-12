@@ -216,7 +216,7 @@ class ResourceManager:
                 mem_mb = mem_bytes / 1e6
                 self._peak_memory_mb = max(self._peak_memory_mb, mem_mb)
                 return mem_mb
-            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            elif hasattr(torch, "backends") and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
                 # MPS doesn't expose memory stats yet
                 return 0.0
         except ImportError:
