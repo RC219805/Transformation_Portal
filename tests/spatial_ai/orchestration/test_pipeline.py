@@ -512,7 +512,7 @@ class TestSpatialAIPipelineSegmentationStage:
         mock_seg_result = MagicMock(spec=SegmentationResult)
         mock_seg_result.masks = [np.ones((256, 256), dtype=bool)]
         mock_seg_result.scores = np.array([0.9])
-        mock_seg_result.metadata = [MaskMetadata()]
+        mock_seg_result.metadata = [MaskMetadata(area=256 * 256, bbox=(0, 0, 256, 256), stability_score=0.9)]
 
         with patch("transformation_portal.spatial_ai.orchestration.pipeline.SAM2Backend") as MockBackend:
             mock_backend = MockBackend.return_value
@@ -603,7 +603,7 @@ class TestSpatialAIPipelineMaterialsStage:
         seg_result = MagicMock(spec=SegmentationResult)
         seg_result.masks = [np.ones((128, 128), dtype=bool)]
         seg_result.scores = np.array([0.9])
-        seg_result.metadata = [MaskMetadata()]
+        seg_result.metadata = [MaskMetadata(area=128 * 128, bbox=(0, 0, 128, 128), stability_score=0.9)]
 
         mock_pbr = MagicMock(spec=PBRTextures)
         mock_pbr.albedo = np.random.rand(128, 128, 3).astype(np.float32)
@@ -715,7 +715,7 @@ class TestSpatialAIPipelineE2E:
         mock_seg = MagicMock(spec=SegmentationResult)
         mock_seg.masks = [np.ones((256, 256), dtype=bool)]
         mock_seg.scores = np.array([0.9])
-        mock_seg.metadata = [MaskMetadata()]
+        mock_seg.metadata = [MaskMetadata(area=256 * 256, bbox=(0, 0, 256, 256), stability_score=0.9)]
 
         with (
             patch("transformation_portal.spatial_ai.orchestration.pipeline.LinearDecoder") as MockDecoder,
@@ -755,7 +755,7 @@ class TestSpatialAIPipelineE2E:
         mock_seg = MagicMock(spec=SegmentationResult)
         mock_seg.masks = [np.ones((128, 128), dtype=bool)]
         mock_seg.scores = np.array([0.9])
-        mock_seg.metadata = [MaskMetadata()]
+        mock_seg.metadata = [MaskMetadata(area=128 * 128, bbox=(0, 0, 128, 128), stability_score=0.9)]
 
         mock_pbr = MagicMock(spec=PBRTextures)
 
