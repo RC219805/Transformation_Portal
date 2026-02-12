@@ -6,6 +6,8 @@
 #
 accelerate==1.12.0
     # via -r requirements/ml.in
+annotated-doc==0.0.4
+    # via typer
 anyio==4.12.1
     # via httpx
 astroid==4.0.3
@@ -452,7 +454,7 @@ triton==3.6.0
     # via torch
 twine==4.0.2
     # via -r requirements/ci.in
-typer==0.21.1
+typer==0.23.0
     # via -r requirements/base.in
 types-pyyaml==6.0.12.20250915
     # via -r requirements/dev.in
@@ -463,7 +465,6 @@ typing-extensions==4.15.0
     #   huggingface-hub
     #   mypy
     #   torch
-    #   typer
 urllib3==2.6.3
     # via
     #   requests
