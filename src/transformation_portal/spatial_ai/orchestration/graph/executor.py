@@ -50,7 +50,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 from .artifact_store import ArtifactStore, ProvenanceMetadata
-from .execution_graph import ExecutionGraph, ExecutionPlan, GraphError, ResourceError
+from .execution_graph import ExecutionGraph, ExecutionPlan
 from .stage import Stage
 
 logger = logging.getLogger(__name__)
@@ -438,6 +438,10 @@ class Executor:
         # Get versions
         numpy_version = np.__version__
 
+        # Note: torch_version is obtained from context.config if provided by L2+ stages.
+        # L1 (Tier 1 core) has no ML dependencies, so torch is not imported here.
+        # Stages that use torch should include version in their config if provenance tracking is needed.
+
         return ProvenanceMetadata(
             cache_key=cache_key,
             stage_id=stage_id,
@@ -448,7 +452,7 @@ class Executor:
             hostname=platform.node(),
             python_version=sys.version,
             numpy_version=numpy_version,
-            torch_version=context.config.get("torch_version"),  # Get from config if provided
+            torch_version=context.config.get("torch_version"),
             device=context.device,
             model_repo_id=context.config.get("repo_id"),
             model_revision=context.config.get("revision"),

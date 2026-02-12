@@ -35,7 +35,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set
 
-from .stage import Stage, StageMetadata
+from .stage import Stage
 
 
 class GraphError(Exception):
