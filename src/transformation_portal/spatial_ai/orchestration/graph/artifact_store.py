@@ -254,56 +254,53 @@ class ArtifactStore:
         # Create lock file if it doesn't exist (idempotent)
         lock_path.touch(exist_ok=True)
 
-        # Open lock file
-        lock_file = open(lock_path, "r+")
-
-        try:
-            # Determine lock mode
-            if exclusive:
-                lock_mode = fcntl.LOCK_EX  # Exclusive (write) lock
-                lock_type = "exclusive"
-            else:
-                # Try shared (read) lock first
-                lock_mode = fcntl.LOCK_SH  # Shared (read) lock
-                lock_type = "shared"
-
-            # Acquire lock with timeout
-            start_time = time.time()
-            acquired = False
-
-            while not acquired:
-                try:
-                    # Try non-blocking lock
-                    fcntl.flock(lock_file.fileno(), lock_mode | fcntl.LOCK_NB)
-                    acquired = True
-                    logger.debug(f"Acquired {lock_type} lock for cache_key: {cache_key}")
-
-                except BlockingIOError:
-                    # Lock held by another process/thread
-                    elapsed = time.time() - start_time
-                    if elapsed >= self.lock_timeout_seconds:
-                        raise CacheLockTimeout(
-                            f"Could not acquire {lock_type} lock for cache_key {cache_key} "
-                            f"within {self.lock_timeout_seconds}s timeout. "
-                            "Another process may be holding the lock."
-                        )
-
-                    # Wait a bit before retrying (exponential backoff)
-                    wait_time = min(0.1 * (1.5 ** int(elapsed * 10)), 1.0)
-                    time.sleep(wait_time)
-
-            # Lock acquired, yield control to caller
-            yield
-
-        finally:
-            # Release lock and close file
+        # Open lock file with context manager to ensure cleanup
+        with open(lock_path, "r+") as lock_file:
             try:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-                logger.debug(f"Released {lock_type} lock for cache_key: {cache_key}")
-            except Exception as e:
-                logger.warning(f"Error releasing lock for {cache_key}: {e}")
+                # Determine lock mode
+                if exclusive:
+                    lock_mode = fcntl.LOCK_EX  # Exclusive (write) lock
+                    lock_type = "exclusive"
+                else:
+                    # Try shared (read) lock first
+                    lock_mode = fcntl.LOCK_SH  # Shared (read) lock
+                    lock_type = "shared"
+
+                # Acquire lock with timeout
+                start_time = time.time()
+                acquired = False
+
+                while not acquired:
+                    try:
+                        # Try non-blocking lock
+                        fcntl.flock(lock_file.fileno(), lock_mode | fcntl.LOCK_NB)
+                        acquired = True
+                        logger.debug(f"Acquired {lock_type} lock for cache_key: {cache_key}")
+
+                    except BlockingIOError:
+                        # Lock held by another process/thread
+                        elapsed = time.time() - start_time
+                        if elapsed >= self.lock_timeout_seconds:
+                            raise CacheLockTimeout(
+                                f"Could not acquire {lock_type} lock for cache_key {cache_key} "
+                                f"within {self.lock_timeout_seconds}s timeout. "
+                                "Another process may be holding the lock."
+                            )
+
+                        # Wait a bit before retrying (exponential backoff)
+                        wait_time = min(0.1 * (1.5 ** int(elapsed * 10)), 1.0)
+                        time.sleep(wait_time)
+
+                # Lock acquired, yield control to caller
+                yield
+
             finally:
-                lock_file.close()
+                # Release lock (file close handled by context manager)
+                try:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                    logger.debug(f"Released {lock_type} lock for cache_key: {cache_key}")
+                except Exception as e:
+                    logger.warning(f"Error releasing lock for {cache_key}: {e}")
 
     def exists(self, cache_key: str) -> bool:
         """Check if artifact exists in cache.
