@@ -5,21 +5,21 @@ No model downloads, no network calls - pure performance measurement infrastructu
 
 Measures:
 - p50/p95 runtime per image and per megapixel
-- Peak memory usage (RSS baseline + incremental)
+- Post-processing memory usage (RSS baseline + incremental)
 - Output invariants (dtype, range, shape, no NaNs/inf)
 
 Success Criteria:
 - Runs in <10s in CI
 - Produces machine-readable output for regression tracking
-- All tests fully offline with mocked ML dependencies
+- All tests fully offline with synthetic backend (no mocks needed)
 """
 
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
-from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -77,57 +77,11 @@ def synthetic_images(tmp_path_factory):
 
 
 @pytest.fixture
-def mock_depth_backend():
-    """Mock depth backend to avoid model downloads and inference.
-
-    Generates deterministic depth maps using vectorized NumPy operations.
-    """
-    with patch("transformation_portal.depth.backends.da3.DA3Backend.compute") as mock_compute:
-
-        def _mock_compute(image, **kwargs):
-            """Generate realistic mock depth result with proper dimensions."""
-            from transformation_portal.depth.backends.protocol import DepthResult
-
-            # Get image dimensions
-            if hasattr(image, "size"):
-                width, height = image.size
-            elif hasattr(image, "shape"):
-                height, width = image.shape[:2]
-            else:
-                height, width = 512, 512
-
-            # Vectorized depth pattern generation (distance from center)
-            x_coords = np.arange(width) - width / 2
-            y_coords = np.arange(height) - height / 2
-            xx, yy = np.meshgrid(x_coords, y_coords)
-            dist = np.sqrt(xx * xx + yy * yy)
-            depth_map = np.clip(dist / (max(width, height) / 2), 0.0, 1.0).astype(np.float32)
-
-            original_image = np.array(image) if hasattr(image, "mode") else image
-
-            return DepthResult(
-                depth_map=depth_map,
-                original_image=original_image,
-                metadata={"model": "mock_da3", "backend": "test"},
-                depth_units="relative",
-                focal_length_px=None,
-                field_of_view_deg=None,
-                backend_id="mock_da3",
-                device="cpu",
-                dtype="float32",
-                input_size=(height, width),
-                warnings=[],
-            )
-
-        mock_compute.side_effect = _mock_compute
-        yield mock_compute
-
-
-@pytest.fixture
 def benchmark_config():
     """Fast config for smoke benchmarks.
 
     Explicitly pins synthetic backend for deterministic, reproducible measurements.
+    No mocking needed - synthetic backend provides offline deterministic depth.
     """
     return EnhanceConfig(
         model_variant=ModelVariant.METRIC_LARGE,
@@ -145,22 +99,19 @@ def benchmark_config():
 
 
 def measure_runtime_stats(runtimes_seconds):
-    """Compute p50, p95, min, max from runtime samples."""
+    """Compute p50, p95, min, max from runtime samples using NumPy percentiles."""
     if not runtimes_seconds:
         return {"p50": 0, "p95": 0, "min": 0, "max": 0, "mean": 0}
 
-    sorted_times = sorted(runtimes_seconds)
-    n = len(sorted_times)
-
-    p50_idx = int(n * 0.50)
-    p95_idx = int(n * 0.95)
+    times_array = np.array(runtimes_seconds)
+    p50, p95 = np.percentile(times_array, [50, 95])
 
     return {
-        "p50": sorted_times[p50_idx] if n > 0 else 0,
-        "p95": sorted_times[p95_idx] if p95_idx < n else sorted_times[-1],
-        "min": sorted_times[0],
-        "max": sorted_times[-1],
-        "mean": sum(sorted_times) / n,
+        "p50": p50,
+        "p95": p95,
+        "min": float(np.min(times_array)),
+        "max": float(np.max(times_array)),
+        "mean": float(np.mean(times_array)),
     }
 
 
@@ -195,7 +146,7 @@ class TestLuxDepthV3PerformanceBaseline:
     """Baseline performance benchmarks for lux_depth_v3 (no optimizations yet)."""
 
     @pytest.mark.benchmark
-    def test_single_image_baseline_runtime(self, tmp_path, synthetic_images, mock_depth_backend, benchmark_config):
+    def test_single_image_baseline_runtime(self, tmp_path, synthetic_images, benchmark_config):
         """Measure baseline runtime for single image processing.
 
         Measures cold-start performance (new orchestrator per run) to capture
@@ -217,9 +168,9 @@ class TestLuxDepthV3PerformanceBaseline:
             output_dir_run = tmp_path / f"output_run_{i}"
             orch = EnhanceOrchestrator(config=benchmark_config, output_root=output_dir_run)
 
-            start = time.time()
+            start = time.perf_counter()
             result = orch.enhance_image(image_input, input_root=tmp_path)
-            elapsed = time.time() - start
+            elapsed = time.perf_counter() - start
 
             runtimes.append(elapsed)
 
@@ -240,7 +191,7 @@ class TestLuxDepthV3PerformanceBaseline:
         print(f"  Per MP: {runtime_per_mp*1000:.1f}ms/MP")
         print(f"{'='*60}\n")
 
-        # Store baseline for future comparison (optional)
+        # Store baseline for future comparison
         baseline_json = {
             "test": "single_image_baseline",
             "fixture": "512x512",
@@ -250,9 +201,9 @@ class TestLuxDepthV3PerformanceBaseline:
             "per_mp_ms": runtime_per_mp * 1000,
         }
 
-        # Write to artifacts if available
-        artifacts_dir = tmp_path / "benchmark_results"
-        artifacts_dir.mkdir(exist_ok=True)
+        # Write to artifacts (env-configurable location for baseline persistence)
+        artifacts_dir = Path(os.environ.get("BENCHMARK_ARTIFACTS_DIR", tmp_path / "benchmark_results"))
+        artifacts_dir.mkdir(parents=True, exist_ok=True)
         with open(artifacts_dir / "baseline_single_image.json", "w") as f:
             json.dump(baseline_json, f, indent=2)
 
@@ -264,7 +215,7 @@ class TestLuxDepthV3PerformanceBaseline:
             print("    This may indicate CI runner performance issues, not code regression")
 
     @pytest.mark.benchmark
-    def test_batch_processing_baseline(self, tmp_path, synthetic_images, mock_depth_backend, benchmark_config):
+    def test_batch_processing_baseline(self, tmp_path, synthetic_images, benchmark_config):
         """Measure baseline runtime for batch processing (multiple images).
 
         Tests sequential processing of multiple images with single orchestrator
@@ -276,12 +227,12 @@ class TestLuxDepthV3PerformanceBaseline:
         # Process all fixtures in batch
         image_inputs = [ImageInput(path=fix["path"]) for fix in synthetic_images]
 
-        start = time.time()
+        start = time.perf_counter()
         results = []
         for img_input in image_inputs:
             result = orchestrator.enhance_image(img_input, input_root=tmp_path)
             results.append(result)
-        batch_elapsed = time.time() - start
+        batch_elapsed = time.perf_counter() - start
 
         # Verify all succeeded
         assert all(r["status"] == "ok" for r in results), "Some images failed processing"
@@ -311,8 +262,8 @@ class TestLuxDepthV3PerformanceBaseline:
             "per_mp_ms": per_mp * 1000,
         }
 
-        artifacts_dir = tmp_path / "benchmark_results"
-        artifacts_dir.mkdir(exist_ok=True)
+        artifacts_dir = Path(os.environ.get("BENCHMARK_ARTIFACTS_DIR", tmp_path / "benchmark_results"))
+        artifacts_dir.mkdir(parents=True, exist_ok=True)
         with open(artifacts_dir / "baseline_batch.json", "w") as f:
             json.dump(baseline_json, f, indent=2)
 
@@ -321,7 +272,7 @@ class TestLuxDepthV3PerformanceBaseline:
             print(f"⚠️  Warning: batch processing unusually slow: {batch_elapsed*1000:.1f}ms (threshold: 5000ms)")
 
     @pytest.mark.benchmark
-    def test_output_invariants_smoke(self, tmp_path, synthetic_images, mock_depth_backend, benchmark_config):
+    def test_output_invariants_smoke(self, tmp_path, synthetic_images, benchmark_config):
         """Verify output invariants across all fixtures."""
         output_dir = tmp_path / "output_invariants"
         orchestrator = EnhanceOrchestrator(config=benchmark_config, output_root=output_dir)
@@ -332,7 +283,7 @@ class TestLuxDepthV3PerformanceBaseline:
 
             assert result["status"] == "ok", f"Processing failed for {fixture['path']}"
 
-            # Load depth output
+            # Load depth output and validate invariants
             depth_path = result.get("depth_path")
             if depth_path and Path(depth_path).exists():
                 # Check if it's a numpy file or PNG
@@ -340,28 +291,35 @@ class TestLuxDepthV3PerformanceBaseline:
                     depth_map = np.load(depth_path)
                     validate_output_invariants(depth_map)
                 elif depth_path.endswith(".png"):
-                    # PNG depth is quantized uint16
-                    depth_img = Image.open(depth_path)
-                    depth_map = np.array(depth_img)
+                    # PNG depth is quantized uint16 - use context manager to close file
+                    with Image.open(depth_path) as depth_img:
+                        depth_map = np.array(depth_img)
                     validate_output_invariants(depth_map)
 
-            # Verify output dimensions match input
+            # Verify output dimensions match input (applies to both .npy and .png)
             expected_height = fixture["height"]
             expected_width = fixture["width"]
 
-            # Depth map should preserve dimensions
             if depth_path and Path(depth_path).exists():
+                # Load depth map based on format
                 if depth_path.endswith(".npy"):
                     depth_map = np.load(depth_path)
-                    assert depth_map.shape == (
-                        expected_height,
-                        expected_width,
-                    ), f"Depth shape mismatch: {depth_map.shape} != ({expected_height}, {expected_width})"
+                elif depth_path.endswith(".png"):
+                    with Image.open(depth_path) as depth_img:
+                        depth_map = np.array(depth_img)
+                else:
+                    continue  # Skip unknown formats
+
+                # Assert dimensions for both formats
+                assert depth_map.shape == (
+                    expected_height,
+                    expected_width,
+                ), f"Depth shape mismatch: {depth_map.shape} != ({expected_height}, {expected_width})"
 
         print(f"✓ Output invariants verified for {len(synthetic_images)} fixtures")
 
     @pytest.mark.benchmark
-    def test_memory_post_processing_baseline(self, tmp_path, synthetic_images, mock_depth_backend, benchmark_config):
+    def test_memory_post_processing_baseline(self, tmp_path, synthetic_images, benchmark_config):
         """Establish baseline for post-processing memory usage (RSS after completion).
 
         Note: Samples RSS after processing completes, not peak during processing.
@@ -373,9 +331,9 @@ class TestLuxDepthV3PerformanceBaseline:
         except ImportError:
             pytest.skip("psutil not available (requires ML dependencies)")
 
-        import os
+        import os as os_module
 
-        process = psutil.Process(os.getpid())
+        process = psutil.Process(os_module.getpid())
 
         # Measure baseline RSS before processing
         baseline_rss_mb = process.memory_info().rss / 1024 / 1024
@@ -414,8 +372,8 @@ class TestLuxDepthV3PerformanceBaseline:
             "per_mp_mb": incremental_mb / fixture["megapixels"],
         }
 
-        artifacts_dir = tmp_path / "benchmark_results"
-        artifacts_dir.mkdir(exist_ok=True)
+        artifacts_dir = Path(os.environ.get("BENCHMARK_ARTIFACTS_DIR", tmp_path / "benchmark_results"))
+        artifacts_dir.mkdir(parents=True, exist_ok=True)
         with open(artifacts_dir / "baseline_memory.json", "w") as f:
             json.dump(baseline_json, f, indent=2)
 
@@ -424,7 +382,7 @@ class TestLuxDepthV3PerformanceBaseline:
             print(f"⚠️  Warning: memory usage unusually high: {incremental_mb:.1f}MB")
 
     @pytest.mark.benchmark
-    def test_no_model_reinitialization_guard(self, tmp_path, synthetic_images, mock_depth_backend, benchmark_config):
+    def test_no_model_reinitialization_guard(self, tmp_path, synthetic_images, benchmark_config):
         """Guard against accidental repeated model loads (baseline check)."""
         output_dir = tmp_path / "output_reinit_check"
         orchestrator = EnhanceOrchestrator(config=benchmark_config, output_root=output_dir)
@@ -436,7 +394,7 @@ class TestLuxDepthV3PerformanceBaseline:
             assert result["status"] == "ok"
 
         # Note: This is a smoke test - actual model singleton checks come in L1.0
-        # With synthetic fallback, the mock won't be called, so just verify processing succeeded
+        # With synthetic backend, no real ML models are loaded
         print(f"✓ Processed {2} images successfully (reinitialization guard placeholder)")
         print("  Note: Full backend singleton validation will be implemented in L1.0 (Backend Warm Pool)")
 

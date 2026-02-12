@@ -28,7 +28,19 @@ pytest tests/benchmarks/test_lux_depth_v3_perf_smoke.py::TestLuxDepthV3Performan
 pytest tests/ -v -m "not benchmark"
 ```
 
-**Note:** Currently, benchmarks ARE included in PR gating CI (core CI runs `"not ml and not slow"`, which does NOT exclude `benchmark`). This means benchmarks run on every PR but with relaxed assertions to avoid runner variance issues.
+## CI Execution
+
+**Important:** Benchmarks ARE currently included in PR gating CI. 
+
+Core CI runs with marker expression: `"not ml and not slow"`, which does NOT exclude `benchmark`. This means:
+- ✅ Benchmarks run on every PR for fast feedback
+- ✅ Relaxed assertions (warnings instead of hard failures) handle runner variance
+- ✅ Backend pinned to `synthetic` for offline deterministic execution
+- ✅ No model downloads or network calls
+
+**Future consideration:** If benchmarks become too slow or flaky, they can be moved to a dedicated performance workflow by either:
+1. Adding `@pytest.mark.slow` to benchmark tests, or
+2. Updating CI marker expression to `"not ml and not slow and not benchmark"`
 
 ## Benchmark Tests
 
@@ -44,7 +56,7 @@ pytest tests/ -v -m "not benchmark"
 - `test_no_model_reinitialization_guard`: Placeholder for backend singleton checks (L1.0)
 - `test_p95_latency_regression_threshold`: Regression guard (to be populated in L1.x)
 
-**Execution Time:** <3 seconds (target: <10s)
+**Execution Time:** <2 seconds (target: <10s)
 
 **Dependencies:**
 - No model downloads (uses pinned synthetic backend)
@@ -57,7 +69,10 @@ pytest tests/ -v -m "not benchmark"
 - **Steady-state tests**: Reuses orchestrator across images (captures runtime efficiency)
 - **Backend pinning**: Explicitly uses `depth_backend="synthetic"` for reproducibility
 - **Fixture generation**: Vectorized NumPy (avoids Python loop contamination)
+- **Timing**: Uses `time.perf_counter()` for monotonic high-resolution measurements
+- **Percentiles**: Computed with `np.percentile()` for accuracy
 - **Assertions**: Relaxed warnings instead of hard failures (prevents CI runner variance issues)
+- **Artifact persistence**: Supports `BENCHMARK_ARTIFACTS_DIR` env var for cross-run baseline storage
 
 **Known Limitations:**
 - Memory test measures post-processing RSS, not true peak during execution
