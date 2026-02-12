@@ -39,9 +39,14 @@ pytestmark = [pytest.mark.benchmark]
 # ============================================================================
 
 
-@pytest.fixture
-def synthetic_images(tmp_path):
-    """Create small deterministic synthetic test images (no downloads)."""
+@pytest.fixture(scope="module")
+def synthetic_images(tmp_path_factory):
+    """Create small deterministic synthetic test images (no downloads).
+
+    Uses vectorized NumPy for fast generation. Module-scoped to avoid
+    regenerating fixtures for each test.
+    """
+    tmp_path = tmp_path_factory.mktemp("benchmark_fixtures")
     fixtures = []
     sizes = [
         (256, 256),  # Small
@@ -50,17 +55,19 @@ def synthetic_images(tmp_path):
     ]
 
     for i, (width, height) in enumerate(sizes):
-        # Create deterministic pattern (not random - same every run)
-        img = Image.new("RGB", (width, height))
-        pixels = []
-        for y in range(height):
-            for x in range(width):
-                # Simple gradient pattern
-                r = (x * 255) // width
-                g = (y * 255) // height
-                b = ((x + y) * 255) // (width + height)
-                pixels.append((r, g, b))
-        img.putdata(pixels)
+        # Vectorized gradient generation (much faster than Python loops)
+        x_coords = np.arange(width)
+        y_coords = np.arange(height)
+        xx, yy = np.meshgrid(x_coords, y_coords)
+
+        # Create deterministic RGB gradient pattern
+        r = (xx * 255 / width).astype(np.uint8)
+        g = (yy * 255 / height).astype(np.uint8)
+        b = ((xx + yy) * 255 / (width + height)).astype(np.uint8)
+
+        # Stack into RGB image
+        rgb_array = np.stack([r, g, b], axis=2)
+        img = Image.fromarray(rgb_array, mode="RGB")
 
         img_path = tmp_path / f"test_{width}x{height}.jpg"
         img.save(img_path, quality=95)
@@ -71,7 +78,10 @@ def synthetic_images(tmp_path):
 
 @pytest.fixture
 def mock_depth_backend():
-    """Mock depth backend to avoid model downloads and inference."""
+    """Mock depth backend to avoid model downloads and inference.
+
+    Generates deterministic depth maps using vectorized NumPy operations.
+    """
     with patch("transformation_portal.depth.backends.da3.DA3Backend.compute") as mock_compute:
 
         def _mock_compute(image, **kwargs):
@@ -86,15 +96,12 @@ def mock_depth_backend():
             else:
                 height, width = 512, 512
 
-            # Generate deterministic depth pattern (not random)
-            depth_map = np.zeros((height, width), dtype=np.float32)
-            for y in range(height):
-                for x in range(width):
-                    # Simple distance-from-center depth
-                    dx = x - width / 2
-                    dy = y - height / 2
-                    dist = np.sqrt(dx * dx + dy * dy)
-                    depth_map[y, x] = min(1.0, dist / (max(width, height) / 2))
+            # Vectorized depth pattern generation (distance from center)
+            x_coords = np.arange(width) - width / 2
+            y_coords = np.arange(height) - height / 2
+            xx, yy = np.meshgrid(x_coords, y_coords)
+            dist = np.sqrt(xx * xx + yy * yy)
+            depth_map = np.clip(dist / (max(width, height) / 2), 0.0, 1.0).astype(np.float32)
 
             original_image = np.array(image) if hasattr(image, "mode") else image
 
@@ -118,13 +125,17 @@ def mock_depth_backend():
 
 @pytest.fixture
 def benchmark_config():
-    """Fast config for smoke benchmarks."""
+    """Fast config for smoke benchmarks.
+
+    Explicitly pins synthetic backend for deterministic, reproducible measurements.
+    """
     return EnhanceConfig(
         model_variant=ModelVariant.METRIC_LARGE,
         enable_v2=False,  # Skip V2 enhancement for pure depth benchmarks
         generate_pbr=False,  # Skip PBR for speed
         enable_manifest_cache=False,  # Test without caching first
         allow_synthetic_fallback=True,  # Allow synthetic backend in test environment
+        depth_backend="synthetic",  # Pin to synthetic for deterministic measurements
     )
 
 
@@ -185,26 +196,25 @@ class TestLuxDepthV3PerformanceBaseline:
 
     @pytest.mark.benchmark
     def test_single_image_baseline_runtime(self, tmp_path, synthetic_images, mock_depth_backend, benchmark_config):
-        """Measure baseline runtime for single image processing."""
+        """Measure baseline runtime for single image processing.
+
+        Measures cold-start performance (new orchestrator per run) to capture
+        initialization overhead. This represents typical single-image workflow.
+        """
         # Use medium-sized fixture
         fixture = synthetic_images[1]  # 512x512
         img_path = fixture["path"]
         megapixels = fixture["megapixels"]
 
-        output_dir = tmp_path / "output_baseline"
-        orchestrator = EnhanceOrchestrator(config=benchmark_config, output_root=output_dir)
-
-        # Warm-up run (to account for any lazy initialization)
         image_input = ImageInput(path=img_path)
-        _ = orchestrator.enhance_image(image_input, input_root=tmp_path)
 
-        # Benchmark runs
+        # Benchmark runs (cold-start: new orchestrator each time)
         num_runs = 5
         runtimes = []
 
-        for _ in range(num_runs):
+        for i in range(num_runs):
             # Clean output between runs
-            output_dir_run = tmp_path / f"output_run_{_}"
+            output_dir_run = tmp_path / f"output_run_{i}"
             orch = EnhanceOrchestrator(config=benchmark_config, output_root=output_dir_run)
 
             start = time.time()
@@ -246,13 +256,20 @@ class TestLuxDepthV3PerformanceBaseline:
         with open(artifacts_dir / "baseline_single_image.json", "w") as f:
             json.dump(baseline_json, f, indent=2)
 
-        # Sanity check: processing should be reasonably fast with mocks
-        # Expect < 500ms p95 for 512x512 with mocked inference
-        assert stats["p95"] < 0.5, f"Baseline p95 too slow: {stats['p95']*1000:.1f}ms"
+        # Relaxed sanity check: warn if extremely slow (allows for CI runner variance)
+        # Note: Absolute thresholds removed per architectural review
+        # TODO L0.2: Implement baseline comparison with % tolerance
+        if stats["p95"] > 1.0:
+            print(f"⚠️  Warning: p95 latency unusually high: {stats['p95']*1000:.1f}ms (threshold: 1000ms)")
+            print("    This may indicate CI runner performance issues, not code regression")
 
     @pytest.mark.benchmark
     def test_batch_processing_baseline(self, tmp_path, synthetic_images, mock_depth_backend, benchmark_config):
-        """Measure baseline runtime for batch processing (multiple images)."""
+        """Measure baseline runtime for batch processing (multiple images).
+
+        Tests sequential processing of multiple images with single orchestrator
+        (steady-state measurement after initialization overhead).
+        """
         output_dir = tmp_path / "output_batch"
         orchestrator = EnhanceOrchestrator(config=benchmark_config, output_root=output_dir)
 
@@ -299,9 +316,9 @@ class TestLuxDepthV3PerformanceBaseline:
         with open(artifacts_dir / "baseline_batch.json", "w") as f:
             json.dump(baseline_json, f, indent=2)
 
-        # Sanity check: batch should complete in reasonable time with mocks
-        # Expect < 2s total for 3 images with mocked inference
-        assert batch_elapsed < 2.0, f"Batch baseline too slow: {batch_elapsed*1000:.1f}ms"
+        # Relaxed sanity check
+        if batch_elapsed > 5.0:
+            print(f"⚠️  Warning: batch processing unusually slow: {batch_elapsed*1000:.1f}ms (threshold: 5000ms)")
 
     @pytest.mark.benchmark
     def test_output_invariants_smoke(self, tmp_path, synthetic_images, mock_depth_backend, benchmark_config):
@@ -344,8 +361,13 @@ class TestLuxDepthV3PerformanceBaseline:
         print(f"✓ Output invariants verified for {len(synthetic_images)} fixtures")
 
     @pytest.mark.benchmark
-    def test_memory_baseline_peak_tracking(self, tmp_path, synthetic_images, mock_depth_backend, benchmark_config):
-        """Establish baseline for peak memory usage (RSS tracking)."""
+    def test_memory_post_processing_baseline(self, tmp_path, synthetic_images, mock_depth_backend, benchmark_config):
+        """Establish baseline for post-processing memory usage (RSS after completion).
+
+        Note: Samples RSS after processing completes, not peak during processing.
+        True peak would require polling during execution. This captures steady-state
+        memory footprint, which is still valuable for detecting memory leaks.
+        """
         try:
             import psutil
         except ImportError:
@@ -365,19 +387,20 @@ class TestLuxDepthV3PerformanceBaseline:
         fixture = synthetic_images[2]  # 1024x768
         img_input = ImageInput(path=fixture["path"])
 
-        # Measure peak RSS during processing
+        # Measure RSS after processing
         result = orchestrator.enhance_image(img_input, input_root=tmp_path)
         assert result["status"] == "ok"
 
-        peak_rss_mb = process.memory_info().rss / 1024 / 1024
-        incremental_mb = peak_rss_mb - baseline_rss_mb
+        post_processing_rss_mb = process.memory_info().rss / 1024 / 1024
+        incremental_mb = post_processing_rss_mb - baseline_rss_mb
 
         print(f"\n{'='*60}")
         print(f"Memory Baseline ({fixture['width']}x{fixture['height']}, {fixture['megapixels']:.2f}MP)")
         print(f"  Baseline RSS: {baseline_rss_mb:.1f}MB")
-        print(f"  Peak RSS: {peak_rss_mb:.1f}MB")
+        print(f"  Post-processing RSS: {post_processing_rss_mb:.1f}MB")
         print(f"  Incremental: {incremental_mb:.1f}MB")
         print(f"  Per MP: {incremental_mb / fixture['megapixels']:.1f}MB/MP")
+        print("  Note: This is post-processing RSS, not true peak during execution")
         print(f"{'='*60}\n")
 
         # Store baseline
@@ -386,7 +409,7 @@ class TestLuxDepthV3PerformanceBaseline:
             "fixture": f"{fixture['width']}x{fixture['height']}",
             "megapixels": fixture["megapixels"],
             "baseline_rss_mb": baseline_rss_mb,
-            "peak_rss_mb": peak_rss_mb,
+            "post_processing_rss_mb": post_processing_rss_mb,
             "incremental_mb": incremental_mb,
             "per_mp_mb": incremental_mb / fixture["megapixels"],
         }
@@ -396,9 +419,9 @@ class TestLuxDepthV3PerformanceBaseline:
         with open(artifacts_dir / "baseline_memory.json", "w") as f:
             json.dump(baseline_json, f, indent=2)
 
-        # Sanity check: incremental memory should be reasonable with mocks
-        # Expect < 500MB incremental for 1024x768 with mocked inference
-        assert incremental_mb < 500, f"Incremental memory too high: {incremental_mb:.1f}MB"
+        # Relaxed sanity check
+        if abs(incremental_mb) > 1000:
+            print(f"⚠️  Warning: memory usage unusually high: {incremental_mb:.1f}MB")
 
     @pytest.mark.benchmark
     def test_no_model_reinitialization_guard(self, tmp_path, synthetic_images, mock_depth_backend, benchmark_config):

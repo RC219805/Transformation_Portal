@@ -7,9 +7,9 @@ as part of the v2.1 Optimization Roadmap.
 
 The benchmark suite provides:
 - **Baseline performance measurement** (p50/p95 runtime, throughput)
-- **Memory tracking** (peak RSS, incremental usage)
+- **Memory tracking** (post-processing RSS, incremental usage)
 - **Output invariants validation** (dtype, range, shape checks)
-- **Regression detection** (automated threshold checks)
+- **Regression detection** (automated threshold checks - planned L0.2)
 
 ## Running Benchmarks
 
@@ -28,6 +28,8 @@ pytest tests/benchmarks/test_lux_depth_v3_perf_smoke.py::TestLuxDepthV3Performan
 pytest tests/ -v -m "not benchmark"
 ```
 
+**Note:** Currently, benchmarks ARE included in PR gating CI (core CI runs `"not ml and not slow"`, which does NOT exclude `benchmark`). This means benchmarks run on every PR but with relaxed assertions to avoid runner variance issues.
+
 ## Benchmark Tests
 
 ### `test_lux_depth_v3_perf_smoke.py`
@@ -35,20 +37,33 @@ pytest tests/ -v -m "not benchmark"
 **Purpose:** Fast smoke tests for performance baseline and regression detection.
 
 **Tests:**
-- `test_single_image_baseline_runtime`: Measures p50/p95 runtime for single images
-- `test_batch_processing_baseline`: Measures batch throughput
+- `test_single_image_baseline_runtime`: Measures p50/p95 runtime for single images (cold-start)
+- `test_batch_processing_baseline`: Measures batch throughput (steady-state)
 - `test_output_invariants_smoke`: Validates output correctness
-- `test_memory_baseline_peak_tracking`: Tracks peak memory usage (requires psutil, skips in core CI)
+- `test_memory_post_processing_baseline`: Tracks post-processing RSS (requires psutil, skips in core CI)
 - `test_no_model_reinitialization_guard`: Placeholder for backend singleton checks (L1.0)
 - `test_p95_latency_regression_threshold`: Regression guard (to be populated in L1.x)
 
 **Execution Time:** <3 seconds (target: <10s)
 
 **Dependencies:**
-- No model downloads (uses synthetic backend fallback)
+- No model downloads (uses pinned synthetic backend)
 - No network calls
-- Fully deterministic synthetic fixtures
+- Fully deterministic vectorized fixtures (NumPy-based)
 - Memory tracking test requires `psutil` (skips gracefully if unavailable in core CI)
+
+**Measurement Methodology:**
+- **Cold-start tests**: New orchestrator per run (captures initialization overhead)
+- **Steady-state tests**: Reuses orchestrator across images (captures runtime efficiency)
+- **Backend pinning**: Explicitly uses `depth_backend="synthetic"` for reproducibility
+- **Fixture generation**: Vectorized NumPy (avoids Python loop contamination)
+- **Assertions**: Relaxed warnings instead of hard failures (prevents CI runner variance issues)
+
+**Known Limitations:**
+- Memory test measures post-processing RSS, not true peak during execution
+- Baseline persistence not yet implemented (each test writes to tmp_path)
+- Absolute time assertions removed per architectural review
+- Cross-run regression detection planned for L0.2
 
 ## Optimization Roadmap Integration
 
