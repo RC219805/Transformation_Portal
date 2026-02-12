@@ -306,21 +306,25 @@ class ExecutionGraph:
 
         Algorithm:
         1. Compute in-degree for each node (count unique upstream stages)
-        2. Start with nodes having in-degree 0 (no dependencies)
-        3. Remove nodes and update in-degrees until graph is empty
-        4. If graph not empty, there's a cycle
+        2. Build adjacency list (upstream → downstream mapping)
+        3. Start with nodes having in-degree 0 (no dependencies)
+        4. Remove nodes and update in-degrees until graph is empty
+        5. If graph not empty, there's a cycle
 
         Design notes:
         - Kahn's algorithm is O(V + E) where V = stages, E = dependencies.
         - Detects cycles by checking if all nodes were processed.
         - Deterministic (stable sort order for nodes with same in-degree).
-        - Correctness: Counts unique upstream stages, not individual inputs.
+        - Correctness: Symmetric in-degree math (increment and decrement both count unique upstream stages).
         """
         if not self._stages:
             return []
 
         # Compute in-degrees (count unique upstream stages per node)
         in_degree: Dict[str, int] = {sid: 0 for sid in self._stages}
+
+        # Build adjacency list for efficient decrement (upstream → set of downstream nodes)
+        adjacency: Dict[str, Set[str]] = {sid: set() for sid in self._stages}
 
         for node in self._stages.values():
             # Track unique upstream stages to avoid double-counting
@@ -338,6 +342,10 @@ class ExecutionGraph:
             # In-degree is number of unique upstream stages
             in_degree[node.stage_id] = len(upstream_stages)
 
+            # Build adjacency: upstream_stage → downstream_nodes
+            for upstream_stage in upstream_stages:
+                adjacency[upstream_stage].add(node.stage_id)
+
         # Queue of stages with no dependencies
         queue = [sid for sid, deg in sorted(in_degree.items()) if deg == 0]
         result = []
@@ -347,16 +355,14 @@ class ExecutionGraph:
             stage_id = queue.pop(0)
             result.append(stage_id)
 
-            # Update in-degrees for downstream stages
-            for other_id, other_node in self._stages.items():
-                for source_ref in other_node.inputs.values():
-                    source_stage = source_ref.split(".")[0]
-                    if source_stage == stage_id:
-                        in_degree[other_id] -= 1
-                        if in_degree[other_id] == 0:
-                            # Maintain deterministic order
-                            queue.append(other_id)
-                            queue.sort()
+            # Decrement in-degree for downstream nodes (EXACTLY ONCE per downstream)
+            # This is symmetric with the increment logic above
+            for downstream_id in adjacency[stage_id]:
+                in_degree[downstream_id] -= 1
+                if in_degree[downstream_id] == 0:
+                    # Maintain deterministic order
+                    queue.append(downstream_id)
+                    queue.sort()
 
         # Check for cycles
         if len(result) != len(self._stages):

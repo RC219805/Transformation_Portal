@@ -238,13 +238,14 @@ class ArtifactStore:
             provenance: Provenance metadata.
 
         Raises:
-            ValueError: If artifact contains non-serializable data.
+            ValueError: If artifact contains non-serializable data or object arrays.
 
         Design notes:
         - Atomic write (temp file + fsync + rename).
         - Stores artifact as .npz (NumPy compressed archive).
         - Stores provenance as .json sidecar.
         - Creates two-level directory hierarchy (first 2 hex chars).
+        - SECURITY: Rejects object dtype arrays (require pickle deserialization).
         """
         artifact_path = self._artifact_path(cache_key)
         provenance_path = self._provenance_path(cache_key)
@@ -252,23 +253,34 @@ class ArtifactStore:
         # Create directory
         artifact_path.parent.mkdir(parents=True, exist_ok=True)
 
+        # Validate and convert artifacts BEFORE entering try/except
+        # This ensures dtype validation errors propagate with clear messages
+        np_dict: Dict[str, np.ndarray] = {}
+        for key, value in artifact.items():
+            # Convert to numpy array (let NumPy infer dtype)
+            if isinstance(value, np.ndarray):
+                arr = value
+            else:
+                # Let NumPy infer dtype (will be numeric, bool, or unicode for homogeneous data)
+                arr = np.array(value)
+
+            # CRITICAL: Reject object dtype (security + correctness invariant)
+            # Object arrays require pickle deserialization and are not permitted.
+            # This prevents runtime failures with allow_pickle=False in load().
+            if arr.dtype == np.dtype("object"):
+                raise ValueError(
+                    f"Artifact value for key '{key}' produced dtype=object. "
+                    "Object arrays require pickle deserialization and are not permitted. "
+                    "Supported types: numeric arrays, bool arrays, string arrays, scalars."
+                )
+
+            np_dict[key] = arr
+
         # Atomic write: temp file + rename
         try:
             # Write artifact (NumPy archive)
             with tempfile.NamedTemporaryFile(mode="wb", dir=artifact_path.parent, delete=False, suffix=".npz") as tmp_artifact:
                 tmp_artifact_path = Path(tmp_artifact.name)
-                # Convert dict to NumPy arrays
-                np_dict = {}
-                for key, value in artifact.items():
-                    if isinstance(value, np.ndarray):
-                        np_dict[key] = value
-                    elif isinstance(value, (list, tuple)):
-                        # Convert lists to arrays
-                        np_dict[key] = np.array(value, dtype=object)
-                    else:
-                        # Store scalars as 0-d arrays
-                        np_dict[key] = np.array(value)
-
                 np.savez_compressed(tmp_artifact, **np_dict)
                 tmp_artifact.flush()
                 os.fsync(tmp_artifact.fileno())

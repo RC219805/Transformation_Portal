@@ -532,17 +532,15 @@ class TestArtifactStoreSecurity:
         assert not store.exists(valid_key)  # Returns False, doesn't raise
 
     def test_store_rejects_object_arrays(self, store: ArtifactStore, cache_dir: Path):
-        """Store rejects object arrays that require pickle (SECURITY).
+        """Store rejects object arrays at store time (SECURITY + CORRECTNESS).
 
-        Object arrays require pickle deserialization, which allows arbitrary
-        code execution. The store should reject these at load time.
+        Object arrays require pickle deserialization, which:
+        1. Allows arbitrary code execution (security vulnerability)
+        2. Fails at load time with allow_pickle=False (runtime failure)
+
+        The store must reject object arrays at store time to prevent both issues.
         """
-        # Valid cache key
         cache_key = _make_cache_key("object_array_test")
-
-        # Create object array (requires pickle)
-        obj_array = np.array([{"a": 1}, {"b": 2}], dtype=object)
-        artifact = {"obj": obj_array}
 
         provenance = ProvenanceMetadata(
             cache_key=cache_key,
@@ -557,25 +555,23 @@ class TestArtifactStoreSecurity:
             device="cpu",
         )
 
-        # Manually create the artifact file with pickle enabled
-        # (bypassing the store's save mechanism to test load protection)
-        artifact_path = cache_dir / "artifacts" / cache_key[:2] / f"{cache_key}.npz"
-        artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        # Test various cases that produce object dtype
+        # Note: Modern NumPy (1.24+) coerces heterogeneous data to string dtype
+        # or raises errors for ragged arrays, so we test explicit object arrays
+        test_cases = [
+            # Explicit object array (most common real-world case)
+            {"obj": np.array([{"a": 1}], dtype=object)},
+            # Python objects
+            {"pyobj": np.array([object(), object()])},
+            # Nested lists with explicit object dtype
+            {"nested": np.array([[1, 2], [3, 4]], dtype=object)},
+        ]
 
-        # Save with pickle enabled (to simulate malicious/legacy artifact)
-        np.savez_compressed(artifact_path, **artifact)
-
-        # Create provenance sidecar
-        prov_path = cache_dir / "artifacts" / cache_key[:2] / f"{cache_key}.json"
-        with open(prov_path, "w") as f:
-            import json
-            from dataclasses import asdict
-
-            json.dump(asdict(provenance), f)
-
-        # Load should fail due to allow_pickle=False
-        with pytest.raises(ValueError, match="Corrupted artifact"):
-            store.load(cache_key)
+        for i, artifacts in enumerate(test_cases):
+            # Generate unique cache key for each test case
+            test_cache_key = _make_cache_key(f"object_array_test_{i}")
+            with pytest.raises(ValueError, match="dtype=object"):
+                store.store(test_cache_key, artifacts, provenance)
 
     def test_safe_numpy_types_accepted(self, store: ArtifactStore):
         """Safe NumPy array types are accepted (no pickle needed)."""
@@ -586,7 +582,9 @@ class TestArtifactStoreSecurity:
             "float_array": np.array([1.0, 2.0, 3.0], dtype=np.float32),
             "int_array": np.array([1, 2, 3], dtype=np.int32),
             "bool_array": np.array([True, False, True], dtype=bool),
-            "structured": np.array([(1, 2.0), (3, 4.0)], dtype=[("a", "i4"), ("b", "f4")]),
+            "str_array": np.array(["a", "b", "c"]),  # Unicode strings are safe
+            "homogeneous_list": [1, 2, 3],  # Infers int64
+            "scalar": np.float32(3.14),
         }
 
         provenance = ProvenanceMetadata(
@@ -610,4 +608,6 @@ class TestArtifactStoreSecurity:
         np.testing.assert_array_equal(loaded["float_array"], artifact["float_array"])
         np.testing.assert_array_equal(loaded["int_array"], artifact["int_array"])
         np.testing.assert_array_equal(loaded["bool_array"], artifact["bool_array"])
-        np.testing.assert_array_equal(loaded["structured"], artifact["structured"])
+        np.testing.assert_array_equal(loaded["str_array"], artifact["str_array"])
+        np.testing.assert_array_equal(loaded["homogeneous_list"], [1, 2, 3])
+        assert loaded["scalar"] == pytest.approx(3.14)

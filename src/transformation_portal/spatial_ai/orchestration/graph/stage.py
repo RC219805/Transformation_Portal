@@ -183,22 +183,34 @@ class Stage(Protocol):
         - Input fingerprints (hash of input data)
         - Execution context (device, config overrides)
 
-        Design:
-        - Same inputs + context → same cache key (deterministic)
-        - Different inputs/context → different cache key (collision-resistant)
-        - Format: "{stage_version}:{input_hash}:{config_hash}"
+        MUST return a valid SHA256 hash (64 lowercase hex characters).
+
+        The key should incorporate:
+        - Stage version/implementation hash
+        - Input data fingerprints (content hashes)
+        - Configuration parameters that affect output
 
         Args:
             inputs: Stage inputs.
             context: Execution context.
 
         Returns:
-            SHA256-based cache key (hex string, typically 64 chars or truncated).
+            64-character lowercase hex string (SHA256 format).
 
-        Example:
-            >>> key = stage.compute_cache_key(inputs, context)
-            >>> print(key)
-            "2.1.0:a3f5e8b2c1d4:9f7e6d5c4b3a"
+        Example implementation:
+            >>> def compute_cache_key(self, inputs, context):
+            ...     import hashlib
+            ...
+            ...     # Combine version + input hashes + config
+            ...     components = [
+            ...         self.metadata.version,
+            ...         hash_input_data(inputs),
+            ...         hash_config(context.config),
+            ...     ]
+            ...
+            ...     # Return full SHA256 hex (64 chars)
+            ...     combined = "|".join(components)
+            ...     return hashlib.sha256(combined.encode()).hexdigest()
         """
         ...
 

@@ -450,6 +450,61 @@ class TestExecutionGraph:
         stage_ids = [node.stage_id for node in plan.stages]
         assert stage_ids == ["stageA", "stageB", "stageC"]
 
+    def test_topological_sort_decrement_symmetry(self):
+        """Multiple inputs from same stage should not cause early enqueuing.
+
+        This test verifies that the topological sort correctly handles nodes
+        that consume multiple outputs from the same upstream stage. The in-degree
+        increment logic counts unique upstream stages, and the decrement logic
+        must match this behavior (decrement at most once per unique upstream stage).
+
+        Without adjacency-based decrement, a node with:
+        - inputs = {"in1": "A.out1", "in2": "A.out2", "in3": "B.out1"}
+        would have:
+        - In-degree: 2 (unique stages: A, B) ✅
+        - When A finishes:
+          - Decrement for "A.out1" → in-degree becomes 1
+          - Decrement for "A.out2" → in-degree becomes 0 ❌ (B not processed yet!)
+          - Node enqueued early, violating DAG order
+
+        The fix uses adjacency list to decrement exactly once per upstream stage.
+        """
+        graph = ExecutionGraph()
+
+        # StageA produces multiple outputs
+        stageA = MockStage("stageA")
+        graph.add_stage("stageA", stageA, inputs={})
+
+        # StageC produces output (parallel with A)
+        stageC = MockStage("stageC")
+        graph.add_stage("stageC", stageC, inputs={})
+
+        # StageB consumes two outputs from A and one from C
+        stageB = MockStage("stageB")
+        graph.add_stage(
+            "stageB",
+            stageB,
+            inputs={
+                "in1": "stageA.out1",
+                "in2": "stageA.out2",
+                "in3": "stageC.out1",
+            },
+        )
+
+        # Should order: A and C (parallel), then B
+        plan = graph.plan()
+        assert len(plan.stages) == 3
+
+        # B must come after both A and C
+        stage_ids = [s.stage_id for s in plan.stages]
+        a_index = stage_ids.index("stageA")
+        c_index = stage_ids.index("stageC")
+        b_index = stage_ids.index("stageB")
+
+        # B must be last (after both A and C)
+        assert b_index > a_index, "stageB should come after stageA"
+        assert b_index > c_index, "stageB should come after stageC"
+
 
 class TestStageNode:
     """Tests for StageNode dataclass."""
