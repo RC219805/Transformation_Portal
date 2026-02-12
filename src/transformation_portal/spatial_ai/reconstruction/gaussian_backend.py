@@ -119,7 +119,7 @@ class GaussianBackend:
 
             if torch.cuda.is_available():
                 return "cuda"
-            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            elif hasattr(torch, "backends") and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
                 return "mps"
             else:
                 return "cpu"
