@@ -16,18 +16,19 @@ Phase 2 (Coming Soon):
 - Advanced postprocessing and effects
 """
 
-import numpy as np
-from pathlib import Path
 import tempfile
+from pathlib import Path
+
+import numpy as np
 
 from transformation_portal.depth_canonical import (
-    UnifiedDepthConfig,
-    ModelConfig,
-    ProcessingConfig,
-    PBRConfig,
     DepthPipeline,
-    ModelVariant,
     DeviceType,
+    ModelConfig,
+    ModelVariant,
+    PBRConfig,
+    ProcessingConfig,
+    UnifiedDepthConfig,
 )
 
 
@@ -50,7 +51,7 @@ def example_single_image_processing():
                 roughness_blur_radius=5,  # Smoother roughness
                 ao_bias=0.6,  # Prevent overly dark occlusion
             )
-        )
+        ),
     )
 
     # Create pipeline
@@ -64,11 +65,7 @@ def example_single_image_processing():
         output_dir = Path(tmpdir)
 
         # Process depth map to generate PBR maps
-        result = pipeline.process(
-            depth_map=depth_map,
-            output_dir=output_dir,
-            basename="example_render"
-        )
+        result = pipeline.process(depth_map=depth_map, output_dir=output_dir, basename="example_render")
 
         # Results
         print(f"\nPBR Maps Generated:")
@@ -89,11 +86,7 @@ def example_batch_processing():
     print("=" * 60)
 
     # Configure pipeline
-    config = UnifiedDepthConfig(
-        processing=ProcessingConfig(
-            pbr=PBRConfig(enabled=True)
-        )
-    )
+    config = UnifiedDepthConfig(processing=ProcessingConfig(pbr=PBRConfig(enabled=True)))
 
     pipeline = DepthPipeline(config)
 
@@ -114,11 +107,7 @@ def example_batch_processing():
         output_dir = Path(tmpdir)
 
         # Batch process
-        results = pipeline.process_batch(
-            image_paths=image_paths,
-            output_dir=output_dir,
-            depth_maps=depth_maps
-        )
+        results = pipeline.process_batch(image_paths=image_paths, output_dir=output_dir, depth_maps=depth_maps)
 
         print(f"\nProcessed {len(results)} images:")
         for i, result in enumerate(results):
@@ -188,11 +177,7 @@ def example_pbr_disabled():
     print("=" * 60)
 
     # PBR disabled (default)
-    config = UnifiedDepthConfig(
-        processing=ProcessingConfig(
-            pbr=PBRConfig(enabled=False)
-        )
-    )
+    config = UnifiedDepthConfig(processing=ProcessingConfig(pbr=PBRConfig(enabled=False)))
 
     pipeline = DepthPipeline(config)
     depth_map = np.random.rand(256, 256).astype(np.float32)

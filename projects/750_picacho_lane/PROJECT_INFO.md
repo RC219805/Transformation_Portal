@@ -1,8 +1,8 @@
 # 750 Picacho Lane - Luxury Real Estate Rendering Project
 
-**Location:** Santa Barbara, CA 93103  
-**Project Type:** Architectural Visualization  
-**Status:** Active Processing  
+**Location:** Santa Barbara, CA 93103
+**Project Type:** Architectural Visualization
+**Status:** Active Processing
 **Created:** 2025-11-08
 
 ---

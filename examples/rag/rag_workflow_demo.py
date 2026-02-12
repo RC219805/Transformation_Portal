@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 # Add RAG system to path
-sys.path.insert(0, '.github/agents/rag_system')
+sys.path.insert(0, ".github/agents/rag_system")
 
 from citation import CitationGenerator
 from classifier import ArtifactClassifier
@@ -59,7 +59,7 @@ def step1_basic_workflow():
     print("\n   Top 3 results:")
     for i, result in enumerate(results[:3], 1):
         print(f"   {i}. {result.file_path} (Score: {result.score:.3f})")
-        chunk_type = result.metadata.get('chunk_type', 'unknown')
+        chunk_type = result.metadata.get("chunk_type", "unknown")
         print(f"      Type: {chunk_type}, Lines: {result.start_line}-{result.end_line}")
 
     # 4. Rerank for better precision
@@ -70,7 +70,7 @@ def step1_basic_workflow():
 
     print("\n   Reranked results:")
     for i, result in enumerate(reranked, 1):
-        rerank_boost = result.metadata.get('rerank_boost', 0.0)
+        rerank_boost = result.metadata.get("rerank_boost", 0.0)
         print(f"   {i}. {result.file_path} (Final Score: {result.score:.3f}, Boost: {rerank_boost:.3f})")
 
     # 5. Generate citations
@@ -81,12 +81,12 @@ def step1_basic_workflow():
 
     # 6. Format citations in markdown
     print("\n6. Formatting citations (markdown):")
-    formatted = citation_gen.format_citations(citations, format_type='markdown')
+    formatted = citation_gen.format_citations(citations, format_type="markdown")
     print(formatted)
 
     # Save to file
     output_file = "step1_citations.md"
-    with open(output_file, 'w') as f:
+    with open(output_file, "w") as f:
         f.write(formatted)
     print(f"\n   ✓ Saved citations to {output_file}")
 
@@ -101,14 +101,14 @@ def step2_prompt_templates():
     print("1. Generating feature implementation template...")
     template = PromptTemplates.feature_implementation(
         feature_description="Add HDR tone mapping with custom transfer function",
-        context="Existing tone mapping in tonemapper_agx_filmic.py"
+        context="Existing tone mapping in tonemapper_agx_filmic.py",
     )
     print("\n   Template preview (first 500 chars):")
     print("   " + template[:500].replace("\n", "\n   "))
 
     # Save template
     template_file = "step2_feature_template.md"
-    with open(template_file, 'w') as f:
+    with open(template_file, "w") as f:
         f.write(template)
     print(f"\n   ✓ Saved template to {template_file}")
 
@@ -120,21 +120,20 @@ def step2_prompt_templates():
             FileModification(
                 path="depth_pipeline/processors/atmospheric.py",
                 patch="+ def apply_haze(image, depth, intensity=0.3): ...",
-                description="Add haze effect implementation"
+                description="Add haze effect implementation",
             ),
             FileModification(
                 path="config/exterior_preset.yaml",
                 patch="+ haze_intensity: 0.3",
-                description="Configure default haze for exteriors"
-            )
+                description="Configure default haze for exteriors",
+            ),
         ],
         tests=["tests/test_atmospheric_processor.py"],
         explanation="Atmospheric haze blends fog color proportional to depth distance",
         confidence=0.85,
-        citations=[{
-            "file_path": "depth_pipeline/processors/clarity.py",
-            "relevance": "Similar pattern for depth-based processing"
-        }]
+        citations=[
+            {"file_path": "depth_pipeline/processors/clarity.py", "relevance": "Similar pattern for depth-based processing"}
+        ],
     )
 
     print(f"   ✓ Created response with {len(response.files)} file modifications")
@@ -152,7 +151,7 @@ def step2_prompt_templates():
 
     # Save JSON
     json_file = "step2_code_modification.json"
-    with open(json_file, 'w') as f:
+    with open(json_file, "w") as f:
         f.write(json_str)
     print(f"\n   ✓ Saved JSON to {json_file}")
 
@@ -209,17 +208,17 @@ def step3_artifact_classification():
     print(f"   Artifacts by pipeline: {stats['by_pipeline']}")
     print(f"   Total artifacts: {stats['total_artifacts']}")
     print(f"   Success rate: {stats['success_rate']:.1%}")
-    if stats['avg_processing_time'] > 0:
+    if stats["avg_processing_time"] > 0:
         print(f"   Avg processing time: {stats['avg_processing_time']:.3f}s")
 
     # Export to JSON
     print("\n4. Exporting to JSON...")
-    catalog_file = 'artifacts_catalog.json'
+    catalog_file = "artifacts_catalog.json"
     classifier.export_to_json(catalog_file)
     print(f"   ✓ Saved catalog to {catalog_file}")
 
     # Show JSON preview
-    with open(catalog_file, 'r') as f:
+    with open(catalog_file, "r") as f:
         catalog = json.load(f)
     print(f"\n   Catalog contains {len(catalog['artifacts'])} artifacts")
     print(f"   Statistics: {catalog['statistics']}")
@@ -239,8 +238,14 @@ def step4_knowledge_engine():
     feedback_samples = [
         ("depth_pipeline", "art_001", True, 0.045, {"model": "depth_anything_v2", "tone_mapping": "agx"}),
         ("depth_pipeline", "art_002", True, 0.038, {"model": "depth_anything_v2", "tone_mapping": "agx"}),
-        ("depth_pipeline", "art_003", False, 0.0, {"model": "depth_anything_v2",
-         "tone_mapping": "custom"}, "Custom tone mapping not found"),
+        (
+            "depth_pipeline",
+            "art_003",
+            False,
+            0.0,
+            {"model": "depth_anything_v2", "tone_mapping": "custom"},
+            "Custom tone mapping not found",
+        ),
         ("depth_pipeline", "art_004", True, 0.042, {"model": "depth_anything_v2", "tone_mapping": "agx"}),
         ("lux_render", "art_005", True, 2.5, {"model": "sdxl", "controlnet": "canny"}),
     ]
@@ -253,7 +258,7 @@ def step4_knowledge_engine():
             success=success,
             processing_time=proc_time,
             parameters=params,
-            error_message=error_msg
+            error_message=error_msg,
         )
     print(f"   ✓ Added {len(feedback_samples)} feedback entries")
 
@@ -290,7 +295,7 @@ def step4_knowledge_engine():
     queries = [
         "What is the success rate for depth_pipeline?",
         "How many pipelines have been executed?",
-        "What is the average processing time?"
+        "What is the average processing time?",
     ]
 
     for query in queries:
@@ -312,7 +317,7 @@ def step5_example_workflows(chunks, retriever):
     print("Filtering: code chunks only")
 
     # Filter code chunks and create a new retriever
-    code_chunks = [c for c in chunks if c.chunk_type == 'code']
+    code_chunks = [c for c in chunks if c.chunk_type == "code"]
     print(f"Found {len(code_chunks)} code chunks")
 
     code_retriever = HybridRetriever()
@@ -329,7 +334,7 @@ def step5_example_workflows(chunks, retriever):
         print(f"   Preview: {preview}...")
 
     # Save to file
-    with open("step5_lut_examples.txt", 'w') as f:
+    with open("step5_lut_examples.txt", "w") as f:
         f.write("LUT Processing Code Examples\n")
         f.write(f"Query: {query1}\n\n")
         for i, result in enumerate(results1, 1):
@@ -349,7 +354,7 @@ def step5_example_workflows(chunks, retriever):
     print("Filtering: documentation chunks only")
 
     # Filter doc chunks
-    doc_chunks = [c for c in chunks if c.chunk_type == 'doc']
+    doc_chunks = [c for c in chunks if c.chunk_type == "doc"]
     print(f"Found {len(doc_chunks)} documentation chunks")
 
     doc_retriever = HybridRetriever()
@@ -361,13 +366,13 @@ def step5_example_workflows(chunks, retriever):
     # Generate citations
     citation_gen = CitationGenerator()
     citations2 = citation_gen.generate_citations(results2, max_citations=5)
-    formatted2 = citation_gen.format_citations(citations2, format_type='markdown')
+    formatted2 = citation_gen.format_citations(citations2, format_type="markdown")
 
     print("\nGenerated citations:")
     print(formatted2)
 
     # Save citations
-    with open("step5_depth_docs.md", 'w') as f:
+    with open("step5_depth_docs.md", "w") as f:
         f.write("# Depth Estimation Documentation\n\n")
         f.write(f"Query: {query2}\n\n")
         f.write(formatted2)
@@ -386,16 +391,15 @@ def step5_example_workflows(chunks, retriever):
 
     # Generate context citations
     citations3 = citation_gen.generate_citations(results3, max_citations=3)
-    context_text = citation_gen.format_citations(citations3, format_type='text')
+    context_text = citation_gen.format_citations(citations3, format_type="text")
 
     print("\n2. Generating feature template with context...")
     feature_template = PromptTemplates.feature_implementation(
-        feature_description="Add fog density parameter to atmospheric effects",
-        context=context_text
+        feature_description="Add fog density parameter to atmospheric effects", context=context_text
     )
 
     # Save feature plan
-    with open("step5_feature_plan.md", 'w') as f:
+    with open("step5_feature_plan.md", "w") as f:
         f.write(feature_template)
     print("   ✓ Saved feature plan to step5_feature_plan.md")
 
@@ -437,7 +441,7 @@ def main():
             "artifacts_catalog.json",
             "step5_lut_examples.txt",
             "step5_depth_docs.md",
-            "step5_feature_plan.md"
+            "step5_feature_plan.md",
         ]
         for f in output_files:
             if Path(f).exists():
@@ -451,6 +455,7 @@ def main():
     except Exception as e:
         print(f"\n❌ Error during demonstration: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 

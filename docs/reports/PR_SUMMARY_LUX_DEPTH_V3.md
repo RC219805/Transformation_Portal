@@ -310,4 +310,3 @@ result = orchestrator.enhance_image(ImageInput(path="input.jpg"))
 **Branch:** `feature/lux-depth-v3-orchestrator`
 **Base:** `main`
 **Commit:** `e6dbd4ac`
-

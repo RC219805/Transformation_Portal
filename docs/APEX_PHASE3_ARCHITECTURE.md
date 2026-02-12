@@ -1,7 +1,7 @@
 # APEX Phase 3: Dashboarding & Long-Term Storage
 
-**Status:** ✅ Implemented  
-**Version:** 1.0.0  
+**Status:** ✅ Implemented
+**Version:** 1.0.0
 **Last Updated:** 2026-02-07
 
 ---
@@ -74,7 +74,7 @@ APEX Phase 3 extends the performance observability platform with:
 **New Indexes:**
 ```sql
 CREATE INDEX IF NOT EXISTS idx_apex_runs_timestamp ON apex_runs(timestamp DESC);
-CREATE INDEX IF NOT EXISTS idx_apex_runs_bucket_zone_time 
+CREATE INDEX IF NOT EXISTS idx_apex_runs_bucket_zone_time
     ON apex_runs(bucket_name, zone, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_apex_runs_pass_fail ON apex_runs(pass_fail);
 ```
@@ -82,7 +82,7 @@ CREATE INDEX IF NOT EXISTS idx_apex_runs_pass_fail ON apex_runs(pass_fail);
 **New View for Dashboard Queries:**
 ```sql
 CREATE VIEW IF NOT EXISTS apex_trends AS
-SELECT 
+SELECT
     bucket_name,
     zone,
     workflow_version,

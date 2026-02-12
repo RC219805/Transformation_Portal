@@ -1,18 +1,18 @@
 # Model Installation Summary
-**Date:** 2025-11-05  
-**Status:** Partially Complete  
-**Context:** Bug Report Issue #2 - Missing Pipeline Models  
+**Date:** 2025-11-05
+**Status:** Partially Complete
+**Context:** Bug Report Issue #2 - Missing Pipeline Models
 
 ---
 
 ## ✅ Successfully Installed
 
 ### 1. Depth Anything V2 (HuggingFace)
-**Status:** ✅ INSTALLED AND VERIFIED  
-**Model:** `LiheYoung/depth-anything-small-hf`  
-**Location:** `~/.cache/huggingface/hub/models--LiheYoung--depth-anything-small-hf`  
-**Size:** ~400MB  
-**Backend:** transformers library  
+**Status:** ✅ INSTALLED AND VERIFIED
+**Model:** `LiheYoung/depth-anything-small-hf`
+**Location:** `~/.cache/huggingface/hub/models--LiheYoung--depth-anything-small-hf`
+**Size:** ~400MB
+**Backend:** transformers library
 
 **Test:**
 ```python
@@ -24,14 +24,14 @@ processor = AutoImageProcessor.from_pretrained("LiheYoung/depth-anything-small-h
 ---
 
 ### 2. ControlNet Models (HuggingFace)
-**Status:** ✅ INSTALLED AND VERIFIED  
+**Status:** ✅ INSTALLED AND VERIFIED
 
 **Models:**
 - `lllyasviel/sd-controlnet-canny` (~1.5GB)
 - `lllyasviel/sd-controlnet-depth` (~1.5GB)
 
-**Location:** `~/.cache/huggingface/hub/`  
-**Backend:** diffusers library  
+**Location:** `~/.cache/huggingface/hub/`
+**Backend:** diffusers library
 
 **Verification:**
 ```bash
@@ -42,19 +42,19 @@ ls ~/.cache/huggingface/hub/models--lllyasviel--sd-controlnet-*
 ---
 
 ### 3. Stable Diffusion v1.5 (HuggingFace)
-**Status:** ✅ INSTALLED AND VERIFIED  
-**Model:** `runwayml/stable-diffusion-v1-5`  
-**Location:** `~/.cache/huggingface/hub/models--runwayml--stable-diffusion-v1-5`  
-**Size:** ~4GB  
-**Backend:** diffusers library  
+**Status:** ✅ INSTALLED AND VERIFIED
+**Model:** `runwayml/stable-diffusion-v1-5`
+**Location:** `~/.cache/huggingface/hub/models--runwayml--stable-diffusion-v1-5`
+**Size:** ~4GB
+**Backend:** diffusers library
 
 ---
 
 ### 4. Real-ESRGAN Weights
-**Status:** ✅ DOWNLOADED, ⚠️ COMPATIBILITY ISSUE  
-**Model:** `RealESRGAN_x4plus.pth`  
-**Location:** `weights/RealESRGAN_x4plus.pth`  
-**Size:** 64MB  
+**Status:** ✅ DOWNLOADED, ⚠️ COMPATIBILITY ISSUE
+**Model:** `RealESRGAN_x4plus.pth`
+**Location:** `weights/RealESRGAN_x4plus.pth`
+**Size:** 64MB
 
 **Issue:** Package compatibility problem with PyTorch 2.9.0
 ```python
@@ -63,7 +63,7 @@ ModuleNotFoundError: No module named 'torchvision.transforms.functional_tensor'
 
 **Workaround:** Use Pillow's LANCZOS resampling for upscaling (current implementation)
 
-**Future Fix:** 
+**Future Fix:**
 - Option 1: Downgrade torch to 2.0-2.5 range
 - Option 2: Use updated Real-ESRGAN fork compatible with torch 2.9
 - Option 3: Implement custom upscaling with torch 2.9
@@ -80,9 +80,9 @@ ModuleNotFoundError: No module named 'torchvision.transforms.functional_tensor'
 | Stable Diffusion v1.5 | ✅ | ~4GB | HuggingFace cache |
 | Real-ESRGAN weights | ⚠️ | 64MB | weights/ |
 
-**Total Downloaded:** ~7.5GB  
-**HuggingFace Models:** Auto-cached for future use  
-**Real-ESRGAN:** Downloaded but needs compatibility fix  
+**Total Downloaded:** ~7.5GB
+**HuggingFace Models:** Auto-cached for future use
+**Real-ESRGAN:** Downloaded but needs compatibility fix
 
 ---
 
@@ -163,10 +163,10 @@ weights/
 ## ⚠️ Known Issues
 
 ### Real-ESRGAN Compatibility
-**Issue:** `torchvision.transforms.functional_tensor` module not found  
-**Cause:** Breaking changes in PyTorch 2.9.0 / torchvision 0.24.0  
-**Impact:** 4x AI upscaling unavailable, falls back to LANCZOS  
-**Priority:** MEDIUM  
+**Issue:** `torchvision.transforms.functional_tensor` module not found
+**Cause:** Breaking changes in PyTorch 2.9.0 / torchvision 0.24.0
+**Impact:** 4x AI upscaling unavailable, falls back to LANCZOS
+**Priority:** MEDIUM
 
 **Current Workaround:**
 ```python
@@ -251,9 +251,9 @@ ls -lh weights/RealESRGAN_x4plus.pth
 
 ---
 
-**Installation Completed:** 2025-11-05 04:32 UTC  
-**Models Ready:** 4/5 (Real-ESRGAN needs fix)  
-**Total Download Time:** ~5 minutes  
-**Disk Space Used:** ~7.5GB  
+**Installation Completed:** 2025-11-05 04:32 UTC
+**Models Ready:** 4/5 (Real-ESRGAN needs fix)
+**Total Download Time:** ~5 minutes
+**Disk Space Used:** ~7.5GB
 
 ---

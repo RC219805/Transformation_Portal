@@ -215,15 +215,15 @@ results = []
 
 for i in range(0, len(image_paths), batch_size):
     batch_paths = image_paths[i:i+batch_size]
-    
+
     # Load batch
     images = [load_image(p) for p in batch_paths]
     image_tensors = torch.stack([to_tensor(img) for img in images])
-    
+
     # Batch inference (much faster)
     with torch.no_grad():
         depth_maps = depth_model(image_tensors)
-    
+
     # Process batch
     for img, depth in zip(images, depth_maps):
         result = process(img, depth)
@@ -375,10 +375,10 @@ def process_single_image(image_path, config):
 def batch_process_parallel(image_paths, config, num_workers=4):
     """Process images in parallel."""
     process_fn = partial(process_single_image, config=config)
-    
+
     with Pool(processes=num_workers) as pool:
         results = pool.map(process_fn, image_paths)
-    
+
     return results
 
 # Usage
@@ -397,7 +397,7 @@ import tifffile
 # Memory-mapped (doesn't load entire file)
 with tifffile.TiffFile(large_tiff_path) as tif:
     image = tif.asarray(out='memmap')  # Memory-mapped array
-    
+
     # Process in tiles to avoid loading full image
     tile_size = 2048
     for y in range(0, image.shape[0], tile_size):
@@ -415,35 +415,35 @@ with tifffile.TiffFile(large_tiff_path) as tif:
 def process_large_image_tiled(image_path, tile_size=2048, overlap=128):
     """
     Process large image in tiles to reduce memory usage.
-    
+
     Args:
         image_path: Path to large image
         tile_size: Size of each tile (pixels)
         overlap: Overlap between tiles to avoid seams
-    
+
     Returns:
         Processed image
     """
     from PIL import Image
-    
+
     with Image.open(image_path) as img:
         width, height = img.size
-        
+
         # Initialize output
         result = Image.new(img.mode, (width, height))
-        
+
         # Process in tiles
         for y in range(0, height, tile_size - overlap):
             for x in range(0, width, tile_size - overlap):
                 # Extract tile with overlap
                 tile_width = min(tile_size, width - x)
                 tile_height = min(tile_size, height - y)
-                
+
                 tile = img.crop((x, y, x + tile_width, y + tile_height))
-                
+
                 # Process tile
                 processed_tile = process_image(tile)
-                
+
                 # Blend into result (center region to avoid overlap artifacts)
                 paste_region = (
                     x + overlap // 2,
@@ -455,7 +455,7 @@ def process_large_image_tiled(image_path, tile_size=2048, overlap=128):
                     overlap // 2, overlap // 2,
                     tile_width - overlap // 2, tile_height - overlap // 2
                 )), paste_region[:2])
-        
+
         return result
 ```
 
@@ -491,60 +491,60 @@ def create_test_images(output_dir, num_images=10, size=(2048, 2048)):
     """Create synthetic test images."""
     output_dir = Path(output_dir)
     output_dir.mkdir(exist_ok=True)
-    
+
     image_paths = []
     for i in range(num_images):
         # Create random image
         img_array = np.random.randint(0, 255, (*size, 3), dtype=np.uint8)
         img = Image.fromarray(img_array)
-        
+
         img_path = output_dir / f"test_{i:04d}.jpg"
         img.save(img_path, quality=90)
         image_paths.append(img_path)
-    
+
     return image_paths
 
 
 def benchmark_processing(image_paths, config):
     """Benchmark processing performance."""
     processor = {FeatureClass}(config)
-    
+
     # Warmup (JIT compilation, model loading)
     print("Warming up...")
     _ = processor.process(image_paths[0])
-    
+
     # Measure memory baseline
     process = psutil.Process(os.getpid())
     baseline_memory_mb = process.memory_info().rss / 1024 / 1024
-    
+
     # Benchmark
     print(f"\nProcessing {len(image_paths)} images...")
     results = []
     start_time = time.perf_counter()
-    
+
     for i, image_path in enumerate(image_paths):
         iter_start = time.perf_counter()
         result = processor.process(image_path)
         iter_time = time.perf_counter() - iter_start
-        
+
         results.append({
             'path': image_path,
             'time_ms': iter_time * 1000,
             'success': result is not None
         })
-        
+
         if (i + 1) % 10 == 0:
             print(f"  Processed {i + 1}/{len(image_paths)}")
-    
+
     total_time = time.perf_counter() - start_time
-    
+
     # Memory usage
     peak_memory_mb = process.memory_info().rss / 1024 / 1024
     memory_increase_mb = peak_memory_mb - baseline_memory_mb
-    
+
     # Statistics
     times_ms = [r['time_ms'] for r in results]
-    
+
     print("\n" + "="*60)
     print("BENCHMARK RESULTS")
     print("="*60)
@@ -562,7 +562,7 @@ def benchmark_processing(image_paths, config):
     print(f"  Peak: {peak_memory_mb:.1f}MB")
     print(f"  Increase: {memory_increase_mb:.1f}MB")
     print("="*60)
-    
+
     return {
         'total_time_sec': total_time,
         'avg_time_ms': np.mean(times_ms),
@@ -579,22 +579,22 @@ def main():
                        help='Image size (width height)')
     parser.add_argument('--config', type=str, default='default',
                        help='Configuration preset to use')
-    
+
     args = parser.parse_args()
-    
+
     # Create test images
     test_dir = Path('benchmark_temp')
     print(f"Creating {args.num_images} test images ({args.size[0]}x{args.size[1]})...")
     image_paths = create_test_images(test_dir, args.num_images, tuple(args.size))
-    
+
     # Run benchmark
     config = load_config(args.config)
     results = benchmark_processing(image_paths, config)
-    
+
     # Cleanup
     import shutil
     shutil.rmtree(test_dir)
-    
+
     return results
 
 
@@ -621,11 +621,11 @@ python benchmarks/benchmark_{feature}.py --num-images 50 --size 4096 4096
 ```python
 def compare_performance(before, after):
     """Compare performance metrics before and after optimization."""
-    
+
     time_improvement = (before['avg_time_ms'] - after['avg_time_ms']) / before['avg_time_ms'] * 100
     throughput_improvement = (after['throughput_per_hour'] - before['throughput_per_hour']) / before['throughput_per_hour'] * 100
     memory_improvement = (before['memory_increase_mb'] - after['memory_increase_mb']) / before['memory_increase_mb'] * 100
-    
+
     print("\n" + "="*60)
     print("OPTIMIZATION IMPACT")
     print("="*60)
@@ -680,6 +680,6 @@ ffmpeg -i input.mp4 -vf "{filters}" -c:v h264_qsv output.mp4
 
 ---
 
-**Template Version**: 1.0  
-**Last Updated**: 2025-11-06  
+**Template Version**: 1.0
+**Last Updated**: 2025-11-06
 **Maintained By**: Transformation Portal RAG System

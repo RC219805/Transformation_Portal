@@ -22,10 +22,10 @@ from typing import Dict, List, Optional, Set, Tuple
 from knowledge_engine import FeedbackRecord, KnowledgeIntegrationEngine
 from semantic_search import CodeEntity, SemanticCodeSearch
 
-
 # ============================================================================
 # 1. CODEBASE EVOLUTION TRACKER
 # ============================================================================
+
 
 @dataclass
 class CodeChange:
@@ -110,10 +110,7 @@ class CodebaseEvolutionTracker:
         self.snapshots[timestamp] = snapshot
         print(f"Snapshot taken: {len(snapshot)} entities")
 
-    def analyze_evolution(
-        self,
-        time_window_days: int = 30
-    ) -> EvolutionMetrics:
+    def analyze_evolution(self, time_window_days: int = 30) -> EvolutionMetrics:
         """
         Analyze codebase evolution over time window.
 
@@ -129,31 +126,27 @@ class CodebaseEvolutionTracker:
         recent_changes = [c for c in self.changes if c.timestamp >= cutoff]
 
         # Count by type
-        added = sum(1 for c in recent_changes if c.change_type == 'added')
-        modified = sum(1 for c in recent_changes if c.change_type == 'modified')
-        deleted = sum(1 for c in recent_changes if c.change_type == 'deleted')
+        added = sum(1 for c in recent_changes if c.change_type == "added")
+        modified = sum(1 for c in recent_changes if c.change_type == "modified")
+        deleted = sum(1 for c in recent_changes if c.change_type == "deleted")
 
         # Calculate complexity trend
         complexity_changes = [c.complexity_delta for c in recent_changes if c.complexity_delta != 0]
         avg_complexity_delta = sum(complexity_changes) / len(complexity_changes) if complexity_changes else 0
 
         if avg_complexity_delta > 0.5:
-            complexity_trend = 'increasing'
+            complexity_trend = "increasing"
         elif avg_complexity_delta < -0.5:
-            complexity_trend = 'decreasing'
+            complexity_trend = "decreasing"
         else:
-            complexity_trend = 'stable'
+            complexity_trend = "stable"
 
         # Identify hotspots
         file_change_counts = defaultdict(int)
         for change in recent_changes:
             file_change_counts[change.file_path] += 1
 
-        hotspots = sorted(
-            file_change_counts.items(),
-            key=lambda x: x[1],
-            reverse=True
-        )[:10]
+        hotspots = sorted(file_change_counts.items(), key=lambda x: x[1], reverse=True)[:10]
 
         # Calculate technical debt
         total_debt_hours = sum(d.estimated_effort_hours for d in self.technical_debt)
@@ -167,13 +160,10 @@ class CodebaseEvolutionTracker:
             complexity_trend=complexity_trend,
             test_coverage=0.75,  # Would calculate from test analysis
             technical_debt_hours=total_debt_hours,
-            hotspots=hotspots
+            hotspots=hotspots,
         )
 
-    def detect_technical_debt(
-        self,
-        search_engine: SemanticCodeSearch
-    ) -> List[TechnicalDebt]:
+    def detect_technical_debt(self, search_engine: SemanticCodeSearch) -> List[TechnicalDebt]:
         """
         Detect technical debt in codebase.
 
@@ -188,37 +178,38 @@ class CodebaseEvolutionTracker:
         for entity in search_engine.entities.values():
             # High complexity
             if entity.complexity > 15:
-                debt_items.append(TechnicalDebt(
-                    debt_type='complexity',
-                    severity='high' if entity.complexity > 20 else 'medium',
-                    file_path=entity.file_path,
-                    line_number=entity.line_number,
-                    description=f"High complexity ({entity.complexity}) in {entity.name}",
-                    estimated_effort_hours=entity.complexity * 0.25,
-                    created_date=datetime.now(),
-                    related_entities=[entity.name]
-                ))
+                debt_items.append(
+                    TechnicalDebt(
+                        debt_type="complexity",
+                        severity="high" if entity.complexity > 20 else "medium",
+                        file_path=entity.file_path,
+                        line_number=entity.line_number,
+                        description=f"High complexity ({entity.complexity}) in {entity.name}",
+                        estimated_effort_hours=entity.complexity * 0.25,
+                        created_date=datetime.now(),
+                        related_entities=[entity.name],
+                    )
+                )
 
             # Missing docstrings
-            if not entity.docstring and entity.entity_type in ('function', 'class'):
-                debt_items.append(TechnicalDebt(
-                    debt_type='missing_documentation',
-                    severity='low',
-                    file_path=entity.file_path,
-                    line_number=entity.line_number,
-                    description=f"Missing docstring for {entity.name}",
-                    estimated_effort_hours=0.25,
-                    created_date=datetime.now(),
-                    related_entities=[entity.name]
-                ))
+            if not entity.docstring and entity.entity_type in ("function", "class"):
+                debt_items.append(
+                    TechnicalDebt(
+                        debt_type="missing_documentation",
+                        severity="low",
+                        file_path=entity.file_path,
+                        line_number=entity.line_number,
+                        description=f"Missing docstring for {entity.name}",
+                        estimated_effort_hours=0.25,
+                        created_date=datetime.now(),
+                        related_entities=[entity.name],
+                    )
+                )
 
         self.technical_debt = debt_items
         return debt_items
 
-    def suggest_refactoring(
-        self,
-        metrics: EvolutionMetrics
-    ) -> List[Dict]:
+    def suggest_refactoring(self, metrics: EvolutionMetrics) -> List[Dict]:
         """
         Suggest refactoring opportunities.
 
@@ -233,28 +224,29 @@ class CodebaseEvolutionTracker:
         # Hotspot refactoring
         for file_path, change_count in metrics.hotspots[:5]:
             if change_count > 10:
-                suggestions.append({
-                    'type': 'extract_module',
-                    'priority': 'high',
-                    'file_path': file_path,
-                    'reason': f"Hotspot with {change_count} changes - consider splitting",
-                    'estimated_effort_hours': 4.0
-                })
+                suggestions.append(
+                    {
+                        "type": "extract_module",
+                        "priority": "high",
+                        "file_path": file_path,
+                        "reason": f"Hotspot with {change_count} changes - consider splitting",
+                        "estimated_effort_hours": 4.0,
+                    }
+                )
 
         # Complexity refactoring
-        high_complexity_debt = [
-            d for d in self.technical_debt
-            if d.debt_type == 'complexity' and d.severity == 'high'
-        ]
+        high_complexity_debt = [d for d in self.technical_debt if d.debt_type == "complexity" and d.severity == "high"]
 
         for debt in high_complexity_debt[:5]:
-            suggestions.append({
-                'type': 'reduce_complexity',
-                'priority': 'high',
-                'file_path': debt.file_path,
-                'reason': debt.description,
-                'estimated_effort_hours': debt.estimated_effort_hours
-            })
+            suggestions.append(
+                {
+                    "type": "reduce_complexity",
+                    "priority": "high",
+                    "file_path": debt.file_path,
+                    "reason": debt.description,
+                    "estimated_effort_hours": debt.estimated_effort_hours,
+                }
+            )
 
         return suggestions
 
@@ -262,6 +254,7 @@ class CodebaseEvolutionTracker:
 # ============================================================================
 # 2. PERFORMANCE REGRESSION DETECTOR
 # ============================================================================
+
 
 @dataclass
 class PerformanceBaseline:
@@ -306,14 +299,7 @@ class PerformanceRegressionDetector:
         self.regressions: List[PerformanceRegression] = []
         self.history: List[Tuple[datetime, str, float]] = []  # (timestamp, entity, value)
 
-    def set_baseline(
-        self,
-        entity_name: str,
-        metric_type: str,
-        value: float,
-        unit: str,
-        environment: Optional[Dict] = None
-    ):
+    def set_baseline(self, entity_name: str, metric_type: str, value: float, unit: str, environment: Optional[Dict] = None):
         """
         Set performance baseline.
 
@@ -332,15 +318,11 @@ class PerformanceRegressionDetector:
             baseline_value=value,
             unit=unit,
             timestamp=datetime.now(),
-            environment=environment or {}
+            environment=environment or {},
         )
 
     def check_regression(
-        self,
-        entity_name: str,
-        metric_type: str,
-        current_value: float,
-        threshold_percent: float = 10.0
+        self, entity_name: str, metric_type: str, current_value: float, threshold_percent: float = 10.0
     ) -> Optional[PerformanceRegression]:
         """
         Check for performance regression.
@@ -364,7 +346,7 @@ class PerformanceRegressionDetector:
 
         # Calculate degradation
         # For throughput, lower is worse; for latency/memory, higher is worse
-        if metric_type in ('throughput', 'images_per_hour'):
+        if metric_type in ("throughput", "images_per_hour"):
             degradation = ((baseline.baseline_value - current_value) / baseline.baseline_value) * 100
         else:  # latency, memory
             degradation = ((current_value - baseline.baseline_value) / baseline.baseline_value) * 100
@@ -374,14 +356,9 @@ class PerformanceRegressionDetector:
 
         if degradation > threshold_percent:
             # Regression detected
-            severity = 'critical' if degradation > 30 else 'warning' if degradation > 15 else 'minor'
+            severity = "critical" if degradation > 30 else "warning" if degradation > 15 else "minor"
 
-            possible_causes = self._analyze_regression_causes(
-                entity_name,
-                metric_type,
-                baseline.baseline_value,
-                current_value
-            )
+            possible_causes = self._analyze_regression_causes(entity_name, metric_type, baseline.baseline_value, current_value)
 
             regression = PerformanceRegression(
                 entity_name=entity_name,
@@ -391,7 +368,7 @@ class PerformanceRegressionDetector:
                 degradation_percent=degradation,
                 severity=severity,
                 detected_at=datetime.now(),
-                possible_causes=possible_causes
+                possible_causes=possible_causes,
             )
 
             self.regressions.append(regression)
@@ -399,42 +376,32 @@ class PerformanceRegressionDetector:
 
         return None
 
-    def _analyze_regression_causes(
-        self,
-        entity_name: str,
-        metric_type: str,
-        baseline: float,
-        current: float
-    ) -> List[str]:
+    def _analyze_regression_causes(self, entity_name: str, metric_type: str, baseline: float, current: float) -> List[str]:
         """Analyze possible causes of regression."""
         causes = []
 
         # General causes
-        if metric_type == 'latency' and current > baseline * 1.5:
+        if metric_type == "latency" and current > baseline * 1.5:
             causes.append("Significant latency increase - check for blocking I/O or synchronous operations")
 
-        if metric_type == 'memory' and current > baseline * 1.3:
+        if metric_type == "memory" and current > baseline * 1.3:
             causes.append("Memory usage increased - check for memory leaks or large allocations")
 
-        if metric_type == 'throughput' and current < baseline * 0.7:
+        if metric_type == "throughput" and current < baseline * 0.7:
             causes.append("Throughput decreased - check for bottlenecks in processing pipeline")
 
         # Entity-specific causes
-        if 'depth' in entity_name.lower():
+        if "depth" in entity_name.lower():
             causes.append("Check depth model loading and GPU utilization")
             causes.append("Verify batch size hasn't decreased")
 
-        if 'batch' in entity_name.lower():
+        if "batch" in entity_name.lower():
             causes.append("Check batch size configuration")
             causes.append("Verify parallel processing is enabled")
 
         return causes or ["Unknown cause - requires manual investigation"]
 
-    def get_performance_trend(
-        self,
-        entity_name: str,
-        days: int = 7
-    ) -> Dict:
+    def get_performance_trend(self, entity_name: str, days: int = 7) -> Dict:
         """
         Get performance trend for entity.
 
@@ -448,43 +415,41 @@ class PerformanceRegressionDetector:
         cutoff = datetime.now() - timedelta(days=days)
 
         # Filter history for this entity
-        entity_history = [
-            (ts, val) for ts, name, val in self.history
-            if name == entity_name and ts >= cutoff
-        ]
+        entity_history = [(ts, val) for ts, name, val in self.history if name == entity_name and ts >= cutoff]
 
         if not entity_history:
-            return {'trend': 'no_data', 'data_points': []}
+            return {"trend": "no_data", "data_points": []}
 
         # Calculate trend
         values = [val for _, val in entity_history]
         if len(values) < 2:
-            trend = 'insufficient_data'
+            trend = "insufficient_data"
         else:
-            first_half_avg = sum(values[:len(values)//2]) / (len(values)//2)
-            second_half_avg = sum(values[len(values)//2:]) / (len(values) - len(values)//2)
+            first_half_avg = sum(values[: len(values) // 2]) / (len(values) // 2)
+            second_half_avg = sum(values[len(values) // 2 :]) / (len(values) - len(values) // 2)
 
             change_pct = ((second_half_avg - first_half_avg) / first_half_avg) * 100
 
             if change_pct > 5:
-                trend = 'degrading'
+                trend = "degrading"
             elif change_pct < -5:
-                trend = 'improving'
+                trend = "improving"
             else:
-                trend = 'stable'
+                trend = "stable"
 
         return {
-            'trend': trend,
-            'data_points': entity_history,
-            'average': sum(values) / len(values),
-            'min': min(values),
-            'max': max(values)
+            "trend": trend,
+            "data_points": entity_history,
+            "average": sum(values) / len(values),
+            "min": min(values),
+            "max": max(values),
         }
 
 
 # ============================================================================
 # 3. CROSS-PIPELINE DEPENDENCY ANALYZER
 # ============================================================================
+
 
 @dataclass
 class PipelineDependency:
@@ -546,20 +511,19 @@ class CrossPipelineDependencyAnalyzer:
                         # Determine if it's a critical dependency
                         critical = self._is_critical_dependency(entity, called_entity)
 
-                        self.dependencies.append(PipelineDependency(
-                            from_pipeline=entity.file_path,
-                            to_pipeline=called_entity.file_path,
-                            dependency_type='function',
-                            critical=critical,
-                            entities=[entity.name, called_entity.name]
-                        ))
+                        self.dependencies.append(
+                            PipelineDependency(
+                                from_pipeline=entity.file_path,
+                                to_pipeline=called_entity.file_path,
+                                dependency_type="function",
+                                critical=critical,
+                                entities=[entity.name, called_entity.name],
+                            )
+                        )
 
         print(f"Found {len(self.dependencies)} dependencies")
 
-    def analyze_impact(
-        self,
-        changed_entity: str
-    ) -> ImpactAnalysis:
+    def analyze_impact(self, changed_entity: str) -> ImpactAnalysis:
         """
         Analyze impact of changing an entity.
 
@@ -595,25 +559,21 @@ class CrossPipelineDependencyAnalyzer:
         # Assess risk level
         total_impact = len(directly_impacted) + len(indirectly_impacted)
         if total_impact > 10:
-            risk_level = 'high'
+            risk_level = "high"
         elif total_impact > 5:
-            risk_level = 'medium'
+            risk_level = "medium"
         else:
-            risk_level = 'low'
+            risk_level = "low"
 
         # Recommend tests
-        recommended_tests = self._recommend_tests(
-            changed_entity,
-            directly_impacted,
-            indirectly_impacted
-        )
+        recommended_tests = self._recommend_tests(changed_entity, directly_impacted, indirectly_impacted)
 
         return ImpactAnalysis(
             changed_entity=changed_entity,
             directly_impacted=directly_impacted,
             indirectly_impacted=indirectly_impacted,
             risk_level=risk_level,
-            recommended_tests=recommended_tests
+            recommended_tests=recommended_tests,
         )
 
     def find_critical_paths(self) -> List[List[str]]:
@@ -643,34 +603,25 @@ class CrossPipelineDependencyAnalyzer:
 
         # Start DFS from all nodes
         for entity in self.search.entities.keys():
-            dfs_paths(entity.split(':')[-1], [], set())
+            dfs_paths(entity.split(":")[-1], [], set())
 
         # Sort by length
         critical_paths.sort(key=len, reverse=True)
 
         return critical_paths[:10]  # Top 10 longest paths
 
-    def _is_critical_dependency(
-        self,
-        from_entity: CodeEntity,
-        to_entity: CodeEntity
-    ) -> bool:
+    def _is_critical_dependency(self, from_entity: CodeEntity, to_entity: CodeEntity) -> bool:
         """Determine if a dependency is critical."""
         # Heuristics for critical dependencies
-        if 'pipeline' in from_entity.file_path.lower() or 'pipeline' in to_entity.file_path.lower():
+        if "pipeline" in from_entity.file_path.lower() or "pipeline" in to_entity.file_path.lower():
             return True
 
-        if 'core' in to_entity.file_path.lower():
+        if "core" in to_entity.file_path.lower():
             return True
 
         return False
 
-    def _recommend_tests(
-        self,
-        changed_entity: str,
-        directly_impacted: List[str],
-        indirectly_impacted: List[str]
-    ) -> List[str]:
+    def _recommend_tests(self, changed_entity: str, directly_impacted: List[str], indirectly_impacted: List[str]) -> List[str]:
         """Recommend tests to run."""
         tests = []
 
@@ -691,6 +642,7 @@ class CrossPipelineDependencyAnalyzer:
 # ============================================================================
 # 4. REAL-TIME CODE QUALITY ADVISOR
 # ============================================================================
+
 
 @dataclass
 class QualityIssue:
@@ -725,11 +677,7 @@ class RealTimeCodeQualityAdvisor:
         """
         self.search = search_engine
 
-    def analyze_code(
-        self,
-        code: str,
-        file_path: str
-    ) -> List[QualityIssue]:
+    def analyze_code(self, code: str, file_path: str) -> List[QualityIssue]:
         """
         Analyze code for quality issues.
 
@@ -745,15 +693,17 @@ class RealTimeCodeQualityAdvisor:
         try:
             tree = ast.parse(code)
         except SyntaxError as e:
-            issues.append(QualityIssue(
-                issue_type='syntax',
-                severity='error',
-                file_path=file_path,
-                line_number=e.lineno or 0,
-                message=f"Syntax error: {e.msg}",
-                suggestion="Fix syntax error before analysis",
-                auto_fixable=False
-            ))
+            issues.append(
+                QualityIssue(
+                    issue_type="syntax",
+                    severity="error",
+                    file_path=file_path,
+                    line_number=e.lineno or 0,
+                    message=f"Syntax error: {e.msg}",
+                    suggestion="Fix syntax error before analysis",
+                    auto_fixable=False,
+                )
+            )
             return issues
 
         # Analyze AST
@@ -765,11 +715,7 @@ class RealTimeCodeQualityAdvisor:
 
         return issues
 
-    def _check_complexity(
-        self,
-        tree: ast.AST,
-        file_path: str
-    ) -> List[QualityIssue]:
+    def _check_complexity(self, tree: ast.AST, file_path: str) -> List[QualityIssue]:
         """Check for complexity issues."""
         issues = []
 
@@ -778,60 +724,58 @@ class RealTimeCodeQualityAdvisor:
                 complexity = self._calculate_complexity(node)
 
                 if complexity > 15:
-                    issues.append(QualityIssue(
-                        issue_type='complexity',
-                        severity='warning' if complexity < 20 else 'error',
-                        file_path=file_path,
-                        line_number=node.lineno,
-                        message=f"Function '{node.name}' has high complexity ({complexity})",
-                        suggestion="Consider breaking into smaller functions",
-                        auto_fixable=False
-                    ))
+                    issues.append(
+                        QualityIssue(
+                            issue_type="complexity",
+                            severity="warning" if complexity < 20 else "error",
+                            file_path=file_path,
+                            line_number=node.lineno,
+                            message=f"Function '{node.name}' has high complexity ({complexity})",
+                            suggestion="Consider breaking into smaller functions",
+                            auto_fixable=False,
+                        )
+                    )
 
         return issues
 
-    def _check_naming(
-        self,
-        tree: ast.AST,
-        file_path: str
-    ) -> List[QualityIssue]:
+    def _check_naming(self, tree: ast.AST, file_path: str) -> List[QualityIssue]:
         """Check naming conventions."""
         issues = []
 
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef):
                 # Check snake_case
-                if not re.match(r'^[a-z_][a-z0-9_]*$', node.name):
-                    issues.append(QualityIssue(
-                        issue_type='naming',
-                        severity='warning',
-                        file_path=file_path,
-                        line_number=node.lineno,
-                        message=f"Function '{node.name}' should use snake_case",
-                        suggestion=f"Rename to {self._to_snake_case(node.name)}",
-                        auto_fixable=True
-                    ))
+                if not re.match(r"^[a-z_][a-z0-9_]*$", node.name):
+                    issues.append(
+                        QualityIssue(
+                            issue_type="naming",
+                            severity="warning",
+                            file_path=file_path,
+                            line_number=node.lineno,
+                            message=f"Function '{node.name}' should use snake_case",
+                            suggestion=f"Rename to {self._to_snake_case(node.name)}",
+                            auto_fixable=True,
+                        )
+                    )
 
             elif isinstance(node, ast.ClassDef):
                 # Check PascalCase
-                if not re.match(r'^[A-Z][a-zA-Z0-9]*$', node.name):
-                    issues.append(QualityIssue(
-                        issue_type='naming',
-                        severity='warning',
-                        file_path=file_path,
-                        line_number=node.lineno,
-                        message=f"Class '{node.name}' should use PascalCase",
-                        suggestion=f"Rename to {self._to_pascal_case(node.name)}",
-                        auto_fixable=True
-                    ))
+                if not re.match(r"^[A-Z][a-zA-Z0-9]*$", node.name):
+                    issues.append(
+                        QualityIssue(
+                            issue_type="naming",
+                            severity="warning",
+                            file_path=file_path,
+                            line_number=node.lineno,
+                            message=f"Class '{node.name}' should use PascalCase",
+                            suggestion=f"Rename to {self._to_pascal_case(node.name)}",
+                            auto_fixable=True,
+                        )
+                    )
 
         return issues
 
-    def _check_structure(
-        self,
-        tree: ast.AST,
-        file_path: str
-    ) -> List[QualityIssue]:
+    def _check_structure(self, tree: ast.AST, file_path: str) -> List[QualityIssue]:
         """Check code structure."""
         issues = []
 
@@ -839,23 +783,21 @@ class RealTimeCodeQualityAdvisor:
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
                 if not ast.get_docstring(node):
-                    issues.append(QualityIssue(
-                        issue_type='structure',
-                        severity='info',
-                        file_path=file_path,
-                        line_number=node.lineno,
-                        message=f"Missing docstring for {node.name}",
-                        suggestion="Add docstring explaining purpose and parameters",
-                        auto_fixable=False
-                    ))
+                    issues.append(
+                        QualityIssue(
+                            issue_type="structure",
+                            severity="info",
+                            file_path=file_path,
+                            line_number=node.lineno,
+                            message=f"Missing docstring for {node.name}",
+                            suggestion="Add docstring explaining purpose and parameters",
+                            auto_fixable=False,
+                        )
+                    )
 
         return issues
 
-    def _check_performance(
-        self,
-        tree: ast.AST,
-        file_path: str
-    ) -> List[QualityIssue]:
+    def _check_performance(self, tree: ast.AST, file_path: str) -> List[QualityIssue]:
         """Check for performance anti-patterns."""
         issues = []
 
@@ -864,24 +806,21 @@ class RealTimeCodeQualityAdvisor:
             if isinstance(node, (ast.For, ast.While)):
                 for child in ast.walk(node):
                     if isinstance(child, ast.AugAssign) and isinstance(child.op, ast.Add):
-                        issues.append(QualityIssue(
-                            issue_type='performance',
-                            severity='warning',
-                            file_path=file_path,
-                            line_number=node.lineno,
-                            message="List concatenation in loop (use list.append instead)",
-                            suggestion="Use list.append() or list comprehension",
-                            auto_fixable=True
-                        ))
+                        issues.append(
+                            QualityIssue(
+                                issue_type="performance",
+                                severity="warning",
+                                file_path=file_path,
+                                line_number=node.lineno,
+                                message="List concatenation in loop (use list.append instead)",
+                                suggestion="Use list.append() or list comprehension",
+                                auto_fixable=True,
+                            )
+                        )
 
         return issues
 
-    def _check_security(
-        self,
-        tree: ast.AST,
-        file_path: str,
-        code: str
-    ) -> List[QualityIssue]:
+    def _check_security(self, tree: ast.AST, file_path: str, code: str) -> List[QualityIssue]:
         """Check for security issues."""
         issues = []
 
@@ -889,16 +828,18 @@ class RealTimeCodeQualityAdvisor:
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
                 if isinstance(node.func, ast.Name):
-                    if node.func.id in ('eval', 'exec'):
-                        issues.append(QualityIssue(
-                            issue_type='security',
-                            severity='error',
-                            file_path=file_path,
-                            line_number=node.lineno,
-                            message=f"Dangerous use of {node.func.id}()",
-                            suggestion="Avoid eval/exec - use safer alternatives",
-                            auto_fixable=False
-                        ))
+                    if node.func.id in ("eval", "exec"):
+                        issues.append(
+                            QualityIssue(
+                                issue_type="security",
+                                severity="error",
+                                file_path=file_path,
+                                line_number=node.lineno,
+                                message=f"Dangerous use of {node.func.id}()",
+                                suggestion="Avoid eval/exec - use safer alternatives",
+                                auto_fixable=False,
+                            )
+                        )
 
         # Check for hardcoded secrets
         secret_patterns = [
@@ -909,15 +850,17 @@ class RealTimeCodeQualityAdvisor:
 
         for pattern, message in secret_patterns:
             if re.search(pattern, code, re.IGNORECASE):
-                issues.append(QualityIssue(
-                    issue_type='security',
-                    severity='error',
-                    file_path=file_path,
-                    line_number=1,
-                    message=message,
-                    suggestion="Use environment variables or secure storage",
-                    auto_fixable=False
-                ))
+                issues.append(
+                    QualityIssue(
+                        issue_type="security",
+                        severity="error",
+                        file_path=file_path,
+                        line_number=1,
+                        message=message,
+                        suggestion="Use environment variables or secure storage",
+                        auto_fixable=False,
+                    )
+                )
 
         return issues
 
@@ -935,24 +878,25 @@ class RealTimeCodeQualityAdvisor:
 
     def _to_snake_case(self, name: str) -> str:
         """Convert to snake_case."""
-        s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
-        return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+        s1 = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
+        return re.sub("([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
 
     def _to_pascal_case(self, name: str) -> str:
         """Convert to PascalCase."""
-        return ''.join(word.capitalize() for word in name.split('_'))
+        return "".join(word.capitalize() for word in name.split("_"))
 
 
 # ============================================================================
 # EXPORT FUNCTIONALITY
 # ============================================================================
 
+
 def export_analysis_report(
     evolution_metrics: EvolutionMetrics,
     regressions: List[PerformanceRegression],
     impact_analysis: ImpactAnalysis,
     quality_issues: List[QualityIssue],
-    output_path: str
+    output_path: str,
 ):
     """
     Export comprehensive analysis report.
@@ -965,14 +909,14 @@ def export_analysis_report(
         output_path: Where to save report
     """
     report = {
-        'generated_at': datetime.now().isoformat(),
-        'evolution': asdict(evolution_metrics),
-        'performance_regressions': [asdict(r) for r in regressions],
-        'impact_analysis': asdict(impact_analysis),
-        'quality_issues': [asdict(q) for q in quality_issues]
+        "generated_at": datetime.now().isoformat(),
+        "evolution": asdict(evolution_metrics),
+        "performance_regressions": [asdict(r) for r in regressions],
+        "impact_analysis": asdict(impact_analysis),
+        "quality_issues": [asdict(q) for q in quality_issues],
     }
 
-    with open(output_path, 'w') as f:
+    with open(output_path, "w") as f:
         json.dump(report, f, indent=2, default=str)
 
     print(f"Analysis report saved to {output_path}")
@@ -982,12 +926,12 @@ def main():
     """CLI for advanced features."""
     import argparse
 
-    parser = argparse.ArgumentParser(description='Advanced RAG Features')
-    parser.add_argument('--repo-root', default='.', help='Repository root')
-    parser.add_argument('--mode', required=True,
-                       choices=['evolution', 'performance', 'dependencies', 'quality'],
-                       help='Analysis mode')
-    parser.add_argument('--output', help='Output file for report')
+    parser = argparse.ArgumentParser(description="Advanced RAG Features")
+    parser.add_argument("--repo-root", default=".", help="Repository root")
+    parser.add_argument(
+        "--mode", required=True, choices=["evolution", "performance", "dependencies", "quality"], help="Analysis mode"
+    )
+    parser.add_argument("--output", help="Output file for report")
 
     args = parser.parse_args()
 
@@ -999,7 +943,7 @@ def main():
     search = SemanticCodeSearch(args.repo_root)
     search.index_codebase()
 
-    if args.mode == 'evolution':
+    if args.mode == "evolution":
         tracker = CodebaseEvolutionTracker(args.repo_root)
         tracker.take_snapshot(search)
         metrics = tracker.analyze_evolution()
@@ -1012,12 +956,12 @@ def main():
         print(f"  Technical debt: {metrics.technical_debt_hours:.1f} hours")
         print(f"\nRefactoring suggestions: {len(suggestions)}")
 
-    elif args.mode == 'performance':
+    elif args.mode == "performance":
         detector = PerformanceRegressionDetector()
 
         # Example usage
-        detector.set_baseline('depth_pipeline', 'throughput', 500, 'images/hour')
-        regression = detector.check_regression('depth_pipeline', 'throughput', 350)
+        detector.set_baseline("depth_pipeline", "throughput", 500, "images/hour")
+        regression = detector.check_regression("depth_pipeline", "throughput", 350)
 
         if regression:
             print(f"\nRegression detected!")
@@ -1027,7 +971,7 @@ def main():
             for cause in regression.possible_causes:
                 print(f"  - {cause}")
 
-    elif args.mode == 'dependencies':
+    elif args.mode == "dependencies":
         analyzer = CrossPipelineDependencyAnalyzer(search)
         analyzer.build_dependency_graph()
 
@@ -1037,13 +981,13 @@ def main():
         for i, path in enumerate(critical_paths[:5], 1):
             print(f"\n{i}. {' → '.join(path)}")
 
-    elif args.mode == 'quality':
+    elif args.mode == "quality":
         advisor = RealTimeCodeQualityAdvisor(search)
 
         # Analyze all Python files
         total_issues = []
-        for py_file in Path(args.repo_root).rglob('*.py'):
-            if '__pycache__' not in str(py_file):
+        for py_file in Path(args.repo_root).rglob("*.py"):
+            if "__pycache__" not in str(py_file):
                 try:
                     code = py_file.read_text()
                     issues = advisor.analyze_code(code, str(py_file))
@@ -1062,5 +1006,5 @@ def main():
             print(f"  {severity}: {count}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -74,7 +74,7 @@ python luxury_tiff_batch_processor_cli.py \
     --recursive
 ```
 
-**Supported Input**: `.tif`, `.tiff`, `.TIF`, `.TIFF`  
+**Supported Input**: `.tif`, `.tiff`, `.TIF`, `.TIFF`
 **Output**: 16-bit TIFF (with tifffile) or 8-bit TIFF (PIL fallback)
 
 ---
@@ -101,7 +101,7 @@ python depth_pipeline/pipeline.py \
     --config config/interior_preset.yaml
 ```
 
-**Supported Input**: `.jpg`, `.jpeg`, `.png`, `.tiff`, `.tif`, `.webp`, `.bmp`  
+**Supported Input**: `.jpg`, `.jpeg`, `.png`, `.tiff`, `.tif`, `.webp`, `.bmp`
 **Output**: Matches input format or specified via `--output-format`
 
 ---
@@ -132,7 +132,7 @@ python lux_render_pipeline.py \
     --brand_text "The Veridian | Penthouse 21B"
 ```
 
-**Supported Input**: Any PIL format (`.jpg`, `.png`, `.tiff`, `.bmp`, `.webp`)  
+**Supported Input**: Any PIL format (`.jpg`, `.png`, `.tiff`, `.bmp`, `.webp`)
 **Output**: PNG (default), TIFF (with `--output-tiff`)
 
 ---
@@ -159,7 +159,7 @@ python material_response.py \
     --strength 0.75
 ```
 
-**Supported Input**: `.jpg`, `.png`, `.tiff`, `.webp`, `.bmp`  
+**Supported Input**: `.jpg`, `.png`, `.tiff`, `.webp`, `.bmp`
 **Output**: Matches input format, TIFF recommended
 
 ---
@@ -181,7 +181,7 @@ python board_material_aerial_enhancer.py \
     --textures textures/custom/
 ```
 
-**Supported Input**: `.jpg`, `.png`, `.tiff`  
+**Supported Input**: `.jpg`, `.png`, `.tiff`
 **Output**: Matches input format
 
 ---
@@ -219,7 +219,7 @@ python luxury_video_master_grader.py \
     --tone-map Hable
 ```
 
-**Supported Input**: `.mp4`, `.mov`, `.avi`, `.mkv`, `.webm`  
+**Supported Input**: `.mp4`, `.mov`, `.avi`, `.mkv`, `.webm`
 **Output**: `.mov` (ProRes), `.mp4` (H.264/H.265)
 
 ---
@@ -272,7 +272,7 @@ python luxury_video_master_grader.py \
 | Lux Render | ✅ | ✅** | ❌ |
 | Material Response | ✅ | ✅* | ❌ |
 
-\* Requires `tifffile` package  
+\* Requires `tifffile` package
 \*\* Input accepted, converted to 8-bit for processing, output as 16-bit
 
 ### Color Space Support
@@ -465,5 +465,5 @@ python material_response.py --input photo.jpg --output enhanced.tiff
 
 ---
 
-**Last Updated**: October 2025  
+**Last Updated**: October 2025
 **Maintainer**: Transformation Portal Team

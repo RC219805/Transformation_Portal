@@ -202,9 +202,9 @@ enhanced_prompt = pipeline.enhance_prompt(
 )
 
 print(enhanced_prompt)
-# Output: "photorealistic architectural rendering, kitchen, 
-#          12' x 14' space, 10' ceiling height, materials: white oak flooring, 
-#          quartz counters, brass hardware, open concept, natural light, 
+# Output: "photorealistic architectural rendering, kitchen,
+#          12' x 14' space, 10' ceiling height, materials: white oak flooring,
+#          quartz counters, brass hardware, open concept, natural light,
 #          bright airy atmosphere"
 ```
 

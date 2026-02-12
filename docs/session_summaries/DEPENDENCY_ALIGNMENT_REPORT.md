@@ -114,5 +114,5 @@ The script is ready to use as-is. Dependencies are properly aligned.
 
 ---
 
-**Date**: 2025-11-06, 23:33 PST  
+**Date**: 2025-11-06, 23:33 PST
 **Status**: ✅ All dependencies aligned

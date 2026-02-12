@@ -4,18 +4,20 @@
 Context-aware processing with Material Response Technology
 """
 
-import sys
-from pathlib import Path
 import json
+import sys
 import time
+from pathlib import Path
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from transformation_portal.utils.image_utils import load_image, save_image
-from transformation_portal.utils.error_handling import safe_execute
 import numpy as np
 from PIL import Image
+
+from transformation_portal.utils.error_handling import safe_execute
+from transformation_portal.utils.image_utils import load_image, save_image
+
 
 def load_exr_to_array(exr_path: Path) -> np.ndarray:
     """Load 16-bit EXR and convert to working format."""
@@ -23,12 +25,12 @@ def load_exr_to_array(exr_path: Path) -> np.ndarray:
 
     # Try OpenEXR first (more reliable for EXR files)
     try:
-        import OpenEXR
         import Imath
+        import OpenEXR
 
         exr_file = OpenEXR.InputFile(str(exr_path))
         header = exr_file.header()
-        dw = header['dataWindow']
+        dw = header["dataWindow"]
         width = dw.max.x - dw.min.x + 1
         height = dw.max.y - dw.min.y + 1
 
@@ -36,7 +38,7 @@ def load_exr_to_array(exr_path: Path) -> np.ndarray:
 
         # Read RGB channels
         FLOAT = Imath.PixelType(Imath.PixelType.FLOAT)
-        channels = ['R', 'G', 'B']
+        channels = ["R", "G", "B"]
         arrays = []
 
         for channel in channels:
@@ -57,6 +59,7 @@ def load_exr_to_array(exr_path: Path) -> np.ndarray:
         print("  ⚠️  OpenEXR not available, trying imageio")
         try:
             import imageio.v3 as iio
+
             # Load EXR (linear color space)
             img_linear = iio.imread(exr_path)
 
@@ -82,11 +85,7 @@ def linear_to_srgb(linear: np.ndarray) -> np.ndarray:
     linear = np.clip(linear, 0, None)
 
     # Apply sRGB gamma curve
-    srgb = np.where(
-        linear <= 0.0031308,
-        linear * 12.92,
-        1.055 * np.power(linear, 1.0 / 2.4) - 0.055
-    )
+    srgb = np.where(linear <= 0.0031308, linear * 12.92, 1.055 * np.power(linear, 1.0 / 2.4) - 0.055)
 
     return srgb
 
@@ -123,23 +122,23 @@ def apply_color_adjustments(img: np.ndarray, config: dict) -> np.ndarray:
     """Apply color grading adjustments."""
     print("🎨 Applying color adjustments")
 
-    adj = config.get('adjustments', {})
+    adj = config.get("adjustments", {})
 
     # Contrast
-    contrast = adj.get('contrast', 1.0)
+    contrast = adj.get("contrast", 1.0)
     if contrast != 1.0:
         img = np.clip((img - 0.5) * contrast + 0.5, 0, None)
         print(f"  • Contrast: {contrast}")
 
     # Saturation
-    saturation = adj.get('saturation', 1.0)
+    saturation = adj.get("saturation", 1.0)
     if saturation != 1.0:
         gray = np.mean(img, axis=2, keepdims=True)
         img = np.clip(gray + (img - gray) * saturation, 0, None)
         print(f"  • Saturation: {saturation}")
 
     # Temperature shift (warm/cool)
-    temp = adj.get('temperature', 0)
+    temp = adj.get("temperature", 0)
     if temp != 0:
         temp_factor = temp / 100.0  # -100 to +100 scale
         img[:, :, 0] = np.clip(img[:, :, 0] * (1 + temp_factor * 0.1), 0, None)  # Red
@@ -160,16 +159,16 @@ def save_outputs(img: np.ndarray, output_dir: Path, base_name: str):
     img_uint16 = (img_clipped * 65535).astype(np.uint16)
 
     # Convert to PIL Image
-    img_pil = Image.fromarray(img_uint16, mode='RGB')
+    img_pil = Image.fromarray(img_uint16, mode="RGB")
 
     # Save 16-bit TIFF
     tiff_path = output_dir / f"{base_name}_Master.ti"
-    img_pil.save(tiff_path, compression='lzw')
+    img_pil.save(tiff_path, compression="lzw")
     print(f"  ✅ Master TIFF (16-bit): {tiff_path.name} ({tiff_path.stat().st_size / 1024 / 1024:.1f} MB)")
 
     # Save high-quality JPEG for web/preview
     img_uint8 = (img_clipped * 255).astype(np.uint8)
-    img_pil_8bit = Image.fromarray(img_uint8, mode='RGB')
+    img_pil_8bit = Image.fromarray(img_uint8, mode="RGB")
 
     jpg_path = output_dir / f"{base_name}_Web.jpg"
     img_pil_8bit.save(jpg_path, quality=95, optimize=True)
@@ -184,9 +183,9 @@ def save_outputs(img: np.ndarray, output_dir: Path, base_name: str):
 
 
 def main():
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("🏊 750 PICACHO POOL - LUXURY RENDERING PIPELINE")
-    print("="*70 + "\n")
+    print("=" * 70 + "\n")
 
     start_time = time.time()
 
@@ -198,9 +197,9 @@ def main():
         config = json.load(f)
 
     # Input/output paths
-    input_path = Path(config['input']['file'])
-    output_dir = Path(config['output']['directory'])
-    base_name = config['output']['base_name']
+    input_path = Path(config["input"]["file"])
+    output_dir = Path(config["output"]["directory"])
+    base_name = config["output"]["base_name"]
 
     if not input_path.exists():
         print(f"❌ Error: Input file not found: {input_path}")
@@ -225,7 +224,7 @@ def main():
     print("STAGE 2: Material Response - Water Enhancement")
     print(f"{'─'*70}")
 
-    if config['processing_stages']['3_material_response']['enabled']:
+    if config["processing_stages"]["3_material_response"]["enabled"]:
         img_enhanced = apply_pool_enhancement(img_srgb)
     else:
         img_enhanced = img_srgb
@@ -235,11 +234,8 @@ def main():
     print("STAGE 3: Color Grading - Santa Barbara Aesthetic")
     print(f"{'─'*70}")
 
-    if config['processing_stages']['4_color_grading']['enabled']:
-        img_graded = apply_color_adjustments(
-            img_enhanced,
-            config['processing_stages']['4_color_grading']
-        )
+    if config["processing_stages"]["4_color_grading"]["enabled"]:
+        img_graded = apply_color_adjustments(img_enhanced, config["processing_stages"]["4_color_grading"])
     else:
         img_graded = img_enhanced
 
@@ -265,5 +261,5 @@ def main():
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

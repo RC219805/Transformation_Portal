@@ -152,7 +152,7 @@ when processing more than 5 images in batch
 
 #### 4. **Creating Presets**
 ```
-@transformation-portal-specialist Create a new video grading preset for 
+@transformation-portal-specialist Create a new video grading preset for
 beachfront properties with warm sunset tones
 ```
 
@@ -165,7 +165,7 @@ beachfront properties with warm sunset tones
 
 #### 5. **Testing Complex Features**
 ```
-@transformation-portal-specialist Write comprehensive tests for the new 
+@transformation-portal-specialist Write comprehensive tests for the new
 zone-based tone mapping feature including edge cases
 ```
 
@@ -182,7 +182,7 @@ zone-based tone mapping feature including edge cases
 
 **Step 1**: Ask for implementation
 ```
-@transformation-portal-specialist I want to add depth-based bokeh simulation 
+@transformation-portal-specialist I want to add depth-based bokeh simulation
 to blur background more than foreground in architectural renders
 ```
 
@@ -194,13 +194,13 @@ to blur background more than foreground in architectural renders
 
 **Step 3**: Iterate with follow-ups
 ```
-@transformation-portal-specialist Can you add a parameter to control the 
+@transformation-portal-specialist Can you add a parameter to control the
 transition zone between sharp and blurred areas?
 ```
 
 **Step 4**: Ask for optimization
 ```
-@transformation-portal-specialist Profile this bokeh implementation and 
+@transformation-portal-specialist Profile this bokeh implementation and
 optimize if it takes more than 50ms per image
 ```
 
@@ -208,25 +208,25 @@ optimize if it takes more than 50ms per image
 
 **Step 1**: Describe the problem
 ```
-@transformation-portal-specialist Video processing is failing with 
+@transformation-portal-specialist Video processing is failing with
 "Invalid pixel format" when processing HDR content from iPhone 15 Pro Max
 ```
 
 **Step 2**: Get diagnostic commands
 ```
-@transformation-portal-specialist Show me how to inspect the video metadata 
+@transformation-portal-specialist Show me how to inspect the video metadata
 with ffprobe to diagnose this issue
 ```
 
 **Step 3**: Implement the fix
 ```
-@transformation-portal-specialist Based on the metadata showing HLG color 
+@transformation-portal-specialist Based on the metadata showing HLG color
 transfer, what's the correct filter graph to handle this?
 ```
 
 **Step 4**: Add test coverage
 ```
-@transformation-portal-specialist Add tests to prevent this HDR detection 
+@transformation-portal-specialist Add tests to prevent this HDR detection
 issue in the future
 ```
 
@@ -234,25 +234,25 @@ issue in the future
 
 **Step 1**: Request profiling
 ```
-@transformation-portal-specialist Profile the Material Response batch 
+@transformation-portal-specialist Profile the Material Response batch
 processor and identify bottlenecks
 ```
 
 **Step 2**: Implement optimizations
 ```
-@transformation-portal-specialist Implement the top 3 optimizations you 
+@transformation-portal-specialist Implement the top 3 optimizations you
 identified that don't sacrifice quality
 ```
 
 **Step 3**: Verify improvements
 ```
-@transformation-portal-specialist Create benchmark tests to measure the 
+@transformation-portal-specialist Create benchmark tests to measure the
 performance improvement
 ```
 
 **Step 4**: Document changes
 ```
-@transformation-portal-specialist Update the performance documentation with 
+@transformation-portal-specialist Update the performance documentation with
 the new throughput numbers
 ```
 
@@ -296,8 +296,8 @@ The depth thing isn't working
 
 **✅ Good Prompt:**
 ```
-@transformation-portal-specialist The ArchitecturalDepthPipeline is throwing 
-"RuntimeError: Expected tensor for argument #1 'input' to have size 518x518" 
+@transformation-portal-specialist The ArchitecturalDepthPipeline is throwing
+"RuntimeError: Expected tensor for argument #1 'input' to have size 518x518"
 when processing 4K images. How should I handle variable image sizes?
 ```
 
@@ -308,9 +308,9 @@ Add tests
 
 **✅ Good Prompt:**
 ```
-@transformation-portal-specialist Write comprehensive tests for the new 
-AtmosphericEffects processor, including unit tests for the fog calculation 
-and integration tests with the full pipeline. Mock the depth model to avoid 
+@transformation-portal-specialist Write comprehensive tests for the new
+AtmosphericEffects processor, including unit tests for the fog calculation
+and integration tests with the full pipeline. Mock the depth model to avoid
 CI timeouts.
 ```
 
@@ -321,19 +321,19 @@ CI timeouts.
 For complex tasks, break them into steps:
 
 ```
-1. @transformation-portal-specialist Design the architecture for a new 
+1. @transformation-portal-specialist Design the architecture for a new
    real-time preview pipeline that shows depth effects before full processing
 
-2. @transformation-portal-specialist Implement the core preview rendering 
+2. @transformation-portal-specialist Implement the core preview rendering
    with 256px resolution for speed
 
-3. @transformation-portal-specialist Add a WebSocket server to stream 
+3. @transformation-portal-specialist Add a WebSocket server to stream
    previews to a browser interface
 
-4. @transformation-portal-specialist Create tests for the preview pipeline 
+4. @transformation-portal-specialist Create tests for the preview pipeline
    including latency measurements
 
-5. @transformation-portal-specialist Write user documentation for the 
+5. @transformation-portal-specialist Write user documentation for the
    preview feature
 ```
 
@@ -342,8 +342,8 @@ For complex tasks, break them into steps:
 Use the agent to review code before committing:
 
 ```
-@transformation-portal-specialist Review this implementation of zone-based 
-tone mapping. Check for performance issues, correctness, and alignment 
+@transformation-portal-specialist Review this implementation of zone-based
+tone mapping. Check for performance issues, correctness, and alignment
 with repository standards.
 
 [paste code]
@@ -354,8 +354,8 @@ with repository standards.
 Use it as a teacher:
 
 ```
-@transformation-portal-specialist Explain how the Material Response 
-technology works, including the physics behind surface enhancement and 
+@transformation-portal-specialist Explain how the Material Response
+technology works, including the physics behind surface enhancement and
 how it differs from simple sharpening
 ```
 
@@ -398,7 +398,7 @@ To update: Edit `.github/agents/transformation-portal-specialist.md`
 1. Design Phase
    └─ @agent: "Design architecture for [feature]"
 
-2. Implementation Phase  
+2. Implementation Phase
    └─ @agent: "Implement [component] with tests"
 
 3. Optimization Phase

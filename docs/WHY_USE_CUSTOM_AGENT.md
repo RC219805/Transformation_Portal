@@ -48,14 +48,14 @@ The **Transformation Portal Specialist** agent is uniquely designed for this rep
 5. Hope performance is acceptable
 6. Write documentation from scratch
 
-**Time**: ~4-6 hours  
+**Time**: ~4-6 hours
 **Quality**: Varies significantly
 
 ### With Custom Agent
 
-**Prompt**: 
+**Prompt**:
 ```
-@transformation-portal-specialist Add depth-based atmospheric haze 
+@transformation-portal-specialist Add depth-based atmospheric haze
 to the ArchitecturalDepthPipeline that increases with distance
 ```
 
@@ -67,7 +67,7 @@ to the ArchitecturalDepthPipeline that increases with distance
 5. ✅ Performance analysis (~5-10ms overhead)
 6. ✅ Professional documentation with examples
 
-**Time**: ~30-60 minutes  
+**Time**: ~30-60 minutes
 **Quality**: Consistently high, production-ready
 
 ### Efficiency Gains
@@ -90,7 +90,7 @@ to the ArchitecturalDepthPipeline that increases with distance
 
 **Generic AI**: Provides basic FFmpeg syntax, may miss metadata preservation
 
-**Custom Agent**: 
+**Custom Agent**:
 - Correct filter graph with proper HDR tone mapping
 - Preserves color metadata (`color_primaries`, `color_trc`, `colorspace`)
 - Includes validation with `--dry-run`
@@ -220,8 +220,8 @@ The custom agent is specialized, not a replacement for all assistance.
 - Tests for PQ, HLG, and SDR inputs
 - Documentation with examples
 
-**Manual Implementation Time**: ~3-4 hours  
-**With Agent**: ~10 minutes + 20 minutes integration  
+**Manual Implementation Time**: ~3-4 hours
+**With Agent**: ~10 minutes + 20 minutes integration
 **Time Saved**: 2.5-3 hours
 
 ### Example 2: Memory Optimization
@@ -234,8 +234,8 @@ The custom agent is specialized, not a replacement for all assistance.
 - Optimized batch size based on available memory
 - Included memory profiling code
 
-**Manual Implementation Time**: ~4-6 hours (including profiling and testing)  
-**With Agent**: ~45 minutes  
+**Manual Implementation Time**: ~4-6 hours (including profiling and testing)
+**With Agent**: ~45 minutes
 **Time Saved**: 3-5 hours
 
 ### Example 3: New Pipeline Feature
@@ -250,19 +250,19 @@ The custom agent is specialized, not a replacement for all assistance.
 - Performance benchmarks (~8ms overhead)
 - Professional documentation
 
-**Manual Implementation Time**: ~6-8 hours  
-**With Agent**: ~1 hour  
+**Manual Implementation Time**: ~6-8 hours
+**With Agent**: ~1 hour
 **Time Saved**: 5-7 hours
 
 ## Conclusion
 
 The Transformation Portal Specialist agent is not just a convenience—it's a **force multiplier** that:
 
-✅ **Accelerates development** by 60-70%  
-✅ **Improves code quality** with consistent patterns and comprehensive testing  
-✅ **Enables learning** through expert explanations and examples  
-✅ **Ensures production readiness** with proper error handling and documentation  
-✅ **Maintains consistency** across the complex codebase  
+✅ **Accelerates development** by 60-70%
+✅ **Improves code quality** with consistent patterns and comprehensive testing
+✅ **Enables learning** through expert explanations and examples
+✅ **Ensures production readiness** with proper error handling and documentation
+✅ **Maintains consistency** across the complex codebase
 
 For a repository as sophisticated as Transformation Portal, with its AI/ML pipelines, professional color science, and hardware optimization requirements, a custom agent transforms development from a challenging expert-only task into an efficient, enjoyable process accessible to developers at all skill levels.
 

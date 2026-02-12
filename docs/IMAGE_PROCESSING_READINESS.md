@@ -7,10 +7,10 @@
 ## 🎯 Three Capability Tiers
 
 ### 📦 Tier 1: Minimal Setup (✓ Available Now)
-**Requirements:** numpy, Pillow  
+**Requirements:** numpy, Pillow
 **What you can do:**
 - ✅ Image format conversion (JPG, PNG, TIFF)
-- ✅ Resize and crop operations  
+- ✅ Resize and crop operations
 - ✅ Basic adjustments (brightness, contrast, saturation)
 - ✅ EXIF/IPTC metadata reading
 - ✅ Batch processing of basic operations
@@ -27,7 +27,7 @@ python scripts/simple_image_processor.py input_images/my_image.jpg \
 ```
 
 ### 📦 Tier 2: Standard Setup (Professional)
-**Requirements:** + scipy, tifffile, imagecodecs, scikit-image  
+**Requirements:** + scipy, tifffile, imagecodecs, scikit-image
 **What you can do:**
 - ✅ All Minimal tier features
 - ✅ LUT-based color grading
@@ -49,7 +49,7 @@ python scripts/utilities/luxury_tiff_batch_processor.py \
 ```
 
 ### 📦 Tier 3: Full Setup (AI-Powered)
-**Requirements:** + torch, diffusers, transformers, realesrgan  
+**Requirements:** + torch, diffusers, transformers, realesrgan
 **What you can do:**
 - ✅ All Standard tier features
 - ✅ AI-powered depth estimation (Depth Anything V2)
@@ -152,7 +152,7 @@ python scripts/check_image_processing_readiness.py
 
 You'll see:
 - ✓ Installed packages (green checkmarks)
-- ○ Optional packages (gray circles)  
+- ○ Optional packages (gray circles)
 - ✗ Missing required packages (red X)
 - Disk space available
 - FFmpeg status
@@ -164,7 +164,7 @@ You'll see:
 ## 💡 Common Scenarios
 
 ### Scenario 1: "I just want to batch process JPEGs"
-**Tier needed:** Minimal  
+**Tier needed:** Minimal
 **Installation:**
 ```bash
 pip install numpy Pillow typer tqdm
@@ -176,7 +176,7 @@ python scripts/simple_image_processor.py input_images/*.jpg \
 ```
 
 ### Scenario 2: "I need professional TIFF workflow"
-**Tier needed:** Standard  
+**Tier needed:** Standard
 **Installation:**
 ```bash
 pip install numpy Pillow scipy tifffile imagecodecs scikit-image
@@ -188,8 +188,8 @@ python scripts/utilities/luxury_tiff_batch_processor.py \
 ```
 
 ### Scenario 3: "I want AI-powered enhancement"
-**Tier needed:** Full  
-**Disk space:** ~5GB for packages + ~2GB for models  
+**Tier needed:** Full
+**Disk space:** ~5GB for packages + ~2GB for models
 **Installation:**
 ```bash
 # Check disk space first
@@ -293,7 +293,7 @@ This is expected if you haven't installed ML packages. You have two options:
 
 ### Upgrade Your Setup
 1. Start with Minimal tier (numpy, Pillow)
-2. Upgrade to Standard when needed (scipy, tifffile)  
+2. Upgrade to Standard when needed (scipy, tifffile)
 3. Upgrade to Full when you have disk space and need AI features
 
 ### Get Help

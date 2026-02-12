@@ -18,10 +18,10 @@ This directory contains verification documentation for PR #98.
 
 ## What Was Verified
 
-✅ Tests pass (53/53)  
-✅ CLI tool works  
-✅ No conflicts with main  
-✅ Ready to merge  
+✅ Tests pass (53/53)
+✅ CLI tool works
+✅ No conflicts with main
+✅ Ready to merge
 
 ## PR #98 Status
 
@@ -37,7 +37,7 @@ This directory contains verification documentation for PR #98.
 
 ---
 
-**Verification Date:** November 1, 2025  
-**Verified By:** GitHub Copilot Coding Agent  
-**PR:** #98 - Document and validate image file format support  
+**Verification Date:** November 1, 2025
+**Verified By:** GitHub Copilot Coding Agent
+**PR:** #98 - Document and validate image file format support
 **Branch:** copilot/enhance-image-file-types

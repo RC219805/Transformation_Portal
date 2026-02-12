@@ -82,8 +82,8 @@ python .github/agents/rag_system/templates.py \
 ```
 @transformation-portal-specialist
 
-Use the feature implementation template to help me add a new 
-atmospheric fog effect to the depth pipeline. The effect should 
+Use the feature implementation template to help me add a new
+atmospheric fog effect to the depth pipeline. The effect should
 apply haze based on depth distance.
 ```
 
@@ -136,7 +136,7 @@ The error happens when running: python lux_render_pipeline.py
 ```
 @transformation-portal-specialist
 
-I need to modify the build.yml workflow to add Python 3.12 to the test 
+I need to modify the build.yml workflow to add Python 3.12 to the test
 matrix. What changes are needed?
 ```
 

@@ -1,8 +1,8 @@
 # Quick Wins - Transformation Portal
 
-**Document Version:** 1.0.0  
-**Date:** February 5, 2026  
-**Effort Threshold:** < 4 hours per task  
+**Document Version:** 1.0.0
+**Date:** February 5, 2026
+**Effort Threshold:** < 4 hours per task
 
 ---
 
@@ -36,9 +36,9 @@ This document identifies **high-value, low-effort tasks** that can be completed 
 
 ### QW-1: Add @abstractmethod Decorators to ComfyUI Base Class
 
-**Effort:** 15 minutes  
-**Impact:** Code clarity, IDE support  
-**Risk:** None (documentation only)  
+**Effort:** 15 minutes
+**Impact:** Code clarity, IDE support
+**Risk:** None (documentation only)
 
 **Task:**
 Add `@abstractmethod` decorators to `BaseNode` abstract methods for better IDE support and explicit interface contract.
@@ -83,9 +83,9 @@ class BaseNode(ABC):  # Add ABC inheritance
 
 ### QW-2: Archive Obsolete PR Tracking Documents
 
-**Effort:** 30 minutes  
-**Impact:** Cleaner docs directory  
-**Risk:** None (moving, not deleting)  
+**Effort:** 30 minutes
+**Impact:** Cleaner docs directory
+**Risk:** None (moving, not deleting)
 
 **Task:**
 Move completed PR tracking documents to archive to reduce documentation clutter.
@@ -109,9 +109,9 @@ Move completed PR tracking documents to archive to reduce documentation clutter.
 
 ### QW-3: Update Binary Cleanup Documentation
 
-**Effort:** 15 minutes  
-**Impact:** Accurate documentation  
-**Risk:** None (doc-only change)  
+**Effort:** 15 minutes
+**Impact:** Accurate documentation
+**Risk:** None (doc-only change)
 
 **Task:**
 Update binary file cleanup documentation to reflect completed status.
@@ -141,9 +141,9 @@ Update binary file cleanup documentation to reflect completed status.
 
 ### QW-4: Audit ADR-023 Manifest Implementation Status
 
-**Effort:** 2 hours  
-**Impact:** Documentation accuracy  
-**Risk:** None (audit only, no code changes)  
+**Effort:** 2 hours
+**Impact:** Documentation accuracy
+**Risk:** None (audit only, no code changes)
 
 **Task:**
 Audit `src/transformation_portal/lux_depth_v3/manifest.py` to determine if ADR-023 TODOs are already implemented.
@@ -172,9 +172,9 @@ Audit `src/transformation_portal/lux_depth_v3/manifest.py` to determine if ADR-0
 
 ### QW-5: Document ComfyUI Integration Status
 
-**Effort:** 1 hour  
-**Impact:** User clarity, manage expectations  
-**Risk:** None (documentation only)  
+**Effort:** 1 hour
+**Impact:** User clarity, manage expectations
+**Risk:** None (documentation only)
 
 **Task:**
 Add documentation clarifying ComfyUI integration as experimental/community-maintained.
@@ -188,9 +188,9 @@ Add documentation clarifying ComfyUI integration as experimental/community-maint
 ```markdown
 # ComfyUI Integration (Experimental)
 
-**Status:** 🧪 Experimental  
-**Maintenance:** Community-contributed  
-**Stability:** Alpha  
+**Status:** 🧪 Experimental
+**Maintenance:** Community-contributed
+**Stability:** Alpha
 
 ## Overview
 The `comfyui` module provides custom nodes for integrating Transformation Portal
@@ -217,9 +217,9 @@ Community contributions welcome! See CONTRIBUTING.md for guidelines.
 
 ### QW-6: Add Rollback Procedures Documentation
 
-**Effort:** 2 hours  
-**Impact:** Incident response readiness  
-**Risk:** None (documentation only)  
+**Effort:** 2 hours
+**Impact:** Incident response readiness
+**Risk:** None (documentation only)
 
 **Task:**
 Document rollback procedures for production deployments.
@@ -236,7 +236,7 @@ Document rollback procedures for production deployments.
    ```bash
    # Identify last known good version
    git tag -l
-   
+
    # Revert to previous version
    git checkout v2.0.0
    git tag v2.0.1-rollback
@@ -267,9 +267,9 @@ Document rollback procedures for production deployments.
 
 ### QW-7: Branch Protection Configuration Guide
 
-**Effort:** 1 hour  
-**Impact:** Repository security  
-**Risk:** None (documentation for admin)  
+**Effort:** 1 hour
+**Impact:** Repository security
+**Risk:** None (documentation for admin)
 
 **Task:**
 Document branch protection configuration for repository admins.
@@ -291,12 +291,12 @@ Navigate to: Settings → Branches → Branch protection rules → `main`
 - [x] **Require pull request before merging**
   - [x] Require approvals: 1
   - [x] Dismiss stale reviews
-  
+
 - [x] **Require status checks to pass**
   - [x] build (Python 3.10, 3.12)
   - [x] lint (Python 3.12)
   - [x] ml-tests (Python 3.11)
-  
+
 - [x] **Require conversation resolution before merging**
 
 - [x] **Require linear history** (no merge commits)
@@ -330,9 +330,9 @@ After configuration:
 
 ### QW-8: Add Security Scan Badge to README
 
-**Effort:** 30 minutes  
-**Impact:** Transparency, trust  
-**Risk:** None (cosmetic change)  
+**Effort:** 30 minutes
+**Impact:** Transparency, trust
+**Risk:** None (cosmetic change)
 
 **Task:**
 Add security scanning badges to README if not already present.
@@ -355,9 +355,9 @@ Add security scanning badges to README if not already present.
 
 ### QW-9: Context-Aware Rendering Script Decision
 
-**Effort:** 2 hours (decision + action)  
-**Impact:** Code clarity, maintainability  
-**Risk:** Low (script not in production path)  
+**Effort:** 2 hours (decision + action)
+**Impact:** Code clarity, maintainability
+**Risk:** Low (script not in production path)
 
 **Task:**
 Decide fate of `scripts/context_aware_rendering.py` and act on decision.
@@ -390,9 +390,9 @@ git mv scripts/context_aware_rendering.py examples/demos/
 
 ### QW-10: Depth Canonical Module Audit
 
-**Effort:** 2 hours  
-**Impact:** Code cleanup, reduce confusion  
-**Risk:** Low (likely unused module)  
+**Effort:** 2 hours
+**Impact:** Code cleanup, reduce confusion
+**Risk:** Low (likely unused module)
 
 **Task:**
 Audit `src/transformation_portal/depth_canonical/` module to determine if it's superseded by `depth/backends/`.

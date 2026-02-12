@@ -1,6 +1,6 @@
      1	# Presence Compiler Annexes v1.2
      2	Supplemental directives extending the v1.1 core spec with localization, governance, adaptation, subject-first compilation, platform APIs, and constructive imperfection grammars.
-     3	
+     3
      4	ANNEX A · LOCALE ADAPTATION FRAMEWORK
      5	- Purpose: adjust expression and lighting primitives for cultural perception without breaking core geometry gates.
      6	- Locale profiles: reference `presence_compiler_locales.yml` for declared or default locales; never infer sensitive traits.
@@ -17,14 +17,14 @@
     17	  3. Default `US_EN` baseline if neither is provided.
     18	- Audit requirement: log locale selection and any manual overrides into manifest `locale` and `overrides` blocks.
     19	- Cultural review: run annual feedback loops with local leads to confirm prompts and micro-expression cues remain resonant.
-    20	
+    20
     21	ANNEX B · DETECTION GOVERNANCE AND CONSENT
     22	- Detection mode can only run when a manifest signed by the subject (or authorized rep) is present and `consent.detect == "granted"`.
     23	- Detection output must be quantized into ranges (e.g., C within [0.55, 0.60]) rather than exact floats to prevent misuse.
     24	- Revocation: subjects can flip `consent.detect` to `revoked`; detection clients must poll manifests before analysis and purge cached results.
     25	- Provenance binding: embed invisible watermark or manifest hash to cross-check image authenticity without storing raw faces.
     26	- Access control: detection API requires signed requests with rotating keys and audit logging; unauthorized calls trigger governance alerts.
-    27	
+    27
     28	ANNEX C · ADAPTATION LOOP AND COMPETENCE-INFLATION DEFENSE
     29	- Metrics:
     30	  * `drift_index` := rolling mean of compiled competence scores.
@@ -34,17 +34,17 @@
     34	  * If `scarcity_index < 12`, expand scenario diversity or reweight prompts to restore variance.
     35	- Presence budget: campaigns must distribute at least 30% of portraits toward warmth-led mixes and 30% toward authority-led mixes per quarter.
     36	- Review cadence: evaluate metrics quarterly; document adjustments and rationale in governance log.
-    37	
+    37
     38	ANNEX D · SUBJECT-FIRST COMPILATION MODES
     39	- Introduce blend parameter λ ∈ [0.2, 0.5] balancing institutional consistency against subject fidelity: maximize `(geo_mean(C, W))^(1-λ) * F^λ`, where `C` = competence and `W` = warmth.
-    40	
+    40
     41	- Modes:
     42	  * `balance` (λ = 0.2): institutional target takes precedence.
     43	  * `faithful` (λ = 0.5): prioritize subject-specific cues (e.g., natural warmth).
     44	- Context vector: {scenario ∈ [board, seller, concierge], risk ∈ [low, medium, high]} influences recommended λ and primitive nudges.
     45	- Deliverable policy: provide both balance and faithful renders when λ differs by ≥0.15; subject selects final asset.
     46	- Manifest requirement: log λ, context vector, fidelity score, and subject approval decision.
-    47	
+    47
     48	ANNEX E · PLATFORM AND API SPECIFICATION
     49	- Endpoints:
     50	  * `POST /v1/compile` — inputs: intent, locale, mode, capture metadata; returns manifest, crop guides, and telemetry targets.
@@ -54,7 +54,7 @@
     54	- Rate limits: 60 compile ops/hour/team, 120 validation ops/hour/team, 30 detection ops/hour/team.
     55	- Storage: manifests stored append-only, encrypted at rest; disruption sets referenced via hashed URIs.
     56	- Telemetry: all API responses include `trace_id` for governance review.
-    57	
+    57
     58	ANNEX F · INTENTIONAL DECOMPILATION GRAMMAR
     59	- Purpose: codify constructive imperfection patterns that read as vulnerability, humility, or immediacy.
     60	- Approved patterns (one per campaign unless otherwise justified):

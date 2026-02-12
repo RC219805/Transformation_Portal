@@ -126,13 +126,16 @@ def get_hardware_info() -> Dict[str, Any]:
     try:
         import torch
 
-        info["torch_version"] = torch.__version__
-        info["cuda_available"] = torch.cuda.is_available()
-        info["mps_available"] = torch.backends.mps.is_available()
+        info["torch_version"] = torch.__version__ if hasattr(torch, "__version__") else "stub"
+        info["cuda_available"] = torch.cuda.is_available() if hasattr(torch, "cuda") else False
+        if hasattr(torch, "backends") and hasattr(torch.backends, "mps"):
+            info["mps_available"] = torch.backends.mps.is_available()
+        else:
+            info["mps_available"] = False
 
-        if torch.cuda.is_available():
+        if hasattr(torch, "cuda") and torch.cuda.is_available():
             info["gpu_name"] = torch.cuda.get_device_name(0)
-        elif torch.backends.mps.is_available():
+        elif hasattr(torch, "backends") and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             info["gpu_name"] = "Apple Metal Performance Shaders"
     except ImportError:
         info["torch_available"] = False

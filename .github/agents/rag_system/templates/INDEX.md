@@ -1,7 +1,7 @@
 # RAG System Template Index
 
-**Template Collection Version**: 1.0  
-**Created**: 2025-11-06  
+**Template Collection Version**: 1.0
+**Created**: 2025-11-06
 **Purpose**: Comprehensive prompt templates for Transformation Portal development workflows
 
 ---

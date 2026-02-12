@@ -221,5 +221,5 @@ Checks:
 
 ---
 
-**Last Updated:** 2026-02-09  
+**Last Updated:** 2026-02-09
 **Schema Version:** 1.0.0

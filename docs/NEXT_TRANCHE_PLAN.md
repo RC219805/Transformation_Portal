@@ -1,8 +1,8 @@
 # Next Tranche Plan (8/21 → 11/21)
 
-**Date:** 2026-02-04  
-**Current Progress:** 8/21 completed (38%)  
-**Epic:** #819  
+**Date:** 2026-02-04
+**Current Progress:** 8/21 completed (38%)
+**Epic:** #819
 
 ---
 
@@ -26,8 +26,8 @@ All quick wins from the improvement opportunities epic are shipped:
 ## Next Three Items (Highest Leverage)
 
 ### 1. TEST-001: Shared conftest.py Fixtures
-**Priority:** HIGH  
-**Effort:** ~4 hours  
+**Priority:** HIGH
+**Effort:** ~4 hours
 **Impact:** Reduces test duplication, speeds new test creation
 
 **Why This Matters:**
@@ -49,8 +49,8 @@ All quick wins from the improvement opportunities epic are shipped:
 ---
 
 ### 2. CI-001 (Phase 1): Workflow Consolidation
-**Priority:** HIGH  
-**Effort:** ~6 hours  
+**Priority:** HIGH
+**Effort:** ~6 hours
 **Impact:** Reduced CI complexity, faster maintenance
 
 **Scope (Incremental, Not Boil-the-Ocean):**
@@ -72,8 +72,8 @@ All quick wins from the improvement opportunities epic are shipped:
 ---
 
 ### 3. DOC-001: Documentation Consolidation Quick Win
-**Priority:** HIGH  
-**Effort:** ~3 hours  
+**Priority:** HIGH
+**Effort:** ~3 hours
 **Impact:** Improved discoverability, reduced confusion
 
 **Tasks:**

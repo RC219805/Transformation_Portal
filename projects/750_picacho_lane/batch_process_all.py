@@ -4,19 +4,20 @@
 Processes all 7 views with scene-specific Material Response settings
 """
 
+import json
 import os
 import sys
-import json
 import time
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+
 import numpy as np
 from PIL import Image
 
 # Import OpenEXR for reading
 try:
-    import OpenEXR
     import Imath
+    import OpenEXR
 except ImportError:
     print("ERROR: OpenEXR not installed. Run: pip install OpenEXR")
     sys.exit(1)
@@ -31,7 +32,7 @@ SCENE_CONFIGS = {
         "contrast": 1.08,
         "saturation": 1.05,
         "temperature": 5,
-        "materials": ["water", "stone", "concrete"]
+        "materials": ["water", "stone", "concrete"],
     },
     "GreatRoom": {
         "description": "Great Room - Interior Living",
@@ -42,7 +43,7 @@ SCENE_CONFIGS = {
         "saturation": 1.03,
         "temperature": 3,
         "warmth": 8,
-        "materials": ["wood", "fabric", "glass", "stone"]
+        "materials": ["wood", "fabric", "glass", "stone"],
     },
     "Kitchen": {
         "description": "Kitchen - Culinary Space",
@@ -53,7 +54,7 @@ SCENE_CONFIGS = {
         "saturation": 1.02,
         "temperature": 2,
         "clarity": 1.15,
-        "materials": ["metal", "stone", "glass", "wood"]
+        "materials": ["metal", "stone", "glass", "wood"],
     },
     "PrimaryBedroom": {
         "description": "Primary Bedroom Suite",
@@ -65,7 +66,7 @@ SCENE_CONFIGS = {
         "temperature": 6,
         "warmth": 10,
         "softness": 0.95,
-        "materials": ["fabric", "wood", "glass"]
+        "materials": ["fabric", "wood", "glass"],
     },
     "PrimaryBathroom": {
         "description": "Primary Bathroom - Spa",
@@ -75,7 +76,7 @@ SCENE_CONFIGS = {
         "contrast": 1.08,
         "saturation": 1.04,
         "temperature": 4,
-        "materials": ["stone", "glass", "metal", "water"]
+        "materials": ["stone", "glass", "metal", "water"],
     },
     "Aerial": {
         "description": "Aerial View - Estate Overview",
@@ -86,7 +87,7 @@ SCENE_CONFIGS = {
         "temperature": 7,
         "clarity": 1.20,
         "atmospheric_depth": True,
-        "materials": ["water", "stone", "vegetation", "roof"]
+        "materials": ["water", "stone", "vegetation", "roof"],
     },
     "Aerial-2": {
         "description": "Aerial View 2 - Neighborhood Context",
@@ -97,17 +98,15 @@ SCENE_CONFIGS = {
         "temperature": 7,
         "clarity": 1.20,
         "atmospheric_depth": True,
-        "materials": ["water", "stone", "vegetation", "roof"]
-    }
+        "materials": ["water", "stone", "vegetation", "roof"],
+    },
 }
 
 
 def linear_to_srgb(linear):
     """Convert linear RGB to sRGB gamma"""
     linear = np.clip(linear, 0, 1)
-    srgb = np.where(linear <= 0.0031308,
-                    12.92 * linear,
-                    1.055 * np.power(linear, 1/2.4) - 0.055)
+    srgb = np.where(linear <= 0.0031308, 12.92 * linear, 1.055 * np.power(linear, 1 / 2.4) - 0.055)
     return srgb
 
 
@@ -116,13 +115,13 @@ def load_exr(filepath):
     exr_file = OpenEXR.InputFile(str(filepath))
     header = exr_file.header()
 
-    dw = header['dataWindow']
+    dw = header["dataWindow"]
     width = dw.max.x - dw.min.x + 1
     height = dw.max.y - dw.min.y + 1
 
     FLOAT = Imath.PixelType(Imath.PixelType.FLOAT)
 
-    channels = ['R', 'G', 'B']
+    channels = ["R", "G", "B"]
     channel_data = [exr_file.channel(c, FLOAT) for c in channels]
 
     img_array = np.zeros((height, width, 3), dtype=np.float32)
@@ -154,16 +153,10 @@ def enhance_water(img, mask, saturation_boost=1.25):
     enhanced = img.copy()
 
     # Boost blue saturation
-    enhanced[:, :, 2] = np.clip(
-        enhanced[:, :, 2] * (1.0 + (saturation_boost - 1.0) * mask),
-        0, 1
-    )
+    enhanced[:, :, 2] = np.clip(enhanced[:, :, 2] * (1.0 + (saturation_boost - 1.0) * mask), 0, 1)
 
     # Slightly cool the color (reduce red)
-    enhanced[:, :, 0] = np.clip(
-        enhanced[:, :, 0] * (1.0 - 0.08 * mask),
-        0, 1
-    )
+    enhanced[:, :, 0] = np.clip(enhanced[:, :, 0] * (1.0 - 0.08 * mask), 0, 1)
 
     return enhanced
 
@@ -173,33 +166,33 @@ def apply_color_grading(img, config):
     graded = img.copy()
 
     # Contrast
-    contrast = config.get('contrast', 1.0)
+    contrast = config.get("contrast", 1.0)
     if contrast != 1.0:
         graded = np.clip((graded - 0.5) * contrast + 0.5, 0, 1)
 
     # Saturation
-    saturation = config.get('saturation', 1.0)
+    saturation = config.get("saturation", 1.0)
     if saturation != 1.0:
         luminance = 0.2126 * graded[:, :, 0] + 0.7152 * graded[:, :, 1] + 0.0722 * graded[:, :, 2]
         luminance = luminance[:, :, np.newaxis]
         graded = np.clip(luminance + (graded - luminance) * saturation, 0, 1)
 
     # Temperature (warm/cool)
-    temperature = config.get('temperature', 0)
+    temperature = config.get("temperature", 0)
     if temperature != 0:
         temp_factor = temperature / 100.0
         graded[:, :, 0] = np.clip(graded[:, :, 0] * (1.0 + temp_factor * 0.1), 0, 1)
         graded[:, :, 2] = np.clip(graded[:, :, 2] * (1.0 - temp_factor * 0.05), 0, 1)
 
     # Warmth (additional for interiors)
-    warmth = config.get('warmth', 0)
+    warmth = config.get("warmth", 0)
     if warmth != 0:
         warmth_factor = warmth / 100.0
         graded[:, :, 0] = np.clip(graded[:, :, 0] * (1.0 + warmth_factor * 0.08), 0, 1)
         graded[:, :, 1] = np.clip(graded[:, :, 1] * (1.0 + warmth_factor * 0.04), 0, 1)
 
     # Clarity (mid-tone contrast) - FIXED
-    clarity = config.get('clarity', 1.0)
+    clarity = config.get("clarity", 1.0)
     if clarity != 1.0:
         # Simple clarity: boost mid-tones
         # Calculate per-channel mid-tone mask
@@ -234,20 +227,20 @@ def process_scene(input_path, output_dir, scene_name, config):
     enhanced = img_srgb.copy()
 
     # Water enhancement if applicable
-    if config.get('water_enhance', False):
+    if config.get("water_enhance", False):
         water_mask = detect_water_mask(img_srgb)
         water_percent = (water_mask > 0.5).sum() / water_mask.size * 100
         print(f"  💧 Water regions: {water_percent:.1f}%")
-        enhanced = enhance_water(enhanced, water_mask, config.get('water_saturation', 1.25))
+        enhanced = enhance_water(enhanced, water_mask, config.get("water_saturation", 1.25))
 
     # Color grading
     print("🎨 Applying color grading")
     print(f"  • Contrast: {config.get('contrast', 1.0)}")
     print(f"  • Saturation: {config.get('saturation', 1.0)}")
     print(f"  • Temperature: +{config.get('temperature', 0)}")
-    if config.get('warmth'):
+    if config.get("warmth"):
         print(f"  • Warmth: +{config.get('warmth', 0)}")
-    if config.get('clarity'):
+    if config.get("clarity"):
         print(f"  • Clarity: {config.get('clarity', 1.0)}")
 
     graded = apply_color_grading(enhanced, config)
@@ -256,28 +249,19 @@ def process_scene(input_path, output_dir, scene_name, config):
     print("💾 Saving deliverables")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    base_name = scene_name.replace('-', '_')
+    base_name = scene_name.replace("-", "_")
 
     # Master TIFF (16-bit)
     img_uint16 = (np.clip(graded, 0, 1) * 65535).astype(np.uint16)
     master_path = output_dir / f"750Picacho_{base_name}_Master.ti"
-    Image.fromarray(img_uint16, mode='RGB').save(
-        master_path,
-        format='TIFF',
-        compression='lzw'
-    )
+    Image.fromarray(img_uint16, mode="RGB").save(master_path, format="TIFF", compression="lzw")
     master_size = master_path.stat().st_size / 1024 / 1024
     print(f"  ✅ Master TIFF: {master_path.name} ({master_size:.1f} MB)")
 
     # Web JPEG
     img_uint8 = (np.clip(graded, 0, 1) * 255).astype(np.uint8)
     web_path = output_dir / f"750Picacho_{base_name}_Web.jpg"
-    Image.fromarray(img_uint8, mode='RGB').save(
-        web_path,
-        format='JPEG',
-        quality=95,
-        optimize=True
-    )
+    Image.fromarray(img_uint8, mode="RGB").save(web_path, format="JPEG", quality=95, optimize=True)
     web_size = web_path.stat().st_size / 1024 / 1024
     print(f"  ✅ Web JPEG: {web_path.name} ({web_size:.1f} MB)")
 
@@ -285,7 +269,7 @@ def process_scene(input_path, output_dir, scene_name, config):
     thumb_img = Image.fromarray(img_uint8)
     thumb_img.thumbnail((1200, 1200), Image.Resampling.LANCZOS)
     thumb_path = output_dir / f"750Picacho_{base_name}_Thumbnail.jpg"
-    thumb_img.save(thumb_path, format='JPEG', quality=90, optimize=True)
+    thumb_img.save(thumb_path, format="JPEG", quality=90, optimize=True)
     thumb_size = thumb_path.stat().st_size / 1024
     print(f"  ✅ Thumbnail: {thumb_path.name} ({thumb_size:.0f} KB)")
 
@@ -293,22 +277,22 @@ def process_scene(input_path, output_dir, scene_name, config):
     print(f"✅ Complete in {elapsed:.1f}s")
 
     return {
-        'scene': scene_name,
-        'config': config,
-        'resolution': (width, height),
-        'master_size': master_size,
-        'web_size': web_size,
-        'thumb_size': thumb_size,
-        'time': elapsed
+        "scene": scene_name,
+        "config": config,
+        "resolution": (width, height),
+        "master_size": master_size,
+        "web_size": web_size,
+        "thumb_size": thumb_size,
+        "time": elapsed,
     }
 
 
 def main():
     """Batch process all renderings"""
 
-    print("="*70)
+    print("=" * 70)
     print("🏛️  750 PICACHO LANE - BATCH PROCESSING")
-    print("="*70)
+    print("=" * 70)
     print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print()
 
@@ -327,7 +311,7 @@ def main():
         filename = exr_path.stem  # e.g., "750Picacho_Pool" or "2-750Picacho_Aerial-2"
 
         for scene_key, config in SCENE_CONFIGS.items():
-            if scene_key.replace('-', '_') in filename or scene_key in filename:
+            if scene_key.replace("-", "_") in filename or scene_key in filename:
                 scenes_to_process.append((exr_path, scene_key, config))
                 break
 
@@ -346,9 +330,9 @@ def main():
     # Summary
     total_time = time.time() - total_start
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("✅ BATCH PROCESSING COMPLETE")
-    print("="*70)
+    print("=" * 70)
     print(f"Total time: {total_time:.1f}s ({total_time/60:.1f} minutes)")
     print(f"Processed: {len(results)} scenes")
     print(f"Average: {total_time/len(results):.1f}s per scene")
@@ -360,15 +344,16 @@ def main():
     total_web_size = 0
 
     for result in results:
-        total_master_size += result['master_size']
-        total_web_size += result['web_size']
-        print(f"  {result['scene']:20} | {result['resolution'][0]}x{result['resolution'][1]:4} | "
-              f"Master: {result['master_size']:5.1f}MB | Web: {result['web_size']:4.1f}MB | "
-              f"{result['time']:4.1f}s")
+        total_master_size += result["master_size"]
+        total_web_size += result["web_size"]
+        print(
+            f"  {result['scene']:20} | {result['resolution'][0]}x{result['resolution'][1]:4} | "
+            f"Master: {result['master_size']:5.1f}MB | Web: {result['web_size']:4.1f}MB | "
+            f"{result['time']:4.1f}s"
+        )
 
     print("-" * 70)
-    print(f"  {'TOTAL':20} |          | Master: {total_master_size:5.1f}MB | "
-          f"Web: {total_web_size:4.1f}MB |")
+    print(f"  {'TOTAL':20} |          | Master: {total_master_size:5.1f}MB | " f"Web: {total_web_size:4.1f}MB |")
     print()
     print("📦 All deliverables saved to:")
     print(f"   {output_dir}")

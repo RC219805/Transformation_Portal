@@ -1,8 +1,8 @@
 # Tranche Execution Plan (8/21 → 11/21 complete)
 
-**Architectural Decision**: Enforce CI health before throughput improvements  
-**Authority**: Transformation Portal Architect  
-**Date**: 2026-02-04  
+**Architectural Decision**: Enforce CI health before throughput improvements
+**Authority**: Transformation Portal Architect
+**Date**: 2026-02-04
 **Status**: BINDING
 
 ---
@@ -50,7 +50,7 @@ This plan mandates a **Gate 0** (CI stabilization) before proceeding with the ne
 
 ### Gate 0: Establish Stable CI Baseline
 
-**Priority**: P0 (blocks all other work)  
+**Priority**: P0 (blocks all other work)
 **Rationale**: Formatting drift of 265 files creates two failure modes:
 1. **Silent drift**: PRs accumulate more formatting violations
 2. **Surprise rejection**: Future PRs fail lint when strict enforcement is added
@@ -161,14 +161,14 @@ Create `.git-blame-ignore-revs` with the formatting commit SHA and document in `
 
 ## Tranche 1 Execution Plan (Post-Gate 0)
 
-**Scope**: Complete 3 items (8/21 → 11/21)  
-**Timeline**: 3 weeks  
+**Scope**: Complete 3 items (8/21 → 11/21)
+**Timeline**: 3 weeks
 **Cadence**: 1 item per week, merged to main before next item begins
 
 ### Week 1: TEST-001 — Shared Test Fixtures
 
-**Priority**: HIGH  
-**Effort**: 4 hours (realistic with scope control)  
+**Priority**: HIGH
+**Effort**: 4 hours (realistic with scope control)
 **Impact**: Strong force multiplier for future test development
 
 #### Refined Scope
@@ -185,14 +185,14 @@ Create `.git-blame-ignore-revs` with the formatting commit SHA and document in `
    def dummy_config():
        """Minimal config object for unit tests."""
        return {"preset": "standard", "output_dir": "/tmp/test"}
-   
+
    @pytest.fixture
    def deterministic_rng():
        """Fixed RNG seed for reproducible tests."""
        import random
        random.seed(42)
        yield random
-   
+
    # Tier 2: IO (tmp files, small test assets)
    @pytest.fixture
    def temp_output_dir(tmp_path):
@@ -200,14 +200,14 @@ Create `.git-blame-ignore-revs` with the formatting commit SHA and document in `
        output = tmp_path / "output"
        output.mkdir()
        return output
-   
+
    @pytest.fixture
    def sample_yaml_config(tmp_path):
        """Minimal valid YAML config file."""
        config_path = tmp_path / "config.yaml"
        config_path.write_text("preset: standard\nquality: 95\n")
        return config_path
-   
+
    # Tier 3: Optional/ML (guarded with pytest.importorskip)
    @pytest.fixture
    def mock_depth_model():
@@ -246,8 +246,8 @@ Add 1-2 **property-based tests** using Hypothesis for:
 
 ### Week 2: DOC-001 — Documentation Consolidation
 
-**Priority**: HIGH  
-**Effort**: 3 hours (constrained scope)  
+**Priority**: HIGH
+**Effort**: 3 hours (constrained scope)
 **Impact**: Onboarding + maintainability
 
 #### Refined Scope
@@ -259,19 +259,19 @@ Add 1-2 **property-based tests** using Hypothesis for:
 1. **Create `DOCUMENTATION_INDEX.md` in repository root**:
    - Lists 3-5 primary entry points only
    - Each entry includes: title, path, intended audience, 1-sentence description
-   
+
    Example:
    ```markdown
    # Documentation Index
-   
+
    ## For Users
    - **README.md** — Quick start, installation, basic usage
    - **docs/user_guide/QUICKSTART.md** — Step-by-step first-time setup
-   
+
    ## For Contributors
    - **CONTRIBUTING.md** — Development setup, PR guidelines, testing
    - **docs/architecture/README.md** — System design, module boundaries
-   
+
    ## For Operators
    - **docs/deployment/DOCKER.md** — Containerized deployment
    - **docs/ci/WORKFLOW_MATRIX.md** — CI pipeline reference
@@ -312,8 +312,8 @@ Update `.github/pull_request_template.md` to include:
 
 ### Week 3: CI-001 (Phase 1) — Workflow Consolidation
 
-**Priority**: HIGH  
-**Effort**: 6 hours  
+**Priority**: HIGH
+**Effort**: 6 hours
 **Impact**: Reduced cognitive load, fewer flaky edges
 
 #### Refined Scope
@@ -327,7 +327,7 @@ Update `.github/pull_request_template.md` to include:
 1. **Create `docs/ci/WORKFLOW_MATRIX.md`**:
    ```markdown
    # CI Workflow Matrix
-   
+
    | Workflow | Trigger | Purpose | Checks |
    |----------|---------|---------|--------|
    | build.yml | PR, push to main | Core gate | Lint, Type, Test (3.10/3.12), Coverage |
@@ -477,7 +477,7 @@ Track in Epic #819 description:
 
 ## Appendix: Gate 0 Execution Checklist
 
-**Owner**: Repository maintainer  
+**Owner**: Repository maintainer
 **Timeline**: 2-3 days
 
 - [ ] **Day 1**: Run baseline formatting
@@ -512,6 +512,6 @@ Track in Epic #819 description:
 
 ---
 
-**Approved**: Transformation Portal Architect  
-**Effective**: 2026-02-04  
+**Approved**: Transformation Portal Architect
+**Effective**: 2026-02-04
 **Review**: After Tranche 1 completion (3 weeks post-Gate 0)

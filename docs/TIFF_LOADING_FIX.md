@@ -1,7 +1,7 @@
 # TIFF Loading Issue - Diagnosis & Solution
 
-**Date:** November 8, 2025  
-**Issue:** PIL automatically downcasts 16-bit TIFFs to 8-bit when loading  
+**Date:** November 8, 2025
+**Issue:** PIL automatically downcasts 16-bit TIFFs to 8-bit when loading
 **Status:** ✅ FIXED
 
 ## The Complete Problem
@@ -135,7 +135,7 @@ save_16bit_tiff(result, 'output.tif')  # ✓ Saves as 16-bit
 - **File size:** 16-bit TIFFs are ~2x larger (expected)
   - 8-bit: ~30-60 MB
   - 16-bit: ~60-120 MB
-  
+
 - **Loading time:** tifffile is slightly faster than PIL
 - **Memory:** Same (numpy arrays are float32 internally anyway)
 
@@ -169,15 +169,15 @@ EOF
 1. **Saving Issue (Fixed Oct 2025):**
    - PIL saves 16-bit data as 8-bit
    - Solution: Use tifffile for saving
-   
+
 2. **Loading Issue (Found Nov 2025):**
    - PIL loads 16-bit data as 8-bit
    - Solution: Use tifffile for loading
-   
+
 3. **Impact:**
    - Even with correct saving, viewing/re-processing loses quality
    - Full roundtrip requires both correct saving AND loading
-   
+
 ## Conclusion
 
 The TIFFs are being **saved correctly** as 16-bit, but applications (including PIL) are **loading them incorrectly** as 8-bit. This creates the illusion of quality degradation when in reality the data is preserved on disk but lost during loading.

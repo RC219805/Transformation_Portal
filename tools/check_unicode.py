@@ -20,6 +20,7 @@ BIDI_CHARS = {
     "\u2069": "POP DIRECTIONAL ISOLATE",
 }
 
+
 # Other format control characters (category Cf)
 def check_file(filepath: Path) -> list[str]:
     """Check a single file for dangerous Unicode."""
@@ -32,17 +33,13 @@ def check_file(filepath: Path) -> list[str]:
                 # Check bidirectional overrides
                 if char in BIDI_CHARS:
                     issues.append(
-                        f"{filepath}:{line_num}:{col_num}: "
-                        f"Bidirectional Unicode U+{ord(char):04X} ({BIDI_CHARS[char]})"
+                        f"{filepath}:{line_num}:{col_num}: " f"Bidirectional Unicode U+{ord(char):04X} ({BIDI_CHARS[char]})"
                     )
 
                 # Check other format control chars (category Cf)
                 elif unicodedata.category(char) == "Cf":
                     name = unicodedata.name(char, "UNKNOWN")
-                    issues.append(
-                        f"{filepath}:{line_num}:{col_num}: "
-                        f"Format control character U+{ord(char):04X} ({name})"
-                    )
+                    issues.append(f"{filepath}:{line_num}:{col_num}: " f"Format control character U+{ord(char):04X} ({name})")
     except Exception as e:
         issues.append(f"{filepath}: Error reading file: {e}")
 

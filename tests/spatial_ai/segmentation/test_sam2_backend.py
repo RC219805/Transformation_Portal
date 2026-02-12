@@ -150,6 +150,7 @@ class TestSAM2BackendLinearToSRGB:
 class TestSAM2BackendModelLoading:
     """Test model loading behavior."""
 
+    @pytest.mark.ml
     @patch("transformers.AutoProcessor")
     @patch("transformers.AutoModel")
     def test_model_loads_successfully(self, mock_auto_model, mock_auto_processor):
@@ -171,6 +172,7 @@ class TestSAM2BackendModelLoading:
         assert backend._model is not None
         assert backend._processor is not None
 
+    @pytest.mark.ml
     @patch("transformers.AutoProcessor")
     @patch("transformers.AutoModel")
     def test_model_loads_only_once(self, mock_auto_model, mock_auto_processor):

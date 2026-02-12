@@ -16,12 +16,12 @@ import sys
 from pathlib import Path
 
 # Add RAG system to path
-rag_system_path = Path(__file__).parent / '.github' / 'agents' / 'rag_system'
+rag_system_path = Path(__file__).parent / ".github" / "agents" / "rag_system"
 if rag_system_path.exists():
     sys.path.insert(0, str(rag_system_path))
 else:
     # Try relative path if running from repo root
-    sys.path.insert(0, '.github/agents/rag_system')
+    sys.path.insert(0, ".github/agents/rag_system")
 
 try:
     from citation import CitationGenerator
@@ -45,7 +45,7 @@ def example_basic_search():
 
     # Get repository root (current directory or parent)
     repo_root = Path.cwd()
-    if not (repo_root / '.git').exists():
+    if not (repo_root / ".git").exists():
         repo_root = repo_root.parent
 
     print(f"\n1. Indexing repository: {repo_root}")
@@ -77,7 +77,7 @@ def example_with_reranking():
     print("=" * 80)
 
     repo_root = Path.cwd()
-    if not (repo_root / '.git').exists():
+    if not (repo_root / ".git").exists():
         repo_root = repo_root.parent
 
     # Index and retrieve
@@ -112,7 +112,7 @@ def example_with_citations():
     print("=" * 80)
 
     repo_root = Path.cwd()
-    if not (repo_root / '.git').exists():
+    if not (repo_root / ".git").exists():
         repo_root = repo_root.parent
 
     # Index, retrieve, and rerank
@@ -135,7 +135,7 @@ def example_with_citations():
     print(f"\nGenerated {len(citations)} citations for: '{query}'\n")
 
     # Format as markdown
-    markdown = citation_gen.format_citations(citations, format_type='markdown')
+    markdown = citation_gen.format_citations(citations, format_type="markdown")
     print(markdown)
 
 
@@ -146,7 +146,7 @@ def example_prompt_template():
     print("=" * 80)
 
     repo_root = Path.cwd()
-    if not (repo_root / '.git').exists():
+    if not (repo_root / ".git").exists():
         repo_root = repo_root.parent
 
     # Get context from repository
@@ -165,13 +165,12 @@ def example_prompt_template():
 
     citation_gen = CitationGenerator()
     citations = citation_gen.generate_citations(reranked, max_citations=3)
-    context = citation_gen.format_citations(citations, format_type='text')
+    context = citation_gen.format_citations(citations, format_type="text")
 
     # Generate template with context
     print("\nGenerating feature implementation template...")
     template = PromptTemplates.feature_implementation(
-        feature_description="Add HDR tone mapping with custom transfer function",
-        context=context
+        feature_description="Add HDR tone mapping with custom transfer function", context=context
     )
 
     print("\nTemplate (first 500 chars):")
@@ -205,7 +204,7 @@ def example_code_modification_response():
 +        fog_color = np.array([0.8, 0.85, 0.9])
 +        return image * (1 - depth_map * intensity) + fog_color * depth_map * intensity
 """,
-                description="Add haze effect implementation"
+                description="Add haze effect implementation",
             ),
             FileModification(
                 path="config/presets/exterior.yaml",
@@ -215,12 +214,10 @@ def example_code_modification_response():
    denoising: 0.2
 +  atmospheric_haze: 0.3
 """,
-                description="Enable haze in exterior preset"
-            )
+                description="Enable haze in exterior preset",
+            ),
         ],
-        tests=[
-            "tests/test_atmospheric_processor.py"
-        ],
+        tests=["tests/test_atmospheric_processor.py"],
         explanation=(
             "Atmospheric haze is implemented by blending fog color proportional to depth. "
             "Distant objects (high depth values) receive more fog, creating realistic "
@@ -231,9 +228,9 @@ def example_code_modification_response():
             {
                 "file_path": "depth_pipeline/processors/clarity.py",
                 "snippet": "Similar depth-based processing pattern",
-                "relevance": "Shows existing depth map usage"
+                "relevance": "Shows existing depth map usage",
             }
-        ]
+        ],
     )
 
     print("\nStructured Response:")
@@ -283,11 +280,7 @@ def example_knowledge_engine():
 
     for pipeline, artifact_id, success, time, params in sample_feedback:
         engine.add_feedback(
-            pipeline=pipeline,
-            artifact_id=artifact_id,
-            success=success,
-            processing_time=time,
-            parameters=params
+            pipeline=pipeline, artifact_id=artifact_id, success=success, processing_time=time, parameters=params
         )
 
     # Analyze pipeline
@@ -327,11 +320,12 @@ def main():
     except Exception as e:
         print(f"\nError running examples: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

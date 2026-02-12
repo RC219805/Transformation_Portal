@@ -37,11 +37,7 @@ def cmd_index(args):
     """Index repository content."""
     print(f"Indexing repository: {args.repo_root}")
 
-    indexer = RepositoryIndexer(
-        repo_root=args.repo_root,
-        chunk_size_tokens=args.chunk_size,
-        overlap_tokens=args.chunk_overlap
-    )
+    indexer = RepositoryIndexer(repo_root=args.repo_root, chunk_size_tokens=args.chunk_size, overlap_tokens=args.chunk_overlap)
 
     chunks = indexer.index_repository()
 
@@ -60,14 +56,14 @@ def cmd_index(args):
     # Save index stats if requested
     if args.output:
         stats = {
-            'total_chunks': len(chunks),
-            'chunk_types': chunk_types,
-            'repo_root': args.repo_root,
-            'chunk_size_tokens': args.chunk_size,
-            'overlap_tokens': args.chunk_overlap
+            "total_chunks": len(chunks),
+            "chunk_types": chunk_types,
+            "repo_root": args.repo_root,
+            "chunk_size_tokens": args.chunk_size,
+            "overlap_tokens": args.chunk_overlap,
         }
 
-        with open(args.output, 'w') as f:
+        with open(args.output, "w") as f:
             json.dump(stats, f, indent=2)
 
         print(f"\nStats saved to: {args.output}")
@@ -90,11 +86,9 @@ def cmd_search(args):
     retriever.index(chunks)
 
     # Retrieve
-    chunk_types = args.types.split(',') if args.types else None
+    chunk_types = args.types.split(",") if args.types else None
     results = retriever.retrieve(
-        query=args.query,
-        top_k=args.top_k * 2,  # Get more for reranking
-        chunk_type_filter=chunk_types
+        query=args.query, top_k=args.top_k * 2, chunk_type_filter=chunk_types  # Get more for reranking
     )
 
     # Rerank if requested
@@ -102,7 +96,7 @@ def cmd_search(args):
         reranker = ResultReranker()
         results = reranker.rerank(results, args.query, top_k=args.top_k)
     else:
-        results = results[:args.top_k]
+        results = results[: args.top_k]
 
     print(f"\nFound {len(results)} results:")
     print("=" * 80)
@@ -152,8 +146,8 @@ def cmd_cite(args):
 
     # Save if requested
     if args.output:
-        with open(args.output, 'w') as f:
-            if args.format == 'json':
+        with open(args.output, "w") as f:
+            if args.format == "json":
                 json.dump(citations, f, indent=2)
             else:
                 f.write(formatted)
@@ -164,22 +158,19 @@ def cmd_cite(args):
 
 def cmd_template(args):
     """Generate prompt template."""
-    if args.type == 'feature':
-        template = PromptTemplates.feature_implementation(
-            feature_description=args.description,
-            context=args.context or ""
-        )
-    elif args.type == 'bug':
+    if args.type == "feature":
+        template = PromptTemplates.feature_implementation(feature_description=args.description, context=args.context or "")
+    elif args.type == "bug":
         template = PromptTemplates.bug_triage(
             error_log=args.description,
             reproduction_steps=args.context or "Not provided",
-            environment=args.environment or "Not specified"
+            environment=args.environment or "Not specified",
         )
-    elif args.type == 'ci':
+    elif args.type == "ci":
         template = PromptTemplates.ci_change(
             workflow_name=args.workflow or "build.yml",
             change_description=args.description,
-            reason=args.context or "Not provided"
+            reason=args.context or "Not provided",
         )
     else:
         print(f"Unknown template type: {args.type}", file=sys.stderr)
@@ -188,7 +179,7 @@ def cmd_template(args):
     print(template)
 
     if args.output:
-        with open(args.output, 'w') as f:
+        with open(args.output, "w") as f:
             f.write(template)
         print(f"\nTemplate saved to: {args.output}", file=sys.stderr)
 
@@ -208,13 +199,13 @@ def cmd_classify(args):
         return []
 
     artifact_count = 0
-    for file_path in input_dir.rglob('*') if args.recursive else input_dir.glob('*'):
+    for file_path in input_dir.rglob("*") if args.recursive else input_dir.glob("*"):
         if file_path.is_file():
             # Try to read content if it's a text file
             content = None
-            if file_path.suffix in {'.json', '.log', '.txt', '.md'}:
+            if file_path.suffix in {".json", ".log", ".txt", ".md"}:
                 try:
-                    content = file_path.read_text(encoding='utf-8', errors='ignore')
+                    content = file_path.read_text(encoding="utf-8", errors="ignore")
                 except Exception:
                     pass
 
@@ -225,10 +216,10 @@ def cmd_classify(args):
     stats = classifier.get_statistics()
     print(f"\nClassified {stats['total_artifacts']} artifacts")
     print("\nBy type:")
-    for artifact_type, count in sorted(stats.get('by_type', {}).items()):
+    for artifact_type, count in sorted(stats.get("by_type", {}).items()):
         print(f"  {artifact_type}: {count}")
     print("\nBy pipeline:")
-    for pipeline, count in sorted(stats.get('by_pipeline', {}).items()):
+    for pipeline, count in sorted(stats.get("by_pipeline", {}).items()):
         print(f"  {pipeline}: {count}")
 
     # Save if requested
@@ -244,7 +235,7 @@ def cmd_analyze(args):
     print(f"Analyzing feedback from: {args.feedback_file}")
 
     # Load feedback
-    with open(args.feedback_file, 'r') as f:
+    with open(args.feedback_file, "r") as f:
         feedback_data = json.load(f)
 
     engine = KnowledgeIntegrationEngine()
@@ -259,8 +250,7 @@ def cmd_analyze(args):
         analysis = engine.analyze_pipeline(args.pipeline)
 
         print(f"\nSuccess rate: {analysis.success_rate:.1%}")
-        print(f"Processing time: avg={analysis.avg_processing_time:.2f}s, "
-              f"p95={analysis.p95_processing_time:.2f}s")
+        print(f"Processing time: avg={analysis.avg_processing_time:.2f}s, " f"p95={analysis.p95_processing_time:.2f}s")
         print(f"Common parameters: {analysis.common_parameters}")
 
         if analysis.failure_modes:
@@ -289,7 +279,7 @@ def cmd_analyze(args):
     # Export if requested
     if args.export:
         knowledge_base = engine.export_knowledge_base()
-        with open(args.export, 'w') as f:
+        with open(args.export, "w") as f:
             json.dump(knowledge_base, f, indent=2)
         print(f"\nKnowledge base exported to: {args.export}")
 
@@ -297,61 +287,57 @@ def cmd_analyze(args):
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
-        description='RAG System CLI for Transformation Portal',
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        description="RAG System CLI for Transformation Portal", formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
-    subparsers = parser.add_subparsers(dest='command', help='Available commands')
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # Index command
-    index_parser = subparsers.add_parser('index', help='Index repository content')
-    index_parser.add_argument('--repo-root', default='.', help='Repository root directory')
-    index_parser.add_argument('--chunk-size', type=int, default=1000, help='Chunk size in tokens')
-    index_parser.add_argument('--chunk-overlap', type=int, default=100, help='Chunk overlap in tokens')
-    index_parser.add_argument('--output', help='Save index stats to JSON file')
-    index_parser.add_argument('--verbose', action='store_true', help='Verbose output')
+    index_parser = subparsers.add_parser("index", help="Index repository content")
+    index_parser.add_argument("--repo-root", default=".", help="Repository root directory")
+    index_parser.add_argument("--chunk-size", type=int, default=1000, help="Chunk size in tokens")
+    index_parser.add_argument("--chunk-overlap", type=int, default=100, help="Chunk overlap in tokens")
+    index_parser.add_argument("--output", help="Save index stats to JSON file")
+    index_parser.add_argument("--verbose", action="store_true", help="Verbose output")
 
     # Search command
-    search_parser = subparsers.add_parser('search', help='Search for relevant chunks')
-    search_parser.add_argument('query', help='Search query')
-    search_parser.add_argument('--repo-root', default='.', help='Repository root directory')
-    search_parser.add_argument('--top-k', type=int, default=5, help='Number of results')
-    search_parser.add_argument('--types', help='Comma-separated chunk types (code,doc,test)')
-    search_parser.add_argument('--no-rerank', action='store_true', help='Skip reranking')
+    search_parser = subparsers.add_parser("search", help="Search for relevant chunks")
+    search_parser.add_argument("query", help="Search query")
+    search_parser.add_argument("--repo-root", default=".", help="Repository root directory")
+    search_parser.add_argument("--top-k", type=int, default=5, help="Number of results")
+    search_parser.add_argument("--types", help="Comma-separated chunk types (code,doc,test)")
+    search_parser.add_argument("--no-rerank", action="store_true", help="Skip reranking")
 
     # Citation command
-    cite_parser = subparsers.add_parser('cite', help='Generate citations')
-    cite_parser.add_argument('query', help='Search query')
-    cite_parser.add_argument('--repo-root', default='.', help='Repository root directory')
-    cite_parser.add_argument('--max-citations', type=int, default=5, help='Max citations')
-    cite_parser.add_argument('--format', choices=['markdown', 'text', 'json'],
-                             default='markdown', help='Output format')
-    cite_parser.add_argument('--output', help='Save citations to file')
+    cite_parser = subparsers.add_parser("cite", help="Generate citations")
+    cite_parser.add_argument("query", help="Search query")
+    cite_parser.add_argument("--repo-root", default=".", help="Repository root directory")
+    cite_parser.add_argument("--max-citations", type=int, default=5, help="Max citations")
+    cite_parser.add_argument("--format", choices=["markdown", "text", "json"], default="markdown", help="Output format")
+    cite_parser.add_argument("--output", help="Save citations to file")
 
     # Template command
-    template_parser = subparsers.add_parser('template', help='Generate prompt template')
-    template_parser.add_argument('type', choices=['feature', 'bug', 'ci'],
-                                 help='Template type')
-    template_parser.add_argument('description', help='Feature/bug/change description')
-    template_parser.add_argument('--context', help='Additional context')
-    template_parser.add_argument('--environment', help='Environment info (for bug triage)')
-    template_parser.add_argument('--workflow', help='Workflow name (for CI changes)')
-    template_parser.add_argument('--output', help='Save template to file')
+    template_parser = subparsers.add_parser("template", help="Generate prompt template")
+    template_parser.add_argument("type", choices=["feature", "bug", "ci"], help="Template type")
+    template_parser.add_argument("description", help="Feature/bug/change description")
+    template_parser.add_argument("--context", help="Additional context")
+    template_parser.add_argument("--environment", help="Environment info (for bug triage)")
+    template_parser.add_argument("--workflow", help="Workflow name (for CI changes)")
+    template_parser.add_argument("--output", help="Save template to file")
 
     # Classify command
-    classify_parser = subparsers.add_parser('classify', help='Classify artifacts')
-    classify_parser.add_argument('input_dir', help='Input directory with artifacts')
-    classify_parser.add_argument('--output', help='Save results to JSON file')
-    classify_parser.add_argument('--recursive', action='store_true', help='Recursive search')
+    classify_parser = subparsers.add_parser("classify", help="Classify artifacts")
+    classify_parser.add_argument("input_dir", help="Input directory with artifacts")
+    classify_parser.add_argument("--output", help="Save results to JSON file")
+    classify_parser.add_argument("--recursive", action="store_true", help="Recursive search")
 
     # Analyze command
-    analyze_parser = subparsers.add_parser('analyze', help='Analyze pipeline performance')
-    analyze_parser.add_argument('--feedback-file', required=True, help='Feedback JSON file')
-    analyze_parser.add_argument('--pipeline', help='Analyze specific pipeline')
-    analyze_parser.add_argument('--recommendations', action='store_true',
-                               help='Generate recommendations')
-    analyze_parser.add_argument('--query', help='Natural language query')
-    analyze_parser.add_argument('--export', help='Export knowledge base to JSON')
+    analyze_parser = subparsers.add_parser("analyze", help="Analyze pipeline performance")
+    analyze_parser.add_argument("--feedback-file", required=True, help="Feedback JSON file")
+    analyze_parser.add_argument("--pipeline", help="Analyze specific pipeline")
+    analyze_parser.add_argument("--recommendations", action="store_true", help="Generate recommendations")
+    analyze_parser.add_argument("--query", help="Natural language query")
+    analyze_parser.add_argument("--export", help="Export knowledge base to JSON")
 
     args = parser.parse_args()
 
@@ -361,17 +347,17 @@ def main():
 
     # Execute command
     try:
-        if args.command == 'index':
+        if args.command == "index":
             cmd_index(args)
-        elif args.command == 'search':
+        elif args.command == "search":
             cmd_search(args)
-        elif args.command == 'cite':
+        elif args.command == "cite":
             cmd_cite(args)
-        elif args.command == 'template':
+        elif args.command == "template":
             cmd_template(args)
-        elif args.command == 'classify':
+        elif args.command == "classify":
             cmd_classify(args)
-        elif args.command == 'analyze':
+        elif args.command == "analyze":
             cmd_analyze(args)
         else:
             print(f"Unknown command: {args.command}", file=sys.stderr)
@@ -381,11 +367,12 @@ def main():
 
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
-        if args.verbose if hasattr(args, 'verbose') else False:
+        if args.verbose if hasattr(args, "verbose") else False:
             import traceback
+
             traceback.print_exc()
         return 1
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

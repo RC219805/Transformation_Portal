@@ -153,4 +153,3 @@ echo "  2. Process a test rendering with context intelligence"
 echo "  3. Compare quality against generic processing"
 echo "  4. Batch process entire project"
 echo
-

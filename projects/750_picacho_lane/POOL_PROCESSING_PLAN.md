@@ -1,7 +1,7 @@
 # 750 Picacho Pool - Processing Plan
 
-**Source:** 750Picacho_Pool.exr (82MB, 16-bit EXR)  
-**Scene Type:** Outdoor Pool & Aquatic Features  
+**Source:** 750Picacho_Pool.exr (82MB, 16-bit EXR)
+**Scene Type:** Outdoor Pool & Aquatic Features
 **Priority:** High (Client Deliverable)
 
 ---
@@ -64,9 +64,9 @@
 
 ## 📋 Technical Specifications
 
-**Input Format:** EXR 16-bit linear  
-**Working Space:** TIFF 16-bit  
-**Color Profile:** Adobe RGB / ProPhoto RGB  
+**Input Format:** EXR 16-bit linear
+**Working Space:** TIFF 16-bit
+**Color Profile:** Adobe RGB / ProPhoto RGB
 **Output Formats:**
 - Master TIFF 16-bit (archival)
 - ProRes 422 HQ (if video needed)

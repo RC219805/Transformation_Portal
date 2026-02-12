@@ -43,7 +43,7 @@ Each module has a single, well-defined responsibility:
 ```
 transformation_portal/
 ├── src/transformation_portal/    # Main package
-├── scripts/                      # Standalone utilities  
+├── scripts/                      # Standalone utilities
 ├── data/                         # Data files (gitignored)
 ├── docs/                         # Documentation
 ├── tests/                        # Test suite
@@ -119,18 +119,18 @@ def process_render(image_path, config):
     """Complete render refinement pipeline."""
     # 1. Load and preprocess
     image = load_image(image_path)
-    
+
     # 2. AI enhancement
     enhanced = ai_enhance(image, config)
-    
+
     # 3. Material response
     if config.material_response:
         mr = MaterialResponse()
         enhanced = mr.enhance(enhanced)
-    
+
     # 4. Color grading
     result = apply_lut(enhanced, config.lut)
-    
+
     return result
 ```
 
@@ -149,10 +149,10 @@ def process_render(image_path, config):
 # material_response/core.py
 class MaterialResponse:
     """Physics-based surface enhancement."""
-    
+
     def __init__(self, config=None):
         self.config = config or default_config()
-    
+
     def enhance(self, image, surfaces=None):
         """Enhance materials in image."""
         # Material-aware processing
@@ -305,16 +305,16 @@ tests/
 # config/preset_name.yaml
 pipeline:
   name: "signature_estate"
-  
+
 processor:
   material_response:
     enabled: true
     strength: 0.7
-    
+
   color_grading:
     lut: "assets/luts/location_aesthetic/Montecito_Golden_Hour.cube"
     opacity: 0.75
-    
+
 output:
   format: "tiff"
   bit_depth: 16
@@ -357,10 +357,10 @@ class ConfigurationError(TransformationPortalError):
 def process_image(image_path, config):
     if not image_path.exists():
         raise ProcessingError(f"Image not found: {image_path}")
-    
+
     if not validate_config(config):
         raise ConfigurationError(f"Invalid config: {config}")
-    
+
     # Process...
 ```
 
