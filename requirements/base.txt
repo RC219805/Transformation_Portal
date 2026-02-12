@@ -19,6 +19,6 @@ scipy==1.17.0
 shellingham==1.5.4
 threadpoolctl==3.6.0
 tifffile==2024.12.12
-tqdm==4.67.2
+tqdm==4.67.3
 typer==0.21.1
 typing-extensions==4.15.0

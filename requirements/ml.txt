@@ -74,7 +74,7 @@ timm==1.0.24
 tokenizers==0.22.2
 torch==2.10.0
 torchvision==0.25.0
-tqdm==4.67.2
+tqdm==4.67.3
 transformers==4.57.6
 triton==3.6.0
 typing-extensions==4.15.0
