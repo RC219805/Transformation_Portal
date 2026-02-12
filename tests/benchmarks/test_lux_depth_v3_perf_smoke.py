@@ -171,7 +171,7 @@ class PeakRSSTracker:
                 rss = self.process.memory_info().rss
                 if rss > self.peak_rss_bytes:
                     self.peak_rss_bytes = rss
-            except Exception:
+            except (ProcessLookupError, PermissionError):
                 break
             self._stop.wait(self.interval)
 
