@@ -53,7 +53,7 @@ import subprocess
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Set
+from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 import numpy as np
 import rawpy
@@ -84,13 +84,7 @@ SRGB_SCALE = 1.055
 
 
 def setup_logging(verbosity: int) -> None:
-    level = (
-        logging.WARNING
-        if verbosity == 0
-        else logging.INFO
-        if verbosity == 1
-        else logging.DEBUG
-    )
+    level = logging.WARNING if verbosity == 0 else logging.INFO if verbosity == 1 else logging.DEBUG
     logging.basicConfig(
         level=level,
         format="%(asctime)s | %(levelname)s | %(message)s",
@@ -317,11 +311,7 @@ class PipelineConfig:
             project_name=data["project_name"],
             project_root=root,
             input_raw_dir=Path(data["input_raw_dir"]).expanduser().resolve(),
-            backup_raw_dir=(
-                Path(data["backup_raw_dir"]).expanduser().resolve()
-                if data.get("backup_raw_dir")
-                else None
-            ),
+            backup_raw_dir=(Path(data["backup_raw_dir"]).expanduser().resolve() if data.get("backup_raw_dir") else None),
             rename=data.get("rename", {"enabled": False}),
             selects=data.get("selects", {"use_csv": False}),
             icc=data.get("icc", {}),
@@ -336,9 +326,7 @@ class PipelineConfig:
                 },
             ),
             styles=data.get("styles", {}),
-            consistency=data.get(
-                "consistency", {"target_median": 0.42, "wb_neutralize": True}
-            ),
+            consistency=data.get("consistency", {"target_median": 0.42, "wb_neutralize": True}),
             retouch=data.get("retouch", {"dust_remove": False, "hotspot_reduce": False}),
             export=data.get(
                 "export",
@@ -384,12 +372,8 @@ class PipelineConfig:
             errors.append(f"export.jpeg_quality must be 1-100, got {jpeg_quality}")
 
         target_median = self.consistency.get("target_median", 0.42)
-        if not isinstance(target_median, (int, float)) or not (
-            0.1 <= target_median <= 0.9
-        ):
-            errors.append(
-                f"consistency.target_median must be 0.1-0.9, got {target_median}"
-            )
+        if not isinstance(target_median, (int, float)) or not (0.1 <= target_median <= 0.9):
+            errors.append(f"consistency.target_median must be 0.1-0.9, got {target_median}")
 
         if not self.styles:
             errors.append("At least one style must be defined")
@@ -401,14 +385,10 @@ class PipelineConfig:
 
             exposure = style_params.get("exposure", 0.0)
             if not isinstance(exposure, (int, float)) or not -3.0 <= exposure <= 3.0:
-                errors.append(
-                    f"Style '{style_name}' exposure must be -3.0 to 3.0, got {exposure}"
-                )
+                errors.append(f"Style '{style_name}' exposure must be -3.0 to 3.0, got {exposure}")
 
         if errors:
-            raise ValueError(
-                "Configuration validation failed:\n  - " + "\n  - ".join(errors)
-            )
+            raise ValueError("Configuration validation failed:\n  - " + "\n  - ".join(errors))
 
         LOG.info("Configuration validated successfully")
 
@@ -472,11 +452,7 @@ class Layout:
             self.docs_contacts,
             self.docs_manifests,
         ]
-        dirs += (
-            list(self.work_variants.values())
-            + list(self.export_print.values())
-            + list(self.export_web.values())
-        )
+        dirs += list(self.work_variants.values()) + list(self.export_print.values()) + list(self.export_web.values())
         ensure_dirs(dirs)
         if self.raw_backup:
             self.raw_backup.mkdir(parents=True, exist_ok=True)
@@ -580,9 +556,7 @@ def decode_raws_parallel(
 
     # Filter out already-completed files
     if tracker:
-        pending = [
-            r for r in raws if not tracker.is_completed(f"raw_decode:{r.name}")
-        ]
+        pending = [r for r in raws if not tracker.is_completed(f"raw_decode:{r.name}")]
         if len(pending) < len(raws):
             LOG.info("Skipping %d already-processed RAWs", len(raws) - len(pending))
         raws = pending
@@ -597,9 +571,7 @@ def decode_raws_parallel(
     with ProcessPoolExecutor(max_workers=workers) as executor:
         futures = {executor.submit(process_raw_file, args): args[0] for args in args_list}
 
-        for future in tqdm(
-            as_completed(futures), total=len(futures), desc="RAW→TIFF (parallel)"
-        ):
+        for future in tqdm(as_completed(futures), total=len(futures), desc="RAW→TIFF (parallel)"):
             raw_path, output_path = future.result()
             if output_path:
                 results.append(output_path)
@@ -612,9 +584,7 @@ def decode_raws_parallel(
 # ----------------------------- file operations ----------------------------- #
 
 
-def save_tiff16_prophoto(
-    img: np.ndarray, path: Path, icc_bytes: Optional[bytes]
-) -> None:
+def save_tiff16_prophoto(img: np.ndarray, path: Path, icc_bytes: Optional[bytes]) -> None:
     """Save 16-bit TIFF preserving full bit depth."""
     img16 = np.clip(np.round(img * 65535.0), 0, 65535).astype(np.uint16)
     im = Image.fromarray(img16, mode="RGB")
@@ -625,9 +595,7 @@ def save_tiff16_prophoto(
     atomic_write(path, _write)
 
 
-def save_jpeg_srgb(
-    img: np.ndarray, path: Path, icc_bytes: Optional[bytes], quality: int = 96
-) -> None:
+def save_jpeg_srgb(img: np.ndarray, path: Path, icc_bytes: Optional[bytes], quality: int = 96) -> None:
     """Save 8-bit JPEG with sRGB color space."""
     img8 = np.clip(np.round(img * 255.0), 0, 255).astype(np.uint8)
     im = Image.fromarray(img8, mode="RGB")
@@ -664,11 +632,7 @@ def resize_long_edge(img: np.ndarray, long_edge: int) -> np.ndarray:
     # Convert to sRGB for PIL resize, then back
     img_srgb = linear_to_srgb(img)
     resized = (
-        np.array(
-            Image.fromarray((img_srgb * 255).astype(np.uint8)).resize(
-                (new_w, new_h), Image.LANCZOS
-            )
-        ).astype(np.float32)
+        np.array(Image.fromarray((img_srgb * 255).astype(np.uint8)).resize((new_w, new_h), Image.LANCZOS)).astype(np.float32)
         / 255.0
     )
     return srgb_to_linear(resized)
@@ -798,16 +762,14 @@ def split_tone(
         hue = (hue * (1 - mask_hi)) + ((hi_h / 360.0) * mask_hi)
         saturation = np.clip(saturation + hi_s * mask_hi, 0, 1)
 
-    out = (
-        Image.merge(
-            "HSV",
-            [
-                Image.fromarray((hue * 255).astype(np.uint8)),
-                Image.fromarray((saturation * 255).astype(np.uint8)),
-                Image.fromarray((value * 255).astype(np.uint8)),
-            ],
-        ).convert("RGB")
-    )
+    out = Image.merge(
+        "HSV",
+        [
+            Image.fromarray((hue * 255).astype(np.uint8)),
+            Image.fromarray((saturation * 255).astype(np.uint8)),
+            Image.fromarray((value * 255).astype(np.uint8)),
+        ],
+    ).convert("RGB")
     result_srgb = np.array(out).astype(np.float32) / 255.0
 
     return srgb_to_linear(result_srgb)
@@ -895,9 +857,7 @@ def neutralize_wb_near_white(img: np.ndarray) -> np.ndarray:
 # ----------------------------- effects ------------------------------------- #
 
 
-def unsharp_mask(
-    img: np.ndarray, amount: float = 0.2, radius: float = 1.2, threshold: float = 0.0
-) -> np.ndarray:
+def unsharp_mask(img: np.ndarray, amount: float = 0.2, radius: float = 1.2, threshold: float = 0.0) -> np.ndarray:
     """Apply unsharp mask in sRGB space."""
     if amount <= 0:
         return img
@@ -1067,9 +1027,7 @@ def embed_iptc_exiftool(img_path: Path, row: Dict[str, str]) -> None:
     add("XMP-iptcCore:Location", row.get("location"))
 
     args.append(str(img_path))
-    subprocess.run(
-        args, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-    )
+    subprocess.run(args, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 # ------------------------------- pipeline ---------------------------------- #
@@ -1096,11 +1054,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1, resume: bool = False) ->
     raws = filter_selects(cfg, raws_copied)
 
     # Parallel RAW decode
-    icc_prophoto = (
-        load_icc_bytes(Path(cfg.icc.get("prophoto_path", "")))
-        if cfg.icc.get("prophoto_path")
-        else None
-    )
+    icc_prophoto = load_icc_bytes(Path(cfg.icc.get("prophoto_path", ""))) if cfg.icc.get("prophoto_path") else None
 
     workers = int(cfg.processing.get("workers", 4))
     base_outputs = decode_raws_parallel(raws, lay.work_base, icc_prophoto, workers, tracker)
@@ -1116,9 +1070,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1, resume: bool = False) ->
 
             try:
                 img = np.array(Image.open(p)).astype(np.float32) / 65535.0
-                img = auto_upright_small(
-                    img, float(cfg.processing.get("upright_max_deg", 3.0))
-                )
+                img = auto_upright_small(img, float(cfg.processing.get("upright_max_deg", 3.0)))
                 out = lay.work_align / p.name
                 save_tiff16_prophoto(img, out, icc_prophoto)
                 aligned_paths.append(out)
@@ -1177,11 +1129,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1, resume: bool = False) ->
         gc.collect()
 
     # Export
-    icc_srgb = (
-        load_icc_bytes(Path(cfg.icc.get("srgb_path", "")))
-        if cfg.icc.get("srgb_path")
-        else None
-    )
+    icc_srgb = load_icc_bytes(Path(cfg.icc.get("srgb_path", ""))) if cfg.icc.get("srgb_path") else None
 
     manifest = {"project": cfg.project_name, "exports": []}
 
@@ -1250,9 +1198,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1, resume: bool = False) ->
         if zip_path.exists():
             zip_path.unlink()
 
-        shutil.make_archive(
-            str(zip_path.with_suffix("")), "zip", root_dir=cfg.project_root, base_dir="EXPORT"
-        )
+        shutil.make_archive(str(zip_path.with_suffix("")), "zip", root_dir=cfg.project_root, base_dir="EXPORT")
         LOG.info("Deliverable zip: %s", zip_path)
 
     LOG.info("Pipeline complete! Outputs in EXPORT/")
@@ -1262,17 +1208,11 @@ def run_pipeline(config_path: Path, verbosity: int = 1, resume: bool = False) ->
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    ap = argparse.ArgumentParser(
-        description="AD Editorial Interior Post-Production Pipeline v2 (Enhanced)"
-    )
+    ap = argparse.ArgumentParser(description="AD Editorial Interior Post-Production Pipeline v2 (Enhanced)")
     ap.add_argument("run", nargs="?", help="Run the full pipeline", default="run")
     ap.add_argument("--config", required=True, type=Path, help="Path to YAML config")
-    ap.add_argument(
-        "-v", "--verbose", action="count", default=1, help="Increase verbosity"
-    )
-    ap.add_argument(
-        "--resume", action="store_true", help="Resume from previous run"
-    )
+    ap.add_argument("-v", "--verbose", action="count", default=1, help="Increase verbosity")
+    ap.add_argument("--resume", action="store_true", help="Resume from previous run")
 
     args = ap.parse_args(argv)
 

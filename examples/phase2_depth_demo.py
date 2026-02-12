@@ -15,18 +15,19 @@ Requirements:
 """
 
 from pathlib import Path
+
 import numpy as np
 from PIL import Image
 
 from transformation_portal.depth_canonical import DepthPipeline
 from transformation_portal.depth_canonical.config import (
-    UnifiedDepthConfig,
+    DeviceType,
+    IOConfig,
     ModelConfig,
     ModelVariant,
-    DeviceType,
-    ProcessingConfig,
     PBRConfig,
-    IOConfig,
+    ProcessingConfig,
+    UnifiedDepthConfig,
 )
 
 
@@ -46,9 +47,9 @@ def create_demo_image(size=(512, 512), name="demo"):
 
 def demo_basic_depth_estimation():
     """Demo 1: Basic depth estimation without PBR."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("DEMO 1: Basic Depth Estimation")
-    print("="*70)
+    print("=" * 70)
 
     # Create config - use small model for speed
     config = UnifiedDepthConfig(
@@ -56,12 +57,8 @@ def demo_basic_depth_estimation():
             variant=ModelVariant.DA3_METRIC_SMALL,
             device=None,  # Auto-detect
         ),
-        processing=ProcessingConfig(
-            pbr=PBRConfig(enabled=False)
-        ),
-        io=IOConfig(
-            cache_enabled=True
-        )
+        processing=ProcessingConfig(pbr=PBRConfig(enabled=False)),
+        io=IOConfig(cache_enabled=True),
     )
 
     # Initialize pipeline
@@ -88,9 +85,9 @@ def demo_basic_depth_estimation():
 
 def demo_depth_with_pbr():
     """Demo 2: Depth estimation + PBR generation."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("DEMO 2: Depth Estimation + PBR Generation")
-    print("="*70)
+    print("=" * 70)
 
     # Create config with PBR enabled
     config = UnifiedDepthConfig(
@@ -104,7 +101,7 @@ def demo_depth_with_pbr():
                 roughness_strength=1.0,
                 ao_strength=0.8,
             )
-        )
+        ),
     )
 
     # Initialize pipeline
@@ -120,11 +117,7 @@ def demo_depth_with_pbr():
 
     # Process with PBR
     print(f"\n🔍 Processing image with PBR...")
-    result = pipeline.process(
-        image=demo_img,
-        output_dir=output_dir,
-        basename="demo"
-    )
+    result = pipeline.process(image=demo_img, output_dir=output_dir, basename="demo")
 
     print(f"\n✓ Depth map: {result.depth_map.shape}")
     print(f"✓ PBR maps generated:")
@@ -140,18 +133,16 @@ def demo_depth_with_pbr():
 
 def demo_batch_processing():
     """Demo 3: Batch processing multiple images."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("DEMO 3: Batch Processing")
-    print("="*70)
+    print("=" * 70)
 
     # Create config
     config = UnifiedDepthConfig(
         model=ModelConfig(
             variant=ModelVariant.DA3_METRIC_SMALL,
         ),
-        processing=ProcessingConfig(
-            pbr=PBRConfig(enabled=True)
-        )
+        processing=ProcessingConfig(pbr=PBRConfig(enabled=True)),
     )
 
     # Initialize pipeline
@@ -175,10 +166,7 @@ def demo_batch_processing():
     output_dir = Path("output/phase2_demo/batch_output")
 
     print(f"\n🔄 Processing {len(images)} images...")
-    results = pipeline.batch_process(
-        images=images,
-        output_dir=output_dir
-    )
+    results = pipeline.batch_process(images=images, output_dir=output_dir)
 
     print(f"\n✓ Processed {len(results)} images:")
     for i, result in enumerate(results):
@@ -191,15 +179,11 @@ def demo_batch_processing():
 
 def demo_backward_compatibility():
     """Demo 4: Backward compatibility with Phase 1 API."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("DEMO 4: Backward Compatibility")
-    print("="*70)
+    print("=" * 70)
 
-    config = UnifiedDepthConfig(
-        processing=ProcessingConfig(
-            pbr=PBRConfig(enabled=True)
-        )
-    )
+    config = UnifiedDepthConfig(processing=ProcessingConfig(pbr=PBRConfig(enabled=True)))
 
     pipeline = DepthPipeline(config)
 
@@ -211,7 +195,7 @@ def demo_backward_compatibility():
         image_path=Path("dummy.jpg"),  # Old parameter name
         depth_map=depth_map,
         output_dir=Path("output/phase2_demo/backward_compat"),
-        basename="old_api"
+        basename="old_api",
     )
 
     print(f"✓ Depth map used: {result.depth_map.shape}")
@@ -221,9 +205,9 @@ def demo_backward_compatibility():
 
 def main():
     """Run all demos."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("🚀 PHASE 2 DEPTH ESTIMATION DEMO")
-    print("="*70)
+    print("=" * 70)
     print("\nThis demo showcases Phase 2 capabilities:")
     print("  1. Basic depth estimation with caching")
     print("  2. Depth estimation + PBR generation")
@@ -237,9 +221,9 @@ def main():
         demo_batch_processing()
         demo_backward_compatibility()
 
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("✅ ALL DEMOS COMPLETED SUCCESSFULLY")
-        print("="*70)
+        print("=" * 70)
         print("\n📂 Check output/phase2_demo/ for generated files")
 
     except ImportError as e:

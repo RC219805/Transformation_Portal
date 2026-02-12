@@ -1,9 +1,9 @@
 # Professional Enhancement Plan: 750 Picacho Kitchen
 
-**Property**: 750 Picacho Residence  
-**Scene**: Luxury Kitchen Interior Rendering  
-**Source File**: `Giga-V2_750Picacho_Kitchen_compatible_kitchen-bright.tiff`  
-**Analysis Date**: 2025-11-07 01:27 PST  
+**Property**: 750 Picacho Residence
+**Scene**: Luxury Kitchen Interior Rendering
+**Source File**: `Giga-V2_750Picacho_Kitchen_compatible_kitchen-bright.tiff`
+**Analysis Date**: 2025-11-07 01:27 PST
 **Target Output**: High-end real estate marketing, magazine-quality publication, hero web image, print brochure
 
 ---
@@ -86,7 +86,7 @@ This provides professional magazine-quality results with optimal time/quality ba
 ## 3. Standard Pipeline Implementation (RECOMMENDED)
 
 ### Stage 1: Technical Preparation & Corrections
-**Duration**: 2-3 minutes  
+**Duration**: 2-3 minutes
 **Tools**: Python + Pillow + colour-science
 
 ```bash
@@ -134,7 +134,7 @@ EOF
 ---
 
 ### Stage 2: Depth-Aware Processing
-**Duration**: 5-8 minutes (with CoreML on Apple Silicon)  
+**Duration**: 5-8 minutes (with CoreML on Apple Silicon)
 **Tools**: `depth_pipeline/` + Depth Anything V2 (CoreML optimized)
 
 ```bash
@@ -154,13 +154,13 @@ python3 depth_pipeline/pipeline.py \
 depth_model:
   name: "depth-anything-v2-small"
   backend: "coreml"  # 3-5x faster on M-series
-  
+
 processing:
   denoising:
     enabled: true
     strength: 0.4  # Moderate - remove rendering noise
     preserve_edges: true
-    
+
   tone_mapping:
     operator: "AgX"  # Film-like roll-off, preserves highlights
     zones:
@@ -174,19 +174,19 @@ processing:
         clarity: 0.20       # Micro-contrast on surfaces
       midground:
         exposure: 0.0       # Maintain balance
-        contrast: 1.10      
+        contrast: 1.10
         clarity: 0.15
       background:
         exposure: -0.05     # Subtle vignette effect
         contrast: 0.95      # Soften distant elements
-        
+
   atmospheric:
     depth_haze:
       enabled: true
       intensity: 0.15     # Very subtle for interior
       color: [0.95, 0.95, 0.98]  # Cool, airy
       start_distance: 0.6  # Only affects far background
-      
+
   clarity:
     global: 0.12          # Overall micro-contrast
     depth_weighted: true  # More clarity in foreground
@@ -207,7 +207,7 @@ processing:
 ---
 
 ### Stage 3: Material Response Technology™
-**Duration**: 8-12 minutes  
+**Duration**: 8-12 minutes
 **Tools**: `material_response.py` (proprietary physics-based enhancement)
 
 ```bash
@@ -276,7 +276,7 @@ python3 material_response.py \
 ---
 
 ### Stage 4: Professional Color Grading
-**Duration**: 3-5 minutes  
+**Duration**: 3-5 minutes
 **Tools**: `luxury_tiff_batch_processor.py` + Custom LUT selection
 
 #### LUT Selection Strategy
@@ -343,7 +343,7 @@ python3 luxury_tiff_batch_processor.py \
 ---
 
 ### Stage 5: Detail Enhancement & Finishing
-**Duration**: 4-6 minutes  
+**Duration**: 4-6 minutes
 **Tools**: Custom Python script using Pillow + scikit-image
 
 ```bash
@@ -445,7 +445,7 @@ EOF
 ---
 
 ### Stage 6: Output Optimization & Deliverables
-**Duration**: 2-3 minutes  
+**Duration**: 2-3 minutes
 **Tools**: Pillow + ExifTool (optional for advanced metadata)
 
 ```bash
@@ -467,7 +467,7 @@ timestamp = datetime.datetime.now().strftime("%Y%m%d")
 # --- Output 1: Master TIFF (16-bit for archival/print) ---
 # Note: Input is 8-bit, but we'll prepare for future 16-bit workflow
 master_path = output_dir / f"750Picacho_Kitchen_MASTER_{timestamp}.tiff"
-img.save(master_path, 
+img.save(master_path,
          compression='lzw',
          dpi=(300, 300))  # Print-ready DPI
 print(f"✓ Master TIFF: {master_path}")
@@ -557,8 +557,8 @@ else:
     img_rgb = img
 icc = img.info.get('icc_profile')
 Path("working").mkdir(exist_ok=True)
-img_rgb.save("working/750Picacho_Kitchen_step1_prep.tiff", 
-             compression='lzw', 
+img_rgb.save("working/750Picacho_Kitchen_step1_prep.tiff",
+             compression='lzw',
              icc_profile=icc if icc else None)
 print("✓ Prep complete")
 EOF
@@ -675,7 +675,7 @@ from realesrgan import RealESRGANer
 from realesrgan.archs.srvgg_arch import SRVGGNetCompact
 
 # Load model
-model = SRVGGNetCompact(num_in_ch=3, num_out_ch=3, num_feat=64, 
+model = SRVGGNetCompact(num_in_ch=3, num_out_ch=3, num_feat=64,
                         num_conv=32, upscale=4, act_type='prelu')
 upsampler = RealESRGANer(
     scale=4,
@@ -824,13 +824,13 @@ stone_mask = (
 ```
 IF (property_location == "California" AND time_of_day == "daytime"):
     USE "Montecito Golden Hour" @ 70%
-    
+
 ELIF (output_medium == "print" OR color_temp == "needs_cooling"):
     USE "Kodak 2393 D55" @ 65%
-    
+
 ELIF (brand_consistency_required == True):
     USE "FilmConvert Nitrate LuxuryRE" @ 60%
-    
+
 ELSE:
     USE "Montecito Golden Hour" @ 65%  # Default safe choice
 ```
@@ -1066,10 +1066,10 @@ python3 material_response.py \
 
 ---
 
-**Pipeline Designed By**: Transformation Portal AI Specialist  
-**Date**: November 7, 2025  
-**Version**: 1.0  
-**Status**: Ready for Production  
+**Pipeline Designed By**: Transformation Portal AI Specialist
+**Date**: November 7, 2025
+**Version**: 1.0
+**Status**: Ready for Production
 
 ---
 

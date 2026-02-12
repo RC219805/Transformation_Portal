@@ -22,4 +22,3 @@ git status --short | grep "^A"
 echo ""
 echo "💾 Ready to commit. Run:"
 echo "   git commit -m 'chore: Add process documentation and utility scripts'"
-

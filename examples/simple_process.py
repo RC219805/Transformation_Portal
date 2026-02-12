@@ -27,7 +27,7 @@ def main():
 
     # Initialize pipeline with default configuration
     print("Loading pipeline...")
-    pipeline = ArchitecturalDepthPipeline.from_config('config/default_config.yaml')
+    pipeline = ArchitecturalDepthPipeline.from_config("config/default_config.yaml")
 
     # Process image
     print(f"Processing: {input_image}")
@@ -35,12 +35,7 @@ def main():
 
     # Save results
     print(f"Saving to: {output_dir}")
-    pipeline.save_result(
-        result,
-        output_dir,
-        save_depth=True,
-        save_visualization=True
-    )
+    pipeline.save_result(result, output_dir, save_depth=True, save_visualization=True)
 
     # Print statistics
     print("\n" + "=" * 50)
@@ -51,5 +46,5 @@ def main():
     print("=" * 50)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -131,7 +131,7 @@ warnings.warn(
 
 ### E. OpenCV Dependency (Already Addressed) ℹ️
 
-**Analysis:** 
+**Analysis:**
 - `opencv-python` is already in `ml` extras in `pyproject.toml`
 - `depth_writer.py` has graceful fallback to PIL when OpenCV missing
 - Tests properly skip when OpenCV not installed (using `pytest.mark.skipif`)

@@ -112,53 +112,90 @@ class ArtifactClassifier:
     # Filename patterns for classification
     PATTERNS = {
         ArtifactType.DEPTH_MAP: [
-            r'depth_map', r'depth.*\.png', r'depth.*\.tiff', r'.*_depth\.',
+            r"depth_map",
+            r"depth.*\.png",
+            r"depth.*\.tiff",
+            r".*_depth\.",
         ],
         ArtifactType.COLOR_GRADE: [
-            r'color_grade', r'graded_', r'.*_lut_applied', r'tone_mapped',
+            r"color_grade",
+            r"graded_",
+            r".*_lut_applied",
+            r"tone_mapped",
         ],
         ArtifactType.HDR_OUTPUT: [
-            r'hdr_', r'.*_hdr\.', r'tonemapped', r'high_dynamic_range',
+            r"hdr_",
+            r".*_hdr\.",
+            r"tonemapped",
+            r"high_dynamic_range",
         ],
         ArtifactType.ANALYSIS: [
-            r'analysis', r'report', r'stats', r'histogram', r'comparison',
+            r"analysis",
+            r"report",
+            r"stats",
+            r"histogram",
+            r"comparison",
         ],
         ArtifactType.METRIC: [
-            r'metrics?\.json', r'performance', r'benchmark', r'timing',
+            r"metrics?\.json",
+            r"performance",
+            r"benchmark",
+            r"timing",
         ],
         ArtifactType.LOG: [
-            r'\.log$', r'debug', r'trace', r'error_log',
+            r"\.log$",
+            r"debug",
+            r"trace",
+            r"error_log",
         ],
         ArtifactType.PROFILE: [
-            r'profile', r'memory', r'cpu_usage', r'gpu_usage',
+            r"profile",
+            r"memory",
+            r"cpu_usage",
+            r"gpu_usage",
         ],
         ArtifactType.MATERIAL_RESPONSE: [
-            r'material_response', r'material_enhanced', r'surface_enhanced',
+            r"material_response",
+            r"material_enhanced",
+            r"surface_enhanced",
         ],
         ArtifactType.LUT_APPLICATION: [
-            r'lut_', r'color_transform', r'film_emulation',
+            r"lut_",
+            r"color_transform",
+            r"film_emulation",
         ],
     }
 
     # Pipeline detection patterns
     PIPELINE_PATTERNS = {
         PipelineType.DEPTH_PIPELINE: [
-            r'depth_pipeline', r'depth_processing', r'architectural_depth',
+            r"depth_pipeline",
+            r"depth_processing",
+            r"architectural_depth",
         ],
         PipelineType.LUX_RENDER: [
-            r'lux_render', r'luxury_render', r'ai_enhanced',
+            r"lux_render",
+            r"luxury_render",
+            r"ai_enhanced",
         ],
         PipelineType.MATERIAL_RESPONSE: [
-            r'material_response', r'surface_processing',
+            r"material_response",
+            r"surface_processing",
         ],
         PipelineType.VIDEO_GRADER: [
-            r'video_grade', r'video_master', r'color_grade',
+            r"video_grade",
+            r"video_master",
+            r"color_grade",
         ],
         PipelineType.TIFF_PROCESSOR: [
-            r'tiff_batch', r'tiff_process', r'16bit_processing',
+            r"tiff_batch",
+            r"tiff_process",
+            r"16bit_processing",
         ],
         PipelineType.HDR_PRODUCTION: [
-            r'hdr_production', r'hdr_pipeline', r'tone_mapping',
+            r"hdr_production",
+            r"hdr_pipeline",
+            r"tone_mapping",
         ],
     }
 
@@ -192,11 +229,11 @@ class ArtifactClassifier:
 
         # Content-based classification if available
         if content:
-            if 'depth' in content.lower() and ('map' in content.lower() or 'estimation' in content.lower()):
+            if "depth" in content.lower() and ("map" in content.lower() or "estimation" in content.lower()):
                 return ArtifactType.DEPTH_MAP
-            if 'lut' in content.lower() or 'color grade' in content.lower():
+            if "lut" in content.lower() or "color grade" in content.lower():
                 return ArtifactType.COLOR_GRADE
-            if 'hdr' in content.lower() or 'tone map' in content.lower():
+            if "hdr" in content.lower() or "tone map" in content.lower():
                 return ArtifactType.HDR_OUTPUT
 
         return ArtifactType.UNKNOWN
@@ -227,11 +264,11 @@ class ArtifactClassifier:
         # Content-based detection
         if content:
             content_lower = content.lower()
-            if 'architectural' in content_lower and 'depth' in content_lower:
+            if "architectural" in content_lower and "depth" in content_lower:
                 return PipelineType.DEPTH_PIPELINE
-            if 'stable diffusion' in content_lower or 'controlnet' in content_lower:
+            if "stable diffusion" in content_lower or "controlnet" in content_lower:
                 return PipelineType.LUX_RENDER
-            if 'material' in content_lower and 'response' in content_lower:
+            if "material" in content_lower and "response" in content_lower:
                 return PipelineType.MATERIAL_RESPONSE
 
         return PipelineType.UNKNOWN
@@ -261,17 +298,17 @@ class ArtifactClassifier:
         )
 
         # Extract timestamp from filename if present
-        timestamp_match = re.search(r'(\d{4}[-_]\d{2}[-_]\d{2})', file_path)
+        timestamp_match = re.search(r"(\d{4}[-_]\d{2}[-_]\d{2})", file_path)
         if timestamp_match:
             try:
-                date_str = timestamp_match.group(1).replace('_', '-')
-                metadata.timestamp = datetime.strptime(date_str, '%Y-%m-%d')
+                date_str = timestamp_match.group(1).replace("_", "-")
+                metadata.timestamp = datetime.strptime(date_str, "%Y-%m-%d")
             except ValueError:
                 # Ignore invalid or missing date formats in filename; timestamp is optional metadata.
                 pass
 
         # Extract resolution from filename
-        resolution_match = re.search(r'(\d{3,4})x(\d{3,4})', file_path)
+        resolution_match = re.search(r"(\d{3,4})x(\d{3,4})", file_path)
         if resolution_match:
             metadata.resolution = (int(resolution_match.group(1)), int(resolution_match.group(2)))
 
@@ -279,39 +316,44 @@ class ArtifactClassifier:
         if content and artifact_type == ArtifactType.METRIC:
             try:
                 data = json.loads(content)
-                metadata.parameters = data.get('parameters', {})
-                metadata.processing_time = data.get('processing_time')
-                metadata.memory_usage = data.get('memory_usage')
-                metadata.gpu_utilization = data.get('gpu_utilization')
-                metadata.success = data.get('success', True)
+                metadata.parameters = data.get("parameters", {})
+                metadata.processing_time = data.get("processing_time")
+                metadata.memory_usage = data.get("memory_usage")
+                metadata.gpu_utilization = data.get("gpu_utilization")
+                metadata.success = data.get("success", True)
             except json.JSONDecodeError:
                 # Content may not always be valid JSON; ignore and proceed with empty/default parameters.
                 pass
 
         # Extract error information from logs
         if content and artifact_type == ArtifactType.LOG:
-            if 'error' in content.lower() or 'exception' in content.lower():
+            if "error" in content.lower() or "exception" in content.lower():
                 metadata.success = False
                 # Extract first error message
-                error_match = re.search(r'(error|exception)[:\s]+([^\n]+)', content, re.IGNORECASE)
+                error_match = re.search(r"(error|exception)[:\s]+([^\n]+)", content, re.IGNORECASE)
                 if error_match:
                     metadata.error_message = error_match.group(2)[:200]  # First 200 chars
 
         # Extract AI model info
         ai_model_patterns = [
-            r'depth_anything_v2',
-            r'stable_diffusion',
-            r'controlnet',
-            r'real_esrgan',
+            r"depth_anything_v2",
+            r"stable_diffusion",
+            r"controlnet",
+            r"real_esrgan",
         ]
         for pattern in ai_model_patterns:
             if re.search(pattern, file_path.lower()):
-                metadata.ai_model = pattern.replace('_', ' ').title()
+                metadata.ai_model = pattern.replace("_", " ").title()
                 break
 
         # Extract color space info
         color_space_patterns = [
-            r'srgb', r'adobe_rgb', r'prophoto', r'aces', r'rec709', r'rec2020',
+            r"srgb",
+            r"adobe_rgb",
+            r"prophoto",
+            r"aces",
+            r"rec709",
+            r"rec2020",
         ]
         for pattern in color_space_patterns:
             if re.search(pattern, file_path.lower()):
@@ -319,7 +361,7 @@ class ArtifactClassifier:
                 break
 
         # Extract bit depth
-        bit_depth_match = re.search(r'(\d+)bit', file_path.lower())
+        bit_depth_match = re.search(r"(\d+)bit", file_path.lower())
         if bit_depth_match:
             metadata.bit_depth = int(bit_depth_match.group(1))
 
@@ -350,11 +392,11 @@ class ArtifactClassifier:
 
         # Status tags
         if metadata.success is not None:
-            tags.add('success' if metadata.success else 'failure')
+            tags.add("success" if metadata.success else "failure")
 
         # Hardware tags
         if metadata.hardware:
-            tags.add(f'hardware:{metadata.hardware}')
+            tags.add(f"hardware:{metadata.hardware}")
 
         # AI model tags
         if metadata.ai_model:
@@ -362,34 +404,34 @@ class ArtifactClassifier:
 
         # Color space tags
         if metadata.color_space:
-            tags.add(f'color_space:{metadata.color_space.lower()}')
+            tags.add(f"color_space:{metadata.color_space.lower()}")
 
         # Resolution tags
         if metadata.resolution:
             width, height = metadata.resolution
-            tags.add(f'resolution:{width}x{height}')
+            tags.add(f"resolution:{width}x{height}")
             # Add general resolution category
             if width >= 3840:
-                tags.add('4k_plus')
+                tags.add("4k_plus")
             elif width >= 1920:
-                tags.add('full_hd')
+                tags.add("full_hd")
             elif width >= 1280:
-                tags.add('hd')
+                tags.add("hd")
 
         # Performance tags
         if metadata.processing_time:
             if metadata.processing_time < 1.0:
-                tags.add('fast_processing')
+                tags.add("fast_processing")
             elif metadata.processing_time > 10.0:
-                tags.add('slow_processing')
+                tags.add("slow_processing")
 
         # Error tags
         if metadata.error_message:
-            tags.add('has_error')
+            tags.add("has_error")
             # Extract error type
-            error_type_match = re.search(r'(\w+Error|\w+Exception)', metadata.error_message)
+            error_type_match = re.search(r"(\w+Error|\w+Exception)", metadata.error_message)
             if error_type_match:
-                tags.add(f'error_type:{error_type_match.group(1)}')
+                tags.add(f"error_type:{error_type_match.group(1)}")
 
         return tags
 
@@ -505,12 +547,12 @@ class ArtifactClassifier:
     def get_statistics(self) -> Dict:
         """Get classification statistics."""
         stats = {
-            'total_artifacts': len(self.artifacts),
-            'by_type': {},
-            'by_pipeline': {},
-            'success_rate': 0.0,
-            'avg_processing_time': 0.0,
-            'artifacts_with_errors': 0,
+            "total_artifacts": len(self.artifacts),
+            "by_type": {},
+            "by_pipeline": {},
+            "success_rate": 0.0,
+            "avg_processing_time": 0.0,
+            "artifacts_with_errors": 0,
         }
 
         total_time = 0.0
@@ -521,11 +563,11 @@ class ArtifactClassifier:
         for artifact in self.artifacts.values():
             # Count by type
             type_name = artifact.artifact_type.value
-            stats['by_type'][type_name] = stats['by_type'].get(type_name, 0) + 1
+            stats["by_type"][type_name] = stats["by_type"].get(type_name, 0) + 1
 
             # Count by pipeline
             pipeline_name = artifact.metadata.pipeline.value
-            stats['by_pipeline'][pipeline_name] = stats['by_pipeline'].get(pipeline_name, 0) + 1
+            stats["by_pipeline"][pipeline_name] = stats["by_pipeline"].get(pipeline_name, 0) + 1
 
             # Processing time
             if artifact.metadata.processing_time:
@@ -540,52 +582,52 @@ class ArtifactClassifier:
 
             # Errors
             if artifact.metadata.error_message:
-                stats['artifacts_with_errors'] += 1
+                stats["artifacts_with_errors"] += 1
 
         # Calculate averages
         if time_count > 0:
-            stats['avg_processing_time'] = total_time / time_count
+            stats["avg_processing_time"] = total_time / time_count
 
         if total_with_status > 0:
-            stats['success_rate'] = success_count / total_with_status
+            stats["success_rate"] = success_count / total_with_status
 
         return stats
 
     def export_to_json(self, output_path: str):
         """Export artifacts to JSON."""
         data = {
-            'artifacts': {},
-            'statistics': self.get_statistics(),
-            'export_time': datetime.now().isoformat(),
+            "artifacts": {},
+            "statistics": self.get_statistics(),
+            "export_time": datetime.now().isoformat(),
         }
 
         for artifact_id, node in self.artifacts.items():
-            data['artifacts'][artifact_id] = {
-                'artifact_id': node.artifact_id,
-                'file_path': node.file_path,
-                'artifact_type': node.artifact_type.value,
-                'pipeline': node.metadata.pipeline.value,
-                'parent_id': node.parent_id,
-                'children_ids': node.children_ids,
-                'related_ids': node.related_ids,
-                'tags': list(node.tags),
-                'version': node.version,
-                'metadata': {
-                    'timestamp': node.metadata.timestamp.isoformat() if node.metadata.timestamp else None,
-                    'parameters': node.metadata.parameters,
-                    'hardware': node.metadata.hardware,
-                    'success': node.metadata.success,
-                    'processing_time': node.metadata.processing_time,
-                    'error_message': node.metadata.error_message,
-                    'resolution': node.metadata.resolution,
-                    'color_space': node.metadata.color_space,
-                    'bit_depth': node.metadata.bit_depth,
-                    'ai_model': node.metadata.ai_model,
-                    'quality_score': node.metadata.quality_score,
+            data["artifacts"][artifact_id] = {
+                "artifact_id": node.artifact_id,
+                "file_path": node.file_path,
+                "artifact_type": node.artifact_type.value,
+                "pipeline": node.metadata.pipeline.value,
+                "parent_id": node.parent_id,
+                "children_ids": node.children_ids,
+                "related_ids": node.related_ids,
+                "tags": list(node.tags),
+                "version": node.version,
+                "metadata": {
+                    "timestamp": node.metadata.timestamp.isoformat() if node.metadata.timestamp else None,
+                    "parameters": node.metadata.parameters,
+                    "hardware": node.metadata.hardware,
+                    "success": node.metadata.success,
+                    "processing_time": node.metadata.processing_time,
+                    "error_message": node.metadata.error_message,
+                    "resolution": node.metadata.resolution,
+                    "color_space": node.metadata.color_space,
+                    "bit_depth": node.metadata.bit_depth,
+                    "ai_model": node.metadata.ai_model,
+                    "quality_score": node.metadata.quality_score,
                 },
             }
 
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             json.dump(data, f, indent=2)
 
 
@@ -593,12 +635,12 @@ def main():
     """CLI for artifact classification."""
     import argparse
 
-    parser = argparse.ArgumentParser(description='Classify image processing artifacts')
-    parser.add_argument('--input-dir', required=True, help='Directory containing artifacts')
-    parser.add_argument('--output', default='artifacts.json', help='Output JSON file')
-    parser.add_argument('--tags', nargs='+', help='Search by tags')
-    parser.add_argument('--require-all-tags', action='store_true', help='Require all tags')
-    parser.add_argument('--verbose', action='store_true', help='Verbose output')
+    parser = argparse.ArgumentParser(description="Classify image processing artifacts")
+    parser.add_argument("--input-dir", required=True, help="Directory containing artifacts")
+    parser.add_argument("--output", default="artifacts.json", help="Output JSON file")
+    parser.add_argument("--tags", nargs="+", help="Search by tags")
+    parser.add_argument("--require-all-tags", action="store_true", help="Require all tags")
+    parser.add_argument("--verbose", action="store_true", help="Verbose output")
 
     args = parser.parse_args()
 
@@ -612,13 +654,13 @@ def main():
 
     print(f"Scanning {input_dir}...")
 
-    for file_path in input_dir.rglob('*'):
+    for file_path in input_dir.rglob("*"):
         if file_path.is_file():
             # Try to read content if it's a text file
             content = None
-            if file_path.suffix in {'.json', '.log', '.txt', '.md'}:
+            if file_path.suffix in {".json", ".log", ".txt", ".md"}:
                 try:
-                    content = file_path.read_text(encoding='utf-8', errors='ignore')
+                    content = file_path.read_text(encoding="utf-8", errors="ignore")
                 except Exception as e:
                     if args.verbose:
                         print(f"  [WARN] Could not read {file_path}: {e}")
@@ -632,13 +674,13 @@ def main():
     stats = classifier.get_statistics()
     print(f"\nClassified {stats['total_artifacts']} artifacts")
     print("\nBy type:")
-    for artifact_type, count in sorted(stats['by_type'].items()):
+    for artifact_type, count in sorted(stats["by_type"].items()):
         print(f"  {artifact_type}: {count}")
     print("\nBy pipeline:")
-    for pipeline, count in sorted(stats['by_pipeline'].items()):
+    for pipeline, count in sorted(stats["by_pipeline"].items()):
         print(f"  {pipeline}: {count}")
 
-    if stats['total_artifacts'] > 0:
+    if stats["total_artifacts"] > 0:
         print(f"\nSuccess rate: {stats['success_rate']:.1%}")
         print(f"Average processing time: {stats['avg_processing_time']:.2f}s")
         print(f"Artifacts with errors: {stats['artifacts_with_errors']}")
@@ -656,5 +698,5 @@ def main():
     print(f"\nExported to {args.output}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

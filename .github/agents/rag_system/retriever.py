@@ -23,6 +23,7 @@ logger = get_logger(__name__)
 # Optional sentence-transformers import
 try:
     from sentence_transformers import SentenceTransformer
+
     SENTENCE_TRANSFORMERS_AVAILABLE = True
 except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
@@ -143,7 +144,7 @@ class BM25Retriever:
         """Tokenize text into lowercase terms."""
         # Simple tokenization: lowercase, split on non-alphanumeric
         text = text.lower()
-        tokens = re.findall(r'\b\w+\b', text)
+        tokens = re.findall(r"\b\w+\b", text)
         return tokens
 
 
@@ -173,23 +174,21 @@ class HybridRetriever:
         """
         # Load config
         config = get_config()
-        retriever_config = config.get_section('retriever')
-        citation_config = config.get_section('citation')
+        retriever_config = config.get_section("retriever")
+        citation_config = config.get_section("citation")
 
-        self.bm25_weight = bm25_weight if bm25_weight is not None else retriever_config.get('bm25_weight', 0.7)
-        self.vector_weight = vector_weight if vector_weight is not None else retriever_config.get('vector_weight', 0.3)
+        self.bm25_weight = bm25_weight if bm25_weight is not None else retriever_config.get("bm25_weight", 0.7)
+        self.vector_weight = vector_weight if vector_weight is not None else retriever_config.get("vector_weight", 0.3)
         self.enable_vector_search = (
-            enable_vector_search
-            if enable_vector_search is not None
-            else retriever_config.get('enable_vector_search', False)
+            enable_vector_search if enable_vector_search is not None else retriever_config.get("enable_vector_search", False)
         )
 
         # Get max expected score for normalization
-        self.max_expected_score = citation_config.get('max_expected_score', 20.0)
+        self.max_expected_score = citation_config.get("max_expected_score", 20.0)
 
         # BM25 retriever
-        bm25_k1 = retriever_config.get('bm25_k1', 1.5)
-        bm25_b = retriever_config.get('bm25_b', 0.75)
+        bm25_k1 = retriever_config.get("bm25_k1", 1.5)
+        bm25_b = retriever_config.get("bm25_b", 0.75)
         self.bm25 = BM25Retriever(k1=bm25_k1, b=bm25_b)
 
         # Vector search components
@@ -197,7 +196,7 @@ class HybridRetriever:
         self.embeddings = None
 
         if self.enable_vector_search and SENTENCE_TRANSFORMERS_AVAILABLE:
-            model_name = vector_model or retriever_config.get('vector_model', 'all-MiniLM-L6-v2')
+            model_name = vector_model or retriever_config.get("vector_model", "all-MiniLM-L6-v2")
             try:
                 logger.info(f"Loading sentence transformer model: {model_name}")
                 self.encoder = SentenceTransformer(model_name)
@@ -211,7 +210,7 @@ class HybridRetriever:
         self.indexed = False
 
         # Query cache size
-        cache_size = retriever_config.get('query_cache_size', 100)
+        cache_size = retriever_config.get("query_cache_size", 100)
         if cache_size > 0:
             # Wrap retrieve method with LRU cache
             self._retrieve_cached = lru_cache(maxsize=cache_size)(self._retrieve_impl)
@@ -244,11 +243,7 @@ class HybridRetriever:
         if self.enable_vector_search and self.encoder is not None:
             try:
                 logger.info("Computing vector embeddings...")
-                self.embeddings = self.encoder.encode(
-                    documents,
-                    show_progress_bar=False,
-                    convert_to_numpy=True
-                )
+                self.embeddings = self.encoder.encode(documents, show_progress_bar=False, convert_to_numpy=True)
                 logger.info(f"Computed embeddings: shape={self.embeddings.shape}")
             except Exception as e:
                 logger.warning(f"Failed to compute embeddings: {e}")
@@ -280,10 +275,7 @@ class HybridRetriever:
             raise RetrievalError("Retriever not indexed. Call index() first.")
 
         # Create cache key for filters (make hashable)
-        filter_key = (
-            tuple(sorted(chunk_type_filter)) if chunk_type_filter else None,
-            file_path_filter
-        )
+        filter_key = (tuple(sorted(chunk_type_filter)) if chunk_type_filter else None, file_path_filter)
 
         # Call cached implementation
         return self._retrieve_cached(query, top_k, filter_key)
@@ -329,22 +321,12 @@ class HybridRetriever:
             vector_scores = self._vector_search(filtered_indices, query, top_k)
 
         # Combine results
-        results = self._combine_results(
-            filtered_indices,
-            bm25_scores,
-            vector_scores,
-            top_k
-        )
+        results = self._combine_results(filtered_indices, bm25_scores, vector_scores, top_k)
 
         logger.debug(f"Retrieved {len(results)} results for query: '{query[:50]}'")
         return results
 
-    def _bm25_search(
-        self,
-        documents: List[str],
-        query: str,
-        top_k: int
-    ) -> Dict[int, float]:
+    def _bm25_search(self, documents: List[str], query: str, top_k: int) -> Dict[int, float]:
         """
         Perform BM25 search.
 
@@ -362,12 +344,7 @@ class HybridRetriever:
 
         return scores
 
-    def _vector_search(
-        self,
-        filtered_indices: List[int],
-        query: str,
-        top_k: int
-    ) -> Dict[int, float]:
+    def _vector_search(self, filtered_indices: List[int], query: str, top_k: int) -> Dict[int, float]:
         """
         Perform vector similarity search.
 
@@ -389,7 +366,7 @@ class HybridRetriever:
             similarities = np.dot(filtered_embeddings, query_embedding) / (doc_norms * query_norm + 1e-8)
 
             # Get top-k indices
-            top_indices = np.argsort(similarities)[::-1][:top_k * 2]
+            top_indices = np.argsort(similarities)[::-1][: top_k * 2]
 
             scores = {}
             for local_idx in top_indices:
@@ -404,11 +381,7 @@ class HybridRetriever:
             return {}
 
     def _combine_results(
-        self,
-        filtered_indices: List[int],
-        bm25_scores: Dict[int, float],
-        vector_scores: Optional[Dict[int, float]],
-        top_k: int
+        self, filtered_indices: List[int], bm25_scores: Dict[int, float], vector_scores: Optional[Dict[int, float]], top_k: int
     ) -> List[RetrievalResult]:
         """
         Combine BM25 and vector scores.
@@ -427,17 +400,10 @@ class HybridRetriever:
             for local_idx, score in vector_scores.items():
                 # Normalize vector score to roughly match BM25 range
                 normalized_score = score * self.max_expected_score
-                combined_scores[local_idx] = (
-                    combined_scores.get(local_idx, 0) +
-                    self.vector_weight * normalized_score
-                )
+                combined_scores[local_idx] = combined_scores.get(local_idx, 0) + self.vector_weight * normalized_score
 
         # Sort by combined score
-        sorted_indices = sorted(
-            combined_scores.keys(),
-            key=lambda idx: combined_scores[idx],
-            reverse=True
-        )[:top_k]
+        sorted_indices = sorted(combined_scores.keys(), key=lambda idx: combined_scores[idx], reverse=True)[:top_k]
 
         # Create results
         results = []
@@ -450,22 +416,24 @@ class HybridRetriever:
             has_vector = vector_scores and local_idx in vector_scores
 
             if has_bm25 and has_vector:
-                method = 'hybrid'
+                method = "hybrid"
             elif has_vector:
-                method = 'vector'
+                method = "vector"
             else:
-                method = 'bm25'
+                method = "bm25"
 
-            results.append(RetrievalResult(
-                chunk_id=chunk.chunk_id,
-                content=chunk.content,
-                file_path=chunk.file_path,
-                start_line=chunk.start_line,
-                end_line=chunk.end_line,
-                score=combined_scores[local_idx],
-                retrieval_method=method,
-                metadata=chunk.metadata
-            ))
+            results.append(
+                RetrievalResult(
+                    chunk_id=chunk.chunk_id,
+                    content=chunk.content,
+                    file_path=chunk.file_path,
+                    start_line=chunk.start_line,
+                    end_line=chunk.end_line,
+                    score=combined_scores[local_idx],
+                    retrieval_method=method,
+                    metadata=chunk.metadata,
+                )
+            )
 
         return results
 
@@ -522,15 +490,15 @@ class HybridRetriever:
         # Look backward
         for i in range(max(0, target_idx - window_size), target_idx):
             if self.chunks[i].file_path == target_file:
-                context.append(self._chunk_to_result(self.chunks[i], 0.0, 'context'))
+                context.append(self._chunk_to_result(self.chunks[i], 0.0, "context"))
 
         # Add target
-        context.append(self._chunk_to_result(self.chunks[target_idx], 1.0, 'target'))
+        context.append(self._chunk_to_result(self.chunks[target_idx], 1.0, "target"))
 
         # Look forward
         for i in range(target_idx + 1, min(len(self.chunks), target_idx + window_size + 1)):
             if self.chunks[i].file_path == target_file:
-                context.append(self._chunk_to_result(self.chunks[i], 0.0, 'context'))
+                context.append(self._chunk_to_result(self.chunks[i], 0.0, "context"))
 
         return context
 
@@ -544,7 +512,7 @@ class HybridRetriever:
             end_line=chunk.end_line,
             score=score,
             retrieval_method=method,
-            metadata=chunk.metadata
+            metadata=chunk.metadata,
         )
 
 
@@ -559,12 +527,12 @@ def main():
 
     from rag_system.indexer import RepositoryIndexer
 
-    parser = argparse.ArgumentParser(description='Test RAG retrieval')
-    parser.add_argument('--repo-root', default='.', help='Repository root directory')
-    parser.add_argument('--query', required=True, help='Search query')
-    parser.add_argument('--top-k', type=int, default=5, help='Number of results')
-    parser.add_argument('--type', nargs='+', help='Filter by chunk type')
-    parser.add_argument('--file', help='Filter by file path pattern')
+    parser = argparse.ArgumentParser(description="Test RAG retrieval")
+    parser.add_argument("--repo-root", default=".", help="Repository root directory")
+    parser.add_argument("--query", required=True, help="Search query")
+    parser.add_argument("--top-k", type=int, default=5, help="Number of results")
+    parser.add_argument("--type", nargs="+", help="Filter by chunk type")
+    parser.add_argument("--file", help="Filter by file path pattern")
 
     args = parser.parse_args()
 
@@ -599,5 +567,5 @@ def main():
         print(f"   Preview: {result.content[:200]}...")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -2,9 +2,9 @@
 
 ## Issue Summary
 
-**Date:** 2026-02-02  
-**Severity:** Medium  
-**Component:** `src/transformation_portal/lux_depth_v3/depth_cache.py`  
+**Date:** 2026-02-02
+**Severity:** Medium
+**Component:** `src/transformation_portal/lux_depth_v3/depth_cache.py`
 **Impact:** Performance degradation in batch workflows with large caches
 
 ## Problem Description
@@ -70,20 +70,20 @@ def store(self, image_sha256: str, config_fingerprint: str, depth: np.ndarray):
     # ...
     self._store_count += 1
     depth_size_gb = depth.nbytes / (1024**3)
-    
+
     # Update approximate size
     self._approximate_size_gb += depth_size_gb
-    
+
     # ✓ Only check actual size when needed
     needs_size_check = (
         self._store_count % self._size_check_interval == 0 or
         self._approximate_size_gb > self.max_size_gb * 0.9
     )
-    
+
     if needs_size_check:
         actual_size = self._cache_size_gb()
         self._approximate_size_gb = actual_size  # Recalibrate
-        
+
         if actual_size > self.max_size_gb:
             self._evict_lru()
             self._approximate_size_gb = self._cache_size_gb()  # Recalibrate after eviction
@@ -110,21 +110,21 @@ Added `test_cache_store_scalability()` to `tests/test_performance_regression.py`
 def test_cache_store_scalability(self, tmp_path):
     """Verify cache store operations scale well with cache population."""
     cache = DepthCache(tmp_path / "cache", max_size_gb=10.0)
-    
+
     # Pre-populate with 100 entries
     for i in range(100):
         depth = np.random.rand(512, 512).astype(np.float32)
         cache.store(f"prepop_{i}", "config_123", depth)
-    
+
     # Benchmark storing 50 additional entries
     depths = [np.random.rand(512, 512).astype(np.float32) for _ in range(50)]
     start = time.time()
     for i, depth in enumerate(depths):
         cache.store(f"test_{i}", "config_456", depth)
     elapsed = time.time() - start
-    
+
     avg_time_ms = (elapsed / 50) * 1000
-    
+
     # Performance target: < 3ms per store
     assert avg_time_ms < 3.0, (
         f"Cache store too slow: {avg_time_ms:.3f}ms/store > 3.0ms target"

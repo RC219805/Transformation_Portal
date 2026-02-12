@@ -106,7 +106,7 @@ class TestTimingContextWithTorch:
         try:
             import torch
 
-            has_mps = hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
+            has_mps = hasattr(torch, "backends") and hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
         except ImportError:
             pytest.skip("torch not available")
 

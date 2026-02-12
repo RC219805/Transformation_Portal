@@ -1,7 +1,7 @@
 # Analysis: Large TIFF Files in Git Push
 
-**Branch:** `feat/rag-integration-complete`  
-**Issue:** Attempting to push 2.7GB of TIFF files in `input_images/` directory  
+**Branch:** `feat/rag-integration-complete`
+**Issue:** Attempting to push 2.7GB of TIFF files in `input_images/` directory
 **Date:** 2025-11-06
 
 ## Current Situation
@@ -15,7 +15,7 @@
 ### Files Being Pushed
 ```
 137MB - 750Picacho_Pool.tiff
-183MB - 750Picacho_PrimaryBathroom.tiff  
+183MB - 750Picacho_PrimaryBathroom.tiff
 163MB - 750Picacho_PrimaryBedroom.tiff
 137MB - 750Picacho_Kitchen.tiff
 183MB - 750Picacho_GreatRoom.tiff
@@ -60,22 +60,22 @@ From the existing `.gitignore` patterns, this repository follows best practices:
 ### 2. What's the best practice for handling large binary image files?
 
 #### Tier 1: Sample Images (For Testing)
-**Location:** `data/sample_images/`  
-**Purpose:** Minimal representative images for CI/CD tests  
-**Size:** Small (<5MB), compressed  
-**Format:** JPG/PNG for portability  
+**Location:** `data/sample_images/`
+**Purpose:** Minimal representative images for CI/CD tests
+**Size:** Small (<5MB), compressed
+**Format:** JPG/PNG for portability
 **Status:** ✅ Already properly .gitignored
 
 #### Tier 2: Development Test Images
-**Location:** `input_images/` (current location)  
-**Purpose:** Local development and testing  
-**Size:** Full resolution (TIFF acceptable)  
+**Location:** `input_images/` (current location)
+**Purpose:** Local development and testing
+**Size:** Full resolution (TIFF acceptable)
 **Status:** ❌ Currently NOT ignored - **THIS IS THE PROBLEM**
 
 #### Tier 3: Production/Client Files
-**Location:** External storage (S3, Google Drive, Dropbox, local NAS)  
-**Purpose:** Real client projects  
-**Size:** Unlimited  
+**Location:** External storage (S3, Google Drive, Dropbox, local NAS)
+**Purpose:** Real client projects
+**Size:** Unlimited
 **Status:** Should NEVER be in git
 
 ### 3. Should we add TIFF files to .gitignore?

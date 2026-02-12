@@ -39,7 +39,7 @@ def validate_single_file(filepath: Path) -> None:
     print(f"\n{'=' * 70}")
     print(f"File: {filepath.name}")
     print(f"Path: {filepath}")
-    print('=' * 70)
+    print("=" * 70)
 
     # Check if file exists
     if not filepath.exists():
@@ -48,7 +48,7 @@ def validate_single_file(filepath: Path) -> None:
 
     # Validate format
     try:
-        validate_format(filepath, 'both', raise_error=True)
+        validate_format(filepath, "both", raise_error=True)
         print("✅ Format is supported")
     except UnsupportedFormatError as e:
         print(f"❌ {e}")
@@ -59,28 +59,28 @@ def validate_single_file(filepath: Path) -> None:
 
     print("\nFormat Details:")
     print(f"  Extension: {info['extension']}")
-    print("  Type: ", end='')
+    print("  Type: ", end="")
 
-    if info['is_image']:
-        print("Image", end='')
-        if info['is_tif']:
-            print(" (TIFF)", end='')
-        if info['is_luxury']:
-            print(" [LUXURY GRADE]", end='')
+    if info["is_image"]:
+        print("Image", end="")
+        if info["is_tif"]:
+            print(" (TIFF)", end="")
+        if info["is_luxury"]:
+            print(" [LUXURY GRADE]", end="")
 
-    if info['is_video']:
-        print("Video", end='')
+    if info["is_video"]:
+        print("Video", end="")
 
     print()
 
     # Show recommendations
-    if info['recommendations']:
+    if info["recommendations"]:
         print("\n📋 Recommendations:")
-        for rec in info['recommendations']:
+        for rec in info["recommendations"]:
             print(f"   • {rec}")
 
     # Suggest output format
-    if info['is_image']:
+    if info["is_image"]:
         quality_output = suggest_output_format(filepath, preserve_quality=True)
         web_output = suggest_output_format(filepath, preserve_quality=False)
 
@@ -90,14 +90,14 @@ def validate_single_file(filepath: Path) -> None:
 
     # Suggest appropriate pipeline
     print("\n🔧 Recommended Pipeline:")
-    if info['is_tif']:
+    if info["is_tif"]:
         print("   → Luxury TIFF Batch Processor")
         print("     python luxury_tiff_batch_processor.py input/ output/ --preset signature")
-    elif info['is_image']:
+    elif info["is_image"]:
         print("   → Depth Pipeline or Lux Render Pipeline")
         print("     python depth_pipeline/pipeline.py --input", filepath.name, "--output enhanced/")
         print("     python lux_render_pipeline.py --input", filepath.name, "--out enhanced/")
-    elif info['is_video']:
+    elif info["is_video"]:
         print("   → Luxury Video Master Grader")
         print("     python luxury_video_master_grader.py --input", filepath.name, "--output graded.mov")
 
@@ -110,14 +110,14 @@ def scan_directory(directory: Path) -> None:
     """
     print(f"\n{'=' * 70}")
     print(f"Scanning Directory: {directory}")
-    print('=' * 70)
+    print("=" * 70)
 
     if not directory.is_dir():
         print(f"❌ Not a directory: {directory}")
         return
 
     # Collect all files
-    all_files = list(directory.rglob('*'))
+    all_files = list(directory.rglob("*"))
     files = [f for f in all_files if f.is_file()]
 
     print(f"\nFound {len(files)} files")
@@ -129,9 +129,9 @@ def scan_directory(directory: Path) -> None:
 
     for file in files:
         info = get_format_info(file)
-        if info['is_image']:
+        if info["is_image"]:
             supported_images.append(file)
-        elif info['is_video']:
+        elif info["is_video"]:
             supported_videos.append(file)
         else:
             unsupported.append(file)
@@ -147,7 +147,7 @@ def scan_directory(directory: Path) -> None:
         print(f"\n🖼️  Supported Image Files ({len(supported_images)}):")
         for file in sorted(supported_images)[:10]:  # Show first 10
             info = get_format_info(file)
-            luxury_badge = " [LUXURY]" if info['is_luxury'] else ""
+            luxury_badge = " [LUXURY]" if info["is_luxury"] else ""
             print(f"   • {file.name}{luxury_badge}")
 
         if len(supported_images) > 10:
@@ -205,20 +205,20 @@ def show_format_summary() -> None:
     print("=" * 70)
 
     print("\n🖼️  Image Formats:")
-    for ext in summary['image']:
-        print(f"   • {ext}", end='')
-        if ext in summary['luxury']:
-            print(" [LUXURY GRADE]", end='')
-        if ext in summary['tif']:
-            print(" [16-BIT CAPABLE]", end='')
+    for ext in summary["image"]:
+        print(f"   • {ext}", end="")
+        if ext in summary["luxury"]:
+            print(" [LUXURY GRADE]", end="")
+        if ext in summary["tif"]:
+            print(" [16-BIT CAPABLE]", end="")
         print()
 
     print("\n🎬 Video Formats:")
-    for ext in summary['video']:
+    for ext in summary["video"]:
         print(f"   • {ext}")
 
     print("\n💎 Luxury Formats (Recommended for Professional Work):")
-    for ext in summary['luxury']:
+    for ext in summary["luxury"]:
         print(f"   • {ext}")
 
     print("\n📖 For detailed format documentation, see:")
@@ -242,27 +242,14 @@ Examples:
 
   # Show all supported formats
   python examples/validate_file_formats.py --formats
-        """
+        """,
     )
 
-    parser.add_argument(
-        'path',
-        nargs='?',
-        type=Path,
-        help='File or directory to validate'
-    )
+    parser.add_argument("path", nargs="?", type=Path, help="File or directory to validate")
 
-    parser.add_argument(
-        '--scan',
-        action='store_true',
-        help='Scan directory and validate all files'
-    )
+    parser.add_argument("--scan", action="store_true", help="Scan directory and validate all files")
 
-    parser.add_argument(
-        '--formats',
-        action='store_true',
-        help='Show all supported formats'
-    )
+    parser.add_argument("--formats", action="store_true", help="Show all supported formats")
 
     args = parser.parse_args()
 
@@ -289,5 +276,5 @@ Examples:
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

@@ -1,6 +1,8 @@
 import numpy as np
-from transformation_portal.atmosphere import SkyGANGenerator, SkyBlender, LocationPresets
+
+from transformation_portal.atmosphere import LocationPresets, SkyBlender, SkyGANGenerator
 from transformation_portal.core.storage import ExportManager
+
 
 def run_golden_test():
     print("🔮 Starting Core Systems Verification...")
@@ -14,14 +16,9 @@ def run_golden_test():
     # We explicitly request the unique Santa Barbara weather condition
     presets = LocationPresets()
     sky_params = presets.get_sky_parameters(
-        location="montecito",
-        time_of_day=17.5,  # 5:30 PM (Golden Hour)
-        condition="sundowner"
+        location="montecito", time_of_day=17.5, condition="sundowner"  # 5:30 PM (Golden Hour)
     )
-    atmo_params = presets.get_atmospheric_parameters(
-        location="montecito",
-        condition="sundowner"
-    )
+    atmo_params = presets.get_atmospheric_parameters(location="montecito", condition="sundowner")
 
     print(f"🌍 Loaded Micro-Climate: Montecito")
     print(f"   - Condition: Sundowner")
@@ -41,8 +38,8 @@ def run_golden_test():
         source_image=input_image,
         sky_params=sky_params,
         atmo_params=atmo_params,
-        auto_correct=True,     # Enable the "Brain"
-        strict_physics=False   # Allow minor deviations
+        auto_correct=True,  # Enable the "Brain"
+        strict_physics=False,  # Allow minor deviations
     )
 
     # 5. Analyze the "Glass Box" Report
@@ -61,6 +58,7 @@ def run_golden_test():
 
     print(f"\n🎨 Rendered output shape: {result.shape}")
     print("✅ Core systems verification complete!")
+
 
 if __name__ == "__main__":
     run_golden_test()

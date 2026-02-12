@@ -36,7 +36,7 @@ for k, v in assignments.items():
 
 **Problem**: The `resize_image()` function created a dictionary with cv2 constants before checking if cv2 was available, causing `NameError` when OpenCV wasn't installed.
 
-**Solution**: 
+**Solution**:
 - Moved cv2-specific code inside the `CV2_AVAILABLE` check
 - Improved PIL fallback to handle float32 images by converting to uint8 and back
 
@@ -67,7 +67,7 @@ else:
 **Solution**: Copied the shim to the repository root to maintain backward compatibility with existing documentation examples.
 
 ### 4. Workflow Shellcheck Warnings
-**Files**: 
+**Files**:
 - `.github/workflows/build.yml`
 - `.github/workflows/ci-enhanced.yml`
 - `.github/workflows/python-app.yml`

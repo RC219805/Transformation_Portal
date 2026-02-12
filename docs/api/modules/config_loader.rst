@@ -21,12 +21,12 @@ Usage Example
 
     # Load a recipe file
     recipe = load_recipe("config/recipes/luxury_estate.yaml")
-    
+
     # Access recipe data (dict)
     print(recipe["name"])
     print(recipe.get("description", ""))
     print(recipe["stages"])
-    
+
     # List available recipes
     recipes = list_recipes("config/recipes")
     for recipe_path in recipes:

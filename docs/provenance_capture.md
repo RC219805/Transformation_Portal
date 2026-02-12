@@ -171,7 +171,7 @@ Provenance errors result in immediate failure with explicit error messages:
 
 ```python
 # Example error messages
-ExiftoolNotFoundError: 
+ExiftoolNotFoundError:
   "exiftool not found in PATH. Install with: apt-get install libimage-exiftool-perl"
 
 MissingRequiredFieldError:

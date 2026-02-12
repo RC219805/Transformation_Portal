@@ -18,7 +18,7 @@ FILES MODIFIED (2)
    - Added 3 new dataclass fields per config
    - ~200 lines added, ~20 modified
    - Total: 1,100+ lines (from 1,030)
-   
+
    New Methods:
    - _auto_download_depth_model()
    - _detect_scene_type()
@@ -26,7 +26,7 @@ FILES MODIFIED (2)
    - _unpad_image()
    - _apply_shadow_boost()
    - _zone_based_tone_mapping()
-   
+
    Modified Methods:
    - _init_depth_model()
    - _stage_4_tone_mapping()
@@ -143,7 +143,7 @@ VALIDATION STATUS
 Syntax Check:       ✅ PASS (py_compile)
 Test Suite:         ✅ PASS (all 3 fixes)
   - Shadow Test:    ✅ PASS
-  - AI Test:        ✅ PASS  
+  - AI Test:        ✅ PASS
   - Depth Test:     ✅ PASS
 Dry Run:            ✅ PASS (configuration valid)
 Quality Grade:      ✅ MAINTAINED (94.0/100)

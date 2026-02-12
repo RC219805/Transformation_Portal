@@ -429,19 +429,19 @@ print(f"Processing time: {result['processing_time']:.2f}s")
 
 **Interior spaces:**
 ```
-"minimalist [room type], floor-to-ceiling windows, natural daylight, 
+"minimalist [room type], floor-to-ceiling windows, natural daylight,
 [material] flooring, clean lines, professional architectural photography"
 ```
 
 **Exterior facades:**
 ```
-"modern [building type] exterior, detailed facade, golden hour lighting, 
+"modern [building type] exterior, detailed facade, golden hour lighting,
 [material] cladding, professional architectural photography"
 ```
 
 **Negative prompts (always include):**
 ```
-"low detail, cartoon, blurry, oversaturated, low quality, artifacts, 
+"low detail, cartoon, blurry, oversaturated, low quality, artifacts,
 distorted, amateur"
 ```
 
@@ -849,8 +849,8 @@ python luxury_tiff_batch_processor_cli.py \
 python lux_render_pipeline.py \
   --input draft_render.jpg \
   --out ./marketing \
-  --prompt "luxury penthouse interior, floor-to-ceiling windows, 
-           natural daylight, hardwood floors, modern furniture, 
+  --prompt "luxury penthouse interior, floor-to-ceiling windows,
+           natural daylight, hardwood floors, modern furniture,
            professional architectural photography" \
   --neg "low quality, blurry, cartoon, oversaturated, amateur" \
   --width 1920 --height 1080 \
@@ -905,9 +905,9 @@ result = pipeline.process_render('facade.jpg')
 
 # Save with depth visualization for review
 pipeline.save_result(
-    result, 
-    'output/', 
-    save_depth=True, 
+    result,
+    'output/',
+    save_depth=True,
     save_visualization=True
 )
 ```
@@ -938,14 +938,14 @@ batch_size = 50
 for i in range(0, len(all_renders), batch_size):
     batch = all_renders[i:i+batch_size]
     print(f"Processing batch {i//batch_size + 1}/{len(all_renders)//batch_size + 1}")
-    
+
     results = pipeline.batch_process(
         batch,
         output_dir='batch_output/',
         save_depth=False,  # Skip depth saves for speed
         save_visualization=False
     )
-    
+
     # Quality check (ensure no errors)
     failed = [r for r in results if r.get('error')]
     if failed:

@@ -1,8 +1,8 @@
 # TODO Inventory - Transformation Portal
 
-**Document Version:** 1.0.0  
-**Date:** February 5, 2026  
-**Last Updated:** 2026-02-05  
+**Document Version:** 1.0.0
+**Date:** February 5, 2026
+**Last Updated:** 2026-02-05
 
 ---
 
@@ -33,10 +33,10 @@ This document provides a **complete, categorized inventory** of all TODOs, NotIm
 
 ### 1.1 ADR-019 Backend Registry Integration
 
-**Status:** ✅ APPROVED FOR IMMEDIATE IMPLEMENTATION  
-**Priority:** P0 (Critical)  
-**Effort:** 2-3 dev days  
-**Owner:** Specialist (Architect-supervised)  
+**Status:** ✅ APPROVED FOR IMMEDIATE IMPLEMENTATION
+**Priority:** P0 (Critical)
+**Effort:** 2-3 dev days
+**Owner:** Specialist (Architect-supervised)
 
 **Context:**
 - Original decision: Defer to v2.1.0 (Depth Pro not operational)
@@ -67,10 +67,10 @@ This document provides a **complete, categorized inventory** of all TODOs, NotIm
 
 ### 1.2 Backend Strict Enforcement (ADR-024)
 
-**Status:** 🔴 DEFERRED TO v2.1.0  
-**Priority:** P2 (Medium)  
-**Effort:** 1-2 days  
-**Blocker:** Requires ADR-019 completion + stable multi-backend system  
+**Status:** 🔴 DEFERRED TO v2.1.0
+**Priority:** P2 (Medium)
+**Effort:** 1-2 days
+**Blocker:** Requires ADR-019 completion + stable multi-backend system
 
 **Scope:**
 - Add `--strict-backend` CLI flag
@@ -85,10 +85,10 @@ This document provides a **complete, categorized inventory** of all TODOs, NotIm
 
 ### 1.3 YAML Configuration Loading (Phase 2)
 
-**Status:** 🟡 DEFERRED TO v2.1.0  
-**Priority:** P3 (Low)  
-**Effort:** 1-2 days  
-**Impact:** Performance optimization (faster preset loading)  
+**Status:** 🟡 DEFERRED TO v2.1.0
+**Priority:** P3 (Low)
+**Effort:** 1-2 days
+**Impact:** Performance optimization (faster preset loading)
 
 **Current State:**
 - Config loader exists, uses `ConfigLoader` class
@@ -114,10 +114,10 @@ This document provides a **complete, categorized inventory** of all TODOs, NotIm
 
 ### 1.4 Depth Pro Preset Configuration
 
-**Status:** 🔴 DEFERRED TO v2.1.0  
-**Priority:** P2 (Medium)  
-**Effort:** 4 hours  
-**Blocker:** Pending ADR-019 integration completion  
+**Status:** 🔴 DEFERRED TO v2.1.0
+**Priority:** P2 (Medium)
+**Effort:** 4 hours
+**Blocker:** Pending ADR-019 integration completion
 
 **Current State:**
 - Example presets exist:
@@ -141,9 +141,9 @@ This document provides a **complete, categorized inventory** of all TODOs, NotIm
 
 ### 1.5 CLI Backend Management Commands
 
-**Status:** 🔴 DEFERRED TO v2.2.0  
-**Priority:** P4 (Nice-to-have)  
-**Effort:** 1 week  
+**Status:** 🔴 DEFERRED TO v2.2.0
+**Priority:** P4 (Nice-to-have)
+**Effort:** 1 week
 
 **Scope:**
 - `lux-depth-v3 --list-backends` - Show available backends
@@ -157,10 +157,10 @@ This document provides a **complete, categorized inventory** of all TODOs, NotIm
 
 ### 1.6 Parallax Occlusion Mapping (POM)
 
-**Status:** 🔴 DEFERRED TO v3.x (EPIC)  
-**Priority:** P5 (Research Required)  
-**Effort:** 2-3 weeks  
-**Impact:** Advanced rendering feature, unclear value proposition  
+**Status:** 🔴 DEFERRED TO v3.x (EPIC)
+**Priority:** P5 (Research Required)
+**Effort:** 2-3 weeks
+**Impact:** Advanced rendering feature, unclear value proposition
 
 **Current State:**
 - Stub exists in `scripts/pipelines/lux_render_pipeline_plus_v3.py:208`
@@ -190,17 +190,17 @@ raise NotImplementedError(
 
 ### 2.1 Lux Depth V3 Preprocessing (2 functions)
 
-**Status:** 🟢 LEGITIMATE STUBS  
-**Priority:** P4 (Low)  
-**Action:** Document as optional, remove if never implemented  
+**Status:** 🟢 LEGITIMATE STUBS
+**Priority:** P4 (Low)
+**Action:** Document as optional, remove if never implemented
 
 **Location:** `src/transformation_portal/lux_depth_v3/preprocessing.py`
 
 #### 2.1.1 `normalize_exif_orientation()`
 
-**Line:** 227  
-**Purpose:** EXIF orientation normalization  
-**Reason:** Not required for V3 depth inference (PIL handles automatically)  
+**Line:** 227
+**Purpose:** EXIF orientation normalization
+**Reason:** Not required for V3 depth inference (PIL handles automatically)
 
 ```python
 raise NotImplementedError(
@@ -218,9 +218,9 @@ raise NotImplementedError(
 
 #### 2.1.2 `validate_depth_image_alignment()`
 
-**Line:** 248  
-**Purpose:** Validate depth map and image dimension matching  
-**Reason:** Not required for V3 (orchestrator handles validation)  
+**Line:** 248
+**Purpose:** Validate depth map and image dimension matching
+**Reason:** Not required for V3 (orchestrator handles validation)
 
 ```python
 raise NotImplementedError(
@@ -235,46 +235,46 @@ raise NotImplementedError(
 
 ### 2.2 ComfyUI Custom Nodes (3 methods)
 
-**Status:** 🟢 EXPERIMENTAL INTEGRATION  
-**Priority:** P4 (Community Feature)  
-**Action:** Mark as experimental, defer to plugin system  
+**Status:** 🟢 EXPERIMENTAL INTEGRATION
+**Priority:** P4 (Community Feature)
+**Action:** Mark as experimental, defer to plugin system
 
 **Location:** `src/transformation_portal/comfyui/custom_nodes.py`
 
 #### 2.2.1 `BaseNode.INPUT_TYPES()`
 
-**Line:** 55  
+**Line:** 55
 ```python
 @classmethod
 def INPUT_TYPES(cls) -> Dict[str, Any]:
     raise NotImplementedError
 ```
 
-**Purpose:** Abstract base class for ComfyUI node interface  
-**Status:** Correct usage (subclasses must override)  
+**Purpose:** Abstract base class for ComfyUI node interface
+**Status:** Correct usage (subclasses must override)
 
 #### 2.2.2 `BaseNode.RETURN_TYPES()`
 
-**Line:** 59  
+**Line:** 59
 ```python
 @classmethod
 def RETURN_TYPES(cls) -> Tuple[str, ...]:
     raise NotImplementedError
 ```
 
-**Purpose:** Abstract base class method  
-**Status:** Correct usage  
+**Purpose:** Abstract base class method
+**Status:** Correct usage
 
 #### 2.2.3 `BaseNode.execute()`
 
-**Line:** 62  
+**Line:** 62
 ```python
 def execute(self, **kwargs) -> Tuple[Any, ...]:
     raise NotImplementedError
 ```
 
-**Purpose:** Abstract base class method  
-**Status:** Correct usage  
+**Purpose:** Abstract base class method
+**Status:** Correct usage
 
 **Decision:**
 - [ ] Add `@abstractmethod` decorators for clarity
@@ -288,9 +288,9 @@ def execute(self, **kwargs) -> Tuple[Any, ...]:
 
 ### 2.3 Depth Canonical Model Registry
 
-**Status:** 🟢 SUPERSEDED (REMOVE)  
-**Priority:** P3 (Cleanup)  
-**Action:** Remove or consolidate with `depth/backends/registry.py`  
+**Status:** 🟢 SUPERSEDED (REMOVE)
+**Priority:** P3 (Cleanup)
+**Action:** Remove or consolidate with `depth/backends/registry.py`
 
 **Location:** `src/transformation_portal/depth_canonical/models/registry.py:31`
 
@@ -315,9 +315,9 @@ raise NotImplementedError
 
 ### 2.4 Security Utils - Windows Platform Restriction
 
-**Status:** ✅ INTENTIONAL LIMITATION  
-**Priority:** N/A  
-**Action:** None (documented constraint)  
+**Status:** ✅ INTENTIONAL LIMITATION
+**Priority:** N/A
+**Action:** None (documented constraint)
 
 **Location:** `src/transformation_portal/utils/security.py:418`
 
@@ -339,9 +339,9 @@ raise NotImplementedError(
 
 ### 2.5 Depth Anything V2 Backend (Legacy)
 
-**Status:** 🟢 CORRECT STUB  
-**Priority:** N/A  
-**Action:** None (correct error handling)  
+**Status:** 🟢 CORRECT STUB
+**Priority:** N/A
+**Action:** None (correct error handling)
 
 **Location:** `src/transformation_portal/depth/models/depth_anything_v2.py:211`
 
@@ -362,10 +362,10 @@ raise NotImplementedError(f"Backend {self.backend} not implemented")
 
 ### 3.1 Context-Aware Rendering Integration
 
-**Status:** 🟡 CLARIFICATION NEEDED  
-**Priority:** P3 (Medium)  
-**Effort:** 2h (decision) or 8h (integration)  
-**Owner:** Architect (decision), Specialist (implementation)  
+**Status:** 🟡 CLARIFICATION NEEDED
+**Priority:** P3 (Medium)
+**Effort:** 2h (decision) or 8h (integration)
+**Owner:** Architect (decision), Specialist (implementation)
 
 **Location:** `scripts/context_aware_rendering.py:354`
 
@@ -398,10 +398,10 @@ raise NotImplementedError(f"Backend {self.backend} not implemented")
 
 ### 3.2 Sample Download URLs (3 instances)
 
-**Status:** 🟡 READY FOR IMPLEMENTATION  
-**Priority:** P2 (User-facing feature)  
-**Effort:** 4 hours (upload + update)  
-**Owner:** DevOps/Docs  
+**Status:** 🟡 READY FOR IMPLEMENTATION
+**Priority:** P2 (User-facing feature)
+**Effort:** 4 hours (upload + update)
+**Owner:** DevOps/Docs
 
 **Location:** `scripts/download_samples.py`
 
@@ -447,9 +447,9 @@ raise NotImplementedError(f"Backend {self.backend} not implemented")
 
 ### 3.3 Performance Regression Investigation
 
-**Status:** 🟢 OBSERVATIONAL (NOT A BLOCKER)  
-**Priority:** P4 (Low)  
-**Action:** Track in IMPROVEMENT_OPPORTUNITIES.md (already done)  
+**Status:** 🟢 OBSERVATIONAL (NOT A BLOCKER)
+**Priority:** P4 (Low)
+**Action:** Track in IMPROVEMENT_OPPORTUNITIES.md (already done)
 
 **Location:** `tests/stress/test_stress_large_batch.py`
 
@@ -485,9 +485,9 @@ raise NotImplementedError(f"Backend {self.backend} not implemented")
 
 ### 4.1 Binary File Cleanup
 
-**Status:** ✅ OBSOLETE (COMPLETED)  
-**Priority:** N/A  
-**Action:** Archive tracking document  
+**Status:** ✅ OBSOLETE (COMPLETED)
+**Priority:** N/A
+**Action:** Archive tracking document
 
 **Location:** `docs/fixes/BINARY_FILE_BEST_PRACTICES.md:133,140`
 
@@ -507,9 +507,9 @@ raise NotImplementedError(f"Backend {self.backend} not implemented")
 
 ### 4.2 PR #98 Action Items
 
-**Status:** ✅ OBSOLETE (PR MERGED)  
-**Priority:** N/A  
-**Action:** Archive tracking documents  
+**Status:** ✅ OBSOLETE (PR MERGED)
+**Priority:** N/A
+**Action:** Archive tracking documents
 
 **Location:** `docs/pr_reports/PR98_ACTION_ITEMS.md` and `docs/development/pr/PR98_ACTION_ITEMS.md`
 
@@ -529,10 +529,10 @@ Multiple TODO items:
 
 ### 4.3 ADR-023 Manifest Implementation
 
-**Status:** 🟢 QUICK WIN  
-**Priority:** P3 (Low)  
-**Effort:** 2 hours  
-**Owner:** Specialist  
+**Status:** 🟢 QUICK WIN
+**Priority:** P3 (Low)
+**Effort:** 2 hours
+**Owner:** Specialist
 
 **Location:** `docs/architecture/decisions/ADR-023-implementation-guide.md`
 
@@ -558,9 +558,9 @@ Multiple TODOs:
 
 ### 4.4 V2.0.0 Release Checklist
 
-**Status:** 🔴 CRITICAL  
-**Priority:** P0 (Blocks Release)  
-**Action:** IMMEDIATE REVIEW REQUIRED  
+**Status:** 🔴 CRITICAL
+**Priority:** P0 (Blocks Release)
+**Action:** IMMEDIATE REVIEW REQUIRED
 
 **Location:** `docs/architecture/V2_0_0_RELEASE_REVIEW.md`
 
@@ -575,7 +575,7 @@ Multiple TODOs:
 | Document rollback procedures | ❌ TODO | Day 2 | Yes |
 | Define staging validation | ❌ TODO | Day 2 | Yes |
 
-**Estimated Effort:** 12-16 hours  
+**Estimated Effort:** 12-16 hours
 **Recommendation:** **NO-GO on v2.0.0 release until P0 items completed**
 
 **Questions for Architect:**
@@ -589,9 +589,9 @@ Multiple TODOs:
 
 ### 4.5 Repository Health Report Placeholders
 
-**Status:** 🟢 OBSERVATIONAL  
-**Priority:** P4 (Low)  
-**Action:** None (status markers, not TODOs)  
+**Status:** 🟢 OBSERVATIONAL
+**Priority:** P4 (Low)
+**Action:** None (status markers, not TODOs)
 
 **Location:** `docs/architecture/REPOSITORY_HEALTH_REPORT_2026-02-03.md:143`
 
@@ -614,9 +614,9 @@ Multiple TODOs:
 
 ### 5.1 Code Coverage Enforcement
 
-**Status:** 🔴 P0 (CRITICAL)  
-**Effort:** 4 hours  
-**Impact:** Quality gate, release blocker  
+**Status:** 🔴 P0 (CRITICAL)
+**Effort:** 4 hours
+**Impact:** Quality gate, release blocker
 
 **Current State:**
 - Coverage calculated but not enforced
@@ -640,9 +640,9 @@ Multiple TODOs:
 
 ### 5.2 Security Scanning in PR Workflow
 
-**Status:** 🔴 P0 (CRITICAL)  
-**Effort:** 4 hours  
-**Impact:** Supply chain security, compliance  
+**Status:** 🔴 P0 (CRITICAL)
+**Effort:** 4 hours
+**Impact:** Supply chain security, compliance
 
 **Current State:**
 - CodeQL analysis exists (scheduled)
@@ -665,9 +665,9 @@ Multiple TODOs:
 
 ### 5.3 Branch Protection Rules
 
-**Status:** 🔴 P0 (CRITICAL)  
-**Effort:** 1 hour  
-**Impact:** Prevent accidental force-pushes, require reviews  
+**Status:** 🔴 P0 (CRITICAL)
+**Effort:** 1 hour
+**Impact:** Prevent accidental force-pushes, require reviews
 
 **Current State:**
 - No branch protection configured (or unclear from code inspection)
@@ -690,9 +690,9 @@ Multiple TODOs:
 
 ### 5.4 CLI Test Suite
 
-**Status:** 🟡 P1 (HIGH)  
-**Effort:** 8 hours  
-**Impact:** Prevent CLI regressions  
+**Status:** 🟡 P1 (HIGH)
+**Effort:** 8 hours
+**Impact:** Prevent CLI regressions
 
 **Current State:**
 - Unit tests for CLI argument parsing exist
@@ -719,9 +719,9 @@ Multiple TODOs:
 
 ### 5.5 Staging Environment
 
-**Status:** 🟡 P1 (HIGH)  
-**Effort:** 16 hours  
-**Impact:** Pre-production validation  
+**Status:** 🟡 P1 (HIGH)
+**Effort:** 16 hours
+**Impact:** Pre-production validation
 
 **Current State:**
 - No staging environment
@@ -747,9 +747,9 @@ Multiple TODOs:
 
 ### 5.6 Rollback Procedures Documentation
 
-**Status:** 🔴 P0 (CRITICAL)  
-**Effort:** 2 hours  
-**Impact:** Incident response, production safety  
+**Status:** 🔴 P0 (CRITICAL)
+**Effort:** 2 hours
+**Impact:** Incident response, production safety
 
 **Current State:**
 - No documented rollback procedures
@@ -776,9 +776,9 @@ Multiple TODOs:
 
 ### 6.1 Dependency-Conditional Test Skips
 
-**Status:** ✅ CORRECT PATTERN  
-**Priority:** N/A  
-**Action:** None (working as intended)  
+**Status:** ✅ CORRECT PATTERN
+**Priority:** N/A
+**Action:** None (working as intended)
 
 **Pattern:**
 ```python
@@ -804,9 +804,9 @@ Multiple TODOs:
 
 ### 6.2 ML Test Isolation
 
-**Status:** ✅ CORRECT PATTERN  
-**Priority:** N/A  
-**Action:** None (working as intended)  
+**Status:** ✅ CORRECT PATTERN
+**Priority:** N/A
+**Action:** None (working as intended)
 
 **Pattern:**
 ```python
@@ -825,10 +825,10 @@ pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch required for 
 
 ### 6.3 Golden Fixture Regression Tests
 
-**Status:** 🟡 RECOMMENDED ENHANCEMENT  
-**Priority:** P3 (Medium)  
-**Effort:** 8 hours  
-**Impact:** Prevent visual regression  
+**Status:** 🟡 RECOMMENDED ENHANCEMENT
+**Priority:** P3 (Medium)
+**Effort:** 8 hours
+**Impact:** Prevent visual regression
 
 **Current State:**
 - No golden fixture tests
@@ -854,9 +854,9 @@ pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch required for 
 
 ### 6.4 Property-Based Tests (Hypothesis)
 
-**Status:** ✅ PARTIALLY IMPLEMENTED  
-**Priority:** P4 (Nice-to-have)  
-**Action:** None (sufficient coverage)  
+**Status:** ✅ PARTIALLY IMPLEMENTED
+**Priority:** P4 (Nice-to-have)
+**Action:** None (sufficient coverage)
 
 **Current State:**
 - Hypothesis available and used in select tests

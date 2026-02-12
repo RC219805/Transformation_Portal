@@ -12,11 +12,11 @@ Successfully diagnosed and fixed a critical workflow failure affecting the `test
 
 **Error Message**:
 ```
-FAILED tests/test_luxury_tiff_batch_processor.py::test_cli_help_works 
+FAILED tests/test_luxury_tiff_batch_processor.py::test_cli_help_works
 - assert ('Batch enhance TIFF files' in '' or 'Usage' in '')
 
-RuntimeWarning: 'luxury_tiff_batch_processor.cli' found in sys.modules after 
-import of package 'luxury_tiff_batch_processor', but prior to execution of 
+RuntimeWarning: 'luxury_tiff_batch_processor.cli' found in sys.modules after
+import of package 'luxury_tiff_batch_processor', but prior to execution of
 'luxury_tiff_batch_processor.cli'; this may result in unpredictable behaviour
 ```
 
@@ -62,7 +62,7 @@ This simple 2-line addition enables the CLI module to be executed as a script.
 
 This allows the package to be invoked via:
     python -m luxury_tiff_batch_processor --help
-    
+
 For the CLI module specifically:
     python -m luxury_tiff_batch_processor.cli --help
 """
@@ -101,7 +101,7 @@ All three patterns call the same `main()` function from `cli.py`.
 
 ### Test Results
 
-**Before Fix**: 
+**Before Fix**:
 - Test Status: ❌ FAILED
 - Stdout: `''` (empty)
 - Error: RuntimeWarning about module execution
@@ -113,7 +113,7 @@ All three patterns call the same `main()` function from `cli.py`.
 
 ### Workflow Status
 
-**Main Branch**: 
+**Main Branch**:
 - Latest successful run: 19292891059 (November 12, 2025)
 - Status: ✅ PASSING
 - Conclusion: Repository is in healthy state

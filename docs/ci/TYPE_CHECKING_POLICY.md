@@ -1,7 +1,7 @@
 # Type Checking Policy
 
-**Status**: DRAFT (requires architect approval)  
-**Owner**: Transformation Portal Architect  
+**Status**: DRAFT (requires architect approval)
+**Owner**: Transformation Portal Architect
 **Last Updated**: 2026-02-04
 
 ---
@@ -269,7 +269,7 @@ type-check-core:
     - run: |
         # Strict on core modules (blocking)
         mypy src/transformation_portal/core/ --strict
-        
+
         # Warning-only on other modules
         mypy src/ tests/ --config-file mypy.ini || true
 ```
@@ -320,5 +320,5 @@ type-check-core:
 
 ---
 
-**Maintained by**: Transformation Portal Architect  
+**Maintained by**: Transformation Portal Architect
 **Review Frequency**: After each phase completion

@@ -97,16 +97,16 @@ python3 premium_pipeline_fixed.py input.tiff --output custom_dir/
 
 ## 🚫 Common Mistakes to Avoid
 
-❌ **Don't use old premium pipeline** (quality issues)  
+❌ **Don't use old premium pipeline** (quality issues)
 ✅ **Use premium_pipeline_fixed.py instead**
 
-❌ **Don't use quality < 95 for print**  
+❌ **Don't use quality < 95 for print**
 ✅ **Always use Q96-98 for client deliverables**
 
-❌ **Don't resize with BILINEAR/BICUBIC**  
+❌ **Don't resize with BILINEAR/BICUBIC**
 ✅ **Always use LANCZOS resampling**
 
-❌ **Don't enable AI enhancement by default**  
+❌ **Don't enable AI enhancement by default**
 ✅ **Skip AI unless specifically needed (safer)**
 
 ---
@@ -145,19 +145,19 @@ output_premium_fixed/  or  output_750picacho_final/
 ## 🆘 Troubleshooting
 
 ### "Real-ESRGAN unavailable"
-✅ Normal - will use high-quality Lanczos instead  
+✅ Normal - will use high-quality Lanczos instead
 💡 Optional: Install with `pip install realesrgan`
 
 ### Large file warnings
-✅ Expected - we process 16K images (144 megapixels)  
+✅ Expected - we process 16K images (144 megapixels)
 💡 Warnings are safe to ignore
 
 ### Out of memory
-✅ Try `--no-4k` to process at standard resolution  
+✅ Try `--no-4k` to process at standard resolution
 💡 Or close other applications
 
 ### Color looks different
-✅ Ensure viewing in color-managed application  
+✅ Ensure viewing in color-managed application
 💡 ICC profiles are preserved in exports
 
 ---
@@ -184,6 +184,6 @@ output_premium_fixed/  or  output_750picacho_final/
 
 ---
 
-**Last Updated:** November 7, 2025  
-**Version:** 1.0 (Production Ready)  
+**Last Updated:** November 7, 2025
+**Version:** 1.0 (Production Ready)
 **Status:** ✅ All systems operational

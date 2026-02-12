@@ -33,7 +33,8 @@ def temp_repo():
         # Create sample documentation
         docs_dir = repo_path / "docs"
         docs_dir.mkdir()
-        (docs_dir / "README.md").write_text("""
+        (docs_dir / "README.md").write_text(
+            """
 # Depth Pipeline Documentation
 
 The depth pipeline processes images using Depth Anything V2 for monocular depth estimation.
@@ -42,12 +43,14 @@ The depth pipeline processes images using Depth Anything V2 for monocular depth 
 - Depth-aware tone mapping
 - Atmospheric effects
 - Zone-based processing
-        """)
+        """
+        )
 
         # Create sample source code
         src_dir = repo_path / "src"
         src_dir.mkdir()
-        (src_dir / "pipeline.py").write_text("""
+        (src_dir / "pipeline.py").write_text(
+            """
 def process_image(image_path, depth_map):
     '''Process image with depth information.
 
@@ -60,17 +63,20 @@ def process_image(image_path, depth_map):
     '''
     # Apply depth-aware processing
     return processed_image
-        """)
+        """
+        )
 
         # Create sample test
         tests_dir = repo_path / "tests"
         tests_dir.mkdir()
-        (tests_dir / "test_pipeline.py").write_text("""
+        (tests_dir / "test_pipeline.py").write_text(
+            """
 def test_process_image():
     '''Test depth pipeline processing.'''
     result = process_image('test.jpg', depth_map)
     assert result is not None
-        """)
+        """
+        )
 
         yield str(repo_path)
 
@@ -88,7 +94,7 @@ class TestRAGPipeline:
 
         # Check chunk types
         chunk_types = {c.chunk_type for c in chunks}
-        assert 'doc' in chunk_types or 'code' in chunk_types, "Should have doc or code chunks"
+        assert "doc" in chunk_types or "code" in chunk_types, "Should have doc or code chunks"
 
     def test_retriever_finds_relevant_chunks(self, temp_repo):
         """Test that retriever finds relevant chunks for a query."""
@@ -104,8 +110,8 @@ class TestRAGPipeline:
         results = retriever.retrieve("depth pipeline processing", top_k=5)
 
         assert len(results) > 0, "Should find relevant results"
-        assert all(hasattr(r, 'content') for r in results), "Results should have content"
-        assert all(hasattr(r, 'score') for r in results), "Results should have scores"
+        assert all(hasattr(r, "content") for r in results), "Results should have content"
+        assert all(hasattr(r, "score") for r in results), "Results should have scores"
 
     def test_reranker_improves_results(self, temp_repo):
         """Test that reranker improves result quality."""
@@ -146,10 +152,10 @@ class TestRAGPipeline:
         assert len(citations) > 0, "Should generate citations"
 
         for citation in citations:
-            assert 'file_path' in citation, "Citation should have file_path"
-            assert 'snippet' in citation, "Citation should have snippet"
-            assert 'confidence' in citation, "Citation should have confidence"
-            assert 0.0 <= citation['confidence'] <= 1.0, "Confidence should be in [0,1]"
+            assert "file_path" in citation, "Citation should have file_path"
+            assert "snippet" in citation, "Citation should have snippet"
+            assert "confidence" in citation, "Citation should have confidence"
+            assert 0.0 <= citation["confidence"] <= 1.0, "Confidence should be in [0,1]"
 
     def test_end_to_end_workflow(self, temp_repo):
         """Test complete RAG workflow from indexing to citation."""
@@ -178,7 +184,7 @@ class TestRAGPipeline:
         assert len(citations) > 0
 
         # 6. Format citations
-        formatted = citation_gen.format_citations(citations, format_type='markdown')
+        formatted = citation_gen.format_citations(citations, format_type="markdown")
         assert isinstance(formatted, str)
         assert len(formatted) > 0
 
@@ -186,7 +192,7 @@ class TestRAGPipeline:
         """Test feature implementation template generation."""
         template = PromptTemplates.feature_implementation(
             description="Add depth-based atmospheric haze effect",
-            context="Existing atmospheric processor in depth_pipeline/processors/"
+            context="Existing atmospheric processor in depth_pipeline/processors/",
         )
 
         assert isinstance(template, str), "Template should be a string"
@@ -198,7 +204,7 @@ class TestRAGPipeline:
         template = PromptTemplates.bug_triage(
             error_log="ImportError: No module named 'torch'",
             reproduction_steps="Run python pipeline.py",
-            environment="Python 3.10, Ubuntu 20.04"
+            environment="Python 3.10, Ubuntu 20.04",
         )
 
         assert isinstance(template, str), "Template should be a string"
@@ -214,13 +220,13 @@ class TestRAGPipeline:
                 FileModification(
                     path="depth_pipeline/processors/atmospheric.py",
                     patch="+ def apply_haze(image, depth): pass",
-                    description="Add haze effect"
+                    description="Add haze effect",
                 )
             ],
             tests=["tests/test_atmospheric.py"],
             explanation="Implements depth-based haze using fog color blending",
             confidence=0.85,
-            citations=[{"file_path": "existing.py", "snippet": "example"}]
+            citations=[{"file_path": "existing.py", "snippet": "example"}],
         )
 
         # Test JSON serialization
@@ -238,7 +244,7 @@ class TestRAGPipeline:
         retriever.index(chunks)
 
         # Filter by code chunks only
-        results = retriever.retrieve("process image", top_k=5, chunk_type_filter=['code'])
+        results = retriever.retrieve("process image", top_k=5, chunk_type_filter=["code"])
 
         if results:
             # All results should be code chunks - check metadata
@@ -258,17 +264,17 @@ class TestRAGPipeline:
         citations = citation_gen.generate_citations(results, max_citations=2)
 
         # Test markdown format
-        markdown = citation_gen.format_citations(citations, format_type='markdown')
-        assert '##' in markdown or '[' in markdown, "Markdown should have formatting"
+        markdown = citation_gen.format_citations(citations, format_type="markdown")
+        assert "##" in markdown or "[" in markdown, "Markdown should have formatting"
 
         # Test plain text format
-        plain = citation_gen.format_citations(citations, format_type='text')
-        assert 'CITATIONS' in plain or 'File:' in plain, "Plain text should have citations"
+        plain = citation_gen.format_citations(citations, format_type="text")
+        assert "CITATIONS" in plain or "File:" in plain, "Plain text should have citations"
 
         # Test JSON format
-        json_str = citation_gen.format_citations(citations, format_type='json')
-        assert 'file_path' in json_str, "JSON should have file_path field"
+        json_str = citation_gen.format_citations(citations, format_type="json")
+        assert "file_path" in json_str, "JSON should have file_path field"
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

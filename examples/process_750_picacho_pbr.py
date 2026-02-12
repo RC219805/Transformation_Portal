@@ -84,12 +84,12 @@ from typing import Optional
 
 try:
     from transformation_portal.lux_depth_v3 import (
-        EnhanceOrchestrator,
-        PREMIUM_QUALITY,
-        WOOD_OPTIMIZED,
-        STONE_OPTIMIZED,
-        GLASS_OPTIMIZED,
         FABRIC_OPTIMIZED,
+        GLASS_OPTIMIZED,
+        PREMIUM_QUALITY,
+        STONE_OPTIMIZED,
+        WOOD_OPTIMIZED,
+        EnhanceOrchestrator,
         get_preset,
         list_presets,
     )
@@ -119,14 +119,14 @@ MATERIAL_PRESETS = {
 
 def print_header():
     """Print processing header with property context."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("750 PICACHO PRIMARY BEDROOM - PREMIUM PBR PROCESSING")
-    print("="*80)
+    print("=" * 80)
     print("\nProperty: 750 Picacho Lane, Santa Barbara, CA")
     print("Scene: Primary Bedroom Suite")
     print("Materials: Hardwood floors, premium textiles, architectural glass")
     print("Quality Tier: Hero shot / Marketing deliverable")
-    print("="*80 + "\n")
+    print("=" * 80 + "\n")
 
 
 def analyze_source_file(input_path: Path) -> dict:
@@ -139,6 +139,7 @@ def analyze_source_file(input_path: Path) -> dict:
     # Try to get image dimensions
     try:
         from PIL import Image
+
         with Image.open(input_path) as img:
             width, height = img.size
             mode = img.mode
@@ -175,7 +176,7 @@ def print_source_analysis(info: dict):
         print(f"Color Mode: {info['mode']}")
 
         # Memory estimate
-        estimated_mem_gb = (info['megapixels'] * 12) / 1024  # Rough estimate
+        estimated_mem_gb = (info["megapixels"] * 12) / 1024  # Rough estimate
         print(f"Estimated Memory: ~{estimated_mem_gb:.1f} GB peak")
     else:
         print(f"Warning: Could not read image dimensions: {info.get('error', 'Unknown')}")
@@ -202,13 +203,17 @@ def print_preset_config(config, preset_name: str):
     # Depth model
     print(f"Depth Model: {config.model_variant.value.display_name}")
     print(f"Device: {config.depth_device}")
-    print(f"Float Depth: {config.save_float_depth} {'✓ High-precision' if config.save_float_depth else '⚠ Standard precision'}")
+    print(
+        f"Float Depth: {config.save_float_depth} {'✓ High-precision' if config.save_float_depth else '⚠ Standard precision'}"
+    )
     print()
 
     # PBR parameters
     print("PBR Map Parameters:")
     print(f"  Normal Strength:    {config.pbr_normal_strength:.1f}x")
-    print(f"  Normal Blur:        {config.pbr_normal_blur_radius}px {'(sharp)' if config.pbr_normal_blur_radius == 0 else '(smoothed)'}")
+    print(
+        f"  Normal Blur:        {config.pbr_normal_blur_radius}px {'(sharp)' if config.pbr_normal_blur_radius == 0 else '(smoothed)'}"
+    )
     print(f"  Roughness Strength: {config.pbr_roughness_strength:.1f}x")
     print(f"  Roughness Blur:     {config.pbr_roughness_blur_radius}px")
     print(f"  AO Strength:        {config.pbr_ao_strength:.1f}x")
@@ -484,49 +489,28 @@ Material Preset Selection Guide:
 For detailed PBR configuration documentation:
   docs/PBR_ENHANCE_CONFIG_GUIDE.md
   docs/PBR_PRESETS_QUICK_REFERENCE.md
-        """
+        """,
     )
 
-    parser.add_argument(
-        "--input",
-        type=Path,
-        default=DEFAULT_INPUT,
-        help=f"Input TIFF file (default: {DEFAULT_INPUT})"
-    )
+    parser.add_argument("--input", type=Path, default=DEFAULT_INPUT, help=f"Input TIFF file (default: {DEFAULT_INPUT})")
 
-    parser.add_argument(
-        "--output",
-        type=Path,
-        default=DEFAULT_OUTPUT,
-        help=f"Output directory (default: {DEFAULT_OUTPUT})"
-    )
+    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT, help=f"Output directory (default: {DEFAULT_OUTPUT})")
 
     parser.add_argument(
         "--preset",
         type=str,
         default="premium",
         choices=list(MATERIAL_PRESETS.keys()),
-        help="PBR preset to use (default: premium)"
+        help="PBR preset to use (default: premium)",
     )
 
     parser.add_argument(
-        "--device",
-        type=str,
-        choices=["mps", "cuda", "cpu"],
-        help="Override device selection (default: auto-detect)"
+        "--device", type=str, choices=["mps", "cuda", "cpu"], help="Override device selection (default: auto-detect)"
     )
 
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Validate configuration without processing"
-    )
+    parser.add_argument("--dry-run", action="store_true", help="Validate configuration without processing")
 
-    parser.add_argument(
-        "--list-presets",
-        action="store_true",
-        help="List available presets and exit"
-    )
+    parser.add_argument("--list-presets", action="store_true", help="List available presets and exit")
 
     args = parser.parse_args()
 

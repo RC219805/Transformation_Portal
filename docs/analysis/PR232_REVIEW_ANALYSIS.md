@@ -87,7 +87,7 @@ $ find . -name "lux_render_pipeline.py"
    ```python
    """
    NOTE: This script requires package installation with: pip install -e .
-   
+
    The imports assume the transformation_portal package is installed and available
    in your Python path. If you get import errors, install the package first.
    ...

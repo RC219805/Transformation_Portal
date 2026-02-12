@@ -1,7 +1,7 @@
 # Premium Pipeline Quality Fix
 
-**Date:** November 7, 2025  
-**Issue:** Severe quality deterioration in all premium outputs except 4K upscale  
+**Date:** November 7, 2025
+**Issue:** Severe quality deterioration in all premium outputs except 4K upscale
 **Status:** ✅ ROOT CAUSE IDENTIFIED & FIXED
 
 ---
@@ -111,7 +111,7 @@ enable_ai_enhance=False  # Default: OFF (safest)
 # Print 8K
 quality=98, subsampling=0, dpi=(300, 300)
 
-# Web 4K  
+# Web 4K
 quality=96, subsampling=0, dpi=(72, 72)
 
 # Magazine 2K

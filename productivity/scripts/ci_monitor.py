@@ -5,9 +5,10 @@ Collects and displays real-time CI/CD metrics
 """
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
-from datetime import datetime
+
 
 class CIMonitor:
     """Monitor CI/CD pipeline health and performance"""
@@ -42,13 +43,7 @@ class CIMonitor:
 
     def _get_test_summary(self) -> Dict:
         """Get test execution summary"""
-        return {
-            "total": 150,
-            "passed": 148,
-            "failed": 2,
-            "skipped": 0,
-            "coverage": 87.5
-        }
+        return {"total": 150, "passed": 148, "failed": 2, "skipped": 0, "coverage": 87.5}
 
     def _get_build_time(self) -> int:
         """Get average build time in seconds"""
@@ -67,7 +62,7 @@ class CIMonitor:
         report.append(f"⏱️  Average Build Time: {metrics['build_time']//60}m {metrics['build_time']%60}s")
 
         report.append("\n\n🔬 Test Results:")
-        tests = metrics['test_results']
+        tests = metrics["test_results"]
         report.append(f"  Total: {tests['total']}")
         report.append(f"  ✅ Passed: {tests['passed']}")
         report.append(f"  ❌ Failed: {tests['failed']}")
@@ -75,8 +70,8 @@ class CIMonitor:
         report.append(f"  📊 Coverage: {tests['coverage']}%")
 
         report.append("\n\n🔄 Recent Workflows:")
-        for workflow in metrics['workflows']:
-            status_icon = "✅" if workflow['status'] == 'success' else "❌"
+        for workflow in metrics["workflows"]:
+            status_icon = "✅" if workflow["status"] == "success" else "❌"
             duration = f"{workflow['duration']//60}m {workflow['duration']%60}s"
             report.append(f"  {status_icon} {workflow['name']}: {duration}")
 
@@ -89,11 +84,12 @@ class CIMonitor:
         metrics = self.collect_metrics()
         output_file = self.artifacts_dir / f"ci-metrics-{datetime.now().strftime('%Y%m%d-%H%M%S')}.json"
 
-        with open(output_file, 'w') as f:
+        with open(output_file, "w") as f:
             json.dump(metrics, f, indent=2)
 
         print(f"✅ Metrics saved to {output_file}")
         return output_file
+
 
 def main():
     """Main entry point"""
@@ -105,6 +101,7 @@ def main():
     # Save metrics
     if "--save" in sys.argv:
         monitor.save_metrics()
+
 
 if __name__ == "__main__":
     main()

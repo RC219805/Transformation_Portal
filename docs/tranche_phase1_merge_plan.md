@@ -7,7 +7,7 @@ All three PRs have CI failures that need addressing before merge. **None are cur
 
 **Recommended Action:** Fix remaining issues in all three PRs in parallel, then merge in this sequence once all are green:
 1. **PR #827** (CI-001) - Foundation workflow changes
-2. **PR #826** (DOC-001) - Documentation consolidation  
+2. **PR #826** (DOC-001) - Documentation consolidation
 3. **PR #825** (TEST-001) - Test infrastructure
 
 ---
@@ -15,13 +15,13 @@ All three PRs have CI failures that need addressing before merge. **None are cur
 ## Current CI Status
 
 ### PR #825 - TEST-001: Shared conftest.py fixtures
-**Branch:** `feature/test-001-shared-fixtures`  
-**Latest Commit:** 662bd166 (lint/pre-commit hygiene fixes)  
+**Branch:** `feature/test-001-shared-fixtures`
+**Latest Commit:** 662bd166 (lint/pre-commit hygiene fixes)
 **CI State:** ❌ **RED** - 3 failures
 
 **Blocking Failures:**
 - `CI Gate` - FAILURE
-- `lint` (CI workflow) - FAILURE  
+- `lint` (CI workflow) - FAILURE
 - `pre-commit-checks` (Quality Gate) - FAILURE
 
 **Passing Checks:** 21/25 workflows green (84%)
@@ -36,8 +36,8 @@ All three PRs have CI failures that need addressing before merge. **None are cur
 ---
 
 ### PR #826 - DOC-001: Documentation consolidation
-**Branch:** `feature/doc-001-consolidation`  
-**Latest Commit:** e5ccb224 (broken links + UTF-8 encoding)  
+**Branch:** `feature/doc-001-consolidation`
+**Latest Commit:** e5ccb224 (broken links + UTF-8 encoding)
 **CI State:** ⚠️ **MOSTLY GREEN** - 2 failures, 3 in progress
 
 **Blocking Failures:**
@@ -58,8 +58,8 @@ All three PRs have CI failures that need addressing before merge. **None are cur
 ---
 
 ### PR #827 - CI-001 Phase 1: Workflow consolidation
-**Branch:** `feature/ci-001-consolidation`  
-**Latest Commit:** a6dd0d5c (file location + ADR corrections)  
+**Branch:** `feature/ci-001-consolidation`
+**Latest Commit:** a6dd0d5c (file location + ADR corrections)
 **CI State:** ❌ **RED** - 3 failures
 
 **Blocking Failures:**
@@ -261,7 +261,7 @@ Once all three PRs are merged:
 
 ### 2. Close Associated Issues
 - Close #825 (referenced by TEST-001 PR)
-- Close #826 (referenced by DOC-001 PR)  
+- Close #826 (referenced by DOC-001 PR)
 - Close #818 (referenced by CI-001 PR)
 
 ### 3. Verify Integration
@@ -332,4 +332,3 @@ Before declaring Tranche Phase 1 complete:
 - Allows validation at each step
 
 ---
-

@@ -1,7 +1,7 @@
 # Real-ESRGAN Compatibility Fix
-**Issue:** ModuleNotFoundError with PyTorch 2.9.0  
-**Status:** ✅ RESOLVED  
-**Date:** 2025-11-05  
+**Issue:** ModuleNotFoundError with PyTorch 2.9.0
+**Status:** ✅ RESOLVED
+**Date:** 2025-11-05
 
 ---
 
@@ -21,7 +21,7 @@ ModuleNotFoundError: No module named 'torchvision.transforms.functional_tensor'
 
 ### The Fix (One-Line Change)
 
-**File:** `.venv/lib/python3.11/site-packages/basicsr/data/degradations.py`  
+**File:** `.venv/lib/python3.11/site-packages/basicsr/data/degradations.py`
 **Line:** 8
 
 **Before (Broken):**
@@ -144,8 +144,8 @@ This resolves:
 
 ---
 
-**Fixed By:** One-line import path correction  
-**Verification:** Complete - tested and working  
-**Status:** PRODUCTION READY ✅  
+**Fixed By:** One-line import path correction
+**Verification:** Complete - tested and working
+**Status:** PRODUCTION READY ✅
 
 ---

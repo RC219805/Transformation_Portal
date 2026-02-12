@@ -68,4 +68,3 @@ If one is a revision/replacement:
 - `Processed_Output/Master_TIFFs/`
 - `Processed_Output/Web_JPEGs/`
 - `TIFFs/16-Bit_TIFFs/`
-

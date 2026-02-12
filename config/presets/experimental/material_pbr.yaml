@@ -1,0 +1,165 @@
+# PBR Material Generation Preset (Experimental)
+#
+# Status: EXPERIMENTAL - HF revision needs verification before promotion
+# Phase: 2.2 (MaterialGAN/NVDIFFREC Integration)
+# Last Updated: 2026-02-11
+#
+# Purpose:
+#   Physics-based PBR texture generation for architectural visualization
+#   and luxury real estate rendering. Generates albedo, normal, roughness,
+#   metallic, and ambient occlusion maps.
+#
+# Model:
+#   - NVDIFFREC (preferred): nvidia/nvdiffrec (BSD-3-Clause, commercial OK)
+#   - MaterialGAN (alternative): research-only (CC BY-NC 4.0)
+#   - Heuristic (fallback): CPU-based classical image processing
+#   - Revision: NEEDS_VERIFICATION - placeholder until verified
+#
+# Usage:
+#   transformation_portal spatial-ai generate-pbr \
+#     --preset experimental/material_pbr \
+#     --input scene.tiff \
+#     --output output/ \
+#     --backend nvdiffrec
+#
+# Promotion Checklist:
+#   [ ] Verify HF revision from nvidia/nvdiffrec/commits/main
+#   [ ] Update revision to 40-char commit SHA
+#   [ ] Run validation: python scripts/validation/validate_hf_revisions.py
+#   [ ] Move to config/presets/material_pbr.yaml
+#
+# ADR-027 Compliance:
+#   ✅ Isolated from lux_depth_v3 (no cross-pipeline imports)
+#   ✅ Contract-driven (gamma=1.0 enforcement)
+#   ✅ Experimental preset (HF placeholder allowed)
+#   ✅ Integration with Phase 2.1 segmentation
+
+name: "PBR Material Generation (Experimental)"
+version: "2.2.0"
+tier: "dev"  # Available to all tiers (BSD-3-Clause license for NVDIFFREC)
+
+# Model Configuration
+model:
+  backend: "nvdiffrec"  # Options: "nvdiffrec", "material_gan", "heuristic"
+  repo_id: "nvidia/nvdiffrec"  # Placeholder - actual repo TBD
+  revision: "NEEDS_VERIFICATION_NVDIFFREC_20260211"  # Placeholder
+  device: "cuda"  # Options: "cuda", "mps", "cpu"
+
+# Alternative Backend (Research Only)
+# Uncomment to use MaterialGAN (CC BY-NC 4.0)
+# model:
+#   backend: "material_gan"
+#   repo_id: "research/material_gan"
+#   revision: "NEEDS_VERIFICATION_MATERIALGAN_20260211"
+#   device: "cuda"
+
+# CPU Fallback (No ML Dependencies)
+# Uncomment for CPU-only environments or testing
+# model:
+#   backend: "heuristic"
+#   device: "cpu"
+
+# PBR Generation Parameters
+pbr:
+  # Texture resolution (power of 2)
+  resolution: 1024  # Options: 512, 1024, 2048, 4096
+
+  # Optimization iterations (neural backends only)
+  optimize_iterations: 100  # Range: 10-500 (more = better quality, slower)
+
+  # Use depth for geometry-aware optimization
+  use_depth: true
+
+  # Normal map intensity [0, 2]
+  normal_strength: 1.0  # 0=flat, 1=normal, 2=exaggerated
+
+  # Ambient occlusion darkness [0, 1]
+  ao_intensity: 0.7  # 0=none, 1=maximum darkening
+
+# Material Presets (Optional Hints)
+material_presets:
+  wood:
+    roughness: 0.7
+    metallic: 0.0
+    subsurface_scattering: 0.1
+  stone:
+    roughness: 0.6
+    metallic: 0.0
+    subsurface_scattering: 0.05
+  metal:
+    roughness: 0.2
+    metallic: 0.95
+    subsurface_scattering: 0.0
+  glass:
+    roughness: 0.05
+    metallic: 0.0
+    subsurface_scattering: 0.0
+  fabric:
+    roughness: 0.8
+    metallic: 0.0
+    subsurface_scattering: 0.2
+  concrete:
+    roughness: 0.9
+    metallic: 0.0
+    subsurface_scattering: 0.0
+  leather:
+    roughness: 0.5
+    metallic: 0.0
+    subsurface_scattering: 0.15
+  ceramic:
+    roughness: 0.3
+    metallic: 0.0
+    subsurface_scattering: 0.05
+
+# Integration with Phase 2.1 Segmentation
+segmentation:
+  # Use SAM2 masks for per-segment PBR generation
+  enabled: true
+
+  # Apply material classification labels as hints
+  use_material_labels: true
+
+  # Batch process multiple segments
+  batch_mode: true
+
+# Input Contract (SpatialCaptureV1)
+input:
+  gamma: 1.0  # Enforced (linear RGB only)
+  dtype: "float32"
+  channels: 3
+  bit_depth: 32
+
+# Output Configuration
+output:
+  emit_albedo: true  # Save albedo map
+  emit_normal: true  # Save normal map
+  emit_roughness: true  # Save roughness map
+  emit_metallic: true  # Save metallic map
+  emit_ao: true  # Save ambient occlusion map
+  emit_height: true  # Save height/displacement map
+  emit_properties: true  # Save JSON with material properties
+  format: "png"  # Options: "png", "exr", "tiff"
+
+# Performance
+performance:
+  batch_size: 1
+  enable_caching: true
+  memory_efficient: false
+  # Target: 1024x1024 in <10s on RTX 3090
+
+# Validation
+validation:
+  check_isolation: true  # ADR-023 compliance
+  check_contract: true  # SpatialCaptureV1 validation
+  check_value_ranges: true  # PBR texture value validation
+
+# Experimental Features
+experimental:
+  # Multi-layer material decomposition
+  multi_layer: false
+
+  # Procedural texture synthesis
+  procedural_synthesis: false
+
+  # AI-guided material optimization
+  ai_optimization: false

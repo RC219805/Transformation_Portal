@@ -32,10 +32,7 @@ def get_logger(name: str, level: Optional[int] = None) -> logging.Logger:
         handler.setLevel(level)
 
         # Create formatter
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        )
+        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
         handler.setFormatter(formatter)
 
         # Add handler to logger
@@ -51,4 +48,4 @@ def set_log_level(level: int):
     Args:
         level: Logging level (e.g., logging.DEBUG, logging.INFO)
     """
-    logging.getLogger('rag_system').setLevel(level)
+    logging.getLogger("rag_system").setLevel(level)
