@@ -235,20 +235,50 @@ class SceneBuilder:
     ) -> List[CameraParams]:
         """Extract smooth camera path for video rendering.
 
+        IMPORTANT: This is a SIMPLIFIED PLACEHOLDER implementation.
+
+        KNOWN ISSUE: Linear interpolation of 4x4 extrinsic matrices is
+        mathematically incorrect - it produces sheared/skewed rotations.
+
+        PRODUCTION REQUIREMENTS:
+        - Decompose extrinsics into translation + rotation (R|t)
+        - Interpolate translation with LERP
+        - Interpolate rotation with SLERP (spherical linear interpolation)
+        - Optionally use spline interpolation for smooth paths
+
+        Current implementation is suitable for:
+        - Testing and development only
+        - Scenes where cameras are close together (minimal rotation)
+        - Placeholder for future proper implementation
+
         Args:
             scene: Reconstructed 3D scene.
             num_frames: Number of frames in camera path.
             interpolation: Interpolation method ("linear" or "spline").
+                          Currently ignored - only linear is implemented.
 
         Returns:
             List of camera parameters along path.
+
+        Raises:
+            ValueError: If scene has fewer than 2 cameras.
+            NotImplementedError: If interpolation != "linear"
         """
-        # Mock implementation: interpolate between existing cameras
         if len(scene.cameras) < 2:
             raise ValueError("Need at least 2 cameras for path extraction")
 
-        # Simple linear interpolation between first and last camera
-        # In production, use smooth spline interpolation
+        if interpolation != "linear":
+            raise NotImplementedError(
+                f"Interpolation method '{interpolation}' not implemented. "
+                "Only 'linear' is supported (with known limitations)."
+            )
+
+        logger.warning(
+            "extract_camera_path uses simplified linear interpolation which "
+            "produces mathematically incorrect rotation blending. "
+            "Use only for testing or scenes with minimal camera rotation. "
+            "See method docstring for production requirements."
+        )
 
         cam0 = scene.cameras[0]
         cam1 = scene.cameras[-1]
@@ -257,7 +287,8 @@ class SceneBuilder:
         for i in range(num_frames):
             t = i / (num_frames - 1)
 
-            # Interpolate extrinsics (simplified)
+            # TODO: Replace with proper SLERP interpolation
+            # This naive interpolation produces sheared rotations
             extrinsics = cam0.extrinsics * (1 - t) + cam1.extrinsics * t
 
             # Copy intrinsics from first camera
