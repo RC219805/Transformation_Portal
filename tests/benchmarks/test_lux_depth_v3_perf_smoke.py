@@ -169,7 +169,15 @@ class PeakRSSTracker:
         self._ready.clear()
         self._thread = threading.Thread(target=self._poll, daemon=True)
         self._thread.start()
-        self._ready.wait(timeout=max(0.05, self.interval * 10))  # ensure at least one poll
+        timeout = max(0.05, self.interval * 10)
+        if not self._ready.wait(timeout=timeout):
+            self._stop.set()
+            if self._thread is not None:
+                self._thread.join(timeout=1.0)
+            raise RuntimeError(
+                f"PeakRSSTracker first-sample barrier timed out after {timeout}s. "
+                f"System may be under extreme load; measurement would be invalid."
+            )
         return self
 
     def _poll(self):
