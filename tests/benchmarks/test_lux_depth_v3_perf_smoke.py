@@ -5,7 +5,7 @@ No model downloads, no network calls - pure performance measurement infrastructu
 
 Measures:
 - p50/p95 runtime per image and per megapixel
-- Post-processing memory usage (RSS baseline + incremental)
+- Peak RSS memory usage (polling-thread high-water mark)
 - Output invariants (dtype, range, shape, no NaNs/inf)
 
 Success Criteria:
@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 from pathlib import Path
 
@@ -135,6 +136,75 @@ def validate_output_invariants(depth_map):
         assert np.all(depth_map >= 0), "Depth map has negative values"
         # No strict upper bound for float depth, but check for sanity
         assert np.all(depth_map < 1e6), "Depth map has unreasonably large values"
+
+
+class PeakRSSTracker:
+    """Track true peak RSS during a code block using a polling thread.
+
+    Uses a daemon thread to sample ``psutil.Process.memory_info().rss`` at
+    a configurable interval and records the high-water mark.  A first-sample
+    barrier ensures at least one poll completes before ``__enter__`` returns,
+    preventing early allocation spikes from being missed.
+
+    Usage::
+
+        with PeakRSSTracker(process) as tracker:
+            do_work()
+        print(tracker.peak_rss_mb, tracker.samples)
+    """
+
+    def __init__(self, process, interval: float = 0.005):
+        self.process = process
+        self.interval = interval
+        self.peak_rss_bytes: int = 0
+        self.samples: int = 0
+        self._stop = threading.Event()
+        self._ready = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def __enter__(self):
+        self.peak_rss_bytes = self.process.memory_info().rss
+        self.samples = 0
+        self._stop.clear()
+        self._ready.clear()
+        self._thread = threading.Thread(target=self._poll, daemon=True)
+        self._thread.start()
+        timeout = max(0.05, self.interval * 10)
+        if not self._ready.wait(timeout=timeout):
+            self._stop.set()
+            if self._thread is not None:
+                self._thread.join(timeout=1.0)
+            raise RuntimeError(
+                f"PeakRSSTracker first-sample barrier timed out after {timeout}s. "
+                f"System may be under extreme load; measurement would be invalid."
+            )
+        return self
+
+    def _poll(self):
+        # Immediate first sample before signalling readiness
+        self._sample()
+        self._ready.set()
+
+        while not self._stop.wait(self.interval):
+            self._sample()
+
+    def _sample(self):
+        try:
+            rss = self.process.memory_info().rss
+        except (ProcessLookupError, PermissionError):
+            return
+        self.samples += 1
+        if rss > self.peak_rss_bytes:
+            self.peak_rss_bytes = rss
+
+    def __exit__(self, *args):
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=1.0)
+
+    @property
+    def peak_rss_mb(self) -> float:
+        return self.peak_rss_bytes / (1024 * 1024)
 
 
 # ============================================================================
@@ -392,12 +462,15 @@ class TestLuxDepthV3PerformanceBaseline:
         print(f"✓ Output invariants verified for {len(synthetic_images)} fixtures")
 
     @pytest.mark.benchmark
-    def test_memory_post_processing_baseline(self, tmp_path, synthetic_images, benchmark_config):
-        """Establish baseline for post-processing memory usage (RSS after completion).
+    def test_memory_peak_rss_baseline(self, tmp_path, synthetic_images, benchmark_config):
+        """Establish baseline for peak RSS memory during image processing.
 
-        Note: Samples RSS after processing completes, not peak during processing.
-        True peak would require polling during execution. This captures steady-state
-        memory footprint, which is still valuable for detecting memory leaks.
+        Measures processing-only peak RSS: baseline is taken AFTER orchestrator
+        construction so that ``incremental_mb`` reflects only the memory used by
+        ``enhance_image()``, not one-time initialization overhead.
+
+        Uses PeakRSSTracker (polling thread with first-sample barrier) to sample
+        RSS at ~5ms intervals and record the high-water mark.
         """
         try:
             import psutil
@@ -408,30 +481,33 @@ class TestLuxDepthV3PerformanceBaseline:
 
         process = psutil.Process(os_module.getpid())
 
-        # Measure baseline RSS before processing
-        baseline_rss_mb = process.memory_info().rss / 1024 / 1024
-
         output_dir = tmp_path / "output_memory"
         orchestrator = EnhanceOrchestrator(config=benchmark_config, output_root=output_dir)
 
-        # Process largest fixture
+        # Baseline RSS after orchestrator construction (processing-only window)
+        baseline_rss_mb = process.memory_info().rss / 1024 / 1024
+
+        # Process largest fixture with peak RSS tracking
         fixture = synthetic_images[2]  # 1024x768
         img_input = ImageInput(path=fixture["path"])
 
-        # Measure RSS after processing
-        result = orchestrator.enhance_image(img_input, input_root=tmp_path)
+        with PeakRSSTracker(process) as tracker:
+            result = orchestrator.enhance_image(img_input, input_root=tmp_path)
         assert result["status"] == "ok"
 
-        post_processing_rss_mb = process.memory_info().rss / 1024 / 1024
-        incremental_mb = post_processing_rss_mb - baseline_rss_mb
+        peak_rss_mb = tracker.peak_rss_mb
+        post_rss_mb = process.memory_info().rss / 1024 / 1024
+        incremental_mb = peak_rss_mb - baseline_rss_mb
 
         print(f"\n{'='*60}")
         print(f"Memory Baseline ({fixture['width']}x{fixture['height']}, {fixture['megapixels']:.2f}MP)")
-        print(f"  Baseline RSS: {baseline_rss_mb:.1f}MB")
-        print(f"  Post-processing RSS: {post_processing_rss_mb:.1f}MB")
-        print(f"  Incremental: {incremental_mb:.1f}MB")
+        print(f"  Baseline RSS (post-init): {baseline_rss_mb:.1f}MB")
+        print(f"  Peak RSS (polled): {peak_rss_mb:.1f}MB")
+        print(f"  Post-processing RSS: {post_rss_mb:.1f}MB")
+        print(f"  Incremental (peak - baseline): {incremental_mb:.1f}MB")
         print(f"  Per MP: {incremental_mb / fixture['megapixels']:.1f}MB/MP")
-        print("  Note: This is post-processing RSS, not true peak during execution")
+        print(f"  Samples: {tracker.samples}")
+        print("  Semantic: processing-only (excludes orchestrator init)")
         print(f"{'='*60}\n")
 
         # Store baseline
@@ -440,9 +516,14 @@ class TestLuxDepthV3PerformanceBaseline:
             "fixture": f"{fixture['width']}x{fixture['height']}",
             "megapixels": fixture["megapixels"],
             "baseline_rss_mb": baseline_rss_mb,
-            "post_processing_rss_mb": post_processing_rss_mb,
+            "peak_rss_mb": peak_rss_mb,
+            "post_processing_rss_mb": post_rss_mb,
             "incremental_mb": incremental_mb,
             "per_mp_mb": incremental_mb / fixture["megapixels"],
+            "measurement_type": "peak_rss_polled",
+            "measurement_semantic": "processing_only",
+            "sampling_interval_s": tracker.interval,
+            "sample_count": tracker.samples,
         }
 
         artifacts_dir = Path(os.environ.get("BENCHMARK_ARTIFACTS_DIR", tmp_path / "benchmark_results"))

@@ -7,7 +7,7 @@ as part of the v2.1 Optimization Roadmap.
 
 The benchmark suite provides:
 - **Baseline performance measurement** (p50/p95 runtime, throughput)
-- **Memory tracking** (post-processing RSS, incremental usage)
+- **Memory tracking** (peak RSS via polling thread, processing-only window)
 - **Output invariants validation** (dtype, range, shape checks)
 - **Regression detection** (automated threshold checks - planned L0.2)
 
@@ -98,14 +98,15 @@ markexpr: "not ml and not slow and not benchmark"
 
 **Memory Tests:**
 
-5. **`test_memory_post_processing_baseline`**
-   - **Type:** POST-PROCESSING RSS snapshot (NOT true peak)
-   - **What:** Samples RSS after processing completes
-   - **Limitation:** Misses transient peaks during execution
-   - **Use Case:** Detecting memory leaks, baseline memory footprint
+5. **`test_memory_peak_rss_baseline`**
+   - **Type:** PEAK RSS via polling thread (true high-water mark)
+   - **What:** Polls RSS at ~5ms intervals during processing to capture peak
+   - **Semantic:** Processing-only — baseline taken after orchestrator init
+   - **Guarantee:** First-sample barrier ensures polling starts before workload
+   - **Captures:** Transient allocation spikes missed by post-completion snapshots
+   - **Use Case:** Detecting memory leaks and regression in allocation patterns
    - **Requires:** psutil (skips gracefully if unavailable)
-   - **Artifact:** `baseline_memory.json`
-   - **Note:** True peak would require polling thread or OS high-water mark
+   - **Artifact:** `baseline_memory.json` (includes `sample_count`, `sampling_interval_s`)
 
 **Guard Tests:**
 
@@ -137,7 +138,7 @@ markexpr: "not ml and not slow and not benchmark"
 - **Artifact persistence**: Supports `BENCHMARK_ARTIFACTS_DIR` env var for cross-run baseline storage
 
 **Known Limitations:**
-- Memory test measures post-processing RSS, not true peak during execution
+- Memory test uses polling-thread peak RSS (~5ms sampling interval); sub-millisecond spikes may be missed
 - Baseline persistence not yet implemented (each test writes to tmp_path)
 - Absolute time assertions removed per architectural review
 - Cross-run regression detection planned for L0.2
@@ -148,7 +149,7 @@ These benchmarks support the lux_depth_v3 v2.1 Optimization Roadmap:
 
 **Milestone 0: Baselines & Guardrails**
 - ✅ **L0.0**: Benchmark harness (this directory)
-- 🔜 **L0.1**: Memory regression + peak tracking
+- ✅ **L0.1**: Peak RSS tracking (polling-thread high-water mark)
 - 🔜 **L0.2**: Output invariants & golden-delta tests
 
 **Milestone 1: Throughput Wins**
@@ -177,9 +178,9 @@ Benchmarks produce machine-readable JSON for automated regression detection:
 ## CI Integration
 
 Benchmarks use the `@pytest.mark.benchmark` marker:
-- Excluded from fast PR gating CI by default (`-m "not benchmark"`)
-- Run in nightly/deep checks or manually
-- Future: Add explicit regression thresholds in CI
+- Included in PR gating CI (marker expression `"not ml and not slow"` does NOT exclude `benchmark`)
+- Assertions are warnings-only until L0.2 implements baseline comparison with % tolerance
+- Dedicated benchmark runs can be invoked with `-m "benchmark"`
 
 ## Design Principles
 
