@@ -383,10 +383,18 @@ class SpatialAIPipeline:
                     emit_provenance=emit_provenance,
                 )
 
+            # Map RETURN_PARTIAL to FAIL_FAST for stage execution
+            # Pipeline level will catch and return partial results
+            stage_strategy = (
+                ErrorRecoveryStrategy.FAIL_FAST
+                if self.config.error_strategy == ErrorRecoveryStrategy.RETURN_PARTIAL
+                else self.config.error_strategy
+            )
+
             result = self.error_handler.execute_with_retry(
                 func=_decode,
                 stage="ingest",
-                strategy=self.config.error_strategy,
+                strategy=stage_strategy,
                 device="cpu",  # Ingest is CPU-only
             )
 
@@ -453,10 +461,18 @@ class SpatialAIPipeline:
             def _segment():
                 return backend.segment(seg_input)
 
+            # Map RETURN_PARTIAL to FAIL_FAST for stage execution
+            # Pipeline level will catch and return partial results
+            stage_strategy = (
+                ErrorRecoveryStrategy.FAIL_FAST
+                if self.config.error_strategy == ErrorRecoveryStrategy.RETURN_PARTIAL
+                else self.config.error_strategy
+            )
+
             result = self.error_handler.execute_with_retry(
                 func=_segment,
                 stage="segment",
-                strategy=self.config.error_strategy,
+                strategy=stage_strategy,
                 device=device,
             )
 
