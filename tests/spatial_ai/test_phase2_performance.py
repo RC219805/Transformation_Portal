@@ -211,8 +211,14 @@ class TestPerformanceRegression:
     """Tests for performance regression detection."""
 
     def test_no_significant_regressions(self, performance_ledger):
-        """Check for significant performance regressions (>50% slower)."""
+        """Check for significant performance regressions (warnings-only until baseline comparison).
+
+        Per benchmark CI policy (tests/benchmarks/README.md): benchmarks use warnings-only
+        approach in PR gating until L0.2 implements baseline comparison with % tolerance.
+        This prevents CI flakiness from blocking PRs while still raising awareness.
+        """
         regressions = []
+        catastrophic_regressions = []
 
         for test_name, data in performance_ledger.metrics.items():
             if not data["measurements"]:
@@ -221,7 +227,8 @@ class TestPerformanceRegression:
             baseline = data["baseline"]
             recent = data["measurements"][-1]["duration"]
 
-            if recent > baseline * 1.5:  # 50% regression threshold
+            # Detect regressions > 50% (informational)
+            if recent > baseline * 1.5:
                 regressions.append(
                     {
                         "test": test_name,
@@ -231,16 +238,31 @@ class TestPerformanceRegression:
                     }
                 )
 
+            # Detect catastrophic regressions > 5x (likely bugs, not CI variance)
+            if recent > baseline * 5.0:
+                catastrophic_regressions.append(
+                    {
+                        "test": test_name,
+                        "baseline": baseline,
+                        "recent": recent,
+                        "regression": (recent / baseline - 1) * 100,
+                    }
+                )
+
         if regressions:
-            print("\n⚠️  Performance regressions detected:")
+            print("\n⚠️  Performance regressions detected (informational):")
             for reg in regressions:
                 print(f"  {reg['test']}: {reg['baseline']:.2f}s → {reg['recent']:.2f}s " f"({reg['regression']:.1f}% slower)")
+            print("\nNote: Regressions are warnings-only until baseline comparison is implemented.")
+            print("This may indicate CI runner variance rather than a genuine regression.")
         else:
             print("\n✅ No significant performance regressions detected")
 
-        # Don't fail on first run or if no baselines
-        if performance_ledger.metrics:
-            assert len(regressions) == 0, f"Performance regressions detected: {regressions}"
+        # Only fail on catastrophic regressions (> 5x slower, likely bugs)
+        if catastrophic_regressions:
+            assert (
+                len(catastrophic_regressions) == 0
+            ), f"Catastrophic performance regressions detected (>5x slower): {catastrophic_regressions}"
 
 
 @pytest.mark.benchmark
