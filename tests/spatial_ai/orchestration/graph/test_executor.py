@@ -70,18 +70,22 @@ class MockStage:
             return {"output": f"executed_{self._name}"}
 
     def compute_cache_key(self, inputs: Dict[str, Any], context: ExecutionContext) -> str:
-        """Compute cache key."""
-        # Simple deterministic key (handle numpy arrays properly)
+        """Compute cache key (SHA256 format for security)."""
+        # Build deterministic input representation
         items = []
         for k, v in sorted(inputs.items()):
             if isinstance(v, np.ndarray):
-                val_str = hashlib.sha256(v.tobytes()).hexdigest()[:8]
+                val_str = hashlib.sha256(v.tobytes()).hexdigest()
             else:
                 val_str = str(v)
             items.append(f"{k}={val_str}")
         input_str = ",".join(items)
-        input_hash = hashlib.sha256(input_str.encode()).hexdigest()[:16]
-        return f"{self._version}:{input_hash}"
+
+        # Create full context string (version + inputs + config)
+        context_str = f"{self._version}:{input_str}:{context.device}"
+
+        # Return full SHA256 hash (64 hex chars)
+        return hashlib.sha256(context_str.encode()).hexdigest()
 
 
 class TestExecutor:
@@ -335,7 +339,8 @@ class TestExecutor:
                 raise ValueError("Intentional failure")
 
             def compute_cache_key(self, inputs: Dict[str, Any], context: ExecutionContext) -> str:
-                return "failing_key"
+                # Return valid SHA256 key
+                return hashlib.sha256(b"failing_stage").hexdigest()
 
         graph = ExecutionGraph()
         graph.add_stage("failing", FailingStage(), inputs={})
@@ -459,8 +464,10 @@ class TestExecutor:
 
             def compute_cache_key(self, inputs: Dict[str, Any], context: ExecutionContext) -> str:
                 data = inputs["data"]
-                data_hash = hashlib.sha256(data.tobytes()).hexdigest()[:16]
-                return f"1.0.0:{data_hash}"
+                data_hash = hashlib.sha256(data.tobytes()).hexdigest()
+                # Return full SHA256 (combine version + data hash)
+                combined = f"1.0.0:{data_hash}"
+                return hashlib.sha256(combined.encode()).hexdigest()
 
         graph = ExecutionGraph()
         graph.add_stage("numpy", NumpyStage(), inputs={})

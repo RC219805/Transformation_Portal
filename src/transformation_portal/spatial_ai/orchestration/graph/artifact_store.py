@@ -45,6 +45,7 @@ import json
 import logging
 import os
 import platform
+import re
 import shutil
 import sys
 import tempfile
@@ -56,6 +57,10 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+# Security: Strict validation for cache keys (SHA256 format)
+# Prevents path traversal attacks via malformed cache keys
+SAFE_CACHE_KEY = re.compile(r"^[a-f0-9]{64}$")
 
 
 @dataclass
@@ -196,7 +201,9 @@ class ArtifactStore:
 
         try:
             # Load NumPy archive
-            data = np.load(artifact_path, allow_pickle=True)
+            # Security: Disable pickle deserialization to prevent arbitrary code execution
+            # Restricts artifacts to safe NumPy array types only
+            data = np.load(artifact_path, allow_pickle=False)
 
             # Convert to dict
             result = {}
@@ -360,29 +367,58 @@ class ArtifactStore:
         }
 
     def _artifact_path(self, cache_key: str) -> Path:
-        """Get artifact file path.
+        """Get artifact file path with strict validation.
 
         Uses two-level directory hierarchy (first 2 hex chars as prefix).
 
         Args:
-            cache_key: Cache key.
+            cache_key: Cache key (must be 64-char SHA256 hex).
 
         Returns:
             Path to artifact file.
+
+        Raises:
+            ValueError: If cache_key format is invalid or contains path traversal.
+
+        Security:
+            Validates cache_key format to prevent path traversal attacks.
+            Even if keys are SHA256-based today, never trust upstream callers forever.
         """
-        # Two-level hierarchy: first 2 chars as directory
+        # Validate cache key format (64 lowercase hex characters)
+        if not SAFE_CACHE_KEY.match(cache_key):
+            raise ValueError(f"Invalid cache_key format: {cache_key!r}. " "Expected 64 lowercase hex characters (SHA256).")
+
+        # Additional safety check for path separators and traversal
+        if "/" in cache_key or "\\" in cache_key or ".." in cache_key:
+            raise ValueError(f"Invalid cache_key contains path separators or traversal: {cache_key!r}")
+
+        # Safe to construct path now
         prefix = cache_key[:2]
         return self.artifacts_dir / prefix / f"{cache_key}.npz"
 
     def _provenance_path(self, cache_key: str) -> Path:
-        """Get provenance file path.
+        """Get provenance file path with strict validation.
 
         Args:
-            cache_key: Cache key.
+            cache_key: Cache key (must be 64-char SHA256 hex).
 
         Returns:
             Path to provenance JSON file.
+
+        Raises:
+            ValueError: If cache_key format is invalid or contains path traversal.
+
+        Security:
+            Validates cache_key format to prevent path traversal attacks.
         """
+        # Validate cache key format (reuse same validation as _artifact_path)
+        if not SAFE_CACHE_KEY.match(cache_key):
+            raise ValueError(f"Invalid cache_key format: {cache_key!r}. " "Expected 64 lowercase hex characters (SHA256).")
+
+        # Additional safety check for path separators and traversal
+        if "/" in cache_key or "\\" in cache_key or ".." in cache_key:
+            raise ValueError(f"Invalid cache_key contains path separators or traversal: {cache_key!r}")
+
         prefix = cache_key[:2]
         return self.artifacts_dir / prefix / f"{cache_key}.json"
 

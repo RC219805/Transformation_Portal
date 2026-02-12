@@ -383,6 +383,73 @@ class TestExecutionGraph:
         assert stage_indices["G"] < stage_indices["I"]
         assert stage_indices["H"] < stage_indices["I"]
 
+    def test_topological_sort_multiple_inputs_same_stage(self):
+        """Stage with multiple inputs from same upstream stage is handled correctly (CORRECTNESS).
+
+        This tests the fix for the in-degree bug where a stage with multiple
+        inputs from the same upstream stage would have its in-degree incorrectly
+        incremented multiple times, causing incorrect topological ordering.
+        """
+        graph = ExecutionGraph()
+
+        # StageA produces two outputs
+        stageA = MockStage("stageA")
+        graph.add_stage("stageA", stageA, inputs={})
+
+        # StageB consumes both outputs from stageA
+        stageB = MockStage("stageB")
+        graph.add_stage(
+            "stageB",
+            stageB,
+            inputs={
+                "in1": "stageA.out1",
+                "in2": "stageA.out2",
+            },
+        )
+
+        # Should correctly order: stageA before stageB (not deadlock)
+        plan = graph.plan()
+        assert len(plan.stages) == 2
+        assert plan.stages[0].stage_id == "stageA"
+        assert plan.stages[1].stage_id == "stageB"
+
+    def test_topological_sort_complex_multiple_inputs(self):
+        """Complex graph with multiple stages having multiple inputs from same upstream."""
+        graph = ExecutionGraph()
+
+        # StageA produces multiple outputs
+        stageA = MockStage("stageA")
+        graph.add_stage("stageA", stageA, inputs={})
+
+        # StageB consumes three outputs from stageA
+        stageB = MockStage("stageB")
+        graph.add_stage(
+            "stageB",
+            stageB,
+            inputs={
+                "in1": "stageA.out1",
+                "in2": "stageA.out2",
+                "in3": "stageA.out3",
+            },
+        )
+
+        # StageC consumes from both A and B
+        stageC = MockStage("stageC")
+        graph.add_stage(
+            "stageC",
+            stageC,
+            inputs={
+                "from_a1": "stageA.out1",
+                "from_a2": "stageA.out2",
+                "from_b": "stageB.out",
+            },
+        )
+
+        # Should correctly order: A, B, C
+        plan = graph.plan()
+        stage_ids = [node.stage_id for node in plan.stages]
+        assert stage_ids == ["stageA", "stageB", "stageC"]
+
 
 class TestStageNode:
     """Tests for StageNode dataclass."""

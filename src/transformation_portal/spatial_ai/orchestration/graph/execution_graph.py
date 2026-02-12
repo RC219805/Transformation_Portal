@@ -305,7 +305,7 @@ class ExecutionGraph:
             GraphError: If graph contains cycles.
 
         Algorithm:
-        1. Compute in-degree for each node (number of dependencies)
+        1. Compute in-degree for each node (count unique upstream stages)
         2. Start with nodes having in-degree 0 (no dependencies)
         3. Remove nodes and update in-degrees until graph is empty
         4. If graph not empty, there's a cycle
@@ -314,19 +314,29 @@ class ExecutionGraph:
         - Kahn's algorithm is O(V + E) where V = stages, E = dependencies.
         - Detects cycles by checking if all nodes were processed.
         - Deterministic (stable sort order for nodes with same in-degree).
+        - Correctness: Counts unique upstream stages, not individual inputs.
         """
         if not self._stages:
             return []
 
-        # Compute in-degrees
+        # Compute in-degrees (count unique upstream stages per node)
         in_degree: Dict[str, int] = {sid: 0 for sid in self._stages}
 
         for node in self._stages.values():
+            # Track unique upstream stages to avoid double-counting
+            # when a stage has multiple inputs from same upstream
+            upstream_stages: Set[str] = set()
+
             for source_ref in node.inputs.values():
                 # Parse "stage_id.output_name" → "stage_id"
-                source_stage = source_ref.split(".")[0]
-                if source_stage in self._stages:
-                    in_degree[node.stage_id] += 1
+                parts = source_ref.split(".")
+                if len(parts) >= 2:  # Dotted ref (stage output)
+                    source_stage = parts[0]
+                    if source_stage in self._stages:
+                        upstream_stages.add(source_stage)
+
+            # In-degree is number of unique upstream stages
+            in_degree[node.stage_id] = len(upstream_stages)
 
         # Queue of stages with no dependencies
         queue = [sid for sid, deg in sorted(in_degree.items()) if deg == 0]
