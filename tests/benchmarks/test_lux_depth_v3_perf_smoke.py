@@ -146,11 +146,11 @@ class TestLuxDepthV3PerformanceBaseline:
     """Baseline performance benchmarks for lux_depth_v3 (no optimizations yet)."""
 
     @pytest.mark.benchmark
-    def test_single_image_baseline_runtime(self, tmp_path, synthetic_images, benchmark_config):
-        """Measure baseline runtime for single image processing.
+    def test_single_image_cold_start_p95(self, tmp_path, synthetic_images, benchmark_config):
+        """Measure cold-start p95 latency (new orchestrator per run).
 
-        Measures cold-start performance (new orchestrator per run) to capture
-        initialization overhead. This represents typical single-image workflow.
+        Cold-start includes initialization overhead: directory creation, config parsing,
+        backend instantiation. This represents worst-case single-image workflow.
         """
         # Use medium-sized fixture
         fixture = synthetic_images[1]  # 512x512
@@ -183,28 +183,30 @@ class TestLuxDepthV3PerformanceBaseline:
 
         # Print baseline metrics
         print(f"\n{'='*60}")
-        print(f"Baseline Single Image Performance (512x512, {megapixels:.2f}MP)")
+        print(f"Cold-Start Single Image Performance (512x512, {megapixels:.2f}MP)")
         print(f"  p50: {stats['p50']*1000:.1f}ms")
         print(f"  p95: {stats['p95']*1000:.1f}ms")
         print(f"  min: {stats['min']*1000:.1f}ms")
         print(f"  max: {stats['max']*1000:.1f}ms")
         print(f"  Per MP: {runtime_per_mp*1000:.1f}ms/MP")
+        print("  Type: COLD-START (includes initialization)")
         print(f"{'='*60}\n")
 
         # Store baseline for future comparison
         baseline_json = {
-            "test": "single_image_baseline",
+            "test": "single_image_cold_start",
             "fixture": "512x512",
             "megapixels": megapixels,
             "p50_ms": stats["p50"] * 1000,
             "p95_ms": stats["p95"] * 1000,
             "per_mp_ms": runtime_per_mp * 1000,
+            "measurement_type": "cold_start",
         }
 
         # Write to artifacts (env-configurable location for baseline persistence)
         artifacts_dir = Path(os.environ.get("BENCHMARK_ARTIFACTS_DIR", tmp_path / "benchmark_results"))
         artifacts_dir.mkdir(parents=True, exist_ok=True)
-        with open(artifacts_dir / "baseline_single_image.json", "w") as f:
+        with open(artifacts_dir / "baseline_cold_start.json", "w") as f:
             json.dump(baseline_json, f, indent=2)
 
         # Relaxed sanity check: warn if extremely slow (allows for CI runner variance)
@@ -215,11 +217,80 @@ class TestLuxDepthV3PerformanceBaseline:
             print("    This may indicate CI runner performance issues, not code regression")
 
     @pytest.mark.benchmark
-    def test_batch_processing_baseline(self, tmp_path, synthetic_images, benchmark_config):
-        """Measure baseline runtime for batch processing (multiple images).
+    def test_single_image_steady_state_p95(self, tmp_path, synthetic_images, benchmark_config):
+        """Measure steady-state p95 latency (reused orchestrator, warmed up).
 
-        Tests sequential processing of multiple images with single orchestrator
-        (steady-state measurement after initialization overhead).
+        Steady-state excludes initialization overhead. This represents best-case
+        throughput for batch workflows or long-running processes.
+        """
+        # Use medium-sized fixture
+        fixture = synthetic_images[1]  # 512x512
+        img_path = fixture["path"]
+        megapixels = fixture["megapixels"]
+
+        output_dir = tmp_path / "output_steady_state"
+        orchestrator = EnhanceOrchestrator(config=benchmark_config, output_root=output_dir)
+
+        image_input = ImageInput(path=img_path)
+
+        # Warm-up run (initialize caches, JIT compilation, etc.)
+        _ = orchestrator.enhance_image(image_input, input_root=tmp_path)
+
+        # Benchmark runs (steady-state: reuse orchestrator)
+        num_runs = 5
+        runtimes = []
+
+        for i in range(num_runs):
+            start = time.perf_counter()
+            result = orchestrator.enhance_image(image_input, input_root=tmp_path)
+            elapsed = time.perf_counter() - start
+
+            runtimes.append(elapsed)
+
+            # Verify result
+            assert result["status"] == "ok", f"Processing failed: {result.get('error')}"
+
+        # Compute stats
+        stats = measure_runtime_stats(runtimes)
+        runtime_per_mp = stats["p50"] / megapixels
+
+        # Print baseline metrics
+        print(f"\n{'='*60}")
+        print(f"Steady-State Single Image Performance (512x512, {megapixels:.2f}MP)")
+        print(f"  p50: {stats['p50']*1000:.1f}ms")
+        print(f"  p95: {stats['p95']*1000:.1f}ms")
+        print(f"  min: {stats['min']*1000:.1f}ms")
+        print(f"  max: {stats['max']*1000:.1f}ms")
+        print(f"  Per MP: {runtime_per_mp*1000:.1f}ms/MP")
+        print("  Type: STEADY-STATE (excludes initialization)")
+        print(f"{'='*60}\n")
+
+        # Store baseline
+        baseline_json = {
+            "test": "single_image_steady_state",
+            "fixture": "512x512",
+            "megapixels": megapixels,
+            "p50_ms": stats["p50"] * 1000,
+            "p95_ms": stats["p95"] * 1000,
+            "per_mp_ms": runtime_per_mp * 1000,
+            "measurement_type": "steady_state",
+        }
+
+        artifacts_dir = Path(os.environ.get("BENCHMARK_ARTIFACTS_DIR", tmp_path / "benchmark_results"))
+        artifacts_dir.mkdir(parents=True, exist_ok=True)
+        with open(artifacts_dir / "baseline_steady_state.json", "w") as f:
+            json.dump(baseline_json, f, indent=2)
+
+        # Relaxed sanity check
+        if stats["p95"] > 1.0:
+            print(f"⚠️  Warning: p95 latency unusually high: {stats['p95']*1000:.1f}ms (threshold: 1000ms)")
+
+    @pytest.mark.benchmark
+    def test_batch_throughput_baseline(self, tmp_path, synthetic_images, benchmark_config):
+        """Measure baseline throughput for batch processing (multiple different images).
+
+        Processes multiple images sequentially with single orchestrator. This measures
+        sustained throughput for production batch workflows.
         """
         output_dir = tmp_path / "output_batch"
         orchestrator = EnhanceOrchestrator(config=benchmark_config, output_root=output_dir)
@@ -246,20 +317,22 @@ class TestLuxDepthV3PerformanceBaseline:
         per_mp = batch_elapsed / total_mp
 
         print(f"\n{'='*60}")
-        print(f"Baseline Batch Performance ({num_images} images, {total_mp:.2f}MP total)")
+        print(f"Batch Throughput ({num_images} images, {total_mp:.2f}MP total)")
         print(f"  Total: {batch_elapsed*1000:.1f}ms")
         print(f"  Per image: {avg_per_image*1000:.1f}ms")
         print(f"  Per MP: {per_mp*1000:.1f}ms/MP")
+        print("  Type: BATCH THROUGHPUT")
         print(f"{'='*60}\n")
 
         # Store baseline
         baseline_json = {
-            "test": "batch_baseline",
+            "test": "batch_throughput",
             "num_images": num_images,
             "total_megapixels": total_mp,
             "total_ms": batch_elapsed * 1000,
             "avg_per_image_ms": avg_per_image * 1000,
             "per_mp_ms": per_mp * 1000,
+            "measurement_type": "batch_throughput",
         }
 
         artifacts_dir = Path(os.environ.get("BENCHMARK_ARTIFACTS_DIR", tmp_path / "benchmark_results"))
@@ -405,28 +478,56 @@ class TestLuxDepthV3PerformanceBaseline:
 
 
 class TestRegressionGuards:
-    """Regression guards for future optimizations (will be populated in L1.x PRs)."""
+    """Regression guards for future optimizations (will be populated in L1.x PRs).
+
+    Note: These tests currently emit warnings only (non-failing) to handle CI runner
+    variance. Once L0.2 implements baseline comparison with % tolerance, these can
+    become blocking checks.
+    """
 
     @pytest.mark.benchmark
-    def test_p95_latency_regression_threshold(self, tmp_path):
-        """Placeholder for p95 latency regression detection.
+    def test_cold_start_p95_regression_threshold(self, tmp_path):
+        """Placeholder for cold-start p95 latency regression detection.
 
-        Future PRs will populate this with actual thresholds.
+        Future PRs will populate this with actual thresholds and % tolerance checks.
         For now, just verify JSON output format.
         """
         # Placeholder baseline
         baseline_p95_ms = 100.0  # Will be updated after L0.0 merge
 
         # Load actual baseline if available
-        baseline_file = tmp_path.parent / "benchmark_results" / "baseline_single_image.json"
+        baseline_file = tmp_path.parent / "benchmark_results" / "baseline_cold_start.json"
         if baseline_file.exists():
             with open(baseline_file) as f:
                 baseline_data = json.load(f)
                 baseline_p95_ms = baseline_data.get("p95_ms", 100.0)
 
         # Placeholder assertion
-        # Real regression check will compare current run vs stored baseline
+        # Real regression check will compare current run vs stored baseline with % tolerance
         assert baseline_p95_ms > 0, "Baseline p95 should be positive"
 
-        print(f"✓ Regression threshold check (baseline p95: {baseline_p95_ms:.1f}ms)")
-        print("  Note: Actual regression detection will be implemented after L0.0 baseline is established")
+        print(f"✓ Regression threshold check (cold-start p95: {baseline_p95_ms:.1f}ms)")
+        print("  Note: Actual regression detection will be implemented in L0.2")
+
+    @pytest.mark.benchmark
+    def test_steady_state_p95_regression_threshold(self, tmp_path):
+        """Placeholder for steady-state p95 latency regression detection.
+
+        Future PRs will populate this with actual thresholds and % tolerance checks.
+        For now, just verify JSON output format.
+        """
+        # Placeholder baseline
+        baseline_p95_ms = 100.0  # Will be updated after L0.0 merge
+
+        # Load actual baseline if available
+        baseline_file = tmp_path.parent / "benchmark_results" / "baseline_steady_state.json"
+        if baseline_file.exists():
+            with open(baseline_file) as f:
+                baseline_data = json.load(f)
+                baseline_p95_ms = baseline_data.get("p95_ms", 100.0)
+
+        # Placeholder assertion
+        assert baseline_p95_ms > 0, "Baseline p95 should be positive"
+
+        print(f"✓ Regression threshold check (steady-state p95: {baseline_p95_ms:.1f}ms)")
+        print("  Note: Actual regression detection will be implemented in L0.2")

@@ -20,7 +20,7 @@ pytest tests/benchmarks/ -v -m benchmark
 
 ### Run specific benchmark test
 ```bash
-pytest tests/benchmarks/test_lux_depth_v3_perf_smoke.py::TestLuxDepthV3PerformanceBaseline::test_single_image_baseline_runtime -v -s
+pytest tests/benchmarks/test_lux_depth_v3_perf_smoke.py::TestLuxDepthV3PerformanceBaseline::test_single_image_cold_start_p95 -v -s
 ```
 
 ### Exclude benchmarks from regular test runs
@@ -28,19 +28,38 @@ pytest tests/benchmarks/test_lux_depth_v3_perf_smoke.py::TestLuxDepthV3Performan
 pytest tests/ -v -m "not benchmark"
 ```
 
-## CI Execution
+## CI Execution Policy
 
-**Important:** Benchmarks ARE currently included in PR gating CI. 
+**Current State:** Benchmarks ARE included in PR gating CI (runs on every PR).
 
 Core CI runs with marker expression: `"not ml and not slow"`, which does NOT exclude `benchmark`. This means:
 - ✅ Benchmarks run on every PR for fast feedback
 - ✅ Relaxed assertions (warnings instead of hard failures) handle runner variance
 - ✅ Backend pinned to `synthetic` for offline deterministic execution
 - ✅ No model downloads or network calls
+- ✅ Fast execution (<3s total)
 
-**Future consideration:** If benchmarks become too slow or flaky, they can be moved to a dedicated performance workflow by either:
-1. Adding `@pytest.mark.slow` to benchmark tests, or
-2. Updating CI marker expression to `"not ml and not slow and not benchmark"`
+**Policy Decision (L0.0):** Keep benchmarks in PR gating CI with warnings-only approach.
+
+**Rationale:**
+1. Normalizes performance awareness in development workflow
+2. Detects catastrophic regressions early (10x slowdowns)
+3. Fast enough (<3s) to not impact PR feedback loop
+4. Non-failing approach prevents CI flakiness from runner variance
+
+**Future Options:**
+- **If benchmarks become flaky:** Mark with `@pytest.mark.slow` to exclude from PR CI
+- **If benchmarks become slow:** Move to dedicated nightly performance workflow
+- **When L0.2 implements baseline comparison:** Can enable blocking checks with % tolerance
+
+To exclude benchmarks from PR CI in the future, update `.github/workflows/build.yml`:
+```yaml
+# Change from:
+markexpr: "not ml and not slow"
+
+# To:
+markexpr: "not ml and not slow and not benchmark"
+```
 
 ## Benchmark Tests
 
@@ -48,13 +67,56 @@ Core CI runs with marker expression: `"not ml and not slow"`, which does NOT exc
 
 **Purpose:** Fast smoke tests for performance baseline and regression detection.
 
-**Tests:**
-- `test_single_image_baseline_runtime`: Measures p50/p95 runtime for single images (cold-start)
-- `test_batch_processing_baseline`: Measures batch throughput (steady-state)
-- `test_output_invariants_smoke`: Validates output correctness
-- `test_memory_post_processing_baseline`: Tracks post-processing RSS (requires psutil, skips in core CI)
-- `test_no_model_reinitialization_guard`: Placeholder for backend singleton checks (L1.0)
-- `test_p95_latency_regression_threshold`: Regression guard (to be populated in L1.x)
+**Performance Tests:**
+
+1. **`test_single_image_cold_start_p95`**
+   - **Type:** COLD-START measurement
+   - **What:** Creates new orchestrator per run
+   - **Includes:** Initialization overhead (directory creation, config parsing, backend instantiation)
+   - **Use Case:** Worst-case single-image workflow, one-off processing
+   - **Artifact:** `baseline_cold_start.json`
+
+2. **`test_single_image_steady_state_p95`**
+   - **Type:** STEADY-STATE measurement
+   - **What:** Reuses orchestrator across runs, includes warm-up
+   - **Excludes:** Initialization overhead
+   - **Use Case:** Best-case throughput, batch workflows, long-running processes
+   - **Artifact:** `baseline_steady_state.json`
+
+3. **`test_batch_throughput_baseline`**
+   - **Type:** BATCH THROUGHPUT measurement
+   - **What:** Processes multiple different images sequentially
+   - **Use Case:** Sustained production throughput
+   - **Artifact:** `baseline_batch.json`
+
+**Invariant Tests:**
+
+4. **`test_output_invariants_smoke`**
+   - Validates dtype, range, shape, no NaNs/inf
+   - Checks both .npy and .png outputs
+   - Ensures dimension preservation
+
+**Memory Tests:**
+
+5. **`test_memory_post_processing_baseline`**
+   - **Type:** POST-PROCESSING RSS snapshot (NOT true peak)
+   - **What:** Samples RSS after processing completes
+   - **Limitation:** Misses transient peaks during execution
+   - **Use Case:** Detecting memory leaks, baseline memory footprint
+   - **Requires:** psutil (skips gracefully if unavailable)
+   - **Artifact:** `baseline_memory.json`
+   - **Note:** True peak would require polling thread or OS high-water mark
+
+**Guard Tests:**
+
+6. **`test_no_model_reinitialization_guard`**
+   - Placeholder for L1.0 backend singleton checks
+
+7. **`test_cold_start_p95_regression_threshold`**
+   - Placeholder for L0.2 regression detection with % tolerance
+
+8. **`test_steady_state_p95_regression_threshold`**
+   - Placeholder for L0.2 regression detection with % tolerance
 
 **Execution Time:** <2 seconds (target: <10s)
 
@@ -62,11 +124,11 @@ Core CI runs with marker expression: `"not ml and not slow"`, which does NOT exc
 - No model downloads (uses pinned synthetic backend)
 - No network calls
 - Fully deterministic vectorized fixtures (NumPy-based)
-- Memory tracking test requires `psutil` (skips gracefully if unavailable in core CI)
+- Memory tracking test requires `psutil` (skips gracefully if unavailable)
 
 **Measurement Methodology:**
-- **Cold-start tests**: New orchestrator per run (captures initialization overhead)
-- **Steady-state tests**: Reuses orchestrator across images (captures runtime efficiency)
+- **Cold-start**: New orchestrator per run (includes initialization)
+- **Steady-state**: Reused orchestrator + warm-up (excludes initialization)
 - **Backend pinning**: Explicitly uses `depth_backend="synthetic"` for reproducibility
 - **Fixture generation**: Vectorized NumPy (avoids Python loop contamination)
 - **Timing**: Uses `time.perf_counter()` for monotonic high-resolution measurements
