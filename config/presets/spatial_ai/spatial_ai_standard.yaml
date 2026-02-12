@@ -1,0 +1,64 @@
+# Spatial AI Standard Pipeline Preset
+# Tier: stable
+# Purpose: Standard image processing with segmentation and materials
+#
+# Features:
+# - Linear ingest (dev-friendly, 8-bit allowed)
+# - SAM2 segmentation (automatic mask generation)
+# - Heuristic PBR materials (no neural dependencies)
+# - No 3D reconstruction (requires research tier)
+#
+# Target use cases:
+# - Architectural image processing
+# - Material extraction from renders
+# - Development and testing
+
+tier: standard
+name: "Spatial AI Standard"
+description: "Standard pipeline for image processing with segmentation and materials"
+version: "1.0.0"
+
+pipeline:
+  ingest:
+    strict_ingest: false  # Dev-friendly (allow 8-bit inputs)
+    emit_exr: false
+    emit_provenance: false
+
+  segmentation:
+    backend: sam2
+    model:
+      size: large
+      repo_id: "facebook/sam2-hiera-large"
+      # TODO: Pin revision hash before marking as stable
+      # revision: "abc123..."
+    material_classification: false  # No CLIP (reduces dependencies)
+
+  materials:
+    backend: heuristic  # No neural dependencies for standard tier
+    material_hints: true
+    resolution: 1024
+    optimize_iterations: 50
+    use_depth: false  # No depth in standard tier
+
+# Resource limits (conservative for standard tier)
+resource_limits:
+  max_gpu_memory_gb: 8.0
+  max_models_loaded: 2
+  batch_size: 1
+  device_preference:
+    - cuda
+    - mps
+    - cpu
+
+# Error handling (safe defaults)
+error_strategy: retry
+
+# Metadata
+metadata:
+  author: "Transformation Portal"
+  created: "2025-02-11"
+  stability: "stable"
+  requires:
+    - "transformers>=4.44.0"
+    - "torch>=2.0.0"
+    - "numpy>=1.24.0"
