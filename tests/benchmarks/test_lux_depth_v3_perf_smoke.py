@@ -169,7 +169,7 @@ class PeakRSSTracker:
         self._ready.clear()
         self._thread = threading.Thread(target=self._poll, daemon=True)
         self._thread.start()
-        self._ready.wait(timeout=0.05)  # ensure at least one poll before workload
+        self._ready.wait(timeout=max(0.05, self.interval * 10))  # ensure at least one poll
         return self
 
     def _poll(self):
