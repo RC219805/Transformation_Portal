@@ -34,8 +34,7 @@ pipeline:
     model:
       size: large
       repo_id: "facebook/sam2-hiera-large"
-      # TODO: Pin revision hash before stable release
-      # revision: "abc123..."
+      revision: "e6a8e8809b8f1bfa2238b6d080f3d05cc76bd251"  # Pinned for determinism (2025-08-15)
     material_classification: true  # Enable CLIP for material hints
 
   materials:

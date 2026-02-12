@@ -67,6 +67,7 @@ config = PipelineConfig(
         "model": {
             "size": "large",
             "repo_id": "facebook/sam2-hiera-large",
+            "revision": "e6a8e8809b8f1bfa2238b6d080f3d05cc76bd251",  # Pinned for determinism
         },
     },
     materials={
@@ -171,7 +172,7 @@ pipeline:
     model:
       size: large  # tiny | small | base | large
       repo_id: "facebook/sam2-hiera-large"
-      revision: "abc123..."  # Pin for stability
+      revision: "e6a8e8809b8f1bfa2238b6d080f3d05cc76bd251"  # Pinned for determinism
     material_classification: false  # Use CLIP?
 
   materials:
