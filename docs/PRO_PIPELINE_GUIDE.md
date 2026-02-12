@@ -211,10 +211,10 @@ stages:
     model: depth-anything-v2-large
     clarity:
       amount: 0.20
-  
+
   material:
     strength: 0.75
-  
+
   grading:
     contrast: 1.15
     saturation: 1.12
@@ -436,32 +436,32 @@ Recommended preset: `aerial-estate`
 
 ## FAQ
 
-**Q: Which preset should I use?**  
+**Q: Which preset should I use?**
 A: Start with `architectural-hero` for maximum quality. For specific use cases (interiors, aerials, pools), use the corresponding preset.
 
-**Q: How long does processing take?**  
+**Q: How long does processing take?**
 A: 30 seconds to 5 minutes per 4K image, depending on stages enabled and hardware.
 
-**Q: Can I process RAW files?**  
+**Q: Can I process RAW files?**
 A: Convert RAW to TIFF first using Adobe Camera Raw or similar. The pipeline works best with TIFF/PNG/JPEG.
 
-**Q: Does it work on Windows?**  
+**Q: Does it work on Windows?**
 A: Yes! The pipeline is cross-platform (Windows, macOS, Linux).
 
-**Q: Can I use multiple GPUs?**  
+**Q: Can I use multiple GPUs?**
 A: Currently single-GPU only. Use `--workers` for parallel CPU processing.
 
-**Q: How do I customize a preset?**  
+**Q: How do I customize a preset?**
 A: Create a custom config file based on `config/pro_pipeline_config.yaml` and modify the preset settings.
 
-**Q: What's the difference between quality levels?**  
-A: 
+**Q: What's the difference between quality levels?**
+A:
 - `draft`: Fast preview (reduced resolution, fewer steps)
 - `standard`: Good balance (default settings)
 - `high`: Maximum quality (more steps, higher resolution)
 - `ultra`: Extreme quality (very slow, experimental)
 
-**Q: Can I process videos?**  
+**Q: Can I process videos?**
 A: Not directly. Extract frames, process with batch mode, then reassemble. Or use `luxury_video_master_grader.py` for video-specific workflows.
 
 ## Support

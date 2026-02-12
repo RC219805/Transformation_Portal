@@ -17,7 +17,7 @@ evidence_gates:
     notes: |
       Shadow mode is for calibration and baseline establishment.
       Accept any data quality to maximize learning.
-  
+
   enforce_mode:
     description: "Blocks merge on policy violations - requires strong evidence"
     min_sample_size: 20
@@ -42,9 +42,9 @@ statistical_methods:
       - Non-parametric (no normality assumption)
       - Robust to outliers and skewed distributions
       - Industry-standard for performance comparison
-      
+
       Alternative: "bootstrap_ci" for median confidence intervals
-  
+
   # Outlier detection method
   outlier_detection:
     method: "median_mad"  # Median Absolute Deviation
@@ -54,7 +54,7 @@ statistical_methods:
       - Robustness to outliers (median is resistant)
       - Better for skewed distributions (common in performance data)
       - Modified z-score = 0.6745 * (x - median) / MAD
-      
+
       Threshold of 3.0 MAD units ≈ 3 sigma for normal distributions
       but more conservative for long-tailed performance distributions.
 
@@ -69,7 +69,7 @@ sample_size_requirements:
     - p50 (median): 10 samples minimum
     - p95: 20 samples minimum (rule of thumb: 20/0.05 = acceptable estimate)
     - p99: 50 samples minimum (rule of thumb: 50/0.01 = 2 samples in tail)
-    
+
     If sample size < required: verdict is "insufficient_data" (shadow mode only).
 
 # Regression tolerance levels
@@ -138,7 +138,7 @@ minimum_detectable_effect:
     With n=20 per group and α=0.05, Mann-Whitney U can detect:
     - ~15% shift in median with 80% power
     - Larger shifts (>20%) with >90% power
-    
+
     This aligns with our fail_min_pct=15% threshold.
 
 # False positive and false negative control
@@ -149,11 +149,11 @@ error_control:
     Type I error (false positive): Incorrectly flagging a non-regression
     - Controlled by α = 0.05 (statistical significance level)
     - Means 5% of clean PRs may trigger false alarm
-    
+
     Type II error (false negative): Missing a real regression
     - Controlled by β = 0.20 (giving power = 1-β = 0.80)
     - Means 20% of real regressions may slip through
-    
+
     These are standard industry values balancing sensitivity and specificity.
 
 # Adaptive enforcement (future enhancement)
@@ -165,7 +165,7 @@ adaptive_enforcement:
     - Historical variance in measurements
     - Stability tier (stable vs canary vs experimental)
     - Recent trend direction
-    
+
     Requires more data collection and validation before enabling.
 
 # Calibration and baseline updates
@@ -177,7 +177,7 @@ calibration:
     - Infrastructure changes (OS updates, hardware)
     - Intentional algorithm improvements
     - Dependency version updates
-    
+
     Baseline updates require policy change review (evidence + approval).
 
 # Enforcement transition plan
@@ -185,14 +185,14 @@ transition_plan:
   phase_1_shadow:
     duration_days: 30
     description: "Collect data, refine thresholds, no blocking"
-  
+
   phase_2_enforce_nightly:
     duration_days: 14
     description: "Enforce on nightly runs, PR lane still shadow"
-  
+
   phase_3_enforce_pr:
     description: "Full enforcement on PR lane (optional, may stay shadow)"
-  
+
   notes: |
     Gradual rollout prevents premature enforcement:
     1. Shadow mode (30 days): Learn variance, set budgets

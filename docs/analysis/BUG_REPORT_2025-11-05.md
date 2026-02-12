@@ -1,8 +1,8 @@
 # Bug Report - Transformation Portal
-**Date:** November 5, 2025  
-**Reporter:** GitHub Copilot CLI  
-**Context:** 750 Picacho Aerial Processing Workflow  
-**System:** Apple M4 Max, macOS, Python 3.11  
+**Date:** November 5, 2025
+**Reporter:** GitHub Copilot CLI
+**Context:** 750 Picacho Aerial Processing Workflow
+**System:** Apple M4 Max, macOS, Python 3.11
 
 ---
 
@@ -10,9 +10,9 @@
 
 Multiple critical issues were encountered while attempting to execute the documented "Option 2: AI-Enhanced Lux Render Pipeline" workflow for processing an architectural aerial rendering. The workflow required significant troubleshooting and workarounds to achieve a successful output.
 
-**Severity:** High - Core documented workflows are broken  
-**Impact:** Users cannot execute documented pipelines without manual intervention  
-**Status:** Workaround implemented, but fixes needed in codebase  
+**Severity:** High - Core documented workflows are broken
+**Impact:** Users cannot execute documented pipelines without manual intervention
+**Status:** Workaround implemented, but fixes needed in codebase
 
 ---
 
@@ -40,8 +40,8 @@ TypeError: expected str, bytes or os.PathLike object, not OptionInfo
 ```
 
 ### Location
-**File:** `src/transformation_portal/pipelines/lux_render_pipeline.py`  
-**Line:** 1131  
+**File:** `src/transformation_portal/pipelines/lux_render_pipeline.py`
+**Line:** 1131
 **Function:** `main()`
 
 ### Root Cause
@@ -107,26 +107,26 @@ The documented depth processing pipeline references CoreML models and depth pred
 ### Missing Components
 
 #### 2.1 CoreML Model
-**File:** `DepthAnythingV2SmallF16.mlpackage`  
-**Referenced in:** `depth_predict_coreml.py` (default model path)  
+**File:** `DepthAnythingV2SmallF16.mlpackage`
+**Referenced in:** `depth_predict_coreml.py` (default model path)
 **Error:**
 ```bash
-FileNotFoundError: [Errno 2] No such file or directory: 
+FileNotFoundError: [Errno 2] No such file or directory:
 '/Users/rc/Transformation_Portal/DepthAnythingV2SmallF16.mlpackage'
 ```
 
 #### 2.2 Depth Pipeline Module
-**Referenced in:** Documentation (`DEPTH_PIPELINE_README.md`, `README.md`)  
-**Expected location:** `depth_pipeline/pipeline.py`  
+**Referenced in:** Documentation (`DEPTH_PIPELINE_README.md`, `README.md`)
+**Expected location:** `depth_pipeline/pipeline.py`
 **Error:**
 ```bash
-/opt/homebrew/Cellar/python@3.11/3.11.14/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python: 
+/opt/homebrew/Cellar/python@3.11/3.11.14/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python:
 can't open file '/Users/rc/Transformation_Portal/depth_pipeline/pipeline.py': [Errno 2] No such file or directory
 ```
 
 #### 2.3 ZoeDepth Model Download
-**Component:** ControlNet Aux ZoeDepth detector  
-**Issue:** Extremely slow model download (1.44GB at 37KB/s = ~11 hours)  
+**Component:** ControlNet Aux ZoeDepth detector
+**Issue:** Extremely slow model download (1.44GB at 37KB/s = ~11 hours)
 **Error:**
 ```bash
 ZoeD_M12_N.pt:   0%|                                | 703k/1.44G [00:30<10:48:36, 37.1kB/s]
@@ -220,7 +220,7 @@ RuntimeError: The size of tensor a (128) must match the size of tensor b (88) at
 
 ### Attempted Dimensions
 - ❌ 1024×768 → tensor size mismatch (128 vs 88)
-- ❌ 1024×616 → tensor size mismatch (128 vs 104)  
+- ❌ 1024×616 → tensor size mismatch (128 vs 104)
 - ✅ 768×512 → Success
 
 ### Root Cause
@@ -358,8 +358,8 @@ Multiple warnings indicate missing `accelerate` package, resulting in slower mod
 
 ### Warnings
 ```
-Cannot initialize model with low cpu memory usage because `accelerate` was not found in the environment. 
-Defaulting to `low_cpu_mem_usage=False`. It is strongly recommended to install `accelerate` for faster and 
+Cannot initialize model with low cpu memory usage because `accelerate` was not found in the environment.
+Defaulting to `low_cpu_mem_usage=False`. It is strongly recommended to install `accelerate` for faster and
 less memory-intense model loading.
 ```
 
@@ -518,10 +518,10 @@ def test_dimension_validation(width, height, should_pass):
 
 ---
 
-**Report Generated:** 2025-11-05 04:19 UTC  
-**Report ID:** TR-2025-11-05-001  
-**Priority:** HIGH  
-**Assigned To:** [TBD]  
-**Status:** OPEN  
+**Report Generated:** 2025-11-05 04:19 UTC
+**Report ID:** TR-2025-11-05-001
+**Priority:** HIGH
+**Assigned To:** [TBD]
+**Status:** OPEN
 
 ---

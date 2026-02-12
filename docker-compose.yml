@@ -19,7 +19,7 @@ services:
       - DEVICE=cpu
       - PYTHONUNBUFFERED=1
     command: python -m transformation_portal.cli serve --host 0.0.0.0 --port 8000
-  
+
   # GPU-enabled service (CUDA)
   transformation-portal-gpu:
     build:
@@ -47,7 +47,7 @@ services:
               count: 1
               capabilities: [gpu]
     command: python -m transformation_portal.cli serve --host 0.0.0.0 --port 8000
-  
+
   # Batch processing worker
   transformation-portal-worker:
     build:
@@ -64,7 +64,7 @@ services:
       - DEVICE=cpu
       - PYTHONUNBUFFERED=1
     command: python -m transformation_portal.cli batch-process /app/input /app/output --preset golden_hour
-  
+
   # Monitoring dashboard (optional)
   transformation-portal-monitor:
     build:

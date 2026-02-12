@@ -1,13 +1,13 @@
 # Spatial AI Foundation Roadmap (Architectural Constitution)
 
-**Path:** `docs/spatial_ai/ROADMAP.md`  
-**Status:** Draft (normative)  
-**Owner:** Spatial AI / Data Foundation maintainers  
+**Path:** `docs/spatial_ai/ROADMAP.md`
+**Status:** Draft (normative)
+**Owner:** Spatial AI / Data Foundation maintainers
 **Last Updated:** 2026-02-10
 
 ## Purpose
 
-This document defines the **strategic and architectural pivot** for `Transformation_Portal`:  
+This document defines the **strategic and architectural pivot** for `Transformation_Portal`:
 from a high-fidelity rendering + depth-processing toolkit into a **Spatial AI Foundation** capable of training **World Models** that learn physics, geometry, and causality in the built environment.
 
 This is not a backlog. This is a **constitution**: it establishes the non-negotiable invariants, the system boundaries, and the milestone sequence that keep the system “clean” and prevent **model collapse**.
@@ -58,7 +58,7 @@ Build a **Clean Spatial AI stack** from an **Exclusive High-Fidelity Spatial AI 
 - Derived artifacts (depth maps, segmentation, splats, NeRF renders, synthetic augmentations) MUST be tracked as **derived** and MUST NOT be re-ingested as “truth”.
 
 ### III. Longitudinal Structure is First-Class
-- The dataset MUST be representable as:  
+- The dataset MUST be representable as:
   **Property ID → Visit ID → Timeline Index**
 - The system MUST preserve and exploit temporal constraints: *Visit A causally precedes Visit B*.
 
@@ -102,13 +102,13 @@ Build a **Clean Spatial AI stack** from an **Exclusive High-Fidelity Spatial AI 
 ## Architecture: What We Are Building
 
 ### Conceptual Layers
-1. **Data Foundation (Clean Moat)**  
+1. **Data Foundation (Clean Moat)**
    Contracts, provenance gates, catalog/ledger, linear decode, high-throughput I/O.
 
-2. **Spatial Intelligence Core**  
+2. **Spatial Intelligence Core**
    Geometry bootstrap, 3D recon assets, predictive representation learning, causal/temporal modeling.
 
-3. **No BS Validation + Production Layer**  
+3. **No BS Validation + Production Layer**
    Consistency/physics harness, multimodal grounding, secure enterprise query surface.
 
 ---
@@ -124,9 +124,9 @@ This phase builds the irreversible moat: the system that preserves fidelity, pro
 **Strategic Justification:** The value is technical fidelity (RAW/TIFF) + provenance-clean status. Without a strict schema, you lose the tails of the distribution (shadow nuance, rare geometry) and invite early model collapse.
 
 **Deliverables**
-- `docs/spatial_ai/DATA_CONTRACT.md`  
+- `docs/spatial_ai/DATA_CONTRACT.md`
   Defines canonical linear space, acceptable encodings, required metadata, forbidden transforms.
-- `docs/spatial_ai/SCENE_SCHEMA.md`  
+- `docs/spatial_ai/SCENE_SCHEMA.md`
   Defines multi-visit longitudinal structure: Property → Visit → Timeline.
 - Codebase: **Provenance gates** in ingestion path (hard fail if lineage is missing or unverified).
 
@@ -168,7 +168,7 @@ This phase builds the irreversible moat: the system that preserves fidelity, pro
 **Strategic Justification:** JPEG/8-bit training introduces banding/blocking/clipping artifacts that models misinterpret as physics. Physical grounding requires **linear-light tensors** on GPU.
 
 **Deliverables**
-- `src/transformation_portal/io/hifi_raw.py`  
+- `src/transformation_portal/io/hifi_raw.py`
   GPU-friendly decode pipeline outputting `float16` or `bfloat16` **linear tensors**.
   - support pathways:
     - nvJPEG2000 (where applicable)

@@ -32,27 +32,24 @@ from typing import List
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from transformation_portal.ingest import validate_schema
-from transformation_portal.ingest.validator import (
-    SchemaValidationError,
-    validate_ingest_contract,
-)
+from transformation_portal.ingest.validator import SchemaValidationError, validate_ingest_contract
 
 
 def find_sidecar_files(test_dir: Path) -> List[Path]:
     """Find all provenance sidecar JSON files in test directory.
-    
+
     Args:
         test_dir: Test directory to scan
-        
+
     Returns:
         List of sidecar file paths
     """
     sidecar_files = []
-    
+
     # Search for *_provenance.json files
     for json_file in test_dir.rglob("*_provenance.json"):
         sidecar_files.append(json_file)
-    
+
     return sidecar_files
 
 
@@ -61,28 +58,28 @@ def validate_all_sidecars(
     strict_mode: bool = True,
 ) -> int:
     """Validate all sidecars in test directory.
-    
+
     Args:
         test_dir: Test directory to scan
         strict_mode: If True, fail on unknown fields
-        
+
     Returns:
         Exit code (0 = success, non-zero = failure)
     """
     sidecar_files = find_sidecar_files(test_dir)
-    
+
     if not sidecar_files:
         print(f"⚠️  No sidecar files found in {test_dir}")
         print("   This is expected if no ingest operations have been performed.")
         return 0
-    
+
     print(f"🔍 Found {len(sidecar_files)} sidecar file(s) to validate")
-    
+
     failures = []
-    
+
     for sidecar_path in sidecar_files:
         print(f"\n📄 Validating: {sidecar_path.relative_to(test_dir)}")
-        
+
         try:
             # Validate schema
             errors = validate_schema(
@@ -90,29 +87,29 @@ def validate_all_sidecars(
                 schema_type="provenance",
                 strict_mode=strict_mode,
             )
-            
+
             if errors:
                 print(f"❌ Schema validation failed:")
                 for error in errors:
                     print(f"   - {error}")
                 failures.append((sidecar_path, "schema_validation", errors))
                 continue
-            
+
             print(f"✅ Schema validation passed")
-            
+
             # Note: Image data validation would require loading actual images,
             # which is not practical in CI. We validate schema only.
-            
+
         except SchemaValidationError as e:
             print(f"❌ Schema validation failed:")
             for error in e.errors:
                 print(f"   - {error}")
             failures.append((sidecar_path, "schema_validation", e.errors))
-            
+
         except Exception as e:
             print(f"❌ Unexpected error: {e}")
             failures.append((sidecar_path, "unexpected", str(e)))
-    
+
     # Summary
     print("\n" + "=" * 80)
     if failures:
@@ -120,7 +117,7 @@ def validate_all_sidecars(
         print("\nFailed files:")
         for sidecar_path, failure_type, details in failures:
             print(f"  - {sidecar_path.relative_to(test_dir)}: {failure_type}")
-        
+
         # Determine exit code based on failure type
         for _, failure_type, _ in failures:
             if "schema_validation" in failure_type:
@@ -131,7 +128,7 @@ def validate_all_sidecars(
                 return 3
             elif "drift" in str(failure_type).lower():
                 return 4
-        
+
         return 5  # Other failure
     else:
         print(f"✅ All {len(sidecar_files)} sidecar file(s) validated successfully")
@@ -140,7 +137,7 @@ def validate_all_sidecars(
 
 def main() -> int:
     """Main entry point.
-    
+
     Returns:
         Exit code
     """
@@ -157,29 +154,29 @@ Exit codes:
   5 - Other validation failure
         """,
     )
-    
+
     parser.add_argument(
         "--test-dir",
         type=Path,
         default=Path("tests/fixtures/ingest"),
         help="Directory containing test artifacts (default: tests/fixtures/ingest)",
     )
-    
+
     parser.add_argument(
         "--strict",
         action="store_true",
         help="Enable strict mode (fail on unknown fields)",
     )
-    
+
     args = parser.parse_args()
-    
+
     # Check if test directory exists
     if not args.test_dir.exists():
         print(f"⚠️  Test directory not found: {args.test_dir}")
         print("   Creating directory (expected for first run)")
         args.test_dir.mkdir(parents=True, exist_ok=True)
         return 0
-    
+
     return validate_all_sidecars(
         test_dir=args.test_dir,
         strict_mode=args.strict,

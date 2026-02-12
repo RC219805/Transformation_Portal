@@ -17,7 +17,7 @@ These files are kept for historical reference and backward compatibility but are
 - `ad_editorial_post_pipeline_v3.py` - Version 3.0 (merged into main version)
 - `test_ad_pipeline.py` - Old tests (superseded by `test_ad_pipeline_v3.py`)
 
-**Migration:** 
+**Migration:**
 Use `../ad_editorial_post_pipeline.py` which incorporates the best features from all versions:
 - Proper sRGB gamma conversion
 - Fine-grained progress tracking

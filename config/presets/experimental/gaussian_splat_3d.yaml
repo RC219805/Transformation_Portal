@@ -1,0 +1,155 @@
+# 3D Gaussian Splatting Reconstruction Preset
+# Phase 2.3: Depth-guided 3D scene reconstruction
+#
+# License: Inria research license (non-commercial)
+# Tier: experimental (research-only)
+#
+# This preset configures 3D Gaussian Splatting for luxury real estate
+# rendering with depth-aware optimization and material integration.
+
+tier: experimental
+license_restriction: research_only  # Inria 3DGS license
+
+# Backend configuration
+backend:
+  type: gaussian_splatting
+  model:
+    repo_id: "graphdeco-inria/gaussian-splatting"
+    # IMPORTANT: Replace with verified commit hash before production use
+    revision: "NEEDS_VERIFICATION_0000000000000000000000"
+    cache_dir: null  # Use default HuggingFace cache
+
+  device: auto  # auto-detect: cuda > mps > cpu
+
+# Optimization parameters
+optimization:
+  iterations: 30000  # Standard: 30k iterations
+
+  # Learning rates (Inria defaults)
+  position_lr: 0.00016
+  scaling_lr: 0.005
+  rotation_lr: 0.001
+  opacity_lr: 0.05
+  feature_lr: 0.0025
+
+  # Densification strategy
+  densify_from_iter: 500
+  densify_until_iter: 15000
+  densify_grad_threshold: 0.0002
+
+  # Pruning
+  prune_from_iter: 500
+  prune_until_iter: 15000
+  prune_opacity_threshold: 0.005
+
+# Quality targets
+quality:
+  rmse_threshold: 0.02  # 2% maximum error for convergence
+  min_views: 3  # Minimum number of views
+  max_gaussians: 1000000  # Memory constraint
+
+  # Validation
+  enable_geometric_validation: true
+  enable_depth_consistency: true
+  enable_coverage_analysis: true
+
+# Phase integration
+integration:
+  # Phase 1: Depth estimation
+  use_depth_prior: true
+  depth_weight: 1.0  # Depth loss weight
+
+  # Phase 2.1: Segmentation
+  use_segmentation: true
+  foreground_only: false  # Reconstruct full scene
+
+  # Phase 2.2: PBR materials
+  use_pbr_textures: false  # Optional: material-aware splatting
+  material_channels: ["albedo", "roughness", "metallic"]
+
+# Multi-view configuration
+multiview:
+  min_baseline: 0.1  # Minimum camera baseline (meters)
+  max_baseline: 10.0  # Maximum camera baseline
+  overlap_threshold: 0.3  # Minimum view overlap
+
+# Export options
+export:
+  formats: ["ply", "obj"]
+
+  ply:
+    binary: true
+    include_attributes: true  # Export scales, rotations, opacities
+    include_sh: false  # Spherical harmonics (future)
+
+  obj:
+    vertex_colors: true
+    subsample_factor: 1  # No downsampling
+
+# Performance tuning
+performance:
+  batch_size: 1  # Process one view at a time
+  num_workers: 4  # Parallel data loading
+
+  # Memory management
+  max_vram_gb: 6  # Target VRAM usage
+  enable_gradient_checkpointing: false
+
+  # Profiling
+  enable_timing: true
+  enable_memory_profiling: false
+
+# Experimental features
+experimental:
+  # Novel view synthesis
+  enable_novel_view_synthesis: true
+  camera_path_frames: 100
+
+  # Advanced rendering
+  enable_depth_of_field: false
+  enable_motion_blur: false
+
+  # Material response (Phase 2.2 integration)
+  enable_material_response: false
+
+# Logging
+logging:
+  level: INFO
+  log_optimization: true
+  log_interval: 1000  # Log every N iterations
+
+  # Metrics
+  track_rmse: true
+  track_psnr: true
+  track_ssim: false
+
+# Validation thresholds
+validation:
+  rmse_excellent: 0.01  # <1% error
+  rmse_good: 0.02       # <2% error
+  rmse_acceptable: 0.05 # <5% error
+
+  depth_consistency_threshold: 0.1  # 10% relative error
+  coverage_min_points: 100  # Minimum visible points per view
+
+# Citation
+citation: |
+  @inproceedings{kerbl20233dgaussians,
+    title={3D Gaussian Splatting for Real-Time Radiance Field Rendering},
+    author={Kerbl, Bernhard and Kopanas, Georgios and Leimk{\"u}hler, Thomas and Drettakis, George},
+    booktitle={ACM Transactions on Graphics},
+    year={2023}
+  }
+
+# License notice
+license_notice: |
+  This preset uses 3D Gaussian Splatting from Inria (research license).
+
+  Non-commercial use only. Commercial applications require separate
+  license agreement with Inria GraphDeco team.
+
+  See: https://github.com/graphdeco-inria/gaussian-splatting
+
+  For commercial alternatives, consider:
+  - NeRF-based approaches (MIT licensed)
+  - Commercial 3D reconstruction SDKs

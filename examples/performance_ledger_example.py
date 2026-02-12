@@ -17,11 +17,7 @@ from transformation_portal.metrics import (
     compute_dimension_adjustment,
     get_bucket_for_capsule,
 )
-from transformation_portal.metrics.ledger import (
-    PerformanceLedger,
-    detect_regression,
-    generate_performance_report,
-)
+from transformation_portal.metrics.ledger import PerformanceLedger, detect_regression, generate_performance_report
 
 
 def main():
@@ -47,9 +43,7 @@ def main():
             original_shape=(6000, 8000),
             enforced_shape=(5992, 7994),
             pixel_count=47_892_448,
-            dimension_adjustment=compute_dimension_adjustment(
-                (6000, 8000), (5992, 7994)
-            ),
+            dimension_adjustment=compute_dimension_adjustment((6000, 8000), (5992, 7994)),
             backend_id="da3",
             model_variant="depth_anything_v3_vits",
             device="mps",
@@ -83,7 +77,7 @@ def main():
         if bucket:
             print(f"   Bucket p50: {bucket.p50_threshold_sec:.2f}s")
             print(f"   Bucket p95: {bucket.p95_threshold_sec:.2f}s")
-            verdict = "PASS" if capsule_pool.timings['total'] <= bucket.p95_threshold_sec else "BLOCK"
+            verdict = "PASS" if capsule_pool.timings["total"] <= bucket.p95_threshold_sec else "BLOCK"
             print(f"   Verdict: {verdict}")
         print()
 

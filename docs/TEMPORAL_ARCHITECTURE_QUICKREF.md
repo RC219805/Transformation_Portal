@@ -19,10 +19,10 @@ from transformation_portal.plugins import plugin, DepthModelPlugin, PluginType
 class MyDepthModel(DepthModelPlugin):
     def _create_metadata(self):
         return self._decorator_metadata
-    
+
     def initialize(self, config=None):
         self._initialized = True
-    
+
     def estimate_depth(self, image):
         return process(image)
 ```
@@ -89,7 +89,7 @@ start = state.state.get('index', 0) if state else 0
 
 for i in range(start, 100):
     process(i)
-    
+
     if i % 10 == 0:
         checkpoint = mgr.create_checkpoint(
             progress=i,
@@ -134,7 +134,7 @@ for evt in recent:
 # CPU service
 docker-compose up transformation-portal-cpu
 
-# GPU service  
+# GPU service
 docker-compose up transformation-portal-gpu
 
 # Batch worker

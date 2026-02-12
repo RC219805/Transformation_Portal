@@ -70,7 +70,7 @@ with open('file.py', 'w') as f:
 **Guidelines**:
 - Keep in root: README, START_HERE, policies, migration guides
 - Move to `docs/sessions/YYYY-MM-DD/`: Session-specific documentation
-- Move to `docs/projects/PROJECT_NAME/`: Project-specific documentation  
+- Move to `docs/projects/PROJECT_NAME/`: Project-specific documentation
 - Move to `docs/`: Technical documentation
 
 ## Quality Gates
@@ -172,7 +172,7 @@ mv DOCUMENTATION.md docs/sessions/$(date +%Y-%m-%d)/
 # Flake8 help
 flake8 --help
 
-# Pylint help  
+# Pylint help
 pylint --help
 
 # Pytest help

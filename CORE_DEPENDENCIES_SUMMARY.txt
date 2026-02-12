@@ -28,4 +28,3 @@ All 4 core dependency PRs (#705, #706, #707, #709) have CI test failures. After 
 - PR #709 (huggingface-hub): 🚨 HIGH RISK - Model downloads critical
 
 See CORE_DEPENDENCY_ANALYSIS.md for full details.
-

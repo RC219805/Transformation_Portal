@@ -2,7 +2,7 @@
 
 **Transformation Portal - Building Custom Plugins**
 
-Version: 1.0.0  
+Version: 1.0.0
 Last Updated: 2025-11-08
 
 ---
@@ -31,29 +31,29 @@ from transformation_portal.plugins import (
 )
 class MyDepthModel(DepthModelPlugin):
     """Custom depth model plugin."""
-    
+
     def _create_metadata(self):
         return self._decorator_metadata
-    
+
     def initialize(self, config=None):
         """Initialize model."""
         self._config = config or {}
-        
+
         # Load your model
         self.model = self._load_model()
-        
+
         self._initialized = True
-    
+
     def estimate_depth(self, image, **kwargs):
         """Estimate depth from image."""
         if not self._initialized:
             raise RuntimeError("Plugin not initialized")
-        
+
         # Your depth estimation logic
         depth_map = self.model.predict(image)
-        
+
         return depth_map
-    
+
     def _load_model(self):
         """Load depth model."""
         # Your model loading logic
@@ -97,11 +97,11 @@ class CustomDepthModel(DepthModelPlugin):
             plugin_type=PluginType.DEPTH_MODEL,
             description="My custom depth model"
         )
-    
+
     def initialize(self, config=None):
         self.model = load_custom_model(config)
         self._initialized = True
-    
+
     def estimate_depth(self, image, **kwargs):
         return self.model.predict(image)
 ```
@@ -120,11 +120,11 @@ class CustomProcessor(ProcessorPlugin):
             version="1.0.0",
             plugin_type=PluginType.PROCESSOR,
         )
-    
+
     def initialize(self, config=None):
         self._config = config or {}
         self._initialized = True
-    
+
     def process(self, input_data, **kwargs):
         """Process image/video."""
         # Your processing logic
@@ -145,10 +145,10 @@ class CustomEnhancer(EnhancerPlugin):
             version="1.0.0",
             plugin_type=PluginType.ENHANCER,
         )
-    
+
     def initialize(self, config=None):
         self._initialized = True
-    
+
     def enhance(self, image, strength=1.0, **kwargs):
         """Enhance image."""
         # Your enhancement logic
@@ -169,10 +169,10 @@ class CustomPlugin(PluginInterface):
             version="1.0.0",
             plugin_type=PluginType.CUSTOM,
         )
-    
+
     def initialize(self, config=None):
         self._initialized = True
-    
+
     def execute(self, *args, **kwargs):
         """Execute custom logic."""
         # Your custom logic
@@ -409,7 +409,7 @@ def test_plugin_execution():
         'my_depth_model',
         initialize=True
     )
-    
+
     result = plugin.estimate_depth(test_image)
     assert result.shape == expected_shape
 ```
@@ -419,12 +419,12 @@ def test_plugin_execution():
 ```python
 def test_plugin_in_pipeline():
     from transformation_portal.depth import ArchitecturalDepthPipeline
-    
+
     # Use custom plugin in pipeline
     pipeline = ArchitecturalDepthPipeline(
         depth_model='my_depth_model'
     )
-    
+
     result = pipeline.process(image)
     assert result is not None
 ```

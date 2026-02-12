@@ -1,7 +1,7 @@
 # APEX Phase 3 Implementation Guide
 
-**Version:** 3.0.0  
-**Status:** Production  
+**Version:** 3.0.0
+**Status:** Production
 **Last Updated:** 2026-02-07
 
 ---
@@ -50,7 +50,7 @@ Phase 3 transforms ephemeral CI performance data into a persistent, interactive 
                  ├──► Upload to GitHub Pages artifact
                  │
                  └──► Deploy to https://<user>.github.io/repo/apex/
-                 
+
 ┌─────────────────────────────────────────────────────────────────┐
 │                   Weekly Backup Job                             │
 │                  (Sunday 00:00 UTC cron)                        │
@@ -126,15 +126,15 @@ CREATE TABLE apex_runs (
 
 ```sql
 -- Time-series queries (trends chart)
-CREATE INDEX idx_apex_runs_timestamp 
+CREATE INDEX idx_apex_runs_timestamp
     ON apex_runs(timestamp DESC);
 
 -- Bucket+zone+time queries (worst offenders)
-CREATE INDEX idx_apex_runs_bucket_zone_time 
+CREATE INDEX idx_apex_runs_bucket_zone_time
     ON apex_runs(bucket_name, zone, timestamp DESC);
 
 -- Status filtering (failures/warnings)
-CREATE INDEX idx_apex_runs_pass_fail 
+CREATE INDEX idx_apex_runs_pass_fail
     ON apex_runs(pass_fail);
 ```
 
@@ -147,7 +147,7 @@ CREATE INDEX idx_apex_runs_pass_fail
 
 ```sql
 CREATE VIEW apex_trends AS
-SELECT 
+SELECT
     bucket_name,
     zone,
     workflow_version,
@@ -336,7 +336,7 @@ Use SQLite's `EXPLAIN QUERY PLAN` to verify index usage:
 ```sql
 EXPLAIN QUERY PLAN
 SELECT * FROM apex_runs
-WHERE bucket_name = 'small_depth_v1' 
+WHERE bucket_name = 'small_depth_v1'
   AND zone = 'local'
   AND timestamp >= '2026-01-01'
 ORDER BY timestamp DESC;
@@ -627,9 +627,9 @@ python scripts/apex_dashboard_generator.py \
 
 ## License & Ownership
 
-**Component:** APEX Performance Observability Platform  
-**Version:** 3.0.0  
-**Owner:** Transformation Portal Architect  
+**Component:** APEX Performance Observability Platform
+**Version:** 3.0.0
+**Owner:** Transformation Portal Architect
 **License:** Same as repository root
 
 This is production-grade infrastructure. Changes require architectural review.

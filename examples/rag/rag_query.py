@@ -11,8 +11,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / ".github" / "agents"))
 
 from rag_system.citation import CitationGenerator
-from rag_system.retriever import HybridRetriever
 from rag_system.indexer import RepositoryIndexer
+from rag_system.retriever import HybridRetriever
+
 
 def main():
     if len(sys.argv) < 2:
@@ -47,6 +48,7 @@ def main():
         print("-" * 80)
 
     print(f"\n✅ Found {len(results)} relevant results from {len(chunks)} indexed chunks\n")
+
 
 if __name__ == "__main__":
     main()

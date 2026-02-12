@@ -1,8 +1,8 @@
 # ADR-026: APEX Performance Governance Framework
 
-**Status:** Accepted  
-**Date:** 2026-02-09  
-**Deciders:** Transformation Portal Architect  
+**Status:** Accepted
+**Date:** 2026-02-09
+**Deciders:** Transformation Portal Architect
 **Extends:** ADR-025 (APEX End-to-End Workflow Architecture)
 
 ---
@@ -211,13 +211,13 @@ tier_policies:
     required_baseline_days: 30
     min_sample_size: 20
     max_change_frequency: "quarterly"
-    
+
   canary:
     description: "Production trial workflows"
     required_baseline_days: 14
     min_sample_size: 10
     max_change_frequency: "monthly"
-    
+
   experimental:
     description: "Research workflows"
     required_baseline_days: 7
@@ -238,7 +238,7 @@ evidence_gates:
     description: "Informational only, never blocks"
     min_sample_size: 1
     allow_synthetic_data: true
-    
+
   enforce_mode:
     description: "Blocks merge on failure"
     min_sample_size: 20
@@ -251,7 +251,7 @@ statistical_methods:
   distribution_comparison:
     method: "mann_whitney_u"  # or "bootstrap_ci"
     alpha: 0.05
-    
+
   outlier_detection:
     method: "median_mad"  # median absolute deviation
     threshold: 3.0  # MAD units
@@ -275,17 +275,17 @@ waivers:
   allowed_scopes:
     - "single_bucket"  # Scope waiver to specific bucket
     - "single_zone"    # Scope waiver to specific zone
-  
+
   required_fields:
     - justification
     - expiry_date
     - scope_definition
     - approver
-    
+
   labels:
     pr_label: "apex-waiver"
     tracking_label: "apex-waiver-tracking"
-    
+
   expiry:
     default_days: 30
     max_days: 90
@@ -297,11 +297,11 @@ budget_changes:
     - ledger_query_results
     - baseline_shift_analysis
     - attribution_investigation
-    
+
   required_review:
     label: "apex-policy-change"
     min_approvers: 1  # Architect role
-    
+
   documentation:
     changelog_required: true
     adr_required_for_major_changes: true
@@ -312,11 +312,11 @@ incidents:
     - condition: "regression > max_regression_pct"
       severity: "high"
       auto_create_issue: true
-      
+
     - condition: "p95 > threshold_p95 * 1.15"
       severity: "medium"
       auto_create_issue: true
-      
+
   issue_template:
     title_format: "[APEX] Performance Regression: {bucket_name} in {zone}"
     labels: ["performance", "apex-incident", "needs-triage"]
@@ -342,11 +342,11 @@ CREATE TABLE IF NOT EXISTS apex_run_samples (
     total_sec REAL NOT NULL,
     captured_at TEXT NOT NULL,
     PRIMARY KEY (run_id, workflow_version, zone, bucket_name, sample_index),
-    FOREIGN KEY (run_id, workflow_version, zone, bucket_name) 
+    FOREIGN KEY (run_id, workflow_version, zone, bucket_name)
         REFERENCES apex_runs(run_id, workflow_version, zone, bucket_name)
 );
 
-CREATE INDEX IF NOT EXISTS idx_samples_bucket_zone_time 
+CREATE INDEX IF NOT EXISTS idx_samples_bucket_zone_time
     ON apex_run_samples(bucket_name, zone, captured_at DESC);
 ```
 
@@ -379,7 +379,7 @@ def compare_distributions(
 ) -> DistributionComparison:
     """
     Compare two performance distributions.
-    
+
     Returns statistical comparison result with confidence level.
     Requires minimum sample size (enforced by caller).
     """
@@ -389,12 +389,12 @@ def compare_distributions(
         )
         # Calculate effect size (Cliff's Delta)
         effect_size = calculate_cliffs_delta(current, baseline)
-        
+
     elif method == "bootstrap_ci":
         # Bootstrap confidence interval on median difference
         effect_size, p_value = bootstrap_median_diff(current, baseline, alpha)
         statistic = effect_size
-        
+
     # Determine verdict
     if p_value > alpha:
         verdict = "no_change"
@@ -402,9 +402,9 @@ def compare_distributions(
         verdict = "regression"
     else:
         verdict = "improvement"
-        
+
     confidence = 1.0 - p_value
-    
+
     return DistributionComparison(
         current_samples=current,
         baseline_samples=baseline,
@@ -425,9 +425,9 @@ def detect_outliers_mad(
 ) -> tuple[List[float], List[int]]:
     """
     Detect outliers using Median Absolute Deviation (MAD).
-    
+
     More robust than mean+stddev for skewed distributions.
-    
+
     Returns:
         clean_samples: Samples with outliers removed
         outlier_indices: Indices of detected outliers
@@ -435,14 +435,14 @@ def detect_outliers_mad(
     arr = np.array(samples)
     median = np.median(arr)
     mad = np.median(np.abs(arr - median))
-    
+
     # Modified z-score
     modified_z = 0.6745 * (arr - median) / mad
-    
+
     outlier_mask = np.abs(modified_z) > threshold
     clean = arr[~outlier_mask]
     outlier_idx = np.where(outlier_mask)[0].tolist()
-    
+
     return clean.tolist(), outlier_idx
 ```
 
@@ -459,12 +459,12 @@ def detect_outliers_mad(
 1. **Create GitHub Issue** (via GitHub API or `gh` CLI):
    ```markdown
    Title: [APEX] Performance Regression: pool_large_mps in us-west-2a
-   
+
    **Severity:** High
    **Detected:** 2026-02-15 14:32 UTC
    **Run ID:** gh-123456-1
    **Commit:** abc123def
-   
+
    ## Regression Summary
    - Bucket: `pool_large_mps`
    - Zone: `us-west-2a`
@@ -472,23 +472,23 @@ def detect_outliers_mad(
    - Current p95: 12.3s
    - Baseline p95: 10.0s
    - Regression: +23% (threshold: 10%)
-   
+
    ## Evidence
    - Ledger query: [link to query results]
    - Distribution comparison: Mann-Whitney U test, p=0.003
    - Sample size: current n=25, baseline n=30
-   
+
    ## Top Contributing Stages
    (from instrumentation, if available)
    1. depth_inference: +15% (+1.8s)
    2. tone_mapping: +5% (+0.4s)
-   
+
    ## Suggested Actions
    - [ ] Reproduce locally: `python scripts/apex_matrix_runner.py ...`
    - [ ] Profile stage X with cProfile
    - [ ] Check for recent dependency version changes
    - [ ] Bisect commits if needed
-   
+
    ## Resolution Workflow
    - [ ] Investigation assigned
    - [ ] Root cause identified
@@ -507,18 +507,18 @@ def detect_outliers_mad(
 2. Developer fills waiver template in PR description:
    ```markdown
    ## APEX Waiver Request
-   
+
    **Justification:** [Required - why is this regression acceptable?]
-   
-   **Scope:** 
+
+   **Scope:**
    - Bucket: `pool_large_mps`
    - Zone: `us-west-2a`
    - Workflow: `v2`
-   
+
    **Expiry Date:** 2026-03-15 (30 days from now)
-   
+
    **Mitigation Plan:** [What will be done to address this?]
-   
+
    **Evidence:** [Link to analysis, profiling, investigation]
    ```
 
@@ -645,19 +645,19 @@ ci_lanes:
     workload: "golden_suite"
     mode: "synthetic"  # Or minimal real (3 images)
     max_duration_min: 2
-    
+
   nightly_baseline:
     workload: "golden_suite"
     mode: "real"
     sample_size: "full"
     backends: ["da3"]
-    
+
   nightly_comprehensive:
     workload: "canary_suite"
     mode: "real"
     sample_size: "full"
     backends: ["da3", "depth_pro"]
-    
+
   weekly_stress:
     workload: "fuzz_suite"
     mode: "real"
@@ -806,6 +806,6 @@ def test_statistical_sample_size():
 
 This ADR establishes the governance framework for APEX performance management.
 
-**Authority:** Transformation Portal Architect  
-**Effective Date:** 2026-02-09  
+**Authority:** Transformation Portal Architect
+**Effective Date:** 2026-02-09
 **Next Review:** 2026-05-09 (quarterly)

@@ -79,9 +79,7 @@ class SyntheticLabelCheck(ContractCheck):
     """Verify that synthetic data is labeled in PR comments."""
 
     def __init__(self):
-        super().__init__(
-            "LABEL-1", "PR comment includes [SYNTHETIC DATA] marker when applicable"
-        )
+        super().__init__("LABEL-1", "PR comment includes [SYNTHETIC DATA] marker when applicable")
 
     def run(self) -> bool:
         comment_gen = Path("scripts/apex_pr_comment.py")
@@ -105,9 +103,7 @@ class AggregationScopingCheck(ContractCheck):
     """Verify that aggregation is scoped by run_id and commit_sha."""
 
     def __init__(self):
-        super().__init__(
-            "SCOPE-1", "Aggregation queries filter by run_id AND commit_sha"
-        )
+        super().__init__("SCOPE-1", "Aggregation queries filter by run_id AND commit_sha")
 
     def run(self) -> bool:
         agg_script = Path("scripts/apex_aggregate_ledger.py")
@@ -134,9 +130,7 @@ class MinSampleSizeCheck(ContractCheck):
     """Verify that small sample sizes produce insufficient_data."""
 
     def __init__(self):
-        super().__init__(
-            "SAMPLE-1", "Sample size < 20 produces insufficient_data verdict"
-        )
+        super().__init__("SAMPLE-1", "Sample size < 20 produces insufficient_data verdict")
 
     def run(self) -> bool:
         gate_module = Path("src/transformation_portal/metrics/gate.py")
@@ -147,9 +141,7 @@ class MinSampleSizeCheck(ContractCheck):
         content = gate_module.read_text()
 
         # Look for min sample size logic - updated to match actual implementation
-        has_min_check = "insufficient_data" in content and (
-            "min_samples" in content or "MIN_SAMPLES" in content
-        )
+        has_min_check = "insufficient_data" in content and ("min_samples" in content or "MIN_SAMPLES" in content)
 
         if not has_min_check:
             self.evidence = "Minimum sample size check not found in gate logic"
@@ -164,14 +156,10 @@ class SyntheticIsolationCheck(ContractCheck):
     """Verify that synthetic data is structurally isolated."""
 
     def __init__(self):
-        super().__init__(
-            "STRUCT-1", "Capsules carry is_synthetic field and ledger stores it"
-        )
+        super().__init__("STRUCT-1", "Capsules carry is_synthetic field and ledger stores it")
 
     def run(self) -> bool:
-        capsule_module = Path(
-            "src/transformation_portal/metrics/performance_capsule.py"
-        )
+        capsule_module = Path("src/transformation_portal/metrics/performance_capsule.py")
         ledger_module = Path("src/transformation_portal/metrics/ledger.py")
 
         if not capsule_module.exists():
@@ -186,9 +174,7 @@ class SyntheticIsolationCheck(ContractCheck):
         ledger_content = ledger_module.read_text()
 
         has_capsule_field = "is_synthetic" in capsule_content
-        has_ledger_column = (
-            "is_synthetic" in ledger_content or "CREATE TABLE" in ledger_content
-        )
+        has_ledger_column = "is_synthetic" in ledger_content or "CREATE TABLE" in ledger_content
 
         if not (has_capsule_field and has_ledger_column):
             self.evidence = "is_synthetic field/column not consistently implemented"
@@ -231,9 +217,7 @@ def run_unit_tests() -> Tuple[bool, str]:
 
 def main():
     parser = argparse.ArgumentParser(description="Verify APEX contract compliance")
-    parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Show detailed output"
-    )
+    parser.add_argument("--verbose", "-v", action="store_true", help="Show detailed output")
     args = parser.parse_args()
 
     if args.verbose:

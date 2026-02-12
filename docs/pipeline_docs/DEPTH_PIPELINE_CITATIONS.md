@@ -1,7 +1,7 @@
 # Depth Pipeline Citations - Transformation Portal
 
-**Generated**: 2025-11-06  
-**Query**: "depth pipeline architecture implementation"  
+**Generated**: 2025-11-06
+**Query**: "depth pipeline architecture implementation"
 **Repository**: Transformation Portal
 
 ---
@@ -18,8 +18,8 @@ The Transformation Portal depth pipeline is a production-ready, depth-aware imag
 
 ### Citation 1.1: Main Pipeline Class
 
-**File**: `pipeline.py:35-81`  
-**Confidence**: 95%  
+**File**: `pipeline.py:35-81`
+**Confidence**: 95%
 **Relevance**: Core pipeline implementation | Architectural pattern | Production-ready
 
 ```python
@@ -81,8 +81,8 @@ class ArchitecturalDepthPipeline:
 
 ### Citation 1.2: Processing Pipeline Execution
 
-**File**: `pipeline.py:192-269`  
-**Confidence**: 95%  
+**File**: `pipeline.py:192-269`
+**Confidence**: 95%
 **Relevance**: Processing flow | Caching strategy | Metadata collection
 
 ```python
@@ -174,8 +174,8 @@ def process_render(
 
 ### Citation 1.3: Batch Processing with Progress Tracking
 
-**File**: `pipeline.py:271-300`  
-**Confidence**: 90%  
+**File**: `pipeline.py:271-300`
+**Confidence**: 90%
 **Relevance**: Batch operations | Throughput optimization | Progress tracking
 
 ```python
@@ -219,8 +219,8 @@ def batch_process(
 
 ### Citation 2.1: Multi-Backend Depth Model Wrapper
 
-**File**: `depth_anything_v2.py:70-132`  
-**Confidence**: 98%  
+**File**: `depth_anything_v2.py:70-132`
+**Confidence**: 98%
 **Relevance**: Model abstraction | Backend selection | Performance optimization
 
 ```python
@@ -297,8 +297,8 @@ class DepthAnythingV2Model:
 
 ### Citation 2.2: Automatic Backend Selection
 
-**File**: `depth_anything_v2.py:133-154`  
-**Confidence**: 95%  
+**File**: `depth_anything_v2.py:133-154`
+**Confidence**: 95%
 **Relevance**: Apple Silicon optimization | Device detection | Hardware acceleration
 
 ```python
@@ -334,8 +334,8 @@ def _auto_detect_device(self) -> str:
 
 ### Citation 2.3: Model Variants and Enums
 
-**File**: `depth_anything_v2.py:51-68`  
-**Confidence**: 100%  
+**File**: `depth_anything_v2.py:51-68`
+**Confidence**: 100%
 **Relevance**: Model configuration | HuggingFace integration | Licensing
 
 ```python
@@ -366,8 +366,8 @@ class ModelVariant(Enum):
 
 ### Citation 3.1: Production-Grade Depth Tools
 
-**File**: `src/transformation_portal/depth/tools.py:1-99`  
-**Confidence**: 92%  
+**File**: `src/transformation_portal/depth/tools.py:1-99`
+**Confidence**: 92%
 **Relevance**: Production features | Error handling | Batch processing
 
 ```python
@@ -429,8 +429,8 @@ SUPPORTED_EXTENSIONS = (
 
 ### Citation 3.2: Backward-Compatible CLI Wrapper
 
-**File**: `depth_tools.py:1-14`  
-**Confidence**: 85%  
+**File**: `depth_tools.py:1-14`
+**Confidence**: 85%
 **Relevance**: Repository organization | Backward compatibility | Developer experience
 
 ```python
@@ -458,8 +458,8 @@ if __name__ == "__main__":
 
 ### Citation 4.1: YAML Configuration Structure
 
-**File**: `docs/depth_pipeline/DEPTH_PIPELINE_README.md:117-149`  
-**Confidence**: 90%  
+**File**: `docs/depth_pipeline/DEPTH_PIPELINE_README.md:117-149`
+**Confidence**: 90%
 **Relevance**: Configuration | Presets | Production deployment
 
 ```yaml
@@ -503,8 +503,8 @@ processing:
 
 ### Citation 4.2: Professional Pipeline Presets
 
-**File**: `config/pro_pipeline_config.yaml:106-218`  
-**Confidence**: 88%  
+**File**: `config/pro_pipeline_config.yaml:106-218`
+**Confidence**: 88%
 **Relevance**: Production presets | Use case examples | Best practices
 
 ```yaml
@@ -537,7 +537,7 @@ presets:
           amount: 0.14
         clarity:
           amount: 0.18
-  
+
   exterior-golden-hour:
     description: "Warm golden hour aesthetic for exteriors"
     stages:
@@ -555,7 +555,7 @@ presets:
           path: assets/luts/location_aesthetic/California_Golden_Hour.cube
         temperature: 15
         saturation: 1.10
-  
+
   aerial-estate:
     description: "Aerial photography enhancement with depth perspective"
     stages:
@@ -577,8 +577,8 @@ presets:
 
 ### Citation 5.1: Quick Start Guide
 
-**File**: `docs/depth_pipeline/DEPTH_PIPELINE_README.md:63-113`  
-**Confidence**: 95%  
+**File**: `docs/depth_pipeline/DEPTH_PIPELINE_README.md:63-113`
+**Confidence**: 95%
 **Relevance**: Getting started | Basic usage | Output files
 
 ```python
@@ -633,8 +633,8 @@ pipeline = ArchitecturalDepthPipeline.from_config('config/exterior_preset.yaml')
 
 ### Citation 5.2: Advanced Custom Pipeline
 
-**File**: `docs/depth_pipeline/DEPTH_PIPELINE_README.md:199-234`  
-**Confidence**: 90%  
+**File**: `docs/depth_pipeline/DEPTH_PIPELINE_README.md:199-234`
+**Confidence**: 90%
 **Relevance**: Advanced usage | Custom processors | Fine-tuning
 
 ```python
@@ -676,8 +676,8 @@ save_image(result, 'output/custom_enhanced.png')
 
 ### Citation 5.3: Processor Configuration Examples
 
-**File**: `docs/depth_pipeline/DEPTH_PIPELINE_README.md:151-197`  
-**Confidence**: 92%  
+**File**: `docs/depth_pipeline/DEPTH_PIPELINE_README.md:151-197`
+**Confidence**: 92%
 **Relevance**: Processor parameters | Fine-tuning | Best practices
 
 ```python
@@ -734,8 +734,8 @@ atmospheric_image = atmosphere(image, depth)
 
 ### Citation 6.1: Comprehensive Test Suite
 
-**File**: `tests/test_depth_tools.py:1-100`  
-**Confidence**: 88%  
+**File**: `tests/test_depth_tools.py:1-100`
+**Confidence**: 88%
 **Relevance**: Testing strategy | Quality assurance | Error handling
 
 ```python
@@ -821,14 +821,14 @@ class TestBatchProcessing:
 
 ### Citation 7.1: Performance Benchmarks
 
-**File**: `docs/depth_pipeline/DEPTH_PIPELINE_README.md:1-34`  
-**Confidence**: 95%  
+**File**: `docs/depth_pipeline/DEPTH_PIPELINE_README.md:1-34`
+**Confidence**: 95%
 **Relevance**: Performance metrics | Hardware optimization | Throughput
 
 ```markdown
 # Depth Anything V2 Pipeline for Architectural Rendering
 
-Production-ready depth-aware image processing pipeline optimized for Apple Silicon. 
+Production-ready depth-aware image processing pipeline optimized for Apple Silicon.
 Transforms architectural renders using monocular depth estimation with Depth Anything V2.
 
 **Performance**: 855-950ms per 4K image on M4 Max (24ms depth estimation + 831ms processing)
@@ -863,8 +863,8 @@ Transforms architectural renders using monocular depth estimation with Depth Any
 
 ### Citation 7.2: Caching System for Performance
 
-**File**: `docs/depth_pipeline/DEPTH_PIPELINE_README.md:255-279`  
-**Confidence**: 90%  
+**File**: `docs/depth_pipeline/DEPTH_PIPELINE_README.md:255-279`
+**Confidence**: 90%
 **Relevance**: Performance optimization | Caching strategy | Iterative workflows
 
 ```python
@@ -903,14 +903,14 @@ cache.clear(clear_disk=True)
 
 ### Citation 8.1: Main README Overview
 
-**File**: `README.md:1-78`  
-**Confidence**: 92%  
+**File**: `README.md:1-78`
+**Confidence**: 92%
 **Relevance**: Project overview | Technology stack | Recent updates
 
 ```markdown
 # Transformation Portal
 
-> Professional image and video processing toolkit for luxury real estate rendering, 
+> Professional image and video processing toolkit for luxury real estate rendering,
 > architectural visualization, and editorial post-production.
 
 ## 🎉 Recent Update: Repository Refactored (October 2025)
@@ -923,10 +923,10 @@ The repository has been significantly reorganized for better performance and mai
 
 ## Overview
 
-**Transformation Portal** is a comprehensive suite of AI-powered tools and pipelines 
-designed for high-end architectural rendering, real estate photography, and video 
-post-production. It combines cutting-edge machine learning models, professional color 
-grading techniques, and proprietary **Material Response** technology to transform raw 
+**Transformation Portal** is a comprehensive suite of AI-powered tools and pipelines
+designed for high-end architectural rendering, real estate photography, and video
+post-production. It combines cutting-edge machine learning models, professional color
+grading techniques, and proprietary **Material Response** technology to transform raw
 renders and photographs into polished marketing visuals.
 
 ### Technology Stack
@@ -952,8 +952,8 @@ renders and photographs into polished marketing visuals.
 
 ### Citation 8.2: Depth Pipeline Location in Repository
 
-**File**: Repository structure (inferred from imports and file paths)  
-**Confidence**: 95%  
+**File**: Repository structure (inferred from imports and file paths)
+**Confidence**: 95%
 **Relevance**: Project organization | Module structure | Developer navigation
 
 **Repository Structure**:
@@ -1004,8 +1004,8 @@ Transformation_Portal/
 
 ### Citation 9.1: Installation Requirements
 
-**File**: `docs/depth_pipeline/DEPTH_PIPELINE_README.md:35-62`  
-**Confidence**: 90%  
+**File**: `docs/depth_pipeline/DEPTH_PIPELINE_README.md:35-62`
+**Confidence**: 90%
 **Relevance**: Setup | Dependencies | Model download
 
 ```bash
@@ -1037,8 +1037,8 @@ Models are automatically downloaded on first use from HuggingFace Hub:
 
 ### Citation 9.2: Use Case Examples
 
-**File**: `docs/depth_pipeline/DEPTH_PIPELINE_README.md:281-300`  
-**Confidence**: 88%  
+**File**: `docs/depth_pipeline/DEPTH_PIPELINE_README.md:281-300`
+**Confidence**: 88%
 **Relevance**: Use cases | Workflow examples | Expected results
 
 ```python
@@ -1065,8 +1065,8 @@ pipeline.save_result(result, 'output/')
 
 ## Summary Statistics
 
-**Total Citations**: 24 citations across 9 categories  
-**Average Confidence**: 92.1%  
+**Total Citations**: 24 citations across 9 categories
+**Average Confidence**: 92.1%
 **Primary Files Referenced**:
 - `pipeline.py` (6 citations)
 - `depth_anything_v2.py` (4 citations)
@@ -1096,6 +1096,6 @@ pipeline.save_result(result, 'output/')
 
 ---
 
-**Generated by**: Transformation Portal RAG System  
-**Citation Count**: 24  
+**Generated by**: Transformation Portal RAG System
+**Citation Count**: 24
 **Documentation Coverage**: Core implementation, configuration, testing, performance, usage examples

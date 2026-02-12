@@ -24,7 +24,7 @@
 # Preview what would be downloaded
 python scripts/install_models.py --dry-run
 
-# Install all models including optional ones  
+# Install all models including optional ones
 python scripts/install_models.py --all
 
 # Force re-download
@@ -250,4 +250,3 @@ python scripts/install_models.py
 **Improvement Grade: A+**
 
 The improved version is significantly more robust, user-friendly, and production-ready while maintaining backward compatibility.
-

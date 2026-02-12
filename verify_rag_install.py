@@ -60,9 +60,7 @@ def check_python(args) -> Tuple[bool, str]:
     msgs: List[str] = []
     ver = sys.version.split()[0]
     in_venv = (
-        hasattr(sys, "real_prefix")
-        or (getattr(sys, "base_prefix", "") != sys.prefix)
-        or bool(os.environ.get("VIRTUAL_ENV"))
+        hasattr(sys, "real_prefix") or (getattr(sys, "base_prefix", "") != sys.prefix) or bool(os.environ.get("VIRTUAL_ENV"))
     )
     msgs.append(f"Python: {ver}")
     msgs.append(f"Virtualenv active: {in_venv} (sys.prefix={sys.prefix})")
@@ -126,9 +124,7 @@ def check_faiss(args) -> Tuple[bool, str]:
         idx.add(x)
         _D, I = idx.search(x, 1)
         ok = I.shape == (2, 1)
-        msgs.append(
-            f"FAISS search: OK (neighbors={I.ravel().tolist()})" if ok else "FAISS search: FAILED"
-        )
+        msgs.append(f"FAISS search: OK (neighbors={I.ravel().tolist()})" if ok else "FAISS search: FAILED")
         return ok, "\n".join(msgs)
     except Exception as e:
         return False, f"FAISS check failed: {e}"
@@ -194,9 +190,9 @@ def check_rag_imports(args, repo_root: Path) -> Tuple[bool, str]:
     ensure_repo_on_path(repo_root)
     try:
         # Try canonical path first
-        from github.agents.rag_system.retriever import HybridRetriever  # type: ignore
-        from github.agents.rag_system.indexer import RepositoryIndexer  # type: ignore
         from github.agents.rag_system.citation import CitationGenerator  # type: ignore
+        from github.agents.rag_system.indexer import RepositoryIndexer  # type: ignore
+        from github.agents.rag_system.retriever import HybridRetriever  # type: ignore
 
         return True, "RAG modules import OK (github.agents.rag_system.*)"
     except ModuleNotFoundError as e:
@@ -206,9 +202,9 @@ def check_rag_imports(args, repo_root: Path) -> Tuple[bool, str]:
                 return False, f"RAG import fix failed: {msg}"
             # Retry after fix
             try:
-                from github.agents.rag_system.retriever import HybridRetriever  # type: ignore
-                from github.agents.rag_system.indexer import RepositoryIndexer  # type: ignore
                 from github.agents.rag_system.citation import CitationGenerator  # type: ignore
+                from github.agents.rag_system.indexer import RepositoryIndexer  # type: ignore
+                from github.agents.rag_system.retriever import HybridRetriever  # type: ignore
 
                 return True, f"RAG modules import OK after fix.\n{msg}"
             except Exception as e2:

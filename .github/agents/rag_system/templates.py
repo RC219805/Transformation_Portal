@@ -40,37 +40,27 @@ class CodeModificationResponse:
     def to_json(self) -> str:
         """Convert to JSON string."""
         data = {
-            'summary': self.summary,
-            'files': [
-                {'path': f.path, 'patch': f.patch, 'description': f.description}
-                for f in self.files
-            ],
-            'tests': self.tests,
-            'explanation': self.explanation,
-            'confidence': self.confidence,
-            'citations': self.citations or [],
+            "summary": self.summary,
+            "files": [{"path": f.path, "patch": f.patch, "description": f.description} for f in self.files],
+            "tests": self.tests,
+            "explanation": self.explanation,
+            "confidence": self.confidence,
+            "citations": self.citations or [],
         }
         return json.dumps(data, indent=2)
 
     @classmethod
-    def from_json(cls, json_str: str) -> 'CodeModificationResponse':
+    def from_json(cls, json_str: str) -> "CodeModificationResponse":
         """Create from JSON string."""
         data = json.loads(json_str)
-        files = [
-            FileModification(
-                path=f['path'],
-                patch=f['patch'],
-                description=f.get('description')
-            )
-            for f in data['files']
-        ]
+        files = [FileModification(path=f["path"], patch=f["patch"], description=f.get("description")) for f in data["files"]]
         return cls(
-            summary=data['summary'],
+            summary=data["summary"],
             files=files,
-            tests=data['tests'],
-            explanation=data['explanation'],
-            confidence=data.get('confidence', 0.0),
-            citations=data.get('citations'),
+            tests=data["tests"],
+            explanation=data["explanation"],
+            confidence=data.get("confidence", 0.0),
+            citations=data.get("citations"),
         )
 
 
@@ -362,51 +352,52 @@ class FewShotExamples:
         """Get feature implementation examples."""
         return [
             {
-                'input': 'Add depth-based atmospheric haze effect to the depth pipeline',
-                'output': json.dumps({
-                    'summary': 'Add atmospheric haze effect based on depth information',
-                    'files': [
-                        {
-                            'path': 'depth_pipeline/processors/atmospheric.py',
-                            'patch': 'Add haze_intensity parameter and depth-based blending',
-                            'description': 'New processor for atmospheric effects'
-                        },
-                        {
-                            'path': 'config/presets/exterior.yaml',
-                            'patch': 'Add haze_intensity: 0.3 to preset',
-                            'description': 'Configure default haze for exteriors'
-                        }
-                    ],
-                    'tests': [
-                        'tests/test_atmospheric_processor.py',
-                        'tests/integration/test_depth_pipeline.py'
-                    ],
-                    'explanation': (
-                        """Atmospheric haze is implemented by blending a fog color proportional to depth distance. Uses depth maps to determine haze intensity per-pixel."""
-                    ),
-                    'confidence': 0.85,
-                }, indent=2)
+                "input": "Add depth-based atmospheric haze effect to the depth pipeline",
+                "output": json.dumps(
+                    {
+                        "summary": "Add atmospheric haze effect based on depth information",
+                        "files": [
+                            {
+                                "path": "depth_pipeline/processors/atmospheric.py",
+                                "patch": "Add haze_intensity parameter and depth-based blending",
+                                "description": "New processor for atmospheric effects",
+                            },
+                            {
+                                "path": "config/presets/exterior.yaml",
+                                "patch": "Add haze_intensity: 0.3 to preset",
+                                "description": "Configure default haze for exteriors",
+                            },
+                        ],
+                        "tests": ["tests/test_atmospheric_processor.py", "tests/integration/test_depth_pipeline.py"],
+                        "explanation": (
+                            """Atmospheric haze is implemented by blending a fog color proportional to depth distance. Uses depth maps to determine haze intensity per-pixel."""
+                        ),
+                        "confidence": 0.85,
+                    },
+                    indent=2,
+                ),
             },
             {
-                'input': 'Add new LUT preset for warm sunset aesthetic',
-                'output': json.dumps({
-                    'summary': 'Add California Golden Hour LUT preset',
-                    'files': [
-                        {
-                            'path': 'luxury_video_master_grader.py',
-                            'patch': 'Add sunset_estate preset with California_Golden_Hour.cube',
-                            'description': 'New preset in PRESETS dictionary'
-                        }
-                    ],
-                    'tests': [
-                        'tests/test_luxury_video_master_grader.py::test_preset_exists'
-                    ],
-                    'explanation': 'Adding a new preset is straightforward: define PresetConfig '
-                                   'with LUT path, exposure, contrast, saturation values. '
-                                   'LUT file should exist in assets/luts/location_aesthetic/',
-                    'confidence': 0.95,
-                }, indent=2)
-            }
+                "input": "Add new LUT preset for warm sunset aesthetic",
+                "output": json.dumps(
+                    {
+                        "summary": "Add California Golden Hour LUT preset",
+                        "files": [
+                            {
+                                "path": "luxury_video_master_grader.py",
+                                "patch": "Add sunset_estate preset with California_Golden_Hour.cube",
+                                "description": "New preset in PRESETS dictionary",
+                            }
+                        ],
+                        "tests": ["tests/test_luxury_video_master_grader.py::test_preset_exists"],
+                        "explanation": "Adding a new preset is straightforward: define PresetConfig "
+                        "with LUT path, exposure, contrast, saturation values. "
+                        "LUT file should exist in assets/luts/location_aesthetic/",
+                        "confidence": 0.95,
+                    },
+                    indent=2,
+                ),
+            },
         ]
 
     @staticmethod
@@ -414,24 +405,25 @@ class FewShotExamples:
         """Get bug triage examples."""
         return [
             {
-                'input': 'ImportError: No module named "tifffile"',
-                'output': json.dumps({
-                    'summary': 'Missing optional dependency: tifffile',
-                    'files': [
-                        {
-                            'path': 'luxury_tiff_batch_processor.py',
-                            'patch': 'Wrap tifffile import in try/except with fallback to Pillow',
-                            'description': 'Make tifffile optional with graceful fallback'
-                        }
-                    ],
-                    'tests': [
-                        'tests/test_luxury_tiff_processor.py::test_works_without_tifffile'
-                    ],
-                    'explanation': 'tifffile is an optional dependency for 16-bit TIFF support. '
-                                   'When not available, should fall back to Pillow with a warning. '
-                                   'This follows the pattern in other scripts.',
-                    'confidence': 0.90,
-                }, indent=2)
+                "input": 'ImportError: No module named "tifffile"',
+                "output": json.dumps(
+                    {
+                        "summary": "Missing optional dependency: tifffile",
+                        "files": [
+                            {
+                                "path": "luxury_tiff_batch_processor.py",
+                                "patch": "Wrap tifffile import in try/except with fallback to Pillow",
+                                "description": "Make tifffile optional with graceful fallback",
+                            }
+                        ],
+                        "tests": ["tests/test_luxury_tiff_processor.py::test_works_without_tifffile"],
+                        "explanation": "tifffile is an optional dependency for 16-bit TIFF support. "
+                        "When not available, should fall back to Pillow with a warning. "
+                        "This follows the pattern in other scripts.",
+                        "confidence": 0.90,
+                    },
+                    indent=2,
+                ),
             }
         ]
 
@@ -440,24 +432,27 @@ class FewShotExamples:
         """Get CI workflow change examples."""
         return [
             {
-                'input': 'Add Python 3.12 to test matrix',
-                'output': json.dumps({
-                    'summary': 'Add Python 3.12 to CI test matrix',
-                    'files': [
-                        {
-                            'path': '.github/workflows/build.yml',
-                            'patch': 'Add "3.12" to python-version matrix',
-                            'description': 'Extend test coverage to Python 3.12'
-                        }
-                    ],
-                    'tests': [
-                        'Manual: Push to branch and verify Actions tab shows Python 3.12 job',
-                        'Verify: All tests pass on Python 3.12'
-                    ],
-                    'explanation': 'Python 3.12 is now stable. Adding to matrix ensures '
-                                   'compatibility. No code changes needed if already compatible.',
-                    'confidence': 0.95,
-                }, indent=2)
+                "input": "Add Python 3.12 to test matrix",
+                "output": json.dumps(
+                    {
+                        "summary": "Add Python 3.12 to CI test matrix",
+                        "files": [
+                            {
+                                "path": ".github/workflows/build.yml",
+                                "patch": 'Add "3.12" to python-version matrix',
+                                "description": "Extend test coverage to Python 3.12",
+                            }
+                        ],
+                        "tests": [
+                            "Manual: Push to branch and verify Actions tab shows Python 3.12 job",
+                            "Verify: All tests pass on Python 3.12",
+                        ],
+                        "explanation": "Python 3.12 is now stable. Adding to matrix ensures "
+                        "compatibility. No code changes needed if already compatible.",
+                        "confidence": 0.95,
+                    },
+                    indent=2,
+                ),
             }
         ]
 
@@ -476,30 +471,30 @@ def validate_response_schema(response: str) -> bool:
         data = json.loads(response)
 
         # Check required fields
-        required_fields = ['summary', 'files', 'tests', 'explanation']
+        required_fields = ["summary", "files", "tests", "explanation"]
         for field in required_fields:
             if field not in data:
                 print(f"Missing required field: {field}")
                 return False
 
         # Validate files structure
-        if not isinstance(data['files'], list):
+        if not isinstance(data["files"], list):
             print("'files' must be a list")
             return False
 
-        for file_mod in data['files']:
-            if 'path' not in file_mod or 'patch' not in file_mod:
+        for file_mod in data["files"]:
+            if "path" not in file_mod or "patch" not in file_mod:
                 print("Each file must have 'path' and 'patch'")
                 return False
 
         # Validate tests
-        if not isinstance(data['tests'], list):
+        if not isinstance(data["tests"], list):
             print("'tests' must be a list")
             return False
 
         # Optional: validate confidence range
-        if 'confidence' in data:
-            conf = data['confidence']
+        if "confidence" in data:
+            conf = data["confidence"]
             if not (0.0 <= conf <= 1.0):
                 print(f"'confidence' must be between 0.0 and 1.0, got {conf}")
                 return False
@@ -518,14 +513,12 @@ def main():
     """CLI for template generation and validation."""
     import argparse
 
-    parser = argparse.ArgumentParser(description='Generate prompt templates')
-    parser.add_argument('--type', choices=['feature', 'bug', 'ci'], required=True,
-                        help='Template type')
-    parser.add_argument('--description', required=True, help='Description/error log')
-    parser.add_argument('--context', help='Additional context')
-    parser.add_argument('--with-examples', action='store_true',
-                        help='Include few-shot examples')
-    parser.add_argument('--validate', help='Validate a JSON response file')
+    parser = argparse.ArgumentParser(description="Generate prompt templates")
+    parser.add_argument("--type", choices=["feature", "bug", "ci"], required=True, help="Template type")
+    parser.add_argument("--description", required=True, help="Description/error log")
+    parser.add_argument("--context", help="Additional context")
+    parser.add_argument("--with-examples", action="store_true", help="Include few-shot examples")
+    parser.add_argument("--validate", help="Validate a JSON response file")
 
     args = parser.parse_args()
 
@@ -545,7 +538,7 @@ def main():
         return
 
     # Generate template
-    if args.type == 'feature':
+    if args.type == "feature":
         template = PromptTemplates.feature_implementation(
             args.description,
             context=args.context,
@@ -554,7 +547,7 @@ def main():
             examples = FewShotExamples.get_feature_examples()
             template = PromptTemplates.add_few_shot_examples(template, examples)
 
-    elif args.type == 'bug':
+    elif args.type == "bug":
         template = PromptTemplates.bug_triage(
             args.description,
             environment=args.context,
@@ -563,9 +556,9 @@ def main():
             examples = FewShotExamples.get_bug_triage_examples()
             template = PromptTemplates.add_few_shot_examples(template, examples)
 
-    elif args.type == 'ci':
+    elif args.type == "ci":
         # Parse workflow name from description
-        workflow_name = args.description.split()[0] if args.description else 'workflow.yml'
+        workflow_name = args.description.split()[0] if args.description else "workflow.yml"
         template = PromptTemplates.ci_change(
             workflow_name,
             args.description,
@@ -578,5 +571,5 @@ def main():
     print(template)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -4,7 +4,7 @@
 
 The Transformation Portal performance ledger provides regression detection for pipeline runtime performance. It parses manifests from batch runs, computes statistics, and compares against baselines to detect performance degradation.
 
-**Status:** Phase 2 tooling (v2.0.1+)  
+**Status:** Phase 2 tooling (v2.0.1+)
 **Enforcement:** Manual workflow, not a CI gate
 
 ---
@@ -164,8 +164,8 @@ python tools/performance_ledger.py \
 ```markdown
 # Performance Comparison Report
 
-**Baseline:** v2.0.0 (DA3, APEX)  
-**Current:** experimental_run (20 images)  
+**Baseline:** v2.0.0 (DA3, APEX)
+**Current:** experimental_run (20 images)
 **Environment:** macOS-14.0-arm64, Python 3.11.0, torch 2.1.0, device=mps
 
 ## Statistics
@@ -326,7 +326,7 @@ python tools/performance_ledger.py \
 WARNING: Environment mismatch detected:
   Baseline: Python 3.11.0, torch 2.1.0, device=mps
   Current:  Python 3.12.0, torch 2.2.0, device=mps
-  
+
   Comparison may not be valid. Consider using environment-specific baseline.
 ```
 
@@ -358,5 +358,5 @@ Potential improvements for v2.1.0+:
 
 ---
 
-**Last Updated:** 2026-02-05  
+**Last Updated:** 2026-02-05
 **Maintainer:** Transformation Portal Architect

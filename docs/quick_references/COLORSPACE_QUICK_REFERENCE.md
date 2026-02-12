@@ -100,7 +100,7 @@ If you encounter linear verification errors in the APEX pipeline:
 # → Tensor is uint8 or uint16, not float32
 # Fix: Use preprocess_image_linear() instead of preprocess_image()
 
-# Error: RangeViolationError  
+# Error: RangeViolationError
 # → Values outside [0, 1]
 # Fix: Check input normalization (should be /255 for uint8, /65535 for uint16)
 
@@ -134,4 +134,3 @@ If you encounter linear verification errors in the APEX pipeline:
 - **Test output:** `processed_images/pool_pro_linear/750Picacho_Pool_compatible_pool-luxury.tiff`
 - **Documentation:** `LINEAR_COLORSPACE_IMPLEMENTATION.md`
 - **Code:** `pro_pipeline.py` (modified with linear support)
-

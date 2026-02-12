@@ -89,10 +89,7 @@ class InteractiveDocumentationSystem:
         self.tutorials: List[Tutorial] = []
         self.faq: List[FAQItem] = []
 
-    def generate_api_documentation(
-        self,
-        module_name: Optional[str] = None
-    ) -> List[APIDocumentation]:
+    def generate_api_documentation(self, module_name: Optional[str] = None) -> List[APIDocumentation]:
         """
         Generate API documentation from code.
 
@@ -124,15 +121,15 @@ class InteractiveDocumentationSystem:
                 name=entity.name,
                 entity_type=entity.entity_type,
                 signature=entity.signature,
-                docstring=parsed['description'],
-                parameters=parsed['parameters'],
+                docstring=parsed["description"],
+                parameters=parsed["parameters"],
                 return_type=entity.return_type,
-                return_description=parsed['returns'],
-                raises=parsed['raises'],
+                return_description=parsed["returns"],
+                raises=parsed["raises"],
                 examples=examples,
                 source_file=entity.file_path,
                 line_number=entity.line_number,
-                related_functions=related
+                related_functions=related,
             )
 
             docs.append(api_doc)
@@ -141,10 +138,7 @@ class InteractiveDocumentationSystem:
         print(f"Generated documentation for {len(docs)} entities")
         return docs
 
-    def generate_tutorials(
-        self,
-        workflow_patterns: Optional[List[str]] = None
-    ) -> List[Tutorial]:
+    def generate_tutorials(self, workflow_patterns: Optional[List[str]] = None) -> List[Tutorial]:
         """
         Generate tutorials from common workflows.
 
@@ -156,13 +150,7 @@ class InteractiveDocumentationSystem:
         """
         # Default workflow patterns
         if not workflow_patterns:
-            workflow_patterns = [
-                'depth_pipeline',
-                'material_response',
-                'video_grading',
-                'batch_processing',
-                'custom_lut'
-            ]
+            workflow_patterns = ["depth_pipeline", "material_response", "video_grading", "batch_processing", "custom_lut"]
 
         tutorials = []
 
@@ -174,10 +162,7 @@ class InteractiveDocumentationSystem:
         self.tutorials = tutorials
         return tutorials
 
-    def generate_faq(
-        self,
-        common_issues: Optional[List[str]] = None
-    ) -> List[FAQItem]:
+    def generate_faq(self, common_issues: Optional[List[str]] = None) -> List[FAQItem]:
         """
         Generate FAQ from common issues.
 
@@ -192,53 +177,52 @@ class InteractiveDocumentationSystem:
         # Common questions from code patterns
         common_questions = [
             {
-                'question': 'How do I process a batch of images?',
-                'category': 'batch_processing',
-                'search_terms': ['batch', 'process', 'multiple', 'images']
+                "question": "How do I process a batch of images?",
+                "category": "batch_processing",
+                "search_terms": ["batch", "process", "multiple", "images"],
             },
             {
-                'question': 'How do I add a custom LUT preset?',
-                'category': 'color_grading',
-                'search_terms': ['lut', 'preset', 'color', 'grade']
+                "question": "How do I add a custom LUT preset?",
+                "category": "color_grading",
+                "search_terms": ["lut", "preset", "color", "grade"],
             },
             {
-                'question': 'How do I optimize GPU performance?',
-                'category': 'performance',
-                'search_terms': ['gpu', 'cuda', 'mps', 'performance']
+                "question": "How do I optimize GPU performance?",
+                "category": "performance",
+                "search_terms": ["gpu", "cuda", "mps", "performance"],
             },
             {
-                'question': 'How do I preserve metadata?',
-                'category': 'metadata',
-                'search_terms': ['metadata', 'iptc', 'xmp', 'preserve']
+                "question": "How do I preserve metadata?",
+                "category": "metadata",
+                "search_terms": ["metadata", "iptc", "xmp", "preserve"],
             },
         ]
 
         for q_data in common_questions:
             # Search for relevant code
-            query = ' '.join(q_data['search_terms'])
+            query = " ".join(q_data["search_terms"])
             results = self.search.search(query, top_k=3)
 
             # Build answer from results
-            answer = self._build_faq_answer(q_data['question'], results)
+            answer = self._build_faq_answer(q_data["question"], results)
 
             # Find code example
             code_example = results[0].code_snippet if results else None
 
-            faq_items.append(FAQItem(
-                question=q_data['question'],
-                answer=answer,
-                category=q_data['category'],
-                code_example=code_example,
-                related_docs=[r.entity.file_path for r in results]
-            ))
+            faq_items.append(
+                FAQItem(
+                    question=q_data["question"],
+                    answer=answer,
+                    category=q_data["category"],
+                    code_example=code_example,
+                    related_docs=[r.entity.file_path for r in results],
+                )
+            )
 
         self.faq = faq_items
         return faq_items
 
-    def export_markdown_documentation(
-        self,
-        output_dir: str
-    ):
+    def export_markdown_documentation(self, output_dir: str):
         """
         Export documentation as Markdown.
 
@@ -249,30 +233,25 @@ class InteractiveDocumentationSystem:
         output_path.mkdir(parents=True, exist_ok=True)
 
         # Export API reference
-        self._export_api_reference(output_path / 'api')
+        self._export_api_reference(output_path / "api")
 
         # Export tutorials
-        self._export_tutorials(output_path / 'tutorials')
+        self._export_tutorials(output_path / "tutorials")
 
         # Export FAQ
-        self._export_faq(output_path / 'faq.md')
+        self._export_faq(output_path / "faq.md")
 
         print(f"Documentation exported to {output_path}")
 
     def _parse_docstring(self, docstring: str) -> Dict:
         """Parse Google-style docstring."""
-        parsed = {
-            'description': '',
-            'parameters': [],
-            'returns': None,
-            'raises': []
-        }
+        parsed = {"description": "", "parameters": [], "returns": None, "raises": []}
 
         if not docstring:
             return parsed
 
-        lines = docstring.split('\n')
-        current_section = 'description'
+        lines = docstring.split("\n")
+        current_section = "description"
         description_lines = []
         param_lines = []
         return_lines = []
@@ -281,46 +260,46 @@ class InteractiveDocumentationSystem:
         for line in lines:
             line = line.strip()
 
-            if line.startswith('Args:'):
-                current_section = 'args'
+            if line.startswith("Args:"):
+                current_section = "args"
                 continue
-            elif line.startswith('Returns:'):
-                current_section = 'returns'
+            elif line.startswith("Returns:"):
+                current_section = "returns"
                 continue
-            elif line.startswith('Raises:'):
-                current_section = 'raises'
+            elif line.startswith("Raises:"):
+                current_section = "raises"
                 continue
 
-            if current_section == 'description':
+            if current_section == "description":
                 description_lines.append(line)
-            elif current_section == 'args':
+            elif current_section == "args":
                 param_lines.append(line)
-            elif current_section == 'returns':
+            elif current_section == "returns":
                 return_lines.append(line)
-            elif current_section == 'raises':
+            elif current_section == "raises":
                 raise_lines.append(line)
 
-        parsed['description'] = '\n'.join(description_lines).strip()
+        parsed["description"] = "\n".join(description_lines).strip()
 
         # Parse parameters
         for line in param_lines:
-            if ':' in line:
-                match = re.match(r'(\w+)\s*(?:\(([^)]+)\))?\s*:\s*(.*)', line)
+            if ":" in line:
+                match = re.match(r"(\w+)\s*(?:\(([^)]+)\))?\s*:\s*(.*)", line)
                 if match:
                     param_name, param_type, param_desc = match.groups()
-                    parsed['parameters'].append((param_name, param_type, param_desc))
+                    parsed["parameters"].append((param_name, param_type, param_desc))
 
         # Parse returns
         if return_lines:
-            parsed['returns'] = ' '.join(return_lines).strip()
+            parsed["returns"] = " ".join(return_lines).strip()
 
         # Parse raises
         for line in raise_lines:
-            if ':' in line:
-                match = re.match(r'(\w+)\s*:\s*(.*)', line)
+            if ":" in line:
+                match = re.match(r"(\w+)\s*:\s*(.*)", line)
                 if match:
                     exception_type, desc = match.groups()
-                    parsed['raises'].append((exception_type, desc))
+                    parsed["raises"].append((exception_type, desc))
 
         return parsed
 
@@ -329,22 +308,18 @@ class InteractiveDocumentationSystem:
         examples = []
 
         # Search in test files
-        results = self.search.retriever.retrieve(
-            entity_name,
-            top_k=10,
-            chunk_type_filter=['test']
-        )
+        results = self.search.retriever.retrieve(entity_name, top_k=10, chunk_type_filter=["test"])
 
         for result in results:
             if entity_name in result.content:
                 # Extract usage lines
-                lines = result.content.split('\n')
+                lines = result.content.split("\n")
                 for i, line in enumerate(lines):
-                    if entity_name in line and '(' in line:
+                    if entity_name in line and "(" in line:
                         # Get context (3 lines before and after)
                         start = max(0, i - 3)
                         end = min(len(lines), i + 4)
-                        example = '\n'.join(lines[start:end])
+                        example = "\n".join(lines[start:end])
                         examples.append(example)
                         break
 
@@ -366,10 +341,7 @@ class InteractiveDocumentationSystem:
 
         return list(set(related))[:5]  # Top 5 unique
 
-    def _create_tutorial_for_workflow(
-        self,
-        workflow_pattern: str
-    ) -> Optional[Tutorial]:
+    def _create_tutorial_for_workflow(self, workflow_pattern: str) -> Optional[Tutorial]:
         """Create tutorial for a workflow pattern."""
         # Search for entities related to this workflow
         results = self.search.search(workflow_pattern, top_k=10)
@@ -378,35 +350,32 @@ class InteractiveDocumentationSystem:
             return None
 
         # Determine difficulty based on complexity
-        avg_complexity = sum(
-            r.entity.complexity for r in results if r.entity.complexity > 0
-        ) / len(results)
+        avg_complexity = sum(r.entity.complexity for r in results if r.entity.complexity > 0) / len(results)
 
         if avg_complexity > 15:
-            difficulty = 'advanced'
+            difficulty = "advanced"
             estimated_time = 45
         elif avg_complexity > 8:
-            difficulty = 'intermediate'
+            difficulty = "intermediate"
             estimated_time = 30
         else:
-            difficulty = 'beginner'
+            difficulty = "beginner"
             estimated_time = 15
 
         # Build tutorial steps
         steps = []
 
         # Step 1: Setup
-        steps.append((
-            "Setup and Imports",
-            f"First, import the necessary modules for {workflow_pattern}."
-        ))
+        steps.append(("Setup and Imports", f"First, import the necessary modules for {workflow_pattern}."))
 
         # Step 2-N: Based on top results
         for i, result in enumerate(results[:3], 2):
-            steps.append((
-                f"Step {i}: Use {result.entity.name}",
-                result.entity.docstring or f"Apply {result.entity.name} to process your data."
-            ))
+            steps.append(
+                (
+                    f"Step {i}: Use {result.entity.name}",
+                    result.entity.docstring or f"Apply {result.entity.name} to process your data.",
+                )
+            )
 
         # Collect code examples
         code_examples = [r.code_snippet for r in results[:3]]
@@ -419,17 +388,13 @@ class InteractiveDocumentationSystem:
             description=f"Learn how to use the {workflow_pattern} workflow.",
             difficulty=difficulty,
             estimated_time_minutes=estimated_time,
-            prerequisites=['Python 3.10+', 'Basic image processing knowledge'],
+            prerequisites=["Python 3.10+", "Basic image processing knowledge"],
             steps=steps,
             code_examples=code_examples,
-            related_apis=related_apis
+            related_apis=related_apis,
         )
 
-    def _build_faq_answer(
-        self,
-        question: str,
-        search_results: List
-    ) -> str:
+    def _build_faq_answer(self, question: str, search_results: List) -> str:
         """Build FAQ answer from search results."""
         if not search_results:
             return "No specific answer found. Please check the documentation or ask for help."
@@ -440,7 +405,7 @@ class InteractiveDocumentationSystem:
         answer = f"To {question.lower()[7:]}, you can use `{top_result.entity.name}`.\n\n"
 
         if top_result.entity.docstring:
-            answer += top_result.entity.docstring.split('\n')[0] + '\n\n'
+            answer += top_result.entity.docstring.split("\n")[0] + "\n\n"
 
         answer += f"See {top_result.entity.file_path}:{top_result.entity.line_number} for implementation details."
 
@@ -457,7 +422,7 @@ class InteractiveDocumentationSystem:
             by_module[module].append(doc)
 
         # Create index
-        with open(output_dir / 'README.md', 'w') as f:
+        with open(output_dir / "README.md", "w") as f:
             f.write("# API Reference\n\n")
             f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n")
             f.write("## Modules\n\n")
@@ -467,7 +432,7 @@ class InteractiveDocumentationSystem:
 
         # Create module docs
         for module, docs in by_module.items():
-            with open(output_dir / f"{module}.md", 'w') as f:
+            with open(output_dir / f"{module}.md", "w") as f:
                 f.write(f"# {module}\n\n")
 
                 for doc in sorted(docs, key=lambda x: x.name):
@@ -506,7 +471,7 @@ class InteractiveDocumentationSystem:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Create index
-        with open(output_dir / 'README.md', 'w') as f:
+        with open(output_dir / "README.md", "w") as f:
             f.write("# Tutorials\n\n")
 
             # Group by difficulty
@@ -514,20 +479,20 @@ class InteractiveDocumentationSystem:
             for tutorial in self.tutorials:
                 by_difficulty[tutorial.difficulty].append(tutorial)
 
-            for difficulty in ['beginner', 'intermediate', 'advanced']:
+            for difficulty in ["beginner", "intermediate", "advanced"]:
                 if difficulty in by_difficulty:
                     f.write(f"## {difficulty.title()}\n\n")
                     for tutorial in by_difficulty[difficulty]:
-                        filename = tutorial.title.lower().replace(' ', '_') + '.md'
+                        filename = tutorial.title.lower().replace(" ", "_") + ".md"
                         f.write(f"- [{tutorial.title}]({filename}) ")
                         f.write(f"({tutorial.estimated_time_minutes} min)\n")
                     f.write("\n")
 
         # Create individual tutorials
         for tutorial in self.tutorials:
-            filename = tutorial.title.lower().replace(' ', '_') + '.md'
+            filename = tutorial.title.lower().replace(" ", "_") + ".md"
 
-            with open(output_dir / filename, 'w') as f:
+            with open(output_dir / filename, "w") as f:
                 f.write(f"# {tutorial.title}\n\n")
                 f.write(f"**Difficulty:** {tutorial.difficulty}\n")
                 f.write(f"**Estimated Time:** {tutorial.estimated_time_minutes} minutes\n\n")
@@ -556,7 +521,7 @@ class InteractiveDocumentationSystem:
 
     def _export_faq(self, output_file: Path):
         """Export FAQ as Markdown."""
-        with open(output_file, 'w') as f:
+        with open(output_file, "w") as f:
             f.write("# Frequently Asked Questions\n\n")
 
             # Group by category
@@ -589,7 +554,7 @@ class InteractiveDocumentationSystem:
         name = path.stem
 
         # Get parent if in a package
-        if path.parent.name not in {'.', 'src', 'tests'}:
+        if path.parent.name not in {".", "src", "tests"}:
             name = f"{path.parent.name}_{name}"
 
         return name
@@ -599,10 +564,10 @@ def main():
     """CLI for documentation generation."""
     import argparse
 
-    parser = argparse.ArgumentParser(description='Interactive Documentation System')
-    parser.add_argument('--repo-root', default='.', help='Repository root')
-    parser.add_argument('--output', default='docs/generated', help='Output directory')
-    parser.add_argument('--module', help='Specific module to document')
+    parser = argparse.ArgumentParser(description="Interactive Documentation System")
+    parser.add_argument("--repo-root", default=".", help="Repository root")
+    parser.add_argument("--output", default="docs/generated", help="Output directory")
+    parser.add_argument("--module", help="Specific module to document")
 
     args = parser.parse_args()
 
@@ -635,5 +600,5 @@ def main():
     print(f"  FAQ items: {len(faq)}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -1,8 +1,8 @@
 # CI Health and Tranche Execution — Architect Directive
 
-**Authority**: Transformation Portal Architect  
-**Date**: 2026-02-04  
-**Status**: BINDING  
+**Authority**: Transformation Portal Architect
+**Date**: 2026-02-04
+**Status**: BINDING
 **Effective**: Immediate
 
 ---
@@ -37,8 +37,8 @@ Current CI status:
 
 ### Gate 0: CI Baseline Stabilization
 
-**Timeline**: 2-3 days  
-**Owner**: Repository Maintainer  
+**Timeline**: 2-3 days
+**Owner**: Repository Maintainer
 **Blocking**: All tranche work
 
 **Required deliverables**:
@@ -227,7 +227,7 @@ This directive is **binding** under Transformation Portal Architect authority:
 
 ### Risk 1: Baseline Formatting PR Too Large
 
-**Likelihood**: High (265 files is significant)  
+**Likelihood**: High (265 files is significant)
 **Impact**: Medium (noisy git blame history, large diff to review)
 
 **Mitigation**:
@@ -238,7 +238,7 @@ This directive is **binding** under Transformation Portal Architect authority:
 
 ### Risk 2: CI Changes Break Existing Workflows
 
-**Likelihood**: Medium  
+**Likelihood**: Medium
 **Impact**: High (blocks all PRs)
 
 **Mitigation**:
@@ -249,7 +249,7 @@ This directive is **binding** under Transformation Portal Architect authority:
 
 ### Risk 3: Tranche Work Takes Longer Than Estimated
 
-**Likelihood**: Medium (always true for estimation)  
+**Likelihood**: Medium (always true for estimation)
 **Impact**: Low (affects timeline, not quality)
 
 **Mitigation**:
@@ -307,7 +307,7 @@ This directive is **binding** under Transformation Portal Architect authority:
 
 ### Announcement (Post-Directive)
 
-**To**: Repository maintainers, contributors  
+**To**: Repository maintainers, contributors
 **Subject**: New CI Health Directive — Gate 0 Required Before Tranche Work
 
 **Message**:
@@ -345,9 +345,9 @@ The Transformation Portal Architect has issued a binding directive regarding CI 
 
 ## Approval and Effective Date
 
-**Approved by**: Transformation Portal Architect  
-**Date**: 2026-02-04  
-**Effective**: Immediate  
+**Approved by**: Transformation Portal Architect
+**Date**: 2026-02-04
+**Effective**: Immediate
 **Review**: After Tranche 1 completion (3 weeks post-Gate 0)
 
 **Binding status**: This directive is enforceable under the Transformation Portal Architect authority scope defined in `docs/architecture/agent_governance.md`.

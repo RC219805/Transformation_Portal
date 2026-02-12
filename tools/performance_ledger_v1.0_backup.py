@@ -236,9 +236,7 @@ def capture_environment() -> EnvironmentMetadata:
     )
 
 
-def detect_regressions(
-    baseline: Baseline, current_stats: Statistics, thresholds: Dict[str, float]
-) -> List[Regression]:
+def detect_regressions(baseline: Baseline, current_stats: Statistics, thresholds: Dict[str, float]) -> List[Regression]:
     """Compare current stats against baseline and detect regressions.
 
     Args:
@@ -524,7 +522,9 @@ def main() -> int:
                 return 0
 
         else:
-            logger.error("Invalid arguments. Use --manifests-dir --output for baseline capture, or --baseline --compare --output for comparison")
+            logger.error(
+                "Invalid arguments. Use --manifests-dir --output for baseline capture, or --baseline --compare --output for comparison"
+            )
             return 1
 
     except Exception as e:

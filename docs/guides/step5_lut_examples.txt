@@ -49,7 +49,7 @@ Score: 6.804
 def example_cli_usage():
     """Example: Show CLI usage."""
     _info("=== CLI Usage Examples ===")
-    
+
     _info("\n1. Single image with VFX:")
     _info("   python realize_v8_unified_cli_extension.py enhance-vfx \\")
     _info("       --input interior.jpg \\")
@@ -57,7 +57,7 @@ def example_cli_usage():
     _info("       --base-preset signature_estate_agx \\")
     _info("       --vfx-preset cinematic_fog \\")
     _info("       --material-response")
-    
+
     _info("\n2. Batch processing:")
     _info("   python realize_v8_unified_cli_extension.py batch-vfx \\")
     _info("       --input renders/ \\")
@@ -65,7 +65,7 @@ def example_cli_usage():
     _info("       --base-preset signature_estate \\")
     _info("       --vfx-preset dramatic_dof \\")
     _info("       --jobs 4")
-    
+
     _info("\n3. With custom LUT:")
     _info("   python realize_v8_unified_cli_extension.py enhance-vfx \\")
     _info("       --input interior.jpg \\")
@@ -175,5 +175,3 @@ def format_help_text(format_type: str = 'image') -> str:
         )
     else:
         raise ValueError(f"Invalid format_type: {format_type}")
-
-

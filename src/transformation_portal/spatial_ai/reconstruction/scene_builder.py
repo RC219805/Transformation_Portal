@@ -1,0 +1,304 @@
+"""Multi-view scene construction with depth and material integration.
+
+Orchestrates 3D reconstruction pipeline:
+1. Multi-view image loading and preprocessing
+2. Integration with depth maps (Phase 1)
+3. Integration with segmentation masks (Phase 2.1)
+4. Integration with PBR textures (Phase 2.2)
+5. Scene optimization and validation
+
+Architecture:
+- Lazy loading of dependencies
+- Progressive reconstruction (coarse-to-fine)
+- Memory-efficient batch processing
+- Integration hooks for all spatial_ai phases
+"""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
+
+from .contracts import CameraParams, ReconstructionInput, Scene3D
+from .gaussian_backend import GaussianBackend
+
+logger = logging.getLogger(__name__)
+
+
+class SceneBuilder:
+    """Multi-view scene construction with phase integration.
+
+    Builds 3D scenes from multi-view images with optional:
+    - Depth priors from Phase 1 (LinearDecoder)
+    - Segmentation masks from Phase 2.1 (SAM2)
+    - PBR textures from Phase 2.2 (MaterialBackend)
+
+    Usage:
+        >>> builder = SceneBuilder(tier="apex_research")
+        >>> scene = builder.build_from_images(
+        ...     image_paths=["view1.png", "view2.png", "view3.png"],
+        ...     cameras=cameras,
+        ...     depth_maps=depth_maps,
+        ... )
+        >>> print(f"Scene quality: {scene.quality_score:.1f}/100")
+    """
+
+    def __init__(
+        self,
+        tier: str = "apex_research",
+        device: Optional[str] = None,
+        backend_config: Optional[Dict[str, Any]] = None,
+    ):
+        """Initialize scene builder.
+
+        Args:
+            tier: Tier restriction for license enforcement.
+            device: Device for computation ("cuda", "mps", "cpu").
+            backend_config: Optional backend configuration overrides.
+        """
+        self.tier = tier
+        self.device = device
+        self.backend_config = backend_config or {}
+
+        # Lazy backend initialization
+        self._backend: Optional[GaussianBackend] = None
+
+        logger.info(f"SceneBuilder initialized (tier={tier})")
+
+    @property
+    def backend(self) -> GaussianBackend:
+        """Lazy-load Gaussian backend."""
+        if self._backend is None:
+            self._backend = GaussianBackend(tier=self.tier, device=self.device, **self.backend_config)
+        return self._backend
+
+    def build_from_images(
+        self,
+        image_paths: List[Path],
+        cameras: List[CameraParams],
+        depth_maps: Optional[List[np.ndarray]] = None,
+        masks: Optional[List[np.ndarray]] = None,
+        material_maps: Optional[List[Dict[str, np.ndarray]]] = None,
+        iterations: int = 30000,
+        gamma: float = 1.0,
+    ) -> Scene3D:
+        """Build 3D scene from image files.
+
+        Args:
+            image_paths: Paths to multi-view images.
+            cameras: Camera parameters for each view.
+            depth_maps: Optional depth priors (H, W) float32.
+            masks: Optional segmentation masks (H, W) bool.
+            material_maps: Optional PBR texture maps.
+            iterations: Optimization iterations.
+            gamma: Gamma value (must be 1.0 for linear RGB).
+
+        Returns:
+            Reconstructed 3D scene.
+
+        Raises:
+            ValueError: If input validation fails.
+            FileNotFoundError: If image files not found.
+        """
+        # Load images
+        images = self._load_images(image_paths, gamma)
+
+        # Build reconstruction input
+        reconstruction_input = ReconstructionInput(
+            images=images,
+            gamma=gamma,
+            cameras=cameras,
+            depth_maps=depth_maps,
+            masks=masks,
+            material_maps=material_maps,
+            tier=self.tier,
+        )
+
+        # Reconstruct scene
+        scene = self.backend.reconstruct(
+            reconstruction_input,
+            iterations=iterations,
+            use_depth_prior=(depth_maps is not None),
+            use_segmentation=(masks is not None),
+            use_pbr_textures=(material_maps is not None),
+        )
+
+        return scene
+
+    def build_from_arrays(
+        self,
+        images: List[np.ndarray],
+        cameras: List[CameraParams],
+        depth_maps: Optional[List[np.ndarray]] = None,
+        masks: Optional[List[np.ndarray]] = None,
+        material_maps: Optional[List[Dict[str, np.ndarray]]] = None,
+        iterations: int = 30000,
+        gamma: float = 1.0,
+    ) -> Scene3D:
+        """Build 3D scene from numpy arrays (in-memory).
+
+        Args:
+            images: Multi-view images (H, W, 3) float32 in linear RGB.
+            cameras: Camera parameters for each view.
+            depth_maps: Optional depth priors (H, W) float32.
+            masks: Optional segmentation masks (H, W) bool.
+            material_maps: Optional PBR texture maps.
+            iterations: Optimization iterations.
+            gamma: Gamma value (must be 1.0 for linear RGB).
+
+        Returns:
+            Reconstructed 3D scene.
+        """
+        # Build reconstruction input
+        reconstruction_input = ReconstructionInput(
+            images=images,
+            gamma=gamma,
+            cameras=cameras,
+            depth_maps=depth_maps,
+            masks=masks,
+            material_maps=material_maps,
+            tier=self.tier,
+        )
+
+        # Reconstruct scene
+        scene = self.backend.reconstruct(
+            reconstruction_input,
+            iterations=iterations,
+            use_depth_prior=(depth_maps is not None),
+            use_segmentation=(masks is not None),
+            use_pbr_textures=(material_maps is not None),
+        )
+
+        return scene
+
+    def _load_images(self, image_paths: List[Path], gamma: float) -> List[np.ndarray]:
+        """Load images from disk as linear RGB float32.
+
+        Args:
+            image_paths: Paths to image files.
+            gamma: Gamma value for linearization.
+
+        Returns:
+            List of images (H, W, 3) float32.
+
+        Raises:
+            FileNotFoundError: If image file not found.
+            ValueError: If gamma != 1.0 (must be pre-linearized).
+        """
+        if abs(gamma - 1.0) > 1e-6:
+            raise ValueError(
+                f"SceneBuilder requires gamma=1.0 (pre-linearized images), got {gamma}. "
+                "Linearize images before passing to SceneBuilder."
+            )
+
+        images = []
+        for path in image_paths:
+            if not path.exists():
+                raise FileNotFoundError(f"Image not found: {path}")
+
+            # Load image
+            from PIL import Image
+
+            img = Image.open(path)
+            img_array = np.array(img).astype(np.float32) / 255.0
+
+            # Ensure RGB
+            if img_array.ndim == 2:
+                img_array = np.stack([img_array] * 3, axis=-1)
+            elif img_array.shape[2] == 4:
+                img_array = img_array[:, :, :3]  # Drop alpha
+
+            images.append(img_array)
+
+        return images
+
+    def render_novel_view(self, scene: Scene3D, camera: CameraParams) -> np.ndarray:
+        """Render novel view from reconstructed scene.
+
+        Args:
+            scene: Reconstructed 3D scene.
+            camera: Target camera viewpoint.
+
+        Returns:
+            Rendered image (H, W, 3) float32 in linear RGB.
+        """
+        return self.backend.render_view(scene, camera)
+
+    def extract_camera_path(
+        self,
+        scene: Scene3D,
+        num_frames: int = 100,
+        interpolation: str = "linear",
+    ) -> List[CameraParams]:
+        """Extract smooth camera path for video rendering.
+
+        IMPORTANT: This is a SIMPLIFIED PLACEHOLDER implementation.
+
+        KNOWN ISSUE: Linear interpolation of 4x4 extrinsic matrices is
+        mathematically incorrect - it produces sheared/skewed rotations.
+
+        PRODUCTION REQUIREMENTS:
+        - Decompose extrinsics into translation + rotation (R|t)
+        - Interpolate translation with LERP
+        - Interpolate rotation with SLERP (spherical linear interpolation)
+        - Optionally use spline interpolation for smooth paths
+
+        Current implementation is suitable for:
+        - Testing and development only
+        - Scenes where cameras are close together (minimal rotation)
+        - Placeholder for future proper implementation
+
+        Args:
+            scene: Reconstructed 3D scene.
+            num_frames: Number of frames in camera path.
+            interpolation: Interpolation method ("linear" or "spline").
+                          Currently ignored - only linear is implemented.
+
+        Returns:
+            List of camera parameters along path.
+
+        Raises:
+            ValueError: If scene has fewer than 2 cameras.
+            NotImplementedError: If interpolation != "linear"
+        """
+        if len(scene.cameras) < 2:
+            raise ValueError("Need at least 2 cameras for path extraction")
+
+        if interpolation != "linear":
+            raise NotImplementedError(
+                f"Interpolation method '{interpolation}' not implemented. "
+                "Only 'linear' is supported (with known limitations)."
+            )
+
+        logger.warning(
+            "extract_camera_path uses simplified linear interpolation which "
+            "produces mathematically incorrect rotation blending. "
+            "Use only for testing or scenes with minimal camera rotation. "
+            "See method docstring for production requirements."
+        )
+
+        cam0 = scene.cameras[0]
+        cam1 = scene.cameras[-1]
+
+        path = []
+        for i in range(num_frames):
+            t = i / (num_frames - 1)
+
+            # TODO: Replace with proper SLERP interpolation
+            # This naive interpolation produces sheared rotations
+            extrinsics = cam0.extrinsics * (1 - t) + cam1.extrinsics * t
+
+            # Copy intrinsics from first camera
+            cam = CameraParams(
+                intrinsics=cam0.intrinsics.copy(),
+                extrinsics=extrinsics,
+                width=cam0.width,
+                height=cam0.height,
+                camera_id=f"path_{i:04d}",
+            )
+            path.append(cam)
+
+        return path

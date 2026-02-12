@@ -12,11 +12,27 @@ def run_autopep8_fix():
     """Auto-fix formatting issues."""
     print("🔧 Running autopep8 auto-fixes...")
     cmd = [
-        "find", ".", "-name", "*.py", "-type", "f",
-        "!", "-path", "./deprecated/*",
-        "!", "-path", "./src/transformation_portal/*",
-        "!", "-path", "./.venv/*",
-        "-exec", "autopep8", "--in-place", "--max-line-length=127", "{}", ";"
+        "find",
+        ".",
+        "-name",
+        "*.py",
+        "-type",
+        "f",
+        "!",
+        "-path",
+        "./deprecated/*",
+        "!",
+        "-path",
+        "./src/transformation_portal/*",
+        "!",
+        "-path",
+        "./.venv/*",
+        "-exec",
+        "autopep8",
+        "--in-place",
+        "--max-line-length=127",
+        "{}",
+        ";",
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if result.returncode != 0:
@@ -30,12 +46,13 @@ def check_critical_errors():
     """Check for critical flake8 errors only."""
     print("\n🔍 Checking for critical errors (undefined names, syntax errors)...")
     cmd = [
-        "flake8", ".",
+        "flake8",
+        ".",
         "--count",
         "--select=E9,F63,F7,F82",  # Critical errors only
         "--show-source",
         "--statistics",
-        "--exclude=deprecated/,src/transformation_portal/,.venv/,.backup_local/,projects/"
+        "--exclude=deprecated/,src/transformation_portal/,.venv/,.backup_local/,projects/",
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
 
@@ -50,9 +67,10 @@ def check_imports():
     """Check for import-related issues."""
     print("\n📦 Checking imports...")
     cmd = [
-        "flake8", ".",
+        "flake8",
+        ".",
         "--select=F401,F811",  # Unused imports, redefined names
-        "--exclude=deprecated/,src/transformation_portal/,.venv/,.backup_local/,projects/,tests/"
+        "--exclude=deprecated/,src/transformation_portal/,.venv/,.backup_local/,projects/,tests/",
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
 
@@ -73,7 +91,7 @@ def check_dataclass_errors():
             continue
 
         try:
-            with open(py_file, 'r') as f:
+            with open(py_file, "r") as f:
                 lines = f.readlines()
                 in_dataclass = False
                 for i, line in enumerate(lines, 1):
@@ -81,7 +99,7 @@ def check_dataclass_errors():
                         in_dataclass = True
                     elif in_dataclass and "class " in line:
                         # Check next 20 lines for parameter issues
-                        for j in range(i, min(i+20, len(lines))):
+                        for j in range(i, min(i + 20, len(lines))):
                             if "finish_type=" in lines[j] and "finish_type:" in lines[j]:
                                 issues.append(f"{py_file}:{j+1} - Possible duplicate parameter")
                         in_dataclass = False
@@ -105,9 +123,9 @@ def check_trailing_whitespace():
             continue
 
         try:
-            with open(py_file, 'r') as f:
+            with open(py_file, "r") as f:
                 lines = f.readlines()
-                ws_lines = [i+1 for i, line in enumerate(lines) if line.endswith(' \n') or line.endswith('\t\n')]
+                ws_lines = [i + 1 for i, line in enumerate(lines) if line.endswith(" \n") or line.endswith("\t\n")]
                 if len(ws_lines) > 10:  # More than 10 lines with trailing whitespace
                     issues += 1
                     print(f"  {py_file}: {len(ws_lines)} lines with trailing whitespace")

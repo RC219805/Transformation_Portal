@@ -282,7 +282,7 @@ import luxury_tiff_batch_processor as ltiff  # noqa: E402  # pylint: disable=wro
 import luxury_tiff_batch_processor as ltiff  # noqa: E402  # pylint: disable=wrong-import-position,consider-using-from-import,no-member
 ```
 
-**Impact:** 
+**Impact:**
 - Fixed 50+ pylint false positive errors (E1101: no-member)
 - Pylint score improved from 9.76/10 to 10.00/10
 - All 30 tests continue to pass
