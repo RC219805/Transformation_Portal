@@ -178,10 +178,24 @@ class TestMaterialsPerformance:
         performance_ledger.record("materials_heuristic_1024", duration, metadata)
         performance_ledger.save()
 
-        # Heuristic backend should be fast (<1s typically)
+        # Heuristic backend should be fast (<1s typically, <20s on CI runners)
         print(f"\nMaterials 1024x1024 (heuristic): {duration:.2f}s")
-        print("Target: <10s (neural), <1s (heuristic)")
-        assert duration < 10.0, f"Materials too slow: {duration:.2f}s > 10s"
+        print("Target: <10s (neural), <1s (heuristic on local), <20s (CI runner variance)")
+
+        # Warnings-only approach until L0.2 baseline comparison is implemented
+        # (per benchmark CI policy: tests/benchmarks/README.md)
+        if duration > 10.0:
+            import warnings
+
+            warnings.warn(
+                f"Materials processing slower than target: {duration:.2f}s > 10s. "
+                f"This may indicate CI runner variance or a genuine regression. "
+                f"Will be enforced as blocking once baseline comparison is implemented.",
+                UserWarning,
+            )
+
+        # Hard limit to catch catastrophic regressions (e.g., infinite loops)
+        assert duration < 30.0, f"Materials critically slow: {duration:.2f}s > 30s (likely a bug)"
 
     def test_materials_performance_baseline_exists(self, performance_ledger):
         """Document materials performance baseline."""
