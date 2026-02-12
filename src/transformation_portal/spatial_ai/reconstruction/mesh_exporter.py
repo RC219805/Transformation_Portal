@@ -1,9 +1,13 @@
 """Mesh export capabilities for 3D scenes.
 
 Exports Gaussian splats to standard mesh formats:
-- PLY (Point Cloud with attributes)
-- OBJ (Mesh with vertex colors)
+- PLY (Point Cloud with attributes) - RECOMMENDED for vertex colors
+- OBJ (Mesh with vertex colors) - Limited scalability, see warnings
 - GLTF (Future: PBR materials)
+
+IMPORTANT: For large Gaussian splat scenes (100K+ points), prefer PLY format.
+OBJ vertex color export creates O(N) material definitions which can produce
+multi-GB MTL files for realistic scene sizes.
 
 Architecture:
 - Format-specific writers with validation
@@ -157,17 +161,21 @@ class MeshExporter:
     ) -> None:
         """Export scene to OBJ mesh format.
 
-        Note: OBJ has limited Gaussian support. This creates a point cloud
-        representation with optional vertex colors in MTL file.
+        WARNING: OBJ vertex color export uses per-vertex materials which
+        creates O(N) material definitions. For realistic Gaussian splat counts
+        (100K-1M+), this will produce extremely large MTL files.
+
+        RECOMMENDED: Use PLY format for vertex colors instead.
+        This method is provided for compatibility but may not scale well.
 
         Args:
             scene: 3D scene to export.
             output_path: Output file path (.obj).
-            vertex_colors: Export vertex colors to MTL file.
+            vertex_colors: Export vertex colors to MTL file (not recommended for large scenes).
             subsample_factor: Downsample factor (1 = no downsampling).
 
         Raises:
-            ValueError: If scene validation fails.
+            ValueError: If scene validation fails or vertex count exceeds safe limits.
             IOError: If file write fails.
         """
         output_path = Path(output_path)
@@ -185,6 +193,13 @@ class MeshExporter:
             colors = splats.colors
 
         N = len(positions)
+
+        # Warn about scalability for large vertex counts
+        if vertex_colors and N > 10000:
+            logger.warning(
+                f"OBJ export with {N} vertex colors will create {N} materials. "
+                f"Consider using PLY format or disabling vertex_colors for better scalability."
+            )
 
         logger.info(f"Exporting {N} vertices to OBJ: {output_path}")
 
