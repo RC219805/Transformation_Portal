@@ -7,7 +7,7 @@ as part of the v2.1 Optimization Roadmap.
 
 The benchmark suite provides:
 - **Baseline performance measurement** (p50/p95 runtime, throughput)
-- **Memory tracking** (post-processing RSS, incremental usage)
+- **Memory tracking** (peak RSS via polling thread, processing-only window)
 - **Output invariants validation** (dtype, range, shape checks)
 - **Regression detection** (automated threshold checks - planned L0.2)
 
@@ -101,10 +101,12 @@ markexpr: "not ml and not slow and not benchmark"
 5. **`test_memory_peak_rss_baseline`**
    - **Type:** PEAK RSS via polling thread (true high-water mark)
    - **What:** Polls RSS at ~5ms intervals during processing to capture peak
+   - **Semantic:** Processing-only — baseline taken after orchestrator init
+   - **Guarantee:** First-sample barrier ensures polling starts before workload
    - **Captures:** Transient allocation spikes missed by post-completion snapshots
    - **Use Case:** Detecting memory leaks and regression in allocation patterns
    - **Requires:** psutil (skips gracefully if unavailable)
-   - **Artifact:** `baseline_memory.json`
+   - **Artifact:** `baseline_memory.json` (includes `sample_count`, `sampling_interval_s`)
 
 **Guard Tests:**
 
