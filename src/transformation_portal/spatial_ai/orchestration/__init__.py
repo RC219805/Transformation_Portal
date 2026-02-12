@@ -33,12 +33,13 @@ Architecture (ADR-027, ADR-028):
 from __future__ import annotations
 
 from .error_handler import ErrorHandler, ErrorRecoveryStrategy, PipelineError
-from .pipeline import PipelineResult, SpatialAIPipeline
+from .pipeline import PipelineConfig, PipelineResult, SpatialAIPipeline
 from .progress_tracker import ProgressEvent, ProgressTracker
 from .resource_manager import ResourceLimits, ResourceManager
 
 __all__ = [
     "SpatialAIPipeline",
+    "PipelineConfig",
     "PipelineResult",
     "ResourceManager",
     "ResourceLimits",

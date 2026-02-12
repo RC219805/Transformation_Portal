@@ -47,16 +47,18 @@ pipeline:
     normal_strength: 1.2
     ao_intensity: 0.8
 
-  reconstruction:
-    enabled: false  # Enable when needed (requires multi-view input)
-    backend: gaussian_splatting
-    quality:
-      rmse_threshold: 0.02  # 2% error target
-      max_iterations: 30000
-      densification_interval: 100
-    output_formats:
-      - ply
-      - splat
+# Note: Reconstruction stage is optional and requires multi-view input
+# Uncomment and add to pipeline section to enable (tier: apex_research required)
+#   reconstruct:
+#     enabled: true
+#     backend: gaussian_splatting
+#     quality:
+#       rmse_threshold: 0.02  # 2% error target
+#       max_iterations: 30000
+#       densification_interval: 100
+#     output_formats:
+#       - ply
+#       - splat
 
 # Resource limits (higher for research tier)
 resource_limits:
