@@ -1,0 +1,36 @@
+{
+  "materials_heuristic_1024": {
+    "baseline": 4.449157953262329,
+    "measurements": [
+      {
+        "duration": 4.449157953262329,
+        "timestamp": 1770858242.192961
+      },
+      {
+        "duration": 4.4562623500823975,
+        "timestamp": 1770858278.4557528
+      },
+      {
+        "duration": 4.500155210494995,
+        "timestamp": 1770858294.833764
+      },
+      {
+        "duration": 4.202737331390381,
+        "timestamp": 1770860211.2630389
+      }
+    ],
+    "metadata": {
+      "image_size": "1024x1024",
+      "hardware": {
+        "platform": "Darwin",
+        "processor": "arm",
+        "python_version": "3.11.14",
+        "torch_version": "2.10.0",
+        "cuda_available": false,
+        "mps_available": true,
+        "gpu_name": "Apple Metal Performance Shaders"
+      },
+      "backend": "heuristic"
+    }
+  }
+}
