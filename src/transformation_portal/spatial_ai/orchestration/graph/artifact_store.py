@@ -19,13 +19,22 @@ Storage Layout:
     ├── artifacts/
     │   ├── ab/
     │   │   ├── ab3f5e8b2c1d4.npz        # Artifact data
-    │   │   └── ab3f5e8b2c1d4.json       # Provenance metadata
+    │   │   ├── ab3f5e8b2c1d4.json       # Provenance metadata
+    │   │   └── ab3f5e8b2c1d4.committed  # Commit marker (transactional)
     │   └── ...
     ├── locks/                           # Per-key lock files
     │   ├── ab3f5e8b2c1d4.lock
     │   └── ...
     ├── stats.lock                       # Global stats lock
     └── stats.json                       # Cache statistics (size, hits, misses)
+
+Transactional Commit (Issue #929):
+    Artifact + provenance are written atomically via temp+rename, then a
+    ".committed" marker file is atomically created. Readers only trust
+    entries where the marker is present. This ensures all-or-nothing
+    visibility: if the process crashes between writing artifact/provenance
+    and creating the marker, the entry is treated as uncommitted and
+    ignored (cleaned up by the scavenger).
 
 Key Features:
 1. Content Addressing: SHA256-based cache keys from inputs + config
@@ -406,13 +415,13 @@ class ArtifactStore:
                     logger.warning(f"Error releasing stats lock: {e}")
 
     def exists(self, cache_key: str) -> bool:
-        """Check if artifact exists in cache (lock-free, advisory only).
+        """Check if committed artifact exists in cache (lock-free, advisory only).
 
         Args:
             cache_key: Content-addressed cache key.
 
         Returns:
-            True if artifact exists, False otherwise.
+            True if artifact exists and is committed, False otherwise.
 
         Warning:
             This method does not acquire locks and may return stale data
@@ -425,9 +434,14 @@ class ArtifactStore:
 
             Unsafe patterns:
             - if store.exists(key): do_critical_action()  # WRONG (race condition)
+
+        Design notes (Issue #929):
+            Requires the .committed marker to be present. Uncommitted entries
+            (artifact without marker) are treated as non-existent.
         """
         artifact_path = self._artifact_path(cache_key)
-        return artifact_path.exists()
+        committed_path = self._committed_path(cache_key)
+        return artifact_path.exists() and committed_path.exists()
 
     def load(self, cache_key: str) -> Dict[str, Any]:
         """Load artifact from cache with shared lock.
@@ -439,12 +453,13 @@ class ArtifactStore:
             Artifact data (stage outputs as dict).
 
         Raises:
-            FileNotFoundError: If artifact not found.
+            FileNotFoundError: If artifact not found or not committed.
             ValueError: If artifact is corrupted.
             CacheLockTimeout: If lock cannot be acquired within timeout.
 
         Design notes:
         - Acquires shared lock to prevent reading partial writes
+        - Requires .committed marker (Issue #929: transactional visibility)
         - Updates access time for LRU tracking
         - Validates artifact integrity (checksums in L2)
         - Returns deep copy to prevent cache mutation
@@ -452,8 +467,9 @@ class ArtifactStore:
         # Acquire shared lock for read (prevents concurrent writes)
         with self._acquire_lock(cache_key, exclusive=False):
             artifact_path = self._artifact_path(cache_key)
+            committed_path = self._committed_path(cache_key)
 
-            if not artifact_path.exists():
+            if not artifact_path.exists() or not committed_path.exists():
                 raise FileNotFoundError(f"Artifact not found: {cache_key}")
 
             try:
@@ -503,6 +519,7 @@ class ArtifactStore:
         - Atomic write (temp file + fsync + rename)
         - Stores artifact as .npz (NumPy compressed archive)
         - Stores provenance as .json sidecar
+        - Creates .committed marker for transactional visibility (Issue #929)
         - Creates two-level directory hierarchy (first 2 hex chars)
         - SECURITY: Rejects object dtype arrays (require pickle deserialization)
         """
@@ -510,6 +527,7 @@ class ArtifactStore:
         with self._acquire_lock(cache_key, exclusive=True):
             artifact_path = self._artifact_path(cache_key)
             provenance_path = self._provenance_path(cache_key)
+            committed_path = self._committed_path(cache_key)
 
             # Create directory
             artifact_path.parent.mkdir(parents=True, exist_ok=True)
@@ -555,9 +573,21 @@ class ArtifactStore:
                     tmp_prov.flush()
                     os.fsync(tmp_prov.fileno())
 
-                # Atomic rename
+                # Atomic rename (artifact + provenance)
                 tmp_artifact_path.replace(artifact_path)
                 tmp_prov_path.replace(provenance_path)
+
+                # Atomic commit marker (Issue #929: transactional visibility)
+                # Only after both artifact and provenance are in place,
+                # atomically create the .committed marker via temp+rename.
+                with tempfile.NamedTemporaryFile(
+                    mode="w",
+                    dir=artifact_path.parent,
+                    delete=False,
+                    suffix=".committed_tmp",
+                ) as tmp_marker:
+                    tmp_marker_path = Path(tmp_marker.name)
+                tmp_marker_path.replace(committed_path)
 
                 # Update stats
                 self._record_cache_miss()
@@ -570,6 +600,8 @@ class ArtifactStore:
                     tmp_artifact_path.unlink()
                 if "tmp_prov_path" in locals() and tmp_prov_path.exists():
                     tmp_prov_path.unlink()
+                if "tmp_marker_path" in locals() and tmp_marker_path.exists():
+                    tmp_marker_path.unlink()
                 raise ValueError(f"Failed to store artifact: {cache_key}") from e
 
             # Check cache size (warn if over limit)
@@ -585,14 +617,18 @@ class ArtifactStore:
             ProvenanceMetadata.
 
         Raises:
-            FileNotFoundError: If provenance not found.
+            FileNotFoundError: If provenance not found or not committed.
             CacheLockTimeout: If lock cannot be acquired within timeout.
+
+        Design notes (Issue #929):
+            Requires .committed marker for transactional visibility.
         """
         # Acquire shared lock for read (prevents concurrent writes)
         with self._acquire_lock(cache_key, exclusive=False):
             provenance_path = self._provenance_path(cache_key)
+            committed_path = self._committed_path(cache_key)
 
-            if not provenance_path.exists():
+            if not provenance_path.exists() or not committed_path.exists():
                 raise FileNotFoundError(f"Provenance not found: {cache_key}")
 
             with open(provenance_path) as f:
@@ -610,14 +646,18 @@ class ArtifactStore:
 
         Design notes:
         - Acquires exclusive lock to prevent concurrent access during deletion
-        - Removes both artifact and provenance files
+        - Removes committed marker, artifact, and provenance files
         - Idempotent (no error if already evicted)
         """
         # Acquire exclusive lock for delete (prevents concurrent access)
         with self._acquire_lock(cache_key, exclusive=True):
             artifact_path = self._artifact_path(cache_key)
             provenance_path = self._provenance_path(cache_key)
+            committed_path = self._committed_path(cache_key)
 
+            # Remove marker first (ensures readers see entry as uncommitted)
+            if committed_path.exists():
+                committed_path.unlink()
             if artifact_path.exists():
                 artifact_path.unlink()
             if provenance_path.exists():
@@ -705,6 +745,129 @@ class ArtifactStore:
 
         prefix = cache_key[:2]
         return self.artifacts_dir / prefix / f"{cache_key}.json"
+
+    def _committed_path(self, cache_key: str) -> Path:
+        """Get commit marker file path with strict validation.
+
+        Args:
+            cache_key: Cache key (must be 64-char SHA256 hex).
+
+        Returns:
+            Path to commit marker file.
+
+        Raises:
+            ValueError: If cache_key format is invalid or contains path traversal.
+
+        Design notes (Issue #929):
+            The .committed marker signals that artifact + provenance were
+            both written successfully. Readers only trust entries with this
+            marker present.
+        """
+        # Validate cache key format (reuse same validation as _artifact_path)
+        if not SAFE_CACHE_KEY.match(cache_key):
+            raise ValueError(f"Invalid cache_key format: {cache_key!r}. " "Expected 64 lowercase hex characters (SHA256).")
+
+        # Additional safety check for path separators and traversal
+        if "/" in cache_key or "\\" in cache_key or ".." in cache_key:
+            raise ValueError(f"Invalid cache_key contains path separators or traversal: {cache_key!r}")
+
+        prefix = cache_key[:2]
+        return self.artifacts_dir / prefix / f"{cache_key}.committed"
+
+    def scavenge(self, max_temp_age_seconds: float = 300.0) -> Dict[str, int]:
+        """Remove orphaned artifacts and stale temp files (Issue #929).
+
+        Scans the artifacts directory for:
+        1. Uncommitted entries: .npz or .json files without a matching
+           .committed marker → removed (orphaned from a crashed store).
+        2. Stale temp files: files with temp-like suffixes older than
+           max_temp_age_seconds → removed.
+
+        Args:
+            max_temp_age_seconds: Maximum age (in seconds) for temp files
+                before they are considered stale and removed. Default 300s (5 min).
+
+        Returns:
+            Cleanup report dict with keys:
+            - orphaned_artifacts_removed: count of .npz files removed
+            - orphaned_provenance_removed: count of .json files removed
+            - stale_temp_files_removed: count of temp files removed
+
+        Design notes:
+        - Does NOT acquire per-key locks (scavenger is best-effort cleanup).
+        - Safe to run concurrently with store/load operations because:
+          (a) store() holds exclusive lock while writing, so an in-progress
+              store will either complete (marker created) or fail (files cleaned
+              up by store's own exception handler) before scavenger acts.
+          (b) Scavenger only removes files without .committed marker.
+        - Logs each removal at DEBUG level for audit trail.
+        """
+        report = {
+            "orphaned_artifacts_removed": 0,
+            "orphaned_provenance_removed": 0,
+            "stale_temp_files_removed": 0,
+        }
+
+        now = time.monotonic()
+
+        # Temp file suffixes produced by store() and _save_stats_atomic()
+        _TEMP_SUFFIXES = (".npz", ".json", ".committed_tmp")
+
+        for prefix_dir in self.artifacts_dir.iterdir():
+            if not prefix_dir.is_dir():
+                continue
+
+            for entry in prefix_dir.iterdir():
+                if not entry.is_file():
+                    continue
+
+                name = entry.name
+
+                # --- Stale temp files ---
+                # NamedTemporaryFile produces names like tmpXXXXXX.suffix
+                if name.startswith("tmp") and any(name.endswith(s) for s in _TEMP_SUFFIXES):
+                    try:
+                        age = time.time() - entry.stat().st_mtime
+                        if age > max_temp_age_seconds:
+                            entry.unlink(missing_ok=True)
+                            report["stale_temp_files_removed"] += 1
+                            logger.debug(f"Scavenger: removed stale temp file {entry}")
+                    except OSError:
+                        pass  # File may have been removed concurrently
+                    continue
+
+                # --- Orphaned artifacts (.npz without .committed) ---
+                if name.endswith(".npz") and SAFE_CACHE_KEY.match(name[:-4]):
+                    cache_key = name[:-4]
+                    committed = prefix_dir / f"{cache_key}.committed"
+                    if not committed.exists():
+                        try:
+                            entry.unlink(missing_ok=True)
+                            report["orphaned_artifacts_removed"] += 1
+                            logger.debug(f"Scavenger: removed orphaned artifact {entry}")
+                        except OSError:
+                            pass
+                    continue
+
+                # --- Orphaned provenance (.json without .committed) ---
+                if name.endswith(".json") and SAFE_CACHE_KEY.match(name[:-5]):
+                    cache_key = name[:-5]
+                    committed = prefix_dir / f"{cache_key}.committed"
+                    if not committed.exists():
+                        try:
+                            entry.unlink(missing_ok=True)
+                            report["orphaned_provenance_removed"] += 1
+                            logger.debug(f"Scavenger: removed orphaned provenance {entry}")
+                        except OSError:
+                            pass
+                    continue
+
+        logger.info(
+            f"Scavenger complete: {report['orphaned_artifacts_removed']} orphaned artifacts, "
+            f"{report['orphaned_provenance_removed']} orphaned provenance, "
+            f"{report['stale_temp_files_removed']} stale temp files removed"
+        )
+        return report
 
     def _load_stats(self) -> None:
         """Load cache statistics from disk (with locking).

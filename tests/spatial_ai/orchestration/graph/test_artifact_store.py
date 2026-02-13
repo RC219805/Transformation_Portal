@@ -328,6 +328,7 @@ class TestArtifactStore:
         assert prefix_dir.exists()
         assert (prefix_dir / f"{cache_key}.npz").exists()
         assert (prefix_dir / f"{cache_key}.json").exists()
+        assert (prefix_dir / f"{cache_key}.committed").exists()
 
     def test_atomic_write_integrity(self, store: ArtifactStore):
         """Test atomic write ensures no partial artifacts."""
@@ -611,3 +612,308 @@ class TestArtifactStoreSecurity:
         np.testing.assert_array_equal(loaded["str_array"], artifact["str_array"])
         np.testing.assert_array_equal(loaded["homogeneous_list"], [1, 2, 3])
         assert loaded["scalar"] == pytest.approx(3.14)
+
+
+class TestCommitMarker:
+    """Tests for transactional commit marker (Issue #929).
+
+    Validates that:
+    - Committed marker is created on successful store
+    - Entries without marker are treated as non-existent
+    - Eviction removes the marker
+    - Mid-commit failure (artifact exists, marker missing) → treated as cache miss
+    """
+
+    @pytest.fixture
+    def cache_dir(self, tmp_path: Path) -> Path:
+        """Create temporary cache directory."""
+        return tmp_path / "test_cache"
+
+    @pytest.fixture
+    def store(self, cache_dir: Path) -> ArtifactStore:
+        """Create ArtifactStore instance."""
+        return ArtifactStore(cache_dir=cache_dir, max_size_gb=1.0)
+
+    def _make_provenance(self, cache_key: str) -> ProvenanceMetadata:
+        """Helper to create a minimal ProvenanceMetadata."""
+        return ProvenanceMetadata(
+            cache_key=cache_key,
+            stage_id="test",
+            stage_version="1.0.0",
+            input_fingerprints={},
+            config_snapshot={},
+            timestamp="2026-02-12T10:00:00Z",
+            hostname="testhost",
+            python_version="3.11",
+            numpy_version="1.26.0",
+            device="cpu",
+        )
+
+    def test_committed_marker_created_on_store(self, store: ArtifactStore, cache_dir: Path):
+        """Committed marker file is created after successful store."""
+        cache_key = _make_cache_key("marker_created")
+        store.store(cache_key, {"v": 1}, self._make_provenance(cache_key))
+
+        prefix = cache_key[:2]
+        committed = cache_dir / "artifacts" / prefix / f"{cache_key}.committed"
+        assert committed.exists(), ".committed marker not created"
+
+    def test_exists_requires_committed_marker(self, store: ArtifactStore, cache_dir: Path):
+        """exists() returns False if artifact exists but marker is missing."""
+        cache_key = _make_cache_key("marker_missing_exists")
+        store.store(cache_key, {"v": 1}, self._make_provenance(cache_key))
+        assert store.exists(cache_key)
+
+        # Remove the committed marker (simulates mid-commit crash)
+        prefix = cache_key[:2]
+        committed = cache_dir / "artifacts" / prefix / f"{cache_key}.committed"
+        committed.unlink()
+
+        assert not store.exists(cache_key), "exists() should return False without marker"
+
+    def test_load_requires_committed_marker(self, store: ArtifactStore, cache_dir: Path):
+        """load() raises FileNotFoundError if marker is missing."""
+        cache_key = _make_cache_key("marker_missing_load")
+        store.store(cache_key, {"v": 1}, self._make_provenance(cache_key))
+
+        # Remove the committed marker
+        prefix = cache_key[:2]
+        committed = cache_dir / "artifacts" / prefix / f"{cache_key}.committed"
+        committed.unlink()
+
+        with pytest.raises(FileNotFoundError, match="Artifact not found"):
+            store.load(cache_key)
+
+    def test_load_provenance_requires_committed_marker(self, store: ArtifactStore, cache_dir: Path):
+        """load_provenance() raises FileNotFoundError if marker is missing."""
+        cache_key = _make_cache_key("marker_missing_prov")
+        store.store(cache_key, {"v": 1}, self._make_provenance(cache_key))
+
+        # Remove the committed marker
+        prefix = cache_key[:2]
+        committed = cache_dir / "artifacts" / prefix / f"{cache_key}.committed"
+        committed.unlink()
+
+        with pytest.raises(FileNotFoundError, match="Provenance not found"):
+            store.load_provenance(cache_key)
+
+    def test_evict_removes_committed_marker(self, store: ArtifactStore, cache_dir: Path):
+        """evict() removes the .committed marker file."""
+        cache_key = _make_cache_key("marker_evict")
+        store.store(cache_key, {"v": 1}, self._make_provenance(cache_key))
+
+        prefix = cache_key[:2]
+        committed = cache_dir / "artifacts" / prefix / f"{cache_key}.committed"
+        assert committed.exists()
+
+        store.evict(cache_key)
+        assert not committed.exists(), ".committed marker should be removed after evict"
+
+    def test_orphaned_artifact_without_marker_is_cache_miss(self, store: ArtifactStore, cache_dir: Path):
+        """Artifact written without marker (simulated crash) is a cache miss.
+
+        This simulates the exact failure mode from Issue #929:
+        Step 1 (artifact rename) succeeds, Step 2 (provenance rename) succeeds,
+        but Step 3 (marker creation) fails due to crash/disk full.
+        """
+        cache_key = _make_cache_key("orphan_cache_miss")
+
+        # Manually create artifact + provenance without marker (simulates crash)
+        prefix = cache_key[:2]
+        prefix_dir = cache_dir / "artifacts" / prefix
+        prefix_dir.mkdir(parents=True, exist_ok=True)
+
+        artifact_path = prefix_dir / f"{cache_key}.npz"
+        provenance_path = prefix_dir / f"{cache_key}.json"
+
+        # Write a valid .npz file
+        import numpy as np
+
+        np.savez_compressed(artifact_path, v=np.array([1]))
+
+        # Write a valid .json provenance
+        from dataclasses import asdict
+
+        with open(provenance_path, "w") as f:
+            json.dump(asdict(self._make_provenance(cache_key)), f)
+
+        # Both files exist, but no .committed marker
+        assert artifact_path.exists()
+        assert provenance_path.exists()
+
+        # Should be treated as non-existent
+        assert not store.exists(cache_key)
+        with pytest.raises(FileNotFoundError):
+            store.load(cache_key)
+        with pytest.raises(FileNotFoundError):
+            store.load_provenance(cache_key)
+
+
+class TestScavenger:
+    """Tests for scavenger/GC cleanup (Issue #929).
+
+    Validates that:
+    - Orphaned artifacts (no marker) are cleaned up
+    - Stale temp files are cleaned up
+    - Valid committed entries are preserved
+    - Cleanup report is accurate
+    """
+
+    @pytest.fixture
+    def cache_dir(self, tmp_path: Path) -> Path:
+        """Create temporary cache directory."""
+        return tmp_path / "test_cache"
+
+    @pytest.fixture
+    def store(self, cache_dir: Path) -> ArtifactStore:
+        """Create ArtifactStore instance."""
+        return ArtifactStore(cache_dir=cache_dir, max_size_gb=1.0)
+
+    def _make_provenance(self, cache_key: str) -> ProvenanceMetadata:
+        """Helper to create a minimal ProvenanceMetadata."""
+        return ProvenanceMetadata(
+            cache_key=cache_key,
+            stage_id="test",
+            stage_version="1.0.0",
+            input_fingerprints={},
+            config_snapshot={},
+            timestamp="2026-02-12T10:00:00Z",
+            hostname="testhost",
+            python_version="3.11",
+            numpy_version="1.26.0",
+            device="cpu",
+        )
+
+    def test_scavenger_removes_orphaned_artifact(self, store: ArtifactStore, cache_dir: Path):
+        """Scavenger removes .npz without .committed marker."""
+        cache_key = _make_cache_key("orphan_scav")
+        prefix = cache_key[:2]
+        prefix_dir = cache_dir / "artifacts" / prefix
+        prefix_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create orphaned artifact (no marker)
+        artifact_path = prefix_dir / f"{cache_key}.npz"
+        np.savez_compressed(artifact_path, v=np.array([1]))
+        assert artifact_path.exists()
+
+        report = store.scavenge()
+        assert report["orphaned_artifacts_removed"] == 1
+        assert not artifact_path.exists()
+
+    def test_scavenger_removes_orphaned_provenance(self, store: ArtifactStore, cache_dir: Path):
+        """Scavenger removes .json without .committed marker."""
+        cache_key = _make_cache_key("orphan_prov_scav")
+        prefix = cache_key[:2]
+        prefix_dir = cache_dir / "artifacts" / prefix
+        prefix_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create orphaned provenance (no marker)
+        provenance_path = prefix_dir / f"{cache_key}.json"
+        provenance_path.write_text("{}")
+        assert provenance_path.exists()
+
+        report = store.scavenge()
+        assert report["orphaned_provenance_removed"] == 1
+        assert not provenance_path.exists()
+
+    def test_scavenger_preserves_committed_entries(self, store: ArtifactStore, cache_dir: Path):
+        """Scavenger does NOT remove entries with .committed marker."""
+        cache_key = _make_cache_key("committed_preserved")
+        store.store(cache_key, {"v": 1}, self._make_provenance(cache_key))
+
+        prefix = cache_key[:2]
+        artifact_path = cache_dir / "artifacts" / prefix / f"{cache_key}.npz"
+        provenance_path = cache_dir / "artifacts" / prefix / f"{cache_key}.json"
+        committed_path = cache_dir / "artifacts" / prefix / f"{cache_key}.committed"
+
+        report = store.scavenge()
+        assert report["orphaned_artifacts_removed"] == 0
+        assert report["orphaned_provenance_removed"] == 0
+        assert artifact_path.exists()
+        assert provenance_path.exists()
+        assert committed_path.exists()
+
+    def test_scavenger_removes_stale_temp_files(self, store: ArtifactStore, cache_dir: Path):
+        """Scavenger removes temp files older than threshold."""
+        cache_key = _make_cache_key("stale_temp")
+        prefix = cache_key[:2]
+        prefix_dir = cache_dir / "artifacts" / prefix
+        prefix_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create a stale temp file (name starts with 'tmp')
+        stale_tmp = prefix_dir / "tmpabcdef.npz"
+        stale_tmp.write_bytes(b"stale data")
+
+        # Backdate the file's mtime so it looks old
+        import os
+        import time
+
+        old_time = time.time() - 600  # 10 minutes ago
+        os.utime(stale_tmp, (old_time, old_time))
+
+        report = store.scavenge(max_temp_age_seconds=300.0)
+        assert report["stale_temp_files_removed"] == 1
+        assert not stale_tmp.exists()
+
+    def test_scavenger_preserves_fresh_temp_files(self, store: ArtifactStore, cache_dir: Path):
+        """Scavenger does NOT remove temp files younger than threshold."""
+        cache_key = _make_cache_key("fresh_temp")
+        prefix = cache_key[:2]
+        prefix_dir = cache_dir / "artifacts" / prefix
+        prefix_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create a fresh temp file
+        fresh_tmp = prefix_dir / "tmpfresh.npz"
+        fresh_tmp.write_bytes(b"fresh data")
+
+        report = store.scavenge(max_temp_age_seconds=300.0)
+        assert report["stale_temp_files_removed"] == 0
+        assert fresh_tmp.exists()
+
+    def test_scavenger_mixed_scenario(self, store: ArtifactStore, cache_dir: Path):
+        """Scavenger handles mix of committed, orphaned, and temp files."""
+        # 1. Store a valid committed entry
+        good_key = _make_cache_key("scav_good")
+        store.store(good_key, {"v": 1}, self._make_provenance(good_key))
+
+        # 2. Create orphaned entry (no marker)
+        orphan_key = _make_cache_key("scav_orphan")
+        prefix = orphan_key[:2]
+        prefix_dir = cache_dir / "artifacts" / prefix
+        prefix_dir.mkdir(parents=True, exist_ok=True)
+        orphan_npz = prefix_dir / f"{orphan_key}.npz"
+        orphan_json = prefix_dir / f"{orphan_key}.json"
+        np.savez_compressed(orphan_npz, v=np.array([2]))
+        orphan_json.write_text("{}")
+
+        # 3. Create stale temp file in the good_key's prefix dir
+        good_prefix_dir = cache_dir / "artifacts" / good_key[:2]
+        stale_tmp = good_prefix_dir / "tmpstale.json"
+        stale_tmp.write_text("junk")
+        import os
+        import time
+
+        old_time = time.time() - 600
+        os.utime(stale_tmp, (old_time, old_time))
+
+        report = store.scavenge(max_temp_age_seconds=300.0)
+
+        # Committed entry preserved
+        assert store.exists(good_key)
+
+        # Orphans removed
+        assert not orphan_npz.exists()
+        assert not orphan_json.exists()
+        assert report["orphaned_artifacts_removed"] == 1
+        assert report["orphaned_provenance_removed"] == 1
+
+        # Stale temp removed
+        assert not stale_tmp.exists()
+        assert report["stale_temp_files_removed"] == 1
+
+    def test_scavenger_empty_cache(self, store: ArtifactStore):
+        """Scavenger on empty cache returns zero counts."""
+        report = store.scavenge()
+        assert report["orphaned_artifacts_removed"] == 0
+        assert report["orphaned_provenance_removed"] == 0
+        assert report["stale_temp_files_removed"] == 0
