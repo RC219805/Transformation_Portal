@@ -5,7 +5,7 @@
 
 # Security and analysis tools
 bandit>=1.7,<2         # static security analyzer
-safety>=2.3,<3         # checks for known vulnerabilities
+safety>=2.3,<4         # checks for known vulnerabilities
 
 # Packaging and release tools
 build>=1.0,<2          # build wheels/distributions
