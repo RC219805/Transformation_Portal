@@ -1042,6 +1042,79 @@ class EnhanceOrchestrator:
             logger.warning(f"PBR generation failed (non-blocking): {pbr_error}")
             return None
 
+    def _serialize_material_masks(
+        self, masks: Dict[str, np.ndarray], output_key: Path, temp_dir: Path
+    ) -> Optional[Path]:
+        """Serialize material masks to compressed NPZ file.
+
+        Masks are saved to temporary directory for V2 subprocess consumption.
+        File format: {output_key.stem}_materials_v3_masks.npz
+
+        Args:
+            masks: Dictionary mapping material names to binary masks
+            output_key: Output key for artifact naming
+            temp_dir: Temporary directory for mask files
+
+        Returns:
+            Path to serialized .npz file, or None on failure
+
+        Raises:
+            No exceptions raised - failures are logged and return None
+        """
+        if not masks:
+            logger.debug("No material masks to serialize")
+            return None
+
+        try:
+            # Ensure temp directory exists
+            temp_dir.mkdir(parents=True, exist_ok=True)
+
+            # Build mask file path
+            mask_filename = f"{output_key.stem}_materials_v3_masks.npz"
+            mask_path = temp_dir / mask_filename
+
+            # Validate mask data before serialization
+            for mat_name, mask in masks.items():
+                if not isinstance(mask, np.ndarray):
+                    logger.warning(f"Invalid mask type for {mat_name}: {type(mask)}, skipping serialization")
+                    return None
+                if mask.dtype not in (np.float32, np.float64):
+                    logger.warning(
+                        f"Invalid mask dtype for {mat_name}: {mask.dtype} (expected float32/float64), skipping"
+                    )
+                    return None
+                if mask.ndim != 2:
+                    logger.warning(f"Invalid mask shape for {mat_name}: {mask.shape} (expected 2D), skipping")
+                    return None
+
+            # Serialize to compressed NPZ
+            # Use savez_compressed for ~10-20% size reduction
+            np.savez_compressed(mask_path, **masks)
+
+            # Verify file was created and check size
+            if not mask_path.exists():
+                logger.warning(f"Mask serialization failed: file not created at {mask_path}")
+                return None
+
+            file_size_mb = mask_path.stat().st_size / (1024 * 1024)
+            if file_size_mb > 100:
+                logger.warning(
+                    f"Mask file unexpectedly large: {file_size_mb:.1f}MB at {mask_path}. "
+                    f"Rejecting for safety (size limit: 100MB)"
+                )
+                mask_path.unlink()  # Clean up oversized file
+                return None
+
+            logger.info(
+                f"Serialized {len(masks)} material masks to {mask_path.name} ({file_size_mb:.2f}MB) "
+                f"for V2 subprocess"
+            )
+            return mask_path
+
+        except Exception as e:
+            logger.warning(f"Failed to serialize material masks: {e}", exc_info=True)
+            return None
+
     def _run_v2_stage(
         self,
         image_input: ImageInput,
@@ -1062,8 +1135,7 @@ class EnhanceOrchestrator:
             manifest_path: Path for manifest JSON
             skip_depth: Whether depth was skipped
             materials_v3_result: Materials V3 result with material_masks (optional)
-                Note: Material masks are available but not currently passed to subprocess.
-                Future: Implement mask serialization for V2 subprocess integration.
+                If provided, masks will be serialized to disk and passed to V2 subprocess.
 
         Returns:
             Tuple of (v2_result, v2_runtime_s, v2_report_path)
@@ -1080,31 +1152,49 @@ class EnhanceOrchestrator:
             logger.info("V2 outputs valid, skipping.")
             return {"status": "ok"}, 0.0, v2_report_path
 
-        # Note: material_masks from materials_v3_result are available but not passed to subprocess
-        # V2Runner is a subprocess wrapper - material masks would require serialization to disk
-        # Future enhancement: Serialize masks to temporary directory and pass path to V2
-        # For now, infrastructure is ready (MaterialsV3Engine.process returns material_masks)
+        # Serialize material masks to disk for V2 subprocess (if available)
+        # Masks are saved to temp/ directory and cleaned up after V2 completes
+        masks_path = None
+        temp_dir = self.output_root / "temp"
+        
         if materials_v3_result and materials_v3_result.get("material_masks"):
-            logger.debug(
-                f"Materials V3 masks available ({len(materials_v3_result['material_masks'])} materials) "
-                f"but not passed to V2 subprocess (requires serialization - future work)"
+            masks_path = self._serialize_material_masks(
+                materials_v3_result["material_masks"],
+                output_key,
+                temp_dir,
             )
+            if masks_path:
+                logger.info(f"Material masks serialized for V2 subprocess: {masks_path.name}")
+            else:
+                logger.warning("Failed to serialize material masks, V2 will run without them")
 
-        # V2 runner: depth_dir=None triggers independent depth generation in V2
-        v2_result = self.v2_runner.run(
-            input_path=image_input.path,
-            depth_dir=self.depth_dir if (depth_path and depth_path.exists()) else None,
-            output_dir=self.v2_dir,
-            preset=self.config.v2_preset,
-            device=self.config.v2_device,
-            upscaler_backend=self.config.v2_upscaler_backend,
-            log_file=v2_log_path,
-            timeout=self.config.v2_timeout,
-        )
-        v2_runtime_s = v2_result.get("runtime_s", 0.0)
-        v2_report_path = find_v2_report(self.v2_dir, output_key.name)
+        # V2 runner: Execute subprocess with optional masks
+        # depth_dir=None triggers independent depth generation in V2
+        try:
+            v2_result = self.v2_runner.run(
+                input_path=image_input.path,
+                depth_dir=self.depth_dir if (depth_path and depth_path.exists()) else None,
+                output_dir=self.v2_dir,
+                preset=self.config.v2_preset,
+                device=self.config.v2_device,
+                upscaler_backend=self.config.v2_upscaler_backend,
+                log_file=v2_log_path,
+                timeout=self.config.v2_timeout,
+                masks_dir=temp_dir if masks_path else None,  # Pass temp dir if masks were serialized
+            )
+            v2_runtime_s = v2_result.get("runtime_s", 0.0)
+            v2_report_path = find_v2_report(self.v2_dir, output_key.name)
 
-        return v2_result, v2_runtime_s, v2_report_path
+            return v2_result, v2_runtime_s, v2_report_path
+
+        finally:
+            # Clean up temporary mask file (guaranteed cleanup even if V2 fails)
+            if masks_path and masks_path.exists():
+                try:
+                    masks_path.unlink()
+                    logger.debug(f"Cleaned up temporary masks: {masks_path.name}")
+                except Exception as cleanup_error:
+                    logger.warning(f"Failed to clean up temporary masks {masks_path}: {cleanup_error}")
 
     def _write_manifest(
         self,

@@ -115,6 +115,12 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--upscaler", default="default", help="Upscaler backend (default: %(default)s)")
     parser.add_argument("--log-file", type=Path, default=None, help="Optional log file path")
     parser.add_argument(
+        "--masks-dir",
+        type=Path,
+        default=None,
+        help="Directory containing material masks (NPZ format) for Materials V3 integration",
+    )
+    parser.add_argument(
         "--allow-8bit",
         action="store_true",
         help="Allow 16-bit → 8-bit downgrade (bypasses Quality Firewall)",
@@ -157,6 +163,58 @@ def configure_logging(verbose: bool, quiet: bool, log_file: Path | None) -> None
     )
 
 
+def load_material_masks(masks_dir: Path | None, image_stem: str) -> dict[str, Any] | None:
+    """Load material masks from NPZ file in masks directory.
+
+    Args:
+        masks_dir: Directory containing material mask NPZ files
+        image_stem: Input image filename stem (for matching mask file)
+
+    Returns:
+        Dictionary mapping material names to numpy arrays, or None if no masks found
+
+    Raises:
+        ValueError: If mask file is invalid or corrupted
+    """
+    if not masks_dir or not masks_dir.exists():
+        return None
+
+    # Look for mask file matching input image stem
+    mask_filename = f"{image_stem}_materials_v3_masks.npz"
+    mask_path = masks_dir / mask_filename
+
+    if not mask_path.exists():
+        logger.debug(f"No material masks found: {mask_path}")
+        return None
+
+    try:
+        # Load NPZ file
+        import numpy as np
+
+        with np.load(mask_path) as data:
+            masks = {key: data[key] for key in data.files}
+
+        if not masks:
+            logger.warning(f"Material mask file is empty: {mask_path}")
+            return None
+
+        # Validate loaded masks
+        for mat_name, mask in masks.items():
+            if not isinstance(mask, np.ndarray):
+                logger.warning(f"Invalid mask type for {mat_name}: {type(mask)}")
+                return None
+            if mask.ndim != 2:
+                logger.warning(f"Invalid mask shape for {mat_name}: {mask.shape} (expected 2D)")
+                return None
+
+        logger.info(f"Loaded {len(masks)} material masks from {mask_path.name}: {list(masks.keys())}")
+        return masks
+
+    except Exception as e:
+        logger.warning(f"Failed to load material masks from {mask_path}: {e}")
+        return None
+
+
 def run_v2_enhancement(
     input_path: Path,
     depth_dir: Path | None,
@@ -165,6 +223,7 @@ def run_v2_enhancement(
     device: str,
     upscaler: str,
     allow_8bit: bool = False,
+    masks_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Run V2 depth-aware enhancement.
 
@@ -176,6 +235,7 @@ def run_v2_enhancement(
         device: Processing device (cpu/cuda/mps)
         upscaler: Upscaler backend (currently unused, reserved for future)
         allow_8bit: Allow 16-bit → 8-bit downgrade (Quality Firewall bypass)
+        masks_dir: Directory containing material masks (optional, NPZ format)
 
     Returns:
         Dict containing enhancement report
@@ -214,11 +274,15 @@ def run_v2_enhancement(
         else:
             logger.warning("No depth map found in %s for %s", depth_dir, input_path.stem)
 
+    # Load material masks if masks_dir provided (Materials V3 integration)
+    material_masks = load_material_masks(masks_dir, input_path.stem) if masks_dir else None
+
     # Run enhancement
     report = enhance_image(
         input_path=input_path,
         output_path=output_path,
         depth_map_path=depth_map_path,
+        material_masks=material_masks,  # Pass through to v2_enhance.py
         config=config,
         device=device,
         allow_8bit_output=allow_8bit,
@@ -255,6 +319,7 @@ def main() -> int:
             device=args.device,
             upscaler=args.upscaler,
             allow_8bit=args.allow_8bit,
+            masks_dir=args.masks_dir,  # Pass through Materials V3 masks directory
         )
 
         if report_path:
