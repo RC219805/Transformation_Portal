@@ -29,12 +29,25 @@ Storage Layout:
     └── stats.json                       # Cache statistics (size, hits, misses)
 
 Transactional Commit (Issue #929):
-    Artifact + provenance are written atomically via temp+rename, then a
-    ".committed" marker file is atomically created. Readers only trust
-    entries where the marker is present. This ensures all-or-nothing
-    visibility: if the process crashes between writing artifact/provenance
-    and creating the marker, the entry is treated as uncommitted and
-    ignored (cleaned up by the scavenger).
+    Artifact + provenance are written atomically via temp+fsync+rename, then a
+    ".committed" marker file is atomically created (also temp+fsync+rename).
+    Readers only trust entries where the marker is present. This ensures
+    all-or-nothing visibility: if the process crashes between writing
+    artifact/provenance and creating the marker, the entry is treated as
+    uncommitted and ignored (cleaned up by the scavenger).
+
+    **Cache Entry Visibility Invariant:**
+    A cache entry is visible (exists/loadable) iff ALL of:
+    - `<key>.npz` exists (artifact payload)
+    - `<key>.json` exists (provenance metadata)
+    - `<key>.committed` exists (transactional marker)
+    - No active writer holds the per-key exclusive lock
+
+    **Scavenger Safety Invariant:**
+    Scavenger cleanup is concurrent-safe iff:
+    - Shared per-key locking protocol (scavenger acquires lock before delete)
+    - Age threshold > maximum expected rename→marker latency
+    - Re-check marker after lock acquisition (TOCTOU prevention)
 
 Key Features:
 1. Content Addressing: SHA256-based cache keys from inputs + config
@@ -448,10 +461,16 @@ class ArtifactStore:
         Design notes (Issue #929):
             Requires the .committed marker to be present. Uncommitted entries
             (artifact without marker) are treated as non-existent.
+
+            Also checks for corruption: if marker exists but payload is missing,
+            returns False (entry is unusable).
         """
         artifact_path = self._artifact_path(cache_key)
+        provenance_path = self._provenance_path(cache_key)
         committed_path = self._committed_path(cache_key)
-        return artifact_path.exists() and committed_path.exists()
+
+        # Entry is valid only if marker AND both payload files exist
+        return artifact_path.exists() and provenance_path.exists() and committed_path.exists()
 
     def load(self, cache_key: str) -> Dict[str, Any]:
         """Load artifact from cache with shared lock.
@@ -477,10 +496,29 @@ class ArtifactStore:
         # Acquire shared lock for read (prevents concurrent writes)
         with self._acquire_lock(cache_key, exclusive=False):
             artifact_path = self._artifact_path(cache_key)
+            provenance_path = self._provenance_path(cache_key)
             committed_path = self._committed_path(cache_key)
 
-            if not artifact_path.exists() or not committed_path.exists():
+            # Reader self-healing: if marker exists but payload is missing,
+            # treat as corruption and raise FileNotFoundError.
+            # This handles pre-fix corruption or manual tampering.
+            marker_exists = committed_path.exists()
+            artifact_exists = artifact_path.exists()
+            provenance_exists = provenance_path.exists()
+
+            # Case 1: No marker → cache miss (normal)
+            if not marker_exists:
                 raise FileNotFoundError(f"Artifact not found: {cache_key}")
+
+            # Case 2: Marker exists but payload missing → corruption
+            if not artifact_exists or not provenance_exists:
+                logger.warning(
+                    f"Cache corruption detected for {cache_key}: "
+                    f"marker exists but payload missing "
+                    f"(artifact={artifact_exists}, provenance={provenance_exists}). "
+                    "Treating as cache miss."
+                )
+                raise FileNotFoundError(f"Artifact corrupted: {cache_key}")
 
             try:
                 # Load NumPy archive
@@ -602,7 +640,8 @@ class ArtifactStore:
 
                 # Atomic commit marker (Issue #929: transactional visibility)
                 # Only after both artifact and provenance are in place,
-                # atomically create the .committed marker via temp+rename.
+                # atomically create the .committed marker via temp+fsync+rename.
+                # Fsync maintains crash consistency symmetry with artifact/provenance.
                 with tempfile.NamedTemporaryFile(
                     mode="w",
                     dir=artifact_path.parent,
@@ -610,6 +649,8 @@ class ArtifactStore:
                     suffix=".committed_tmp",
                 ) as tmp_marker:
                     tmp_marker_path = Path(tmp_marker.name)
+                    tmp_marker.flush()
+                    os.fsync(tmp_marker.fileno())
                 tmp_marker_path.replace(committed_path)
 
                 # Update stats
@@ -654,11 +695,26 @@ class ArtifactStore:
         """
         # Acquire shared lock for read (prevents concurrent writes)
         with self._acquire_lock(cache_key, exclusive=False):
+            artifact_path = self._artifact_path(cache_key)
             provenance_path = self._provenance_path(cache_key)
             committed_path = self._committed_path(cache_key)
 
-            if not provenance_path.exists() or not committed_path.exists():
+            # Reader self-healing: check for corruption (same logic as load())
+            marker_exists = committed_path.exists()
+            artifact_exists = artifact_path.exists()
+            provenance_exists = provenance_path.exists()
+
+            if not marker_exists:
                 raise FileNotFoundError(f"Provenance not found: {cache_key}")
+
+            if not artifact_exists or not provenance_exists:
+                logger.warning(
+                    f"Cache corruption detected for {cache_key}: "
+                    f"marker exists but payload missing "
+                    f"(artifact={artifact_exists}, provenance={provenance_exists}). "
+                    "Treating as cache miss."
+                )
+                raise FileNotFoundError(f"Provenance corrupted: {cache_key}")
 
             with open(provenance_path) as f:
                 data = json.load(f)

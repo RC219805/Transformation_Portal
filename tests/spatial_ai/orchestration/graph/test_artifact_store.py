@@ -785,6 +785,30 @@ class TestCommitMarker:
         assert new_artifact_mtime == original_artifact_mtime
         assert new_committed_mtime == original_committed_mtime
 
+    def test_reader_self_healing_corruption_detection(self, store: ArtifactStore, cache_dir: Path):
+        """Readers detect and report corruption when marker exists but payload is missing."""
+        cache_key = _make_cache_key("corrupted_entry")
+        artifact = {"data": np.array([99])}
+        prov = self._make_provenance(cache_key)
+
+        # Store valid entry
+        store.store(cache_key, artifact, prov)
+        assert store.exists(cache_key)
+
+        # Simulate corruption: delete artifact but leave marker + provenance
+        artifact_path = store._artifact_path(cache_key)
+        artifact_path.unlink()
+
+        # Readers should detect corruption and raise FileNotFoundError
+        with pytest.raises(FileNotFoundError, match="corrupted"):
+            store.load(cache_key)
+
+        with pytest.raises(FileNotFoundError, match="corrupted"):
+            store.load_provenance(cache_key)
+
+        # exists() should return False for corrupted entries
+        assert not store.exists(cache_key)
+
 
 class TestScavenger:
     """Tests for scavenger/GC cleanup (Issue #929).
