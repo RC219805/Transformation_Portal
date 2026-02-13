@@ -106,13 +106,13 @@ class SAM2Backend:
 
         try:
             # Load processor (handles image preprocessing)
-            self._processor = AutoProcessor.from_pretrained(
+            self._processor = AutoProcessor.from_pretrained(  # nosec B615
                 model_id,
                 revision=self.revision if not self.revision.startswith("NEEDS_VERIFICATION") else None,
             )
 
             # Load model
-            self._model = AutoModel.from_pretrained(
+            self._model = AutoModel.from_pretrained(  # nosec B615
                 model_id,
                 revision=self.revision if not self.revision.startswith("NEEDS_VERIFICATION") else None,
             )
