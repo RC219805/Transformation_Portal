@@ -27,26 +27,38 @@ This document captures the correctness invariants, safety properties, and operat
 
 ---
 
-### 2. Atomic Writes (No Partial Artifacts)
+### 2. Atomic Writes (Per-File Atomicity)
 
-**Invariant**: Artifacts are either fully written or not present at all (no partial/corrupted states visible)
+**Invariant**: Individual files (artifact `.npz`, provenance `.json`) are written atomically via temp → fsync → rename
 
 **Enforcement**:
-- temp file → fsync → atomic rename pattern
-- Provenance and artifact written to separate temp files, both renamed atomically
-- Write failures leave no artifact (temp files cleaned up)
+- Each file uses temp → fsync → atomic rename pattern
+- Artifact and provenance written to separate temp files
+- Each file becomes visible atomically (rename is atomic on POSIX)
 
-**Implementation** (artifact_store.py:500-545):
+**Known limitation**: Artifact + provenance are committed via **two separate renames**, not a single atomic transaction. If artifact rename succeeds but provenance rename fails, an orphaned artifact may remain.
+
+**Recovery behavior**:
+- Readers treat missing provenance as invalid and skip the artifact
+- Recommended: cleanup orphaned artifacts during periodic cache maintenance
+
+**Implementation** (see `ArtifactStore.store` method):
 ```python
 with tempfile.NamedTemporaryFile(...) as tmp_artifact:
     np.savez_compressed(tmp_artifact, **artifact)
     tmp_artifact.flush()
     os.fsync(tmp_artifact.fileno())
 
-tmp_artifact_path.replace(artifact_path)  # atomic rename
+tmp_artifact_path.replace(artifact_path)  # atomic rename (step 1)
+tmp_prov_path.replace(provenance_path)    # atomic rename (step 2)
 ```
 
-**Why it matters**: Prevents readers from loading incomplete data during concurrent writes.
+**Why it matters**: Prevents readers from loading incomplete/corrupted individual files. The two-step commit is a known gap; future options include single-file commit, atomic directory swap, or commit markers.
+
+**Future hardening options** (not currently implemented):
+- Store provenance inside `.npz` (single-file commit)
+- Atomic directory rename (write both files to temp dir, rename dir)
+- Commit marker pattern (write both, then atomically create "COMMITTED" file)
 
 ---
 
@@ -60,7 +72,7 @@ tmp_artifact_path.replace(artifact_path)  # atomic rename
 - Shared locks for reads (load, load_provenance)
 - Lock acquisition uses `fcntl.flock` with timeout
 
-**Implementation** (artifact_store.py:226-280):
+**Implementation** (see `ArtifactStore._acquire_lock` method):
 ```python
 with self._acquire_lock(cache_key, exclusive=True):
     # write operations (store, evict)
@@ -70,7 +82,7 @@ with self._acquire_lock(cache_key, exclusive=False):
 ```
 
 **Timeout behavior**:
-- Default: 30 seconds (`DEFAULT_LOCK_TIMEOUT`)
+- Default: 30 seconds (`DEFAULT_LOCK_TIMEOUT` constant)
 - Configurable via `lock_timeout_seconds` parameter
 - Raises `CacheLockTimeout` on failure
 
@@ -87,7 +99,7 @@ with self._acquire_lock(cache_key, exclusive=False):
 - Read-modify-write pattern inside lock (reload from disk → increment → save atomically)
 - Same timeout as per-key locks
 
-**Implementation** (artifact_store.py:722-766):
+**Implementation** (see `ArtifactStore._record_cache_hit` and `_record_cache_miss` methods):
 ```python
 def _record_cache_hit(self):
     with self._acquire_stats_lock():
@@ -108,7 +120,7 @@ def _record_cache_hit(self):
 **Invariant**: If both per-key lock and stats lock are required, ALWAYS acquire per-key lock(s) first, then stats lock
 
 **Enforcement**:
-- Documented in module docstring (artifact_store.py:12-15)
+- Documented in module docstring (search for "Lock Ordering Invariant")
 - All current operations respect this order
 - No operation exists that acquires stats → per-key
 
@@ -132,7 +144,7 @@ def _record_cache_hit(self):
 - Explicit checks for `/`, `\`, `..` characters
 - Two-level directory hierarchy (prefix-based sharding)
 
-**Implementation** (artifact_store.py:70-72):
+**Implementation** (search for `SAFE_CACHE_KEY` constant and validation in `_artifact_path`):
 ```python
 SAFE_CACHE_KEY = re.compile(r"^[a-f0-9]{64}$")
 
@@ -215,7 +227,7 @@ if "/" in cache_key or "\\" in cache_key or ".." in cache_key:
 3. Increment counter
 4. Write `stats.json` atomically (temp → fsync → rename)
 
-**Cost**: ~1-5ms per hit/miss (dominated by fsync)
+**Cost** (estimated): ~1-5ms per hit/miss, dominated by fsync (varies by filesystem/SSD)
 
 **Rationale**: L1 prioritizes correctness over cleverness. Stats must be accurate under multi-process concurrency.
 
@@ -234,7 +246,7 @@ if "/" in cache_key or "\\" in cache_key or ".." in cache_key:
 
 **Stats lock contention**:
 - All cache operations contend on global `stats.lock`
-- Exponential backoff minimizes CPU spin
+- Exponential backoff (implemented) minimizes CPU spin during retries
 - Timeout prevents indefinite hangs
 
 **Operational guidance**:
@@ -312,9 +324,10 @@ When reviewing cache subsystem changes:
 | Test flakiness | `Queue.empty()` race in tests | Exact-count queue reads (#926) | #13 |
 | Temp file pollution | Failed atomic rename | Cleanup on exception (#926) | #2, #4 |
 | Deadlock potential | Inconsistent lock ordering | Lock ordering invariant (#926) | #5 |
+| Orphaned artifact without provenance | Two-step commit (separate renames) | Known limitation; readers skip invalid entries | #2 |
 
 ---
 
-**Document Status**: Draft for post-PR-#926-merge review
+**Document Status**: Living document (Phase 3 L1 Stabilization)
 **Owner**: RC219805
-**Reviewers**: TBD (after merge)
+**Last Updated**: 2026-02-13
