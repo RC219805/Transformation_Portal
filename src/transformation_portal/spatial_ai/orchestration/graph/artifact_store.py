@@ -44,7 +44,6 @@ Example:
 from __future__ import annotations
 
 import contextlib
-import fcntl
 import json
 import logging
 import os
@@ -56,6 +55,15 @@ from pathlib import Path
 from typing import Any, Dict, Generator, Optional
 
 import numpy as np
+
+# Platform-specific imports (guarded for cross-platform safety)
+try:
+    import fcntl
+
+    _HAVE_FCNTL = True
+except ImportError:
+    fcntl = None  # type: ignore
+    _HAVE_FCNTL = False
 
 logger = logging.getLogger(__name__)
 
@@ -141,15 +149,26 @@ class ArtifactStore:
     Multi-process safety (Phase 3 L1):
     - Per-key lock files prevent concurrent access to same cache key
     - Exclusive locks for writes (store operations)
-    - Shared locks for reads (load operations) with exclusive fallback
+    - Shared locks for reads (load operations)
     - Lock files stored in locks/ directory
     - Automatic lock release on operation completion
     - Configurable timeout to prevent indefinite hangs
+
+    Platform requirements:
+    - Requires POSIX-compliant OS (fcntl.flock)
+    - Requires local filesystem for correctness (advisory locks)
+    - Not supported on Windows
+    - May behave incorrectly on some network filesystems (NFS, etc.)
 
     Thread safety:
     - Atomic writes (temp file + rename)
     - File locks are process-safe and thread-safe
     - Write operations use OS-level atomic rename
+
+    Lock-free operations (advisory only):
+    - exists() does not acquire locks (may return stale data)
+    - Correctness guarantees only apply to load()/store()/evict()
+    - Do not build critical logic on exists() alone - use load() for safety
 
     Cache eviction (L1):
     - Warns at size limit, actual eviction deferred to L2
@@ -206,15 +225,13 @@ class ArtifactStore:
         self._load_stats()
 
     @contextlib.contextmanager
-    def _acquire_lock(
-        self, cache_key: str, exclusive: bool = True
-    ) -> Generator[None, None, None]:
+    def _acquire_lock(self, cache_key: str, exclusive: bool = True) -> Generator[None, None, None]:
         """Acquire per-key file lock for cache operations.
 
         Args:
             cache_key: Content-addressed cache key (must be valid SHA256 hex).
-            exclusive: If True, acquire exclusive (write) lock. If False, try
-                      shared (read) lock first, fall back to exclusive if unavailable.
+            exclusive: If True, acquire exclusive (write) lock. If False, acquire
+                      shared (read) lock.
 
         Yields:
             None (context manager)
@@ -227,10 +244,16 @@ class ArtifactStore:
         - Per-key locking maximizes concurrency (different keys don't block each other)
         - Lock files stored in locks/ directory: locks/<cache_key>.lock
         - Exclusive locks for writes prevent corruption during store operations
-        - Shared locks for reads allow concurrent readers (with exclusive fallback)
+        - Shared locks for reads allow concurrent readers
         - Lock acquisition uses non-blocking retries with timeout
         - Locks released automatically via context manager (even on exceptions)
         - Lock files never deleted (reused across operations for same key)
+
+        Platform requirements:
+        - Requires POSIX-compliant OS (fcntl.flock)
+        - Requires local filesystem semantics for correctness
+        - Not supported on Windows (flock not available)
+        - May behave incorrectly on some network filesystems (e.g., NFS with certain mount options)
 
         Thread safety:
         - fcntl locks are process-safe AND thread-safe within same process
@@ -241,12 +264,17 @@ class ArtifactStore:
         - Prevents write corruption (only one writer at a time per key)
         - Different keys can be accessed concurrently without blocking
         """
+        # Platform check: Require fcntl for multi-process locking
+        if not _HAVE_FCNTL:
+            raise RuntimeError(
+                "Per-key file locking requires POSIX fcntl.flock support. "
+                "This environment does not provide it (Windows or non-POSIX platform). "
+                "ArtifactStore cannot guarantee multi-process safety without fcntl."
+            )
+
         # Validate cache_key format (security + correctness)
         if not SAFE_CACHE_KEY.match(cache_key):
-            raise ValueError(
-                f"Invalid cache_key format: {cache_key!r}. "
-                "Expected 64 lowercase hex characters (SHA256)."
-            )
+            raise ValueError(f"Invalid cache_key format: {cache_key!r}. " "Expected 64 lowercase hex characters (SHA256).")
 
         # Lock file path: locks/<cache_key>.lock
         lock_path = self.locks_dir / f"{cache_key}.lock"
@@ -267,8 +295,10 @@ class ArtifactStore:
                     lock_type = "shared"
 
                 # Acquire lock with timeout
-                start_time = time.time()
+                # Use monotonic clock to avoid system time changes (NTP corrections, VM time skew)
+                start_time = time.monotonic()
                 acquired = False
+                attempt = 0
 
                 while not acquired:
                     try:
@@ -279,7 +309,7 @@ class ArtifactStore:
 
                     except BlockingIOError:
                         # Lock held by another process/thread
-                        elapsed = time.time() - start_time
+                        elapsed = time.monotonic() - start_time
                         if elapsed >= self.lock_timeout_seconds:
                             raise CacheLockTimeout(
                                 f"Could not acquire {lock_type} lock for cache_key {cache_key} "
@@ -287,8 +317,9 @@ class ArtifactStore:
                                 "Another process may be holding the lock."
                             )
 
-                        # Wait a bit before retrying (exponential backoff)
-                        wait_time = min(0.1 * (1.5 ** int(elapsed * 10)), 1.0)
+                        # Exponential backoff with cap (100ms base, 2x multiplier, 1s max)
+                        attempt += 1
+                        wait_time = min(0.1 * (2**attempt), 1.0)
                         time.sleep(wait_time)
 
                 # Lock acquired, yield control to caller
@@ -303,13 +334,25 @@ class ArtifactStore:
                     logger.warning(f"Error releasing lock for {cache_key}: {e}")
 
     def exists(self, cache_key: str) -> bool:
-        """Check if artifact exists in cache.
+        """Check if artifact exists in cache (lock-free, advisory only).
 
         Args:
             cache_key: Content-addressed cache key.
 
         Returns:
             True if artifact exists, False otherwise.
+
+        Warning:
+            This method does not acquire locks and may return stale data
+            due to concurrent operations. Do not build critical logic on
+            exists() alone - use load() for correctness guarantees.
+
+            Safe patterns:
+            - if store.exists(key): result = store.load(key)  # OK (load locks)
+            - if not store.exists(key): store.store(key, ...)  # OK (store locks)
+
+            Unsafe patterns:
+            - if store.exists(key): do_critical_action()  # WRONG (race condition)
         """
         artifact_path = self._artifact_path(cache_key)
         return artifact_path.exists()
@@ -425,7 +468,9 @@ class ArtifactStore:
             # Atomic write: temp file + rename
             try:
                 # Write artifact (NumPy archive)
-                with tempfile.NamedTemporaryFile(mode="wb", dir=artifact_path.parent, delete=False, suffix=".npz") as tmp_artifact:
+                with tempfile.NamedTemporaryFile(
+                    mode="wb", dir=artifact_path.parent, delete=False, suffix=".npz"
+                ) as tmp_artifact:
                     tmp_artifact_path = Path(tmp_artifact.name)
                     np.savez_compressed(tmp_artifact, **np_dict)
                     tmp_artifact.flush()

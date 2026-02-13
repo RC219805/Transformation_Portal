@@ -17,14 +17,9 @@ Design notes:
 from __future__ import annotations
 
 import hashlib
-import json
 import multiprocessing
-import os
-import tempfile
 import time
-from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Dict
 
 import numpy as np
 import pytest
@@ -79,7 +74,7 @@ def _store_worker(
                 "worker_id": worker_id,
                 "data": np.array([worker_id] * 100, dtype=np.int32),
             }
-        
+
         provenance = ProvenanceMetadata(
             cache_key=cache_key,
             stage_id=f"worker_{worker_id}",
@@ -127,10 +122,10 @@ def _load_worker(
         # Verify artifact is complete (not partial/corrupted)
         if expected_keys is None:
             expected_keys = ["worker_id", "data"]
-        
+
         for key in expected_keys:
             assert key in artifact, f"Artifact missing {key} key (partial read)"
-        
+
         # If we expect worker_id and data, validate data structure
         if "data" in expected_keys:
             assert isinstance(artifact["data"], np.ndarray), "Data not a numpy array"
@@ -138,21 +133,25 @@ def _load_worker(
                 assert len(artifact["data"]) == 100, "Data array wrong length (partial read)"
 
         loaded_worker_id = int(artifact["worker_id"]) if "worker_id" in artifact else None
-        result_queue.put({
-            "success": True,
-            "worker_id": worker_id,
-            "loaded_worker_id": loaded_worker_id,
-            "error": None,
-        })
+        result_queue.put(
+            {
+                "success": True,
+                "worker_id": worker_id,
+                "loaded_worker_id": loaded_worker_id,
+                "error": None,
+            }
+        )
 
     except FileNotFoundError:
         # Expected if artifact doesn't exist yet
-        result_queue.put({
-            "success": True,
-            "worker_id": worker_id,
-            "loaded_worker_id": None,
-            "error": "not_found",
-        })
+        result_queue.put(
+            {
+                "success": True,
+                "worker_id": worker_id,
+                "loaded_worker_id": None,
+                "error": "not_found",
+            }
+        )
     except Exception as e:
         result_queue.put({"success": False, "worker_id": worker_id, "error": str(e)})
 
@@ -166,11 +165,11 @@ def _hold_lock_worker(
     """Worker that acquires and holds a lock for testing timeout behavior."""
     try:
         store = ArtifactStore(cache_dir=cache_dir, lock_timeout_seconds=30.0)
-        
+
         # Acquire and hold lock
         with store._acquire_lock(cache_key, exclusive=True):
             time.sleep(hold_seconds)
-        
+
         result_queue.put({"success": True})
     except Exception as e:
         result_queue.put({"success": False, "error": str(e)})
