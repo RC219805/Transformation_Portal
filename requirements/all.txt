@@ -8,6 +8,8 @@ accelerate==1.12.0
     # via -r requirements/ml.in
 annotated-doc==0.0.4
     # via typer
+annotated-types==0.7.0
+    # via pydantic
 anyio==4.12.1
     # via httpx
 astroid==4.0.3
@@ -308,6 +310,10 @@ pycodestyle==2.14.0
     #   flake8
 pycparser==3.0
     # via cffi
+pydantic==2.12.5
+    # via -r requirements/base.in
+pydantic-core==2.41.5
+    # via pydantic
 pyflakes==3.4.0
     # via flake8
 pygments==2.19.2
@@ -464,7 +470,12 @@ typing-extensions==4.15.0
     #   cattrs
     #   huggingface-hub
     #   mypy
+    #   pydantic
+    #   pydantic-core
     #   torch
+    #   typing-inspection
+typing-inspection==0.4.2
+    # via pydantic
 urllib3==2.6.3
     # via
     #   requests

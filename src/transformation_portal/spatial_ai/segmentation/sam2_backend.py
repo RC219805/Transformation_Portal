@@ -89,10 +89,19 @@ class SAM2Backend:
 
         Raises:
             ImportError: If transformers/torch missing.
+            ValueError: If revision is an unverified placeholder.
             RuntimeError: If model download fails.
         """
         if self._model is not None:
             return  # Already loaded
+
+        # ADR-027: reject unverified revision placeholders at load time
+        if self.revision.startswith("NEEDS_VERIFICATION"):
+            raise ValueError(
+                f"SAM2 model revision '{self.revision}' is an unverified placeholder. "
+                "Supply a pinned HuggingFace commit SHA for production use. "
+                "See ADR-027 for revision pinning policy."
+            )
 
         try:
             import torch
@@ -108,13 +117,13 @@ class SAM2Backend:
             # Load processor (handles image preprocessing)
             self._processor = AutoProcessor.from_pretrained(  # nosec B615
                 model_id,
-                revision=self.revision if not self.revision.startswith("NEEDS_VERIFICATION") else None,
+                revision=self.revision,
             )
 
             # Load model
             self._model = AutoModel.from_pretrained(  # nosec B615
                 model_id,
-                revision=self.revision if not self.revision.startswith("NEEDS_VERIFICATION") else None,
+                revision=self.revision,
             )
 
             # Move to device
