@@ -3,7 +3,7 @@
 Tests the complete flow:
 1. Orchestrator computes material masks via Materials V3
 2. Masks serialized to NPZ file in temp directory
-3. V2 runner passes masks_dir to subprocess
+3. V2 runner passes explicit masks_file path to subprocess
 4. enhance_image.py loads and uses masks
 5. Temporary masks cleaned up after V2 completes
 """
@@ -336,7 +336,7 @@ class TestBackwardCompatibility:
     """Test backward compatibility when masks are not provided."""
 
     def test_v2_runner_works_without_masks(self, tmp_path, monkeypatch):
-        """V2 runner should work normally when masks_dir is None (backward compatibility)."""
+        """V2 runner should work normally when masks_file is None (backward compatibility)."""
         from transformation_portal.lux_depth_v3.v2_runner import V2Runner
 
         # Create a mock script file

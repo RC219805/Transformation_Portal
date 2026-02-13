@@ -4,7 +4,7 @@
 # material-aware perceptual finishing.
 #
 # Prerequisites:
-#   - EfficientSAM weights downloaded (see docs/models.md)
+#   - EfficientSAM weights downloaded (automatic on first use)
 #   - ML dependencies installed: pip install -e ".[ml]"
 #
 # Performance:
