@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import multiprocessing
+import queue
 import time
 from pathlib import Path
 
@@ -187,9 +188,9 @@ class TestArtifactStoreMultiProcess:
         """Test 4 processes writing to same cache key concurrently.
 
         Expected behavior:
-        - Only one process succeeds (last writer wins due to exclusive lock)
-        - All processes complete without errors
-        - Final artifact is complete and valid (no corruption)
+        - All processes complete successfully (per-key lock serializes writes)
+        - Final artifact is valid (last writer wins)
+        - No corruption or partial writes
         - Provenance exists and is consistent with final artifact
         """
         cache_key = _make_cache_key("concurrent_writes_test")
@@ -211,10 +212,14 @@ class TestArtifactStoreMultiProcess:
             p.join(timeout=15.0)
             assert not p.is_alive(), f"Process {p.pid} did not complete in time"
 
-        # Collect results
+        # Collect results (exact-count pattern, no Queue.empty() race)
         results = []
-        while not result_queue.empty():
-            results.append(result_queue.get())
+        for i in range(num_workers):
+            try:
+                result = result_queue.get(timeout=5.0)
+                results.append(result)
+            except queue.Empty:
+                pytest.fail(f"Expected {num_workers} results but only got {i}")
 
         # Verify all processes succeeded
         assert len(results) == num_workers, f"Expected {num_workers} results, got {len(results)}"
@@ -273,10 +278,14 @@ class TestArtifactStoreMultiProcess:
         assert not writer.is_alive(), "Writer did not complete in time"
         assert not reader.is_alive(), "Reader did not complete in time"
 
-        # Collect results
+        # Collect results (exact-count pattern)
         results = []
-        while not result_queue.empty():
-            results.append(result_queue.get())
+        for i in range(2):
+            try:
+                result = result_queue.get(timeout=5.0)
+                results.append(result)
+            except queue.Empty:
+                pytest.fail(f"Expected 2 results but only got {i}")
 
         # Verify both processes succeeded (no crashes/corruption)
         assert len(results) == 2, f"Expected 2 results, got {len(results)}"
@@ -319,10 +328,14 @@ class TestArtifactStoreMultiProcess:
             p.join(timeout=10.0)
             assert not p.is_alive(), f"Process {p.pid} did not complete in time"
 
-        # Collect results
+        # Collect results (exact-count pattern)
         results = []
-        while not result_queue.empty():
-            results.append(result_queue.get())
+        for i in range(num_workers):
+            try:
+                result = result_queue.get(timeout=5.0)
+                results.append(result)
+            except queue.Empty:
+                pytest.fail(f"Expected {num_workers} results but only got {i}")
 
         # Verify all processes succeeded
         assert len(results) == num_workers, f"Expected {num_workers} results, got {len(results)}"
@@ -434,10 +447,14 @@ class TestArtifactStoreMultiProcess:
             p.join(timeout=10.0)
             assert not p.is_alive(), f"Process {p.pid} did not complete in time"
 
-        # Collect results
+        # Collect results (exact-count pattern)
         results = []
-        while not result_queue.empty():
-            results.append(result_queue.get())
+        for i in range(num_readers):
+            try:
+                result = result_queue.get(timeout=5.0)
+                results.append(result)
+            except queue.Empty:
+                pytest.fail(f"Expected {num_readers} results but only got {i}")
 
         # Verify all readers succeeded
         assert len(results) == num_readers, f"Expected {num_readers} results, got {len(results)}"
@@ -483,3 +500,99 @@ class TestArtifactStoreMultiProcess:
         # Subsequent attempts should cleanly fail (FileNotFoundError)
         with pytest.raises(FileNotFoundError):
             store.load(cache_key)
+
+    def test_stats_concurrent_different_keys(self, cache_dir: Path):
+        """Test stats.json integrity under concurrent access to different keys.
+
+        Expected behavior (Issue #925):
+        - Multiple processes hit different cache keys concurrently
+        - stats.json remains valid JSON (no corruption)
+        - Hit/miss counters are consistent (all increments recorded)
+        - Global stats lock prevents lost updates
+
+        Design notes:
+        - Stresses stats.json concurrency (not artifact concurrency)
+        - Uses deterministic pattern (all writes, then all reads)
+        - Verifies stats counts match expected totals
+        """
+        num_workers = 4
+        result_queue = multiprocessing.Queue()
+
+        # Phase 1: 4 workers write to different keys (all cache misses)
+        write_processes = []
+        write_keys = []
+        for i in range(num_workers):
+            cache_key = _make_cache_key(f"stats_test_write_{i}")
+            write_keys.append(cache_key)
+            p = multiprocessing.Process(
+                target=_store_worker,
+                args=(cache_dir, cache_key, i, result_queue),
+            )
+            p.start()
+            write_processes.append(p)
+
+        # Wait for all writes to complete
+        for p in write_processes:
+            p.join(timeout=10.0)
+            assert not p.is_alive(), "Writer did not complete in time"
+
+        # Collect write results
+        write_results = []
+        for i in range(num_workers):
+            try:
+                result = result_queue.get(timeout=5.0)
+                write_results.append(result)
+            except queue.Empty:
+                pytest.fail(f"Expected {num_workers} write results but only got {i}")
+
+        # Verify all writes succeeded
+        assert len(write_results) == num_workers
+        for result in write_results:
+            assert result["success"], f"Writer failed: {result['error']}"
+
+        # Phase 2: 4 workers read from different keys (all cache hits)
+        read_processes = []
+        for i in range(num_workers):
+            cache_key = write_keys[i]  # Read same keys we wrote
+            p = multiprocessing.Process(
+                target=_load_worker,
+                args=(cache_dir, cache_key, i + num_workers, result_queue),
+            )
+            p.start()
+            read_processes.append(p)
+
+        # Wait for all reads to complete
+        for p in read_processes:
+            p.join(timeout=10.0)
+            assert not p.is_alive(), "Reader did not complete in time"
+
+        # Collect read results
+        read_results = []
+        for i in range(num_workers):
+            try:
+                result = result_queue.get(timeout=5.0)
+                read_results.append(result)
+            except queue.Empty:
+                pytest.fail(f"Expected {num_workers} read results but only got {i}")
+
+        # Verify all reads succeeded
+        assert len(read_results) == num_workers
+        for result in read_results:
+            assert result["success"], f"Reader failed: {result['error']}"
+
+        # Verify stats.json integrity and counts
+        store = ArtifactStore(cache_dir=cache_dir)
+        stats = store.get_stats()
+
+        # Verify stats.json is valid (no corruption)
+        assert isinstance(stats, dict), "stats.json corrupted (not a dict)"
+        assert "cache_hits" in stats, "stats.json missing 'cache_hits' key"
+        assert "cache_misses" in stats, "stats.json missing 'cache_misses' key"
+
+        # Verify counts match expected totals
+        # Expected: 4 misses (writes) + 4 hits (reads)
+        expected_misses = num_workers
+        expected_hits = num_workers
+
+        assert stats["cache_misses"] == expected_misses, f"Expected {expected_misses} misses, got {stats['cache_misses']}"
+        assert stats["cache_hits"] == expected_hits, f"Expected {expected_hits} hits, got {stats['cache_hits']}"
