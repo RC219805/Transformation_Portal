@@ -115,10 +115,10 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--upscaler", default="default", help="Upscaler backend (default: %(default)s)")
     parser.add_argument("--log-file", type=Path, default=None, help="Optional log file path")
     parser.add_argument(
-        "--masks-dir",
+        "--masks-file",
         type=Path,
         default=None,
-        help="Directory containing material masks (NPZ format) for Materials V3 integration",
+        help="Explicit path to material masks NPZ file for Materials V3 integration",
     )
     parser.add_argument(
         "--allow-8bit",
@@ -163,12 +163,11 @@ def configure_logging(verbose: bool, quiet: bool, log_file: Path | None) -> None
     )
 
 
-def load_material_masks(masks_dir: Path | None, image_stem: str) -> dict[str, Any] | None:
-    """Load material masks from NPZ file in masks directory.
+def load_material_masks(masks_file: Path | None) -> dict[str, Any] | None:
+    """Load material masks from explicit NPZ file path.
 
     Args:
-        masks_dir: Directory containing material mask NPZ files
-        image_stem: Input image filename stem (for matching mask file)
+        masks_file: Explicit path to material masks NPZ file
 
     Returns:
         Dictionary mapping material names to numpy arrays, or None if no masks found
@@ -176,26 +175,26 @@ def load_material_masks(masks_dir: Path | None, image_stem: str) -> dict[str, An
     Raises:
         ValueError: If mask file is invalid or corrupted
     """
-    if not masks_dir or not masks_dir.exists():
+    if not masks_file or not masks_file.exists():
         return None
 
-    # Look for mask file matching input image stem
-    mask_filename = f"{image_stem}_materials_v3_masks.npz"
-    mask_path = masks_dir / mask_filename
-
-    if not mask_path.exists():
-        logger.debug(f"No material masks found: {mask_path}")
+    # Security: Check file size BEFORE loading (DoS protection)
+    file_size = masks_file.stat().st_size
+    if file_size > 100 * 1024 * 1024:  # 100MB limit
+        logger.warning(
+            f"Material masks file too large: {file_size / (1024 * 1024):.1f}MB " f"(limit: 100MB). Rejecting for safety."
+        )
         return None
 
     try:
-        # Load NPZ file
+        # Load NPZ file with explicit pickle=False for security
         import numpy as np
 
-        with np.load(mask_path) as data:
+        with np.load(masks_file, allow_pickle=False) as data:
             masks = {key: data[key] for key in data.files}
 
         if not masks:
-            logger.warning(f"Material mask file is empty: {mask_path}")
+            logger.warning(f"Material mask file is empty: {masks_file}")
             return None
 
         # Validate loaded masks
@@ -207,11 +206,11 @@ def load_material_masks(masks_dir: Path | None, image_stem: str) -> dict[str, An
                 logger.warning(f"Invalid mask shape for {mat_name}: {mask.shape} (expected 2D)")
                 return None
 
-        logger.info(f"Loaded {len(masks)} material masks from {mask_path.name}: {list(masks.keys())}")
+        logger.info(f"Loaded {len(masks)} material masks from {masks_file.name}: {list(masks.keys())}")
         return masks
 
     except Exception as e:
-        logger.warning(f"Failed to load material masks from {mask_path}: {e}")
+        logger.warning(f"Failed to load material masks from {masks_file}: {e}")
         return None
 
 
@@ -223,7 +222,7 @@ def run_v2_enhancement(
     device: str,
     upscaler: str,
     allow_8bit: bool = False,
-    masks_dir: Path | None = None,
+    masks_file: Path | None = None,
 ) -> dict[str, Any]:
     """Run V2 depth-aware enhancement.
 
@@ -235,7 +234,7 @@ def run_v2_enhancement(
         device: Processing device (cpu/cuda/mps)
         upscaler: Upscaler backend (currently unused, reserved for future)
         allow_8bit: Allow 16-bit → 8-bit downgrade (Quality Firewall bypass)
-        masks_dir: Directory containing material masks (optional, NPZ format)
+        masks_file: Explicit path to material masks NPZ file (optional, Materials V3 integration)
 
     Returns:
         Dict containing enhancement report
@@ -274,8 +273,8 @@ def run_v2_enhancement(
         else:
             logger.warning("No depth map found in %s for %s", depth_dir, input_path.stem)
 
-    # Load material masks if masks_dir provided (Materials V3 integration)
-    material_masks = load_material_masks(masks_dir, input_path.stem) if masks_dir else None
+    # Load material masks if masks_file provided (Materials V3 integration)
+    material_masks = load_material_masks(masks_file) if masks_file else None
 
     # Run enhancement
     report = enhance_image(
@@ -319,7 +318,7 @@ def main() -> int:
             device=args.device,
             upscaler=args.upscaler,
             allow_8bit=args.allow_8bit,
-            masks_dir=args.masks_dir,  # Pass through Materials V3 masks directory
+            masks_file=args.masks_file,  # Pass through Materials V3 explicit mask file
         )
 
         if report_path:

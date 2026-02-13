@@ -1042,9 +1042,7 @@ class EnhanceOrchestrator:
             logger.warning(f"PBR generation failed (non-blocking): {pbr_error}")
             return None
 
-    def _serialize_material_masks(
-        self, masks: Dict[str, np.ndarray], output_key: Path, temp_dir: Path
-    ) -> Optional[Path]:
+    def _serialize_material_masks(self, masks: Dict[str, np.ndarray], output_key: Path, temp_dir: Path) -> Optional[Path]:
         """Serialize material masks to compressed NPZ file.
 
         Masks are saved to temporary directory for V2 subprocess consumption.
@@ -1079,35 +1077,43 @@ class EnhanceOrchestrator:
                     logger.warning(f"Invalid mask type for {mat_name}: {type(mask)}, skipping serialization")
                     return None
                 if mask.dtype not in (np.float32, np.float64):
-                    logger.warning(
-                        f"Invalid mask dtype for {mat_name}: {mask.dtype} (expected float32/float64), skipping"
-                    )
+                    logger.warning(f"Invalid mask dtype for {mat_name}: {mask.dtype} (expected float32/float64), skipping")
                     return None
                 if mask.ndim != 2:
                     logger.warning(f"Invalid mask shape for {mat_name}: {mask.shape} (expected 2D), skipping")
                     return None
 
-            # Serialize to compressed NPZ
-            # Use savez_compressed for ~10-20% size reduction
-            np.savez_compressed(mask_path, **masks)
+            # Serialize to compressed NPZ with atomic write pattern
+            # Use temp + fsync + rename to ensure atomicity (matches ArtifactStore L1 invariant)
+            import os
 
-            # Verify file was created and check size
+            tmp_path = mask_path.with_suffix(".npz.tmp")
+
+            # Write to temporary file
+            with open(tmp_path, "wb") as f:
+                np.savez_compressed(f, **masks)
+                f.flush()
+                os.fsync(f.fileno())
+
+            # Check size before rename
+            file_size_mb = tmp_path.stat().st_size / (1024 * 1024)
+            if file_size_mb > 100:
+                logger.warning(
+                    f"Mask file unexpectedly large: {file_size_mb:.1f}MB. " f"Rejecting for safety (size limit: 100MB)"
+                )
+                tmp_path.unlink()  # Clean up oversized temp file
+                return None
+
+            # Atomic rename (guarantees no partial reads)
+            os.replace(tmp_path, mask_path)
+
+            # Verify final file exists
             if not mask_path.exists():
                 logger.warning(f"Mask serialization failed: file not created at {mask_path}")
                 return None
 
-            file_size_mb = mask_path.stat().st_size / (1024 * 1024)
-            if file_size_mb > 100:
-                logger.warning(
-                    f"Mask file unexpectedly large: {file_size_mb:.1f}MB at {mask_path}. "
-                    f"Rejecting for safety (size limit: 100MB)"
-                )
-                mask_path.unlink()  # Clean up oversized file
-                return None
-
             logger.info(
-                f"Serialized {len(masks)} material masks to {mask_path.name} ({file_size_mb:.2f}MB) "
-                f"for V2 subprocess"
+                f"Serialized {len(masks)} material masks to {mask_path.name} ({file_size_mb:.2f}MB) " f"for V2 subprocess"
             )
             return mask_path
 
@@ -1156,7 +1162,7 @@ class EnhanceOrchestrator:
         # Masks are saved to temp/ directory and cleaned up after V2 completes
         masks_path = None
         temp_dir = self.output_root / "temp"
-        
+
         if materials_v3_result and materials_v3_result.get("material_masks"):
             masks_path = self._serialize_material_masks(
                 materials_v3_result["material_masks"],
@@ -1180,7 +1186,7 @@ class EnhanceOrchestrator:
                 upscaler_backend=self.config.v2_upscaler_backend,
                 log_file=v2_log_path,
                 timeout=self.config.v2_timeout,
-                masks_dir=temp_dir if masks_path else None,  # Pass temp dir if masks were serialized
+                masks_file=masks_path,  # Pass explicit NPZ file path (Option B: eliminates naming coupling)
             )
             v2_runtime_s = v2_result.get("runtime_s", 0.0)
             v2_report_path = find_v2_report(self.v2_dir, output_key.name)

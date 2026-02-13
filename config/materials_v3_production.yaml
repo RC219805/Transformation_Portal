@@ -1,5 +1,5 @@
 # Materials V3 Production Preset
-# 
+#
 # Enables real material segmentation with EfficientSAM backend and
 # material-aware perceptual finishing.
 #
@@ -66,25 +66,25 @@ processing:
 materials_v3:
   # Enable Materials V3 surface-aware finishing
   enable_materials_v3: true
-  
+
   # Enable pixel operations (material-specific enhancements)
   apply_pixel_ops: true
-  
+
   # Material segmentation backend
   enable_material_segmentation: true
   material_segmentation_backend: "efficientsam"  # Real ML segmentation
-  
+
   # Strict backend mode: fail if EfficientSAM unavailable
   # Set to false for graceful fallback to stub backend
   strict_backend: false  # Recommended: false for production
-  
+
   # Material detection thresholds
   min_coverage_px: 500      # Minimum pixels for material detection
   min_mean_conf: 0.20       # Minimum confidence threshold
-  
+
   # Refinement strategy
   refinement_strategy: "canary"  # Conservative refinements only
-  
+
   # Glass material response
   glass_response_enabled: true
 
@@ -95,16 +95,16 @@ materials_v3:
 v2_enhancement:
   # Enable V2 enhancement stage (material-aware perceptual finishing)
   enable_v2: true
-  
+
   # V2 preset (default is balanced for luxury real estate)
   v2_preset: "default"
-  
+
   # V2 processing device
   v2_device: "cpu"  # Options: cpu, cuda, mps
-  
+
   # V2 subprocess timeout (seconds)
   v2_timeout: 120
-  
+
   # Upscaler backend (optional)
   # v2_upscaler_backend: "esrgan"  # Uncomment to enable upscaling
 
@@ -115,10 +115,10 @@ v2_enhancement:
 output:
   # Emit master 16-bit output (linear RGB, archival quality)
   emit_master16: false
-  
+
   # Emit upscaled 16-bit output
   emit_upscaled16: false
-  
+
   # PBR map generation
   generate_pbr: false
 
@@ -129,7 +129,7 @@ output:
 optimization:
   production_resolution: 1024  # Max resolution for batch processing
   batch_size: 4                # Parallel processing (if supported)
-  
+
   # Hash mode for output key generation
   # xxhash: 5x faster than SHA-1 (requires xxhash package)
   # sha1: Standard, always available
@@ -142,16 +142,17 @@ optimization:
 # python -m transformation_portal.lux_depth_v3 \
 #   input_images/ \
 #   --output-root output/ \
-#   --config config/materials_v3_production.yaml \
-#   --enable-segmentation  # Enable via CLI flag
+#   --enable-segmentation
 #
 # Or via Python API:
 #
 #   from transformation_portal.lux_depth_v3 import EnhanceConfig, EnhanceOrchestrator
-#   
-#   config = EnhanceConfig.from_yaml("config/materials_v3_production.yaml")
-#   config.enable_material_segmentation = True  # Opt-in
-#   
+#
+#   # Load config from defaults and override specific settings
+#   config = EnhanceConfig()
+#   config.enable_material_segmentation = True  # Enable segmentation
+#   config.material_segmentation_backend = "efficientsam"
+#
 #   orchestrator = EnhanceOrchestrator(config, output_root)
 #   orchestrator.process_batch(input_paths)
 #

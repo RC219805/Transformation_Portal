@@ -113,42 +113,57 @@ class TestMaskSerialization:
         result = orchestrator._serialize_material_masks(masks, output_key, temp_dir)
         assert result is None
 
-    def test_serialize_oversized_file_returns_none(self, temp_output_dir, mock_depth_backend, mock_da3_available):
+    def test_serialize_oversized_file_returns_none(self, temp_output_dir, mock_depth_backend, mock_da3_available, monkeypatch):
         """Oversized mask file should be rejected and cleaned up."""
         config = EnhanceConfig(enable_v2=False, depth_device="cpu")
         orchestrator = EnhanceOrchestrator(config, temp_output_dir)
 
-        # Create unreasonably large masks (trigger size limit)
-        # Size limit is 100MB. NPZ compression is very effective (~90% reduction),
-        # so we need truly massive masks to exceed the limit
-        # Creating 15000x15000 float32 masks (~900MB uncompressed, ~10MB compressed after NPZ)
-        # Skip this test as it would require >1GB of RAM and is impractical
-        # Instead, test the size check logic is present
-        
-        # Verify the size check exists in the code
-        import inspect
-        source = inspect.getsource(orchestrator._serialize_material_masks)
-        assert "file_size_mb" in source
-        assert "100" in source  # Size limit constant
+        # Mock stat() to report oversized file
+        original_stat = Path.stat
+
+        def mock_stat(self):
+            if self.suffix == ".tmp":
+                # Report oversized temp file (150MB)
+                result = original_stat(self)
+                result = type("obj", (object,), {"st_size": 150 * 1024 * 1024})()
+                return result
+            return original_stat(self)
+
+        monkeypatch.setattr(Path, "stat", mock_stat)
+
+        # Create small test masks (won't actually be oversized)
+        masks = {"glass": np.ones((64, 64), dtype=np.float32)}
+
+        output_key = Path("test_image_abc123")
+        temp_dir = temp_output_dir / "temp"
+
+        # Should return None and clean up
+        result = orchestrator._serialize_material_masks(masks, output_key, temp_dir)
+        assert result is None
+
+        # Verify no .npz or .tmp files left behind
+        if temp_dir.exists():
+            remaining_files = list(temp_dir.glob("*.npz")) + list(temp_dir.glob("*.tmp"))
+            assert len(remaining_files) == 0, f"Cleanup failed: {remaining_files}"
 
 
 class TestV2RunnerMaskIntegration:
-    """Test V2 runner with masks_dir parameter."""
+    """Test V2 runner with masks_file parameter."""
 
-    def test_runner_accepts_masks_dir(self):
-        """V2Runner.run should accept masks_dir parameter."""
+    def test_runner_accepts_masks_file(self):
+        """V2Runner.run should accept masks_file parameter."""
         from transformation_portal.lux_depth_v3.v2_runner import V2Runner
 
         runner = V2Runner()
 
-        # Check that run method signature includes masks_dir
+        # Check that run method signature includes masks_file
         import inspect
 
         sig = inspect.signature(runner.run)
-        assert "masks_dir" in sig.parameters
+        assert "masks_file" in sig.parameters
 
-    def test_runner_builds_command_with_masks_dir(self, tmp_path, monkeypatch):
-        """V2Runner should add --masks-dir to command when masks_dir provided."""
+    def test_runner_builds_command_with_masks_file(self, tmp_path, monkeypatch):
+        """V2Runner should add --masks-file to command when masks_file provided."""
         from transformation_portal.lux_depth_v3.v2_runner import V2Runner
 
         # Create a mock script file
@@ -167,7 +182,7 @@ class TestV2RunnerMaskIntegration:
 
         monkeypatch.setattr("subprocess.run", mock_run)
 
-        # Create runner and run with masks_dir
+        # Create runner and run with masks_file
         runner = V2Runner()
         runner.repo_root = repo_root
         runner.script_path = script_path
@@ -175,21 +190,19 @@ class TestV2RunnerMaskIntegration:
         input_path = tmp_path / "input.jpg"
         input_path.write_text("mock")
         output_dir = tmp_path / "output"
-        masks_dir = tmp_path / "temp"
+        masks_file = tmp_path / "temp" / "test_masks.npz"
 
-        runner.run(
-            input_path=input_path, depth_dir=None, output_dir=output_dir, preset="default", masks_dir=masks_dir
-        )
+        runner.run(input_path=input_path, depth_dir=None, output_dir=output_dir, preset="default", masks_file=masks_file)
 
-        # Verify --masks-dir in command
+        # Verify --masks-file in command
         assert len(captured_cmd) == 1
         cmd = captured_cmd[0]
-        assert "--masks-dir" in cmd
-        masks_dir_idx = cmd.index("--masks-dir")
-        assert str(masks_dir) == cmd[masks_dir_idx + 1]
+        assert "--masks-file" in cmd
+        masks_file_idx = cmd.index("--masks-file")
+        assert str(masks_file) == cmd[masks_file_idx + 1]
 
-    def test_runner_omits_masks_dir_when_none(self, tmp_path, monkeypatch):
-        """V2Runner should omit --masks-dir when masks_dir is None."""
+    def test_runner_omits_masks_file_when_none(self, tmp_path, monkeypatch):
+        """V2Runner should omit --masks-file when masks_file is None."""
         from transformation_portal.lux_depth_v3.v2_runner import V2Runner
 
         # Create a mock script file
@@ -208,7 +221,7 @@ class TestV2RunnerMaskIntegration:
 
         monkeypatch.setattr("subprocess.run", mock_run)
 
-        # Create runner and run without masks_dir
+        # Create runner and run without masks_file
         runner = V2Runner()
         runner.repo_root = repo_root
         runner.script_path = script_path
@@ -217,12 +230,12 @@ class TestV2RunnerMaskIntegration:
         input_path.write_text("mock")
         output_dir = tmp_path / "output"
 
-        runner.run(input_path=input_path, depth_dir=None, output_dir=output_dir, preset="default", masks_dir=None)
+        runner.run(input_path=input_path, depth_dir=None, output_dir=output_dir, preset="default", masks_file=None)
 
-        # Verify --masks-dir NOT in command
+        # Verify --masks-file NOT in command
         assert len(captured_cmd) == 1
         cmd = captured_cmd[0]
-        assert "--masks-dir" not in cmd
+        assert "--masks-file" not in cmd
 
 
 class TestCleanupBehavior:
@@ -230,15 +243,47 @@ class TestCleanupBehavior:
 
     def test_cleanup_on_success(self, temp_output_dir, mock_depth_backend, mock_da3_available, monkeypatch):
         """Temporary masks should be cleaned up after successful V2 run."""
-        # This test would require mocking the entire V2 subprocess flow
-        # For now, verify cleanup logic is in try-finally block
-        from transformation_portal.lux_depth_v3 import orchestrator
-        import inspect
+        config = EnhanceConfig(
+            enable_v2=True,
+            v2_preset="default",
+            enable_materials_v3=True,
+            enable_material_segmentation=True,
+            material_segmentation_backend="stub",
+            depth_device="cpu",
+        )
 
-        # Check that _run_v2_stage has try-finally with cleanup
-        source = inspect.getsource(orchestrator.EnhanceOrchestrator._run_v2_stage)
-        assert "finally:" in source
-        assert "masks_path.unlink()" in source or "unlink" in source
+        orchestrator = EnhanceOrchestrator(config, temp_output_dir)
+
+        # Create test masks
+        masks = {"glass": np.random.rand(64, 64).astype(np.float32)}
+        output_key = Path("test_image_abc123")
+        temp_dir = temp_output_dir / "temp"
+
+        # Serialize masks
+        mask_path = orchestrator._serialize_material_masks(masks, output_key, temp_dir)
+        assert mask_path.exists()
+
+        # Mock V2 runner to succeed
+        with patch.object(orchestrator.v2_runner, "run", return_value={"status": "success", "runtime_s": 1.0}):
+            from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+            # Create ImageInput
+            test_input_path = temp_output_dir / "test.jpg"
+            test_input_path.write_text("mock")
+            image_input = ImageInput(path=test_input_path, metadata={"sha256": "abc123"})
+
+            orchestrator._run_v2_stage(
+                image_input=image_input,
+                depth_path=None,
+                output_key=output_key,
+                v2_log_path=temp_output_dir / "logs" / "test.log",
+                manifest_path=temp_output_dir / "manifests" / "test.json",
+                skip_depth=False,
+                materials_v3_result={"material_masks": masks},
+            )
+
+        # Verify cleanup happened after success
+        assert not mask_path.exists(), "Temporary masks should be cleaned up after V2 success"
 
     def test_cleanup_on_failure(self, temp_output_dir, mock_depth_backend, mock_da3_available):
         """Temporary masks should be cleaned up even if V2 subprocess fails."""
@@ -322,9 +367,7 @@ class TestBackwardCompatibility:
 
         assert result["status"] == "success"
 
-    def test_orchestrator_works_without_materials_v3(
-        self, temp_output_dir, mock_depth_backend, mock_da3_available
-    ):
+    def test_orchestrator_works_without_materials_v3(self, temp_output_dir, mock_depth_backend, mock_da3_available):
         """Orchestrator should work normally when Materials V3 is disabled."""
         config = EnhanceConfig(
             enable_materials_v3=False,  # Materials V3 disabled
