@@ -216,6 +216,9 @@ class ArtifactStore:
         self.locks_dir = self.cache_dir / "locks"
         self.locks_dir.mkdir(parents=True, exist_ok=True)
 
+        # Stats lock for global stats.json (Issue #925)
+        self.stats_lock_path = self.cache_dir / "stats.lock"
+
         self.max_size_gb = max_size_gb
         self.eviction_policy = eviction_policy
         self.lock_timeout_seconds = lock_timeout_seconds
@@ -332,6 +335,50 @@ class ArtifactStore:
                     logger.debug(f"Released {lock_type} lock for cache_key: {cache_key}")
                 except Exception as e:
                     logger.warning(f"Error releasing lock for {cache_key}: {e}")
+
+    @contextlib.contextmanager
+    def _acquire_stats_lock(self) -> Generator[None, None, None]:
+        """Acquire global lock for stats.json operations.
+
+        Yields:
+            None (context manager)
+
+        Raises:
+            RuntimeError: If fcntl is not available (non-POSIX platform).
+
+        Design notes (Issue #925):
+        - Global lock for global shared state (stats.json)
+        - Per-key locks cannot serialize stats access across different keys
+        - Lock cost is negligible compared to I/O + NumPy operations
+        - Prevents corrupted/lost increments under multi-process contention
+        """
+        # Platform check: Require fcntl for stats locking
+        if not _HAVE_FCNTL:
+            raise RuntimeError(
+                "Stats locking requires POSIX fcntl.flock support. "
+                "This environment does not provide it (Windows or non-POSIX platform)."
+            )
+
+        # Create stats lock file if it doesn't exist (idempotent)
+        self.stats_lock_path.touch(exist_ok=True)
+
+        # Open lock file with context manager to ensure cleanup
+        with open(self.stats_lock_path, "r+") as lock_file:
+            try:
+                # Acquire exclusive lock (blocking, no timeout for stats)
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+                logger.debug("Acquired stats lock")
+
+                # Lock acquired, yield control to caller
+                yield
+
+            finally:
+                # Release lock (file close handled by context manager)
+                try:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                    logger.debug("Released stats lock")
+                except Exception as e:
+                    logger.warning(f"Error releasing stats lock: {e}")
 
     def exists(self, cache_key: str) -> bool:
         """Check if artifact exists in cache (lock-free, advisory only).
@@ -635,27 +682,88 @@ class ArtifactStore:
         return self.artifacts_dir / prefix / f"{cache_key}.json"
 
     def _load_stats(self) -> None:
-        """Load cache statistics from disk."""
-        if self.stats_path.exists():
-            with open(self.stats_path) as f:
-                self._stats = json.load(f)
-        else:
-            self._stats = {"hits": 0, "misses": 0}
+        """Load cache statistics from disk (with locking).
 
-    def _save_stats(self) -> None:
-        """Save cache statistics to disk."""
-        with open(self.stats_path, "w") as f:
-            json.dump(self._stats, f, indent=2)
+        Design notes (Issue #925):
+        - Acquires stats lock to prevent concurrent access
+        - Initializes to zero if stats.json doesn't exist
+        """
+        with self._acquire_stats_lock():
+            if self.stats_path.exists():
+                with open(self.stats_path) as f:
+                    self._stats = json.load(f)
+            else:
+                self._stats = {"hits": 0, "misses": 0}
+
+    def _save_stats_atomic(self) -> None:
+        """Save cache statistics to disk atomically.
+
+        Design notes (Issue #925):
+        - Uses temp → fsync → rename pattern (same as artifacts)
+        - Atomic write prevents corruption from crashes mid-write
+        - Caller must hold stats lock
+        """
+        # Write to temp file in same directory (ensures same filesystem for atomic rename)
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            dir=self.cache_dir,
+            delete=False,
+            suffix=".json",
+            prefix=".stats_tmp_",
+        ) as tmp_file:
+            tmp_path = Path(tmp_file.name)
+            json.dump(self._stats, tmp_file, indent=2)
+            tmp_file.flush()
+            os.fsync(tmp_file.fileno())
+
+        # Atomic rename
+        tmp_path.replace(self.stats_path)
 
     def _record_cache_hit(self) -> None:
-        """Record cache hit in statistics."""
-        self._stats["hits"] = self._stats.get("hits", 0) + 1
-        self._save_stats()
+        """Record cache hit in statistics (with locking and atomic write).
+
+        Design notes (Issue #925):
+        - Acquires global stats lock to prevent lost increments
+        - Reloads stats from disk inside lock to ensure consistency
+        - Uses atomic write to prevent corruption
+        """
+        with self._acquire_stats_lock():
+            # Reload from disk to get latest counts
+            if self.stats_path.exists():
+                with open(self.stats_path) as f:
+                    current_stats = json.load(f)
+            else:
+                current_stats = {"hits": 0, "misses": 0}
+
+            # Increment
+            current_stats["hits"] = current_stats.get("hits", 0) + 1
+
+            # Save atomically
+            self._stats = current_stats
+            self._save_stats_atomic()
 
     def _record_cache_miss(self) -> None:
-        """Record cache miss in statistics."""
-        self._stats["misses"] = self._stats.get("misses", 0) + 1
-        self._save_stats()
+        """Record cache miss in statistics (with locking and atomic write).
+
+        Design notes (Issue #925):
+        - Acquires global stats lock to prevent lost increments
+        - Reloads stats from disk inside lock to ensure consistency
+        - Uses atomic write to prevent corruption
+        """
+        with self._acquire_stats_lock():
+            # Reload from disk to get latest counts
+            if self.stats_path.exists():
+                with open(self.stats_path) as f:
+                    current_stats = json.load(f)
+            else:
+                current_stats = {"hits": 0, "misses": 0}
+
+            # Increment
+            current_stats["misses"] = current_stats.get("misses", 0) + 1
+
+            # Save atomically
+            self._stats = current_stats
+            self._save_stats_atomic()
 
     def _check_cache_size(self) -> None:
         """Check cache size and warn if over limit.
