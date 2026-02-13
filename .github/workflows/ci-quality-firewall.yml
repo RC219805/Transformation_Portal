@@ -90,7 +90,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.preflight.outputs.head_sha }}
 
@@ -134,7 +134,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.preflight.outputs.head_sha }}
 
@@ -164,7 +164,7 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.preflight.outputs.head_sha }}
 
@@ -224,7 +224,7 @@ jobs:
         python-version: ["3.11", "3.12"]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.preflight.outputs.head_sha }}
 
@@ -309,7 +309,7 @@ jobs:
     timeout-minutes: 25
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.preflight.outputs.head_sha }}
 
@@ -407,7 +407,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.preflight.outputs.head_sha }}
           fetch-depth: 0
@@ -473,7 +473,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.preflight.outputs.head_sha }}
 
@@ -514,7 +514,7 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ needs.preflight.outputs.head_sha }}
 
