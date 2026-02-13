@@ -243,13 +243,20 @@ class ArtifactStore:
         self._load_stats()
 
     @contextlib.contextmanager
-    def _acquire_lock(self, cache_key: str, exclusive: bool = True) -> Generator[None, None, None]:
+    def _acquire_lock(
+        self,
+        cache_key: str,
+        exclusive: bool = True,
+        timeout: Optional[float] = None,
+    ) -> Generator[None, None, None]:
         """Acquire per-key file lock for cache operations.
 
         Args:
             cache_key: Content-addressed cache key (must be valid SHA256 hex).
             exclusive: If True, acquire exclusive (write) lock. If False, acquire
                       shared (read) lock.
+            timeout: Optional lock timeout in seconds. If None, uses self.lock_timeout_seconds.
+                    Use small values (e.g., 0.1) for non-blocking scavenger.
 
         Yields:
             None (context manager)
@@ -294,6 +301,9 @@ class ArtifactStore:
         if not SAFE_CACHE_KEY.match(cache_key):
             raise ValueError(f"Invalid cache_key format: {cache_key!r}. " "Expected 64 lowercase hex characters (SHA256).")
 
+        # Use provided timeout or fall back to instance timeout
+        lock_timeout = timeout if timeout is not None else self.lock_timeout_seconds
+
         # Lock file path: locks/<cache_key>.lock
         lock_path = self.locks_dir / f"{cache_key}.lock"
 
@@ -328,10 +338,10 @@ class ArtifactStore:
                     except BlockingIOError:
                         # Lock held by another process/thread
                         elapsed = time.monotonic() - start_time
-                        if elapsed >= self.lock_timeout_seconds:
+                        if elapsed >= lock_timeout:
                             raise CacheLockTimeout(
                                 f"Could not acquire {lock_type} lock for cache_key {cache_key} "
-                                f"within {self.lock_timeout_seconds}s timeout. "
+                                f"within {lock_timeout}s timeout. "
                                 "Another process may be holding the lock."
                             )
 
@@ -529,6 +539,19 @@ class ArtifactStore:
             provenance_path = self._provenance_path(cache_key)
             committed_path = self._committed_path(cache_key)
 
+            # Idempotency check: if already committed, skip write (Issue #929 correctness)
+            # This prevents overwrite hazards when multiple processes compute same key.
+            # If crash happens during overwrite, old .committed marker could point to
+            # mismatched artifact/provenance pair.
+            if committed_path.exists():
+                if artifact_path.exists() and provenance_path.exists():
+                    logger.debug(f"Store skipped (already committed): {cache_key}")
+                    return
+                else:
+                    # Marker exists but files missing → corruption, invalidate and rebuild
+                    logger.warning(f"Corrupted entry detected (marker without files): {cache_key}")
+                    committed_path.unlink(missing_ok=True)
+
             # Create directory
             artifact_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -595,13 +618,19 @@ class ArtifactStore:
                 logger.debug(f"Stored artifact: {cache_key}")
 
             except Exception as e:
-                # Clean up temp files on failure
+                # Clean up temp files AND uncommitted artifacts on failure
+                # Without marker, these are by definition uncommitted junk
                 if "tmp_artifact_path" in locals() and tmp_artifact_path.exists():
                     tmp_artifact_path.unlink()
                 if "tmp_prov_path" in locals() and tmp_prov_path.exists():
                     tmp_prov_path.unlink()
                 if "tmp_marker_path" in locals() and tmp_marker_path.exists():
                     tmp_marker_path.unlink()
+
+                # Best-effort cleanup of renamed-but-uncommitted files
+                artifact_path.unlink(missing_ok=True)
+                provenance_path.unlink(missing_ok=True)
+
                 raise ValueError(f"Failed to store artifact: {cache_key}") from e
 
             # Check cache size (warn if over limit)
@@ -793,13 +822,15 @@ class ArtifactStore:
             - orphaned_provenance_removed: count of .json files removed
             - stale_temp_files_removed: count of temp files removed
 
-        Design notes:
-        - Does NOT acquire per-key locks (scavenger is best-effort cleanup).
-        - Safe to run concurrently with store/load operations because:
-          (a) store() holds exclusive lock while writing, so an in-progress
-              store will either complete (marker created) or fail (files cleaned
-              up by store's own exception handler) before scavenger acts.
-          (b) Scavenger only removes files without .committed marker.
+        Design notes (concurrent safety):
+        - Acquires per-key locks before deleting uncommitted entries
+        - Only deletes uncommitted files older than max_temp_age_seconds (age grace period)
+        - Re-checks marker presence after acquiring lock (TOCTOU prevention)
+        - Scavenger is best-effort: skips keys where lock can't be acquired
+        - Safe to run concurrently with store/load operations:
+          (a) Age check prevents deleting fresh in-flight writes
+          (b) Lock check prevents deleting files held by active writers
+          (c) Re-check after lock prevents race between check and delete
         - Logs each removal at DEBUG level for audit trail.
         """
         report = {
@@ -810,6 +841,10 @@ class ArtifactStore:
 
         # Temp file suffixes produced by store() and _save_stats_atomic()
         _TEMP_SUFFIXES = (".npz", ".json", ".committed_tmp")
+
+        # Track uncommitted entries by cache key (to process as units)
+        uncommitted_keys: Dict[str, List[Path]] = {}
+        now = time.time()
 
         for prefix_dir in self.artifacts_dir.iterdir():
             if not prefix_dir.is_dir():
@@ -825,7 +860,7 @@ class ArtifactStore:
                 # NamedTemporaryFile produces names like tmpXXXXXX.suffix
                 if name.startswith("tmp") and any(name.endswith(s) for s in _TEMP_SUFFIXES):
                     try:
-                        age = time.time() - entry.stat().st_mtime
+                        age = now - entry.stat().st_mtime
                         if age > max_temp_age_seconds:
                             entry.unlink(missing_ok=True)
                             report["stale_temp_files_removed"] += 1
@@ -834,31 +869,78 @@ class ArtifactStore:
                         pass  # File may have been removed concurrently
                     continue
 
-                # --- Orphaned artifacts (.npz without .committed) ---
+                # --- Collect uncommitted entries by key ---
                 if name.endswith(".npz") and SAFE_CACHE_KEY.match(name[:-4]):
                     cache_key = name[:-4]
                     committed = prefix_dir / f"{cache_key}.committed"
                     if not committed.exists():
-                        try:
-                            entry.unlink(missing_ok=True)
-                            report["orphaned_artifacts_removed"] += 1
-                            logger.debug(f"Scavenger: removed orphaned artifact {entry}")
-                        except OSError:
-                            pass
+                        if cache_key not in uncommitted_keys:
+                            uncommitted_keys[cache_key] = []
+                        uncommitted_keys[cache_key].append(entry)
                     continue
 
-                # --- Orphaned provenance (.json without .committed) ---
                 if name.endswith(".json") and SAFE_CACHE_KEY.match(name[:-5]):
                     cache_key = name[:-5]
                     committed = prefix_dir / f"{cache_key}.committed"
                     if not committed.exists():
-                        try:
-                            entry.unlink(missing_ok=True)
-                            report["orphaned_provenance_removed"] += 1
-                            logger.debug(f"Scavenger: removed orphaned provenance {entry}")
-                        except OSError:
-                            pass
+                        if cache_key not in uncommitted_keys:
+                            uncommitted_keys[cache_key] = []
+                        uncommitted_keys[cache_key].append(entry)
                     continue
+
+        # --- Process uncommitted entries with lock + age checks ---
+        for cache_key, files in uncommitted_keys.items():
+            # Age check: only scavenge old uncommitted files
+            try:
+                mtimes = [f.stat().st_mtime for f in files if f.exists()]
+                if not mtimes:
+                    continue  # Files deleted concurrently
+
+                newest = max(mtimes)
+                age = now - newest
+
+                if age < max_temp_age_seconds:
+                    logger.debug(f"Scavenger: skipping fresh uncommitted key {cache_key} (age={age:.1f}s)")
+                    continue
+            except OSError:
+                continue  # Stat failed, skip this key
+
+            # Lock check: try to acquire per-key lock (non-blocking)
+            try:
+                with self._acquire_lock(cache_key, exclusive=True, timeout=0.1):
+                    # Re-check marker after lock acquisition (TOCTOU prevention)
+                    committed_path = self._committed_path(cache_key)
+                    if committed_path.exists():
+                        continue  # Became committed while we waited for lock
+
+                    # Safe to delete uncommitted files
+                    artifact_path = self._artifact_path(cache_key)
+                    prov_path = self._provenance_path(cache_key)
+
+                    try:
+                        if artifact_path.exists():
+                            artifact_path.unlink()
+                            report["orphaned_artifacts_removed"] += 1
+                            logger.debug(f"Scavenger: removed orphaned artifact {artifact_path}")
+                    except FileNotFoundError:
+                        pass  # Deleted concurrently
+                    except OSError as e:
+                        logger.debug(f"Scavenger: failed to remove {artifact_path} ({e})")
+
+                    try:
+                        if prov_path.exists():
+                            prov_path.unlink()
+                            report["orphaned_provenance_removed"] += 1
+                            logger.debug(f"Scavenger: removed orphaned provenance {prov_path}")
+                    except FileNotFoundError:
+                        pass
+                    except OSError as e:
+                        logger.debug(f"Scavenger: failed to remove {prov_path} ({e})")
+
+            except CacheLockTimeout:
+                # Writer holding lock, skip this key
+                logger.debug(f"Scavenger: skipping locked key {cache_key}")
+                continue
 
         logger.info(
             f"Scavenger complete: {report['orphaned_artifacts_removed']} orphaned artifacts, "
