@@ -26,7 +26,7 @@ from transformation_portal.plugins import (
     description="Simple example depth model using gradient-based estimation",
     author="Transformation Portal Team",
     license="MIT",
-    tags=["example", "simple", "gradient-based"]
+    tags=["example", "simple", "gradient-based"],
 )
 class SimpleDepthModel(DepthModelPlugin):
     """Simple depth model example using gradient-based estimation.
@@ -60,8 +60,8 @@ class SimpleDepthModel(DepthModelPlugin):
                 - invert: Invert depth values (default: False)
         """
         self._config = config or {}
-        self.normalize = self._config.get('normalize', True)
-        self.invert = self._config.get('invert', False)
+        self.normalize = self._config.get("normalize", True)
+        self.invert = self._config.get("invert", False)
 
         # Mark as initialized
         self._initialized = True
@@ -175,10 +175,10 @@ if __name__ == "__main__":
     model = SimpleDepthModel()
 
     # Initialize
-    model.initialize(config={'normalize': True, 'invert': False})
+    model.initialize(config={"normalize": True, "invert": False})
 
     # Load test image
-    test_image = Image.new('RGB', (512, 512), color='white')
+    test_image = Image.new("RGB", (512, 512), color="white")
 
     # Estimate depth
     depth_map = model.estimate_depth(test_image)

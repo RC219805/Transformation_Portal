@@ -1,0 +1,150 @@
+name: Ingest Contract Validation
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  validate-ingest-contract:
+    name: Validate Ingest Contract
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read  # Security: lock down permissions
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install exiftool
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libimage-exiftool-perl
+          exiftool -ver
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest
+
+      - name: Run ingest contract validation
+        run: |
+          python scripts/validate_ingest_contract.py --test-dir tests/fixtures/ingest --strict
+        continue-on-error: false
+
+      - name: Run ingest contract tests
+        run: |
+          pytest tests/ingest/ -v --tb=short -m "not ml and not slow"
+        continue-on-error: false
+
+  schema-drift-detection:
+    name: Schema Drift Detection
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    permissions:
+      contents: read  # Security: lock down permissions
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0  # Need full history to compare
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Check for schema changes with policy enforcement
+        run: |
+          # Check if schema files were modified
+          git fetch origin ${{ github.base_ref }}
+
+          SCHEMA_FILES="src/transformation_portal/ingest/schemas.py"
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}..HEAD)
+
+          SCHEMA_CHANGED=false
+          for file in $SCHEMA_FILES; do
+            if echo "$CHANGED_FILES" | grep -q "$file"; then
+              echo "⚠️  Schema file modified: $file"
+              SCHEMA_CHANGED=true
+            fi
+          done
+
+          if [ "$SCHEMA_CHANGED" = "true" ]; then
+            echo ""
+            echo "📋 Schema change detected - validating compliance with schema evolution policy:"
+            echo ""
+
+            # Check 1: Schema version must be bumped
+            echo "✓ Checking schema version bump..."
+            VERSION_CHANGED=$(git diff origin/${{ github.base_ref }}..HEAD -- src/transformation_portal/ingest/schemas.py | grep -E '^\+.*Literal\["[0-9]+\.[0-9]+\.[0-9]+"\]' | wc -l)
+
+            if [ "$VERSION_CHANGED" -eq 0 ]; then
+              echo "❌ POLICY VIOLATION: Schema version not bumped"
+              echo "   When modifying schemas.py, you must bump the Literal schema version"
+              echo "   Example: Literal[\"1.0.0\"] → Literal[\"1.1.0\"] or Literal[\"2.0.0\"]"
+              exit 1
+            fi
+            echo "   ✅ Schema version appears to be bumped"
+
+            # Check 2: CHANGELOG.md must be updated
+            echo ""
+            echo "✓ Checking CHANGELOG.md update..."
+            if ! echo "$CHANGED_FILES" | grep -q "CHANGELOG.md"; then
+              echo "❌ POLICY VIOLATION: CHANGELOG.md not updated"
+              echo "   Schema changes require CHANGELOG.md update with migration notes"
+              exit 1
+            fi
+            echo "   ✅ CHANGELOG.md updated"
+
+            # Check 3: Contract docs must be updated
+            echo ""
+            echo "✓ Checking contract documentation update..."
+            if ! echo "$CHANGED_FILES" | grep -q "docs/apex/ingest_contract.md"; then
+              echo "❌ POLICY VIOLATION: docs/apex/ingest_contract.md not updated"
+              echo "   Schema changes require contract documentation update"
+              exit 1
+            fi
+            echo "   ✅ Contract docs updated"
+
+            echo ""
+            echo "✅ All schema evolution policy checks passed"
+            echo "   Schema change is properly documented and versioned"
+          else
+            echo "✅ No schema files modified"
+          fi
+
+      - name: Verify schema version consistency
+        run: |
+          # Ensure all schema versions are consistent
+          python -c "
+          from transformation_portal.ingest.schemas import ProvenanceSidecar, IngestManifest
+
+          prov_version = ProvenanceSidecar.model_fields['schema_version'].default
+          manifest_version = IngestManifest.model_fields['schema_version'].default
+
+          if prov_version != manifest_version:
+              print(f'❌ Schema version mismatch:')
+              print(f'   ProvenanceSidecar: {prov_version}')
+              print(f'   IngestManifest: {manifest_version}')
+              exit(1)
+
+          print(f'✅ Schema versions consistent: {prov_version}')
+          "

@@ -170,10 +170,7 @@ class KnowledgeIntegrationEngine:
 
         # Filter records for this pipeline and time window
         cutoff = datetime.now() - timedelta(days=days)
-        records = [
-            r for r in self.feedback_records
-            if r.pipeline == pipeline and r.timestamp >= cutoff
-        ]
+        records = [r for r in self.feedback_records if r.pipeline == pipeline and r.timestamp >= cutoff]
 
         if not records:
             return PatternAnalysis(
@@ -202,7 +199,8 @@ class KnowledgeIntegrationEngine:
             if not record.success and record.error_message:
                 # Extract error type
                 import re
-                error_type_match = re.search(r'(\w+Error|\w+Exception)', record.error_message)
+
+                error_type_match = re.search(r"(\w+Error|\w+Exception)", record.error_message)
                 if error_type_match:
                     error_type = error_type_match.group(1)
                     failure_modes[error_type] += 1
@@ -243,15 +241,10 @@ class KnowledgeIntegrationEngine:
                 if record.success:
                     successful_parameter_values[key][value_str] += 1
 
-        common_parameters = {
-            key: counter.most_common(1)[0][0]
-            for key, counter in parameter_values.items()
-        }
+        common_parameters = {key: counter.most_common(1)[0][0] for key, counter in parameter_values.items()}
 
         optimal_parameters = {
-            key: counter.most_common(1)[0][0]
-            for key, counter in successful_parameter_values.items()
-            if counter
+            key: counter.most_common(1)[0][0] for key, counter in successful_parameter_values.items() if counter
         }
 
         analysis = PatternAnalysis(
@@ -336,71 +329,79 @@ class KnowledgeIntegrationEngine:
 
             # Recommendation: Low success rate
             if analysis.success_rate < 0.9 and analysis.total_runs >= 10:
-                recommendations.append(Recommendation(
-                    recommendation_type="regression",
-                    severity="high" if analysis.success_rate < 0.8 else "medium",
-                    title=f"Low success rate for {pipeline_name}",
-                    description=f"Success rate is {analysis.success_rate:.1%}, which is below the 90% threshold.",
-                    affected_component=pipeline_name,
-                    suggested_action="Review recent changes and error patterns. Consider adding more error handling.",
-                    evidence=[
-                        f"Total runs: {analysis.total_runs}",
-                        f"Failures: {analysis.total_runs - int(analysis.total_runs * analysis.success_rate)}",
-                        f"Common errors: {', '.join(list(analysis.failure_modes.keys())[:3])}",
-                    ],
-                    confidence=0.9,
-                ))
+                recommendations.append(
+                    Recommendation(
+                        recommendation_type="regression",
+                        severity="high" if analysis.success_rate < 0.8 else "medium",
+                        title=f"Low success rate for {pipeline_name}",
+                        description=f"Success rate is {analysis.success_rate:.1%}, which is below the 90% threshold.",
+                        affected_component=pipeline_name,
+                        suggested_action="Review recent changes and error patterns. Consider adding more error handling.",
+                        evidence=[
+                            f"Total runs: {analysis.total_runs}",
+                            f"Failures: {analysis.total_runs - int(analysis.total_runs * analysis.success_rate)}",
+                            f"Common errors: {', '.join(list(analysis.failure_modes.keys())[:3])}",
+                        ],
+                        confidence=0.9,
+                    )
+                )
 
             # Recommendation: Performance degradation
             if analysis.time_trend == "degrading" and analysis.total_runs >= 20:
-                recommendations.append(Recommendation(
-                    recommendation_type="optimization",
-                    severity="medium",
-                    title=f"Performance degradation in {pipeline_name}",
-                    description=f"Processing time has increased. Current average: {analysis.avg_processing_time:.2f}s",
-                    affected_component=pipeline_name,
-                    suggested_action="Profile the pipeline to identify bottlenecks. Consider optimizing slow operations.",
-                    evidence=[
-                        f"Average time: {analysis.avg_processing_time:.2f}s",
-                        f"P95 time: {analysis.p95_processing_time:.2f}s",
-                        f"Trend: {analysis.time_trend}",
-                    ],
-                    confidence=0.8,
-                ))
+                recommendations.append(
+                    Recommendation(
+                        recommendation_type="optimization",
+                        severity="medium",
+                        title=f"Performance degradation in {pipeline_name}",
+                        description=f"Processing time has increased. Current average: {analysis.avg_processing_time:.2f}s",
+                        affected_component=pipeline_name,
+                        suggested_action="Profile the pipeline to identify bottlenecks. Consider optimizing slow operations.",
+                        evidence=[
+                            f"Average time: {analysis.avg_processing_time:.2f}s",
+                            f"P95 time: {analysis.p95_processing_time:.2f}s",
+                            f"Trend: {analysis.time_trend}",
+                        ],
+                        confidence=0.8,
+                    )
+                )
 
             # Recommendation: Quality degradation
             if analysis.quality_trend == "degrading" and analysis.total_runs >= 20:
-                recommendations.append(Recommendation(
-                    recommendation_type="regression",
-                    severity="high",
-                    title=f"Quality degradation in {pipeline_name}",
-                    description="Output quality has decreased compared to previous period.",
-                    affected_component=pipeline_name,
-                    suggested_action="Review recent parameter changes. Consider reverting to previous settings.",
-                    evidence=[
-                        f"Quality trend: {analysis.quality_trend}",
-                        f"Optimal parameters: {analysis.optimal_parameters}",
-                    ],
-                    confidence=0.85,
-                ))
+                recommendations.append(
+                    Recommendation(
+                        recommendation_type="regression",
+                        severity="high",
+                        title=f"Quality degradation in {pipeline_name}",
+                        description="Output quality has decreased compared to previous period.",
+                        affected_component=pipeline_name,
+                        suggested_action="Review recent parameter changes. Consider reverting to previous settings.",
+                        evidence=[
+                            f"Quality trend: {analysis.quality_trend}",
+                            f"Optimal parameters: {analysis.optimal_parameters}",
+                        ],
+                        confidence=0.85,
+                    )
+                )
 
             # Recommendation: Common failure patterns
             if analysis.failure_modes and analysis.total_runs >= 10:
                 for error_type, count in list(analysis.failure_modes.items())[:3]:
                     if count >= 3:  # At least 3 occurrences
-                        recommendations.append(Recommendation(
-                            recommendation_type="missing_test",
-                            severity="medium",
-                            title=f"Recurring {error_type} in {pipeline_name}",
-                            description=f"This error has occurred {count} times.",
-                            affected_component=pipeline_name,
-                            suggested_action=f"Add test coverage for {error_type}. Implement better error handling.",
-                            evidence=[
-                                f"Occurrences: {count}",
-                                f"Example: {analysis.error_patterns[0] if analysis.error_patterns else 'N/A'}",
-                            ],
-                            confidence=0.9,
-                        ))
+                        recommendations.append(
+                            Recommendation(
+                                recommendation_type="missing_test",
+                                severity="medium",
+                                title=f"Recurring {error_type} in {pipeline_name}",
+                                description=f"This error has occurred {count} times.",
+                                affected_component=pipeline_name,
+                                suggested_action=f"Add test coverage for {error_type}. Implement better error handling.",
+                                evidence=[
+                                    f"Occurrences: {count}",
+                                    f"Example: {analysis.error_patterns[0] if analysis.error_patterns else 'N/A'}",
+                                ],
+                                confidence=0.9,
+                            )
+                        )
 
         # Check for undocumented features
         # (Features used in parameters but not in documentation)
@@ -422,7 +423,7 @@ class KnowledgeIntegrationEngine:
         query_lower = query.lower()
 
         # Success rate queries
-        if 'success rate' in query_lower or 'success' in query_lower:
+        if "success rate" in query_lower or "success" in query_lower:
             # Find pipeline mentioned in query
             pipelines = {r.pipeline for r in self.feedback_records}
             mentioned_pipeline = None
@@ -442,7 +443,7 @@ class KnowledgeIntegrationEngine:
                 return f"Overall success rate across all pipelines is {overall_rate:.1%} ({total_runs} total runs)."
 
         # Performance queries
-        if 'performance' in query_lower or 'speed' in query_lower or 'time' in query_lower:
+        if "performance" in query_lower or "speed" in query_lower or "time" in query_lower:
             pipelines = {r.pipeline for r in self.feedback_records}
             mentioned_pipeline = None
             for pipeline in pipelines:
@@ -463,7 +464,7 @@ class KnowledgeIntegrationEngine:
                     return "No performance data available."
 
         # Error queries
-        if 'error' in query_lower or 'fail' in query_lower or 'problem' in query_lower:
+        if "error" in query_lower or "fail" in query_lower or "problem" in query_lower:
             pipelines = {r.pipeline for r in self.feedback_records}
             mentioned_pipeline = None
             for pipeline in pipelines:
@@ -474,7 +475,7 @@ class KnowledgeIntegrationEngine:
             if mentioned_pipeline:
                 analysis = self.analyze_patterns(mentioned_pipeline)
                 if analysis.failure_modes:
-                    top_errors = ', '.join([f"{k} ({v})" for k, v in list(analysis.failure_modes.items())[:3]])
+                    top_errors = ", ".join([f"{k} ({v})" for k, v in list(analysis.failure_modes.items())[:3]])
                     return f"Top errors for {mentioned_pipeline}: {top_errors}"
                 else:
                     return f"No errors recorded for {mentioned_pipeline}."
@@ -484,18 +485,19 @@ class KnowledgeIntegrationEngine:
                 for record in self.feedback_records:
                     if not record.success and record.error_message:
                         import re
-                        error_type_match = re.search(r'(\w+Error|\w+Exception)', record.error_message)
+
+                        error_type_match = re.search(r"(\w+Error|\w+Exception)", record.error_message)
                         if error_type_match:
                             error_counter[error_type_match.group(1)] += 1
 
                 if error_counter:
-                    top_errors = ', '.join([f"{k} ({v})" for k, v in error_counter.most_common(3)])
+                    top_errors = ", ".join([f"{k} ({v})" for k, v in error_counter.most_common(3)])
                     return f"Top errors across all pipelines: {top_errors}"
                 else:
                     return "No errors recorded."
 
         # Recommendation queries
-        if 'recommend' in query_lower or 'suggest' in query_lower or 'improve' in query_lower:
+        if "recommend" in query_lower or "suggest" in query_lower or "improve" in query_lower:
             recommendations = self.generate_recommendations()
             if recommendations:
                 # Return top 3 recommendations
@@ -530,18 +532,15 @@ class KnowledgeIntegrationEngine:
                 continue
 
             # Filter by time
-            filtered_values = [
-                (ts, val) for ts, val in values
-                if ts >= cutoff
-            ]
+            filtered_values = [(ts, val) for ts, val in values if ts >= cutoff]
 
             if filtered_values:
                 summary[kpi_key] = {
-                    'data_points': filtered_values,
-                    'current': filtered_values[-1][1],
-                    'average': statistics.mean(v for _, v in filtered_values),
-                    'min': min(v for _, v in filtered_values),
-                    'max': max(v for _, v in filtered_values),
+                    "data_points": filtered_values,
+                    "current": filtered_values[-1][1],
+                    "average": statistics.mean(v for _, v in filtered_values),
+                    "min": min(v for _, v in filtered_values),
+                    "max": max(v for _, v in filtered_values),
                 }
 
         return summary
@@ -549,53 +548,53 @@ class KnowledgeIntegrationEngine:
     def export_knowledge_base(self, output_path: str):
         """Export knowledge base to JSON."""
         data = {
-            'export_time': datetime.now().isoformat(),
-            'total_feedback_records': len(self.feedback_records),
-            'pipelines': list({r.pipeline for r in self.feedback_records}),
-            'patterns': {},
-            'recommendations': [],
-            'kpi_summary': {},
+            "export_time": datetime.now().isoformat(),
+            "total_feedback_records": len(self.feedback_records),
+            "pipelines": list({r.pipeline for r in self.feedback_records}),
+            "patterns": {},
+            "recommendations": [],
+            "kpi_summary": {},
         }
 
         # Export patterns for each pipeline
         pipelines = {r.pipeline for r in self.feedback_records}
         for pipeline in pipelines:
             analysis = self.analyze_patterns(pipeline)
-            data['patterns'][pipeline] = {
-                'total_runs': analysis.total_runs,
-                'success_rate': analysis.success_rate,
-                'avg_processing_time': analysis.avg_processing_time,
-                'median_processing_time': analysis.median_processing_time,
-                'p95_processing_time': analysis.p95_processing_time,
-                'failure_modes': analysis.failure_modes,
-                'time_trend': analysis.time_trend,
-                'quality_trend': analysis.quality_trend,
-                'common_parameters': analysis.common_parameters,
-                'optimal_parameters': analysis.optimal_parameters,
+            data["patterns"][pipeline] = {
+                "total_runs": analysis.total_runs,
+                "success_rate": analysis.success_rate,
+                "avg_processing_time": analysis.avg_processing_time,
+                "median_processing_time": analysis.median_processing_time,
+                "p95_processing_time": analysis.p95_processing_time,
+                "failure_modes": analysis.failure_modes,
+                "time_trend": analysis.time_trend,
+                "quality_trend": analysis.quality_trend,
+                "common_parameters": analysis.common_parameters,
+                "optimal_parameters": analysis.optimal_parameters,
             }
 
         # Export recommendations
         recommendations = self.generate_recommendations()
         for rec in recommendations:
-            data['recommendations'].append({
-                'type': rec.recommendation_type,
-                'severity': rec.severity,
-                'title': rec.title,
-                'description': rec.description,
-                'affected_component': rec.affected_component,
-                'suggested_action': rec.suggested_action,
-                'confidence': rec.confidence,
-            })
+            data["recommendations"].append(
+                {
+                    "type": rec.recommendation_type,
+                    "severity": rec.severity,
+                    "title": rec.title,
+                    "description": rec.description,
+                    "affected_component": rec.affected_component,
+                    "suggested_action": rec.suggested_action,
+                    "confidence": rec.confidence,
+                }
+            )
 
         # Export KPI summary
-        data['kpi_summary'] = self.get_kpi_summary(days=30)
+        data["kpi_summary"] = self.get_kpi_summary(days=30)
         # Convert timestamps to strings for JSON serialization
-        for kpi_key, kpi_data in data['kpi_summary'].items():
-            kpi_data['data_points'] = [
-                (ts.isoformat(), val) for ts, val in kpi_data['data_points']
-            ]
+        for kpi_key, kpi_data in data["kpi_summary"].items():
+            kpi_data["data_points"] = [(ts.isoformat(), val) for ts, val in kpi_data["data_points"]]
 
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             json.dump(data, f, indent=2)
 
 
@@ -603,13 +602,13 @@ def main():
     """CLI for knowledge engine."""
     import argparse
 
-    parser = argparse.ArgumentParser(description='Knowledge Integration Engine')
-    parser.add_argument('--feedback-file', help='JSON file with feedback records')
-    parser.add_argument('--query', help='Natural language query')
-    parser.add_argument('--analyze-pipeline', help='Analyze specific pipeline')
-    parser.add_argument('--recommendations', action='store_true', help='Generate recommendations')
-    parser.add_argument('--export', help='Export knowledge base to JSON')
-    parser.add_argument('--days', type=int, default=30, help='Days to analyze (default: 30)')
+    parser = argparse.ArgumentParser(description="Knowledge Integration Engine")
+    parser.add_argument("--feedback-file", help="JSON file with feedback records")
+    parser.add_argument("--query", help="Natural language query")
+    parser.add_argument("--analyze-pipeline", help="Analyze specific pipeline")
+    parser.add_argument("--recommendations", action="store_true", help="Generate recommendations")
+    parser.add_argument("--export", help="Export knowledge base to JSON")
+    parser.add_argument("--days", type=int, default=30, help="Days to analyze (default: 30)")
 
     args = parser.parse_args()
 
@@ -620,15 +619,15 @@ def main():
         with open(args.feedback_file) as f:
             feedback_data = json.load(f)
 
-        for record_data in feedback_data.get('records', []):
+        for record_data in feedback_data.get("records", []):
             engine.add_feedback(
-                pipeline=record_data['pipeline'],
-                artifact_id=record_data['artifact_id'],
-                success=record_data['success'],
-                processing_time=record_data['processing_time'],
-                parameters=record_data.get('parameters', {}),
-                error_message=record_data.get('error_message'),
-                quality_score=record_data.get('quality_score'),
+                pipeline=record_data["pipeline"],
+                artifact_id=record_data["artifact_id"],
+                success=record_data["success"],
+                processing_time=record_data["processing_time"],
+                parameters=record_data.get("parameters", {}),
+                error_message=record_data.get("error_message"),
+                quality_score=record_data.get("quality_score"),
             )
         print(f"Loaded {len(engine.feedback_records)} feedback records")
 
@@ -671,5 +670,5 @@ def main():
         print(f"\nExported knowledge base to {args.export}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

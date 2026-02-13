@@ -177,9 +177,13 @@ class EnhanceConfig:
 
     # License acceptance flags (for research-only models)
     accept_apple_depth_pro_research_license: bool = False  # Apple AMLR license for Depth Pro
+    accept_research_tools_license: bool = False  # Umbrella flag for APEX Research Ultra (ADR-026)
+
+    # Spatial AI Foundation (ADR-026 Phase I)
+    spatial_ai_linear_ingest: bool = False  # Enable linear light preservation (float32, gamma=1.0)
 
     # Depth backend selection
-    depth_backend: Optional[str] = None  # None = auto (DA3), or "depth_pro"
+    depth_backend: Optional[str] = None  # None = auto (DA3), "depth_pro", or "ensemble"
     depth_pro_checkpoint_path: Optional[str] = None  # Path to depth_pro.pt checkpoint
 
     # Fallback configuration
@@ -223,6 +227,18 @@ class EnhanceConfig:
     # Quality tier and Materials V3
     quality_tier: str = "standard"  # Options: standard, premium, apex
     enable_materials_v3: bool = False  # Materials V3 surface-aware finishing
+    apply_pixel_ops: bool = True  # Apply pixel operations in Materials V3 (requires enable_materials_v3=True)
+
+    # Materials V3 configuration
+    refinement_strategy: str = "canary"  # EfficientSAM refinement strategy (canary, disabled)
+    min_coverage_px: int = 500  # Minimum material coverage in pixels
+    min_mean_conf: float = 0.2  # Minimum mean confidence for material detection
+    glass_response_enabled: bool = True  # Enable glass material response
+
+    # Materials V3 segmentation backend (Phase 3)
+    enable_material_segmentation: bool = False  # Enable automatic material segmentation
+    material_segmentation_backend: str = "stub"  # Options: stub, efficientsam
+    strict_backend: bool = False  # If True, raise on backend errors instead of falling back to stub
 
     # Emit flags (deliverables)
     emit_master16: bool = False  # Emit master 16-bit output

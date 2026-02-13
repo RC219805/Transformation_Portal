@@ -209,6 +209,51 @@ class BackendSelectionMetadata:
 
 
 @dataclass
+class MaterialsV3Metadata:
+    """Metadata for Materials V3 surface-aware finishing.
+
+    Schema version 1.0: Initial release.
+
+    Attributes:
+        enabled: Whether Materials V3 was enabled
+        version: Materials V3 engine version
+        response_plan: Response plan generated
+        pixel_ops: Pixel operations telemetry
+        runtime_seconds: Processing time in seconds
+        schema_version: Schema version for forward/backward compatibility
+    """
+
+    enabled: bool
+    version: str = "3.1"
+    response_plan: Optional[Dict[str, Any]] = None
+    pixel_ops: Optional[Dict[str, Any]] = None
+    runtime_seconds: Optional[float] = None
+    schema_version: str = "1.0"
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to dictionary."""
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> MaterialsV3Metadata:
+        """Deserialize from dictionary."""
+        schema_version = data.get("schema_version", "1.0")
+        if schema_version != "1.0":
+            raise ValueError(
+                f"Unsupported MaterialsV3Metadata schema version: {schema_version}. " f"This code supports version 1.0 only."
+            )
+
+        return cls(
+            enabled=data["enabled"],
+            version=data.get("version", "3.1"),
+            response_plan=data.get("response_plan"),
+            pixel_ops=data.get("pixel_ops"),
+            runtime_seconds=data.get("runtime_seconds"),
+            schema_version=schema_version,
+        )
+
+
+@dataclass
 class ConfigFingerprint:
     """Configuration fingerprint for caching validation."""
 
@@ -305,6 +350,7 @@ class CombinedManifest:
     input: Optional[InputMetadata] = None
     depth: Optional[DepthMetadata] = None
     v2: Optional[V2Metadata] = None
+    materials_v3: Optional[MaterialsV3Metadata] = None
     timing: Optional[TimingMetadata] = None
     pbr_assets: Optional[Dict[str, Any]] = None
     repro: Optional[ReproMetadata] = None
@@ -327,6 +373,7 @@ class CombinedManifest:
             "input",
             "depth",
             "v2",
+            "materials_v3",
             "timing",
             "pbr_assets",
             "repro",
@@ -369,6 +416,8 @@ class CombinedManifest:
             manifest.depth = DepthMetadata(**data["depth"])
         if "v2" in data:
             manifest.v2 = V2Metadata(**data["v2"])
+        if "materials_v3" in data:
+            manifest.materials_v3 = MaterialsV3Metadata.from_dict(data["materials_v3"])
         if "timing" in data:
             manifest.timing = TimingMetadata(**data["timing"])
         if "repro" in data:

@@ -1,8 +1,8 @@
 # ADR-023 Implementation Guide
 
-**Target:** Transformation Portal Specialist  
-**Authority:** Transformation Portal Architect  
-**ADR:** ADR-023 (Post-PR #841 Hardening Strategy)  
+**Target:** Transformation Portal Specialist
+**Authority:** Transformation Portal Architect
+**ADR:** ADR-023 (Post-PR #841 Hardening Strategy)
 **Date:** 2026-02-05
 
 ---
@@ -24,7 +24,7 @@ This document provides implementation guidance for Phase 2 (Performance Ledger) 
 
 #### 1. Complete `tools/performance_ledger.py`
 
-**Current Status:** Skeleton created with dataclasses and stubs  
+**Current Status:** Skeleton created with dataclasses and stubs
 **TODO:** Implement actual manifest parsing logic
 
 **Key Functions to Implement:**
@@ -36,14 +36,14 @@ def parse_manifests(manifests_dir: Path) -> List[Dict[str, Any]]:
 
 def extract_timings(manifests: List[Dict[str, Any]]) -> Tuple[List[float], int, int]:
     """TODO: Extract timing from actual manifest schema.
-    
+
     Current manifest structure (from src/transformation_portal/lux_depth_v3/manifest.py):
     - CombinedManifest.timing: TimingMetadata
       - total_sec: float
       - depth_sec: float
       - v2_sec: float (optional)
     - CombinedManifest.status: str ("success", "error", etc.)
-    
+
     Implementation:
     1. Iterate over manifests
     2. Extract manifest.get("timing", {}).get("total_sec")
@@ -70,7 +70,7 @@ def format_markdown(...) -> str:
 
 def main() -> int:
     """TODO: Wire up the full workflow.
-    
+
     Implementation:
     1. Parse args (already done)
     2. If --manifests-dir and --output (baseline mode):
@@ -184,7 +184,7 @@ rm -rf test_manifests test_manifests_slow test_baseline.json test_report.md
 @dataclass
 class BackendSelectionMetadata:
     """Backend selection audit trail (added in v2.0.1).
-    
+
     Tracks requested vs resolved backend for transparency.
     """
     requested_backend: Optional[str]  # User-specified or None (auto)
@@ -205,7 +205,7 @@ class BackendSelectionMetadata:
         schema_version = data.get("schema_version", "1.0")
         if schema_version != "1.0":
             raise ValueError(f"Unsupported BackendSelectionMetadata schema: {schema_version}")
-        
+
         return cls(
             requested_backend=data.get("requested_backend"),
             resolved_backend=data["resolved_backend"],
@@ -236,12 +236,12 @@ class CombinedManifest:
     def from_dict(cls, data: Dict[str, Any]) -> CombinedManifest:
         """Deserialize from dictionary with backend_selection."""
         # ... existing deserialization ...
-        
+
         # Deserialize backend_selection if present
         backend_selection = None
         if "backend_selection" in data and data["backend_selection"] is not None:
             backend_selection = BackendSelectionMetadata.from_dict(data["backend_selection"])
-        
+
         return cls(
             # ... existing fields ...
             backend_selection=backend_selection,
@@ -259,23 +259,23 @@ def _capture_backend_metadata(
     engine: DA3InferenceEngine,
 ) -> BackendSelectionMetadata:
     """Capture backend selection decision for manifest.
-    
+
     Args:
         requested: User-specified backend (from config.depth_backend)
         engine: Initialized DA3InferenceEngine instance
-    
+
     Returns:
         BackendSelectionMetadata with selection audit trail
     """
     resolved = "depth_anything_v3"  # Current reality (DA3 is only backend)
     status = "success"
     reason = None
-    
+
     # Check for mismatch (e.g., user requested depth_pro but got DA3)
     if requested and requested != resolved:
         status = "fallback"
         reason = f"Requested '{requested}' not available, using '{resolved}' (ADR-019 not yet implemented)"
-    
+
     return BackendSelectionMetadata(
         requested_backend=requested,
         resolved_backend=resolved,
@@ -291,22 +291,22 @@ def _capture_backend_metadata(
 ```python
 def enhance_batch(self, input_dir: Path, image_extensions: Optional[List[str]] = None) -> List[Dict[str, Any]]:
     """Process a batch of images with backend selection truth.
-    
+
     Changes in v2.0.1 (ADR-023):
     - Capture backend selection metadata
     - Log truth line on startup
     - Include backend_selection in manifest
     """
     batch_start = time.time()
-    
+
     # ... existing input discovery code ...
-    
+
     # NEW: Capture backend selection BEFORE processing
     backend_metadata = self._capture_backend_metadata(
         requested=self.config.depth_backend,
         engine=self.engine,
     )
-    
+
     # NEW: Log truth line
     logger.info(
         "Backend selection: requested=%s resolved=%s status=%s device=%s model=%s",
@@ -316,20 +316,20 @@ def enhance_batch(self, input_dir: Path, image_extensions: Optional[List[str]] =
         backend_metadata.device,
         backend_metadata.model_id,
     )
-    
+
     # NEW: Log warning if fallback occurred
     if backend_metadata.resolution_status == "fallback":
         logger.warning("Backend fallback: %s", backend_metadata.resolution_reason)
-    
+
     # ... existing batch processing code ...
-    
+
     # MODIFY: Add backend_selection to manifest
     # Find where CombinedManifest is created and add:
     manifest = CombinedManifest(
         # ... existing fields ...
         backend_selection=backend_metadata,  # NEW
     )
-    
+
     # ... rest of enhance_batch ...
 ```
 

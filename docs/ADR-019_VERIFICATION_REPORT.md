@@ -34,7 +34,7 @@ ADR-019 Backend Registry Integration has been **successfully completed**. The or
   "backend": "da3",
   "license": "CC-BY-NC",
   "unit": "relative",
-  
+
   # After:
   "backend": self.depth_backend.name,
   "license": self.depth_backend.license_type.value,

@@ -1,7 +1,7 @@
 # Binary File Best Practices - Transformation Portal
 
-**Date**: 2025-11-06  
-**Context**: RAG system integration push with 356MB of PNG preview files in `input_images/`  
+**Date**: 2025-11-06
+**Context**: RAG system integration push with 356MB of PNG preview files in `input_images/`
 **Status**: ✅ TIFF files already excluded via .gitignore (as of commit c47bbc9)
 
 ---
@@ -672,7 +672,7 @@ python lux_render_pipeline.py input_images/my_render.tiff
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: 2025-11-06  
-**Author**: Transformation Portal Specialist  
+**Document Version**: 1.0
+**Last Updated**: 2025-11-06
+**Author**: Transformation Portal Specialist
 **Status**: ✅ READY FOR IMPLEMENTATION

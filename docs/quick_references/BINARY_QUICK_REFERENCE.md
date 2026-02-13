@@ -108,6 +108,6 @@ assets/brand/lantern_logo.svg   50KB  ✅ KEEP (brand asset)
 
 ---
 
-**Status**: ✅ Ready to execute after current push  
-**Time Required**: ~15 minutes  
+**Status**: ✅ Ready to execute after current push
+**Time Required**: ~15 minutes
 **Impact**: -356MB in future clones, improved privacy

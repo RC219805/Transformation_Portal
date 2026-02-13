@@ -76,8 +76,8 @@ python conservative_enhance_pool.py \
 
 ## Expected Results
 
-**Before:** Luminance 0.441, Contrast 0.105, Saturation 0.545  
-**After:** Luminance 0.525 (+19%), Contrast 0.135 (+29%), Saturation 0.578 (+6%)  
+**Before:** Luminance 0.441, Contrast 0.105, Saturation 0.545
+**After:** Luminance 0.525 (+19%), Contrast 0.135 (+29%), Saturation 0.578 (+6%)
 **Processing Time:** 6-10 seconds (M4 Max)
 
 ---

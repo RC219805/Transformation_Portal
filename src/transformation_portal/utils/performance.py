@@ -80,7 +80,7 @@ def profile_memory(func: F) -> F:
         mem_after = memory_usage()[0]
         mem_delta = mem_after - mem_before
 
-        logger.info(f"{func.__name__} memory: {mem_delta:+.1f}MB " f"(peak: {mem_after:.1f}MB)")
+        logger.info(f"{func.__name__} memory: {mem_delta:+.1f}MB " f"(post: {mem_after:.1f}MB)")
         return result
 
     return cast(F, wrapper)

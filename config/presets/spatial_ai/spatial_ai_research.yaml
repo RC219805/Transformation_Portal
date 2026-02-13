@@ -1,0 +1,89 @@
+# Spatial AI Research Pipeline Preset
+# Tier: apex_research
+# Purpose: Full pipeline with neural backends and optional 3D reconstruction
+#
+# Features:
+# - Strict linear ingest (16-bit+ only, OpenEXR output)
+# - SAM2 segmentation with material classification (CLIP)
+# - Neural PBR materials (when nvdiffrec implemented)
+# - 3D Gaussian Splatting (Inria research license)
+#
+# Target use cases:
+# - Research and experimentation
+# - High-quality material extraction
+# - Multi-view 3D reconstruction
+# - Advanced architectural visualization
+#
+# License restrictions:
+# - 3D Gaussian Splatting: Inria research license (non-commercial)
+# - Commercial use prohibited without explicit license
+
+tier: apex_research
+name: "Spatial AI Research"
+description: "Full pipeline with neural backends and 3D reconstruction"
+version: "1.0.0"
+
+pipeline:
+  ingest:
+    strict_ingest: true  # Research rigor (reject 8-bit)
+    emit_exr: true  # HDR preservation
+    emit_provenance: true  # Full audit trail
+
+  segmentation:
+    backend: sam2
+    model:
+      size: large
+      repo_id: "facebook/sam2-hiera-large"
+      revision: "e6a8e8809b8f1bfa2238b6d080f3d05cc76bd251"  # Pinned for determinism (2025-08-15)
+    material_classification: true  # Enable CLIP for material hints
+
+  materials:
+    backend: heuristic  # TODO: Switch to nvdiffrec when implemented
+    material_hints: true
+    resolution: 2048  # Higher resolution for research
+    optimize_iterations: 200  # More iterations for quality
+    use_depth: true  # Use depth priors if available
+    normal_strength: 1.2
+    ao_intensity: 0.8
+
+# Note: Reconstruction stage is optional and requires multi-view input
+# Uncomment and add to pipeline section to enable (tier: apex_research required)
+#   reconstruct:
+#     enabled: true
+#     backend: gaussian_splatting
+#     quality:
+#       rmse_threshold: 0.02  # 2% error target
+#       max_iterations: 30000
+#       densification_interval: 100
+#     output_formats:
+#       - ply
+#       - splat
+
+# Resource limits (higher for research tier)
+resource_limits:
+  max_gpu_memory_gb: 16.0
+  max_models_loaded: 3
+  batch_size: 1
+  device_preference:
+    - cuda
+    - mps
+    - cpu
+
+# Error handling (retry with CPU fallback)
+error_strategy: retry_cpu_fallback
+
+# Metadata
+metadata:
+  author: "Transformation Portal"
+  created: "2025-02-11"
+  stability: "experimental"
+  license_restrictions:
+    - "3D Gaussian Splatting (Inria): Non-commercial research only"
+  requires:
+    - "transformers>=4.44.0"
+    - "torch>=2.0.0"
+    - "numpy>=1.24.0"
+    - "OpenEXR>=3.0.0"
+    - "Imath>=3.0.0"
+  optional:
+    - "nvdiffrec>=0.1.0  # For neural PBR (not yet integrated)"

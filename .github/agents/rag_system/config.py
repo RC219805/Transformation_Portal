@@ -22,30 +22,30 @@ class Config:
     """
 
     DEFAULT_CONFIG = {
-        'indexer': {
-            'chunk_size_tokens': 750,
-            'overlap_tokens': 75,
-            'chars_per_token': 4.0,
-            'cache_enabled': True,
-            'cache_dir': '.rag_cache',
+        "indexer": {
+            "chunk_size_tokens": 750,
+            "overlap_tokens": 75,
+            "chars_per_token": 4.0,
+            "cache_enabled": True,
+            "cache_dir": ".rag_cache",
         },
-        'retriever': {
-            'bm25_weight': 0.7,
-            'vector_weight': 0.3,
-            'enable_vector_search': False,
-            'vector_model': 'all-MiniLM-L6-v2',
-            'bm25_k1': 1.5,
-            'bm25_b': 0.75,
-            'query_cache_size': 100,
+        "retriever": {
+            "bm25_weight": 0.7,
+            "vector_weight": 0.3,
+            "enable_vector_search": False,
+            "vector_model": "all-MiniLM-L6-v2",
+            "bm25_k1": 1.5,
+            "bm25_b": 0.75,
+            "query_cache_size": 100,
         },
-        'citation': {
-            'max_results': 5,
-            'include_line_numbers': True,
-            'max_expected_score': 20.0,
+        "citation": {
+            "max_results": 5,
+            "include_line_numbers": True,
+            "max_expected_score": 20.0,
         },
-        'reranker': {
-            'enabled': False,
-            'model': 'cross-encoder/ms-marco-MiniLM-L-6-v2',
+        "reranker": {
+            "enabled": False,
+            "model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
         },
     }
 
@@ -64,9 +64,9 @@ class Config:
         else:
             # Try to find config.yaml in common locations
             search_paths = [
-                'config.yaml',
-                'rag_config.yaml',
-                '.github/agents/rag_system/config.yaml',
+                "config.yaml",
+                "rag_config.yaml",
+                ".github/agents/rag_system/config.yaml",
             ]
 
             for path in search_paths:
@@ -88,7 +88,7 @@ class Config:
             config_path: Path to YAML config file
         """
         try:
-            with open(config_path, 'r') as f:
+            with open(config_path, "r") as f:
                 file_config = yaml.safe_load(f)
 
             if file_config:
@@ -125,15 +125,15 @@ class Config:
         - Numbers: integers and floats
         - Strings: anything else
         """
-        prefix = 'RAG_'
+        prefix = "RAG_"
 
         for env_key, env_value in os.environ.items():
             if not env_key.startswith(prefix):
                 continue
 
             # Remove prefix and split into section and key
-            config_path = env_key[len(prefix):].lower()
-            parts = config_path.split('_', 1)
+            config_path = env_key[len(prefix) :].lower()
+            parts = config_path.split("_", 1)
 
             if len(parts) != 2:
                 logger.warning(f"Invalid environment variable format: {env_key}")
@@ -169,16 +169,16 @@ class Config:
         """
         # Boolean conversion (only for explicit boolean strings, not "0"/"1")
         lower_value = value.lower()
-        if lower_value in ('true', 'yes', 'on'):
+        if lower_value in ("true", "yes", "on"):
             return True
-        if lower_value in ('false', 'no', 'off'):
+        if lower_value in ("false", "no", "off"):
             return False
 
         # Try numeric conversion
         try:
             float_val = float(value)
             # Check if value looks like an integer (no decimal point)
-            if '.' not in value and 'e' not in value.lower():
+            if "." not in value and "e" not in value.lower():
                 # If original type is float, preserve it even for integer-looking values
                 if original_type is float:
                     return float_val
@@ -207,7 +207,7 @@ class Config:
         Returns:
             Configuration value
         """
-        default = kwargs.get('default', None)
+        default = kwargs.get("default", None)
 
         # Handle both calling conventions
         if len(args) == 1:
@@ -230,7 +230,7 @@ class Config:
         else:
             raise TypeError(f"get() takes 1-3 positional arguments but {len(args)} were given")
 
-        keys = key.split('.')
+        keys = key.split(".")
         value = self.config
 
         for k in keys:
@@ -274,7 +274,7 @@ class Config:
         else:
             raise TypeError(f"set() takes 2-3 positional arguments but {len(args)} were given")
 
-        keys = key.split('.')
+        keys = key.split(".")
         config = self.config
 
         for k in keys[:-1]:

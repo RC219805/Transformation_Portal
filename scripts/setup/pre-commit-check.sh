@@ -23,13 +23,13 @@ ALLOWED_ROOT_FILES=(
     "CONTRIBUTING.md"
     "CHANGELOG.md"
     "REPO_ORGANIZATION.md"
-    
+
     # Build configuration
     "Makefile"
     "pyproject.toml"
     "setup.py"
     "setup.cfg"
-    
+
     # Dependency management
     "requirements.txt"
     "requirements-dev.txt"
@@ -38,34 +38,34 @@ ALLOWED_ROOT_FILES=(
     "Pipfile"
     "Pipfile.lock"
     "poetry.lock"
-    
+
     # Testing configuration
     "pytest.ini"
     "tox.ini"
     ".coveragerc"
-    
+
     # Linting configuration
     ".pylintrc"
     ".flake8"
     "mypy.ini"
-    
+
     # Docker
     "Dockerfile"
     "docker-compose.yml"
     "docker-compose.yaml"
-    
+
     # Git
     ".gitignore"
     ".gitattributes"
     ".gitmodules"
-    
+
     # Organization system
     ".auto-organize.sh"
-    
+
     # Package metadata
     "PKG-INFO"
     "MANIFEST.in"
-    
+
     # Python package
     "__init__.py"
 )
@@ -81,21 +81,21 @@ ALLOWED_ROOT_PATTERNS=(
 is_allowed_in_root() {
     local file="$1"
     local basename=$(basename "$file")
-    
+
     # Check exact matches
     for allowed in "${ALLOWED_ROOT_FILES[@]}"; do
         if [[ "$basename" == "$allowed" ]]; then
             return 0
         fi
     done
-    
+
     # Check patterns
     for pattern in "${ALLOWED_ROOT_PATTERNS[@]}"; do
         if [[ "$basename" =~ $pattern ]]; then
             return 0
         fi
     done
-    
+
     return 1
 }
 
@@ -104,7 +104,7 @@ suggest_destination() {
     local file="$1"
     local basename=$(basename "$file")
     local ext="${basename##*.}"
-    
+
     # Documentation
     if [[ "$basename" =~ \.md$ ]]; then
         if [[ "$basename" =~ (PLAN|STRATEGY|OPTIMIZATION|SUMMARY) ]]; then
@@ -120,7 +120,7 @@ suggest_destination() {
         fi
         return
     fi
-    
+
     # Scripts
     if [[ "$basename" =~ \.(sh|py)$ ]] && [[ ! "$basename" =~ ^test_ ]]; then
         if [[ "$basename" =~ (install|setup|download) ]]; then
@@ -132,13 +132,13 @@ suggest_destination() {
         fi
         return
     fi
-    
+
     # Data files
     if [[ "$ext" == "json" || "$ext" == "csv" || "$ext" == "txt" ]]; then
         echo "data/"
         return
     fi
-    
+
     # Images
     if [[ "$ext" =~ ^(jpg|jpeg|png|gif|tiff|tif)$ ]]; then
         if [[ "$basename" =~ (debug|test) ]]; then
@@ -148,13 +148,13 @@ suggest_destination() {
         fi
         return
     fi
-    
+
     # Code files
     if [[ "$ext" == "ts" || "$ext" == "js" ]]; then
         echo "archive/"
         return
     fi
-    
+
     # Default
     echo "appropriate subdirectory"
 }
@@ -163,38 +163,38 @@ suggest_destination() {
 main() {
     local exit_code=0
     local misplaced_files=()
-    
+
     # Get list of staged files in root directory
     while IFS= read -r file; do
         # Skip if not in root directory
         if [[ "$file" == */* ]]; then
             continue
         fi
-        
+
         # Skip if directory
         if [[ -d "$file" ]]; then
             continue
         fi
-        
+
         # Check if file is allowed in root
         if ! is_allowed_in_root "$file"; then
             misplaced_files+=("$file")
         fi
     done < <(git diff --cached --name-only --diff-filter=ACM)
-    
+
     # If there are misplaced files, show error and suggest fix
     if [[ ${#misplaced_files[@]} -gt 0 ]]; then
         echo -e "${RED}✗ Pre-commit check failed${NC}"
         echo ""
         echo "The following files should not be in the repository root:"
         echo ""
-        
+
         for file in "${misplaced_files[@]}"; do
             local suggestion=$(suggest_destination "$file")
             echo -e "  ${YELLOW}$file${NC}"
             echo -e "    → Suggested: ${GREEN}$suggestion${NC}"
         done
-        
+
         echo ""
         echo "Please move these files to appropriate directories and try again:"
         echo ""
@@ -219,10 +219,10 @@ main() {
         echo ""
         echo "For more information, see: REPO_ORGANIZATION.md"
         echo ""
-        
+
         exit_code=1
     fi
-    
+
     exit $exit_code
 }
 

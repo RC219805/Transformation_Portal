@@ -41,7 +41,7 @@ Author: GitHub Copilot <copilot@github.com>
 Date:   Fri Nov 1 06:59:15 2025 +0000
 
     Fix trailing whitespace issues for pylint compliance
-    
+
     3 files changed, 170 insertions(+), 170 deletions(-)
 ```
 

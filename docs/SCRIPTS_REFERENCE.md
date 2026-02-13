@@ -626,6 +626,6 @@ python install_models_auto.py --retry
 
 ---
 
-**Last Updated**: 2025-11-07  
-**Version**: 2.0.0  
+**Last Updated**: 2025-11-07
+**Version**: 2.0.0
 **Total Scripts**: 24+

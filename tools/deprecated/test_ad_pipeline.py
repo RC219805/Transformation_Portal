@@ -19,6 +19,7 @@ import pytest
 
 # Import from v2
 from ad_editorial_post_pipeline_v2 import (
+    PipelineConfig,
     ProgressTracker,
     adjust_contrast,
     adjust_exposure,
@@ -28,7 +29,6 @@ from ad_editorial_post_pipeline_v2 import (
     linear_to_srgb,
     median_luma,
     normalize_exposure_inplace,
-    PipelineConfig,
     safe_name,
     sha256sum,
     split_tokens,
@@ -36,7 +36,6 @@ from ad_editorial_post_pipeline_v2 import (
     unsharp_mask,
     vignette,
 )
-
 
 # ============================================================================
 # Helpers & Fixtures

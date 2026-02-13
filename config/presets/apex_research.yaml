@@ -1,0 +1,177 @@
+# APEX Research Stable Preset
+# ⚠️  LICENSE: Research-Only (Apple AMLR + CC BY-NC 4.0)
+#
+# This preset uses research-licensed models and is PROHIBITED for commercial use.
+#
+# Licensed Models:
+#   - Depth Pro: Apple Machine Learning Research License (AMLR)
+#   - DA3 1.1 (fallback): Creative Commons BY-NC 4.0
+#
+# Permitted Uses:
+#   ✅ Academic research (university, institute)
+#   ✅ Non-profit projects (no revenue generation)
+#   ✅ Personal experimentation (non-commercial)
+#   ✅ Benchmarking and comparative studies
+#
+# Prohibited Uses:
+#   ❌ Commercial products or services
+#   ❌ Revenue-generating applications
+#   ❌ Enterprise/business deployments
+#   ❌ Proprietary software distribution
+#
+# For commercial applications, use 'apex' preset instead.
+# See: docs/architecture/ADR-025-apex-research-workflow.md
+
+name: apex-research-stable
+description: "APEX Research: highest quality using research-licensed tools (Depth Pro + SAM vit_h)"
+tier: apex_research
+license_restriction: research_only
+stability: stable
+
+# Depth Backend Configuration
+# Primary: Depth Pro (Apple AMLR) — metric depth + focal length estimation
+depth_backend: depth_pro
+
+model:
+  variant: depth-pro
+  device: auto  # MPS (Apple Silicon) > CUDA > CPU auto-detection
+  checkpoint_path: checkpoints/depth_pro.pt
+  expected_sha256: "3eb35ca68168ad3d14cb150f8947a4edf85589941661fdb2686259c80685c0ce"
+
+# Segmentation Backend Configuration
+# Primary: Segment Anything (SAM) vit_h — 2.4GB model, zero-shot universal segmentation
+segmentation_backend: sam_vit_h
+
+segmentation:
+  model_variant: vit_h
+  checkpoint_path: checkpoints/sam_vit_h_4b8939.pth
+  # SHA256 placeholder — update with actual SAM vit_h checkpoint hash
+  expected_sha256: "4b8939a88964f0f4ff5f5b2642c598a6fe38d5b7b5f5b2642c598a6fe38d5b7b"
+  confidence_threshold: 0.85  # Higher threshold for research-grade quality
+  device: auto
+
+# Processing Configuration
+processing:
+  # Bilateral filtering for edge-aware smoothing
+  apply_bilateral: true
+  bilateral_sigma_spatial: 5.0
+  bilateral_sigma_range: 0.1
+
+  # Zone mapping incompatible with metric depth
+  enable_zone_mapping: false
+
+  # PBR Configuration (Research-Grade Tuning)
+  pbr:
+    enabled: true
+    preset: RESEARCH_PREMIUM
+
+    # Normal map generation
+    normal:
+      strength: 1.5              # vs 1.2 in commercial APEX
+      edge_aware: true
+      high_frequency_detail: 0.3  # Enhanced micro-detail preservation
+
+    # Roughness map generation
+    roughness:
+      base_value: 0.6
+      depth_modulation: 0.4       # Stronger depth-based variation
+      edge_sharpening: true
+
+    # Ambient Occlusion
+    ao:
+      radius: 5.0                 # vs 3.0 in commercial APEX
+      samples: 128                # vs 64 in commercial APEX
+      quality: ultra
+
+# Quality Enforcement
+quality:
+  # Strict mode: enforce all quality gates
+  strict_mode: true
+
+  # Quality Firewall: enforce 16-bit preservation
+  quality_firewall_active: true
+  allow_8bit_output: false
+
+  # APEX Gates: statistical regression enforcement
+  apex_gates:
+    enabled: true
+    mode: enforce
+    min_samples: 30              # Higher bar for research validation (vs 20 commercial)
+    regression_threshold: 0.10   # Stricter than commercial (0.15)
+    statistical_method: mann_whitney_u
+    outlier_detection:
+      enabled: true
+      method: median_absolute_deviation
+      threshold: 3.0
+
+# I/O Configuration
+io:
+  # Enhanced caching with metadata
+  cache_enabled: true
+  output_format: npz            # .npz + .json sidecar for metric depth
+
+  # Bit depth configuration
+  depth_bit_depth: 32           # Float32 for metric depth values
+  output_bit_depth: 16          # 16-bit PNG/TIFF output
+
+  # Output file naming
+  output_suffix: "_apex_research"
+
+# License Compliance (REQUIRED)
+compliance:
+  # User must explicitly acknowledge non-commercial restriction
+  non_commercial_ok: true
+
+  # Depth Pro specific license acceptance
+  accept_apple_depth_pro_research_license: true
+
+  # Provenance tracking
+  track_license_mode: true
+  license_metadata:
+    tier: apex_research
+    depth_license: "Apple AMLR (research-only)"
+    segmentation_license: "Apache 2.0"
+    usage_restriction: "non-commercial research only"
+
+# Performance Expectations (Reference Only)
+# These are NOT enforced, but document expected behavior
+performance_targets:
+  depth_inference_ms: 1200      # Depth Pro slower than DA3 (~1.2s for 4K on M4)
+  segmentation_ms: 800          # SAM vit_h slower than EfficientSAM
+  total_pipeline_ms: 3500       # ~3.5s total for 4K (research acceptable)
+
+  # Memory requirements
+  peak_memory_gb: 12            # Depth Pro + SAM vit_h + working buffers
+  vram_required_gb: 8           # GPU memory (if using CUDA/MPS)
+
+# Fallback Configuration
+# If Depth Pro checkpoint unavailable, fallback to DA3 1.1 (also research-only)
+fallback:
+  depth_backend: da3_1.1_nested_giant_large
+  model:
+    variant: depth-anything-v3-nested-giant-large-1.1
+    source: huggingface
+    hf_id: "depth-anything/DA3-NESTED-GIANT-LARGE-1.1"
+    # TODO(Phase 1.1): Pin revision to commit hash for reproducibility
+    # See: docs/apex/HUGGINGFACE_MODEL_PINNING.md
+    # Omitted until manual verification complete (will default to 'main' in loader)
+
+  # Fallback still requires non-commercial license
+  license_restriction: research_only
+
+# Metadata
+metadata:
+  version: "1.0.0"
+  last_updated: "2026-02-10"
+  author: "Transformation Portal Architect"
+  adr: "ADR-025"
+
+  # Quality validation
+  benchmark_validation:
+    required: true
+    min_improvement_over_commercial: 0.10  # 10% improvement required
+    metrics:
+      - depth_mae
+      - edge_sharpness
+      - material_iou
+      - normal_detail_score

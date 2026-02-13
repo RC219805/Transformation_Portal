@@ -47,21 +47,21 @@ tone_mapping:
 # ============================================================================
 color_grading:
   enabled: true
-  
+
   # LUT stack (applied in order)
   lut_stack:
     - "assets/luts/location_aesthetic/California/Montecito_Golden_Hour_HDR.cube"
     - "assets/luts/film_emulation/Kodak/Kodak_2393_D55_HDR.cube"
-  
+
   # LUT strengths (0.0-1.0, corresponds to lut_stack order)
   lut_strengths:
     - 0.75  # Montecito Golden Hour @ 75%
     - 0.65  # Kodak Film @ 65%
-  
+
   # Color adjustments
   saturation: 1.10  # Overall saturation multiplier
   vibrance: 1.12  # Smart saturation (preserves skin tones)
-  
+
   # Temperature shift (RGB multipliers)
   # [R, G, B] - values > 1.0 boost, < 1.0 reduce
   temperature_shift: [1.02, 1.0, 0.98]  # Subtle warmth for golden hour
@@ -73,16 +73,16 @@ ai_enhancement:
   enabled: true
   use_controlnet: true  # Edge-preserving ControlNet
   use_depth_controlnet: true  # Depth-aware ControlNet
-  
+
   # Prompts
   prompt: "photorealistic luxury architectural rendering, montecito estate, perfect lighting, ultra detailed, professional real estate photography, high-end finishes, pristine condition"
   negative_prompt: "blurry, artifacts, cartoon, painting, oversaturated, unrealistic, distorted, low quality, compression artifacts, noise"
-  
+
   # AI settings
   strength: 0.32  # Lower = more faithful to original (0.0-1.0)
   guidance_scale: 7.5  # CFG scale (1.0-20.0, higher = follows prompt more)
   num_steps: 30  # Inference steps (20-50, more = better quality but slower)
-  
+
   # Upscaling
   upscale_4x: true  # Enable 4x upscaling
   use_esrgan: true  # Use Real-ESRGAN for upscaling
@@ -103,7 +103,7 @@ output:
 # These can be specified via CLI or by creating separate config files
 
 room_overrides:
-  
+
   # Interior spaces (Great Room, Bedroom, Bathroom, Kitchen)
   interior:
     depth:
@@ -116,7 +116,7 @@ room_overrides:
     ai_enhancement:
       prompt: "luxury interior, montecito estate, perfect architectural lighting, high-end finishes, photorealistic, ultra detailed, professional real estate photography"
       strength: 0.30
-  
+
   # Aerial and exterior views
   aerial:
     depth:
@@ -131,7 +131,7 @@ room_overrides:
     ai_enhancement:
       prompt: "luxury montecito coastal estate aerial photography, dramatic hillside architecture, infinity pool, mediterranean landscaping, golden hour lighting, ultra detailed, professional architectural photography, photorealistic"
       strength: 0.35
-  
+
   # Pool and outdoor living
   pool:
     depth:

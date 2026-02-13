@@ -2,7 +2,7 @@
 
 ## Decision: Remove python-app.yml
 
-**Date:** 2026-02-04  
+**Date:** 2026-02-04
 **Author:** Repository Architect
 
 ### Problem
@@ -79,9 +79,9 @@ git commit -m "Rollback: Re-enable python-app.yml"
 
 ### Success Criteria
 
-✅ Workflow count reduced from 16 to 15  
-✅ No new required checks added to branch protection  
-✅ CI runtime improved (measured in next 5 PRs)  
+✅ Workflow count reduced from 16 to 15
+✅ No new required checks added to branch protection
+✅ CI runtime improved (measured in next 5 PRs)
 ✅ No regression in test coverage or quality gates
 
 ### References

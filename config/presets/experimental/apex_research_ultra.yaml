@@ -1,0 +1,415 @@
+# APEX Research Ultra — Experimental Multi-Model Ensemble Workflow
+# ⚠️  LICENSE: Research-Only (Apple AMLR + CC BY-NC 4.0 + Proprietary)
+# ⚠️  STABILITY: Experimental (Subject to change)
+#
+# ADR: ADR-026 (Supersedes ADR-025 for experimental research)
+#
+# This preset uses cutting-edge research tools with multi-model ensembles
+# and geometric verification. It is PROHIBITED for commercial use and is
+# subject to change based on research validation.
+#
+# Licensed Models & Tools:
+#   - Depth Pro: Apple Machine Learning Research License (AMLR)
+#   - DA3 1.1 Nested Giant Large: Creative Commons BY-NC 4.0
+#   - DepthCrafter: Apache 2.0 (commercial-OK)
+#   - SAM2 Hiera Large: Apache 2.0 (commercial-OK)
+#   - MaterialGAN: Proprietary Research License
+#   - 3D Gaussian Splatting: Inria License (research-OK)
+#   - LLaVA-1.6 34B: Apache 2.0 (commercial-OK)
+#
+# Permitted Uses:
+#   ✅ Academic research (university, institute)
+#   ✅ Non-profit projects (no revenue generation)
+#   ✅ Personal experimentation (non-commercial)
+#   ✅ Benchmarking and comparative studies
+#   ✅ Algorithm development and validation
+#
+# Prohibited Uses:
+#   ❌ Commercial products or services
+#   ❌ Revenue-generating applications
+#   ❌ Enterprise/business deployments
+#   ❌ Proprietary software distribution
+#
+# For commercial applications, use 'apex' preset instead.
+# For stable research workflows, use 'apex_research' preset (ADR-025).
+#
+# See: docs/architecture/ADR-026-apex-research-ultra.md
+
+name: apex-research-ultra-experimental
+description: "APEX Research Ultra: multi-model depth ensemble + geometric verification + physics-based materials (EXPERIMENTAL)"
+tier: apex_research_ultra
+license_restriction: research_only
+stability: experimental
+
+# Spatial AI Foundation Integration (Issue #890 Phase I)
+spatial_ai:
+  # Linear light preservation (no 8-bit sRGB collapse)
+  linear_ingest: true
+
+  # Contract validation (SpatialCaptureV1)
+  contract_validation: strict
+
+  # Output artifacts
+  emit_exr: true              # *_linear.exr (float32 HDR intermediate)
+  emit_provenance: true       # *_provenance.json (decode recipe + hashes)
+
+  # Gamma enforcement
+  gamma: 1.0                  # Must be linear (no baked gamma curves)
+  bit_depth: 32               # Float32 for HDR preservation
+
+# Depth Backend: Multi-Model Ensemble
+depth:
+  backend: ensemble
+
+  # Three-model ensemble for robustness
+  models:
+    # Primary: Depth Pro (metric depth + focal length)
+    - name: depth_pro
+      weight: 0.5
+      checkpoint: checkpoints/depth_pro.pt
+      expected_sha256: "3eb35ca68168ad3d14cb150f8947a4edf85589941661fdb2686259c80685c0ce"
+      license: apple_amlr
+      device: auto
+
+    # Secondary: DA3 1.1 Nested Giant Large (detail preservation)
+    - name: da3_1.1_nested_giant_large
+      weight: 0.3
+      checkpoint: hf://depth-anything/DA3-NESTED-GIANT-LARGE-1.1
+      # Pin to commit hash for reproducibility (Phase 1.1 Item 5)
+      # TODO: Verify at https://huggingface.co/depth-anything/DA3-NESTED-GIANT-LARGE-1.1/commits/main
+      revision: "NEEDS_VERIFICATION_0000000000000000000000"  # Replace with actual commit SHA
+      license: cc_by_nc_4.0
+      device: auto
+
+    # Tertiary: DepthCrafter (temporal consistency for video)
+    - name: depthcrafter
+      weight: 0.2
+      checkpoint: checkpoints/depthcrafter_v1.pt
+      expected_sha256: "PLACEHOLDER_UPDATE_WHEN_INTEGRATED"
+      license: apache_2.0
+      device: auto
+
+  # Fusion algorithm
+  fusion_method: variance_weighted  # Adaptive weighting by per-pixel variance
+
+  # Temporal consistency (video sequences only)
+  temporal_consistency: true
+  temporal_filter_alpha: 0.3  # Exponential moving average
+
+  # Quality gate
+  max_variance_threshold: 0.15  # Flag for review if inter-model disagreement >15%
+
+# Segmentation Backend: SAM2 Video
+segmentation:
+  backend: sam2_hiera_large
+
+  model:
+    checkpoint: checkpoints/sam2_hiera_l.pt
+    expected_sha256: "PLACEHOLDER_UPDATE_WHEN_INTEGRATED"
+    device: auto
+
+  # Temporal propagation (video)
+  temporal_propagation: true
+  propagate_every_n_frames: 10  # Re-prompt every 10 frames
+
+  # Confidence threshold (higher for research quality)
+  confidence_threshold: 0.88
+
+  # Fallback
+  fallback_backend: sam_vit_h  # ADR-025 stable backend
+
+# Materials: Physics-Based BRDF Estimation
+materials:
+  backend: materialgan  # or "nvdiffrec" for hero shots
+
+  model:
+    checkpoint: checkpoints/materialgan_v2.pth
+    expected_sha256: "PLACEHOLDER_UPDATE_WHEN_INTEGRATED"
+    device: auto
+
+  # Use geometric normals (from depth) for better accuracy
+  use_geometric_normals: true
+
+  # NVDIFFREC optimization (if backend=nvdiffrec)
+  optimize_iterations: 200
+  learning_rate: 1e-3
+
+  # Fallback to heuristic PBR (ADR-025 behavior)
+  fallback_to_heuristic: true
+
+# Geometric Reconstruction: 3D Gaussian Splatting
+reconstruction:
+  backend: gsplat
+
+  # Auto-enable if ≥3 views detected
+  enabled: auto
+  min_views_required: 3
+
+  # Training config
+  iterations: 7000
+  learning_rate: 1e-3
+
+  # Depth consistency verification
+  depth_consistency_threshold: 0.05  # 5% RMSE = "geometrically plausible"
+
+  # Output artifacts
+  output_ply: true
+  output_meta: true
+
+  # Quality gate
+  fail_on_high_rmse: false  # Log warning only (experimental)
+
+# Enhancement: Research Premium Tuning
+enhancement:
+  # Tone mapping
+  tone_mapping:
+    method: aces_filmic  # vs "reinhard" in standard
+    preserve_hdr: true
+    white_point: 1.0
+
+  # Color grading
+  color_grading:
+    lut: assets/luts/research_premium_v2.cube
+    strength: 0.85
+    fallback_lut: assets/luts/filmstock_teal_orange.cube
+
+  # Sharpening
+  sharpening:
+    method: unsharp_mask_adaptive
+    radius: 2.0
+    amount: 0.6
+    edge_aware: true
+
+# Validation: LLaVA-1.6 34B Vision-Language Quality Assessment
+validation:
+  backend: llava_1.6_34b
+
+  model:
+    checkpoint: liuhaotian/llava-v1.6-34b
+    device: auto
+
+  # Multi-turn quality assessment
+  prompt_template: research_premium
+  max_turns: 3
+
+  # Quality dimensions
+  assess_dimensions:
+    - depth_plausibility
+    - material_realism
+    - enhancement_quality
+    - architectural_correctness
+
+  # Quality gates (non-blocking, log warnings)
+  fail_on_low_score: false
+  min_acceptable_score: 7.5
+
+  # Fallback
+  fallback_backend: llava_1.5_13b  # ADR-025 stable backend
+
+# Processing Configuration
+processing:
+  # Bilateral filtering (edge-aware smoothing)
+  apply_bilateral: true
+  bilateral_sigma_spatial: 5.0
+  bilateral_sigma_range: 0.1
+
+  # Zone mapping incompatible with metric depth
+  enable_zone_mapping: false
+
+  # PBR Configuration (Research-Grade Tuning)
+  pbr:
+    enabled: true
+    preset: RESEARCH_PREMIUM
+
+    # Normal map generation
+    normal:
+      strength: 1.5              # vs 1.2 in commercial APEX
+      edge_aware: true
+      high_frequency_detail: 0.3  # Enhanced micro-detail preservation
+      use_geometric_normals: true # From depth (if MaterialGAN available)
+
+    # Roughness map generation
+    roughness:
+      base_value: 0.6
+      depth_modulation: 0.4       # Stronger depth-based variation
+      edge_sharpening: true
+      physics_based: true         # MaterialGAN override (if available)
+
+    # Ambient Occlusion
+    ao:
+      radius: 5.0                 # vs 3.0 in commercial APEX
+      samples: 128                # vs 64 in commercial APEX
+      quality: ultra
+
+# Quality Enforcement
+quality:
+  # Strict mode: enforce all quality gates
+  strict_mode: true
+
+  # Quality Firewall: enforce 16-bit preservation
+  quality_firewall_active: true
+  allow_8bit_output: false
+
+  # APEX Gates: statistical regression enforcement
+  apex_gates:
+    enabled: true
+    mode: enforce
+    min_samples: 50              # Higher bar for research validation (vs 30 ADR-025)
+    regression_threshold: 0.08   # Stricter than ADR-025 (0.10)
+    statistical_method: mann_whitney_u
+    outlier_detection:
+      enabled: true
+      method: median_absolute_deviation
+      threshold: 3.0
+
+# I/O Configuration
+io:
+  # Enhanced caching with metadata
+  cache_enabled: true
+
+  # Output formats
+  output_format: npz            # .npz + .json sidecar for metric depth
+
+  # Bit depth configuration
+  depth_bit_depth: 32           # Float32 for metric depth values
+  output_bit_depth: 16          # 16-bit PNG/TIFF output (minimum)
+
+  # Output file naming
+  output_suffix: "_apex_research_ultra"
+
+  # Provenance
+  emit_manifest: true
+  manifest_version: "2.0.0"
+
+# License Compliance (REQUIRED)
+compliance:
+  # User must explicitly acknowledge non-commercial restriction
+  non_commercial_ok: true
+
+  # Umbrella research tools license acceptance
+  accept_research_tools_license: true
+
+  # Individual license flags (for granular tracking)
+  accept_apple_depth_pro_research_license: true
+
+  # Spatial AI linear ingest requirement
+  spatial_ai_linear_ingest_required: true
+
+  # Provenance tracking
+  track_license_mode: true
+  license_metadata:
+    tier: apex_research_ultra
+    depth_licenses:
+      - "Apple AMLR (research-only)"
+      - "CC BY-NC 4.0 (non-commercial)"
+      - "Apache 2.0 (commercial-OK)"
+    segmentation_license: "Apache 2.0"
+    materials_license: "Proprietary Research (MaterialGAN)"
+    reconstruction_license: "Inria License (research-OK)"
+    validation_license: "Apache 2.0"
+    usage_restriction: "non-commercial research only"
+
+# Performance Expectations (Reference Only - NOT enforced)
+performance_targets:
+  # Single-image workflow (no reconstruction)
+  depth_inference_ms: 3500      # Multi-model ensemble (~3.5s for 4K on M4 Ultra)
+  segmentation_ms: 1200         # SAM2 (~1.2s)
+  materials_ms: 200             # MaterialGAN (~200ms)
+  enhancement_ms: 800           # Standard v2_enhance
+  validation_ms: 2500           # LLaVA 34B (~2.5s)
+  total_pipeline_single_ms: 8400  # ~8.4s total (2.4x slower than ADR-025)
+
+  # Multi-view workflow (with reconstruction)
+  reconstruction_ms: 12000      # 3DGS 7K iterations (~12s for 3 views)
+  total_pipeline_multi_ms: 20400  # ~20s total
+
+  # Memory requirements
+  peak_memory_gb: 28            # Ensemble + SAM2 + MaterialGAN + buffers
+  vram_required_gb: 16          # GPU memory (if using CUDA/MPS)
+
+  # Quality vs ADR-025
+  expected_quality_improvement:
+    depth_mae_reduction: 0.15   # ≥15% improvement
+    material_iou_improvement: 0.10  # ≥10% improvement
+    geometric_rmse: 0.05        # <5% error
+    llava_score_min: 8.0        # ≥8.0/10
+
+# Fallback Configuration
+# If any primary backend fails, graceful degradation to ADR-025 stable backends
+fallback:
+  # Depth ensemble → Depth Pro → DA3 Metric Large
+  depth_cascade:
+    - ensemble  # Try ensemble first
+    - depth_pro # Fallback to single Depth Pro
+    - da3_metric_large  # Commercial fallback (ADR-025)
+
+  # SAM2 → SAM vit_h
+  segmentation_cascade:
+    - sam2_hiera_large
+    - sam_vit_h
+
+  # MaterialGAN → Heuristic PBR
+  materials_cascade:
+    - materialgan
+    - heuristic_pbr  # ADR-025 procedural
+
+  # LLaVA 34B → LLaVA 13B
+  validation_cascade:
+    - llava_1.6_34b
+    - llava_1.5_13b
+
+  # Reconstruction: optional (skip if <3 views)
+  reconstruction_optional: true
+
+# Metadata
+metadata:
+  version: "0.1.0"
+  last_updated: "2026-02-11"
+  author: "Transformation Portal Architect"
+  adr: "ADR-026"
+  supersedes: "ADR-025"
+  experimental: true
+
+  # Quality validation requirements
+  benchmark_validation:
+    required: true
+    min_improvement_over_adr025: 0.15  # 15% improvement required for promotion
+    metrics:
+      - depth_mae_ensemble        # Mean Absolute Error (ensemble)
+      - material_iou              # Intersection-over-Union (materials)
+      - geometric_consistency_rmse  # 3DGS reconstruction RMSE
+      - llava_quality_score       # LLaVA 0-10 score
+      - temporal_flicker          # Frame-to-frame variance (video)
+
+  # Promotion criteria (experimental → stable)
+  promotion_criteria:
+    min_successful_projects: 3
+    min_benchmark_score: 8.0
+    max_geometric_rmse: 0.05
+    artist_preference_threshold: 0.70  # ≥70% prefer over ADR-025
+
+# Notes
+notes: |
+  APEX Research Ultra is an EXPERIMENTAL workflow that extends ADR-025 with:
+
+  1. Multi-model depth ensemble (Depth Pro + DA3 1.1 + DepthCrafter)
+  2. SAM2 video segmentation with temporal propagation
+  3. Physics-based material estimation (MaterialGAN)
+  4. 3D Gaussian Splatting geometric verification (optional, multi-view)
+  5. LLaVA-1.6 34B vision-language quality validation
+
+  This preset is subject to change based on research validation. For stable
+  research workflows, use 'apex_research.yaml' (ADR-025).
+
+  Expected quality improvement: ≥15% over ADR-025 (depth MAE, material IoU).
+  Expected performance: 2.4x slower than ADR-025 (~8-20s for 4K).
+
+  Requirements:
+  - High-end GPU/NPU (≥16GB VRAM)
+  - non_commercial_ok=True
+  - accept_research_tools_license=True
+  - spatial_ai_linear_ingest=True
+
+  For usage examples, see:
+  - docs/architecture/ADR-026-apex-research-ultra.md
+  - docs/apex/ultra_workflow_guide.md (TODO)

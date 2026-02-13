@@ -1,6 +1,6 @@
 # 750 Picacho TIFF Quality - Final Report
 
-**Date:** November 8, 2025  
+**Date:** November 8, 2025
 **Status:** ✅ ALL FILES VERIFIED AS CORRECT
 
 ## Executive Summary
@@ -31,8 +31,8 @@ All 17 TIFF files verified as correct 16-bit:
 ✓ 750Picacho_PrimaryBedroom.tif            16-bit    71.3 MB
 ```
 
-**Bit Depth:** All files are true 16-bit (65,536 tonal levels per channel)  
-**Data Integrity:** Full 16-bit precision verified with tifffile library  
+**Bit Depth:** All files are true 16-bit (65,536 tonal levels per channel)
+**Data Integrity:** Full 16-bit precision verified with tifffile library
 **File Size:** Correct for 16-bit TIFFs (~60-100 MB per image)
 
 ## What Happened
@@ -40,7 +40,7 @@ All 17 TIFF files verified as correct 16-bit:
 ### The Issue You Observed
 When viewing TIFF files in:
 - macOS Preview
-- Web browsers  
+- Web browsers
 - Quick Look
 - Some PIL-based tools
 
@@ -91,7 +91,7 @@ print(arr.dtype)  # uint16 (CORRECT!)
 - Open → Image → Mode → Verify "16 Bits/Channel"
 - Full 16-bit precision displayed
 
-✅ **Adobe Lightroom**  
+✅ **Adobe Lightroom**
 - Native 16-bit support
 - Automatic color management
 
@@ -99,15 +99,15 @@ print(arr.dtype)  # uint16 (CORRECT!)
 - Professional 16-bit workflow
 - Excellent color handling
 
-✅ **Affinity Photo**  
+✅ **Affinity Photo**
 - 16-bit document mode
 - Cost-effective alternative
 
 ### Applications That Downcast
 
-✗ **macOS Preview** - Shows 8-bit  
-✗ **Web Browsers** - Show 8-bit  
-✗ **Quick Look** - Shows 8-bit  
+✗ **macOS Preview** - Shows 8-bit
+✗ **Web Browsers** - Show 8-bit
+✗ **Quick Look** - Shows 8-bit
 ✗ **Most PIL-based tools** - Load as 8-bit
 
 ## For Future Processing
@@ -140,7 +140,7 @@ save_16bit_tiff(processed, 'output.tif')
 - Appropriate resolution (2000px wide for web)
 
 ### For Editing
-- If client uses Photoshop/Lightroom: ✅ TIFFs  
+- If client uses Photoshop/Lightroom: ✅ TIFFs
 - If client uses basic tools: Export JPEGs
 
 ## Tools Created
@@ -159,9 +159,9 @@ save_16bit_tiff(processed, 'output.tif')
 
 ## Bottom Line
 
-✅ **No re-processing needed**  
-✅ **Files are archival quality**  
-✅ **Full 16-bit precision verified**  
+✅ **No re-processing needed**
+✅ **Files are archival quality**
+✅ **Full 16-bit precision verified**
 
 The "problem" is how you're viewing the files, not the files themselves. Use professional imaging software (Photoshop, Lightroom) to see the true quality.
 

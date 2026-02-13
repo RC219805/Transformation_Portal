@@ -55,4 +55,3 @@ gh pr checks 804 --required --json name,state,workflow
 **Note:** Other repository policies (workflow approvals, code scanning alerts, CODEOWNERS) may still gate merges independently of branch protection.
 
 **Decision Point:** Review which non-required checks should become pre-merge gates vs. post-merge/nightly validation.
-

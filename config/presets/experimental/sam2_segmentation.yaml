@@ -1,0 +1,116 @@
+# SAM2 Segmentation Preset (Experimental)
+#
+# Status: EXPERIMENTAL - HF revision needs verification before promotion
+# Phase: 2.1 (SAM2 Integration)
+# Last Updated: 2026-02-11
+#
+# Purpose:
+#   Universal object/material segmentation with temporal consistency
+#   for architectural visualization and luxury real estate rendering.
+#
+# Model:
+#   - facebook/sam2-hiera-large (Apache 2.0 license)
+#   - Revision: NEEDS_VERIFICATION - placeholder until verified
+#
+# Usage:
+#   transformation_portal spatial-ai segment \
+#     --preset experimental/sam2_segmentation \
+#     --input scene.tiff \
+#     --output output/ \
+#     --mode auto
+#
+# Promotion Checklist:
+#   [ ] Verify HF revision from facebook/sam2-hiera-large/commits/main
+#   [ ] Update revision to 40-char commit SHA
+#   [ ] Run validation: python scripts/validation/validate_hf_revisions.py
+#   [ ] Move to config/presets/sam2_segmentation.yaml
+#
+# ADR-027 Compliance:
+#   ✅ Isolated from lux_depth_v3 (no cross-pipeline imports)
+#   ✅ Contract-driven (gamma=1.0 enforcement)
+#   ✅ Experimental preset (HF placeholder allowed)
+
+name: "SAM2 Segmentation (Experimental)"
+version: "2.1.0"
+tier: "dev"  # Available to all tiers (Apache 2.0 license)
+
+# Model Configuration
+model:
+  backend: "sam2"
+  size: "large"  # Options: "base", "large"
+  revision: "NEEDS_VERIFICATION_SAM2_LARGE_20260211"  # Placeholder
+  device: "cuda"  # Options: "cuda", "cpu", "mps"
+
+# Segmentation Parameters
+segmentation:
+  mode: "auto"  # Options: "auto", "points", "bbox", "video"
+
+  # Quality thresholds
+  min_area: 100  # Minimum mask area in pixels
+  min_stability: 0.5  # Minimum stability score [0, 1]
+
+  # Refinement
+  refine_masks: true
+  refinement_kernel_size: 3
+
+  # Overlap handling
+  resolve_overlaps: true
+
+# Material Classification (Optional)
+material_classification:
+  enabled: false  # Set to true to enable CLIP classification
+  confidence_threshold: 0.3
+  classes:
+    - "wood floor"
+    - "wood panel"
+    - "marble surface"
+    - "granite stone"
+    - "limestone wall"
+    - "travertine tile"
+    - "brushed steel"
+    - "polished brass"
+    - "copper metal"
+    - "aluminum frame"
+    - "clear glass"
+    - "frosted glass"
+    - "tinted glass"
+    - "linen fabric"
+    - "velvet upholstery"
+    - "silk curtain"
+    - "cotton textile"
+    - "concrete wall"
+    - "concrete floor"
+    - "leather furniture"
+    - "painted wall"
+    - "plaster ceiling"
+    - "ceramic tile"
+    - "porcelain surface"
+
+# Temporal Tracking (Video Mode)
+temporal:
+  enabled: false  # Enable for video sequences
+  iou_threshold: 0.5  # IoU threshold for tracking
+
+# Input Contract (SpatialCaptureV1)
+input:
+  gamma: 1.0  # Enforced (linear RGB only)
+  dtype: "float32"
+  channels: 3
+  bit_depth: 32
+
+# Output Configuration
+output:
+  emit_masks: true  # Save masks as PNG
+  emit_metadata: true  # Save JSON metadata
+  emit_visualization: true  # Save overlay visualization
+
+# Performance
+performance:
+  batch_size: 1
+  enable_caching: true
+  memory_efficient: false
+
+# Validation
+validation:
+  check_isolation: true  # ADR-023 compliance
+  check_contract: true  # SpatialCaptureV1 validation

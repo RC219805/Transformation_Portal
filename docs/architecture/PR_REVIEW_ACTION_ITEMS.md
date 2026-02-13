@@ -208,15 +208,15 @@ diff <(git show main:requirements/all.txt) requirements/all.txt | grep -E "numpy
 def select_depth_stage(config: dict) -> Stage:
     """
     Select depth estimation stage based on configuration.
-    
+
     Supports:
     - depth_anything_v3 (default, production)
     - depth_pro (experimental, requires opt-in)
-    
+
     See ADR-018 for Depth Pro integration roadmap.
     """
     backend = config.get("depth_backend", "depth_anything_v3")
-    
+
     if backend == "depth_pro":
         from .stages.depth_pro import DepthProStage
         return DepthProStage()
@@ -298,26 +298,26 @@ def test_depth_backend_invalid():
     name: ADR Compliance Check
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    
+
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Need full history for git diff
-      
+
       - name: Check for architectural changes
         run: |
           # Files that indicate architectural changes
           ARCH_FILES=$(git diff --name-only origin/main... | grep -E \
             "stage_graph/.*\.py|contracts/|protocols/|lux_depth_v3/.*\.py" || true)
-          
+
           if [ -n "$ARCH_FILES" ]; then
             echo "::notice::Architectural changes detected in:"
             echo "$ARCH_FILES"
-            
+
             # Check for corresponding ADR updates
             ADR_FILES=$(git diff --name-only origin/main... | grep -E \
               "docs/architecture/ADR-.*\.md" || true)
-            
+
             if [ -z "$ADR_FILES" ]; then
               echo "::error::Architectural changes require ADR update"
               echo "Changed files:"

@@ -1,8 +1,8 @@
 # Performance Ledger v1.7 Upgrade: Architectural Review
 
-**Review Date:** 2026-02-05  
-**Reviewer:** Transformation Portal Architect  
-**Target:** `tools/performance_ledger.py` v1.0 → v1.7  
+**Review Date:** 2026-02-05
+**Reviewer:** Transformation Portal Architect
+**Target:** `tools/performance_ledger.py` v1.0 → v1.7
 **Status:** ⚠️ CONDITIONAL APPROVAL - BREAKING CHANGES IDENTIFIED
 
 ---
@@ -100,7 +100,7 @@ parser.add_argument("--baseline-version", dest="baseline_version", ...)  # Prefe
   // Existing fields (preserved - GOOD)
   "version": "...",
   "statistics": { ... },
-  
+
   // New fields (additive - SAFE if consumers ignore unknowns)
   "forensics": {
     "error_taxonomy": [ ... ],
@@ -170,10 +170,10 @@ class MathUtils:
 # Required test:
 def test_pure_python_percentile_matches_numpy():
     data = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-    
+
     # NumPy reference
     np_p95 = np.percentile(data, 95)
-    
+
     # Pure Python fallback
     with mock.patch('tools.performance_ledger.HAS_NUMPY', False):
         stats = compute_statistics(data)
@@ -189,11 +189,11 @@ def test_pure_python_percentile_matches_numpy():
 
 ### 1.2 Additive Features (Non-Breaking)
 
-✅ **Bootstrap confidence intervals** - New feature, safe if optional  
-✅ **Error taxonomy** - New feature, safe if doesn't change exit codes  
-✅ **Per-backend latency summaries** - Safe addition  
-✅ **Histogram rendering** - Safe if optional  
-✅ **Outlier detection** - Safe if doesn't change regression logic  
+✅ **Bootstrap confidence intervals** - New feature, safe if optional
+✅ **Error taxonomy** - New feature, safe if doesn't change exit codes
+✅ **Per-backend latency summaries** - Safe addition
+✅ **Histogram rendering** - Safe if optional
+✅ **Outlier detection** - Safe if doesn't change regression logic
 
 **Risk:** LOW - These are pure additions if properly gated
 
@@ -203,8 +203,8 @@ def test_pure_python_percentile_matches_numpy():
 
 ### 2.1 Current Test Coverage (v1.0)
 
-**File:** `tests/test_performance_ledger.py`  
-**Test Count:** 16 unit tests  
+**File:** `tests/test_performance_ledger.py`
+**Test Count:** 16 unit tests
 **Coverage:** Function-level only (no CLI integration tests)
 
 **Breakdown:**
@@ -251,14 +251,14 @@ def test_cli_capture_baseline(tmp_path):
 def test_version_flag_backward_compatibility():
     """Verify --version still works as alias for --baseline-version."""
     # Test both old and new flag names produce identical results
-    
+
 def test_exit_codes_all_paths():
     """Verify all 4 exit codes (0, 1, 2, 3) are reachable."""
     # 0: no regression
     # 1: significant regression
     # 2: backend mismatch
     # 3: insufficient data
-    
+
 def test_strict_mode_changes_exit_behavior():
     """Verify --strict makes exit code 0 require strong confidence."""
 ```
@@ -268,7 +268,7 @@ def test_strict_mode_changes_exit_behavior():
 @pytest.mark.parametrize("has_numpy", [True, False])
 def test_statistics_with_and_without_numpy(has_numpy):
     """Verify pure Python fallback matches NumPy exactly."""
-    
+
 def test_bootstrap_ci_without_numpy():
     """Verify bootstrap works in pure Python mode."""
 ```
@@ -277,13 +277,13 @@ def test_bootstrap_ci_without_numpy():
 ```python
 def test_error_taxonomy_classification():
     """Verify failure bucketing logic."""
-    
+
 def test_backend_mismatch_detection():
     """Verify exit code 2 when backend changes."""
-    
+
 def test_histogram_rendering():
     """Verify histogram ASCII art generation."""
-    
+
 def test_outlier_detection():
     """Verify top-slowest and p95 contributor logic."""
 ```
@@ -300,7 +300,7 @@ def test_outlier_detection():
 - Update all documentation and CI scripts
 - Deprecate v1.0 schema
 
-**Pros:** Clean break, no technical debt  
+**Pros:** Clean break, no technical debt
 **Cons:** Coordination overhead, user disruption
 
 **Option B: Compatibility Shim (v1.7)**
@@ -309,7 +309,7 @@ def test_outlier_detection():
 - Preserve v1.0 baseline schema exactly
 - Add v1.7 features as opt-in flags
 
-**Pros:** Zero disruption, gradual migration  
+**Pros:** Zero disruption, gradual migration
 **Cons:** Technical debt, confusing dual behavior
 
 **ARCHITECT RECOMMENDATION:** Option B initially, then Option A in 3-6 months
@@ -378,7 +378,7 @@ python tools/performance_ledger.py \
 ### 4.1 Critical Risks
 
 #### 🔴 **Risk 1: Pure Python Correctness**
-**Severity:** HIGH  
+**Severity:** HIGH
 **Likelihood:** MEDIUM
 
 Bootstrap CI and percentile calculations are non-trivial. Pure Python implementations may have subtle bugs (off-by-one errors, interpolation differences).
@@ -398,7 +398,7 @@ def test_percentile_pure_python_vs_numpy(data):
 ```
 
 #### 🟡 **Risk 2: Bootstrap CI False Positives**
-**Severity:** MEDIUM  
+**Severity:** MEDIUM
 **Likelihood:** MEDIUM
 
 Bootstrap confidence intervals may be too sensitive or too lenient depending on:
@@ -412,7 +412,7 @@ Bootstrap confidence intervals may be too sensitive or too lenient depending on:
 - Provide override flags for experimentation
 
 #### 🟡 **Risk 3: Backend Mismatch False Alarms**
-**Severity:** MEDIUM  
+**Severity:** MEDIUM
 **Likelihood:** LOW
 
 If backend detection is too strict, legitimate backend aliases (e.g., `da3` vs `da3-cpu`) may trigger false mismatches.
@@ -423,7 +423,7 @@ If backend detection is too strict, legitimate backend aliases (e.g., `da3` vs `
 - Make exit code 2 opt-in initially
 
 #### 🟢 **Risk 4: Test Coverage Gaps**
-**Severity:** LOW  
+**Severity:** LOW
 **Likelihood:** HIGH (already exists)
 
 Current test suite lacks CLI integration tests. v1.7 adds complexity without corresponding test expansion.
@@ -480,8 +480,8 @@ numpy (optional, recommended)
 **Required validation:**
 ```python
 # Ensure all user inputs are bounded
-parser.add_argument("--bootstrap-iterations", type=int, 
-                    default=1000, 
+parser.add_argument("--bootstrap-iterations", type=int,
+                    default=1000,
                     choices=range(100, 10001))  # Prevent DoS
 parser.add_argument("--hist-bins", type=int,
                     default=20,
@@ -602,7 +602,7 @@ This review constitutes **Architect-level approval with conditions**.
 ```json
 {
   // ... all v1.0 fields preserved ...
-  
+
   "forensics": {  // OPTIONAL, omit for v1.0 compatibility
     "error_taxonomy": [...],
     "failure_signatures": {...},
@@ -640,15 +640,15 @@ Non-zero: Internal error (exception)
 0: Success
    - In lenient mode (default): no regression OR potential regression with low confidence
    - In strict mode: no regression with statistical significance
-   
+
 1: Significant regression detected
    - p95 or mean exceeded threshold
    - In strict mode: bootstrap CI confirms significance
-   
+
 2: Backend mismatch detected
    - Baseline backend != current backend
    - Only with --strict or explicit flag
-   
+
 3: Insufficient data for analysis
    - Sample size below --min-samples threshold
    - Cannot compute reliable statistics
@@ -658,5 +658,5 @@ Non-zero: Internal error (exception)
 
 ---
 
-**Review Complete**  
+**Review Complete**
 **Next Action:** Specialist to implement conditions, then return for final approval.

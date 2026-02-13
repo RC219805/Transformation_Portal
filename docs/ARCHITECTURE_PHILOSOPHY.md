@@ -65,10 +65,10 @@ checkpoint_mgr = CheckpointManager("batch_process")
 with ProgressBar(total=len(images), description="Processing") as pbar:
     for i, image_path in enumerate(images):
         result = process(image_path)
-        
+
         # Update progress
         pbar.update(1, message=f"Processing {image_path.name}")
-        
+
         # Checkpoint every 10 images
         if i % 10 == 0:
             checkpoint = checkpoint_mgr.create_checkpoint(
@@ -283,10 +283,10 @@ def custom_pipeline(image):
 def test_backwards_compatibility(version):
     # Load old version's test data
     old_result = load_reference_result(version)
-    
+
     # Process with current version
     current_result = process_with_current_version()
-    
+
     # Results should be compatible (not necessarily identical)
     assert is_compatible(old_result, current_result)
 ```
@@ -299,7 +299,7 @@ def test_backwards_compatibility(version):
 def test_event_replay():
     # Replay production events
     events = load_production_events("2025-01-01")
-    
+
     for event in events:
         # Ensure current version handles old events
         assert can_replay(event)
@@ -350,7 +350,7 @@ monitor = PerformanceMonitor()
 for image in images:
     with monitor.track("processing"):
         result = process(image)
-    
+
     print(f"Throughput: {monitor.throughput:.1f} img/sec")
     print(f"Avg time: {monitor.avg_time:.2f}s")
 ```

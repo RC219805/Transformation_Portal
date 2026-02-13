@@ -1,6 +1,6 @@
 # Full Enhanced Lux Depth V3 Test Report
-**Date:** 2026-02-05  
-**Test Run:** lux_depth_v3_full_enhanced_20260205_044858  
+**Date:** 2026-02-05
+**Test Run:** lux_depth_v3_full_enhanced_20260205_044858
 **Status:** ✅ **COMPLETE SUCCESS**
 
 ---
@@ -68,7 +68,7 @@ input_images/750_picacho/source_jpegs/_non_source/750Picacho_Pool_depthpro_depth
 
 ### Input Types Processed
 - **JPEG images:** ~13 files
-- **TIFF images (large source):** 6 files  
+- **TIFF images (large source):** 6 files
   - V2_750Picacho_Aerial.tiff
   - V2_750Picacho_GreatRoom.tiff
   - V2_750Picacho_Kitchen.tiff
@@ -82,7 +82,7 @@ input_images/750_picacho/source_jpegs/_non_source/750Picacho_Pool_depthpro_depth
 
 ### Backend Selection
 ```
-INFO: Backend selection: requested=da3 resolved=da3 status=success device=mps 
+INFO: Backend selection: requested=da3 resolved=da3 status=success device=mps
       model=depth-anything/DA3NESTED-GIANT-LARGE-1.1
 ```
 
@@ -300,7 +300,7 @@ INFO: Depth cache enabled: output/.../. depth_cache
 ## Quality Checks
 
 ### Error Analysis
-**Errors:** 0  
+**Errors:** 0
 **Warnings:** 2 (expected)
 
 **Expected Warnings:**
@@ -332,9 +332,9 @@ INFO: ✅ All processing complete
 ## Integration Validation
 
 ### DA3 Model Integration
-**Status:** ✅ Working  
-**Model:** depth-anything/DA3NESTED-GIANT-LARGE-1.1  
-**Backend:** PyTorch MPS  
+**Status:** ✅ Working
+**Model:** depth-anything/DA3NESTED-GIANT-LARGE-1.1
+**Backend:** PyTorch MPS
 **Device:** Apple Silicon GPU
 
 **Evidence:**
@@ -343,8 +343,8 @@ INFO: ✅ All processing complete
 - Output depth maps generated correctly
 
 ### V2 Enhancement Script Integration
-**Status:** ✅ Working  
-**Script:** `scripts/enhance_image.py`  
+**Status:** ✅ Working
+**Script:** `scripts/enhance_image.py`
 **Implementation:** Placeholder passthrough
 
 **Evidence:**
@@ -354,7 +354,7 @@ INFO: ✅ All processing complete
 - Execution times tracked correctly
 
 ### PBR Pipeline Integration
-**Status:** ✅ Working  
+**Status:** ✅ Working
 **Maps:** Normal, Roughness, AO
 
 **Evidence:**
@@ -377,7 +377,7 @@ INFO: ✅ All processing complete
 ### Format Support
 **Status:** ✅ Enhanced
 
-**Previously:** JPEG, PNG  
+**Previously:** JPEG, PNG
 **Now:** JPEG, PNG, **TIFF (large source files)**
 
 **Evidence:**
@@ -389,7 +389,7 @@ INFO: ✅ All processing complete
 ## Known Issues & Limitations
 
 ### 1. V2 Enhancement = Placeholder
-**Status:** Expected  
+**Status:** Expected
 **Impact:** Low (design decision)
 
 **Current Behavior:**
@@ -403,7 +403,7 @@ INFO: ✅ All processing complete
 - Add quality tier differentiation
 
 ### 2. Final Summary Reporting Bug
-**Status:** Minor bug  
+**Status:** Minor bug
 **Impact:** Low (cosmetic only)
 
 **Current Behavior:**
@@ -423,7 +423,7 @@ INFO:   Failed: 0
 **Evidence:** All output artifacts present and correct; only final count reporting is incorrect.
 
 ### 3. CoreML Warnings
-**Status:** Expected  
+**Status:** Expected
 **Impact:** None
 
 **Warnings:**
@@ -500,7 +500,7 @@ This test run establishes a **golden baseline** for future regression testing:
 
 ## Test Artifacts
 
-**Test Run ID:** `lux_depth_v3_full_enhanced_20260205_044858`  
+**Test Run ID:** `lux_depth_v3_full_enhanced_20260205_044858`
 **Output Directory:** `output/lux_depth_v3_full_enhanced_20260205_044858/`
 
 **Artifact Inventory:**
@@ -512,7 +512,7 @@ This test run establishes a **golden baseline** for future regression testing:
 - Manifests: available (in `manifests/`)
 - Depth cache: 21 files (in `.depth_cache/`)
 
-**Report Generated:** 2026-02-05 04:52 UTC  
+**Report Generated:** 2026-02-05 04:52 UTC
 **Status:** ✅ **COMPLETE SUCCESS**
 
 ---

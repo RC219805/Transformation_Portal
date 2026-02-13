@@ -70,7 +70,7 @@ class ResultReranker:
 
             # Create modified result with updated score
             result.score = final_score
-            result.metadata['rerank_boost'] = rerank_score
+            result.metadata["rerank_boost"] = rerank_score
             reranked.append(result)
 
         # Sort by final score
@@ -88,15 +88,15 @@ class ResultReranker:
         score += self._exact_match_score(result.content, query)
 
         # Code quality bonus
-        if result.metadata.get('entity_type') in ('function', 'class'):
+        if result.metadata.get("entity_type") in ("function", "class"):
             score += self._code_quality_score(result)
 
         # Documentation bonus
-        if result.file_path.endswith('.md'):
+        if result.file_path.endswith(".md"):
             score += self._documentation_score(result)
 
         # Test relevance bonus
-        if 'test' in result.file_path:
+        if "test" in result.file_path:
             score += self._test_relevance_score(result, query)
 
         return score
@@ -111,7 +111,7 @@ class ResultReranker:
             return self.signals.exact_match_bonus
 
         # Partial matches (query terms)
-        query_terms = re.findall(r'\b\w+\b', query_lower)
+        query_terms = re.findall(r"\b\w+\b", query_lower)
         if len(query_terms) < 2:
             return 0.0
 
@@ -132,11 +132,11 @@ class ResultReranker:
             score += self.signals.code_quality_bonus * 0.5
 
         # Has type hints
-        if '->' in content or ': ' in content:
+        if "->" in content or ": " in content:
             score += self.signals.code_quality_bonus * 0.3
 
         # Has meaningful variable names (longer than 3 chars)
-        vars_match = re.findall(r'\b[a-z_][a-z0-9_]{3,}\b', content)
+        vars_match = re.findall(r"\b[a-z_][a-z0-9_]{3,}\b", content)
         if len(vars_match) > 5:
             score += self.signals.code_quality_bonus * 0.2
 
@@ -148,15 +148,15 @@ class ResultReranker:
         content = result.content
 
         # Has title
-        if result.metadata.get('title'):
+        if result.metadata.get("title"):
             score += self.signals.documentation_bonus * 0.3
 
         # Has code examples
-        if '```' in content:
+        if "```" in content:
             score += self.signals.documentation_bonus * 0.4
 
         # Has links
-        if re.search(r'\[.*?\]\(.*?\)', content):
+        if re.search(r"\[.*?\]\(.*?\)", content):
             score += self.signals.documentation_bonus * 0.3
 
         return score
@@ -166,8 +166,8 @@ class ResultReranker:
         score = 0.0
 
         # Test function name matches query
-        if result.metadata.get('function_name'):
-            func_name = result.metadata['function_name']
+        if result.metadata.get("function_name"):
+            func_name = result.metadata["function_name"]
             if any(term in func_name.lower() for term in query.lower().split()):
                 score += self.signals.test_bonus
 
@@ -186,10 +186,10 @@ def main():
     from rag_system.indexer import RepositoryIndexer
     from rag_system.retriever import HybridRetriever
 
-    parser = argparse.ArgumentParser(description='Test RAG reranking')
-    parser.add_argument('--repo-root', default='.', help='Repository root directory')
-    parser.add_argument('--query', required=True, help='Search query')
-    parser.add_argument('--top-k', type=int, default=5, help='Number of results')
+    parser = argparse.ArgumentParser(description="Test RAG reranking")
+    parser.add_argument("--repo-root", default=".", help="Repository root directory")
+    parser.add_argument("--query", required=True, help="Search query")
+    parser.add_argument("--top-k", type=int, default=5, help="Number of results")
 
     args = parser.parse_args()
 
@@ -204,7 +204,7 @@ def main():
     results = retriever.retrieve(args.query, top_k=args.top_k * 2)
 
     print(f"\nBefore reranking ({len(results)} results):")
-    for i, r in enumerate(results[:args.top_k], 1):
+    for i, r in enumerate(results[: args.top_k], 1):
         print(f"{i}. {r.file_path}:{r.start_line} - Score: {r.score:.3f}")
 
     # Rerank
@@ -214,9 +214,9 @@ def main():
 
     print(f"\nAfter reranking ({len(reranked)} results):")
     for i, r in enumerate(reranked, 1):
-        boost = r.metadata.get('rerank_boost', 0.0)
+        boost = r.metadata.get("rerank_boost", 0.0)
         print(f"{i}. {r.file_path}:{r.start_line} - Score: {r.score:.3f} (boost: {boost:+.3f})")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

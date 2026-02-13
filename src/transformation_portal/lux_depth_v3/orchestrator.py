@@ -60,6 +60,7 @@ from .manifest import (
     ConfigFingerprint,
     DepthMetadata,
     InputMetadata,
+    MaterialsV3Metadata,
     ReproMetadata,
     TimingMetadata,
     V2Metadata,
@@ -70,6 +71,7 @@ from .manifest import (
 from .pbr import generate_pbr_maps
 from .pbr_writer import write_pbr_maps
 from .postprocessing import Postprocessor
+from .provenance import ExiftoolNotFoundError, ProvenanceError, capture_provenance
 from .security import HashMode, sanitize_file_stem, sanitize_path_component_nonlossy
 from .v2_runner import V2Runner, find_v2_report
 
@@ -303,6 +305,15 @@ class EnhanceOrchestrator:
 
         # Initialize Postprocessor (FIX: Ensures refine_edges/bilateral settings from preset are applied)
         self.postprocessor = Postprocessor(da3_config.postprocessing)
+
+        # Initialize Materials V3 Engine (if enabled)
+        if config.enable_materials_v3:
+            from .materials_v3 import MaterialsV3Engine
+
+            self.materials_v3_engine = MaterialsV3Engine(config)
+            logger.info("Materials V3 surface-aware finishing enabled")
+        else:
+            self.materials_v3_engine = None
 
         # Initialize V2 Runner and Environment (with fail-fast validation)
         if config.enable_v2 and config.v2_preset is not None:
@@ -678,7 +689,7 @@ class EnhanceOrchestrator:
         float_depth_path: Path,
         manifest_path: Path,
         skip_depth: bool,
-    ) -> tuple[Optional[Any], float, Optional[dict]]:
+    ) -> tuple[Optional[Any], float, Optional[dict], Optional[dict], float, Optional[Path]]:
         """Stage A: Depth computation with caching and PBR generation.
 
         Args:
@@ -690,11 +701,15 @@ class EnhanceOrchestrator:
             skip_depth: Whether to skip depth computation
 
         Returns:
-            Tuple of (depth_metadata, depth_runtime_s, pbr_assets)
+            Tuple of (depth_metadata, depth_runtime_s, pbr_assets, materials_v3_result,
+                     materials_v3_runtime_s, enhanced_image_path)
         """
         depth_runtime_s = 0.0
         depth_metadata = None
         pbr_assets = None
+        materials_v3_result = None
+        materials_v3_runtime_s = 0.0
+        enhanced_image_path = None  # Will be set if Materials V3 produces enhanced_image
 
         if not skip_depth:
             # Lazy preprocessing: Only validate and preprocess if we're running depth
@@ -718,6 +733,9 @@ class EnhanceOrchestrator:
                     raise ValueError(f"Image failed strict verification: {validated_path}") from e
 
             preprocessed_array, original_shape = preprocess_image(validated_path)
+
+            # Initialize working_image - this will be updated by Materials V3 if enabled
+            working_image = preprocessed_array
 
             logger.info(f"Stage A: Generating depth for {output_key}...")
             t0 = time.time()
@@ -777,6 +795,82 @@ class EnhanceOrchestrator:
                         result.depth = depth_map
 
                 depth_runtime_s = time.time() - t0
+
+                # 2b. Materials V3 Processing (if enabled)
+                materials_v3_result = None
+                materials_v3_runtime_s = 0.0
+                if self.materials_v3_engine:
+                    logger.info("Running Materials V3 surface-aware finishing...")
+                    t_materials_start = time.time()
+                    try:
+                        # Material segmentation (configurable backend)
+                        # Current: stub backend (returns empty masks)
+                        # Future: EfficientSAM integration for real material detection
+                        from .segmentation_backend import segment_materials
+
+                        # Convert preprocessed float32 [0,1] to uint8 [0,255] for segmentation backend
+                        preprocessed_uint8_for_seg = (np.clip(preprocessed_array, 0, 1) * 255).astype(np.uint8)
+                        segmentation_result = {"materials": segment_materials(preprocessed_uint8_for_seg, self.config)}
+
+                        # Log segmentation result if materials were detected
+                        if segmentation_result.get("materials"):
+                            logger.info(
+                                f"Material segmentation: {len(segmentation_result['materials'])} "
+                                f"materials detected using {self.config.material_segmentation_backend} backend"
+                            )
+
+                        materials_v3_result = self.materials_v3_engine.process(
+                            image=preprocessed_array, segmentation_result=segmentation_result, depth_map=depth_map
+                        )
+                        materials_v3_runtime_s = time.time() - t_materials_start
+                        if materials_v3_result:
+                            # CRITICAL FIX: Use enhanced_image from Materials V3 for downstream processing
+                            enhanced_image = materials_v3_result.get("enhanced_image")
+                            if enhanced_image is not None:
+                                working_image = enhanced_image
+
+                                # Write enhanced image to temporary file for V2 stage
+                                # V2 subprocess requires a file path, not an array
+                                #
+                                # NOTE: 8-bit PNG conversion is intentional:
+                                # - V2 subprocess expects standard image formats (PNG/JPG, not 16-bit TIFF)
+                                # - working_image is already tone-mapped/perceptually encoded (not linear)
+                                # - V2 operates in perceptual color space, not linear
+                                # - This matches what V2 receives when Materials V3 is disabled (original 8-bit input)
+                                # - Temporary file is cleaned up after V2 completes (see line ~1352)
+                                import tempfile
+
+                                from PIL import Image as PILImage
+
+                                # Create temp file in output directory to avoid cross-filesystem issues
+                                temp_dir = self.output_root / "temp"
+                                temp_dir.mkdir(parents=True, exist_ok=True)
+
+                                # Convert working_image (float32 [0,1]) to uint8 for saving
+                                enhanced_uint8 = (np.clip(working_image, 0, 1) * 255).astype(np.uint8)
+                                enhanced_pil = PILImage.fromarray(enhanced_uint8)
+
+                                # Save with output_key stem to make it identifiable
+                                enhanced_image_path = temp_dir / f"{output_key.stem}_materials_v3_enhanced.png"
+                                enhanced_pil.save(enhanced_image_path)
+
+                                logger.info(
+                                    f"Materials V3 enhanced image with "
+                                    f"{len(materials_v3_result.get('materials_v3_pixel_ops', {}).get('applied', []))} "
+                                    f"pixel operations - saved to {enhanced_image_path} for V2 stage"
+                                )
+                            else:
+                                logger.debug("Materials V3 did not return enhanced_image, using original image")
+
+                            logger.info(
+                                f"Materials V3 completed in {materials_v3_runtime_s:.3f}s: "
+                                f"{len(materials_v3_result.get('materials_v3_pixel_ops', {}).get('applied', []))} "
+                                f"operations applied"
+                            )
+                    except Exception as e:
+                        logger.warning(f"Materials V3 processing failed: {e}", exc_info=True)
+                        materials_v3_result = None
+                        materials_v3_runtime_s = time.time() - t_materials_start
 
                 # 3. Write quantized depth (PNG 16-bit)
                 _, _, depth_stats = atomic_write_depth_u16_png_with_stats(
@@ -844,21 +938,36 @@ class EnhanceOrchestrator:
                 if self.config.depth_fallback == "fail":
                     raise
                 elif self.config.depth_fallback == "skip":
-                    return None, 0.0, None
+                    return None, 0.0, None, None, 0.0, None
                 elif self.config.depth_fallback == "v2-auto":
                     logger.info("V2 fallback mode: V3 failed, will attempt V2 with independent depth")
                     if depth_path.exists():
                         depth_path.unlink()
-                    return None, 0.0, None
+                    return None, 0.0, None, None, 0.0, None
                 else:
                     raise ValueError(f"Unsupported depth_fallback mode: {self.config.depth_fallback}") from e
         else:
             # Depth was skipped - load from cache
+            # CRITICAL FIX: Preserve Materials V3 metadata from previous run
             if manifest_path.exists():
                 try:
                     m = CombinedManifest.load(manifest_path)
                     depth_metadata = m.depth
                     pbr_assets = getattr(m, "pbr_assets", None)
+
+                    # Preserve Materials V3 result from previous run
+                    if hasattr(m, "materials_v3") and m.materials_v3:
+                        logger.info("Preserving Materials V3 metadata from previous run (depth was cached)")
+                        materials_v3_result = {
+                            "materials_v3_response_plan": m.materials_v3.response_plan,
+                            "materials_v3_pixel_ops": m.materials_v3.pixel_ops,
+                            "materials_v3_metadata": {"version": m.materials_v3.version},
+                            # Note: enhanced_image and material_masks are not persisted to manifest
+                            # This is intentional - only the response plan and telemetry are preserved
+                        }
+                        materials_v3_runtime_s = (
+                            m.materials_v3.runtime_seconds if hasattr(m.materials_v3, "runtime_seconds") else 0.0
+                        )
                 except Exception as e:
                     logger.debug(f"Failed to load previous manifest metadata: {e}")
 
@@ -872,7 +981,7 @@ class EnhanceOrchestrator:
                 except Exception as pbr_error:
                     logger.warning(f"PBR generation from cache failed: {pbr_error}")
 
-        return depth_metadata, depth_runtime_s, pbr_assets
+        return depth_metadata, depth_runtime_s, pbr_assets, materials_v3_result, materials_v3_runtime_s, enhanced_image_path
 
     def _generate_pbr_stage(self, depth: Any, output_key: Path) -> Optional[dict]:
         """Generate PBR maps from depth data.
@@ -941,6 +1050,7 @@ class EnhanceOrchestrator:
         v2_log_path: Path,
         manifest_path: Path,
         skip_depth: bool,
+        materials_v3_result: Optional[dict] = None,
     ) -> tuple[dict, float, Optional[Path]]:
         """Stage B: V2 enhancement subprocess.
 
@@ -951,6 +1061,9 @@ class EnhanceOrchestrator:
             v2_log_path: Path for V2 subprocess log
             manifest_path: Path for manifest JSON
             skip_depth: Whether depth was skipped
+            materials_v3_result: Materials V3 result with material_masks (optional)
+                Note: Material masks are available but not currently passed to subprocess.
+                Future: Implement mask serialization for V2 subprocess integration.
 
         Returns:
             Tuple of (v2_result, v2_runtime_s, v2_report_path)
@@ -966,6 +1079,16 @@ class EnhanceOrchestrator:
         if skip_v2:
             logger.info("V2 outputs valid, skipping.")
             return {"status": "ok"}, 0.0, v2_report_path
+
+        # Note: material_masks from materials_v3_result are available but not passed to subprocess
+        # V2Runner is a subprocess wrapper - material masks would require serialization to disk
+        # Future enhancement: Serialize masks to temporary directory and pass path to V2
+        # For now, infrastructure is ready (MaterialsV3Engine.process returns material_masks)
+        if materials_v3_result and materials_v3_result.get("material_masks"):
+            logger.debug(
+                f"Materials V3 masks available ({len(materials_v3_result['material_masks'])} materials) "
+                f"but not passed to V2 subprocess (requires serialization - future work)"
+            )
 
         # V2 runner: depth_dir=None triggers independent depth generation in V2
         v2_result = self.v2_runner.run(
@@ -995,6 +1118,8 @@ class EnhanceOrchestrator:
         v2_runtime_s: float,
         pipeline_start_time: float,
         pipeline_end_time: float,
+        materials_v3_result: Optional[dict] = None,
+        materials_v3_runtime_s: float = 0.0,
     ) -> None:
         """Write combined manifest with all pipeline metadata.
 
@@ -1009,7 +1134,63 @@ class EnhanceOrchestrator:
             v2_runtime_s: V2 stage runtime
             pipeline_start_time: Pipeline start timestamp
             pipeline_end_time: Pipeline end timestamp
+            materials_v3_result: Materials V3 result (optional)
+            materials_v3_runtime_s: Materials V3 runtime (optional)
         """
+        # --- PROVENANCE CAPTURE (audit-grade) ---
+        # Capture provenance sidecar for RAW/TIFF inputs at ingestion point
+        # This runs BEFORE manifest write to ensure we have complete metadata
+        provenance_sidecar_path = manifest_path.parent / f"{manifest_path.stem}_provenance.json"
+
+        # Determine if this is an audit-grade input (RAW or TIFF)
+        # Only RAW/TIFF require exiftool for audit trail
+        from .raw_loader import is_raw_file
+
+        is_audit_input = is_raw_file(image_input.path) or image_input.path.suffix.lower() in {".tif", ".tiff"}
+
+        try:
+            # Get config fingerprint for provenance
+            config_fp = self.compute_config_fingerprint()
+            config_fp_str = f"sha256:{config_fp.to_sha256()}"
+
+            # Capture CLI args from environment if available (set by CLI runner)
+            # Use shlex for proper shell-quoting aware parsing
+            import shlex
+
+            cli_args = shlex.split(os.environ.get("TP_CLI_ARGS", "")) if "TP_CLI_ARGS" in os.environ else None
+
+            # Capture provenance metadata
+            # For RAW/TIFF: require exiftool (audit-grade)
+            # For JPG/PNG: best-effort (no exiftool requirement)
+            provenance = capture_provenance(
+                image_path=image_input.path,
+                config_fingerprint=config_fp_str,
+                cli_args=cli_args,
+                repo_root=Path.cwd(),  # Repository root for git SHA
+                require_exiftool=is_audit_input,
+            )
+
+            # Write provenance sidecar
+            provenance.write_sidecar(provenance_sidecar_path)
+            logger.info(f"Wrote provenance sidecar: {provenance_sidecar_path}")
+
+        except ExiftoolNotFoundError as e:
+            # Hard fail if exiftool is not available for RAW/TIFF (audit requirement)
+            logger.error(f"Provenance capture failed: exiftool not available for RAW/TIFF input")
+            raise RuntimeError(
+                f"Audit-grade provenance for RAW/TIFF requires exiftool. "
+                f"Install with: apt-get install libimage-exiftool-perl (Ubuntu/Debian) "
+                f"or brew install exiftool (macOS)"
+            ) from e
+        except ProvenanceError as e:
+            # Hard fail on any provenance error (no silent drops)
+            logger.error(f"Provenance capture failed: {e}")
+            raise RuntimeError(f"Provenance capture failed: {e}") from e
+        except Exception as e:
+            # Catch-all for unexpected errors
+            logger.error(f"Unexpected error during provenance capture: {e}")
+            raise RuntimeError(f"Provenance capture failed unexpectedly: {e}") from e
+
         # V2 metadata
         v2_metadata = V2Metadata(
             preset=self.config.v2_preset,
@@ -1019,6 +1200,19 @@ class EnhanceOrchestrator:
             status=v2_result["status"],
             error_message=v2_result.get("error"),
         )
+
+        # Materials V3 metadata
+        materials_v3_metadata = None
+        if materials_v3_result:
+            from .manifest import MaterialsV3Metadata
+
+            materials_v3_metadata = MaterialsV3Metadata(
+                enabled=True,
+                version=materials_v3_result.get("materials_v3_metadata", {}).get("version", "3.1"),
+                response_plan=materials_v3_result.get("materials_v3_response_plan"),
+                pixel_ops=materials_v3_result.get("materials_v3_pixel_ops"),
+                runtime_seconds=materials_v3_runtime_s,
+            )
 
         # Compute input hash respecting HashMode
         manifest_exists = manifest_path.exists()
@@ -1044,6 +1238,7 @@ class EnhanceOrchestrator:
             ),
             depth=depth_metadata,
             v2=v2_metadata,
+            materials_v3=materials_v3_metadata,
             timing=TimingMetadata(
                 depth_seconds=depth_runtime_s,
                 v2_seconds=v2_runtime_s,
@@ -1122,7 +1317,14 @@ class EnhanceOrchestrator:
         # (skip_depth already computed above for both paths)
 
         # --- STAGE A: DEPTH COMPUTATION ---
-        depth_metadata, depth_runtime_s, pbr_assets = self._compute_depth_stage(
+        (
+            depth_metadata,
+            depth_runtime_s,
+            pbr_assets,
+            materials_v3_result,
+            materials_v3_runtime_s,
+            enhanced_image_path,
+        ) = self._compute_depth_stage(
             image_input=image_input,
             output_key=output_key,
             depth_path=depth_path,
@@ -1137,17 +1339,31 @@ class EnhanceOrchestrator:
                 return {"status": "skipped", "reason": "Depth computation failed", "image": str(image_input.path)}
 
         # --- STAGE B: V2 ENHANCEMENT ---
+        # Use enhanced image from Materials V3 if available, otherwise use original
+        v2_input_path = enhanced_image_path if enhanced_image_path else image_input.path
+        if enhanced_image_path:
+            logger.info(f"V2 stage using Materials V3 enhanced image: {enhanced_image_path}")
+
         v2_result, v2_runtime_s, v2_report_path = self._run_v2_stage(
-            image_input=image_input,
+            image_input=ImageInput(path=v2_input_path) if enhanced_image_path else image_input,
             depth_path=depth_path if depth_metadata else None,
             output_key=output_key,
             v2_log_path=v2_log_path,
             manifest_path=manifest_path,
             skip_depth=skip_depth,
+            materials_v3_result=materials_v3_result,
         )
 
         # Capture end time for accurate timestamps
         pipeline_end_time = time.time()
+
+        # Clean up temporary enhanced image file if it was created
+        if enhanced_image_path and enhanced_image_path.exists():
+            try:
+                enhanced_image_path.unlink()
+                logger.debug(f"Cleaned up temporary enhanced image: {enhanced_image_path}")
+            except Exception as e:
+                logger.warning(f"Failed to clean up temporary enhanced image: {e}")
 
         # --- MANIFEST WRITING ---
         self._write_manifest(
@@ -1161,6 +1377,8 @@ class EnhanceOrchestrator:
             v2_runtime_s=v2_runtime_s,
             pipeline_start_time=pipeline_start_time,
             pipeline_end_time=pipeline_end_time,
+            materials_v3_result=materials_v3_result,
+            materials_v3_runtime_s=materials_v3_runtime_s,
         )
 
         return {

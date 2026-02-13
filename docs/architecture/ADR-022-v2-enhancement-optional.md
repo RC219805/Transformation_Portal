@@ -1,15 +1,15 @@
 # ADR-022: V2 Enhancement Stage Optionality
 
-**Status:** Accepted  
-**Date:** 2026-02-04  
-**Authors:** Transformation Portal Architect  
+**Status:** Accepted
+**Date:** 2026-02-04
+**Authors:** Transformation Portal Architect
 **Context:** Lux Depth V3 orchestrator hard-fails when V2 script missing
 
 ---
 
 ## Context
 
-The Lux Depth V3 orchestrator (`EnhanceOrchestrator`) has a hard dependency on `scripts/enhance_image.py` for the V2 enhancement stage, which is enabled by default (`enable_v2=True`, `v2_preset="default"`). 
+The Lux Depth V3 orchestrator (`EnhanceOrchestrator`) has a hard dependency on `scripts/enhance_image.py` for the V2 enhancement stage, which is enabled by default (`enable_v2=True`, `v2_preset="default"`).
 
 **Current Behavior:**
 - Orchestrator initialization performs fail-fast validation: if V2 is enabled and the script doesn't exist, it raises `FileNotFoundError`
@@ -266,9 +266,9 @@ config = EnhanceConfig(
 
 ## Approval
 
-**Architect Decision:** Accepted  
+**Architect Decision:** Accepted
 **Rationale:** Tactical fix provides immediate unblocking while preserving strategic options for future refactoring. Backward compatible, security-safe, and maintainable.
 
-**Implementation Priority:** High (blocking user workflows)  
-**Complexity:** Low (script creation + 2 CLI flags)  
+**Implementation Priority:** High (blocking user workflows)
+**Complexity:** Low (script creation + 2 CLI flags)
 **Risk:** Low (backward compatible, well-tested)

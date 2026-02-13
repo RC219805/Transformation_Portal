@@ -17,16 +17,12 @@ Requirements:
 """
 
 import argparse
+import sys
 from pathlib import Path
 from typing import Optional
-import sys
 
 try:
-    from transformation_portal.lux_depth_v3 import (
-        EnhanceOrchestrator,
-        get_preset,
-        list_presets,
-    )
+    from transformation_portal.lux_depth_v3 import EnhanceOrchestrator, get_preset, list_presets
     from transformation_portal.lux_depth_v3.input_manager import ImageInput
 except ImportError as e:
     print(f"Error: Could not import lux_depth_v3 module: {e}")
@@ -56,40 +52,21 @@ Examples:
 
   # List all available presets
   %(prog)s --list-presets
-        """
+        """,
     )
 
-    parser.add_argument(
-        "--input",
-        type=Path,
-        help="Input directory containing images (JPG, PNG, TIFF)"
-    )
-    parser.add_argument(
-        "--output",
-        type=Path,
-        help="Output directory for PBR maps (default: ./pbr_output_<preset>)"
-    )
+    parser.add_argument("--input", type=Path, help="Input directory containing images (JPG, PNG, TIFF)")
+    parser.add_argument("--output", type=Path, help="Output directory for PBR maps (default: ./pbr_output_<preset>)")
     parser.add_argument(
         "--preset",
         type=str,
         default="standard",
-        help="Preset name: standard, premium, draft, wood, metal, glass, stone, fabric (default: standard)"
+        help="Preset name: standard, premium, draft, wood, metal, glass, stone, fabric (default: standard)",
     )
+    parser.add_argument("--limit", type=int, help="Limit number of images to process (for testing)")
+    parser.add_argument("--list-presets", action="store_true", help="List available presets and exit")
     parser.add_argument(
-        "--limit",
-        type=int,
-        help="Limit number of images to process (for testing)"
-    )
-    parser.add_argument(
-        "--list-presets",
-        action="store_true",
-        help="List available presets and exit"
-    )
-    parser.add_argument(
-        "--device",
-        type=str,
-        choices=["mps", "cuda", "cpu"],
-        help="Override device selection (default: auto-detect)"
+        "--device", type=str, choices=["mps", "cuda", "cpu"], help="Override device selection (default: auto-detect)"
     )
 
     args = parser.parse_args()
@@ -133,6 +110,7 @@ Examples:
     # Override device if specified
     if args.device:
         from dataclasses import replace
+
         config = replace(config, depth_device=args.device)
         print(f"Using device: {args.device}")
 
@@ -146,10 +124,7 @@ Examples:
 
     # Find images
     image_extensions = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
-    image_paths = [
-        p for p in args.input.iterdir()
-        if p.is_file() and p.suffix.lower() in image_extensions
-    ]
+    image_paths = [p for p in args.input.iterdir() if p.is_file() and p.suffix.lower() in image_extensions]
     image_paths.sort()
 
     if not image_paths:
@@ -159,7 +134,7 @@ Examples:
 
     # Apply limit if specified
     if args.limit:
-        image_paths = image_paths[:args.limit]
+        image_paths = image_paths[: args.limit]
 
     # Print configuration
     print(f"\n{'='*60}")

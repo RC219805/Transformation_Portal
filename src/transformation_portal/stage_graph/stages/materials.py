@@ -8,11 +8,83 @@ for material-aware enhancement.
 from __future__ import annotations
 
 import hashlib
-from typing import Dict
+import math
+from typing import Dict, Optional, Tuple, Union
 
 import numpy as np
 
 from ..stage import Stage, StageContext, StageResult, StageStatus
+
+# Type aliases for segmentation output normalization
+Mask = np.ndarray  # Binary mask (H, W) with values 0.0-1.0
+MaskWithConfidence = Tuple[np.ndarray, float]  # (mask, confidence_score)
+SegmentValue = Union[Mask, MaskWithConfidence]  # Flexible backend output
+
+
+def _coerce_mask_conf(value: SegmentValue) -> Tuple[np.ndarray, Optional[float]]:
+    """
+    Accept either mask or (mask, confidence) tuple.
+
+    Args:
+        value: Either a mask array or (mask, confidence) tuple
+
+    Returns:
+        (mask, confidence) where confidence is:
+        - None if not provided
+        - None if invalid (non-finite or outside [0,1])
+        - float in [0.0, 1.0] if valid
+
+    Raises:
+        ValueError: If value is not a valid mask or tuple format
+    """
+    if isinstance(value, tuple) and len(value) == 2:
+        mask, conf = value
+        if not isinstance(mask, np.ndarray):
+            raise ValueError(f"Invalid mask type in tuple: {type(mask)}")
+
+        # Validate confidence is finite and in [0,1]
+        try:
+            conf_float = float(conf)
+            # Invalid confidence: keep mask, discard confidence
+            if not (0.0 <= conf_float <= 1.0 and math.isfinite(conf_float)):
+                return mask, None
+            return mask, conf_float
+        except (ValueError, TypeError):
+            # Invalid confidence type: keep mask, discard confidence
+            return mask, None
+    elif isinstance(value, np.ndarray):
+        return value, None
+    else:
+        raise ValueError(f"Unexpected segmentation output format: {type(value)}")
+
+
+def _coerce_results(results: Dict[str, SegmentValue]) -> Tuple[Dict[str, np.ndarray], Dict[str, Optional[float]]]:
+    """
+    Normalize segmentation results to separate masks and confidences.
+
+    Args:
+        results: Dict mapping material names to masks or (mask, confidence) tuples
+
+    Returns:
+        (masks, confidences) tuple of dicts
+
+    Note:
+        Invalid entries are silently skipped. Consumers should validate
+        the results if completeness is required.
+    """
+    masks: Dict[str, np.ndarray] = {}
+    confidences: Dict[str, Optional[float]] = {}
+
+    for name, value in results.items():
+        try:
+            mask, conf = _coerce_mask_conf(value)
+            masks[name] = mask
+            confidences[name] = conf
+        except (ValueError, TypeError):
+            # Skip invalid entries silently - caller should log if needed
+            pass
+
+    return masks, confidences
 
 
 class MaterialSegmentationStage(Stage):
@@ -75,7 +147,7 @@ class MaterialSegmentationStage(Stage):
             self._load_segmenter(context.device)
 
         # Compute segmentation
-        material_masks = self._segment_materials(image, depth_map, context.device)
+        material_masks = self._segment_materials(image, depth_map, context)
 
         duration_ms = (time.time() - start) * 1000
 
@@ -133,20 +205,29 @@ class MaterialSegmentationStage(Stage):
         self,
         image: np.ndarray,
         depth_map: np.ndarray | None,
-        device: str,
+        context: StageContext,
     ) -> Dict[str, np.ndarray]:
         """
         Segment image into material types.
 
+        This method handles multiple segmentation backend output formats:
+        - Modern backends: return Dict[str, Tuple[mask, confidence]]
+        - Legacy backends: return Dict[str, mask]
+        - Mixed outputs: some tuples, some masks
+
         Args:
             image: Input image (H, W, 3)
             depth_map: Optional depth map (H, W)
-            device: Device to use
+            context: Stage context for config access
 
         Returns:
-            Dict mapping material names to binary masks
+            Dict mapping material names to binary masks (float32)
+
+        Raises:
+            Exception: Propagates backend failures if strict mode enabled
         """
         h, w = image.shape[:2]
+        device = context.device
 
         if self._segmenter == "heuristic":
             # Use color-based heuristics
@@ -175,20 +256,44 @@ class MaterialSegmentationStage(Stage):
 
         try:
             # Use actual segmenter
-            masks = self._segmenter.segment(image)
+            results = self._segmenter.segment(image)
 
-            # Convert to standard format
-            material_masks = {}
-            for material_name, mask in masks.items():
+            # Normalize outputs using helper functions
+            # First, validate and log any invalid entries
+            for material_name, value in results.items():
+                try:
+                    _coerce_mask_conf(value)
+                except (ValueError, TypeError) as e:
+                    self.logger.warning(f"Unexpected segmentation output format for {material_name}: {e}. Skipping.")
+
+            material_masks, material_confidences = _coerce_results(results)
+
+            # Convert to float32 and log confidence
+            final_masks = {}
+            for material_name, mask in material_masks.items():
                 if isinstance(mask, np.ndarray):
-                    material_masks[material_name] = mask.astype(np.float32)
+                    final_masks[material_name] = mask.astype(np.float32)
+                    conf = material_confidences.get(material_name)
+                    if conf is not None:
+                        self.logger.debug(f"{material_name}: {conf:.0%} confidence")
+                    else:
+                        self.logger.debug(f"{material_name}: detected (no confidence score)")
 
-            return material_masks
+            return final_masks
 
         except Exception as e:
             self.logger.error(f"Material segmentation failed: {e}")
-            # Return empty dict on failure
-            return {}
+
+            # Default to soft failure (pipeline continues) unless strict mode enabled
+            strict = context.get_config("materials_segmentation_strict", False)
+            if strict:
+                raise  # Hard failure: stop pipeline
+            else:
+                # Soft failure: log + return empty, pipeline continues
+                self.logger.warning(
+                    "Returning empty materials (soft failure). " "Set materials_segmentation_strict=True to make this fatal."
+                )
+                return {}
 
     @staticmethod
     def _rgb_to_hsv(rgb: np.ndarray) -> np.ndarray:

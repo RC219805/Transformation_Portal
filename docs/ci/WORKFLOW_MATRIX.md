@@ -1,7 +1,7 @@
 # CI Workflow Matrix
 
-**Purpose**: Canonical reference for all GitHub Actions workflows  
-**Owner**: Transformation Portal Architect  
+**Purpose**: Canonical reference for all GitHub Actions workflows
+**Owner**: Transformation Portal Architect
 **Last Updated**: 2026-02-04
 
 ---
@@ -26,8 +26,8 @@
 ## Workflow Responsibilities
 
 ### Primary Quality Gate: `build.yml`
-**Purpose**: Enforce code quality, type safety, and test coverage  
-**Runs on**: Every PR and push to main  
+**Purpose**: Enforce code quality, type safety, and test coverage
+**Runs on**: Every PR and push to main
 **Blocking**: Yes (required for merge)
 
 **Jobs**:
@@ -60,8 +60,8 @@
 ---
 
 ### Formatting Enforcement: `quality-gate.yml`
-**Purpose**: Auto-fix and enforce formatting standards  
-**Runs on**: Every PR and push to main  
+**Purpose**: Auto-fix and enforce formatting standards
+**Runs on**: Every PR and push to main
 **Blocking**: Partial (some checks non-blocking)
 
 **Jobs**:
@@ -85,8 +85,8 @@
 ---
 
 ### Security Scanning: `security-unified.yml`
-**Purpose**: Detect vulnerabilities in code and dependencies  
-**Runs on**: Every PR and push to main  
+**Purpose**: Detect vulnerabilities in code and dependencies
+**Runs on**: Every PR and push to main
 **Blocking**: Yes
 
 **Jobs**:
@@ -97,8 +97,8 @@
 ---
 
 ### Code Analysis: `codeql.yml`
-**Purpose**: GitHub's semantic code analysis  
-**Runs on**: PR, push to main, weekly schedule  
+**Purpose**: GitHub's semantic code analysis
+**Runs on**: PR, push to main, weekly schedule
 **Blocking**: Yes
 
 **Languages**: Python
@@ -228,5 +228,5 @@ A "green CI" state requires:
 
 ---
 
-**Maintained by**: Transformation Portal Architect  
+**Maintained by**: Transformation Portal Architect
 **Review Frequency**: Monthly (or after any workflow change)

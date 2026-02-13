@@ -184,7 +184,7 @@ git commit -m "Add calibrated palette for 750 Picacho aerial"
 If a palette references a material name that doesn't exist, you'll see:
 
 ```
-ValueError: Unknown material 'granite' in palette. 
+ValueError: Unknown material 'granite' in palette.
 Available materials: ['plaster', 'stone', 'cladding', ...]
 ```
 

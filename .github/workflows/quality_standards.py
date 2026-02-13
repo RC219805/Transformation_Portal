@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import List, Tuple
 
+
 class QualityEnforcer:
     """Enforce code quality standards proactively."""
 
@@ -46,20 +47,16 @@ class QualityEnforcer:
     def check_f_string_interpolation(self) -> bool:
         """Check for f-strings without interpolation."""
         result = subprocess.run(
-            ["grep", "-r", "-n", 'f"[^{]*"', "--include=*.py", "."],
-            cwd=self.repo_root,
-            capture_output=True,
-            text=True
+            ["grep", "-r", "-n", 'f"[^{]*"', "--include=*.py", "."], cwd=self.repo_root, capture_output=True, text=True
         )
 
         # Filter out false positives
         if result.stdout:
-            lines = result.stdout.strip().split('\n')
+            lines = result.stdout.strip().split("\n")
             # This is a warning, not an error
             if len(lines) > 10:
                 self.warnings.append(
-                    f"⚠️  Found {len(lines)} f-strings without interpolation\n"
-                    f"   → Consider using regular strings instead"
+                    f"⚠️  Found {len(lines)} f-strings without interpolation\n" f"   → Consider using regular strings instead"
                 )
 
         print("✓ F-string usage checked")
@@ -68,24 +65,20 @@ class QualityEnforcer:
     def check_dangerous_defaults(self) -> bool:
         """Check for dangerous default arguments."""
         dangerous_patterns = [
-            (r'def.*\(.*=\[\]', 'Empty list [] as default'),
-            (r'def.*\(.*=\{\}', 'Empty dict {} as default'),
+            (r"def.*\(.*=\[\]", "Empty list [] as default"),
+            (r"def.*\(.*=\{\}", "Empty dict {} as default"),
         ]
 
         found_issues = False
         for pattern, desc in dangerous_patterns:
             result = subprocess.run(
-                ["grep", "-r", "-n", "-E", pattern, "--include=*.py", "."],
-                cwd=self.repo_root,
-                capture_output=True,
-                text=True
+                ["grep", "-r", "-n", "-E", pattern, "--include=*.py", "."], cwd=self.repo_root, capture_output=True, text=True
             )
 
             if result.stdout and result.returncode == 0:
-                lines = result.stdout.strip().split('\n')
+                lines = result.stdout.strip().split("\n")
                 self.warnings.append(
-                    f"⚠️  Found {len(lines)} instances of: {desc}\n"
-                    f"   → Use None as default and initialize in function body"
+                    f"⚠️  Found {len(lines)} instances of: {desc}\n" f"   → Use None as default and initialize in function body"
                 )
                 found_issues = True
 
@@ -95,16 +88,13 @@ class QualityEnforcer:
     def auto_fix_trailing_whitespace(self) -> bool:
         """Auto-fix trailing whitespace in Python files."""
         py_files = list(self.repo_root.rglob("*.py"))
-        py_files = [
-            f for f in py_files
-            if not any(x in str(f) for x in ['.venv', 'deprecated', 'node_modules'])
-        ]
+        py_files = [f for f in py_files if not any(x in str(f) for x in [".venv", "deprecated", "node_modules"])]
 
         fixed_count = 0
         for py_file in py_files:
             try:
                 content = py_file.read_text()
-                fixed_content = '\n'.join(line.rstrip() for line in content.split('\n'))
+                fixed_content = "\n".join(line.rstrip() for line in content.split("\n"))
 
                 if content != fixed_content:
                     py_file.write_text(fixed_content)
@@ -128,18 +118,22 @@ class QualityEnforcer:
     def run_flake8_critical(self) -> bool:
         """Run flake8 for critical errors only."""
         result = subprocess.run(
-            ["flake8", ".", "--count", "--select=E9,F63,F7,F82",
-             "--show-source", "--statistics",
-             "--exclude=deprecated/,src/transformation_portal/,.venv/"],
+            [
+                "flake8",
+                ".",
+                "--count",
+                "--select=E9,F63,F7,F82",
+                "--show-source",
+                "--statistics",
+                "--exclude=deprecated/,src/transformation_portal/,.venv/",
+            ],
             cwd=self.repo_root,
             capture_output=True,
-            text=True
+            text=True,
         )
 
         if result.returncode != 0:
-            self.errors.append(
-                f"❌ Flake8 critical errors found:\n{result.stdout}\n{result.stderr}"
-            )
+            self.errors.append(f"❌ Flake8 critical errors found:\n{result.stdout}\n{result.stderr}")
             return False
 
         print("✓ Flake8 critical checks passed")
@@ -197,7 +191,7 @@ class QualityEnforcer:
                     report_lines.append(f"\n{warning}")
 
         report_lines.append("\n" + "=" * 60)
-        return '\n'.join(report_lines)
+        return "\n".join(report_lines)
 
 
 def main():

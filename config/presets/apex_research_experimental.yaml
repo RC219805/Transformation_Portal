@@ -1,0 +1,114 @@
+# APEX Research Experimental Preset
+# ⚠️  LICENSE: Research-Only (Multiple)
+# ⚠️  STABILITY: EXPERIMENTAL (unstable, testing-only)
+#
+# This preset combines bleeding-edge research features that may be unstable.
+# DO NOT use for critical research workflows.
+#
+# For stable research workflows, use 'apex-research-stable' instead.
+
+name: apex-research-experimental
+description: "APEX Research (Experimental): unstable, bleeding-edge research features"
+tier: apex_research
+license_restriction: research_only
+stability: experimental
+
+# Extends stable preset
+extends: apex_research
+
+# Experimental: Multi-Backend Depth Fusion
+depth_fusion:
+  enabled: true
+  backends:
+    - depth_pro
+    - da3_1.1_nested_giant_large
+  fusion_method: weighted_average
+  weights: [0.6, 0.4]  # Favor Depth Pro (better boundary precision)
+
+  # Conflict resolution
+  conflict_resolution: depth_pro  # Use Depth Pro as ground truth
+
+# Experimental: LLaVA Quality Validation
+quality:
+  llava_validation:
+    enabled: true
+    model: liuhaotian/llava-v1.5-13b
+    device: auto
+
+    # Validation prompts
+    prompts:
+      - "Assess architectural detail preservation quality on a scale of 0-10. Focus on edge sharpness and material boundaries."
+      - "Rate surface material realism on a scale of 0-10. Consider normal map detail and roughness variation."
+      - "Evaluate depth map accuracy on a scale of 0-10. Check for boundary precision and occlusion handling."
+
+    # Quality threshold (block output if LLaVA scores below threshold)
+    quality_threshold: 7.5
+    block_on_failure: false  # Log warning but don't block (experimental)
+
+  # Disable APEX gates for experimental (LLaVA replaces statistical gates)
+  apex_gates:
+    enabled: false
+
+# Experimental: Enhanced Material Segmentation
+segmentation:
+  # Use multiple segmentation backends and fuse results
+  multi_backend_fusion:
+    enabled: true
+    backends:
+      - sam_vit_h
+      - efficientsam_v2
+    fusion_method: confidence_weighted
+
+  # CLIP-based material classification with expanded vocabulary
+  material_classification:
+    enabled: true
+    model: openai/clip-vit-large-patch14
+    vocabulary:
+      - architectural_glass
+      - polished_stone
+      - brushed_metal
+      - hardwood_flooring
+      - ceramic_tile
+      - painted_drywall
+      - natural_fabric
+      - polished_concrete
+      # ... expanded material vocabulary
+
+# Experimental: Advanced PBR Synthesis
+processing:
+  pbr:
+    # Experimental: Depth-aware normal map synthesis
+    normal:
+      depth_aware_synthesis: true
+      multi_scale_detail: true
+      scales: [1.0, 2.0, 4.0]  # Multi-scale detail extraction
+
+    # Experimental: Material-specific roughness
+    roughness:
+      material_specific: true
+      material_presets:
+        glass: 0.05
+        stone: 0.7
+        metal: 0.3
+        wood: 0.6
+
+    # Experimental: Screen-space ambient occlusion (SSAO)
+    ao:
+      method: ssao_experimental
+      samples: 512  # High sample count (very slow)
+
+# Performance Warning
+performance_targets:
+  total_pipeline_ms: 10000  # ~10s for 4K (experimental, very slow)
+  peak_memory_gb: 24        # High memory usage (multiple models loaded)
+
+# Metadata
+metadata:
+  version: "1.0.0-experimental"
+  last_updated: "2026-02-10"
+  stability_warning: "EXPERIMENTAL: Features may be unstable or removed without notice. Do not use for critical workflows."
+  experimental_features:
+    - multi_backend_depth_fusion
+    - llava_quality_validation
+    - material_specific_pbr
+    - ssao_experimental

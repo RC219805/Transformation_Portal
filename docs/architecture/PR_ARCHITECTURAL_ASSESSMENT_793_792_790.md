@@ -206,11 +206,11 @@ class DepthArtifact:
 ```python
 class DepthModel(Protocol):
     """Backend-agnostic depth estimation interface."""
-    
+
     def estimate_depth(self, image: np.ndarray) -> DepthArtifact:
         """Estimate depth from image."""
         ...
-    
+
     def get_cache_key(self, image: np.ndarray) -> str:
         """Generate deterministic cache key."""
         ...
@@ -600,7 +600,7 @@ def build_stages(config):
 class DepthProStage(Stage):
     LICENSE = "non-commercial-research"
     LICENSE_URL = "https://github.com/apple/ml-depth-pro/blob/main/LICENSE"
-    
+
     def validate_license_acceptance(self):
         if not self._license_accepted:
             raise LicenseError(f"Must accept {self.LICENSE}: {self.LICENSE_URL}")
@@ -642,7 +642,7 @@ class DepthProStage(Stage):
 def select_depth_stage(config):
     """Select depth stage based on configuration."""
     backend = config.get("depth_backend", "depth_anything_v3")
-    
+
     if backend == "depth_pro":
         from .stages.depth_pro import DepthProStage
         return DepthProStage()

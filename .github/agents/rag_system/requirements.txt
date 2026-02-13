@@ -9,7 +9,7 @@ PyYAML>=6.0  # For configuration management
 # Vector embeddings (optional, required only for semantic/vector search)
 # To enable vector search, install these extras:
 # pip install sentence-transformers>=2.2.0 torch>=2.0.0
-# 
+#
 # OR install the transformation-portal package with ML extras:
 # pip install -e ".[ml]"
 #

@@ -1,13 +1,13 @@
 # Performance Ledger v1.7 Upgrade: Architect Verdict
 
-**Date:** 2026-02-05  
+**Date:** 2026-02-05
 **Status:** ⚠️ CONDITIONAL APPROVAL - BREAKING CHANGES REQUIRE MITIGATION
 
 ---
 
 ## TL;DR
 
-**CAN THIS BE A DROP-IN REPLACEMENT?** 
+**CAN THIS BE A DROP-IN REPLACEMENT?**
 ❌ **NO** - Multiple breaking changes require:
 1. CLI compatibility shims
 2. Test suite expansion (16 → ~35 tests)
@@ -26,18 +26,18 @@
 1. **CLI Flag Rename** (HIGH IMPACT)
    - `--version` → `--baseline-version`
    - **Fix:** Add `--version` as deprecated alias
-   
+
 2. **Exit Code Expansion** (MEDIUM IMPACT)
    - v1.0: `0=success, 1=regression`
    - v1.7: `0=success, 1=regression, 2=backend_mismatch, 3=insufficient_data`
    - **Risk:** Exit code 0 may hide "potential regressions" without `--strict`
    - **Fix:** Make `--strict` default in CI, lenient for exploratory use
-   
+
 3. **NumPy Optional** (MEDIUM IMPACT)
    - Pure Python fallbacks add 50-100x performance penalty
    - **Risk:** Subtle math errors in pure Python percentile/bootstrap
    - **Fix:** Comprehensive property-based testing (Hypothesis)
-   
+
 4. **JSON Schema Extensions** (LOW IMPACT)
    - Additive only (forensics, backend_compliance)
    - **Risk:** Baseline files grow 2-3x with forensics data
@@ -45,7 +45,7 @@
 
 ### Current Test Coverage Analysis
 
-**Existing (v1.0):** 16 unit tests  
+**Existing (v1.0):** 16 unit tests
 **Coverage:** Function-level only, no CLI integration tests
 
 **What's NOT tested:**
@@ -62,7 +62,7 @@
 ## Test Impact Assessment
 
 ### Tests That Will Break
-**Direct:** NONE (no tests invoke CLI)  
+**Direct:** NONE (no tests invoke CLI)
 **Behavioral:** Hypothetical CLI tests would break due to `--version` rename
 
 ### Required New Tests (Priority Order)
@@ -150,13 +150,13 @@ If coordination overhead is low (< 5 users), could bump to v2.0.0 immediately wi
 
 ### Security Implications
 
-✅ **POSITIVE:** Reduces dependency attack surface (NumPy optional)  
+✅ **POSITIVE:** Reduces dependency attack surface (NumPy optional)
 ⚠️ **CAUTION:** Validate new input bounds (bootstrap iterations, histogram bins)
 
 **Required validation:**
 ```python
-parser.add_argument("--bootstrap-iterations", type=int, 
-                    default=1000, 
+parser.add_argument("--bootstrap-iterations", type=int,
+                    default=1000,
                     choices=range(100, 10001))  # Prevent DoS
 ```
 
@@ -169,27 +169,27 @@ parser.add_argument("--bootstrap-iterations", type=int,
 1. ✅ **Backward Compatibility Shims**
    - Add `--version` as deprecated alias for `--baseline-version`
    - Preserve exact v1.0 baseline JSON schema in `load_baseline()`
-   
+
 2. ✅ **Pure Python Validation**
    - Property-based tests (Hypothesis) for percentile correctness
    - Cross-validate against NumPy for 1000+ random datasets
    - Document any intentional deviations
-   
+
 3. ✅ **CLI Integration Tests**
    - Minimum 10 tests covering: capture, compare, exit codes, flags
    - Test all 4 exit code paths (0, 1, 2, 3)
    - Test `--strict` mode behavior
-   
+
 4. ✅ **ADR-023 Amendment**
    - Document breaking changes
    - Migration guide for existing users
    - Exit code contract definition
-   
+
 5. ✅ **Performance Regression Tests**
    - Benchmark NumPy mode (should be ~same as v1.0)
    - Benchmark pure Python mode (document acceptable slowdown)
    - Fail if NumPy mode degrades > 2x
-   
+
 6. ✅ **Input Validation**
    - Bound all user inputs (iterations, bins, samples)
    - Test rejection of extreme values
@@ -200,11 +200,11 @@ parser.add_argument("--bootstrap-iterations", type=int,
 7. 🔵 **Forensics Isolation**
    - Move forensics data to separate `--emit-forensics` file
    - Keep baseline JSON compact for version control
-   
+
 8. 🔵 **Schema Versioning**
    - Add `"schema_version": "1.0"` field to baselines
    - Implement forward/backward compatibility checks
-   
+
 9. 🔵 **Documentation Updates**
    - Update README examples
    - Add migration guide to docs/
@@ -278,8 +278,8 @@ The prompt mentioned "tests we just fixed in PR #845" - those 4 tests are likely
 
 ---
 
-**Reviewed by:** Transformation Portal Architect  
-**Date:** 2026-02-05  
+**Reviewed by:** Transformation Portal Architect
+**Date:** 2026-02-05
 **Next Action:** Specialist to implement mandatory conditions
 
 **Full architectural analysis:** `docs/architecture/performance_ledger_v1.7_review.md`

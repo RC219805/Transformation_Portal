@@ -28,7 +28,7 @@ baselines/
 
 ## Active Baseline: v2.0.0-post-pr841
 
-**Created:** 2026-02-05  
+**Created:** 2026-02-05
 **Environment:**
 - OS: macOS 14.2 (Darwin 25.2.0, arm64)
 - Python: 3.11.14

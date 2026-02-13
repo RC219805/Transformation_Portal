@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Ingest Contract v1.0.0:** Audit-grade provenance and schema validation for RAW/TIFF ingest
+  - **Versioned Schemas:** Pydantic models for ProvenanceSidecar (v1.0.0) and IngestManifest (v1.0.0)
+  - **Complete Metadata Extraction:** exiftool integration captures all EXIF tags + groups
+  - **Provenance Capture:** Toolchain versions, git SHA, CLI args, timestamps, host/OS metadata
+  - **Deterministic Output:** Sorted JSON keys, stable serialization (except run_id UUID)
+  - **Schema Validation:** Hard-fail on missing fields, type mismatches, unknown fields (drift detection)
+  - **Quality Firewall:** 8-bit conversion detection, gamma correction detection, dtype/range validation
+  - **CI Enforcement:** `.github/workflows/ingest_contract_validation.yml` gates PRs on violations
+  - **Atomic Writes:** Temp file + rename pattern prevents corruption
+  - **30 Comprehensive Tests:** Schema validation, drift detection, determinism, gamma/8-bit checks
+  - **Exit Codes:** 0=pass, 1=schema_fail, 2=8bit, 3=gamma, 4=drift, 5=other
+  - **Contract Documentation:** `docs/apex/ingest_contract.md` defines binding guarantees
+  - **Dependencies:** Added pydantic>=2.0 to core requirements
+  - See: [Ingest Contract v1.0.0](docs/apex/ingest_contract.md)
+
 ### Fixed
 - **CRITICAL: Lux Depth V3 Pipeline Bug Fixes (6 issues):**
   - **Fix #1:** Double EXIF rotation in v2_enhance.py - Strip EXIF data after `exif_transpose()` to prevent viewers from rotating twice (pixels already rotated + EXIF tag says rotate again)

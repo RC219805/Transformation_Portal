@@ -89,7 +89,7 @@ python lux_render_pipeline.py \
 
 **Symptoms**:
 ```
-FileNotFoundError: [Errno 2] No such file or directory: 
+FileNotFoundError: [Errno 2] No such file or directory:
 'DepthAnythingV2SmallF16.mlpackage'
 ```
 
@@ -104,7 +104,7 @@ pip install transformers torch
 
 # Model downloads automatically on first use
 from transformers import pipeline
-depth_estimator = pipeline("depth-estimation", 
+depth_estimator = pipeline("depth-estimation",
                           model="depth-anything/Depth-Anything-V2-Small")
 ```
 
@@ -221,7 +221,7 @@ python lux_render_pipeline.py --no-depth --input 'images/*.png'
 
 **Symptoms**:
 ```
-Cannot initialize model with low cpu memory usage because `accelerate` 
+Cannot initialize model with low cpu memory usage because `accelerate`
 was not found in the environment.
 ```
 
@@ -423,6 +423,6 @@ top -l 1 | grep PhysMem  # macOS
 
 ---
 
-**Last Updated**: November 2025  
-**Version**: 1.0.0  
+**Last Updated**: November 2025
+**Version**: 1.0.0
 **Related**: See [SETUP_GUIDE.md](SETUP_GUIDE.md) for installation details

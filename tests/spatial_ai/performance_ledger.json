@@ -1,0 +1,92 @@
+{
+  "materials_heuristic_1024": {
+    "baseline": 4.449157953262329,
+    "measurements": [
+      {
+        "duration": 4.449157953262329,
+        "timestamp": 1770858242.192961
+      },
+      {
+        "duration": 4.4562623500823975,
+        "timestamp": 1770858278.4557528
+      },
+      {
+        "duration": 4.500155210494995,
+        "timestamp": 1770858294.833764
+      },
+      {
+        "duration": 4.202737331390381,
+        "timestamp": 1770860211.2630389
+      },
+      {
+        "duration": 4.259204864501953,
+        "timestamp": 1770860453.7642822
+      },
+      {
+        "duration": 4.5181097984313965,
+        "timestamp": 1770864230.577392
+      },
+      {
+        "duration": 4.682499170303345,
+        "timestamp": 1770864396.501421
+      },
+      {
+        "duration": 4.591259002685547,
+        "timestamp": 1770864567.80637
+      },
+      {
+        "duration": 4.6720569133758545,
+        "timestamp": 1770864614.53015
+      },
+      {
+        "duration": 4.648688077926636,
+        "timestamp": 1770865557.6929338
+      },
+      {
+        "duration": 4.611675977706909,
+        "timestamp": 1770865642.151802
+      },
+      {
+        "duration": 4.610576152801514,
+        "timestamp": 1770866183.482348
+      },
+      {
+        "duration": 4.5784759521484375,
+        "timestamp": 1770866329.0371819
+      },
+      {
+        "duration": 4.8601789474487305,
+        "timestamp": 1770866551.420615
+      },
+      {
+        "duration": 4.583547115325928,
+        "timestamp": 1770877257.9283462
+      },
+      {
+        "duration": 4.252213001251221,
+        "timestamp": 1770882509.733886
+      },
+      {
+        "duration": 4.423923015594482,
+        "timestamp": 1770927583.1650062
+      },
+      {
+        "duration": 4.456444978713989,
+        "timestamp": 1770929742.115057
+      }
+    ],
+    "metadata": {
+      "image_size": "1024x1024",
+      "hardware": {
+        "platform": "Darwin",
+        "processor": "arm",
+        "python_version": "3.11.14",
+        "torch_version": "2.10.0",
+        "cuda_available": false,
+        "mps_available": true,
+        "gpu_name": "Apple Metal Performance Shaders"
+      },
+      "backend": "heuristic"
+    }
+  }
+}
