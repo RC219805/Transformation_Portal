@@ -115,6 +115,12 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--upscaler", default="default", help="Upscaler backend (default: %(default)s)")
     parser.add_argument("--log-file", type=Path, default=None, help="Optional log file path")
     parser.add_argument(
+        "--masks-file",
+        type=Path,
+        default=None,
+        help="Explicit path to material masks NPZ file for Materials V3 integration",
+    )
+    parser.add_argument(
         "--allow-8bit",
         action="store_true",
         help="Allow 16-bit → 8-bit downgrade (bypasses Quality Firewall)",
@@ -157,6 +163,57 @@ def configure_logging(verbose: bool, quiet: bool, log_file: Path | None) -> None
     )
 
 
+def load_material_masks(masks_file: Path | None) -> dict[str, Any] | None:
+    """Load material masks from explicit NPZ file path.
+
+    Args:
+        masks_file: Explicit path to material masks NPZ file
+
+    Returns:
+        Dictionary mapping material names to numpy arrays, or None if no masks found
+
+    Raises:
+        ValueError: If mask file is invalid or corrupted
+    """
+    if not masks_file or not masks_file.exists():
+        return None
+
+    # Security: Check file size BEFORE loading (DoS protection)
+    file_size = masks_file.stat().st_size
+    if file_size > 100 * 1024 * 1024:  # 100MB limit
+        logger.warning(
+            f"Material masks file too large: {file_size / (1024 * 1024):.1f}MB " f"(limit: 100MB). Rejecting for safety."
+        )
+        return None
+
+    try:
+        # Load NPZ file with explicit pickle=False for security
+        import numpy as np
+
+        with np.load(masks_file, allow_pickle=False) as data:
+            masks = {key: data[key] for key in data.files}
+
+        if not masks:
+            logger.warning(f"Material mask file is empty: {masks_file}")
+            return None
+
+        # Validate loaded masks
+        for mat_name, mask in masks.items():
+            if not isinstance(mask, np.ndarray):
+                logger.warning(f"Invalid mask type for {mat_name}: {type(mask)}")
+                return None
+            if mask.ndim != 2:
+                logger.warning(f"Invalid mask shape for {mat_name}: {mask.shape} (expected 2D)")
+                return None
+
+        logger.info(f"Loaded {len(masks)} material masks from {masks_file.name}: {list(masks.keys())}")
+        return masks
+
+    except Exception as e:
+        logger.warning(f"Failed to load material masks from {masks_file}: {e}")
+        return None
+
+
 def run_v2_enhancement(
     input_path: Path,
     depth_dir: Path | None,
@@ -165,6 +222,7 @@ def run_v2_enhancement(
     device: str,
     upscaler: str,
     allow_8bit: bool = False,
+    masks_file: Path | None = None,
 ) -> dict[str, Any]:
     """Run V2 depth-aware enhancement.
 
@@ -176,6 +234,7 @@ def run_v2_enhancement(
         device: Processing device (cpu/cuda/mps)
         upscaler: Upscaler backend (currently unused, reserved for future)
         allow_8bit: Allow 16-bit → 8-bit downgrade (Quality Firewall bypass)
+        masks_file: Explicit path to material masks NPZ file (optional, Materials V3 integration)
 
     Returns:
         Dict containing enhancement report
@@ -214,11 +273,15 @@ def run_v2_enhancement(
         else:
             logger.warning("No depth map found in %s for %s", depth_dir, input_path.stem)
 
+    # Load material masks if masks_file provided (Materials V3 integration)
+    material_masks = load_material_masks(masks_file) if masks_file else None
+
     # Run enhancement
     report = enhance_image(
         input_path=input_path,
         output_path=output_path,
         depth_map_path=depth_map_path,
+        material_masks=material_masks,  # Pass through to v2_enhance.py
         config=config,
         device=device,
         allow_8bit_output=allow_8bit,
@@ -255,6 +318,7 @@ def main() -> int:
             device=args.device,
             upscaler=args.upscaler,
             allow_8bit=args.allow_8bit,
+            masks_file=args.masks_file,  # Pass through Materials V3 explicit mask file
         )
 
         if report_path:

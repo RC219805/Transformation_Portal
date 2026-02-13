@@ -1,0 +1,158 @@
+# Materials V3 Production Preset
+#
+# Enables real material segmentation with EfficientSAM backend and
+# material-aware perceptual finishing.
+#
+# Prerequisites:
+#   - EfficientSAM weights downloaded (automatic on first use)
+#   - ML dependencies installed: pip install -e ".[ml]"
+#
+# Performance:
+#   - Segmentation overhead: ~200-500ms per image (CPU)
+#   - Segmentation overhead: ~50-150ms per image (GPU/MPS)
+#   - Total pipeline: ~2-3s per image with V2 enhancement
+#
+# Disk Usage:
+#   - Temporary masks: ~5-20MB per image (auto-cleaned)
+#   - EfficientSAM model: ~50MB (one-time download)
+
+depth_model:
+  variant: "small"  # DA3 small variant for speed
+  backend: "pytorch_mps"  # Use MPS on macOS, CUDA on Linux, CPU fallback
+  cache_size: 100
+
+processing:
+  # Depth map postprocessing
+  depth_postprocessing:
+    enabled: true
+    method: bilateral
+    sigma: 4.0
+    edge_preserve: 0.12
+    preserve_scale: true
+
+  # Depth-aware denoising
+  depth_aware_denoise:
+    enabled: true
+    sigma_spatial: 2.0
+    preserve_strength: 0.85
+
+  # Zone-based tone mapping
+  zone_tone_mapping:
+    enabled: true
+    num_zones: 3
+    method: "agx"
+    zone_params:
+      - {contrast: 1.15, saturation: 1.1, exposure: 0.05}  # Foreground
+      - {contrast: 1.0, saturation: 1.0, exposure: 0.0}    # Midground
+      - {contrast: 0.9, saturation: 0.95, exposure: -0.05} # Background
+
+  # Disable atmospheric effects for clarity
+  atmospheric_effects:
+    enabled: false
+
+  # Depth-guided filters
+  depth_guided_filters:
+    enabled: true
+    clarity_strength: 0.5
+
+  # Depth of field (optional)
+  depth_of_field:
+    enabled: false
+
+# ============================================================================
+# Materials V3 Configuration (PRODUCTION)
+# ============================================================================
+
+materials_v3:
+  # Enable Materials V3 surface-aware finishing
+  enable_materials_v3: true
+
+  # Enable pixel operations (material-specific enhancements)
+  apply_pixel_ops: true
+
+  # Material segmentation backend
+  enable_material_segmentation: true
+  material_segmentation_backend: "efficientsam"  # Real ML segmentation
+
+  # Strict backend mode: fail if EfficientSAM unavailable
+  # Set to false for graceful fallback to stub backend
+  strict_backend: false  # Recommended: false for production
+
+  # Material detection thresholds
+  min_coverage_px: 500      # Minimum pixels for material detection
+  min_mean_conf: 0.20       # Minimum confidence threshold
+
+  # Refinement strategy
+  refinement_strategy: "canary"  # Conservative refinements only
+
+  # Glass material response
+  glass_response_enabled: true
+
+# ============================================================================
+# V2 Enhancement Configuration
+# ============================================================================
+
+v2_enhancement:
+  # Enable V2 enhancement stage (material-aware perceptual finishing)
+  enable_v2: true
+
+  # V2 preset (default is balanced for luxury real estate)
+  v2_preset: "default"
+
+  # V2 processing device
+  v2_device: "cpu"  # Options: cpu, cuda, mps
+
+  # V2 subprocess timeout (seconds)
+  v2_timeout: 120
+
+  # Upscaler backend (optional)
+  # v2_upscaler_backend: "esrgan"  # Uncomment to enable upscaling
+
+# ============================================================================
+# Output Configuration
+# ============================================================================
+
+output:
+  # Emit master 16-bit output (linear RGB, archival quality)
+  emit_master16: false
+
+  # Emit upscaled 16-bit output
+  emit_upscaled16: false
+
+  # PBR map generation
+  generate_pbr: false
+
+# ============================================================================
+# Performance Optimization
+# ============================================================================
+
+optimization:
+  production_resolution: 1024  # Max resolution for batch processing
+  batch_size: 4                # Parallel processing (if supported)
+
+  # Hash mode for output key generation
+  # xxhash: 5x faster than SHA-1 (requires xxhash package)
+  # sha1: Standard, always available
+  hash_mode: "sha1"  # Change to "xxhash" if installed
+
+# ============================================================================
+# Usage Example
+# ============================================================================
+#
+# python -m transformation_portal.lux_depth_v3 \
+#   input_images/ \
+#   --output-root output/ \
+#   --enable-segmentation
+#
+# Or via Python API:
+#
+#   from transformation_portal.lux_depth_v3 import EnhanceConfig, EnhanceOrchestrator
+#
+#   # Load config from defaults and override specific settings
+#   config = EnhanceConfig()
+#   config.enable_material_segmentation = True  # Enable segmentation
+#   config.material_segmentation_backend = "efficientsam"
+#
+#   orchestrator = EnhanceOrchestrator(config, output_root)
+#   orchestrator.process_batch(input_paths)
+#

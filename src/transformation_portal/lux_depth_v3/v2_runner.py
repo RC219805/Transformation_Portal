@@ -87,6 +87,7 @@ class V2Runner:
         upscaler_backend: Optional[str] = None,
         log_file: Optional[Path] = None,
         timeout: Optional[float] = None,
+        masks_file: Optional[Path] = None,
         **kwargs,
     ) -> Dict[str, Any]:
         """Run V2 depth-aware enhancement pipeline.
@@ -100,6 +101,7 @@ class V2Runner:
             upscaler_backend: Upscaler backend (optional)
             log_file: Log file path (optional)
             timeout: Subprocess timeout in seconds (optional)
+            masks_file: Explicit path to material masks NPZ file (optional, Materials V3 integration)
             **kwargs: Additional arguments (reserved)
 
         Returns:
@@ -144,6 +146,11 @@ class V2Runner:
 
         if log_file is not None:
             cmd.extend(["--log-file", str(log_file)])
+
+        # Add explicit mask file path if provided (Materials V3 integration)
+        # Uses explicit NPZ path to eliminate filename coupling
+        if masks_file is not None:
+            cmd.extend(["--masks-file", str(masks_file)])
 
         logger.info(f"Running V2 enhancement: {' '.join(cmd)}")
 
