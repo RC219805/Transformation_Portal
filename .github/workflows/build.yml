@@ -71,6 +71,7 @@ jobs:
               /^src\//,
               /^tests\//,
               /^scripts\//,
+              /^tools\//,              // execution risk: montecito_manifest.py
               /^config\//,
               /^pyproject\.toml$/,
               /^requirements/,
@@ -450,6 +451,8 @@ jobs:
     needs: [preflight, lightweight, lint, test, generate-manifest]
     if: ${{ always() }}
     timeout-minutes: 5
+    permissions:
+      checks: write
 
     steps:
       - name: Summarize upstream results
@@ -466,12 +469,15 @@ jobs:
           echo "  generate-manifest: ${{ needs['generate-manifest'].result }}"
 
       - name: Enforce pass/fail
+        id: gate
         run: |
           set -euo pipefail
 
           # Lightweight must always succeed
           if [ "${{ needs.lightweight.result }}" != "success" ]; then
             echo "❌ lightweight checks failed"
+            echo "GATE_STATUS=failure" >> "$GITHUB_ENV"
+            echo "GATE_MODE=lightweight (failed)" >> "$GITHUB_ENV"
             exit 1
           fi
 
@@ -495,15 +501,53 @@ jobs:
             fi
 
             if [ "$ok" != "true" ]; then
+              echo "GATE_STATUS=failure" >> "$GITHUB_ENV"
+              echo "GATE_MODE=full suite (failed)" >> "$GITHUB_ENV"
               echo "CI Gate: FAILED (full suite required)"
               exit 1
             fi
 
+            echo "GATE_STATUS=success" >> "$GITHUB_ENV"
+            echo "GATE_MODE=full suite" >> "$GITHUB_ENV"
             echo "✅ CI Gate: PASSED (full suite)"
             exit 0
           fi
 
           # Lightweight mode: heavy jobs are allowed to be skipped
+          echo "GATE_STATUS=success" >> "$GITHUB_ENV"
+          echo "GATE_MODE=lightweight-only" >> "$GITHUB_ENV"
           echo "✅ CI Gate: PASSED (lightweight-only mode)"
 
-          echo "CI Gate: PASSED"
+      - name: Publish Dedicated CI Gate Check
+        if: ${{ always() }}
+        uses: actions/github-script@v7
+        env:
+          GATE_STATUS: ${{ env.GATE_STATUS || 'failure' }}
+          GATE_MODE: ${{ env.GATE_MODE || 'unknown' }}
+        with:
+          script: |
+            const conclusion = process.env.GATE_STATUS === 'success' ? 'success' : 'failure';
+
+            await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'CI Gate',
+              head_sha: context.payload.pull_request?.head?.sha || context.sha,
+              status: 'completed',
+              conclusion,
+              output: {
+                title: conclusion === 'success' ? '✅ CI Gate: PASSED' : '❌ CI Gate: FAILED',
+                summary: `**Mode**: ${process.env.GATE_MODE}\n\n**Reason**: ${process.env.GATE_MODE.includes('full') ? '${{ needs.preflight.outputs.reason }}' : 'docs-only or non-runtime changes'}`,
+                text: `
+            **Preflight Decision**:
+            - run_full: ${{ needs.preflight.outputs.run_full }}
+            - reason: ${{ needs.preflight.outputs.reason }}
+
+            **Job Results**:
+            - lightweight: ${{ needs.lightweight.result }}
+            - lint: ${{ needs.lint.result }}
+            - test: ${{ needs.test.result }}
+            - generate-manifest: ${{ needs['generate-manifest'].result }}
+            `,
+              }
+            });
