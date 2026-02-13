@@ -222,6 +222,7 @@ class ArtifactStore:
         max_size_gb: float = 10.0,
         eviction_policy: str = "lru",
         lock_timeout_seconds: float = DEFAULT_LOCK_TIMEOUT,
+        durable_commits: bool = False,
     ):
         """Initialize artifact store.
 
@@ -230,11 +231,20 @@ class ArtifactStore:
             max_size_gb: Maximum cache size in gigabytes (warns at limit).
             eviction_policy: Eviction policy ("lru" or "manual").
             lock_timeout_seconds: Timeout for lock acquisition (default 30s).
+            durable_commits: If True, fsync containing directory after commit
+                marker creation to ensure durability across power loss.
+                Default False (performance > durability for cache workloads).
 
         Design notes:
         - Creates cache_dir if it doesn't exist.
         - Initializes artifacts/ and locks/ subdirectories.
         - Logs warning if cache size exceeds limit (no auto-eviction in L1).
+
+        Durability semantics:
+        - durable_commits=False (default): Atomic visibility (survives process
+          crash, may lose entries on OS/power loss). Recommended for caches.
+        - durable_commits=True: Full crash durability (survives power loss).
+          Adds directory fsync overhead. Use for quasi-storage workloads.
         """
         self.cache_dir = Path(cache_dir)
         self.artifacts_dir = self.cache_dir / "artifacts"
@@ -250,10 +260,53 @@ class ArtifactStore:
         self.max_size_gb = max_size_gb
         self.eviction_policy = eviction_policy
         self.lock_timeout_seconds = lock_timeout_seconds
+        self.durable_commits = durable_commits
+        self.eviction_policy = eviction_policy
+        self.lock_timeout_seconds = lock_timeout_seconds
+        self.durable_commits = durable_commits
 
         # Cache statistics
         self.stats_path = self.cache_dir / "stats.json"
         self._load_stats()
+
+    def _fsync_directory(self, directory: Path) -> None:
+        """Fsync a directory to ensure metadata durability (opt-in elite tier).
+
+        Args:
+            directory: Directory path to fsync.
+
+        Design notes (crash durability):
+        - Called only when durable_commits=True
+        - Ensures directory metadata (rename operations) persists to disk
+        - Required for durability across OS/power loss (not just process crash)
+        - On POSIX: fsync() on directory fd flushes directory entries
+        - On Windows: no-op (directory fsync not supported/needed)
+        - Performance cost: adds ~1-10ms per store() depending on filesystem
+
+        References:
+        - PostgreSQL durable_rename(): fsync file + directory
+        - Linux fsync(2): "For a directory, ensures entries are persistent"
+        """
+        if not self.durable_commits:
+            return
+
+        # Platform check: directory fsync only works on POSIX
+        if not _HAVE_FCNTL:
+            logger.debug("Skipping directory fsync (non-POSIX platform)")
+            return
+
+        try:
+            # Open directory and fsync to flush metadata
+            dir_fd = os.open(directory, os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+                logger.debug(f"Fsynced directory: {directory}")
+            finally:
+                os.close(dir_fd)
+        except OSError as e:
+            # Log but don't fail - this is a durability optimization
+            # Some filesystems/mounts may not support directory fsync
+            logger.warning(f"Directory fsync failed for {directory}: {e}")
 
     @contextlib.contextmanager
     def _acquire_lock(
@@ -652,6 +705,10 @@ class ArtifactStore:
                     tmp_marker.flush()
                     os.fsync(tmp_marker.fileno())
                 tmp_marker_path.replace(committed_path)
+
+                # Optional: fsync containing directory for crash durability
+                # (elite tier - ensures rename persists across power loss)
+                self._fsync_directory(artifact_path.parent)
 
                 # Update stats
                 self._record_cache_miss()
