@@ -142,6 +142,7 @@ class MaterialClassifier:
 
         try:
             # Use OpenAI's CLIP ViT-B/32 (good balance of speed/quality)
+            # B615: public model, revision pinning tracked in ADR-027
             model_id = "openai/clip-vit-base-patch32"
 
             self._processor = CLIPProcessor.from_pretrained(model_id)  # nosec B615
