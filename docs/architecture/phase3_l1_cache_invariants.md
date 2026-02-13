@@ -39,7 +39,9 @@ This document captures the correctness invariants, safety properties, and operat
 **Known limitation**: Artifact + provenance are committed via **two separate renames**, not a single atomic transaction. If artifact rename succeeds but provenance rename fails, an orphaned artifact may remain.
 
 **Recovery behavior**:
-- Readers treat missing provenance as invalid and skip the artifact
+- `load()` and `load_provenance()` are separate operations - artifacts can exist without provenance
+- Callers that require provenance MUST handle `FileNotFoundError` from `load_provenance()`
+- Callers MAY treat orphaned artifacts (artifact without provenance) as invalid and evict them
 - Recommended: cleanup orphaned artifacts during periodic cache maintenance
 
 **Implementation** (see `ArtifactStore.store` method):
@@ -324,7 +326,7 @@ When reviewing cache subsystem changes:
 | Test flakiness | `Queue.empty()` race in tests | Exact-count queue reads (#926) | #13 |
 | Temp file pollution | Failed atomic rename | Cleanup on exception (#926) | #2, #4 |
 | Deadlock potential | Inconsistent lock ordering | Lock ordering invariant (#926) | #5 |
-| Orphaned artifact without provenance | Two-step commit (separate renames) | Known limitation; readers skip invalid entries | #2 |
+| Orphaned artifact without provenance | Two-step commit (separate renames) | Known limitation; callers must handle missing provenance | #2 |
 
 ---
 
