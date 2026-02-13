@@ -5,6 +5,7 @@
 #    pip-compile --constraint=all.txt --output-file=base.txt base.in
 #
 annotated-doc==0.0.4
+annotated-types==0.7.0
 click==8.3.1
 imagecodecs==2024.12.30
 joblib==1.5.3
@@ -13,6 +14,8 @@ mdurl==0.1.2
 numpy==2.2.6
 opencv-python==4.13.0.90
 pillow==12.1.1
+pydantic==2.12.5
+pydantic-core==2.41.5
 pygments==2.19.2
 rich==14.3.2
 scikit-learn==1.8.0
@@ -22,3 +25,5 @@ threadpoolctl==3.6.0
 tifffile==2024.12.12
 tqdm==4.67.3
 typer==0.23.0
+typing-extensions==4.15.0
+typing-inspection==0.4.2
