@@ -19,8 +19,8 @@ This document captures the correctness invariants, safety properties, and operat
 **Invariant**: Same inputs + same config → same cache key → same artifact (bitwise identical)
 
 **Enforcement**:
-- Cache keys are SHA256 hashes of serialized inputs + config
-- Keys are 64-character lowercase hex strings (validated by `SAFE_CACHE_KEY` regex)
+- **Stage contract**: Stages compute SHA256 hashes of serialized inputs + config to generate cache keys
+- **ArtifactStore enforcement**: Validates cache key format (64-character lowercase hex via `SAFE_CACHE_KEY` regex)
 - No external mutable state influences cache key computation
 
 **Why it matters**: Cache hits must be semantically equivalent to re-execution. Violations break pipeline determinism.
@@ -66,21 +66,21 @@ tmp_prov_path.replace(provenance_path)    # atomic rename (step 2)
 
 ### 3. Multi-Process Safety (Per-Key Locking)
 
-**Invariant**: Concurrent operations on the same cache key are serialized via exclusive file locks
+**Invariant**: Concurrent **write** operations on the same cache key are serialized; concurrent **reads** proceed in parallel when no writer holds the lock
 
 **Enforcement** (PR #924):
 - Per-key lock files in `locks/` subdirectory
-- Exclusive locks for writes (store, evict)
-- Shared locks for reads (load, load_provenance)
+- **Exclusive locks** for writes (store, evict) - block all other accessors
+- **Shared locks** for reads (load, load_provenance) - allow concurrent readers, block writers
 - Lock acquisition uses `fcntl.flock` with timeout
 
 **Implementation** (see `ArtifactStore._acquire_lock` method):
 ```python
 with self._acquire_lock(cache_key, exclusive=True):
-    # write operations (store, evict)
+    # write operations (store, evict) - exclusive access
 
 with self._acquire_lock(cache_key, exclusive=False):
-    # read operations (load, load_provenance)
+    # read operations (load, load_provenance) - shared access
 ```
 
 **Timeout behavior**:
@@ -88,7 +88,7 @@ with self._acquire_lock(cache_key, exclusive=False):
 - Configurable via `lock_timeout_seconds` parameter
 - Raises `CacheLockTimeout` on failure
 
-**Why it matters**: Prevents corruption/lost-update scenarios when multiple processes access the same artifact.
+**Why it matters**: Prevents corruption/lost-update scenarios when multiple processes write to the same artifact. Allows read parallelism when safe.
 
 ---
 
@@ -215,7 +215,7 @@ if "/" in cache_key or "\\" in cache_key or ".." in cache_key:
 **Implications**:
 - ✅ Dead processes don't leave locks held indefinitely
 - ✅ Timeout covers "wedged but alive" processes
-- ⚠️ Crash during write may leave temp files (cleaned up on next `store()`)
+- ⚠️ Crash during write may leave temp files (requires external cleanup tooling; not auto-cleaned by next `store()`)
 
 ---
 
