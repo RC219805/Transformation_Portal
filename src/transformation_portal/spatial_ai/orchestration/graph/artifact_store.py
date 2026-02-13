@@ -9,6 +9,11 @@ Design Principles (ADR-029):
 - Determinism verification (cache hit = bitwise identical output)
 - Multi-process safe operations (per-key file locks for concurrent access)
 
+Lock Ordering Invariant (Issue #925):
+    If both per-key lock and stats lock are required in the same operation,
+    ALWAYS acquire per-key lock(s) first, then stats lock.
+    This prevents AB/BA deadlock hazards in future features.
+
 Storage Layout:
     .cache/spatial_ai/
     ├── artifacts/
@@ -19,7 +24,8 @@ Storage Layout:
     ├── locks/                           # Per-key lock files
     │   ├── ab3f5e8b2c1d4.lock
     │   └── ...
-    └── stats.json  # Cache statistics (size, hits, misses)
+    ├── stats.lock                       # Global stats lock
+    └── stats.json                       # Cache statistics (size, hits, misses)
 
 Key Features:
 1. Content Addressing: SHA256-based cache keys from inputs + config
@@ -345,12 +351,14 @@ class ArtifactStore:
 
         Raises:
             RuntimeError: If fcntl is not available (non-POSIX platform).
+            CacheLockTimeout: If lock cannot be acquired within timeout.
 
         Design notes (Issue #925):
         - Global lock for global shared state (stats.json)
         - Per-key locks cannot serialize stats access across different keys
         - Lock cost is negligible compared to I/O + NumPy operations
         - Prevents corrupted/lost increments under multi-process contention
+        - Uses timeout to prevent indefinite hangs from wedged processes
         """
         # Platform check: Require fcntl for stats locking
         if not _HAVE_FCNTL:
@@ -364,11 +372,28 @@ class ArtifactStore:
 
         # Open lock file with context manager to ensure cleanup
         with open(self.stats_lock_path, "r+") as lock_file:
-            try:
-                # Acquire exclusive lock (blocking, no timeout for stats)
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-                logger.debug("Acquired stats lock")
+            # Acquire exclusive lock with timeout (same as per-key locks)
+            start_time = time.monotonic()
+            attempt = 0
 
+            while True:
+                try:
+                    # Try non-blocking lock
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    logger.debug("Acquired stats lock")
+                    break
+                except BlockingIOError:
+                    # Lock held by another process
+                    elapsed = time.monotonic() - start_time
+                    if elapsed >= self.lock_timeout_seconds:
+                        raise CacheLockTimeout(f"Failed to acquire stats lock after {elapsed:.1f}s")
+
+                    # Exponential backoff with cap
+                    backoff = min(0.1 * (2**attempt), 1.0)
+                    time.sleep(backoff)
+                    attempt += 1
+
+            try:
                 # Lock acquired, yield control to caller
                 yield
 
@@ -701,6 +726,7 @@ class ArtifactStore:
         Design notes (Issue #925):
         - Uses temp → fsync → rename pattern (same as artifacts)
         - Atomic write prevents corruption from crashes mid-write
+        - Temp file cleaned up on failure (disk full, permissions, etc.)
         - Caller must hold stats lock
         """
         # Write to temp file in same directory (ensures same filesystem for atomic rename)
@@ -716,8 +742,13 @@ class ArtifactStore:
             tmp_file.flush()
             os.fsync(tmp_file.fileno())
 
-        # Atomic rename
-        tmp_path.replace(self.stats_path)
+        # Atomic rename with cleanup on failure
+        try:
+            tmp_path.replace(self.stats_path)
+        except Exception:
+            # Clean up temp file on failure (disk full, permissions, etc.)
+            tmp_path.unlink(missing_ok=True)
+            raise
 
     def _record_cache_hit(self) -> None:
         """Record cache hit in statistics (with locking and atomic write).
