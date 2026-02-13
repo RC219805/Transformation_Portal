@@ -138,9 +138,9 @@ As the **Transformation Portal Architect**, I have final authority over:
 ### Orchestrator ↔ V2 Runner Boundary
 
 **Contract:**
-- Orchestrator serializes masks to `temp/` directory
-- Orchestrator passes `masks_dir` to V2 runner
-- V2 runner adds `--masks-dir` to CLI if provided
+- Orchestrator serializes masks to NPZ file in `temp/` directory
+- Orchestrator passes explicit `masks_file` path to V2 runner
+- V2 runner adds `--masks-file` to CLI if provided
 - Orchestrator cleans up masks after V2 completes
 
 **Verification:**
@@ -151,8 +151,8 @@ As the **Transformation Portal Architect**, I have final authority over:
 ### V2 Runner ↔ enhance_image.py Boundary
 
 **Contract:**
-- V2 runner passes `--masks-dir` as optional CLI argument
-- `enhance_image.py` loads masks from directory if provided
+- V2 runner passes `--masks-file` as optional CLI argument with explicit NPZ path
+- `enhance_image.py` loads masks from explicit file path if provided
 - `enhance_image.py` handles missing masks gracefully
 
 **Verification:**

@@ -124,7 +124,6 @@ class TestMaskSerialization:
         def mock_stat(self):
             if self.suffix == ".tmp":
                 # Report oversized temp file (150MB)
-                result = original_stat(self)
                 result = type("obj", (object,), {"st_size": 150 * 1024 * 1024})()
                 return result
             return original_stat(self)

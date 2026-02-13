@@ -1,8 +1,8 @@
 # ADR-030: Materials V3 Production Integration
 
-**Status:** Approved  
-**Date:** 2026-02-11  
-**Decider:** Transformation Portal Architect  
+**Status:** Approved
+**Date:** 2026-02-11
+**Decider:** Transformation Portal Architect
 **Context:** Materials V3 stub implementation complete, need production-ready integration
 
 ---
@@ -128,7 +128,7 @@ def _serialize_material_masks(
     temp_dir: Path,
 ) -> Optional[Path]:
     """Serialize material masks to NPZ file.
-    
+
     Returns:
         Path to .npz file or None on failure
     """
@@ -153,15 +153,15 @@ Add parameter:
 def run(
     self,
     ...
-    masks_dir: Optional[Path] = None,  # NEW
+    masks_file: Optional[Path] = None,  # NEW: Explicit NPZ file path
     **kwargs,
 ) -> Dict[str, Any]:
 ```
 
 Pass to CLI:
 ```python
-if masks_dir is not None:
-    cmd.extend(["--masks-dir", str(masks_dir)])
+if masks_file is not None:
+    cmd.extend(["--masks-file", str(masks_file)])
 ```
 
 ### 3. CLI Extension (scripts/enhance_image.py)
@@ -169,19 +169,19 @@ if masks_dir is not None:
 Add argument:
 ```python
 parser.add_argument(
-    "--masks-dir",
+    "--masks-file",
     type=Path,
     default=None,
-    help="Directory containing material masks (NPZ format)",
+    help="Explicit path to material masks NPZ file (Materials V3 integration)",
 )
 ```
 
 Load and pass to `enhance_image()`:
 ```python
-masks = _load_material_masks(args.masks_dir, input_path.stem) if args.masks_dir else None
+masks = load_material_masks(args.masks_file) if args.masks_file else None
 result = enhance_image(
     input_path=...,
-    material_masks=masks,  # Pass through
+    masks_file=args.masks_file,  # Pass explicit file path
     ...
 )
 ```
@@ -281,6 +281,6 @@ finally:
 
 ## Approval
 
-**Architect Decision:** Approved  
-**Rationale:** Design is backward compatible, properly scoped, and enforceable via tests.  
+**Architect Decision:** Approved
+**Rationale:** Design is backward compatible, properly scoped, and enforceable via tests.
 **Next Steps:** Proceed with implementation per plan above.

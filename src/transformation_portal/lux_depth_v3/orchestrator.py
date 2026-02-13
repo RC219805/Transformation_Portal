@@ -144,8 +144,6 @@ def _log_dependency_status() -> dict:
         logger.debug("numba not available - using NumPy fallback (30-50% slower for some operations)")
 
     # Check HF_TOKEN for model downloads
-    import os
-
     hf_token = os.environ.get("HF_TOKEN")
     status["hf_token"] = bool(hf_token)
     if hf_token:
@@ -414,8 +412,6 @@ class EnhanceOrchestrator:
                     # Check if synthetic fallback is explicitly allowed
                     if not self.config.allow_synthetic_fallback:
                         # Check environment variable override (for CI)
-                        import os
-
                         if not os.getenv("TP_ALLOW_SYNTHETIC_FALLBACK") == "1":
                             raise RuntimeError(
                                 f"No depth backend available: {fallback_error}. "
@@ -1085,8 +1081,6 @@ class EnhanceOrchestrator:
 
             # Serialize to compressed NPZ with atomic write pattern
             # Use temp + fsync + rename to ensure atomicity (matches ArtifactStore L1 invariant)
-            import os
-
             tmp_path = mask_path.with_suffix(".npz.tmp")
 
             # Write to temporary file
