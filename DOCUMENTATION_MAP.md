@@ -2,7 +2,7 @@
 
 **Purpose:** Single source of truth for finding documentation in Transformation Portal.
 
-**Last Updated:** 2026-02-04
+**Last Updated:** 2026-02-13
 **Maintainer:** Repository Architect
 
 ---
@@ -29,6 +29,9 @@
 | **Code Quality Standards** | [docs/CODE_QUALITY_STANDARDS.md](docs/CODE_QUALITY_STANDARDS.md) | ✅ Stable |
 | **Testing Guidelines** | [docs/development/TESTING_GUIDE.md](docs/development/TESTING_GUIDE.md) | 🔄 In Progress |
 | **Custom Agents** | [docs/CUSTOM_AGENT_GUIDE.md](docs/CUSTOM_AGENT_GUIDE.md) | ✅ Stable |
+| **TODO Inventory** | [docs/analysis/TODO_INVENTORY.md](docs/analysis/TODO_INVENTORY.md) | ✅ **NEW** (v2.0.0) |
+| **TODO Executive Summary** | [docs/architecture/TODO_INVENTORY_EXECUTIVE_SUMMARY.md](docs/architecture/TODO_INVENTORY_EXECUTIVE_SUMMARY.md) | ✅ **NEW** (v2.0.0) |
+| **TODO Quick Reference** | [docs/architecture/TODO_INVENTORY_QUICK_REF.md](docs/architecture/TODO_INVENTORY_QUICK_REF.md) | ✅ **NEW** (v2.0.0) |
 
 ### CI/CD & Operations
 

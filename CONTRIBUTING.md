@@ -146,12 +146,69 @@ twine check dist/*
 
 ## Branch Protection Rules
 
-The `main` branch is protected with these rules:
+The `main` branch is protected with the following enforced rules (verified 2026-02-10):
 
-1. **Require PR reviews**: 1+ approving review required
-2. **Require status checks**: All CI jobs must pass
-3. **No force push**: History is immutable
-4. **Linear history**: Prefer rebase/squash merges
+### Required Status Checks (✅ ENFORCED)
+- **CI Gate** (GitHub App ID: 15368) must pass
+- **Strict status checks**: Branches must be up-to-date before merging
+- **Cannot bypass**: Status checks are mandatory
+
+### Pull Request Reviews (⚠️ PARTIAL)
+- **Approving reviews required**: 0 (not enforced, but recommended)
+- **Dismiss stale reviews**: ✅ Enabled (stale approvals dismissed on new commits)
+- **Code owner reviews**: Not required
+- **Last push approval**: Not required
+
+### History and Force Push Protection (✅ ENFORCED)
+- **Force pushes**: ❌ Disabled (history is immutable)
+- **Branch deletions**: ❌ Disabled (main cannot be deleted)
+- **Linear history**: ✅ Required (merge commits or squash merges only)
+
+### Additional Protections (NOT ENABLED)
+- **Enforce for admins**: ❌ Not enabled (admins can bypass)
+- **Require signed commits**: ❌ Not enabled
+- **Require conversation resolution**: ❌ Not enabled
+- **Lock branch**: ❌ Not enabled
+
+### Recommended Improvements
+Based on governance best practices, consider enabling:
+
+1. **Required approving reviews**: Set to 1+ reviewer minimum
+   ```bash
+   gh api -X PATCH repos/RC219805/Transformation_Portal/branches/main/protection/required_pull_request_reviews \
+     -f required_approving_review_count=1
+   ```
+
+2. **Enforce for admins**: Prevent accidental bypasses
+   ```bash
+   gh api -X POST repos/RC219805/Transformation_Portal/branches/main/protection/enforce_admins
+   ```
+
+3. **Require signed commits**: For supply chain security (optional)
+   ```bash
+   gh api -X POST repos/RC219805/Transformation_Portal/branches/main/protection/required_signatures
+   ```
+
+### Current Configuration Summary
+```json
+{
+  "required_status_checks": {
+    "strict": true,
+    "checks": ["CI Gate"]
+  },
+  "required_pull_request_reviews": {
+    "required_approving_review_count": 0,
+    "dismiss_stale_reviews": true
+  },
+  "enforce_admins": false,
+  "required_linear_history": true,
+  "allow_force_pushes": false,
+  "allow_deletions": false,
+  "required_signatures": false
+}
+```
+
+**Verification**: Run `gh api repos/RC219805/Transformation_Portal/branches/main/protection` to verify current settings.
 
 ## Commit Messages
 
