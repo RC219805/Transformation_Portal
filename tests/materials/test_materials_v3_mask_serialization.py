@@ -121,12 +121,12 @@ class TestMaskSerialization:
         # Mock stat() to report oversized file
         original_stat = Path.stat
 
-        def mock_stat(self):
+        def mock_stat(self, *, follow_symlinks=True):
             if self.suffix == ".tmp":
                 # Report oversized temp file (150MB)
                 result = type("obj", (object,), {"st_size": 150 * 1024 * 1024})()
                 return result
-            return original_stat(self)
+            return original_stat(self, follow_symlinks=follow_symlinks)
 
         monkeypatch.setattr(Path, "stat", mock_stat)
 
