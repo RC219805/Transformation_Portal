@@ -40,7 +40,7 @@ Example:
 
 from __future__ import annotations
 
-from .artifact_store import ArtifactStore, ProvenanceMetadata
+from .artifact_store import ArtifactStore, CacheLockTimeout, ProvenanceMetadata
 from .execution_graph import ExecutionGraph, ExecutionPlan, StageNode
 from .executor import ExecutionContext, ExecutionResult, Executor
 from .stage import ResourceRequirements, Stage, StageMetadata
@@ -57,6 +57,7 @@ __all__ = [
     # Artifact store
     "ArtifactStore",
     "ProvenanceMetadata",
+    "CacheLockTimeout",
     # Executor
     "Executor",
     "ExecutionContext",
