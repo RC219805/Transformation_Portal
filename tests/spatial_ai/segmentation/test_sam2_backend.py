@@ -8,6 +8,9 @@ import pytest
 from transformation_portal.spatial_ai.segmentation.contracts import SegmentationInput, SegmentationResult
 from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
 
+# 40-char hex string mimicking a verified HuggingFace commit SHA
+MOCK_VERIFIED_REVISION = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+
 
 class TestSAM2BackendInitialization:
     """Test SAM2Backend initialization."""
@@ -185,7 +188,7 @@ class TestSAM2BackendModelLoading:
         mock_model.to.return_value = mock_model
 
         # Load model twice (use verified revision to pass validation)
-        backend = SAM2Backend(revision="abc123def456abc123def456abc123def456abc1")
+        backend = SAM2Backend(revision=MOCK_VERIFIED_REVISION)
         backend._load_model()
         backend._load_model()
 
@@ -195,7 +198,7 @@ class TestSAM2BackendModelLoading:
 
     def test_model_loading_missing_dependencies(self):
         """Test error handling when dependencies missing."""
-        backend = SAM2Backend(revision="abc123def456abc123def456abc123def456abc1")
+        backend = SAM2Backend(revision=MOCK_VERIFIED_REVISION)
 
         # Patch the import inside _load_model
         with patch.dict("sys.modules", {"transformers": None}):
