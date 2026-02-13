@@ -2,38 +2,14 @@ name: CI (Lint, Tests & Manifest)
 
 permissions:
   contents: read
+  pull-requests: read
 
 on:
   push:
     branches: [main]
-    # No path filters on main - always run full suite for protected branch
   pull_request:
     branches: [main]
-    paths:
-      # Source code changes
-      - 'src/**'
-      - 'scripts/**'
-      # Tests (always run to validate changes)
-      - 'tests/**'
-      - 'conftest.py'
-      # Runtime configuration (presets, recipes, etc.)
-      - 'config/**'
-      # Dependencies and configuration
-      - 'pyproject.toml'
-      - 'setup.py'
-      - 'requirements*.txt'
-      - 'requirements/**'
-      # Workflow changes (validate CI modifications)
-      - '.github/workflows/**'
-      - '.github/actions/**'
-      # AI/Copilot instructions (governance-critical)
-      - '.github/copilot-instructions.md'
-      # Makefile and core config
-      - 'Makefile'
-      - 'mypy.ini'
-      - '.pylintrc'
   workflow_dispatch:
-    # Manual trigger always runs full suite
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -58,25 +34,90 @@ env:
   HF_HUB_DISABLE_PROGRESS_BARS: "1"
 
 jobs:
-  # Info job - explains path-based triggering
-  check-skip:
+  # Preflight: classify changes to determine whether full or lightweight suite runs
+  preflight:
+    name: Preflight (change classification)
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    outputs:
+      run_full: ${{ steps.classify.outputs.run_full }}
+      reason: ${{ steps.classify.outputs.reason }}
     steps:
-      - name: Log workflow trigger reason
-        id: check
+      - name: Classify change set
+        id: classify
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Default: full suite for non-PR events (push to main, workflow_dispatch)
+            if (context.eventName !== 'pull_request') {
+              core.setOutput('run_full', 'true');
+              core.setOutput('reason', 'non-PR event (main push or manual trigger)');
+              return;
+            }
+
+            const pr = context.payload.pull_request;
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+              per_page: 100,
+            });
+
+            const names = files.map(f => f.filename);
+            core.info(`Changed files (${names.length}):`);
+            names.forEach(n => core.info(`  ${n}`));
+
+            // Patterns that trigger full CI suite
+            const fullSuiteMatchers = [
+              /^src\//,
+              /^tests\//,
+              /^scripts\//,
+              /^tools\//,              // execution risk: montecito_manifest.py
+              /^config\//,
+              /^pyproject\.toml$/,
+              /^requirements/,
+              /^setup\.py$/,
+              /^conftest\.py$/,
+              /^Makefile$/,
+              /^mypy\.ini$/,
+              /^\.pylintrc$/,
+              /^\.github\/workflows\//,
+              /^\.github\/actions\//,
+              /^\.github\/copilot-instructions\.md$/,
+            ];
+
+            const runFull = names.some(name => fullSuiteMatchers.some(re => re.test(name)));
+
+            core.setOutput('run_full', runFull ? 'true' : 'false');
+            core.setOutput('reason', runFull ? 'code/tests/deps/workflows changed' : 'docs-only or non-runtime changes');
+
+            core.info('');
+            core.info(`Decision: run_full = ${runFull}`);
+            core.info(`Reason: ${runFull ? 'code/tests/deps/workflows changed' : 'docs-only or non-runtime changes'}`);
+
+  # Lightweight checks (always run, fast)
+  lightweight:
+    name: Lightweight checks
+    needs: [preflight]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Preflight summary
         run: |
-          echo "✅ This workflow triggered because PR includes path-filtered changes"
-          echo ""
-          echo "Paths that trigger build.yml:"
-          echo "  - src/**, scripts/**, tests/**"
-          echo "  - config/** (presets, recipes, runtime data)"
-          echo "  - requirements, workflows, Makefile"
-          echo ""
-          echo "Note: API documentation-only changes trigger docs.yml instead"
-          echo "Note: On main branch, full suite always runs (no filters)"
+          set -euo pipefail
+          echo "Preflight decision:"
+          echo "  run_full: ${{ needs.preflight.outputs.run_full }}"
+          echo "  reason:   ${{ needs.preflight.outputs.reason }}"
+
+      - name: Basic sanity
+        run: |
+          set -euo pipefail
+          echo "Python available: $(python3 --version 2>&1 || echo 'no')"
+          echo "✅ Lightweight checks passed"
 
   lint:
+    needs: [preflight]
+    if: needs.preflight.outputs.run_full == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
 
@@ -110,7 +151,7 @@ jobs:
           python-version: "3.12" # latest for linting
 
       - name: Cache pip packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-lint-${{ hashFiles('requirements-lint.txt') }}
@@ -177,7 +218,8 @@ jobs:
           echo "Pylint passed (exit code: $PYLINT_EXIT)"
 
   test:
-    needs: lint
+    needs: [preflight, lint]
+    if: needs.preflight.outputs.run_full == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
 
@@ -228,7 +270,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Cache pip packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ matrix.test-type }}-${{ hashFiles('requirements-ci.txt') }}
@@ -363,7 +405,8 @@ jobs:
 
   generate-manifest:
     name: Build Montecito Manifest
-    needs: [test]
+    needs: [preflight, test]
+    if: needs.preflight.outputs.run_full == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
 
@@ -405,42 +448,106 @@ jobs:
   ci_gate:
     name: CI Gate
     runs-on: ubuntu-24.04
-    needs: [lint, test, generate-manifest]
+    needs: [preflight, lightweight, lint, test, generate-manifest]
     if: ${{ always() }}
     timeout-minutes: 5
+    permissions:
+      checks: write
 
     steps:
       - name: Summarize upstream results
         run: |
           set -euo pipefail
-          echo "lint result:  ${{ needs.lint.result }}"
-          echo "test result:  ${{ needs.test.result }}"
-          echo "manifest result: ${{ needs['generate-manifest'].result }}"
+          echo "Preflight decision:"
+          echo "  run_full: ${{ needs.preflight.outputs.run_full }}"
+          echo "  reason:   ${{ needs.preflight.outputs.reason }}"
+          echo ""
+          echo "Job results:"
+          echo "  lightweight:       ${{ needs.lightweight.result }}"
+          echo "  lint:              ${{ needs.lint.result }}"
+          echo "  test:              ${{ needs.test.result }}"
+          echo "  generate-manifest: ${{ needs['generate-manifest'].result }}"
 
       - name: Enforce pass/fail
+        id: gate
         run: |
           set -euo pipefail
 
-          ok="true"
-
-          if [ "${{ needs.lint.result }}" != "success" ]; then
-            echo "❌ lint did not succeed"
-            ok="false"
-          fi
-
-          if [ "${{ needs.test.result }}" != "success" ]; then
-            echo "❌ test matrix did not succeed"
-            ok="false"
-          fi
-
-          if [ "${{ needs['generate-manifest'].result }}" != "success" ]; then
-            echo "❌ generate-manifest did not succeed"
-            ok="false"
-          fi
-
-          if [ "$ok" != "true" ]; then
-            echo "CI Gate: FAILED"
+          # Lightweight must always succeed
+          if [ "${{ needs.lightweight.result }}" != "success" ]; then
+            echo "❌ lightweight checks failed"
+            echo "GATE_STATUS=failure" >> "$GITHUB_ENV"
+            echo "GATE_MODE=lightweight (failed)" >> "$GITHUB_ENV"
             exit 1
           fi
 
-          echo "CI Gate: PASSED"
+          # If full suite was required, enforce all jobs
+          if [ "${{ needs.preflight.outputs.run_full }}" = "true" ]; then
+            ok="true"
+
+            if [ "${{ needs.lint.result }}" != "success" ]; then
+              echo "❌ lint did not succeed"
+              ok="false"
+            fi
+
+            if [ "${{ needs.test.result }}" != "success" ]; then
+              echo "❌ test matrix did not succeed"
+              ok="false"
+            fi
+
+            if [ "${{ needs['generate-manifest'].result }}" != "success" ]; then
+              echo "❌ generate-manifest did not succeed"
+              ok="false"
+            fi
+
+            if [ "$ok" != "true" ]; then
+              echo "GATE_STATUS=failure" >> "$GITHUB_ENV"
+              echo "GATE_MODE=full suite (failed)" >> "$GITHUB_ENV"
+              echo "CI Gate: FAILED (full suite required)"
+              exit 1
+            fi
+
+            echo "GATE_STATUS=success" >> "$GITHUB_ENV"
+            echo "GATE_MODE=full suite" >> "$GITHUB_ENV"
+            echo "✅ CI Gate: PASSED (full suite)"
+            exit 0
+          fi
+
+          # Lightweight mode: heavy jobs are allowed to be skipped
+          echo "GATE_STATUS=success" >> "$GITHUB_ENV"
+          echo "GATE_MODE=lightweight-only" >> "$GITHUB_ENV"
+          echo "✅ CI Gate: PASSED (lightweight-only mode)"
+
+      - name: Publish Dedicated CI Gate Check
+        if: ${{ always() }}
+        uses: actions/github-script@v7
+        env:
+          GATE_STATUS: ${{ env.GATE_STATUS || 'failure' }}
+          GATE_MODE: ${{ env.GATE_MODE || 'unknown' }}
+        with:
+          script: |
+            const conclusion = process.env.GATE_STATUS === 'success' ? 'success' : 'failure';
+
+            await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'CI Gate',
+              head_sha: context.payload.pull_request?.head?.sha || context.sha,
+              status: 'completed',
+              conclusion,
+              output: {
+                title: conclusion === 'success' ? '✅ CI Gate: PASSED' : '❌ CI Gate: FAILED',
+                summary: `**Mode**: ${process.env.GATE_MODE}\n\n**Reason**: ${process.env.GATE_MODE.includes('full') ? '${{ needs.preflight.outputs.reason }}' : 'docs-only or non-runtime changes'}`,
+                text: `
+            **Preflight Decision**:
+            - run_full: ${{ needs.preflight.outputs.run_full }}
+            - reason: ${{ needs.preflight.outputs.reason }}
+
+            **Job Results**:
+            - lightweight: ${{ needs.lightweight.result }}
+            - lint: ${{ needs.lint.result }}
+            - test: ${{ needs.test.result }}
+            - generate-manifest: ${{ needs['generate-manifest'].result }}
+            `,
+              }
+            });
