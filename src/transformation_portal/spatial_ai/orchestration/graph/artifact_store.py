@@ -49,6 +49,19 @@ Transactional Commit (Issue #929):
     - Age threshold > maximum expected rename→marker latency
     - Re-check marker after lock acquisition (TOCTOU prevention)
 
+    **Durability Contract (Two Tiers):**
+    Tier 1 (durable_commits=False, default):
+    - store() success means: atomic visibility (survives process crash)
+    - Payload + marker fsynced to disk (file durability)
+    - Directory metadata NOT fsynced (may lose entries on power loss)
+    - Best for: ephemeral/recomputable cache workloads
+
+    Tier 2 (durable_commits=True, opt-in):
+    - store() success means: durable across power loss/OS crash
+    - Payload + marker fsynced + directory fsynced (POSIX durability)
+    - Adds ~1-10ms overhead per store() (filesystem-dependent)
+    - Best for: expensive-to-regenerate entries on persistent volumes
+
 Key Features:
 1. Content Addressing: SHA256-based cache keys from inputs + config
 2. Atomic Writes: No partial artifacts (temp file + rename)
