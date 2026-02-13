@@ -808,8 +808,6 @@ class ArtifactStore:
             "stale_temp_files_removed": 0,
         }
 
-        now = time.monotonic()
-
         # Temp file suffixes produced by store() and _save_stats_atomic()
         _TEMP_SUFFIXES = (".npz", ".json", ".committed_tmp")
 
