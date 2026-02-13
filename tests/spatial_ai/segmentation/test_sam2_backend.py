@@ -165,8 +165,8 @@ class TestSAM2BackendModelLoading:
         mock_auto_model.from_pretrained.return_value = mock_model
         mock_model.to.return_value = mock_model
 
-        # Load model
-        backend = SAM2Backend(model_size="base", device="cpu")
+        # Load model (use verified revision to pass ADR-027 validation)
+        backend = SAM2Backend(model_size="base", device="cpu", revision=MOCK_VERIFIED_REVISION)
         backend._load_model()
 
         # Verify calls
