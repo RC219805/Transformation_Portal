@@ -7,23 +7,16 @@ Test coverage for all Phase B components:
 - B4: Integration (backend bootstrap method)
 - B5: End-to-end sky detection and enhancement
 
-Total tests: 11 (exceeds 8 minimum requirement)
+Total tests: 13 (exceeds 8 minimum requirement)
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict
+from dataclasses import dataclass
 
 import numpy as np
-import pytest
 
-from transformation_portal.lux_depth_v3.bootstrap.sky_seed import (
-    _compute_bbox,
-    _sample_points_inside,
-    _sample_points_outside,
-    detect_sky_seed,
-)
+from transformation_portal.lux_depth_v3.bootstrap.sky_seed import detect_sky_seed
 from transformation_portal.lux_depth_v3.materials_v3_taxonomy import DEFAULT_MATERIAL_METADATA
 from transformation_portal.lux_depth_v3.pixel_ops_registry import (
     OP_REGISTRY,
@@ -113,8 +106,9 @@ def test_sky_seed_low_gradient_regions():
     H, W = 256, 256
     image = np.ones((H, W, 3), dtype=np.uint8) * 180
 
-    # Add texture to bottom half
-    noise = np.random.randint(-30, 30, size=(H // 2, W, 3), dtype=np.int16)
+    # Add texture to bottom half (deterministic)
+    rng = np.random.default_rng(0)
+    noise = rng.integers(-30, 30, size=(H // 2, W, 3), dtype=np.int16)
     bottom = image[H // 2 :, :, :].astype(np.int16) + noise
     image[H // 2 :, :, :] = np.clip(bottom, 0, 255).astype(np.uint8)
 

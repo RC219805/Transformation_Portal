@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import time
 from typing import Any, Dict, Tuple
 
@@ -173,11 +174,12 @@ def _resolve_overlaps(
         # Mark these pixels as assigned
         assigned_pixels[available] = True
 
-    # Calculate overlap percentage
+    # Calculate overlap percentage (overlapping pixels / total material pixels)
+    # Note: This counts each overlapping pixel once, even if covered by multiple materials
     overlap_percent = (overlapping_pixels / total_pixels * 100.0) if total_pixels > 0 else 0.0
 
     telemetry = {
-        "overlap_percent": round(overlap_percent, 2),
+        "overlap_percent": round(overlap_percent, 2),  # % of material pixels that overlap
         "reassignments": {k: v for k, v in reassignments.items() if v > 0},
         "total_pixels": int(total_pixels),
         "overlapping_pixels": int(overlapping_pixels),
@@ -325,7 +327,7 @@ def apply_pixel_ops(
 
         # A2: Expand bbox by feathering padding
         img_h, img_w = image.shape[:2]
-        pad = int(3 * feather_sigma) if feather_sigma > 0 else 0
+        pad = math.ceil(3 * feather_sigma) if feather_sigma > 0 else 0
         x0, y0, x1, y1 = bbox
         x0_padded, y0_padded, x1_padded, y1_padded = _expand_bbox_with_padding(bbox, pad, img_h, img_w)
 

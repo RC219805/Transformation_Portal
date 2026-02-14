@@ -281,15 +281,13 @@ def sky_gradient_smooth(image: np.ndarray, mask: np.ndarray, params: dict) -> np
         if normalized.ndim == 3:
             # RGB: compute mean per channel
             mean_color = np.mean(normalized[masked_pixels], axis=0, keepdims=False)
-            # Broadcast to image shape
-            mean_image = np.ones_like(normalized) * mean_color
+            # Blend toward mean using NumPy broadcasting (no intermediate allocation)
+            smoothed = normalized * (1.0 - strength) + mean_color * strength
         else:
             # Grayscale
             mean_color = np.mean(normalized[masked_pixels])
-            mean_image = np.full_like(normalized, mean_color)
+            smoothed = normalized * (1.0 - strength) + mean_color * strength
 
-        # Blend toward mean (very subtle)
-        smoothed = normalized * (1.0 - strength) + mean_image * strength
         smoothed = np.clip(smoothed, 0.0, 1.0)
     else:
         smoothed = normalized

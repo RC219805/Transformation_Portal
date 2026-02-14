@@ -71,6 +71,9 @@ def detect_sky_seed(image: np.ndarray, config: Any) -> Dict[str, Any]:
     gradient_threshold = getattr(config, "sky_gradient_threshold", 0.05)
     brightness_threshold = getattr(config, "sky_brightness_threshold", 0.4)
 
+    # Input validation: clamp top_region_fraction to [0, 1]
+    top_region_fraction = np.clip(top_region_fraction, 0.0, 1.0)
+
     # 1. Top-of-frame prior
     # Sky is typically in the upper portion of the image
     top_region_height = int(H * top_region_fraction)
@@ -151,7 +154,7 @@ def _compute_bbox(mask: np.ndarray) -> Tuple[int, int, int, int] | None:
 
 
 def _sample_points_inside(mask: np.ndarray, num_points: int = 5) -> List[Tuple[int, int]]:
-    """Sample random points inside the mask.
+    """Sample deterministic points inside the mask using stratified sampling.
 
     Args:
         mask: Binary mask (H, W) with values in {0, 1}
@@ -164,15 +167,15 @@ def _sample_points_inside(mask: np.ndarray, num_points: int = 5) -> List[Tuple[i
     if ys.size == 0:
         return []
 
-    # Sample without replacement if possible
-    num_to_sample = min(num_points, len(ys))
-    indices = np.random.choice(len(ys), size=num_to_sample, replace=False)
+    # Deterministic stratified sampling (every Nth point)
+    step = max(1, len(ys) // num_points)
+    indices = range(0, min(len(ys), num_points * step), step)[:num_points]
 
     return [(int(xs[i]), int(ys[i])) for i in indices]
 
 
 def _sample_points_outside(mask: np.ndarray, H: int, W: int, num_points: int = 5) -> List[Tuple[int, int]]:
-    """Sample random points outside the mask.
+    """Sample deterministic points outside the mask using stratified sampling.
 
     Args:
         mask: Binary mask (H, W) with values in {0, 1}
@@ -187,8 +190,8 @@ def _sample_points_outside(mask: np.ndarray, H: int, W: int, num_points: int = 5
     if ys.size == 0:
         return []
 
-    # Sample without replacement if possible
-    num_to_sample = min(num_points, len(ys))
-    indices = np.random.choice(len(ys), size=num_to_sample, replace=False)
+    # Deterministic stratified sampling (every Nth point)
+    step = max(1, len(ys) // num_points)
+    indices = range(0, min(len(ys), num_points * step), step)[:num_points]
 
     return [(int(xs[i]), int(ys[i])) for i in indices]
