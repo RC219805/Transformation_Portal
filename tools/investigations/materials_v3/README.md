@@ -31,15 +31,24 @@ All scripts are preserved as-is from the development cycle, with minimal updates
 
 **Usage**:
 ```bash
+# Use default paths (original investigation)
+python tools/investigations/materials_v3/diagnose_sky_issue.py
+
+# Analyze a specific directory
 python tools/investigations/materials_v3/diagnose_sky_issue.py \
-  --input input_images/montecito_coastal_view.jpg \
+  --input depth_maps/ \
   --output debug_sky/
 
-# Outputs:
-#   debug_sky/sky_mask.png
-#   debug_sky/before.png
-#   debug_sky/after.png
-#   debug_sky/diff_amplified.png
+# Analyze specific depth map files
+python tools/investigations/materials_v3/diagnose_sky_issue.py \
+  --input depth_maps/ \
+  --files aerial_depth.png pool_depth.png
+
+# Outputs (console):
+#   Depth statistics (min, max, mean, percentiles)
+#   Zone analysis (foreground/background/midground)
+#   Sky region analysis (for aerial/pool images)
+#   Metadata check (from JSON sidecar files)
 ```
 
 **Key Findings** (from original investigation):
@@ -65,12 +74,23 @@ python tools/investigations/materials_v3/diagnose_sky_issue.py \
 
 **Usage**:
 ```bash
+# Use default paths (original investigation)
+python tools/investigations/materials_v3/create_sky_comparison.py
+
+# Compare custom before/after images
 python tools/investigations/materials_v3/create_sky_comparison.py \
-  --input input_images/test_sky.jpg \
+  --before output_old/aerial.tiff \
+  --after output_new/aerial.tiff \
   --output comparison_sky.png \
   --amplify 10
 
-# Output: comparison_sky.png (3-panel: before | after | diff×10)
+# Disable sky region cropping (show full image)
+python tools/investigations/materials_v3/create_sky_comparison.py \
+  --before before.jpg \
+  --after after.jpg \
+  --no-crop
+
+# Output: comparison image with 3 panels (before, after, difference visualization)
 ```
 
 **Key Findings** (from original investigation):
