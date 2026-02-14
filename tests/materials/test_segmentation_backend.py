@@ -347,7 +347,7 @@ def test_heuristic_segmentation_detects_materials():
     # Check for expected materials (heuristic-based)
     # Note: Exact detection depends on heuristics, so we're lenient
     detected_materials = set(results.keys())
-    possible_materials = {"water", "foliage", "stone", "glass"}
+    possible_materials = {"water", "foliage", "stone", "glass", "sky"}
 
     assert detected_materials.issubset(possible_materials)
 
@@ -480,7 +480,10 @@ def test_confidence_scores_in_valid_range(sample_image):
 
 @pytest.mark.ml
 def test_heuristic_fallback_returns_medium_confidence(sample_image, monkeypatch):
-    """Heuristic fallback should return 0.5 confidence to indicate uncertainty."""
+    """Heuristic fallback should return 0.5 confidence to indicate uncertainty.
+
+    Exception: Sky material uses bootstrap heuristic with dynamic confidence [0.0-1.0].
+    """
     import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
 
     # Mock EFFICIENTVIT_AVAILABLE to force heuristic mode
@@ -491,9 +494,13 @@ def test_heuristic_fallback_returns_medium_confidence(sample_image, monkeypatch)
 
     results = backend.segment(sample_image)
 
-    # All heuristic results should have 0.5 confidence
+    # All heuristic results should have 0.5 confidence (except sky)
     for material, (mask, confidence) in results.items():
-        assert confidence == 0.5, f"Heuristic {material} should have 0.5 confidence, got {confidence}"
+        if material == "sky":
+            # Sky uses bootstrap heuristic with dynamic confidence
+            assert 0.0 <= confidence <= 1.0, f"Sky confidence should be in [0,1], got {confidence}"
+        else:
+            assert confidence == 0.5, f"Heuristic {material} should have 0.5 confidence, got {confidence}"
 
 
 @pytest.mark.ml
