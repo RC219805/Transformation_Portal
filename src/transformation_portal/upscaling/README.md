@@ -65,8 +65,8 @@ upscaled = upscaler.upscale(image, scale_factor=2.0)
 
 **Golden Path** - Always available, no dependencies.
 
-- **Algorithm**: PIL's high-quality bicubic resampling (Lanczos variant)
-- **Dependencies**: None (PIL in base requirements)
+- **Algorithm**: OpenCV's bicubic interpolation (cv2.INTER_CUBIC)
+- **Dependencies**: None (OpenCV in base requirements)
 - **Performance**: ~100-200 images/hour for 4K→8K
 - **Memory**: ~50MB per image
 - **Quality**: Good for 2x, acceptable for 4x

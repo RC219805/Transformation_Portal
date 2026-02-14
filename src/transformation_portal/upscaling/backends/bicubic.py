@@ -60,10 +60,29 @@ class BicubicUpscaler:
             Upscaled image (RGB) with same dtype as input.
 
         Raises:
-            ValueError: If scale_factor is invalid.
+            ValueError: If scale_factor is invalid or image has invalid shape/values.
         """
+        # Validate scale factor
         if scale_factor < 1.0 or scale_factor > 4.0:
             raise ValueError(f"scale_factor must be in [1.0, 4.0], got {scale_factor}")
+
+        # Validate input shape
+        if image.ndim != 3:
+            raise ValueError(f"Expected 3D image array (H, W, C), got {image.ndim}D")
+        if image.shape[2] != 3:
+            raise ValueError(f"Expected 3 channels (RGB), got {image.shape[2]}")
+
+        # Validate dimensions are non-zero
+        h, w = image.shape[:2]
+        if h <= 0 or w <= 0:
+            raise ValueError(f"Image dimensions must be positive, got {h}x{w}")
+
+        # Validate dtype and values
+        if image.dtype not in (np.uint8, np.float32):
+            raise ValueError(f"Expected dtype uint8 or float32, got {image.dtype}")
+
+        if not np.all(np.isfinite(image)):
+            raise ValueError("Image contains non-finite values (NaN or Inf)")
 
         h, w = image.shape[:2]
         new_h = int(h * scale_factor)
