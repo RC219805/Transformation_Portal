@@ -902,8 +902,14 @@ class EnhanceOrchestrator:
                     if _k in _md:
                         stats[_k] = _md[_k]
 
+                # CRITICAL FIX: Use resolved backend name, not config default
+                # This ensures depth.model matches what actually ran (backend_selection.resolved_backend)
+                # ADR-023 compliance: identity must match execution reality
+                resolved_backend = getattr(self, "_backend_metadata", None)
+                model_name = resolved_backend.resolved_backend if resolved_backend else self.config.model_variant.value.name
+
                 depth_metadata = DepthMetadata(
-                    model=self.config.model_variant.value.name,
+                    model=model_name,
                     depth_path=str(depth_path),
                     runtime_seconds=depth_runtime_s,
                     scaling=depth_stats._asdict(),

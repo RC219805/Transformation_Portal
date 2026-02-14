@@ -152,3 +152,86 @@ def test_orchestrator_depth_pro_checkpoint_missing(tmp_path):
     assert orchestrator.depth_backend.name == "da3"
     assert orchestrator._backend_metadata.resolution_status == "fallback"
     assert "not found" in orchestrator._backend_metadata.resolution_reason
+
+
+def test_depth_metadata_uses_resolved_backend_not_config_default(tmp_path, mock_da3_available):
+    """REGRESSION TEST for ADR-023: depth.model must use resolved backend, not config default.
+
+    Bug: Previously used self.config.model_variant.value.name which shows config default
+    Fix: Now uses self._backend_metadata.resolved_backend which shows actual execution
+
+    This prevents manifest mismatches like:
+    - depth.model = "depth-anything-v3-metric-large" (config)
+    - backend_selection.resolved_backend = "depth_pro" (reality)
+
+    Critical for production debugging when fallbacks occur.
+    """
+    import json
+    from unittest.mock import patch
+
+    import numpy as np
+    from PIL import Image
+
+    from transformation_portal.depth.backends.protocol import DepthResult
+    from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+    # Create test image
+    test_image = tmp_path / "test.png"
+    img = Image.new("RGB", (64, 64), color="white")
+    img.save(test_image)
+
+    # Configure for DA3 backend
+    config = EnhanceConfig(
+        depth_backend="da3",
+        depth_device="cpu",
+        enable_v2=False,
+        enable_materials_v3=False,
+    )
+
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    # Verify backend metadata was captured correctly
+    assert orchestrator._backend_metadata.requested_backend == "da3"
+    assert orchestrator._backend_metadata.resolved_backend == "da3"
+    assert orchestrator._backend_metadata.resolution_status == "success"
+
+    # Mock the depth backend compute to return synthetic result (fast test)
+    mock_depth_result = DepthResult(
+        depth_map=np.random.rand(64, 64).astype(np.float32),
+        original_image=np.array(img),
+        metadata={},
+        depth_units="relative",
+        backend_id="da3",
+        device="cpu",
+    )
+
+    with patch.object(orchestrator.depth_backend, "compute", return_value=mock_depth_result):
+        # Process single image to trigger depth metadata creation
+        image_input = ImageInput(path=test_image)
+        result = orchestrator.enhance_image(image_input)
+
+    # Verify manifest was created
+    manifest_path = result["manifest"]
+    assert Path(manifest_path).exists()
+
+    # Load and verify manifest
+    with open(manifest_path) as f:
+        manifest = json.load(f)
+
+    # CRITICAL ASSERTION: depth.model must match backend_selection.resolved_backend
+    assert "depth" in manifest
+    assert "backend_selection" in manifest
+
+    depth_model = manifest["depth"]["model"]
+    resolved_backend = manifest["backend_selection"]["resolved_backend"]
+
+    # This is the regression test: they must match!
+    assert depth_model == resolved_backend, (
+        f"ADR-023 violation: depth.model='{depth_model}' != "
+        f"backend_selection.resolved_backend='{resolved_backend}'. "
+        f"Depth metadata must use resolved backend, not config default."
+    )
+
+    # For DA3 backend, both should be "da3"
+    assert depth_model == "da3"
+    assert resolved_backend == "da3"
