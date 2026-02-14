@@ -36,6 +36,7 @@ from __future__ import annotations
 import logging
 from functools import lru_cache
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
@@ -719,13 +720,13 @@ class EfficientSAMBackend:
             brightness_threshold = getattr(cfg, "sky_brightness_threshold", 0.4) if cfg else 0.4
 
             # Create minimal config object for bootstrap
-            class SkyConfig:
-                def __init__(self, sky_top_region_fraction, sky_gradient_threshold, sky_brightness_threshold):
-                    self.sky_top_region_fraction = sky_top_region_fraction
-                    self.sky_gradient_threshold = sky_gradient_threshold
-                    self.sky_brightness_threshold = sky_brightness_threshold
+            sky_config = SimpleNamespace(
+                sky_top_region_fraction=top_region_fraction,
+                sky_gradient_threshold=gradient_threshold,
+                sky_brightness_threshold=brightness_threshold,
+            )
 
-            sky_result = detect_sky_seed(image, SkyConfig(top_region_fraction, gradient_threshold, brightness_threshold))
+            sky_result = detect_sky_seed(image, sky_config)
             if sky_result["confidence"] > 0.1:  # Only include if confident
                 masks["sky"] = (sky_result["coarse_mask"], sky_result["confidence"])
         except Exception as e:
