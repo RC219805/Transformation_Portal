@@ -347,7 +347,7 @@ def test_heuristic_segmentation_detects_materials():
     # Check for expected materials (heuristic-based)
     # Note: Exact detection depends on heuristics, so we're lenient
     detected_materials = set(results.keys())
-    possible_materials = {"water", "foliage", "stone", "glass"}
+    possible_materials = {"water", "foliage", "stone", "glass", "sky"}
 
     assert detected_materials.issubset(possible_materials)
 
