@@ -19,8 +19,25 @@ class PixelOpDefinition:
 
 
 def _normalize_image(image: np.ndarray) -> tuple[np.ndarray, float]:
+    """Normalize image to [0, 1] float32 range.
+
+    NOTE (A4): This function is DEPRECATED for use in pixel ops.
+    All pixel operations now receive pre-normalized [0,1] float32 input
+    via the executor. Use params["normalized"] instead.
+
+    This function is retained for backward compatibility with external code
+    that may still reference it.
+
+    Args:
+        image: Input image (uint8, uint16, or float)
+
+    Returns:
+        Tuple of (normalized_image, scale_factor)
+    """
     if image.dtype == np.uint8:
         scale = 255.0
+    elif image.dtype == np.uint16:
+        scale = 65535.0
     else:
         scale = 1.0
     return image.astype(np.float32) / scale, scale
@@ -32,10 +49,26 @@ def _apply_mask_blend(image: np.ndarray, mask: np.ndarray, modified: np.ndarray)
 
 
 def brightness_boost(image: np.ndarray, mask: np.ndarray, params: dict) -> np.ndarray:
-    """Increase brightness within the mask."""
+    """Increase brightness within the mask.
+
+    CONTRACT (A4): This operation receives pre-normalized [0,1] float32 input
+    from the executor. The params["normalized"] contains the working image.
+
+    Args:
+        image: Input image (pre-normalized to [0,1] by executor)
+        mask: Material mask (0-1 float)
+        params: Operation parameters
+            - strength: Brightness boost amount (default: 0.08)
+            - normalized: Pre-normalized image (provided by executor)
+            - scale: Normalization scale (legacy, always 1.0)
+
+    Returns:
+        Enhanced image in [0,1] float32 range
+    """
     strength = float(params.get("strength", 0.08))
     normalized = params.get("normalized")
     if normalized is None:
+        # Fallback for backward compatibility
         normalized, scale = _normalize_image(image)
     else:
         scale = float(params.get("scale", 1.0))

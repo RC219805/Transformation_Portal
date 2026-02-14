@@ -10,7 +10,7 @@ from __future__ import annotations
 import importlib.util
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 from .security import HashMode
 
@@ -234,6 +234,11 @@ class EnhanceConfig:
     min_coverage_px: int = 500  # Minimum material coverage in pixels
     min_mean_conf: float = 0.2  # Minimum mean confidence for material detection
     glass_response_enabled: bool = True  # Enable glass material response
+
+    # Materials V3 Pixel Ops - Feathering Configuration (A3)
+    mask_feather_sigma_default: float = 3.0  # Default Gaussian blur sigma for mask feathering
+    mask_feather_sigma_overrides: Dict[str, float] = field(default_factory=dict)  # Material-specific overrides
+    mask_feather_disabled_materials: list[str] = field(default_factory=list)  # Materials with feathering disabled
 
     # Materials V3 segmentation backend (Phase 3)
     enable_material_segmentation: bool = False  # Enable automatic material segmentation
