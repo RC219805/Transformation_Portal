@@ -69,26 +69,19 @@ class RealESRGANUpscaler:
             ImportError: If torch or basicsr not installed.
             ValueError: If model name is invalid.
         """
-        try:
-            import torch  # noqa: F401
-        except ImportError:
-            raise ImportError("Real-ESRGAN backend requires PyTorch. " "Install with: pip install torch torchvision")
+        # SECURITY: BasicSR is blocked due to CVE-2024-27763
+        # Real-ESRGAN backend is currently unavailable until a safe alternative is implemented
+        raise ImportError(
+            "Real-ESRGAN backend is currently unavailable due to CVE-2024-27763 in BasicSR. "
+            "Use 'bicubic' backend instead. "
+            "A vendored safe implementation will be added in a future update."
+        )
 
-        try:
-            from basicsr.archs.rrdbnet_arch import RRDBNet  # noqa: F401
-        except ImportError:
-            raise ImportError("Real-ESRGAN backend requires BasicSR. " "Install with: pip install basicsr")
-
-        self._device = device
-        self._model_name = model
-        self._half_precision = half_precision and device != "cpu"
-        self._model: Optional[RRDBNet] = None
-        self._netscale: int = 2
-
-        # Validate model name
-        valid_models = ["RealESRGAN_x2plus", "RealESRGAN_x4plus"]
-        if model not in valid_models:
-            raise ValueError(f"Unknown model: {model}. " f"Valid models: {', '.join(valid_models)}")
+        # The code below is disabled until BasicSR security issue is resolved
+        # - PyTorch dependency check (torch import)
+        # - BasicSR RRDBNet model import (BLOCKED)
+        # - Device/model/precision configuration
+        # - Model name validation
 
     @property
     def name(self) -> str:
@@ -132,11 +125,16 @@ class RealESRGANUpscaler:
         Downloads model weights automatically on first use.
         Weights are cached in `weights/` directory.
         """
-        if self._model is not None:
-            return
+        # SECURITY: This method is disabled due to CVE-2024-27763 in BasicSR
+        raise ImportError(
+            "Real-ESRGAN backend is currently unavailable due to CVE-2024-27763. "
+            "A safe alternative implementation is required."
+        )
 
-        import torch
-        from basicsr.archs.rrdbnet_arch import RRDBNet
+        # The code below is disabled until BasicSR security issue is resolved:
+        # - Model singleton check
+        # - PyTorch import
+        # - RRDBNet model class import (BLOCKED)
 
         logger.info(f"Loading Real-ESRGAN model: {self._model_name}")
 

@@ -31,25 +31,23 @@ print(upscaled.shape)  # (2000, 2000, 3)
 
 ### Real-ESRGAN (Requires ML Dependencies)
 
+**⚠️ CURRENTLY UNAVAILABLE**: Real-ESRGAN backend is disabled due to CVE-2024-27763.
+
 ```bash
-# Install ML dependencies
-pip install basicsr
-```
+# Real-ESRGAN is currently disabled due to security vulnerability
+# The code below is for reference only - it will raise ImportError
 
-```python
-from transformation_portal.upscaling import UpscalerRegistry
+# Install ML dependencies (BLOCKED)
+# pip install basicsr  # CVE-2024-27763
 
-# Get Real-ESRGAN backend
-registry = UpscalerRegistry()
-upscaler = registry.get(
-    "realesrgan",
-    device="cuda",  # or "cpu", "mps"
-    model="RealESRGAN_x2plus",
-    half_precision=False,
-)
-
-# Upscale
-upscaled = upscaler.upscale(image, scale_factor=2.0)
+# Get Real-ESRGAN backend (will fail)
+# registry = UpscalerRegistry()
+# upscaler = registry.get(
+#     "realesrgan",
+#     device="cuda",
+#     model="RealESRGAN_x2plus",
+#     half_precision=False,
+# )
 ```
 
 ### With Graceful Fallback
@@ -77,6 +75,8 @@ upscaled = upscaler.upscale(image, scale_factor=2.0)
 ### Real-ESRGAN (`realesrgan`)
 
 **ML Tier** - Superior quality, requires ML dependencies.
+
+**⚠️ CURRENTLY UNAVAILABLE**: Real-ESRGAN backend is temporarily disabled due to CVE-2024-27763 in the BasicSR dependency. A vendored safe implementation will be added in a future update. Use `bicubic` backend as the current production path.
 
 - **Algorithm**: Real-ESRGAN (RRDB network with perceptual loss)
 - **Dependencies**: torch, basicsr
@@ -221,7 +221,9 @@ class RealESRGANUpscaler:
 | 3840x2160 → 7680x4320 | 2.0x | ~15ms | ~240/hour | ~50MB |
 | 1920x1080 → 7680x4320 | 4.0x | ~20ms | ~180/hour | ~50MB |
 
-### Real-ESRGAN
+### Real-ESRGAN (CURRENTLY UNAVAILABLE)
+
+**Note**: Real-ESRGAN backend is currently disabled due to security vulnerability CVE-2024-27763 in BasicSR dependency. Benchmarks preserved for future reference when safe implementation is available.
 
 | Resolution | Scale | Time (GPU) | Time (CPU) | Throughput (GPU) | Memory (GPU) |
 |------------|-------|------------|------------|------------------|--------------|
@@ -232,11 +234,13 @@ class RealESRGANUpscaler:
 
 All components are commercial-safe:
 
-| Component | License | Commercial Use |
-|-----------|---------|----------------|
-| Bicubic (PIL) | HPND | ✅ Yes |
-| Real-ESRGAN Model | BSD-3-Clause | ✅ Yes |
-| BasicSR | Apache 2.0 | ✅ Yes |
+| Component | License | Commercial Use | Status |
+|-----------|---------|----------------|--------|
+| Bicubic (PIL) | HPND | ✅ Yes | Active |
+| Real-ESRGAN Model | BSD-3-Clause | ✅ Yes | Suspended (CVE-2024-27763) |
+| BasicSR | Apache 2.0 | ⚠️ Blocked | CVE-2024-27763 |
+
+**Security Note**: BasicSR dependency is blocked due to CVE-2024-27763 (command injection vulnerability). Real-ESRGAN backend will be re-enabled when a safe vendored implementation is available.
 
 ## Examples
 
@@ -259,13 +263,12 @@ python examples/upscaling_comparison.py --backend realesrgan --device cuda
 # Run all tests (bicubic only, no ML deps required)
 pytest tests/test_upscaling.py -v
 
-# Run integration tests
-python tests/test_upscaling_integration.py
-
-# Run with Real-ESRGAN (requires ML deps)
-pip install basicsr
-pytest tests/test_upscaling.py -v
+# Run with Real-ESRGAN (CURRENTLY UNAVAILABLE - tests will skip)
+# Real-ESRGAN tests are disabled due to CVE-2024-27763 in BasicSR
+pytest tests/test_upscaling.py -v -m ml
 ```
+
+**Note**: Real-ESRGAN integration tests have been removed. They will be re-added when a safe vendored implementation is available.
 
 ## References
 

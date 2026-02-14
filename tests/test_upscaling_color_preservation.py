@@ -67,9 +67,10 @@ def _check_ml_deps_available() -> bool:
     """Check if ML dependencies are available."""
     try:
         import torch  # noqa: F401
-        from basicsr.archs.rrdbnet_arch import RRDBNet  # noqa: F401
 
-        return True
+        # Note: basicsr is blocked due to CVE-2024-27763
+        # This will always return False until a safe alternative is implemented
+        return False
     except ImportError:
         return False
 
