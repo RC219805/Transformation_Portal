@@ -1,5 +1,9 @@
 # Phase 2: 16-Bit Output Path - Quick Reference
 
+**Investigation Date:** 2026-02-10  
+**Extraction Date:** 2026-02-12  
+**Implementation Date:** 2026-02-13
+
 ## What Was Implemented
 
 **Goal:** Enable end-to-end 16-bit image processing by fixing Materials V3 → V2 handoff.
@@ -88,10 +92,10 @@ python -m transformation_portal.lux_depth_v3 \
 
 ```bash
 # Run all Phase 2 tests
-python test_16bit_implementation.py
+python tools/verify_16bit_implementation.py
 
 # Verify TIFF format
-python verify_16bit_handoff.py
+python tools/verify_16bit_handoff.py
 
 # Run regression tests
 pytest tests/materials/ -v

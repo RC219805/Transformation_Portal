@@ -828,11 +828,9 @@ class EnhanceOrchestrator:
                                 # Write enhanced image to temporary file for V2 stage
                                 # V2 subprocess requires a file path, not an array
                                 #
-                                # NOTE: 8-bit PNG conversion is intentional:
-                                # - V2 subprocess expects standard image formats (PNG/JPG, not 16-bit TIFF)
-                                # - working_image is already tone-mapped/perceptually encoded (not linear)
-                                # - V2 operates in perceptual color space, not linear
-                                # - This matches what V2 receives when Materials V3 is disabled (original 8-bit input)
+                                # NOTE: Conditional handoff format:
+                                # - WITH emit_master16/emit_upscaled16: 16-bit TIFF for archival quality
+                                # - WITHOUT emit flags: 8-bit PNG (Golden Path, matches original V2 behavior)
                                 # - Temporary file is cleaned up after V2 completes (see line ~1352)
                                 import tempfile
 
@@ -1305,8 +1303,14 @@ class EnhanceOrchestrator:
             raise RuntimeError(f"Provenance capture failed unexpectedly: {e}") from e
 
         # V2 metadata
-        # Determine V2 input/output bit depth based on emit flags and Materials V3 usage
-        v2_input_bit_depth = 16 if (self.config.emit_master16 or self.config.emit_upscaled16) and materials_v3_result else 8
+        # Determine V2 input/output bit depth based on actual Materials V3 enhanced output
+        # Only report 16-bit if Materials V3 actually produced an enhanced image (not just config flags)
+        materials_v3_enhanced_image = materials_v3_result.get("enhanced_image") if materials_v3_result else None
+        v2_input_bit_depth = (
+            16
+            if (self.config.emit_master16 or self.config.emit_upscaled16) and materials_v3_enhanced_image is not None
+            else 8
+        )
         v2_output_bit_depth = 16 if (self.config.emit_master16 or self.config.emit_upscaled16) else 8
 
         v2_metadata = V2Metadata(
@@ -1325,8 +1329,13 @@ class EnhanceOrchestrator:
         if materials_v3_result:
             from .manifest import MaterialsV3Metadata
 
-            # Determine bit depth based on emit flags
-            materials_v3_bit_depth = 16 if (self.config.emit_master16 or self.config.emit_upscaled16) else 8
+            # Determine output bit depth based on whether enhanced output was actually generated
+            # Only report 16-bit if Materials V3 produced an enhanced image (not just config flags)
+            materials_v3_bit_depth = (
+                16
+                if (self.config.emit_master16 or self.config.emit_upscaled16) and materials_v3_enhanced_image is not None
+                else 8
+            )
 
             materials_v3_metadata = MaterialsV3Metadata(
                 enabled=True,

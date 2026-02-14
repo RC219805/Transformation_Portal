@@ -1,6 +1,8 @@
 # Phase 2 Implementation Report: 16-Bit Output Path
 
-**Status:** ✅ **COMPLETED** (2026-02-13)
+**Status:** ✅ **COMPLETED** (2026-02-13)  
+**Investigation Date:** 2026-02-10  
+**Extraction Date:** 2026-02-12
 
 ---
 
@@ -153,7 +155,7 @@ tifffile>=2023.7.18,<2027
 
 ### End-to-End Tests (100% Pass Rate)
 
-**Test Suite:** `test_16bit_implementation.py`
+**Test Suite:** `tools/verify_16bit_implementation.py`
 
 ```
 ======================================================================
@@ -209,7 +211,7 @@ python -m transformation_portal.lux_depth_v3 \
 
 ### TIFF Format Verification
 
-**Verification Script:** `verify_16bit_handoff.py`
+**Verification Script:** `tools/verify_16bit_handoff.py`
 
 ```
 ======================================================================
@@ -377,12 +379,12 @@ $ pytest tests/materials/ -v
 
 ### Test Scripts Added (2 files)
 
-4. **`test_16bit_implementation.py`** (new)
+4. **`tools/verify_16bit_implementation.py`** (new)
    - End-to-end validation suite
    - 3 test scenarios: 16-bit, 8-bit, V2 tracking
    - **Total:** ~350 lines
 
-5. **`verify_16bit_handoff.py`** (new)
+5. **`tools/verify_16bit_handoff.py`** (new)
    - TIFF format verification
    - Bit depth inspection
    - **Total:** ~200 lines
