@@ -1,10 +1,9 @@
-# Phase 2: 16-Bit Output Path - Quick Reference
+# 16-Bit Output Path - Quick Reference
 
-## What Was Implemented
+> **Context**: Extracted from PR #934 (Phase 3) - Optional archival-quality output path for luxury real estate workflows.
 
-**Goal:** Enable end-to-end 16-bit image processing by fixing Materials V3 → V2 handoff.
-
-**Result:** ✅ **COMPLETE** - Zero regressions, backward compatible, fully tested.
+**Investigation Date:** 2024-02-10
+**Extraction Date:** 2026-02-14
 
 ---
 
@@ -88,10 +87,10 @@ python -m transformation_portal.lux_depth_v3 \
 
 ```bash
 # Run all Phase 2 tests
-python test_16bit_implementation.py
+python tools/test_16bit_implementation.py
 
 # Verify TIFF format
-python verify_16bit_handoff.py
+python tools/verify_16bit_handoff.py
 
 # Run regression tests
 pytest tests/materials/ -v

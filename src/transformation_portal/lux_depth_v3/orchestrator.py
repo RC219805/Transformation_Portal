@@ -842,7 +842,8 @@ class EnhanceOrchestrator:
                                 temp_dir = self.output_root / "temp"
                                 temp_dir.mkdir(parents=True, exist_ok=True)
 
-                                # Save enhanced image for V2 (16-bit TIFF if emit flags enabled, 8-bit PNG otherwise)
+                                # Save enhanced image for V2 handoff
+                                # 16-bit TIFF when emit flags enabled, 8-bit PNG otherwise (Golden Path)
                                 if self.config.emit_master16 or self.config.emit_upscaled16:
                                     # 16-bit TIFF path for archival quality
                                     import tifffile
@@ -1305,8 +1306,11 @@ class EnhanceOrchestrator:
             raise RuntimeError(f"Provenance capture failed unexpectedly: {e}") from e
 
         # V2 metadata
-        # Determine V2 input/output bit depth based on emit flags and Materials V3 usage
-        v2_input_bit_depth = 16 if (self.config.emit_master16 or self.config.emit_upscaled16) and materials_v3_result else 8
+        # Determine V2 input/output bit depth based on emit flags and actual Materials V3 enhancement usage
+        materials_v3_enhanced_image = materials_v3_result.get("enhanced_image") if materials_v3_result else None
+        v2_input_bit_depth = (
+            16 if (self.config.emit_master16 or self.config.emit_upscaled16) and materials_v3_enhanced_image is not None else 8
+        )
         v2_output_bit_depth = 16 if (self.config.emit_master16 or self.config.emit_upscaled16) else 8
 
         v2_metadata = V2Metadata(
@@ -1325,8 +1329,10 @@ class EnhanceOrchestrator:
         if materials_v3_result:
             from .manifest import MaterialsV3Metadata
 
-            # Determine bit depth based on emit flags
-            materials_v3_bit_depth = 16 if (self.config.emit_master16 or self.config.emit_upscaled16) else 8
+            # Determine bit depth based on emit flags and actual enhanced image generation
+            materials_v3_bit_depth = None
+            if materials_v3_enhanced_image is not None:
+                materials_v3_bit_depth = 16 if (self.config.emit_master16 or self.config.emit_upscaled16) else 8
 
             materials_v3_metadata = MaterialsV3Metadata(
                 enabled=True,

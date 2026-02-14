@@ -47,6 +47,7 @@ def main():
 
         # Run pipeline with V2 ENABLED but with a hook to inspect the TIFF
         # We'll run with --enable-v2 on and capture the temp file
+        # Run with V2 disabled to preserve temp/ handoff file for inspection
         print("Running pipeline with 16-bit flags enabled...")
         cmd = [
             sys.executable,
@@ -63,7 +64,7 @@ def main():
             "--materials-v3",
             "on",
             "--enable-v2",
-            "off",  # Disable V2 to keep temp file
+            "off",  # V2 disabled to keep temp file for verification
             "--emit-master16",
             "on",
             "--emit-upscaled16",
