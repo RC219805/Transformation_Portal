@@ -121,6 +121,8 @@ class V2Metadata:
         output_dir: V2 output directory
         report_path: Path to V2 report file
         error_message: Error message if status is not 'ok'
+        input_bit_depth: Bit depth of input to V2 (8 or 16)
+        output_bit_depth: Bit depth of V2 output (8 or 16)
     """
 
     preset: str
@@ -131,6 +133,8 @@ class V2Metadata:
     output_dir: Optional[str] = None
     report_path: Optional[str] = None
     error_message: Optional[str] = None
+    input_bit_depth: Optional[int] = None  # 8 or 16
+    output_bit_depth: Optional[int] = None  # 8 or 16
 
 
 @dataclass
@@ -213,6 +217,7 @@ class MaterialsV3Metadata:
     """Metadata for Materials V3 surface-aware finishing.
 
     Schema version 1.0: Initial release.
+    Schema version 1.1: Added bit depth tracking (output_bit_depth field).
 
     Attributes:
         enabled: Whether Materials V3 was enabled
@@ -220,6 +225,7 @@ class MaterialsV3Metadata:
         response_plan: Response plan generated
         pixel_ops: Pixel operations telemetry
         runtime_seconds: Processing time in seconds
+        output_bit_depth: Bit depth of Materials V3 output (8 or 16), added in v1.1
         schema_version: Schema version for forward/backward compatibility
     """
 
@@ -228,7 +234,8 @@ class MaterialsV3Metadata:
     response_plan: Optional[Dict[str, Any]] = None
     pixel_ops: Optional[Dict[str, Any]] = None
     runtime_seconds: Optional[float] = None
-    schema_version: str = "1.0"
+    output_bit_depth: Optional[int] = None  # 8 or 16, added in schema v1.1
+    schema_version: str = "1.1"
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dictionary."""
@@ -236,11 +243,12 @@ class MaterialsV3Metadata:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> MaterialsV3Metadata:
-        """Deserialize from dictionary."""
+        """Deserialize from dictionary with backward compatibility."""
         schema_version = data.get("schema_version", "1.0")
-        if schema_version != "1.0":
+        if schema_version not in ("1.0", "1.1"):
             raise ValueError(
-                f"Unsupported MaterialsV3Metadata schema version: {schema_version}. " f"This code supports version 1.0 only."
+                f"Unsupported MaterialsV3Metadata schema version: {schema_version}. "
+                f"This code supports versions 1.0 and 1.1 only."
             )
 
         return cls(
@@ -249,6 +257,7 @@ class MaterialsV3Metadata:
             response_plan=data.get("response_plan"),
             pixel_ops=data.get("pixel_ops"),
             runtime_seconds=data.get("runtime_seconds"),
+            output_bit_depth=data.get("output_bit_depth"),  # v1.1+, defaults to None for v1.0
             schema_version=schema_version,
         )
 
