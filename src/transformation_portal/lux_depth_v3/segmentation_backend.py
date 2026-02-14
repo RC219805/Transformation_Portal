@@ -256,6 +256,7 @@ class EfficientSAMBackend:
         # V1: Heuristic-based segmentation (fallback or primary for v1)
         masks = self._heuristic_segmentation(image)
         logger.debug(f"EfficientSAM (heuristic) segmented {len(masks)} materials: {list(masks.keys())}")
+        logger.info(f"Heuristic segmentation detected {len(masks)} materials with fixed confidence 0.5")
         return masks
 
     def _resolve_device(self, device: str) -> str:
