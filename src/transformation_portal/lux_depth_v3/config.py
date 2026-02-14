@@ -240,6 +240,11 @@ class EnhanceConfig:
     mask_feather_sigma_overrides: Dict[str, float] = field(default_factory=dict)  # Material-specific overrides
     mask_feather_disabled_materials: list[str] = field(default_factory=list)  # Materials with feathering disabled
 
+    # Materials V3 Phase B - Sky Bootstrap Configuration
+    sky_top_region_fraction: float = 0.5  # Top fraction of image to consider for sky (default: upper 50%)
+    sky_gradient_threshold: float = 0.05  # Maximum gradient magnitude for smooth sky regions
+    sky_brightness_threshold: float = 0.4  # Minimum brightness threshold for sky pixels
+
     # Materials V3 segmentation backend (Phase 3)
     enable_material_segmentation: bool = False  # Enable automatic material segmentation
     material_segmentation_backend: str = "stub"  # Options: stub, efficientsam

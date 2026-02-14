@@ -685,6 +685,7 @@ class EfficientSAMBackend:
         Future versions will use real EfficientSAM + CLIP classification.
 
         Materials detected:
+        - sky: Top-of-frame regions with smooth gradients (Phase B)
         - glass: High brightness regions with blue tint
         - water: Blue-dominant regions
         - foliage: Green-dominant regions
@@ -697,11 +698,30 @@ class EfficientSAMBackend:
             Dict of (mask, confidence) tuples:
             - mask: Material mask (H, W), float32 [0.0-1.0]
             - confidence: Fixed at 0.5 to indicate heuristic classification
+                         (sky uses bootstrap confidence score)
         """
         masks = {}
 
         # Convert to float for analysis
         img_float = image.astype(np.float32) / 255.0
+
+        # Sky detection (Phase B): Use bootstrap heuristic
+        # Note: This is integrated here for v1, but in future versions
+        # sky detection will use SAM2 refinement with these bootstrap seeds
+        try:
+            from .bootstrap.sky_seed import detect_sky_seed
+
+            # Create minimal config object for bootstrap
+            class SkyConfig:
+                sky_top_region_fraction = 0.5
+                sky_gradient_threshold = 0.05
+                sky_brightness_threshold = 0.4
+
+            sky_result = detect_sky_seed(image, SkyConfig())
+            if sky_result["confidence"] > 0.1:  # Only include if confident
+                masks["sky"] = (sky_result["coarse_mask"], sky_result["confidence"])
+        except Exception as e:
+            logger.debug(f"Sky bootstrap failed (non-critical): {e}")
 
         # Glass detection: High brightness + blue tint
         brightness = img_float.mean(axis=2)
@@ -729,6 +749,27 @@ class EfficientSAMBackend:
             masks["stone"] = (stone_mask.astype(np.float32), 0.5)
 
         return masks
+
+    def _bootstrap_sky(self, image: np.ndarray, config: Any) -> Dict[str, Any]:
+        """Bootstrap sky detection using heuristics (Phase B).
+
+        Uses spatial and intensity priors to detect sky regions, which are
+        amorphous "stuff" materials difficult for standard object detection.
+
+        Args:
+            image: RGB image (H, W, 3), uint8 [0-255]
+            config: Configuration object with sky_* attributes
+
+        Returns:
+            Dict with coarse_mask, confidence, bbox, and prompt points
+
+        Note:
+            This method delegates to the sky_seed module, which provides
+            heuristic-based detection optimized for sky regions.
+        """
+        from .bootstrap.sky_seed import detect_sky_seed
+
+        return detect_sky_seed(image, config)
 
 
 # =============================================================================

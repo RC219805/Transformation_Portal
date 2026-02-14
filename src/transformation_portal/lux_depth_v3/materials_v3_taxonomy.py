@@ -10,7 +10,9 @@ class RefinementStrategy(Enum):
 
 
 # Expanded Metadata (PR-4C)
+# Phase B: Added sky as first-class material (priority 11)
 DEFAULT_MATERIAL_METADATA = {
+    "sky": {"priority": 11, "threshold": 0.30, "canary": True},  # Phase B: highest priority, amorphous
     "glass": {"priority": 10, "threshold": 0.40, "canary": True},
     "water": {"priority": 9, "threshold": 0.35, "canary": True},
     "foliage": {"priority": 5, "threshold": 0.50, "canary": True},
