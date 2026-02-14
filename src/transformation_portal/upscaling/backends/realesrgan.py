@@ -144,7 +144,7 @@ class RealESRGANUpscaler:
         # The code below is disabled until BasicSR security issue is resolved
         # (CVE-2024-27763). Preserved for Phase 4.1 restoration when safe.
         #
-        # Blocked imports: torch, RRDBNet from basicsr.archs.rrdbnet_arch
+        # Blocked imports: torch, RRDBNet from [REDACTED].archs.rrdbnet_arch
         # Blocked operations: model loading, weights download, device placement
         #
         # # logger.info(f"Loading Real-ESRGAN model: {self._model_name}")
