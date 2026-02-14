@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 
@@ -69,6 +69,13 @@ class RealESRGANUpscaler:
             ImportError: If torch or basicsr not installed.
             ValueError: If model name is invalid.
         """
+        # Instance attributes (for pylint, even though unreachable)
+        self._model_name: str = model
+        self._device: str = device
+        self._half_precision: bool = half_precision
+        self._model: Optional[Any] = None
+        self._netscale: int = 2
+
         # SECURITY: BasicSR is blocked due to CVE-2024-27763
         # Real-ESRGAN backend is currently unavailable until a safe alternative is implemented
         raise ImportError(
@@ -131,78 +138,80 @@ class RealESRGANUpscaler:
             "A safe alternative implementation is required."
         )
 
-        # The code below is disabled until BasicSR security issue is resolved:
-        # - Model singleton check
-        # - PyTorch import
-        # - RRDBNet model class import (BLOCKED)
-
-        logger.info(f"Loading Real-ESRGAN model: {self._model_name}")
-
-        # Model configurations
-        if self._model_name == "RealESRGAN_x2plus":
-            # Best for 2x upscaling
-            model = RRDBNet(
-                num_in_ch=3,
-                num_out_ch=3,
-                num_feat=64,
-                num_block=23,
-                num_grow_ch=32,
-                scale=2,
-            )
-            self._netscale = 2
-
-        elif self._model_name == "RealESRGAN_x4plus":
-            # Best for 4x upscaling
-            model = RRDBNet(
-                num_in_ch=3,
-                num_out_ch=3,
-                num_feat=64,
-                num_block=23,
-                num_grow_ch=32,
-                scale=4,
-            )
-            self._netscale = 4
-
-        else:
-            raise ValueError(f"Unknown model: {self._model_name}")
-
-        # Model weights path
-        # TODO(Phase 4.1): Use ~/.cache/transformation_portal/upscaling/weights
-        weights_dir = Path("weights")
-        weights_dir.mkdir(exist_ok=True)
-        model_path = weights_dir / f"{self._model_name}.pth"
-
-        # Download if not cached
-        if not model_path.exists():
-            self._download_model_weights(model_path)
-
-        # Load weights
-        try:
-            loadnet = torch.load(model_path, map_location=torch.device(self._device))
-
-            # Handle different checkpoint formats
-            if "params_ema" in loadnet:
-                keyname = "params_ema"
-            elif "params" in loadnet:
-                keyname = "params"
-            else:
-                keyname = "model"
-
-            model.load_state_dict(loadnet[keyname], strict=True)
-
-        except Exception as e:
-            raise RuntimeError(f"Failed to load model weights from {model_path}: {e}") from e
-
-        # Move to device and set to eval mode
-        model.eval()
-        model = model.to(self._device)
-
-        if self._half_precision:
-            model = model.half()
-
-        self._model = model
-
-        logger.info(f"Real-ESRGAN loaded: {self._model_name} on {self._device} " f"(half={self._half_precision})")
+        # The code below is disabled until BasicSR security issue is resolved
+        # (CVE-2024-27763). Preserved for Phase 4.1 restoration when safe.
+        #
+        # Blocked imports: torch, RRDBNet from basicsr.archs.rrdbnet_arch
+        # Blocked operations: model loading, weights download, device placement
+        #
+        # # logger.info(f"Loading Real-ESRGAN model: {self._model_name}")
+        #
+        # # Model configurations
+        # if self._model_name == "RealESRGAN_x2plus":
+        #     # Best for 2x upscaling
+        #     model = RRDBNet(
+        #         num_in_ch=3,
+        #         num_out_ch=3,
+        #         num_feat=64,
+        #         num_block=23,
+        #         num_grow_ch=32,
+        #         scale=2,
+        #     )
+        #     self._netscale = 2
+        #
+        # elif self._model_name == "RealESRGAN_x4plus":
+        #     # Best for 4x upscaling
+        #     model = RRDBNet(
+        #         num_in_ch=3,
+        #         num_out_ch=3,
+        #         num_feat=64,
+        #         num_block=23,
+        #         num_grow_ch=32,
+        #         scale=4,
+        #     )
+        #     self._netscale = 4
+        #
+        # else:
+        #     raise ValueError(f"Unknown model: {self._model_name}")
+        #
+        # # Model weights path
+        # # TODO(Phase 4.1): Use ~/.cache/transformation_portal/upscaling/weights
+        # weights_dir = Path("weights")
+        # weights_dir.mkdir(exist_ok=True)
+        # model_path = weights_dir / f"{self._model_name}.pth"
+        #
+        # # Download if not cached
+        # if not model_path.exists():
+        #     self._download_model_weights(model_path)
+        #
+        # # Load weights
+        # try:
+        #     loadnet = torch.load(model_path, map_location=torch.device(self._device))
+        #
+        #     # Handle different checkpoint formats
+        #     if "params_ema" in loadnet:
+        #         keyname = "params_ema"
+        #     elif "params" in loadnet:
+        #         keyname = "params"
+        #     else:
+        #         keyname = "model"
+        #
+        #     model.load_state_dict(loadnet[keyname], strict=True)
+        #
+        # except Exception as e:
+        #     raise RuntimeError(f"Failed to load model weights from {model_path}: {e}") from e
+        #
+        # # Move to device and set to eval mode
+        # model.eval()
+        # model = model.to(self._device)
+        #
+        # if self._half_precision:
+        #     model = model.half()
+        #
+        # self._model = model
+        #
+        # logger.info(f"Real-ESRGAN loaded: {self._model_name} on {self._device} "
+        #             f"(half={self._half_precision})")
 
     def _preprocess_image(self, image: np.ndarray) -> "torch.Tensor":
         """Convert numpy image to torch tensor.
@@ -298,7 +307,7 @@ class RealESRGANUpscaler:
 
             # Run inference
             with torch.no_grad():
-                output_tensor = self._model(input_tensor)
+                output_tensor = self._model(input_tensor)  # pylint: disable=not-callable
 
             # Postprocess to numpy
             output_rgb = self._postprocess_output(output_tensor)
@@ -310,10 +319,15 @@ class RealESRGANUpscaler:
                 target_h = int(image_uint8.shape[0] * scale_factor)
                 target_w = int(image_uint8.shape[1] * scale_factor)
 
+                # Resize to target dimensions using PIL (fallback for non-integer scales)
+                # Note: PIL.Image.BICUBIC deprecated in Pillow 10+, use Image.Resampling.BICUBIC
                 from PIL import Image
 
                 pil_img = Image.fromarray(output_rgb[..., ::-1])  # BGR to RGB
-                pil_resized = pil_img.resize((target_w, target_h), Image.BICUBIC)
+                pil_resized = pil_img.resize(
+                    (target_w, target_h),
+                    resample=Image.Resampling.BICUBIC if hasattr(Image, "Resampling") else 3,
+                )
                 output_rgb = np.array(pil_resized)[..., ::-1]  # RGB to BGR
 
             # Convert back to original dtype
