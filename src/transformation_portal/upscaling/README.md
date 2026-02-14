@@ -236,7 +236,7 @@ All components are commercial-safe:
 
 | Component | License | Commercial Use | Status |
 |-----------|---------|----------------|--------|
-| Bicubic (PIL) | HPND | ✅ Yes | Active |
+| Bicubic (OpenCV) | Apache 2.0 | ✅ Yes | Active |
 | Real-ESRGAN Model | BSD-3-Clause | ✅ Yes | Suspended (CVE-2024-27763) |
 | BasicSR | Apache 2.0 | ⚠️ Blocked | CVE-2024-27763 |
 
