@@ -123,7 +123,7 @@ def test_materials_v3_manifest_integration(tmp_path, mock_depth_backend, mock_da
     assert loaded_manifest.materials_v3.enabled is True
     assert loaded_manifest.materials_v3.version == "3.1"
     assert loaded_manifest.materials_v3.runtime_seconds == 0.123
-    assert loaded_manifest.materials_v3.schema_version == "1.0"
+    assert loaded_manifest.materials_v3.schema_version == "1.1"  # Updated to 1.1 for bit depth tracking
 
 
 def test_materials_v3_disabled_returns_empty(tmp_path, mock_depth_backend, mock_da3_available):

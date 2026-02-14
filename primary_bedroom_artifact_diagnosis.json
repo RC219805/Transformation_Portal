@@ -1,0 +1,71 @@
+{
+  "image": "Primary Bedroom",
+  "input_path": "/Users/rc/Projects/Transformation_Portal/input_images/750Picacho_16-bit_TIFFs/750Picacho_PrimaryBedroom_master16.tif",
+  "output_path": "/Users/rc/Projects/Transformation_Portal/output_bugfix_validation_final/v2/750Picacho_PrimaryBedroom_master16_tif_032ef607_materials_v3_enhanced.tif",
+  "materials_v3_operations": [
+    {
+      "material": "glass",
+      "ops": [
+        "brightness_boost",
+        "edge_contrast"
+      ],
+      "timing_ms": 41.966,
+      "delta_stats": {
+        "inside_mask_mean_abs": 0.074602,
+        "outside_mask_mean_abs": 0.0,
+        "_debug_pixels_above_0.5": 225462,
+        "_debug_total_pixels": 2626800,
+        "_debug_mask_mean": 0.085831,
+        "_debug_mask_max": 1.0,
+        "_debug_mean_delta_all_pixels": 0.006403,
+        "_debug_max_delta": 0.125451
+      }
+    },
+    {
+      "material": "foliage",
+      "ops": [
+        "vibrance_boost"
+      ],
+      "timing_ms": 0.497,
+      "delta_stats": {
+        "inside_mask_mean_abs": 0.01992,
+        "outside_mask_mean_abs": 0.0,
+        "_debug_pixels_above_0.5": 23909,
+        "_debug_total_pixels": 31248,
+        "_debug_mask_mean": 0.765137,
+        "_debug_mask_max": 1.0,
+        "_debug_mean_delta_all_pixels": 0.015242,
+        "_debug_max_delta": 0.074039
+      }
+    }
+  ],
+  "boundary_analysis": {
+    "region_size": [
+      798,
+      3990,
+      3
+    ],
+    "mean_delta_r": 0.07518446445465088,
+    "mean_delta_g": 0.07261720299720764,
+    "mean_delta_b": 0.07000815123319626,
+    "max_delta_r": 1.0,
+    "max_delta_g": 1.0,
+    "max_delta_b": 1.0,
+    "blue_contamination_mean": -0.003892685752362013,
+    "blue_contamination_max": 0.7085756063461304,
+    "blue_contamination_pixels_significant": 62777
+  },
+  "edge_artifacts": {
+    "pixels_affected": 1634529,
+    "percentage": 15.400616202159533
+  },
+  "white_halos": {
+    "pixels": 4458684,
+    "percentage": 42.00994968624569
+  },
+  "issues": [
+    "Edge artifacts: 15.40% of pixels affected",
+    "Sky/ocean blue contamination: 62,777 pixels",
+    "White halos: 42.01% of pixels"
+  ]
+}

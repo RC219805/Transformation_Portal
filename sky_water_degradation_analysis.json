@@ -1,0 +1,330 @@
+[
+  {
+    "image": "Aerial",
+    "input_path": "/Users/rc/Projects/Transformation_Portal/input_images/750Picacho_16-bit_TIFFs/750Picacho_Aerial_master16.tif",
+    "output_path": "/Users/rc/Projects/Transformation_Portal/output_bugfix_validation_final/v2/750Picacho_Aerial_master16_tif_abd152a0_materials_v3_enhanced.tif",
+    "regions": [
+      {
+        "type": "sky_top30pct",
+        "input": {
+          "region": "sky_top30pct",
+          "pixel_count": 2864820,
+          "mean_rgb": [
+            0.7357704639434814,
+            0.7739051580429077,
+            0.793067455291748
+          ],
+          "std_rgb": [
+            0.2132146805524826,
+            0.2038482278585434,
+            0.21552379429340363
+          ],
+          "mean_brightness": 0.7677904963493347,
+          "std_brightness": 0.2038937360048294,
+          "mean_saturation": 0.113344706594944,
+          "std_saturation": 0.08910419791936874
+        },
+        "output": {
+          "region": "sky_top30pct",
+          "pixel_count": 2864820,
+          "mean_rgb": [
+            0.7352597117424011,
+            0.7759456038475037,
+            0.7919469475746155
+          ],
+          "std_rgb": [
+            0.2167840600013733,
+            0.2067902833223343,
+            0.22370104491710663
+          ],
+          "mean_brightness": 0.7680018544197083,
+          "std_brightness": 0.2082129865884781,
+          "mean_saturation": 0.11671654134988785,
+          "std_saturation": 0.0939197763800621
+        },
+        "delta": {
+          "region": "sky_top30pct",
+          "pixel_count": 2864820,
+          "delta_mean_rgb": [
+            -0.0005107522010803223,
+            0.0020404458045959473,
+            -0.0011205077171325684
+          ],
+          "delta_brightness": 0.00021135807037353516,
+          "delta_saturation": 0.0033718347549438477,
+          "brightness_change_pct": 0.027528091501326683,
+          "saturation_change_pct": 2.9748497801433773
+        }
+      },
+      {
+        "type": "sky_color_detected",
+        "coverage_pct": 23.79566292506538,
+        "input": {
+          "region": "sky_color_detected",
+          "pixel_count": 2272976,
+          "mean_rgb": [
+            0.6444429159164429,
+            0.7073778510093689,
+            0.7696305513381958
+          ],
+          "std_rgb": [
+            0.14145448803901672,
+            0.1438954472541809,
+            0.13928484916687012
+          ],
+          "mean_brightness": 0.7078936100006104,
+          "std_brightness": 0.13621100783348083,
+          "mean_saturation": 0.12753786146640778,
+          "std_saturation": 0.08723771572113037
+        },
+        "output": {
+          "region": "sky_color_detected",
+          "pixel_count": 2272976,
+          "mean_rgb": [
+            0.6408655047416687,
+            0.7014214992523193,
+            0.7571836709976196
+          ],
+          "std_rgb": [
+            0.16457724571228027,
+            0.17101259529590607,
+            0.18243348598480225
+          ],
+          "mean_brightness": 0.7003676891326904,
+          "std_brightness": 0.16671942174434662,
+          "mean_saturation": 0.13124774396419525,
+          "std_saturation": 0.08914018422365189
+        },
+        "delta": {
+          "region": "sky_color_detected",
+          "pixel_count": 2272976,
+          "delta_mean_rgb": [
+            -0.00357741117477417,
+            -0.0059563517570495605,
+            -0.012446880340576172
+          ],
+          "delta_brightness": -0.007525920867919922,
+          "delta_saturation": 0.0037098824977874756,
+          "brightness_change_pct": -1.0631429301803463,
+          "saturation_change_pct": 2.9088479727760075
+        }
+      },
+      {
+        "type": "whole_image",
+        "input": {
+          "region": "whole_image",
+          "pixel_count": 9552060,
+          "mean_rgb": [
+            0.42378735542297363,
+            0.4287258982658386,
+            0.3919582962989807
+          ],
+          "std_rgb": [
+            0.30446749925613403,
+            0.3027781546115875,
+            0.33166125416755676
+          ],
+          "mean_brightness": 0.41886964440345764,
+          "std_brightness": 0.3100014925003052,
+          "mean_saturation": 0.10157620161771774,
+          "std_saturation": 0.09559483826160431
+        },
+        "output": {
+          "region": "whole_image",
+          "pixel_count": 9552060,
+          "mean_rgb": [
+            0.4261239469051361,
+            0.43093740940093994,
+            0.39604634046554565
+          ],
+          "std_rgb": [
+            0.3146965503692627,
+            0.31090018153190613,
+            0.3414232134819031
+          ],
+          "mean_brightness": 0.4217168986797333,
+          "std_brightness": 0.3184499442577362,
+          "mean_saturation": 0.10576147586107254,
+          "std_saturation": 0.10038948059082031
+        },
+        "delta": {
+          "region": "whole_image",
+          "pixel_count": 9552060,
+          "delta_mean_rgb": [
+            0.0023365914821624756,
+            0.0022115111351013184,
+            0.004088044166564941
+          ],
+          "delta_brightness": 0.0028472542762756348,
+          "delta_saturation": 0.004185274243354797,
+          "brightness_change_pct": 0.6797471037393064,
+          "saturation_change_pct": 4.120329542451377
+        }
+      }
+    ]
+  },
+  {
+    "image": "Pool",
+    "input_path": "/Users/rc/Projects/Transformation_Portal/input_images/750Picacho_16-bit_TIFFs/750Picacho_Pool_master16.tif",
+    "output_path": "/Users/rc/Projects/Transformation_Portal/output_bugfix_validation_final/v2/750Picacho_Pool_master16_tif_c91cb832_materials_v3_enhanced.tif",
+    "regions": [
+      {
+        "type": "water_bottom30pct",
+        "input": {
+          "region": "water_bottom30pct",
+          "pixel_count": 2681280,
+          "mean_rgb": [
+            0.23619793355464935,
+            0.2872141897678375,
+            0.33418208360671997
+          ],
+          "std_rgb": [
+            0.18282637000083923,
+            0.18751133978366852,
+            0.22616294026374817
+          ],
+          "mean_brightness": 0.2852555215358734,
+          "std_brightness": 0.1905173808336258,
+          "mean_saturation": 0.13512374460697174,
+          "std_saturation": 0.10899421572685242
+        },
+        "output": {
+          "region": "water_bottom30pct",
+          "pixel_count": 2681280,
+          "mean_rgb": [
+            0.23319457471370697,
+            0.2847464382648468,
+            0.33159905672073364
+          ],
+          "std_rgb": [
+            0.19429618120193481,
+            0.19789354503154755,
+            0.23481209576129913
+          ],
+          "mean_brightness": 0.2826455235481262,
+          "std_brightness": 0.1995648890733719,
+          "mean_saturation": 0.1422334760427475,
+          "std_saturation": 0.11572787165641785
+        },
+        "delta": {
+          "region": "water_bottom30pct",
+          "pixel_count": 2681280,
+          "delta_mean_rgb": [
+            -0.003003358840942383,
+            -0.0024677515029907227,
+            -0.002583026885986328
+          ],
+          "delta_brightness": -0.0026099979877471924,
+          "delta_saturation": 0.007109731435775757,
+          "brightness_change_pct": -0.9149684373134779,
+          "saturation_change_pct": 5.26164476602947
+        }
+      },
+      {
+        "type": "water_color_detected",
+        "coverage_pct": 57.58447457930541,
+        "input": {
+          "region": "water_color_detected",
+          "pixel_count": 5146670,
+          "mean_rgb": [
+            0.45402127504348755,
+            0.5509598255157471,
+            0.684651255607605
+          ],
+          "std_rgb": [
+            0.19649429619312286,
+            0.19659122824668884,
+            0.19503183662891388
+          ],
+          "mean_brightness": 0.5655027627944946,
+          "std_brightness": 0.18874312937259674,
+          "mean_saturation": 0.2384701371192932,
+          "std_saturation": 0.12390591204166412
+        },
+        "output": {
+          "region": "water_color_detected",
+          "pixel_count": 5146670,
+          "mean_rgb": [
+            0.45010972023010254,
+            0.5727849006652832,
+            0.671165406703949
+          ],
+          "std_rgb": [
+            0.21240553259849548,
+            0.23363260924816132,
+            0.22809737920761108
+          ],
+          "mean_brightness": 0.5662685036659241,
+          "std_brightness": 0.2154873162508011,
+          "mean_saturation": 0.23863932490348816,
+          "std_saturation": 0.1271839290857315
+        },
+        "delta": {
+          "region": "water_color_detected",
+          "pixel_count": 5146670,
+          "delta_mean_rgb": [
+            -0.00391155481338501,
+            0.021825075149536133,
+            -0.013485848903656006
+          ],
+          "delta_brightness": 0.0007657408714294434,
+          "delta_saturation": 0.0001691877841949463,
+          "brightness_change_pct": 0.13540886478528413,
+          "saturation_change_pct": 0.07094715767715232
+        }
+      },
+      {
+        "type": "whole_image",
+        "input": {
+          "region": "whole_image",
+          "pixel_count": 8937600,
+          "mean_rgb": [
+            0.3978893458843231,
+            0.4410001337528229,
+            0.4869535565376282
+          ],
+          "std_rgb": [
+            0.25356367230415344,
+            0.2491520345211029,
+            0.29895612597465515
+          ],
+          "mean_brightness": 0.446620374917984,
+          "std_brightness": 0.2534918487071991,
+          "mean_saturation": 0.1917671114206314,
+          "std_saturation": 0.1453923135995865
+        },
+        "output": {
+          "region": "whole_image",
+          "pixel_count": 8937600,
+          "mean_rgb": [
+            0.39848750829696655,
+            0.4594101309776306,
+            0.48824959993362427
+          ],
+          "std_rgb": [
+            0.2655450105667114,
+            0.2744417190551758,
+            0.30991676449775696
+          ],
+          "mean_brightness": 0.452792227268219,
+          "std_brightness": 0.2690325975418091,
+          "mean_saturation": 0.1980464905500412,
+          "std_saturation": 0.14736919105052948
+        },
+        "delta": {
+          "region": "whole_image",
+          "pixel_count": 8937600,
+          "delta_mean_rgb": [
+            0.0005981624126434326,
+            0.01840999722480774,
+            0.0012960433959960938
+          ],
+          "delta_brightness": 0.006171852350234985,
+          "delta_saturation": 0.00627937912940979,
+          "brightness_change_pct": 1.3819012066720793,
+          "saturation_change_pct": 3.274481783081298
+        }
+      }
+    ]
+  }
+]

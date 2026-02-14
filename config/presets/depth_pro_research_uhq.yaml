@@ -1,0 +1,184 @@
+# Depth Pro Research - Ultra High Quality (UHQ)
+# Research-Grade APEX with Maximum Depth Quality
+#
+# ⚠️  LICENSE: Research-Only (Apple Machine Learning Research License)
+#
+# This preset uses Depth Pro from Apple ML Research and is PROHIBITED for
+# commercial use. See: https://github.com/apple/ml-depth-pro/blob/main/LICENSE
+#
+# Permitted Uses:
+#   ✅ Academic research (university, institute)
+#   ✅ Non-profit projects (no revenue generation)
+#   ✅ Personal experimentation (non-commercial)
+#   ✅ Benchmarking and comparative studies
+#
+# Prohibited Uses:
+#   ❌ Commercial products or services
+#   ❌ Revenue-generating applications
+#   ❌ Enterprise/business deployments
+#   ❌ Proprietary software distribution
+#
+# For commercial applications, use 'apex' preset with DA3 instead.
+# See: docs/research/DEPTH_PRO_RESEARCH_GUIDE.md
+
+name: depth-pro-research-uhq
+description: "Research-grade APEX with Depth Pro for maximum depth quality (16-bit metric depth)"
+tier: apex_research
+license_restriction: research_only
+stability: stable
+
+# Depth Backend Configuration
+# Depth Pro: Metric depth (meters) + focal length estimation + superior quality
+depth_backend: depth_pro
+
+model:
+  variant: depth-pro
+  device: mps  # Apple Silicon (auto-fallback to CPU if unavailable)
+  checkpoint_path: checkpoints/depth_pro.pt
+  # Verified SHA-256 of Depth Pro checkpoint (1.9 GB)
+  expected_sha256: "3eb35ca68168ad3d14cb150f8947a4edf85589941661fdb2686259c80685c0ce"
+  strict_validation: false  # Set true to enforce hash validation
+
+# Segmentation Backend Configuration
+# Use real EfficientSAM for material detection (Materials V3)
+segmentation_backend: efficientsam
+
+segmentation:
+  model_variant: efficientsam
+  confidence_threshold: 0.80  # Research-grade confidence threshold
+  device: mps
+
+# Processing Configuration
+processing:
+  # Bilateral filtering for edge-aware smoothing (compatible with metric depth)
+  apply_bilateral: true
+  bilateral_sigma_spatial: 4.0
+  bilateral_sigma_range: 0.08
+
+  # Zone mapping incompatible with metric depth (Depth Pro outputs meters, not normalized)
+  enable_zone_mapping: false
+
+  # PBR Configuration (Research-Grade Tuning for Metric Depth)
+  pbr:
+    enabled: true
+    preset: RESEARCH_PREMIUM
+
+    # Normal map generation (tuned for metric depth gradients)
+    normal:
+      strength: 1.6              # Higher strength for metric depth
+      edge_aware: true
+      high_frequency_detail: 0.35  # Enhanced micro-detail preservation
+
+    # Roughness map generation
+    roughness:
+      base_value: 0.6
+      depth_modulation: 0.5       # Stronger depth-based variation
+      edge_sharpening: true
+      metric_depth_aware: true    # Use metric depth scale for roughness
+
+    # Ambient Occlusion (tuned for metric depth)
+    ao:
+      radius: 6.0                 # Larger radius for metric depth (meters)
+      samples: 128                # High sample count for research quality
+      quality: ultra
+      metric_depth_aware: true    # Use metric depth for accurate AO
+
+# V2 Enhancement Configuration
+v2_enhancement:
+  enabled: true
+  preset: premium
+  material_aware_tone_mapping: true
+  preserve_metric_depth_metadata: true  # Preserve focal length, depth units
+
+# Quality Enforcement
+quality:
+  # Strict mode: enforce all quality gates
+  strict_mode: true
+
+  # Quality Firewall: enforce 16-bit preservation
+  quality_firewall_active: true
+  allow_8bit_output: false
+
+  # APEX Gates: statistical regression enforcement
+  apex_gates:
+    enabled: true
+    mode: enforce
+    min_samples: 30              # Higher bar for research validation
+    regression_threshold: 0.10   # Stricter than commercial (0.15)
+    statistical_method: mann_whitney_u
+    outlier_detection:
+      enabled: true
+      method: median_absolute_deviation
+      threshold: 3.0
+
+# I/O Configuration
+io:
+  # Enhanced caching with metadata
+  cache_enabled: true
+
+  # Output format: 16-bit PNG for depth maps (preserves full precision)
+  # Metric depth stored as float32 internally, exported as uint16 PNG with stats
+  output_format: png
+
+  # Bit depth configuration
+  depth_bit_depth: 16           # 16-bit depth maps (NOT 8-bit)
+  output_bit_depth: 16          # 16-bit enhanced images
+
+  # Output file naming
+  output_suffix: "_depth_pro_uhq"
+
+# License Compliance (REQUIRED)
+compliance:
+  # User must explicitly acknowledge non-commercial restriction
+  non_commercial_ok: true
+
+  # Depth Pro specific license acceptance
+  accept_apple_depth_pro_research_license: true
+
+  # Provenance tracking
+  track_license_mode: true
+  license_metadata:
+    tier: apex_research
+    depth_license: "Apple AMLR (research-only)"
+    depth_backend: "depth_pro"
+    segmentation_license: "MIT/Apache 2.0"
+    usage_restriction: "non-commercial research only"
+    depth_output_format: "16-bit PNG (metric depth in meters)"
+
+# Performance Expectations (Reference Only)
+# These are NOT enforced, but document expected behavior on M4 Max
+performance_targets:
+  depth_inference_ms: 1200      # Depth Pro slower than DA3 (~1.2s for 4K)
+  segmentation_ms: 600          # EfficientSAM ~600ms
+  v2_enhancement_ms: 800        # Material-aware enhancement
+  total_pipeline_ms: 3000       # ~3s total for 4K (research acceptable)
+
+  # Memory requirements
+  peak_memory_gb: 10            # Depth Pro + EfficientSAM + working buffers
+  vram_required_gb: 6           # MPS memory (Apple Neural Engine)
+
+# Research Metadata
+research:
+  # Depth Pro advantages over DA3
+  depth_quality_improvements:
+    - "Metric depth in meters (not normalized)"
+    - "Focal length estimation for accurate 3D reconstruction"
+    - "Superior depth boundaries and edge preservation"
+    - "Better performance on architectural scenes"
+    - "Handles reflective surfaces (glass, water) more accurately"
+
+  # Validation metrics
+  validation_metrics:
+    - depth_mae              # Mean Absolute Error vs ground truth
+    - edge_sharpness         # Edge preservation quality
+    - material_iou           # Material segmentation accuracy
+    - normal_detail_score    # Normal map detail preservation
+    - focal_length_accuracy  # Focal length estimation accuracy (Depth Pro only)
+
+# Metadata
+metadata:
+  version: "1.0.0"
+  last_updated: "2026-02-12"
+  author: "Transformation Portal Specialist"
+  purpose: "Research-grade depth processing with maximum quality"
+  adr: "ADR-025"

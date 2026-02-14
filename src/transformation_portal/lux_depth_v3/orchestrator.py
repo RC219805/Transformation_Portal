@@ -842,19 +842,37 @@ class EnhanceOrchestrator:
                                 temp_dir = self.output_root / "temp"
                                 temp_dir.mkdir(parents=True, exist_ok=True)
 
-                                # Convert working_image (float32 [0,1]) to uint8 for saving
-                                enhanced_uint8 = (np.clip(working_image, 0, 1) * 255).astype(np.uint8)
-                                enhanced_pil = PILImage.fromarray(enhanced_uint8)
+                                # Save enhanced image for V2 (16-bit TIFF if emit flags enabled, 8-bit PNG otherwise)
+                                # This enables end-to-end 16-bit pipeline when --emit-master16 or --emit-upscaled16 is on
+                                if self.config.emit_master16 or self.config.emit_upscaled16:
+                                    # 16-bit TIFF path for archival quality
+                                    import tifffile
 
-                                # Save with output_key stem to make it identifiable
-                                enhanced_image_path = temp_dir / f"{output_key.stem}_materials_v3_enhanced.png"
-                                enhanced_pil.save(enhanced_image_path)
-
-                                logger.info(
-                                    f"Materials V3 enhanced image with "
-                                    f"{len(materials_v3_result.get('materials_v3_pixel_ops', {}).get('applied', []))} "
-                                    f"pixel operations - saved to {enhanced_image_path} for V2 stage"
-                                )
+                                    enhanced_uint16 = (np.clip(working_image, 0, 1) * 65535 + 0.5).astype(np.uint16)
+                                    enhanced_image_path = temp_dir / f"{output_key.stem}_materials_v3_enhanced.tif"
+                                    tifffile.imwrite(
+                                        enhanced_image_path,
+                                        enhanced_uint16,
+                                        photometric="rgb",
+                                        compression="lzw",
+                                        metadata={"software": "Transformation Portal v3"},
+                                    )
+                                    logger.info(
+                                        f"Materials V3 enhanced image with "
+                                        f"{len(materials_v3_result.get('materials_v3_pixel_ops', {}).get('applied', []))} "
+                                        f"pixel operations - saved to {enhanced_image_path} (16-bit TIFF) for V2 stage"
+                                    )
+                                else:
+                                    # 8-bit PNG path (Golden Path, existing behavior)
+                                    enhanced_uint8 = (np.clip(working_image, 0, 1) * 255).astype(np.uint8)
+                                    enhanced_pil = PILImage.fromarray(enhanced_uint8)
+                                    enhanced_image_path = temp_dir / f"{output_key.stem}_materials_v3_enhanced.png"
+                                    enhanced_pil.save(enhanced_image_path)
+                                    logger.info(
+                                        f"Materials V3 enhanced image with "
+                                        f"{len(materials_v3_result.get('materials_v3_pixel_ops', {}).get('applied', []))} "
+                                        f"pixel operations - saved to {enhanced_image_path} (8-bit PNG) for V2 stage"
+                                    )
                             else:
                                 logger.debug("Materials V3 did not return enhanced_image, using original image")
 
@@ -902,8 +920,14 @@ class EnhanceOrchestrator:
                     if _k in _md:
                         stats[_k] = _md[_k]
 
+                # CRITICAL FIX: Use resolved backend name, not config default
+                # This ensures depth.model matches what actually ran (backend_selection.resolved_backend)
+                # ADR-023 compliance: identity must match execution reality
+                resolved_backend = getattr(self, "_backend_metadata", None)
+                model_name = resolved_backend.resolved_backend if resolved_backend else self.config.model_variant.value.name
+
                 depth_metadata = DepthMetadata(
-                    model=self.config.model_variant.value.name,
+                    model=model_name,
                     depth_path=str(depth_path),
                     runtime_seconds=depth_runtime_s,
                     scaling=depth_stats._asdict(),
@@ -1282,6 +1306,10 @@ class EnhanceOrchestrator:
             raise RuntimeError(f"Provenance capture failed unexpectedly: {e}") from e
 
         # V2 metadata
+        # Determine V2 input/output bit depth based on emit flags and Materials V3 usage
+        v2_input_bit_depth = 16 if (self.config.emit_master16 or self.config.emit_upscaled16) and materials_v3_result else 8
+        v2_output_bit_depth = 16 if (self.config.emit_master16 or self.config.emit_upscaled16) else 8
+
         v2_metadata = V2Metadata(
             preset=self.config.v2_preset,
             strict_depth=depth_metadata is not None,
@@ -1289,6 +1317,8 @@ class EnhanceOrchestrator:
             report_path=str(v2_report_path) if v2_report_path else "",
             status=v2_result["status"],
             error_message=v2_result.get("error"),
+            input_bit_depth=v2_input_bit_depth,
+            output_bit_depth=v2_output_bit_depth,
         )
 
         # Materials V3 metadata
@@ -1296,12 +1326,16 @@ class EnhanceOrchestrator:
         if materials_v3_result:
             from .manifest import MaterialsV3Metadata
 
+            # Determine bit depth based on emit flags
+            materials_v3_bit_depth = 16 if (self.config.emit_master16 or self.config.emit_upscaled16) else 8
+
             materials_v3_metadata = MaterialsV3Metadata(
                 enabled=True,
                 version=materials_v3_result.get("materials_v3_metadata", {}).get("version", "3.1"),
                 response_plan=materials_v3_result.get("materials_v3_response_plan"),
                 pixel_ops=materials_v3_result.get("materials_v3_pixel_ops"),
                 runtime_seconds=materials_v3_runtime_s,
+                output_bit_depth=materials_v3_bit_depth,
             )
 
         # Compute input hash respecting HashMode

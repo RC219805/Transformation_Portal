@@ -15,6 +15,7 @@ Usage:
         --quality-tier "apex" \\
         --depth-backend "da3" \\
         --depth-device "mps" \\
+        --v2-device "mps" \\
         --materials-v3 "on" \\
         --pbr "on" \\
         --cache-depth "on" \\
@@ -35,6 +36,17 @@ Usage:
         --depth-device "mps" \\
         --emit-master16 "on"
 
+    # V2 enhancement with MPS acceleration (Apple Silicon)
+    lux-depth-v3 \\
+        --input-dir "./input_images" \\
+        --output-dir "./output/lux_depth_v3_v2_mps" \\
+        --quality-tier "premium" \\
+        --enable-v2 "on" \\
+        --v2-preset "luxury_estate" \\
+        --v2-device "mps" \\
+        --depth-device "mps" \\
+        --overwrite
+
     # Material segmentation with EfficientSAM backend
     lux-depth-v3 \\
         --input-dir "./input_images" \\
@@ -43,7 +55,8 @@ Usage:
         --materials-v3 "on" \\
         --enable-segmentation "on" \\
         --segmentation-backend "efficientsam" \\
-        --depth-device "mps"
+        --depth-device "mps" \\
+        --v2-device "mps"
 
     # Research-only: Depth Anything V3.1 (explicit opt-in)
     lux-depth-v3 \\
@@ -53,6 +66,7 @@ Usage:
         --preset "depth-anything-v3.1-research-m4" \\
         --non-commercial-ok "true" \\
         --depth-device "mps" \\
+        --v2-device "mps" \\
         --materials-v3 "on" \\
         --pbr "on" \\
         --cache-depth "on" \\
@@ -73,6 +87,7 @@ Usage:
         --non-commercial-ok "true" \\
         --accept-apple-depth-pro-research-license "true" \\
         --depth-device "mps" \\
+        --v2-device "mps" \\
         --materials-v3 "on" \\
         --pbr "on" \\
         --cache-depth "on" \\
@@ -101,7 +116,7 @@ Key Concepts:
 
     - Material Segmentation:
       * Use --enable-segmentation "on" to enable automatic material detection
-      * --segmentation-backend: Choose "stub" (heuristic, default) or "efficientsam" (AI-powered)
+      * --segmentation-backend: Choose "stub" (heuristic, default), "efficientsam" (fast AI), or "sam2" (superior quality)
       * --strict-segmentation: Fail on backend errors instead of falling back to stub
 
     - Research Models:
@@ -193,7 +208,7 @@ def main(
     segmentation_backend: str = typer.Option(
         "stub",
         "--segmentation-backend",
-        help="Segmentation backend: stub (default, no segmentation), efficientsam (heuristic v1)",
+        help="Segmentation backend: stub (default, no segmentation), efficientsam (fast), sam2 (superior quality)",
     ),
     strict_segmentation: bool = typer.Option(
         False, "--strict-segmentation", help="Fail on segmentation backend errors instead of falling back to stub"
@@ -211,6 +226,17 @@ def main(
         "default",
         "--v2-preset",
         help="V2 enhancement preset name or 'none' to skip enhancement (default: default). Only used when --enable-v2 is on.",
+    ),
+    v2_device: str = typer.Option(
+        "cpu",
+        "--v2-device",
+        help="Device for V2 enhancement: cpu, cuda, mps (default: cpu). Use 'mps' for 2-3x speedup on Apple Silicon.",
+    ),
+    v2_upscaler: str = typer.Option(
+        "bicubic",
+        "--v2-upscaler",
+        help="V2 upscaler backend: bicubic (default, fast), realesrgan (ML-based, higher quality). "
+        "Requires ML dependencies for realesrgan.",
     ),
     # Emit Options (Deliverables)
     emit_master16: str = typer.Option("off", "--emit-master16", help="Emit master 16-bit output: on/off"),
@@ -329,7 +355,7 @@ def main(
         raise typer.Exit(code=1)
 
     # Validate segmentation backend
-    valid_segmentation_backends = ["stub", "efficientsam"]
+    valid_segmentation_backends = ["stub", "efficientsam", "sam2"]
     if segmentation_backend.lower() not in valid_segmentation_backends:
         error_msg = (
             f"Invalid segmentation backend '{segmentation_backend}'. "
@@ -364,6 +390,8 @@ def main(
         enable_depth_cache=enable_cache_depth,
         enable_v2=enable_v2_bool,
         v2_preset=v2_preset_value,
+        v2_device=v2_device,
+        v2_upscaler_backend=v2_upscaler,
         generate_pbr=enable_pbr,
         quality_tier=quality_tier,
         enable_materials_v3=enable_materials_v3,

@@ -136,9 +136,21 @@ class UpscalingStage(Stage):
 
     def _load_upscaler(self, device: str):
         """Load upscaling backend."""
-        # Always use bicubic for simplicity (torch backend requires config)
-        self.logger.info(f"Using bicubic upscaler on {device}")
-        self._upscaler = "bicubic"
+        from transformation_portal.upscaling import UpscalerRegistry
+
+        try:
+            registry = UpscalerRegistry()
+            self._upscaler = registry.get(
+                self.backend,
+                device=device,
+                fallback_to_bicubic=True,  # Graceful degradation
+            )
+            self.logger.info(f"Loaded upscaler backend: {self.backend} on {device}")
+        except Exception as e:
+            # Should not happen due to fallback, but be defensive
+            self.logger.warning(f"Failed to load {self.backend}: {e}")
+            self.logger.info("Falling back to bicubic upscaler")
+            self._upscaler = registry.get("bicubic")
 
     def _upscale_image(self, image: np.ndarray, device: str) -> np.ndarray:
         """
@@ -151,34 +163,23 @@ class UpscalingStage(Stage):
         Returns:
             Upscaled image
         """
-        h, w = image.shape[:2]
-        new_h = int(h * self.scale_factor)
-        new_w = int(w * self.scale_factor)
+        try:
+            # Use upscaler backend (protocol-based)
+            return self._upscaler.upscale(image, scale_factor=self.scale_factor)
 
-        if self._upscaler == "bicubic":
-            # Simple bicubic interpolation
+        except Exception as e:
+            # Fallback to skimage bicubic if backend fails
+            self.logger.error(f"Upscaling failed: {e}, falling back to skimage bicubic")
             from skimage.transform import resize
+
+            h, w = image.shape[:2]
+            new_h = int(h * self.scale_factor)
+            new_w = int(w * self.scale_factor)
 
             return resize(
                 image,
                 (new_h, new_w),
                 order=3,  # Bicubic
-                preserve_range=True,
-                anti_aliasing=True,
-            ).astype(image.dtype)
-
-        try:
-            # Use actual upscaler
-            return self._upscaler.upscale(image, scale=self.scale_factor)
-
-        except Exception as e:
-            self.logger.error(f"Upscaling failed: {e}, falling back to bicubic")
-            from skimage.transform import resize
-
-            return resize(
-                image,
-                (new_h, new_w),
-                order=3,
                 preserve_range=True,
                 anti_aliasing=True,
             ).astype(image.dtype)

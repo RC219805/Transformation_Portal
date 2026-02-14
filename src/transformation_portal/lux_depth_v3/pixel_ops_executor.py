@@ -22,11 +22,30 @@ def _compute_delta_stats(before: np.ndarray, after: np.ndarray, mask: np.ndarray
     delta = np.abs(after.astype(np.float32) - before.astype(np.float32))
     mask = np.squeeze(mask) if mask.ndim == 3 else mask
     mask_bool = mask > 0.5
+
+    # Compute stats for pixels with mask > 0.5
     inside = float(delta[mask_bool].mean()) if mask_bool.any() else 0.0
     outside = float(delta[~mask_bool].mean()) if (~mask_bool).any() else 0.0
+
+    # DEBUGGING: Check if there are ANY pixels > 0.5
+    pixels_above_threshold = int(mask_bool.sum())
+    total_pixels = int(mask.size)
+    mask_mean = float(mask.mean())
+    mask_max = float(mask.max())
+
+    # Also compute mean delta across ALL pixels for debugging
+    mean_delta_all = float(delta.mean())
+
     return {
         "inside_mask_mean_abs": round(inside, 6),
         "outside_mask_mean_abs": round(outside, 6),
+        # Debug fields
+        "_debug_pixels_above_0.5": pixels_above_threshold,
+        "_debug_total_pixels": total_pixels,
+        "_debug_mask_mean": round(mask_mean, 6),
+        "_debug_mask_max": round(mask_max, 6),
+        "_debug_mean_delta_all_pixels": round(mean_delta_all, 6),
+        "_debug_max_delta": round(float(delta.max()), 6),
     }
 
 
@@ -102,15 +121,59 @@ def apply_pixel_ops(
 
         x0, y0, x1, y1 = bbox
         mask_roi = mask[y0:y1, x0:x1]
-        before = output[y0:y1, x0:x1]
+        before = output[y0:y1, x0:x1].copy()  # CRITICAL: must copy, not view!
         after = before.copy()
 
         start_material = time.perf_counter()
         applied_ops = []
         working = after
         original_dtype = before.dtype
-        if original_dtype == np.uint8:
+
+        # CRITICAL FIX: Normalize ALL dtypes to float32 [0,1] for pixel ops
+        # Pixel ops expect normalized input regardless of original dtype
+        # ADR-023 compliance: uint16 → float32 → ops → uint16 pipeline
+        # Note: preprocess_image() already converts to float32 [0,1], so check dtype AND range
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        # Check if already normalized (float32 in [0,1])
+        is_already_normalized = original_dtype in (np.float32, np.float64) and before.min() >= 0.0 and before.max() <= 1.0
+
+        if is_already_normalized:
+            working = before.astype(np.float32)
+            denorm_scale = 1.0
+        elif original_dtype == np.uint8:
             working = before.astype(np.float32) / 255.0
+            denorm_scale = 255.0
+        elif original_dtype == np.uint16:
+            working = before.astype(np.float32) / 65535.0
+            denorm_scale = 65535.0
+        else:
+            # Fallback: assume needs normalization
+            working = before.astype(np.float32)
+            denorm_scale = 1.0
+
+        # CRITICAL FIX (Bug #3): Feather mask edges to prevent visible halos
+        # SAM2 masks have sharp edges (0/1 transitions) which create visible
+        # color boundaries when blending. Apply Gaussian blur for smooth transitions.
+        try:
+            from scipy.ndimage import gaussian_filter
+
+            # Squeeze mask if needed (remove channel dim)
+            mask_to_feather = np.squeeze(mask_roi) if mask_roi.ndim == 3 else mask_roi
+
+            # Apply Gaussian blur (sigma=3.0 is good balance)
+            # sigma=2: minimal feathering (conservative)
+            # sigma=3: balanced (recommended)
+            # sigma=5: aggressive (may blur too much)
+            mask_feathered = gaussian_filter(mask_to_feather.astype(np.float32), sigma=3.0)
+            mask_roi = np.clip(mask_feathered, 0.0, 1.0)
+
+        except ImportError:
+            # scipy not available - use unfeathered mask (will have edge artifacts)
+            logger.warning("scipy not available for mask feathering - edge artifacts may occur")
+
         for op_name in recommended_ops:
             op_def = ops_for_material.get(op_name)
             if not op_def or not op_def.implemented:
@@ -122,8 +185,14 @@ def apply_pixel_ops(
             )
             applied_ops.append(op_name)
 
-        if original_dtype == np.uint8:
-            after = np.clip(working * 255.0, 0.0, 255.0).astype(np.uint8)
+        # Denormalize back to original dtype
+        # Note: If input was already float32 [0,1], keep it that way
+        if is_already_normalized:
+            after = working.astype(np.float32)
+        elif original_dtype == np.uint8:
+            after = np.clip(working * denorm_scale, 0.0, 255.0).astype(np.uint8)
+        elif original_dtype == np.uint16:
+            after = np.clip(working * denorm_scale, 0.0, 65535.0).astype(np.uint16)
         else:
             after = working.astype(original_dtype)
 

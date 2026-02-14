@@ -6,6 +6,7 @@ Architecture:
 - Protocol-based design (SegmentationBackend Protocol)
 - Stub backend (default, production-safe, returns empty masks)
 - EfficientSAM backend (opt-in, requires ML dependencies)
+- SAM2 backend (opt-in, requires transformers + torch, highest quality)
 - Fail-safe fallback: missing weights → stub backend with warning
 - Lazy loading: models loaded only on first inference
 
@@ -21,11 +22,19 @@ Backends:
    - License: MIT (commercial use allowed)
    - Model size: ~50MB
    - Performance: Works on CPU, optimized for MPS/CUDA
-   - Material detection: Heuristic-based labeling (v1)
+   - Material detection: Heuristic-based or CLIP labeling
+
+3. SAM2Backend (opt-in via config):
+   - Meta's Segment Anything Model 2
+   - License: Apache 2.0 (commercial use allowed)
+   - Model size: ~1.2GB (base), ~2.5GB (large)
+   - Performance: Best on CUDA, works on CPU (slower)
+   - Material detection: Heuristic-based labeling
+   - Highest quality segmentation masks
 
 Configuration:
 - enable_material_segmentation: Enable/disable segmentation
-- material_segmentation_backend: "stub" (default) or "efficientsam"
+- material_segmentation_backend: "stub" (default), "efficientsam", or "sam2"
 - strict_backend: If True, raise on missing weights instead of falling back
 
 For usage examples, see docs/materials_v3_quick_reference.md
@@ -745,8 +754,8 @@ def _get_backend_instance(
     """Get or create a cached backend instance.
 
     Args:
-        backend_name: "stub" or "efficientsam"
-        device: Device for backend (only used for efficientsam)
+        backend_name: "stub", "efficientsam", or "sam2"
+        device: Device for backend (only used for efficientsam and sam2)
         strict: If True, raise on errors instead of falling back
 
     Returns:
@@ -782,8 +791,44 @@ def _get_backend_instance(
             return _get_backend_instance("stub", device="cpu", strict=False)
         return backend
 
+    elif backend_name == "sam2":
+        # Import SAM2 adapter
+        try:
+            from .sam2_adapter import SAM2MaterialsAdapter
+        except ImportError as e:
+            if strict:
+                raise RuntimeError(f"Failed to import SAM2MaterialsAdapter: {e}") from e
+            logger.warning(
+                f"SAM2 backend not available (import failed): {e}\n"
+                f"Install dependencies: pip install transformers torch\n"
+                f"Falling back to stub backend."
+            )
+            return _get_backend_instance("stub", device="cpu", strict=False)
+
+        # Create SAM2 adapter instance
+        backend = SAM2MaterialsAdapter(
+            model_size="base",  # Default to base model (faster, smaller)
+            device=device if device != "auto" else "cuda",  # SAM2 defaults to CUDA
+        )
+
+        # Load backend
+        try:
+            backend.load(device=device)
+        except RuntimeError as e:
+            if strict:
+                raise RuntimeError(f"Failed to load SAM2 backend: {e}") from e
+
+            logger.warning(
+                f"Failed to load SAM2 backend: {e}\n"
+                f"This is expected if transformers is not installed or model download failed.\n"
+                f"Falling back to stub backend."
+            )
+            return _get_backend_instance("stub", device="cpu", strict=False)
+
+        return backend
+
     else:
-        raise ValueError(f"Unknown segmentation backend: {backend_name}\n" f"Valid options: 'stub', 'efficientsam'")
+        raise ValueError(f"Unknown segmentation backend: {backend_name}\n" f"Valid options: 'stub', 'efficientsam', 'sam2'")
 
 
 def segment_materials(
@@ -796,13 +841,14 @@ def segment_materials(
 
     Backends:
     - stub (default): Returns empty masks, production-safe
-    - efficientsam (opt-in): ML-powered segmentation
+    - efficientsam (opt-in): ML-powered segmentation (~50MB model)
+    - sam2 (opt-in): State-of-the-art segmentation (~1.2GB model, highest quality)
 
     Args:
         image: Input image as numpy array (H, W, 3) in RGB, uint8 [0-255]
         config: EnhanceConfig instance with segmentation settings
             - enable_material_segmentation: Enable/disable segmentation
-            - material_segmentation_backend: Backend to use ("stub" or "efficientsam")
+            - material_segmentation_backend: Backend to use ("stub", "efficientsam", or "sam2")
             - strict_backend: If True, raise on errors instead of falling back
 
     Returns:

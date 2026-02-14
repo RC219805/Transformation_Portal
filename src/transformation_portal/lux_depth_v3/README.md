@@ -34,6 +34,7 @@ lux-depth-v3 \
   --output-dir "./output/enhanced" \
   --quality-tier "apex" \
   --depth-device "mps" \
+  --v2-device "mps" \
   --pbr "on" \
   --materials-v3 "on" \
   --emit-master16 "on" \
@@ -62,6 +63,16 @@ The V2 enhancement stage is **optional** and enabled by default for backward com
 ```bash
 --enable-v2 "off"
 ```
+
+**To use GPU acceleration (Apple Silicon):**
+```bash
+--v2-device "mps"  # 2-3x faster on M-series chips
+```
+
+**Supported devices:**
+- `cpu` - CPU processing (default, works everywhere)
+- `cuda` - NVIDIA GPU acceleration
+- `mps` - Apple Silicon GPU (M1/M2/M3/M4)
 
 **Why disable V2?**
 - PBR-only workflows (depth + maps only)

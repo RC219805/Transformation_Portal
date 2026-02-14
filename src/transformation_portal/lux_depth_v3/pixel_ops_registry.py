@@ -163,6 +163,15 @@ def foliage_vibrance_boost(image: np.ndarray, mask: np.ndarray, params: dict) ->
         # Apply selective green boost
         enhanced[..., 1] = np.clip(normalized[..., 1] * (1.0 + strength), 0.0, 1.0)
 
+        # DEBUG: Check if enhanced differs from normalized
+        delta_check = np.abs(enhanced - normalized).max()
+        if delta_check == 0:
+            import logging
+
+            logging.warning(
+                f"foliage_vibrance_boost: enhanced == normalized (no change)! shape={normalized.shape}, dtype={normalized.dtype}, green_min={normalized[...,1].min()}, green_max={normalized[...,1].max()}, strength={strength}"
+            )
+
     # Blend using mask
     blended = _apply_mask_blend(normalized, mask, enhanced)
 

@@ -8,6 +8,7 @@ torch>=2.10.0,<3
 diffusers>=0.36.0,<1
 controlnet-aux>=0.0.6,<1
 # realesrgan>=0.3.0,<1  # BANNED: Unmaintained, use local implementation
+basicsr>=1.4.2,<2  # For Real-ESRGAN upscaling (local implementation)
 
 # HuggingFace ecosystem and vision utilities
 transformers>=4.57.0,<6

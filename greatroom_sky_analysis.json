@@ -1,0 +1,73 @@
+{
+  "input": {
+    "name": "INPUT",
+    "dtype": "uint8",
+    "shape": [
+      3000,
+      4000,
+      3
+    ],
+    "sky_region_shape": [
+      600,
+      4000,
+      3
+    ],
+    "sky_region_pixels": 2400000,
+    "red_mean": 0.8332294225692749,
+    "green_mean": 0.8046509027481079,
+    "blue_mean": 0.7804584503173828,
+    "red_std": 0.12735086679458618,
+    "green_std": 0.15237517654895782,
+    "blue_std": 0.17599591612815857,
+    "red_min": 0.0,
+    "green_min": 0.0,
+    "blue_min": 0.0,
+    "red_max": 0.9607843160629272,
+    "green_max": 0.9607843160629272,
+    "blue_max": 0.9607843160629272,
+    "brightness": 0.8061129252115885,
+    "saturation": 0.021568449214100838
+  },
+  "output": {
+    "name": "OUTPUT",
+    "dtype": "uint8",
+    "shape": [
+      2996,
+      3990,
+      3
+    ],
+    "sky_region_shape": [
+      599,
+      3990,
+      3
+    ],
+    "sky_region_pixels": 2390010,
+    "red_mean": 0.8354681730270386,
+    "green_mean": 0.8067978620529175,
+    "blue_mean": 0.7824453711509705,
+    "red_std": 0.1274406611919403,
+    "green_std": 0.15315960347652435,
+    "blue_std": 0.17714011669158936,
+    "red_min": 0.0,
+    "green_min": 0.0,
+    "blue_min": 0.0,
+    "red_max": 1.0,
+    "green_max": 1.0,
+    "blue_max": 1.0,
+    "brightness": 0.8082371552785238,
+    "saturation": 0.021670378744602203
+  },
+  "comparison": {
+    "brightness_change": 0.0021242300669352954,
+    "brightness_change_pct": 0.2635151974988774,
+    "saturation_change": 0.00010192953050136566,
+    "saturation_change_pct": 0.47258627400400693,
+    "red_change": 0.002238750457763672,
+    "red_change_pct": 0.26868355786818626,
+    "green_change": 0.0021469593048095703,
+    "green_change_pct": 0.2668187281561611,
+    "blue_change": 0.0019869208335876465,
+    "blue_change_pct": 0.25458380683553894
+  },
+  "warnings": []
+}
