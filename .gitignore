@@ -74,6 +74,7 @@ processed_output/
 
 # Generated reports and artifacts
 *_report.json
+*-report.json
 material_response_report.json
 *_summary.json
 *.tmp
