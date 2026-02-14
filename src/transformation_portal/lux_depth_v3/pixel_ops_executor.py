@@ -108,7 +108,9 @@ def _expand_bbox_with_padding(
 
 
 def _resolve_overlaps(
-    materials: Dict[str, np.ndarray], material_metadata: Dict[str, Dict[str, Any]]
+    materials: Dict[str, np.ndarray],
+    material_metadata: Dict[str, Dict[str, Any]],
+    image_shape: Tuple[int, int],
 ) -> Tuple[Dict[str, np.ndarray], Dict[str, Any]]:
     """Resolve overlapping masks using priority-based assignment.
 
@@ -118,6 +120,7 @@ def _resolve_overlaps(
     Args:
         materials: Dict mapping material name to 2D mask (H, W)
         material_metadata: Dict mapping material name to metadata (must include 'priority')
+        image_shape: Tuple of (height, width) for authoritative dimensions
 
     Returns:
         Tuple of:
@@ -127,9 +130,8 @@ def _resolve_overlaps(
     if not materials:
         return {}, {"overlap_percent": 0.0, "reassignments": {}}
 
-    # Get image dimensions from first mask
-    first_mask = next(iter(materials.values()))
-    h, w = first_mask.shape[:2]
+    # Use authoritative image dimensions
+    h, w = image_shape
 
     # Sort materials by priority (highest first)
     sorted_materials = sorted(
@@ -244,7 +246,7 @@ def apply_pixel_ops(
     # A5: Resolve overlapping masks using priority
     from .materials_v3_taxonomy import DEFAULT_MATERIAL_METADATA
 
-    resolved_materials, overlap_telemetry = _resolve_overlaps(materials, DEFAULT_MATERIAL_METADATA)
+    resolved_materials, overlap_telemetry = _resolve_overlaps(materials, DEFAULT_MATERIAL_METADATA, image.shape[:2])
     telemetry["overlap_resolution"] = overlap_telemetry
 
     # Get feathering configuration (A3)

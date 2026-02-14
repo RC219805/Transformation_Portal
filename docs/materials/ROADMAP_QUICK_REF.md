@@ -66,8 +66,8 @@
 **Deliverables:**
 - 3 PRs
 - 8 new tests
-- New file: `sky_bootstrap.py`
-- New preset: `materials_v3_sky.yaml`
+- New file: `bootstrap/sky_seed.py`
+- Sky configuration integrated into `EnhanceConfig`
 - +10-20ms performance
 
 ---
@@ -137,15 +137,14 @@
 - `pixel_ops_registry.py` (~20 lines)
 - `config.py` (~5 lines)
 
-### Phase B (6 files, ~355 lines)
+### Phase B (5 files, ~255 lines)
 - `materials_v3_taxonomy.py` (+5 lines)
-- `sky_bootstrap.py` (NEW, ~150 lines)
+- `bootstrap/sky_seed.py` (NEW, ~150 lines)
 - `pixel_ops_registry.py` (+80 lines)
 - `segmentation_backend.py` (+15 lines)
 - `config.py` (+5 lines)
-- `config/materials_v3_sky.yaml` (NEW, ~100 lines)
 
-**Total:** ~430 lines (330 new, 100 modified)
+**Total:** ~255 lines (150 new, 105 modified)
 
 ---
 

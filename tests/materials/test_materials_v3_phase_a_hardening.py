@@ -261,7 +261,7 @@ def test_resolve_overlaps_sky_and_water():
     if "sky" not in metadata:
         metadata["sky"] = {"priority": 8, "threshold": 0.40}
 
-    resolved, telemetry = _resolve_overlaps(materials, metadata)
+    resolved, telemetry = _resolve_overlaps(materials, metadata, (64, 64))
 
     # Check that overlap was detected
     assert telemetry["overlap_percent"] > 0.0
@@ -296,7 +296,7 @@ def test_resolve_overlaps_priority_ordering():
 
     materials = {"glass": glass_mask, "water": water_mask, "foliage": foliage_mask}
 
-    resolved, telemetry = _resolve_overlaps(materials, DEFAULT_MATERIAL_METADATA)
+    resolved, telemetry = _resolve_overlaps(materials, DEFAULT_MATERIAL_METADATA, (64, 64))
 
     # Verify overlap detected
     assert telemetry["overlap_percent"] > 0.0
@@ -320,7 +320,7 @@ def test_resolve_overlaps_telemetry():
 
     materials = {"mat_a": mask_a, "mat_b": mask_b}
 
-    resolved, telemetry = _resolve_overlaps(materials, metadata)
+    resolved, telemetry = _resolve_overlaps(materials, metadata, (32, 32))
 
     # Check telemetry fields
     assert "overlap_percent" in telemetry
@@ -345,7 +345,7 @@ def test_resolve_overlaps_no_overlap():
 
     materials = {"mat_a": mask_a, "mat_b": mask_b}
 
-    resolved, telemetry = _resolve_overlaps(materials, metadata)
+    resolved, telemetry = _resolve_overlaps(materials, metadata, (32, 32))
 
     # Should have no overlap
     assert telemetry["overlap_percent"] == 0.0

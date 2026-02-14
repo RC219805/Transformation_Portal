@@ -209,7 +209,7 @@ def _resolve_material_overlap(materials, priority_map):
 
 **Output:** Confidence mask + bbox/point proposals for SAM2 refinement
 
-**New File:** `sky_bootstrap.py` (~150 lines)
+**New File:** `bootstrap/sky_seed.py` (~150 lines)
 **Tests:** 4 tests (outdoor detection, indoor rejection, depth integration, output format)
 
 ---
@@ -252,7 +252,7 @@ enable_sky_bootstrap: bool = False  # Opt-in
 sky_confidence_threshold: float = 0.6
 ```
 
-**New Preset:** `config/materials_v3_sky.yaml`
+**Sky Configuration:** Integrated into `EnhanceConfig` (sky_top_region_fraction, etc.)
 **Tests:** 2 tests (opt-in verification, preset loading)
 
 ---
@@ -473,8 +473,8 @@ enforcement:
 **Deliverables:**
 - [ ] 3 PRs: (B1+B2), (B3+B4), (B5)
 - [ ] 8 new tests, all passing
-- [ ] New file: `sky_bootstrap.py`
-- [ ] New preset: `config/materials_v3_sky.yaml`
+- [ ] New file: `bootstrap/sky_seed.py`
+- [ ] Sky configuration integrated into `EnhanceConfig`
 - [ ] Documentation: `SKY_MATERIAL_GUIDE.md`
 
 **Success Criteria:**
@@ -503,7 +503,7 @@ orchestrator.py
       ├─> segmentation_backend.py
       │   ├─> sam2_adapter.py
       │   │   └─> spatial_ai/segmentation/sam2_backend.py
-      │   └─> sky_bootstrap.py ◄─ NEW (Phase B)
+      │   └─> bootstrap/sky_seed.py ◄─ NEW (Phase B)
       ├─> pixel_ops_executor.py ◄─ MODIFIED (Phase A)
       │   └─> pixel_ops_registry.py ◄─ EXTENDED (Phase A, B)
       └─> materials_v3_taxonomy.py ◄─ EXTENDED (Phase B)
@@ -698,13 +698,12 @@ Improve material detection stability in video by implementing SAM2 temporal trac
 | File | Type | Lines | Risk |
 |------|------|-------|------|
 | `materials_v3_taxonomy.py` | Modified | ~5 | LOW |
-| `sky_bootstrap.py` | **New** | ~150 | MED |
+| `bootstrap/sky_seed.py` | **New** | ~150 | MED |
 | `pixel_ops_registry.py` | Modified | ~80 | LOW |
 | `segmentation_backend.py` | Modified | ~15 | LOW |
 | `config.py` | Modified | ~5 | LOW |
-| `config/materials_v3_sky.yaml` | **New** | ~100 | LOW |
 
-**Total:** ~330 lines new, ~180 modified
+**Total:** ~150 lines new, ~105 modified
 
 ---
 

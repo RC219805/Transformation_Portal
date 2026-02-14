@@ -294,6 +294,10 @@ def test_bootstrap_sky_integration():
     # Verify result structure
     assert "coarse_mask" in result
     assert "confidence" in result
-    assert "bbox" in result or result["bbox"] is None
+    # Validate bbox exists and is properly structured
+    assert "bbox" in result, "Sky seed should include bbox"
+    assert result["bbox"] is not None, "Sky bbox should not be None"
+    assert isinstance(result["bbox"], tuple), "Sky bbox should be tuple"
+    assert len(result["bbox"]) == 4, "Sky bbox should have 4 coordinates (y0, x0, y1, x1)"
     assert "points_positive" in result
     assert "points_negative" in result
