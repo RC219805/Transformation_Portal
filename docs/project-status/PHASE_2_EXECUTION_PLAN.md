@@ -274,7 +274,7 @@ git checkout docs/materials-v3-investigations
 
 **Move Investigation Reports**:
 ```bash
-cd /Users/rc/Projects/Transformation_Portal
+cd "$(git rev-parse --show-toplevel)"
 
 # Move and rename for clarity
 git mv docs/investigations/PRIMARY_BEDROOM_EDGE_ARTIFACTS_SUMMARY.md \
@@ -1098,7 +1098,7 @@ echo ""
 
 # Configuration
 PHASE_BRANCH="docs/materials-v3-investigations"
-BASE_DIR="/Users/rc/Projects/Transformation_Portal"
+BASE_DIR="$(git rev-parse --show-toplevel)"
 
 cd "$BASE_DIR"
 
