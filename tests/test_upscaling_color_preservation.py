@@ -64,13 +64,16 @@ def test_bicubic_float32_preserves_channels():
 
 
 def _check_ml_deps_available() -> bool:
-    """Check if ML dependencies are available."""
+    """Check if ML dependencies are available.
+
+    Returns True if torch is available, allowing tests to run with mocked backends.
+    Backend-specific security checks (e.g., basicsr CVE) are handled by the
+    backend implementations themselves.
+    """
     try:
         import torch  # noqa: F401
 
-        # Note: basicsr is blocked due to CVE-2024-27763
-        # This will always return False until a safe alternative is implemented
-        return False
+        return True
     except ImportError:
         return False
 
@@ -85,6 +88,15 @@ def test_realesrgan_preserves_red_channel(monkeypatch):
     import logging
 
     logger = logging.getLogger(__name__)
+
+    # Mock __init__ to bypass security guard (CVE-2024-27763 block)
+    def mock_init(self, device="cpu", model="RealESRGAN_x2plus", half_precision=False):
+        """Mock __init__ - bypass security guard for testing."""
+        self._model_name = model
+        self._device = device
+        self._half_precision = half_precision
+        self._model = None
+        self._netscale = 2 if "x2" in model else 4
 
     # Mock the model loading to avoid weight downloads
     def mock_load_model(self):
@@ -114,6 +126,7 @@ def test_realesrgan_preserves_red_channel(monkeypatch):
 
     from transformation_portal.upscaling.backends.realesrgan import RealESRGANUpscaler
 
+    monkeypatch.setattr(RealESRGANUpscaler, "__init__", mock_init)
     monkeypatch.setattr(RealESRGANUpscaler, "_load_model", mock_load_model)
 
     upscaler = RealESRGANUpscaler(device="cpu", model="RealESRGAN_x2plus")
@@ -139,6 +152,15 @@ def test_realesrgan_preserves_blue_channel(monkeypatch):
     import logging
 
     logger = logging.getLogger(__name__)
+
+    # Mock __init__ to bypass security guard (CVE-2024-27763 block)
+    def mock_init(self, device="cpu", model="RealESRGAN_x2plus", half_precision=False):
+        """Mock __init__ - bypass security guard for testing."""
+        self._model_name = model
+        self._device = device
+        self._half_precision = half_precision
+        self._model = None
+        self._netscale = 2 if "x2" in model else 4
 
     # Mock the model loading
     def mock_load_model(self):
@@ -167,7 +189,20 @@ def test_realesrgan_preserves_blue_channel(monkeypatch):
 
     from transformation_portal.upscaling.backends.realesrgan import RealESRGANUpscaler
 
+    monkeypatch.setattr(RealESRGANUpscaler, "__init__", mock_init)
     monkeypatch.setattr(RealESRGANUpscaler, "_load_model", mock_load_model)
+
+    upscaler = RealESRGANUpscaler(device="cpu", model="RealESRGAN_x2plus")
+
+    # Create a pure BLUE image (0, 0, 255) - RGB format
+    image = np.zeros((64, 64, 3), dtype=np.uint8)
+    image[:, :, 2] = 255  # Blue channel
+
+    upscaled = upscaler.upscale(image, scale_factor=2.0)
+
+    # This would FAIL with the old BGR swap bug (blue would become red)
+    assert upscaled[:, :, 2].mean() > 250, "Blue channel should be preserved (not swapped to red)"
+    assert upscaled[:, :, 0].mean() < 5, "Red should stay zero (old bug would make this 255)"
 
     upscaler = RealESRGANUpscaler(device="cpu", model="RealESRGAN_x2plus")
 

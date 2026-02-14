@@ -35,6 +35,9 @@ class BicubicUpscaler:
     # Backend ID for registry (class-level constant)
     BACKEND_ID = "bicubic"
 
+    # Class-level metadata (for registry introspection without instantiation)
+    REQUIRES_ML = False
+
     @property
     def name(self) -> str:
         """Backend name."""
@@ -62,11 +65,7 @@ class BicubicUpscaler:
         Raises:
             ValueError: If scale_factor is invalid or image has invalid shape/values.
         """
-        # Validate scale factor
-        if scale_factor < 1.0 or scale_factor > 4.0:
-            raise ValueError(f"scale_factor must be in [1.0, 4.0], got {scale_factor}")
-
-        # Validate input shape
+        # Validate input shape first (fail fast on fundamentally invalid inputs)
         if image.ndim != 3:
             raise ValueError(f"Expected 3D image array (H, W, C), got {image.ndim}D")
         if image.shape[2] != 3:
@@ -77,14 +76,17 @@ class BicubicUpscaler:
         if h <= 0 or w <= 0:
             raise ValueError(f"Image dimensions must be positive, got {h}x{w}")
 
-        # Validate dtype and values
+        # Validate dtype and values (data integrity before operation constraints)
         if image.dtype not in (np.uint8, np.float32):
             raise ValueError(f"Expected dtype uint8 or float32, got {image.dtype}")
 
         if not np.all(np.isfinite(image)):
             raise ValueError("Image contains non-finite values (NaN or Inf)")
 
-        h, w = image.shape[:2]
+        # Validate scale factor (operation-specific constraint checked last)
+        if scale_factor < 1.0 or scale_factor > 4.0:
+            raise ValueError(f"scale_factor must be in [1.0, 4.0], got {scale_factor}")
+
         new_h = int(h * scale_factor)
         new_w = int(w * scale_factor)
 
@@ -93,25 +95,18 @@ class BicubicUpscaler:
         # Note: OpenCV uses BGR, so we need to convert RGB→BGR→RGB
         input_dtype = image.dtype
 
+        # For float32, work directly without dtype conversion (preserves 16-bit quality)
+        # Convert RGB to BGR for OpenCV
+        image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)  # pylint: disable=no-member
+        upscaled_bgr = cv2.resize(
+            image_bgr,
+            (new_w, new_h),
+            interpolation=cv2.INTER_CUBIC,  # pylint: disable=no-member
+        )
+        # Convert BGR back to RGB
+        upscaled = cv2.cvtColor(upscaled_bgr, cv2.COLOR_BGR2RGB)  # pylint: disable=no-member
+
+        # Return with dtype preservation (float32 clipped to [0,1], uint8 as-is)
         if input_dtype == np.float32:
-            # For float32, work directly without dtype conversion (preserves 16-bit quality)
-            # Convert RGB to BGR for OpenCV
-            image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-            upscaled_bgr = cv2.resize(
-                image_bgr,
-                (new_w, new_h),
-                interpolation=cv2.INTER_CUBIC,
-            )
-            # Convert BGR back to RGB
-            upscaled = cv2.cvtColor(upscaled_bgr, cv2.COLOR_BGR2RGB)
-            # Clip to valid range
             return np.clip(upscaled, 0.0, 1.0)
-        else:
-            # For uint8, standard path
-            image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-            upscaled_bgr = cv2.resize(
-                image_bgr,
-                (new_w, new_h),
-                interpolation=cv2.INTER_CUBIC,
-            )
-            return cv2.cvtColor(upscaled_bgr, cv2.COLOR_BGR2RGB)
+        return upscaled

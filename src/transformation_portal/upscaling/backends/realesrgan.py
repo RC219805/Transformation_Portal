@@ -52,6 +52,9 @@ class RealESRGANUpscaler:
     # Backend ID for registry (class-level constant)
     BACKEND_ID = "realesrgan"
 
+    # Class-level metadata (for registry introspection without instantiation)
+    REQUIRES_ML = True
+
     def __init__(
         self,
         device: str = "cpu",
@@ -315,7 +318,6 @@ class RealESRGANUpscaler:
             # Handle non-native scale factors (e.g., 1.5x, 3x)
             if abs(scale_factor - self._netscale) > 0.01:
                 # Post-resize to desired scale
-                h, w = output_rgb.shape[:2]
                 target_h = int(image_uint8.shape[0] * scale_factor)
                 target_w = int(image_uint8.shape[1] * scale_factor)
 

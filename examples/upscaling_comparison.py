@@ -2,17 +2,19 @@
 """Visual comparison: Bicubic vs Real-ESRGAN upscaling.
 
 This script demonstrates the quality difference between bicubic and Real-ESRGAN
-upscaling backends. Requires ML dependencies for Real-ESRGAN.
+upscaling backends.
+
+**IMPORTANT**: Real-ESRGAN is currently UNAVAILABLE due to CVE-2024-27763 in BasicSR.
+Only bicubic backend is functional in this version. Real-ESRGAN will be restored
+when a safe vendored implementation is available.
 
 Usage:
     # Test with bicubic (always available)
     python examples/upscaling_comparison.py --backend bicubic
 
-    # Test with Real-ESRGAN (requires: pip install basicsr)
-    python examples/upscaling_comparison.py --backend realesrgan --device cuda
-
-    # Compare both backends
-    python examples/upscaling_comparison.py --backend both --device cuda
+    # Real-ESRGAN is DISABLED (CVE-2024-27763)
+    # The following will fail:
+    # python examples/upscaling_comparison.py --backend realesrgan
 """
 
 import argparse
@@ -174,7 +176,8 @@ def main():
             realesrgan_result, _ = benchmark_upscaler("realesrgan", image, args.scale, args.device)
         except ImportError as e:
             print(f"\n❌ Real-ESRGAN not available: {e}")
-            print("Install ML dependencies: pip install basicsr")
+            print("Note: BasicSR is blocked due to CVE-2024-27763 (command injection vulnerability).")
+            print("Real-ESRGAN will be restored when a safe vendored implementation is available.")
 
     # Save results
     save_comparison(image, bicubic_result, realesrgan_result, args.output_dir)

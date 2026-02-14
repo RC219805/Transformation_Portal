@@ -75,32 +75,17 @@ class UpscalerRegistry:
     def list_backends(self) -> Dict[str, Dict[str, Any]]:
         """List all registered backends with metadata.
 
+        Returns metadata without instantiating backends (follows DepthBackendRegistry pattern).
+
         Returns:
             Dict mapping backend name to metadata (requires_ml).
         """
-        result = {}
-        for name, cls in self._backends.items():
-            # Instantiate temporarily to check properties
-            try:
-                if name == "bicubic":
-                    instance = cls()
-                else:
-                    # ML backends might fail if deps missing, that's ok
-                    try:
-                        instance = cls(device="cpu")
-                    except Exception:
-                        # Can't instantiate, assume requires ML
-                        result[name] = {"requires_ml": True}
-                        continue
-
-                result[name] = {
-                    "requires_ml": instance.requires_ml,
-                }
-            except Exception:
-                # Fallback for any instantiation errors
-                result[name] = {"requires_ml": True}
-
-        return result
+        return {
+            name: {
+                "requires_ml": cls.REQUIRES_ML,
+            }
+            for name, cls in self._backends.items()
+        }
 
     def get_backend_class(self, backend_id: str) -> Optional[Type[UpscalerBackend]]:
         """Get backend class by ID without instantiation.
