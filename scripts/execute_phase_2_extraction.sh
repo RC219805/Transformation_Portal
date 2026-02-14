@@ -353,21 +353,21 @@ validation() {
 
     log "Testing diagnostic scripts..."
 
-    # Test diagnose_sky_issue.py
+    # Test diagnose_sky_issue.py (syntax check - no argparse/CLI flags)
     if [ -f "tools/investigations/materials_v3/diagnose_sky_issue.py" ]; then
-        if python tools/investigations/materials_v3/diagnose_sky_issue.py --help &>/dev/null; then
-            success "diagnose_sky_issue.py --help works"
+        if python -m py_compile tools/investigations/materials_v3/diagnose_sky_issue.py; then
+            success "diagnose_sky_issue.py compiles OK"
         else
-            error "diagnose_sky_issue.py --help failed"
+            error "diagnose_sky_issue.py has syntax errors"
         fi
     fi
 
-    # Test create_sky_comparison.py
+    # Test create_sky_comparison.py (syntax check - no argparse/CLI flags)
     if [ -f "tools/investigations/materials_v3/create_sky_comparison.py" ]; then
-        if python tools/investigations/materials_v3/create_sky_comparison.py --help &>/dev/null; then
-            success "create_sky_comparison.py --help works"
+        if python -m py_compile tools/investigations/materials_v3/create_sky_comparison.py; then
+            success "create_sky_comparison.py compiles OK"
         else
-            error "create_sky_comparison.py --help failed"
+            error "create_sky_comparison.py has syntax errors"
         fi
     fi
 

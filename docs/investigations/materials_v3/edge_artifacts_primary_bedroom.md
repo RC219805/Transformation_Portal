@@ -26,7 +26,7 @@
 
 ## Root Cause: V2 Enhancement Creates Artifacts
 
-###Initial Hypothesis (INCORRECT)
+### Initial Hypothesis (INCORRECT)
 
 ❌ **Believed**: SAM2 masks have sharp edges → Materials V3 blending creates halos
 ❌ **Attempted fix**: Add Gaussian blur (sigma=3.0) to masks before pixel ops
@@ -165,7 +165,7 @@ if v2_enabled:
 
 ---
 
-##Testing Commands
+## Testing Commands
 
 **Test V2 with default preset**:
 ```bash

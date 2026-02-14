@@ -1,6 +1,6 @@
 # Sky/Water Investigation - Quick Summary
 
-**Investigation Date:** 2024-02-14
+**Investigation Date:** 2024-02-14 (extracted into repo: 2026-02-14)
 **Pipeline Run:** `output_bugfix_validation_final/` (2026-02-13)
 **Status:** ✅ **NO DEGRADATION FOUND**
 
