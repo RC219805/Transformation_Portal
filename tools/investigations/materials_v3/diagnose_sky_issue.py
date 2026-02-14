@@ -5,6 +5,7 @@ Analyzes depth maps to verify sky region depth values and identifies
 the root cause of color grading regression.
 """
 
+import argparse
 import json
 from pathlib import Path
 
@@ -98,13 +99,45 @@ def analyze_depth_map(depth_path: Path, name: str):
 
 def main():
     """Run diagnostic analysis."""
-    depth_dir = Path("depth_maps_apex")
+    parser = argparse.ArgumentParser(
+        description="Diagnose sky detection and color grading issues",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Use default hardcoded paths (original investigation)
+  python diagnose_sky_issue.py
+
+  # Analyze a specific directory
+  python diagnose_sky_issue.py --input depth_maps/ --output debug_sky/
+
+  # Analyze specific depth map files
+  python diagnose_sky_issue.py --input depth_maps/ --files aerial.png pool.png
+        """,
+    )
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=Path("depth_maps_apex"),
+        help="Directory containing depth maps (default: depth_maps_apex)",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Output directory for diagnostic results (optional)",
+    )
+    parser.add_argument(
+        "--files",
+        nargs="+",
+        default=["V2_750Picacho_Aerial_depth.png", "V2_750Picacho_Pool_depth.png"],
+        help="Depth map filenames to analyze (default: Aerial and Pool images)",
+    )
+
+    args = parser.parse_args()
+    depth_dir = args.input
 
     # Analyze key images with sky
-    images = [
-        ("V2_750Picacho_Aerial_depth.png", "Aerial (lots of sky)"),
-        ("V2_750Picacho_Pool_depth.png", "Pool (sky + water)"),
-    ]
+    images = [(f, f.replace("_depth.png", "").replace("_", " ")) for f in args.files]
 
     for depth_file, name in images:
         depth_path = depth_dir / depth_file
@@ -113,12 +146,16 @@ def main():
         else:
             print(f"\n⚠️  Depth map not found: {depth_path}")
 
-    # Load and check JSON metadata
+    # Load and check JSON metadata (use first file as reference)
     print(f"\n{'='*60}")
     print("Depth Map Metadata Check")
     print(f"{'='*60}")
 
-    json_path = depth_dir / "V2_750Picacho_Aerial_depth.json"
+    # Try to find corresponding JSON for first depth file
+    first_depth_file = args.files[0]
+    json_file = first_depth_file.replace(".png", ".json")
+    json_path = depth_dir / json_file
+
     if json_path.exists():
         with open(json_path) as f:
             meta = json.load(f)
@@ -137,6 +174,12 @@ def main():
 
         print(f"\n  NOTE: PNG visualization uses p01-p99 normalization")
         print(f"        This may affect the depth range loaded by enhancement")
+    else:
+        print(f"\n⚠️  No metadata JSON found at: {json_path}")
+
+    if args.output:
+        args.output.mkdir(parents=True, exist_ok=True)
+        print(f"\n✓ Output directory ready: {args.output}")
 
 
 if __name__ == "__main__":
