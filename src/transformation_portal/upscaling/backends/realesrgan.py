@@ -22,9 +22,12 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
+
+if TYPE_CHECKING:
+    import torch  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +219,7 @@ class RealESRGANUpscaler:
         # logger.info(f"Real-ESRGAN loaded: {self._model_name} on {self._device} "
         #             f"(half={self._half_precision})")
 
-    def _preprocess_image(self, image: np.ndarray) -> "torch.Tensor":
+    def _preprocess_image(self, image: np.ndarray) -> torch.Tensor:  # type: ignore[name-defined]
         """Convert numpy image to torch tensor.
 
         Args:
@@ -248,7 +251,7 @@ class RealESRGANUpscaler:
 
         return image_tensor
 
-    def _postprocess_output(self, output: "torch.Tensor") -> np.ndarray:
+    def _postprocess_output(self, output: torch.Tensor) -> np.ndarray:  # type: ignore[name-defined]
         """Convert torch tensor to numpy image.
 
         Args:
