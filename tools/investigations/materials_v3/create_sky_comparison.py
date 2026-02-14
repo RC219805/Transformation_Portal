@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Create side-by-side comparison of before/after sky fix."""
 
+import argparse
 from pathlib import Path
 
 import numpy as np
@@ -91,9 +92,75 @@ def analyze_sky_brightness(image_path, region_name):
 
 def main():
     """Run comparison analysis."""
-    before = Path("output_apex_v2_luxury/V2_750Picacho_Aerial.tiff")
-    after = Path("test_sky_fix/V2_750Picacho_Aerial_FIXED.tiff")
-    comparison_out = Path("test_sky_fix/sky_fix_comparison.jpg")
+    parser = argparse.ArgumentParser(
+        description="Generate side-by-side visual comparisons for sky processing validation",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Use default hardcoded paths (original investigation)
+  python create_sky_comparison.py
+
+  # Compare custom before/after images
+  python create_sky_comparison.py \\
+    --input input_images/test_sky.jpg \\
+    --output comparison_sky.png \\
+    --amplify 10
+
+  # Process specific before/after pair
+  python create_sky_comparison.py \\
+    --before output_old/aerial.tiff \\
+    --after output_new/aerial.tiff \\
+    --output comparison.jpg
+        """,
+    )
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=None,
+        help="Single input image (will be used as 'before', requires processing logic)",
+    )
+    parser.add_argument(
+        "--before",
+        type=Path,
+        default=Path("output_apex_v2_luxury/V2_750Picacho_Aerial.tiff"),
+        help="Before image path (default: original investigation image)",
+    )
+    parser.add_argument(
+        "--after",
+        type=Path,
+        default=Path("test_sky_fix/V2_750Picacho_Aerial_FIXED.tiff"),
+        help="After image path (default: original investigation fixed image)",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("test_sky_fix/sky_fix_comparison.jpg"),
+        help="Output comparison image path (default: test_sky_fix/sky_fix_comparison.jpg)",
+    )
+    parser.add_argument(
+        "--amplify",
+        type=int,
+        default=10,
+        help="Amplification factor for difference visualization (default: 10)",
+    )
+    parser.add_argument(
+        "--no-crop",
+        action="store_true",
+        help="Disable cropping to sky region (show full image)",
+    )
+
+    args = parser.parse_args()
+
+    # Handle --input mode (single image, not yet implemented - would need processing)
+    if args.input:
+        print("⚠️  --input mode requires processing logic (not yet implemented)")
+        print("    Use --before and --after to compare existing images")
+        return
+
+    before = args.before
+    after = args.after
+    comparison_out = args.output
+    crop_sky_region = not args.no_crop
 
     print("=" * 60)
     print("Sky Degradation Fix - Visual Comparison")
@@ -119,7 +186,7 @@ def main():
     print(f"{'='*60}")
 
     comparison_out.parent.mkdir(parents=True, exist_ok=True)
-    create_comparison(before, after, comparison_out, crop_sky_region=True)
+    create_comparison(before, after, comparison_out, crop_sky_region=crop_sky_region)
 
     print(f"\n{'='*60}")
     print("Review the comparison image to verify:")
