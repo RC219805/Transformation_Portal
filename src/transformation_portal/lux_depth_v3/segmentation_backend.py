@@ -205,8 +205,8 @@ class EfficientSAMBackend:
             else:
                 # V1: Fall back to heuristic-only mode
                 logger.warning(
-                    "EfficientVIT not available - falling back to heuristic-based segmentation (v1). "
-                    "For real model inference, install: pip install efficientvit"
+                    "EfficientVIT not available - falling back to heuristic-based segmentation (v1) "
+                    "with fixed confidence scores (0.5). For real model inference, install: pip install efficientvit"
                 )
                 self._model = self._create_placeholder_model()
                 self._use_real_model = False
