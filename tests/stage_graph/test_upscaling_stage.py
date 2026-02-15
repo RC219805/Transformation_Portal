@@ -40,12 +40,13 @@ class TestUpscalingStageUnit:
         assert stage.version == "2.0.0"
 
     def test_get_dependencies(self):
-        """UpscalingStage should have no required dependencies."""
+        """UpscalingStage declares 'enhancement' dependency for backward compatibility."""
         stage = UpscalingStage()
         deps = stage.get_dependencies()
 
         assert isinstance(deps, list)
-        assert len(deps) == 0
+        assert len(deps) == 1
+        assert "enhancement" in deps
 
     def test_cache_key_determinism(self):
         """Same image should produce same cache key."""

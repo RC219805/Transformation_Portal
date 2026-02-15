@@ -63,12 +63,19 @@ class UpscalingStage(Stage):
 
     def get_dependencies(self) -> list:
         """
-        Optional dependencies.
+        Stage dependencies.
 
         Returns:
-            Empty list - upscaling can work on any image artifact
+            ["enhancement"] for backward-compatible execution order.
+
+        Note:
+            - The declared dependency ensures that, in default/Golden Path
+              pipelines, upscaling runs after enhancement.
+            - The compute method still supports multiple artifact types
+              (enhanced_image, image, depth_map); this dependency only
+              constrains default ordering, not input flexibility.
         """
-        return []
+        return ["enhancement"]
 
     def compute(self, context: StageContext) -> StageResult:
         """
@@ -115,6 +122,7 @@ class UpscalingStage(Stage):
 
         # Handle grayscale depth maps (H, W) → expand to (H, W, 3)
         original_was_grayscale = False
+        original_shape = image.shape  # Capture original shape before expansion
         if image.ndim == 2:
             original_was_grayscale = True
             image = np.stack([image] * 3, axis=-1)  # Duplicate to 3 channels
@@ -167,7 +175,7 @@ class UpscalingStage(Stage):
                         "scale_factor": self.scale_factor,
                         "backend_requested": self.backend,
                         "backend_used": actual_backend,
-                        "input_shape": image.shape,
+                        "input_shape": original_shape,  # Original shape before grayscale expansion
                         "output_shape": upscaled_image.shape,
                         "input_dtype": str(image.dtype),
                         "output_dtype": str(upscaled_image.dtype),

@@ -474,7 +474,7 @@ context = StageContext(artifacts={"image": image_float})
 
 ## References
 
-- **Phase 4**: [ML Upscaling Backend Extraction](../PHASE3_ML_UPSCALING_SUMMARY.md)
+- **Phase 4**: ML Upscaling Backend Extraction (see PR #943)
 - **ADR-029**: [Execution Graph Abstraction](adr-029-execution-graph-abstraction.md)
 - **Phase 3**: [16-bit Depth Pipeline](APEX_PHASE3_IMPLEMENTATION.md)
 - **CVE-2024-27763**: [Real-ESRGAN Security Advisory](https://nvd.nist.gov/vuln/detail/CVE-2024-27763)
