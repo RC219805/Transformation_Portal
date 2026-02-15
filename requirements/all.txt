@@ -230,7 +230,6 @@ pillow==12.1.1
     #   diffusers
     #   imageio
     #   scikit-image
-    #   sentence-transformers
     #   torchvision
 pkginfo==1.12.1.2
     # via twine
@@ -347,7 +346,7 @@ scipy==1.17.0
     #   scikit-image
     #   scikit-learn
     #   sentence-transformers
-sentence-transformers==2.7.0
+sentence-transformers==5.2.2
     # via -r ml.in
 shellingham==1.5.4
     # via typer
@@ -418,6 +417,7 @@ typing-extensions==4.15.0
     #   mypy
     #   pydantic
     #   pydantic-core
+    #   sentence-transformers
     #   torch
     #   typing-inspection
 typing-inspection==0.4.2
