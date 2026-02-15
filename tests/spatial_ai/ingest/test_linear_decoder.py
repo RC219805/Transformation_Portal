@@ -20,7 +20,13 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from transformation_portal.spatial_ai.ingest import LinearDecoder, LinearIngestResult, decode
+from transformation_portal.spatial_ai.ingest import (
+    BitDepthViolationError,
+    LinearDecoder,
+    LinearIngestResult,
+    UnsupportedFormatError,
+    decode,
+)
 
 
 class TestLinearDecoder:
@@ -171,17 +177,19 @@ class TestLinearDecoder:
         unsupported_path.write_text("dummy")
 
         decoder = LinearDecoder(gamma=1.0)
-        with pytest.raises(ValueError, match="Unsupported format"):
+        with pytest.raises(UnsupportedFormatError, match="Unsupported format"):
             decoder.decode(unsupported_path)
 
-    def test_raw_format_not_implemented(self, tmp_path: Path):
-        """Test that RAW formats raise NotImplementedError (Phase II)."""
-        # Create dummy RAW file
+    def test_raw_format_requires_rawpy(self, tmp_path: Path):
+        """Test that RAW formats require rawpy package (now implemented)."""
+        # Create dummy RAW file (invalid content, but will test import check)
         raw_path = tmp_path / "test.cr2"
         raw_path.write_text("dummy")
 
         decoder = LinearDecoder(gamma=1.0)
-        with pytest.raises(NotImplementedError, match="RAW format"):
+        # Should raise RuntimeError from rawpy failing to decode the dummy file
+        # (not NotImplementedError anymore since RAW support is implemented)
+        with pytest.raises((RuntimeError, ImportError)):
             decoder.decode(raw_path)
 
     def test_content_hash_reproducible(self, tmp_path: Path):
@@ -272,8 +280,8 @@ class TestLinearDecoder:
         test_img_path = tmp_path / "test_8bit.png"
         Image.fromarray(test_img, mode="RGB").save(test_img_path)
 
-        # Attempt decode with strict_ingest=True should fail
-        with pytest.raises(ValueError, match="strict_ingest=True rejects 8-bit inputs"):
+        # Attempt decode with strict_ingest=True should fail with BitDepthViolationError
+        with pytest.raises(BitDepthViolationError, match="Bit depth violation"):
             decode(test_img_path, gamma=1.0, strict_ingest=True)
 
     def test_strict_ingest_allows_uint16(self, tmp_path: Path):

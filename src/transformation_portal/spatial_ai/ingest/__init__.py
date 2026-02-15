@@ -2,31 +2,90 @@
 
 This module provides RAW/TIFF → float32 linear light decoding for research workflows.
 
-Architecture (ADR-023):
+Architecture (ADR-023, Issue #890 Phase I):
 - Complete isolation from lux_depth_v3.raw_loader (no shared decode logic)
 - Linear gamma (1.0) enforcement
 - 16-bit → float32 pipeline (no 8-bit collapse)
 - HDR preservation (values >1.0 allowed)
-- Provenance tracking
+- Full provenance tracking (EXIF + ingest metadata)
+- Versioned manifest schema
+- Hard failure guardrails
+
+Modules:
+- linear_decoder: Core RAW/TIFF/PNG/EXR decoder
+- provenance: EXIF extraction and metadata tracking
+- manifest_schema: Versioned dataset manifests
+- validators: Hard-constraint validation
+- exceptions: Clear, actionable error messages
 
 Usage:
-    >>> from transformation_portal.spatial_ai.ingest import linear_decoder
-    >>> result = linear_decoder.decode(
-    ...     input_path="scene.tiff",
-    ...     gamma=1.0,
-    ...     emit_exr=True,
-    ...     emit_provenance=True
-    ... )
+    >>> from transformation_portal.spatial_ai.ingest import LinearDecoder, ProvenanceCapture
+    >>> decoder = LinearDecoder(gamma=1.0, strict_ingest=True)
+    >>> result = decoder.decode("scene.CR2", emit_exr=True, emit_provenance=True)
     >>> assert result.linear_rgb.max() > 1.0  # HDR preserved
     >>> assert result.gamma == 1.0  # Linear light
+
+    >>> # Or use manifest builder for datasets
+    >>> from transformation_portal.spatial_ai.ingest import DatasetManifestBuilder
+    >>> builder = DatasetManifestBuilder(name="training_set_v1")
+    >>> # ... add images ...
+    >>> manifest = builder.build()
+    >>> manifest.write(Path("manifest.json"))
 """
 
 from __future__ import annotations
 
+from .exceptions import (
+    BitDepthViolationError,
+    LinearIngestError,
+    LinearityViolationError,
+    ManifestError,
+    ProvenanceError,
+    RangeViolationError,
+    SchemaVersionError,
+    UnsupportedFormatError,
+)
 from .linear_decoder import LinearDecoder, LinearIngestResult, decode
+from .manifest_schema import DatasetManifestBuilder, ImageManifestEntry, ManifestSchema
+from .provenance import CameraMetadata, ProvenanceCapture, ProvenanceData
+from .validators import (
+    CURRENT_SCHEMA_VERSION,
+    validate_bit_depth,
+    validate_dtype,
+    validate_gamma,
+    validate_linear_output,
+    validate_range,
+    validate_schema_version,
+)
 
 __all__ = [
+    # Core decoder
     "LinearDecoder",
     "LinearIngestResult",
     "decode",
+    # Provenance
+    "ProvenanceCapture",
+    "ProvenanceData",
+    "CameraMetadata",
+    # Manifest schema
+    "ManifestSchema",
+    "DatasetManifestBuilder",
+    "ImageManifestEntry",
+    # Validators
+    "validate_bit_depth",
+    "validate_dtype",
+    "validate_gamma",
+    "validate_range",
+    "validate_linear_output",
+    "validate_schema_version",
+    "CURRENT_SCHEMA_VERSION",
+    # Exceptions
+    "LinearIngestError",
+    "BitDepthViolationError",
+    "LinearityViolationError",
+    "RangeViolationError",
+    "SchemaVersionError",
+    "ProvenanceError",
+    "ManifestError",
+    "UnsupportedFormatError",
 ]

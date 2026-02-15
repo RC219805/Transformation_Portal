@@ -5,22 +5,23 @@ This decoder outputs float32 linear light with gamma=1.0 (NOT display-ready).
 WARNING: DO NOT use for rendering pipelines.
 For rendering, use: transformation_portal.lux_depth_v3.raw_loader
 
-Architecture (ADR-023, ADR-026):
+Architecture (ADR-023, ADR-026, Issue #890 Phase I):
 - Complete isolation from rendering decode logic
 - Linear gamma enforcement (gamma=1.0, no baked curves)
 - Float32 HDR preservation (values >1.0 allowed)
-- Provenance tracking (decode recipe + content hashes)
-- Contract validation (SpatialCaptureV1 - Phase I MVP)
+- Full provenance tracking (EXIF + ingest metadata + transform chain)
+- Contract validation (SpatialCaptureV1)
+- Hard failure guardrails (no silent 8-bit collapse)
 
 Supported Formats:
 - TIFF (16-bit/32-bit, uncompressed or LZW)
 - PNG (16-bit)
 - EXR (32-bit float, HDR)
-- RAW formats (Phase II - not yet implemented)
+- RAW formats (CR2, NEF, ARW, DNG) via rawpy/LibRaw
 
 Example:
-    >>> decoder = LinearDecoder(gamma=1.0, bit_depth=32)
-    >>> result = decoder.decode("scene.tiff", emit_exr=True, emit_provenance=True)
+    >>> decoder = LinearDecoder(gamma=1.0, bit_depth=32, strict_ingest=True)
+    >>> result = decoder.decode("scene.CR2", emit_exr=True, emit_provenance=True)
     >>> assert result.linear_rgb.dtype == np.float32
     >>> assert result.gamma == 1.0
     >>> assert result.linear_rgb.max() > 1.0  # HDR preserved
@@ -39,6 +40,10 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 from PIL import Image
+
+from .exceptions import BitDepthViolationError, UnsupportedFormatError
+from .provenance import ProvenanceCapture
+from .validators import validate_bit_depth, validate_linear_output
 
 logger = logging.getLogger(__name__)
 
@@ -227,10 +232,10 @@ class LinearDecoder:
             path: Input file path.
 
         Returns:
-            Format string (TIFF, PNG, EXR, etc.).
+            Format string (TIFF, PNG, EXR, RAW_CR2, RAW_NEF, RAW_ARW, RAW_DNG).
 
         Raises:
-            ValueError: If format not supported.
+            UnsupportedFormatError: If format not supported.
         """
         ext = path.suffix.lower()
         if ext in [".tif", ".tiff"]:
@@ -239,12 +244,30 @@ class LinearDecoder:
             return "PNG"
         elif ext == ".exr":
             return "EXR"
-        elif ext in [".cr2", ".nef", ".arw", ".dng"]:
-            raise NotImplementedError(
-                f"RAW format {ext} not yet supported (Phase II). " "For now, convert to TIFF with linear gamma."
+        elif ext == ".cr2":
+            return "RAW_CR2"
+        elif ext == ".nef":
+            return "RAW_NEF"
+        elif ext == ".arw":
+            return "RAW_ARW"
+        elif ext == ".dng":
+            return "RAW_DNG"
+        elif ext in [".jpg", ".jpeg"]:
+            raise UnsupportedFormatError(
+                input_path=path,
+                detected_format="JPEG",
+                supported_formats=[
+                    "TIFF (16-bit/32-bit)",
+                    "PNG (16-bit)",
+                    "EXR (32-bit float)",
+                    "RAW (CR2, NEF, ARW, DNG)",
+                ],
             )
         else:
-            raise ValueError(f"Unsupported format: {ext}. " "Supported: .tif, .tiff, .png, .exr")
+            raise UnsupportedFormatError(
+                input_path=path,
+                detected_format=ext,
+            )
 
     def _decode_linear(self, path: Path, format_str: str) -> Tuple[np.ndarray, Tuple[int, int]]:
         """Decode image to float32 linear RGB.
@@ -257,16 +280,18 @@ class LinearDecoder:
             Tuple of (linear_rgb array, (height, width)).
 
         Raises:
-            ValueError: If strict_ingest validation fails.
+            BitDepthViolationError: If strict_ingest validation fails.
             RuntimeError: If decode fails.
         """
         try:
             if format_str == "EXR":
                 return self._decode_exr(path)
+            elif format_str.startswith("RAW_"):
+                return self._decode_raw(path, format_str)
             else:
                 return self._decode_pillow(path, format_str)
-        except ValueError:
-            # Let ValueError propagate directly (contract violations)
+        except (BitDepthViolationError, UnsupportedFormatError):
+            # Let custom exceptions propagate directly
             raise
         except Exception as e:
             raise RuntimeError(f"Failed to decode {path}: {e}") from e
@@ -312,7 +337,7 @@ class LinearDecoder:
             return self._decode_pillow(path, "EXR")
 
     def _decode_pillow(self, path: Path, format_str: str) -> Tuple[np.ndarray, Tuple[int, int]]:
-        """Decode image using Pillow (TIFF, PNG, EXR fallback).
+        """Decode image using Pillow or tifffile (TIFF, PNG, EXR fallback).
 
         Args:
             path: Input file path.
@@ -320,9 +345,24 @@ class LinearDecoder:
 
         Returns:
             Tuple of (linear_rgb array, (height, width)).
+
+        Raises:
+            BitDepthViolationError: If strict_ingest=True and input is 8-bit.
         """
-        img = Image.open(path)
-        img_array = np.array(img)
+        # Use tifffile for TIFF to preserve 16-bit
+        if format_str == "TIFF":
+            try:
+                import tifffile
+
+                img_array = tifffile.imread(str(path))
+            except ImportError:
+                # Fallback to PIL
+                logger.warning("tifffile not available, using PIL (may lose bit depth)")
+                img = Image.open(path)
+                img_array = np.array(img)
+        else:
+            img = Image.open(path)
+            img_array = np.array(img)
 
         # Convert to RGB if grayscale
         if img_array.ndim == 2:
@@ -331,13 +371,13 @@ class LinearDecoder:
             # Drop alpha channel
             img_array = img_array[:, :, :3]
 
-        # Enforce strict ingest if requested
-        if self.strict_ingest and img_array.dtype == np.uint8:
-            raise ValueError(
-                f"strict_ingest=True rejects 8-bit inputs to prevent lossy collapse. "
-                f"Input {path.name} is uint8. Use >=16-bit TIFF/PNG or EXR for linear ingest. "
-                f"Set strict_ingest=False to allow 8-bit normalization (not recommended for training data)."
-            )
+        # Validate bit depth using new validator
+        validate_bit_depth(
+            input_path=path,
+            array=img_array,
+            min_bits=16,
+            strict=self.strict_ingest,
+        )
 
         # Convert to float32 and normalize to [0, 1] range initially
         if img_array.dtype == np.uint8:
@@ -350,17 +390,86 @@ class LinearDecoder:
             raise ValueError(f"Unsupported dtype: {img_array.dtype}")
 
         # Note: This is a simplified linear decode.
-        # Full RAW decode with LibRaw (Phase II) will handle:
+        # Full RAW decode with LibRaw (via rawpy) handles:
         # - Demosaicing
         # - White balance
         # - Color matrix transforms
         # - Lens corrections
         #
-        # For now, we assume input is already demosaiced/color-corrected.
-        # This is sufficient for TIFF/PNG/EXR inputs.
+        # For TIFF/PNG/EXR inputs, we assume already demosaiced/color-corrected.
 
         height, width = img_array.shape[:2]
         return linear_rgb, (height, width)
+
+    def _decode_raw(self, path: Path, format_str: str) -> Tuple[np.ndarray, Tuple[int, int]]:
+        """Decode RAW image using rawpy (LibRaw wrapper).
+
+        This method provides proper RAW decode with:
+        - Linear demosaicing (no gamma)
+        - Configurable white balance
+        - No output curve baking
+        - 16-bit → float32 pipeline
+
+        Args:
+            path: Path to RAW file.
+            format_str: RAW format string (RAW_CR2, RAW_NEF, etc.).
+
+        Returns:
+            Tuple of (linear_rgb array, (height, width)).
+
+        Raises:
+            ImportError: If rawpy is not installed.
+            RuntimeError: If RAW decode fails.
+        """
+        try:
+            import rawpy
+        except ImportError as e:
+            raise ImportError(
+                f"RAW format {format_str} requires rawpy package. "
+                f"Install with: pip install rawpy\n"
+                f"Or install spatial_ai with RAW support: pip install -e .[raw]"
+            ) from e
+
+        try:
+            with rawpy.imread(str(path)) as raw:
+                # Decode with linear settings
+                # Key parameters for linear ingest:
+                # - output_color=rawpy.ColorSpace.sRGB: Output in linear sRGB (Phase I)
+                # - gamma=(1,1): NO gamma correction (linear light)
+                # - no_auto_bright=True: No auto brightness adjustment
+                # - output_bps=16: 16-bit output (max precision before float32)
+                # - use_camera_wb=True: Use camera white balance (default)
+                # - demosaic_algorithm: Half-size for speed, can upgrade to AHD for quality
+
+                rgb = raw.postprocess(
+                    gamma=(1, 1),  # Linear gamma (no correction)
+                    no_auto_bright=True,  # No auto exposure
+                    output_color=rawpy.ColorSpace.sRGB,  # Linear sRGB color space
+                    output_bps=16,  # 16-bit output
+                    use_camera_wb=True,  # Use camera white balance from EXIF
+                    half_size=False,  # Full resolution
+                    four_color_rgb=False,  # Standard 3-color RGB
+                    demosaic_algorithm=rawpy.DemosaicAlgorithm.AHD,  # High quality demosaic
+                    median_filter_passes=0,  # No median filtering (preserve detail)
+                    use_auto_wb=False,  # Don't override camera WB
+                    highlight_mode=rawpy.HighlightMode.Clip,  # Clip highlights (no reconstruction)
+                )
+
+                # Convert uint16 [0, 65535] to float32 [0, 1]
+                linear_rgb = rgb.astype(np.float32) / 65535.0
+
+                # Note: rawpy returns (H, W, C) RGB directly (already demosaiced)
+                height, width = linear_rgb.shape[:2]
+
+                logger.info(
+                    f"RAW decode complete: {format_str}, {width}x{height}, "
+                    f"range=[{linear_rgb.min():.4f}, {linear_rgb.max():.4f}]"
+                )
+
+                return linear_rgb, (height, width)
+
+        except Exception as e:
+            raise RuntimeError(f"Failed to decode RAW file {path.name}: {e}") from e
 
     def _compute_content_hash(self, array: np.ndarray) -> str:
         """Compute SHA-256 hash of array content.
