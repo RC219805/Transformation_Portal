@@ -20,8 +20,9 @@ defaults:
     shell: bash
 
 env:
-  # Disk-friendly installs
-  PIP_NO_CACHE_DIR: "1"
+  # Pip configuration
+  # Note: PIP_NO_CACHE_DIR removed to enable GitHub Actions cache (Issue #817)
+  # actions/cache@v5 manages ~/.cache/pip for 3-5 min savings per job
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
 
   # Cleaner CI behavior/logging
