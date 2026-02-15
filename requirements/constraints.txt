@@ -9,6 +9,9 @@ realesrgan>=9999.0.0
 # gfpgan  # Unstable dependencies, use alternative (HARD-BLOCKED)
 gfpgan>=9999.0.0
 
+# basicsr  # CVE-2024-27763: command injection via SLURM_NODELIST (HARD-BLOCKED)
+basicsr>=9999.0.0
+
 # Spatial AI Foundation: Supply chain risks pending audit
 # apache-iceberg  # Java interop (py4j), supply chain risk not assessed (ADR-024 pending)
 apache-iceberg>=9999.0.0
