@@ -36,19 +36,33 @@ class ImageMetadataV1(BaseModel):
     """Metadata for a single image in the dataset (schema v1.0.0).
 
     This is the validated schema for image entries in manifests.
+    Includes forward compatibility fields for Phase II artifact lineage DAG.
     """
 
     file_path: str = Field(..., description="Relative path to image file")
     provenance_path: Optional[str] = Field(None, description="Relative path to provenance JSON sidecar")
     content_hash: str = Field(..., description="SHA-256 hash of linear RGB tensor")
     input_format: str = Field(..., description="Input format (TIFF, PNG, EXR, RAW)")
-    color_space: str = Field(..., description="Color space of linear RGB (e.g., 'linear_sRGB', 'camera_native_linear')")
+    color_space: str = Field(
+        ...,
+        description="Color space of linear RGB (e.g., 'linear_sRGB', 'camera_native_linear')",
+    )
     dimensions: tuple[int, int, int] = Field(..., description="Image dimensions (H, W, C)")
     value_range: tuple[float, float] = Field(..., description="Value range (min, max)")
     has_hdr: bool = Field(False, description="True if max value > 1.0")
     camera_make: Optional[str] = Field(None, description="Camera manufacturer")
     camera_model: Optional[str] = Field(None, description="Camera model")
     tags: List[str] = Field(default_factory=list, description="Custom tags for filtering/organization")
+
+    # Forward compatibility: Phase II artifact lineage DAG
+    parent_artifact_hash: Optional[str] = Field(
+        None,
+        description="SHA-256 hash of parent artifact in processing DAG (for Phase II lineage tracking)",
+    )
+    pipeline_stage: str = Field(
+        "linear_ingest",
+        description="Pipeline stage that produced this artifact (e.g., 'linear_ingest', 'depth_estimation', 'enhancement')",
+    )
 
     @field_validator("dimensions")
     @classmethod
@@ -68,6 +82,18 @@ class ImageMetadataV1(BaseModel):
             raise ValueError(f"SHA-256 hash must be 64 characters, got {len(v)}")
         if not all(c in "0123456789abcdef" for c in v.lower()):
             raise ValueError("Hash must be hex string")
+        return v
+
+    @field_validator("parent_artifact_hash")
+    @classmethod
+    def validate_parent_hash(cls, v):
+        """Validate parent_artifact_hash is valid SHA-256 format if provided."""
+        if v is None:
+            return v
+        if len(v) != 64:
+            raise ValueError(f"parent_artifact_hash must be 64-character SHA-256 hex, got {len(v)}")
+        if not all(c in "0123456789abcdef" for c in v.lower()):
+            raise ValueError("parent_artifact_hash must be hex string")
         return v
 
 
@@ -127,6 +153,7 @@ class ImageManifestEntry:
     """Builder for image manifest entries.
 
     This is a convenience class for constructing ImageMetadataV1 instances.
+    Includes forward compatibility fields for Phase II artifact lineage.
     """
 
     file_path: str
@@ -140,6 +167,9 @@ class ImageManifestEntry:
     camera_make: Optional[str] = None
     camera_model: Optional[str] = None
     tags: List[str] = field(default_factory=list)
+    # Forward compatibility: Phase II artifact lineage DAG
+    parent_artifact_hash: Optional[str] = None
+    pipeline_stage: str = "linear_ingest"
 
     def to_pydantic(self) -> ImageMetadataV1:
         """Convert to validated Pydantic model."""

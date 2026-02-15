@@ -424,6 +424,141 @@ class TestManifestToDictRoundtrip:
         assert reloaded_dict["dataset"]["name"] == "test_dataset"
 
 
+class TestManifestDAGForwardCompatibility:
+    """Tests for P2-3: Manifest DAG forward compatibility fields."""
+
+    def test_manifest_dag_fields_optional(self):
+        """Test that DAG fields (parent_artifact_hash, pipeline_stage) are optional."""
+        builder = DatasetManifestBuilder(name="test_dataset")
+
+        # Create image WITHOUT DAG fields (should use defaults)
+        builder.add_image(
+            ImageManifestEntry(
+                file_path="test.tiff",
+                content_hash="a" * 64,
+                input_format="TIFF",
+                color_space="linear_sRGB",
+                dimensions=(100, 100, 3),
+                value_range=(0.0, 1.0),
+                # parent_artifact_hash and pipeline_stage not specified
+            )
+        )
+
+        # Should build successfully with defaults
+        manifest = builder.build()
+        images = manifest.get_images()
+        assert len(images) == 1
+        assert images[0].parent_artifact_hash is None
+        assert images[0].pipeline_stage == "linear_ingest"
+
+    def test_manifest_parent_hash_validation(self):
+        """Test that parent_artifact_hash is validated if provided."""
+        # Valid parent hash (64 char hex)
+        valid_entry = ImageManifestEntry(
+            file_path="test.tiff",
+            content_hash="a" * 64,
+            input_format="TIFF",
+            color_space="linear_sRGB",
+            dimensions=(100, 100, 3),
+            value_range=(0.0, 1.0),
+            parent_artifact_hash="b" * 64,  # Valid SHA-256
+            pipeline_stage="depth_estimation",
+        )
+
+        builder = DatasetManifestBuilder(name="test_dataset")
+        builder.add_image(valid_entry)
+        manifest = builder.build()
+
+        images = manifest.get_images()
+        assert images[0].parent_artifact_hash == "b" * 64
+        assert images[0].pipeline_stage == "depth_estimation"
+
+        # Invalid parent hash (wrong length)
+        with pytest.raises(ManifestError):
+            invalid_entry = ImageManifestEntry(
+                file_path="test2.tiff",
+                content_hash="c" * 64,
+                input_format="TIFF",
+                color_space="linear_sRGB",
+                dimensions=(100, 100, 3),
+                value_range=(0.0, 1.0),
+                parent_artifact_hash="short",  # Invalid - too short
+            )
+            builder2 = DatasetManifestBuilder(name="test_dataset2")
+            builder2.add_image(invalid_entry)
+            builder2.build()  # Should raise validation error
+
+    def test_manifest_forward_compatibility(self):
+        """Test that DAG fields enable Phase II artifact lineage tracking."""
+        builder = DatasetManifestBuilder(name="lineage_test")
+
+        # Simulate a processing chain:
+        # 1. Linear ingest (no parent)
+        linear_hash = "a" * 64
+        builder.add_image(
+            ImageManifestEntry(
+                file_path="linear/img001.exr",
+                content_hash=linear_hash,
+                input_format="EXR",
+                color_space="linear_sRGB",
+                dimensions=(1000, 1500, 3),
+                value_range=(0.0, 2.5),
+                has_hdr=True,
+                parent_artifact_hash=None,  # Root artifact
+                pipeline_stage="linear_ingest",
+            )
+        )
+
+        # 2. Depth estimation (parent = linear)
+        depth_hash = "b" * 64
+        builder.add_image(
+            ImageManifestEntry(
+                file_path="depth/img001_depth.exr",
+                content_hash=depth_hash,
+                input_format="EXR",
+                color_space="linear_sRGB",
+                dimensions=(1000, 1500, 3),
+                value_range=(0.0, 100.0),
+                has_hdr=True,
+                parent_artifact_hash=linear_hash,  # Links to linear ingest
+                pipeline_stage="depth_estimation",
+            )
+        )
+
+        # 3. Enhancement (parent = depth)
+        builder.add_image(
+            ImageManifestEntry(
+                file_path="enhanced/img001_enhanced.exr",
+                content_hash="c" * 64,
+                input_format="EXR",
+                color_space="linear_sRGB",
+                dimensions=(1000, 1500, 3),
+                value_range=(0.0, 1.2),
+                has_hdr=True,
+                parent_artifact_hash=depth_hash,  # Links to depth
+                pipeline_stage="enhancement",
+            )
+        )
+
+        manifest = builder.build()
+        images = manifest.get_images()
+
+        # Verify DAG structure
+        assert len(images) == 3
+
+        linear_img = images[0]
+        assert linear_img.pipeline_stage == "linear_ingest"
+        assert linear_img.parent_artifact_hash is None  # Root
+
+        depth_img = images[1]
+        assert depth_img.pipeline_stage == "depth_estimation"
+        assert depth_img.parent_artifact_hash == linear_hash  # Points to linear
+
+        enhanced_img = images[2]
+        assert enhanced_img.pipeline_stage == "enhancement"
+        assert enhanced_img.parent_artifact_hash == depth_hash  # Points to depth
+
+
 # Pytest markers
 pytestmark = [
     pytest.mark.unit,  # Fast unit tests

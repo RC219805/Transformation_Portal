@@ -263,11 +263,79 @@ if img:
     print(f"HDR: {img.has_hdr}")
 ```
 
+### Example 8: DAG Fields for Artifact Lineage (Phase II Forward Compatibility)
+
+The manifest schema includes optional `parent_artifact_hash` and `pipeline_stage` fields for tracking processing lineage. These are forward-compatible for Phase II multi-stage pipelines.
+
+```python
+from transformation_portal.spatial_ai.ingest import (
+    DatasetManifestBuilder,
+    ImageManifestEntry,
+)
+
+# Create manifest builder
+builder = DatasetManifestBuilder(name="multi_stage_pipeline_v1")
+
+# Stage 1: Linear ingest (root artifact, no parent)
+linear_hash = "abc123..."  # SHA-256 hash from linear ingest
+builder.add_image(
+    ImageManifestEntry(
+        file_path="linear/scene001.exr",
+        content_hash=linear_hash,
+        input_format="EXR",
+        color_space="linear_sRGB",
+        dimensions=(2000, 3000, 3),
+        value_range=(0.0, 2.5),
+        has_hdr=True,
+        parent_artifact_hash=None,  # Root artifact (no parent)
+        pipeline_stage="linear_ingest",  # Default stage
+    )
+)
+
+# Stage 2: Depth estimation (parent = linear ingest)
+depth_hash = "def456..."  # SHA-256 hash from depth estimation
+builder.add_image(
+    ImageManifestEntry(
+        file_path="depth/scene001_depth.exr",
+        content_hash=depth_hash,
+        input_format="EXR",
+        color_space="linear_sRGB",
+        dimensions=(2000, 3000, 3),
+        value_range=(0.0, 100.0),
+        has_hdr=True,
+        parent_artifact_hash=linear_hash,  # Links to linear ingest output
+        pipeline_stage="depth_estimation",
+    )
+)
+
+# Stage 3: Enhancement (parent = depth)
+builder.add_image(
+    ImageManifestEntry(
+        file_path="enhanced/scene001_enhanced.exr",
+        content_hash="ghi789...",
+        input_format="EXR",
+        color_space="linear_sRGB",
+        dimensions=(2000, 3000, 3),
+        value_range=(0.0, 1.2),
+        has_hdr=True,
+        parent_artifact_hash=depth_hash,  # Links to depth estimation
+        pipeline_stage="enhancement",
+    )
+)
+
+manifest = builder.build()
+manifest.write(Path("multi_stage_manifest.json"))
+
+print(f"✅ Multi-stage lineage tracked: {manifest.total_images} artifacts")
+```
+
+**Note:** DAG fields are **optional** for Phase I (linear ingest only). They become useful in Phase II when chaining multiple processing stages (depth → enhancement → materials).
+
 ---
 
 ## Validation and Quality Control
 
-### Example 8: Validate Linear Output
+### Example 9: Validate Linear Output
 
 ```python
 from transformation_portal.spatial_ai.ingest import (
@@ -289,7 +357,7 @@ validate_linear_output(
 print("✅ All validation checks passed")
 ```
 
-### Example 9: Check for HDR Clipping
+### Example 10: Check for HDR Clipping
 
 ```python
 import numpy as np
@@ -310,7 +378,7 @@ result = decode("bright_scene.CR2")
 check_hdr_clipping(result.linear_rgb)
 ```
 
-### Example 10: Verify Determinism
+### Example 11: Verify Determinism
 
 ```python
 # Decode same file twice
