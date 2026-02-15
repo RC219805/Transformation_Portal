@@ -1,0 +1,216 @@
+================================================================================
+DUAL REQUEST: ARCHITECT DECISIONS - SUMMARY
+================================================================================
+Date: 2026-02-15
+Decider: Transformation Portal Architect
+Full Docs: docs/architecture/DUAL_REQUEST_ARCHITECT_DECISION.md
+           docs/architecture/DUAL_REQUEST_QUICK_REF.md
+
+================================================================================
+DECISION 1: MATERIALS V3 PHASE D
+================================================================================
+
+REQUEST: Sky Rayleigh Scattering + Water Displacement Mapping
+
+VERDICT: ❌ REJECTED - OUT OF SCOPE
+
+RATIONALE:
+  • User described Phase E (Material Synthesis), not Phase D (Detector Integration)
+  • Phase E already rejected in comprehensive roadmap review (Feb 15, 2026)
+  • Physics-based synthesis (Rayleigh/FFT) is CGI/VFX, not real estate enhancement
+  • Repository mission is ENHANCEMENT (Lightroom), not SYNTHESIS (Blender)
+  • Sky enhancement already delivered in Phase B (heuristic-based)
+
+APPROVED SCOPE:
+  ✅ Phase A: Pixel Ops Hardening (complete)
+  ✅ Phase B: Sky Enhancement (heuristic detection + 3 ops, complete)
+  ✅ Phase C.2: SAM2 Confidence Semantics (merged PR #947)
+
+REJECTED SCOPE:
+  ❌ Phase E: Rayleigh scattering (atmospheric physics simulation)
+  ❌ Phase E: Water displacement mapping (FFT-based wave synthesis)
+  ❌ ANY material synthesis or CGI workflows
+
+DEFERRED SCOPE:
+  ⏸️ Phase C.3: SAM2Long (video tracking, needs video architecture)
+  ⏸️ Phase D: Detector Integration (RT-DETR/Det-SAM2, needs use case validation)
+
+ACTION: NO MATERIALS V3 WORK APPROVED
+
+================================================================================
+DECISION 2: APEX PHASE 2 BRANCH STATUS
+================================================================================
+
+BRANCH: feat/apex-phase2-real-pipeline-integration
+
+STATUS:
+  • Last commit: Nov 7, 2024 (3 months old)
+  • 1,674 commits behind main
+  • 16 commits ahead of main
+  • Predates StageGraph, Materials V3, security fixes
+
+VERDICT: ❌ CLOSE BRANCH - DO NOT CONTINUE
+
+RATIONALE:
+  • Massive drift from main (3 months stale)
+  • Predates major architectural changes (StageGraph, ADR-029)
+  • Missing Materials V3 integration (Phases A, B, C.2)
+  • Missing security fixes (CVE-73169, multiple Dependabot alerts)
+  • Merge conflict resolution would be high-risk
+
+RECOMMENDATION:
+  1. Close branch (don't merge, don't continue)
+  2. Document closure reason
+  3. Re-assess if real APEX integration still needed
+  4. If yes: Create FRESH branch from current main (1-2 weeks, not 3 months)
+
+ACTION: CLOSE BRANCH IMMEDIATELY
+
+================================================================================
+DECISION 3: PRIORITY SEQUENCING
+================================================================================
+
+VERDICT: ⏸️ HOLD ALL WORK - CLEANUP FIRST
+
+SEQUENCE:
+  1. ✅ IMMEDIATE: Close APEX Phase 2 branch
+  2. ✅ 1 DAY:     Document closure reason (create docs/apex/APEX_PHASE2_CLOSURE.md)
+  3. ⏸️ 1 WEEK:    Re-assess APEX real integration needs
+  4. ⏸️ ONGOING:   HOLD all Materials V3 work (nothing approved)
+
+RATIONALE:
+  • Materials V3 in good state (Phases A+B complete, C.2 merged)
+  • APEX branch is technical debt
+  • Repository healthy (all CI passing, clean state)
+  • Good time for strategic planning, not rushed execution
+
+ACTION: HOLD ALL DEVELOPMENT, CLEANUP DEBT FIRST
+
+================================================================================
+ARCHITECTURE QUESTIONS - ANSWERED
+================================================================================
+
+Q1: Does Phase D align with repository mission (luxury real estate)?
+A:  Phase E (what user described) does NOT align. Enhancement ✅, Synthesis ❌.
+
+Q2: Are sky/water shaders blocked by missing video pipeline?
+A:  Image-based enhancement works now (Phase B). Video synthesis would be blocked.
+
+Q3: Do sky/water require SAM2Long (video) or existing SAM2 (image)?
+A:  Existing SAM2 backend (Phase C.2) sufficient for images. SAM2Long for video (deferred).
+
+Q4: Do new material types require schema changes?
+A:  Sky already in taxonomy (Phase B). Water already exists. NO schema changes approved.
+
+Q5: Should Phase D proceed before or after APEX Phase 2?
+A:  NEITHER. Phase E rejected. APEX branch should be closed.
+
+================================================================================
+GOVERNANCE ENFORCEMENT
+================================================================================
+
+MISSION ALIGNMENT:
+  ✅ APPROVED:  Detect materials, enhance regions, maintain realism
+  ❌ REJECTED:  Synthesize materials, physics simulation, CGI workflows
+
+BRANCH HYGIENE:
+  POLICY:  Branches >1 month stale with >100 commits drift → CLOSE
+  ACTION:  feat/apex-phase2-real-pipeline-integration violates → CLOSE
+
+VIDEO PIPELINE BLOCKER:
+  REALITY: No video pipeline (lux_depth_v3 is image-only)
+  BLOCKED: SAM2Long (C.3), temporal tracking, cross-frame features
+  POLICY:  Don't approve video work until foundation ADR exists
+
+================================================================================
+MATERIALS V3 CURRENT STATE
+================================================================================
+
+Phase A:   ✅ COMPLETE   - 3D mask fix, feathering, overlap resolution
+Phase B:   ✅ COMPLETE   - Sky detection + enhancement (heuristic)
+Phase C.1: ✅ COMPLETE   - Memory protocol (via A.6)
+Phase C.2: ✅ MERGED     - SAM2 confidence semantics (PR #947)
+Phase C.3: ⏸️ DEFERRED   - SAM2Long (needs video architecture)
+Phase D:   ⏸️ ESCALATED  - Detector integration (needs use case)
+Phase E:   ❌ REJECTED   - Material synthesis (out of scope)
+
+Repository Evidence:
+  • 0582b30d - Phase C.2 merged (Feb 15, 2026)
+  • d8004b35 - Phase A.1 + A.6 (SAM2 stability)
+  • Phase B complete (sky detection + 3 ops)
+
+================================================================================
+APEX CURRENT STATE
+================================================================================
+
+Scaffolding:      ✅ COMPLETE (merged)
+  • SQLite ledger, CI integration, PR comments
+  • Performance bucketing, zone-aware metrics
+  • Running in --dry-run mode (synthetic data)
+
+Phase 2 (Real):   ⏸️ STALE BRANCH → CLOSE
+  • Connect to orchestrator
+  • Remove --dry-run flag
+  • Real timing measurements
+  • Shadow mode rollout
+
+Decision: Close old branch, re-assess, re-plan from fresh main if needed.
+
+================================================================================
+IMMEDIATE ACTIONS REQUIRED
+================================================================================
+
+USER MUST:
+
+1. Close APEX Phase 2 branch:
+   $ git branch -D feat/apex-phase2-real-pipeline-integration
+
+2. Document closure (create docs/apex/APEX_PHASE2_CLOSURE.md):
+   • 3-month staleness, 1,674 commits drift
+   • Predates StageGraph, Materials V3
+   • Decision to re-plan if needed
+
+3. Re-assess APEX needs (1 week timeline):
+   • Is dry-run mode sufficient?
+   • What value does real execution provide?
+   • Blockers preventing real integration?
+
+4. If real integration needed:
+   • Create FRESH branch from main
+   • Re-scope: 1-2 weeks (not 3 months of merges)
+
+5. HOLD Materials V3 work:
+   • No Phase E (synthesis) work
+   • No new phases without approval
+
+================================================================================
+KEY TAKEAWAYS
+================================================================================
+
+1. PHASE CONFUSION:   User requested Phase E (synthesis), not Phase D (detector)
+2. ALREADY REJECTED:  Phase E assessed and rejected in roadmap review
+3. APEX DRIFT:        3-month-old branch should be closed, not continued
+4. GOOD STATE:        Repository healthy, no urgent work needed
+5. STRATEGIC PAUSE:   Good time for planning, not execution
+
+================================================================================
+REFERENCES
+================================================================================
+
+Full Decision:    docs/architecture/DUAL_REQUEST_ARCHITECT_DECISION.md
+Quick Reference:  docs/architecture/DUAL_REQUEST_QUICK_REF.md
+Roadmap Review:   docs/materials/MATERIALS_V3_ROADMAP_COMPREHENSIVE_REVIEW.md
+APEX Phase 2:     docs/APEX_REAL_PIPELINE_INTEGRATION.md
+Governance:       docs/architecture/agent_governance.md
+Materials ADR:    docs/architecture/ADR-030-materials-v3-production-integration.md
+
+================================================================================
+BINDING DECISION
+================================================================================
+
+This decision is BINDING per agent_governance.md Section 4 (Precedence Order).
+
+Signed: Transformation Portal Architect
+Date:   2026-02-15
+
+================================================================================

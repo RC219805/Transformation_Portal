@@ -212,9 +212,72 @@ jobs:
           path: |
             bandit-report.json
 
+  test-isolation:
+    name: Validate Test Isolation (ADR-031)
+    needs: preflight
+    if: needs.preflight.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.preflight.outputs.head_sha }}
+
+      - name: Set up Python ${{ env.PYTHON_VERSION_TEST_MIN }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION_TEST_MIN }}
+          cache: 'pip'
+          cache-dependency-path: 'requirements-ci.txt'
+
+      - name: Install minimal dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+
+      - name: Check ML test isolation (pre-commit hook)
+        run: |
+          # Pre-commit hook uses git diff --cached, so stage test files
+          # In CI, no files are staged by default (working tree is clean)
+          git add tests/ || true
+
+          # Run pre-commit hook validation
+          bash scripts/check_ml_test_isolation.sh
+
+      - name: Verify core tests don't import ML dependencies
+        run: |
+          # Collect core tests and check for ML imports
+          # This catches violations that escaped the pre-commit hook
+
+          echo "🔍 Collecting core tests (without ML marker)..."
+          CORE_TEST_OUTPUT=$(python -m pytest tests/ -m "not ml" --collect-only -q 2>&1 || true)
+
+          echo "📋 Collection output:"
+          echo "$CORE_TEST_OUTPUT"
+
+          # Check for ML dependency imports in collection output
+          if echo "$CORE_TEST_OUTPUT" | grep -qi "ModuleNotFoundError.*\(transformers\|torch\|diffusers\)"; then
+            echo ""
+            echo "❌ ERROR: Core tests attempted to import ML dependencies!"
+            echo ""
+            echo "Tests NOT marked with @pytest.mark.ml must not import:"
+            echo "  - transformers"
+            echo "  - torch (except via safe utilities)"
+            echo "  - diffusers"
+            echo "  - ML backend packages"
+            echo ""
+            echo "These dependencies are not installed in core CI environment."
+            echo ""
+            echo "See: docs/architecture/ADR-031-test-dependency-isolation.md"
+            exit 1
+          fi
+
+          echo "✅ Core test isolation verified"
+
   test-core:
     name: Core Tests (Python ${{ matrix.python-version }})
-    needs: preflight
+    needs: [preflight, test-isolation]
     if: needs.preflight.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
