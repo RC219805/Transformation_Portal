@@ -25,5 +25,14 @@ repos:
       - id: isort
         args: ['--profile=black', '--line-length=127']
 
+  - repo: local
+    hooks:
+      - id: check-ml-test-isolation
+        name: Check ML Test Isolation (ADR-031)
+        entry: scripts/check_ml_test_isolation.sh
+        language: script
+        files: ^tests/.*\.py$
+        pass_filenames: false
+
 # Manual run: pre-commit run --all-files
 # Install: pre-commit install
