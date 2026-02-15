@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- **Archived Obsolete Module:** `depth_canonical` module superseded by ADR-019 backend architecture
+  - Moved to `archive/depth_canonical/` with full git history preserved
+  - Replacement: `src/transformation_portal/depth/backends/` (implemented in PR #906)
+  - Associated tests moved to `archive/depth_canonical_tests/` and `archive/test_depth_canonical_yaml.py`
+  - See: `archive/depth_canonical/ARCHIVE_README.md` for migration path and rationale
+
 ### Added
 - **Ingest Contract v1.0.0:** Audit-grade provenance and schema validation for RAW/TIFF ingest
   - **Versioned Schemas:** Pydantic models for ProvenanceSidecar (v1.0.0) and IngestManifest (v1.0.0)
