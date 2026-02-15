@@ -55,6 +55,7 @@ class TestManifestSchema:
                 file_path="images/img001.tiff",
                 content_hash="a" * 64,  # Valid SHA-256 hex
                 input_format="TIFF",
+                color_space="linear_sRGB",
                 dimensions=(1000, 1500, 3),
                 value_range=(0.0, 1.0),
             )
@@ -65,6 +66,7 @@ class TestManifestSchema:
                 file_path="images/img002.exr",
                 content_hash="b" * 64,
                 input_format="EXR",
+                color_space="linear_sRGB",
                 dimensions=(2000, 3000, 3),
                 value_range=(0.0, 5.0),
                 has_hdr=True,
@@ -88,6 +90,7 @@ class TestManifestSchema:
                 file_path="test.tiff",
                 content_hash="a" * 64,
                 input_format="TIFF",
+                color_space="linear_sRGB",
                 dimensions=(100, 100, 3),
                 value_range=(0.0, 1.0),
             )
@@ -119,6 +122,7 @@ class TestManifestSchema:
                     file_path="test.tiff",
                     content_hash="invalid_hash",  # Too short
                     input_format="TIFF",
+                    color_space="linear_sRGB",
                     dimensions=(100, 100, 3),
                     value_range=(0.0, 1.0),
                 )
@@ -144,6 +148,7 @@ class TestManifestSchema:
                     file_path="test.tiff",
                     content_hash="a" * 64,
                     input_format="TIFF",
+                    color_space="linear_sRGB",
                     dimensions=(100, 100, 4),  # RGBA, not RGB
                     value_range=(0.0, 1.0),
                 )
@@ -165,6 +170,7 @@ class TestManifestBuilder:
                     file_path="test.tiff",
                     content_hash="a" * 64,
                     input_format="TIFF",
+                    color_space="linear_sRGB",
                     dimensions=(100, 100, 3),
                     value_range=(0.0, 1.0),
                 )
@@ -201,6 +207,7 @@ class TestImageInventory:
                     file_path=f"img{i:03d}.tiff",
                     content_hash=f"{i}" * 64,
                     input_format="TIFF",
+                    color_space="linear_sRGB",
                     dimensions=(100, 100, 3),
                     value_range=(0.0, 1.0),
                 )
@@ -221,6 +228,7 @@ class TestImageInventory:
                 file_path="img001.tiff",
                 content_hash="a" * 64,
                 input_format="TIFF",
+                color_space="linear_sRGB",
                 dimensions=(100, 100, 3),
                 value_range=(0.0, 1.0),
                 tags=["interior", "training"],
@@ -232,6 +240,7 @@ class TestImageInventory:
                 file_path="img002.tiff",
                 content_hash="b" * 64,
                 input_format="TIFF",
+                color_space="linear_sRGB",
                 dimensions=(100, 100, 3),
                 value_range=(0.0, 1.0),
                 tags=["exterior", "training"],
@@ -243,6 +252,7 @@ class TestImageInventory:
                 file_path="img003.tiff",
                 content_hash="c" * 64,
                 input_format="TIFF",
+                color_space="linear_sRGB",
                 dimensions=(100, 100, 3),
                 value_range=(0.0, 1.0),
                 tags=["interior", "validation"],
@@ -267,6 +277,7 @@ class TestImageInventory:
                 file_path="images/special.tiff",
                 content_hash="a" * 64,
                 input_format="TIFF",
+                color_space="linear_sRGB",
                 dimensions=(100, 100, 3),
                 value_range=(0.0, 1.0),
             )
@@ -354,6 +365,7 @@ class TestManifestFromDirectory:
                 file_path="test.tiff",
                 content_hash="a" * 64,
                 input_format="TIFF",
+                color_space="linear_sRGB",
                 dimensions=(100, 100, 3),
                 value_range=(0.0, 1.0),
             )
@@ -392,6 +404,7 @@ class TestManifestToDictRoundtrip:
                 file_path="test.tiff",
                 content_hash="a" * 64,
                 input_format="TIFF",
+                color_space="linear_sRGB",
                 dimensions=(100, 100, 3),
                 value_range=(0.0, 1.0),
             )

@@ -42,6 +42,7 @@ class ImageMetadataV1(BaseModel):
     provenance_path: Optional[str] = Field(None, description="Relative path to provenance JSON sidecar")
     content_hash: str = Field(..., description="SHA-256 hash of linear RGB tensor")
     input_format: str = Field(..., description="Input format (TIFF, PNG, EXR, RAW)")
+    color_space: str = Field(..., description="Color space of linear RGB (e.g., 'linear_sRGB', 'camera_native_linear')")
     dimensions: tuple[int, int, int] = Field(..., description="Image dimensions (H, W, C)")
     value_range: tuple[float, float] = Field(..., description="Value range (min, max)")
     has_hdr: bool = Field(False, description="True if max value > 1.0")
@@ -131,6 +132,7 @@ class ImageManifestEntry:
     file_path: str
     content_hash: str
     input_format: str
+    color_space: str
     dimensions: tuple[int, int, int]
     value_range: tuple[float, float]
     provenance_path: Optional[str] = None

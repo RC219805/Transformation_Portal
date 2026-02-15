@@ -41,7 +41,7 @@ from typing import Any, Dict, Optional, Tuple
 import numpy as np
 from PIL import Image
 
-from .exceptions import BitDepthViolationError, UnsupportedFormatError
+from .exceptions import BitDepthViolationError, ColorSpaceError, UnsupportedFormatError
 from .provenance import ProvenanceCapture
 from .validators import validate_bit_depth, validate_linear_output
 
@@ -60,6 +60,7 @@ class LinearIngestResult:
         input_size: Original image dimensions (height, width).
         input_path: Path to input file.
         input_format: Input format detected (e.g., "TIFF", "PNG", "EXR").
+        color_space: Color space of linear RGB output (e.g., "linear_sRGB", "camera_native_linear").
         output_exr_path: Path to output EXR file (if emit_exr=True).
         provenance_path: Path to provenance JSON (if emit_provenance=True).
         provenance_data: Provenance metadata dict.
@@ -73,6 +74,7 @@ class LinearIngestResult:
     input_size: Tuple[int, int]
     input_path: Path
     input_format: str
+    color_space: str
     output_exr_path: Optional[Path] = None
     provenance_path: Optional[Path] = None
     provenance_data: Dict[str, Any] = field(default_factory=dict)
@@ -183,6 +185,15 @@ class LinearDecoder:
         format_str = self._detect_format(input_path)
         logger.debug(f"Detected format: {format_str}")
 
+        # Detect color space (especially for RAW files)
+        if format_str.startswith("RAW_"):
+            color_space = self._detect_raw_color_space(input_path)
+        else:
+            # Non-RAW formats: assume linear_sRGB for Phase I
+            # (TIFF/PNG/EXR don't have embedded color matrices like RAW)
+            color_space = "linear_sRGB"
+        logger.debug(f"Color space: {color_space}")
+
         # Decode to linear RGB
         linear_rgb, input_size = self._decode_linear(input_path, format_str)
 
@@ -206,6 +217,7 @@ class LinearDecoder:
             input_size=input_size,
             input_path=input_path,
             input_format=format_str,
+            color_space=color_space,
             provenance_data=provenance,
             content_hash=content_hash,
         )
@@ -470,6 +482,84 @@ class LinearDecoder:
 
         except Exception as e:
             raise RuntimeError(f"Failed to decode RAW file {path.name}: {e}") from e
+
+    def _detect_raw_color_space(self, path: Path) -> str:
+        """Detect and validate color space from RAW file metadata.
+
+        This method extracts camera color matrix from RAW metadata to determine
+        the explicit color space of the linear RGB output. Phase I hardcodes
+        linear sRGB via rawpy.ColorSpace.sRGB in _decode_raw().
+
+        Args:
+            path: Path to RAW file.
+
+        Returns:
+            Color space string (e.g., "camera_native_linear", "linear_sRGB").
+
+        Raises:
+            ColorSpaceError: If color matrix is missing or invalid.
+            ImportError: If rawpy is not installed.
+        """
+        try:
+            import rawpy
+        except ImportError as e:
+            raise ImportError("RAW color space detection requires rawpy package. " "Install with: pip install rawpy") from e
+
+        try:
+            with rawpy.imread(str(path)) as raw:
+                # Extract camera color matrices
+                # LibRaw provides color matrix data via rawpy
+                # Check for both color_matrix (camera) and rgb_xyz_matrix (standard)
+
+                # rawpy exposes raw.color_matrix and raw.rgb_xyz_matrix
+                # color_matrix: camera-specific color transformation
+                # rgb_xyz_matrix: RGB to XYZ transformation
+
+                color_matrix = None
+                rgb_xyz_matrix = None
+
+                # Try to get color matrices
+                if hasattr(raw, "color_matrix"):
+                    color_matrix = raw.color_matrix
+                if hasattr(raw, "rgb_xyz_matrix"):
+                    rgb_xyz_matrix = raw.rgb_xyz_matrix
+
+                # Validate that at least one matrix exists
+                if color_matrix is None or (hasattr(color_matrix, "size") and color_matrix.size == 0):
+                    if rgb_xyz_matrix is None or (hasattr(rgb_xyz_matrix, "size") and rgb_xyz_matrix.size == 0):
+                        raise ColorSpaceError(
+                            input_path=path,
+                            reason="No camera color matrix found in RAW metadata",
+                            matrix_present=False,
+                        )
+
+                # Validate matrix is well-formed (not all zeros)
+                matrix_to_check = color_matrix if color_matrix is not None else rgb_xyz_matrix
+                if hasattr(matrix_to_check, "__len__"):
+                    # Convert to numpy array for validation
+                    matrix_array = np.array(matrix_to_check)
+                    if matrix_array.size > 0:
+                        if np.allclose(matrix_array, 0.0):
+                            raise ColorSpaceError(
+                                input_path=path,
+                                reason="Camera color matrix is all zeros (malformed)",
+                                matrix_present=True,
+                            )
+
+                # Phase I: We use rawpy.ColorSpace.sRGB in _decode_raw()
+                # This produces linear sRGB output (gamma=1.0)
+                # Future phases may expose camera_native_linear option
+                return "linear_sRGB"
+
+        except ColorSpaceError:
+            # Let ColorSpaceError propagate
+            raise
+        except Exception as e:
+            raise ColorSpaceError(
+                input_path=path,
+                reason=f"Failed to read RAW metadata: {e}",
+                matrix_present=False,
+            ) from e
 
     def _compute_content_hash(self, array: np.ndarray) -> str:
         """Compute SHA-256 hash of array content.

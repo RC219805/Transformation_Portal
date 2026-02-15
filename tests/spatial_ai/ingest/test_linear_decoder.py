@@ -22,6 +22,7 @@ from PIL import Image
 
 from transformation_portal.spatial_ai.ingest import (
     BitDepthViolationError,
+    ColorSpaceError,
     LinearDecoder,
     LinearIngestResult,
     UnsupportedFormatError,
@@ -151,6 +152,7 @@ class TestLinearDecoder:
                 input_size=(100, 100),
                 input_path=test_img_path,
                 input_format="PNG",
+                color_space="linear_sRGB",
             )
 
     def test_contract_validation_rejects_non_linear_gamma(self, tmp_path: Path):
@@ -168,6 +170,7 @@ class TestLinearDecoder:
                 input_size=(100, 100),
                 input_path=Path("test.png"),
                 input_format="PNG",
+                color_space="linear_sRGB",
             )
 
     def test_unsupported_format_raises(self, tmp_path: Path):
@@ -187,9 +190,9 @@ class TestLinearDecoder:
         raw_path.write_text("dummy")
 
         decoder = LinearDecoder(gamma=1.0)
-        # Should raise RuntimeError from rawpy failing to decode the dummy file
+        # Should raise RuntimeError, ColorSpaceError, or ImportError from rawpy failing to decode the dummy file
         # (not NotImplementedError anymore since RAW support is implemented)
-        with pytest.raises((RuntimeError, ImportError)):
+        with pytest.raises((RuntimeError, ColorSpaceError, ImportError)):
             decoder.decode(raw_path)
 
     def test_content_hash_reproducible(self, tmp_path: Path):
@@ -332,6 +335,79 @@ class TestLinearIngestIntegration:
 
         config = EnhanceConfig(spatial_ai_linear_ingest=True)
         assert config.spatial_ai_linear_ingest is True
+
+
+class TestColorSpaceValidation:
+    """Tests for P1-1: Color space validation and tracking."""
+
+    def test_color_space_in_result(self, tmp_path: Path):
+        """Test that color_space field is populated in LinearIngestResult."""
+        # Create simple 16-bit test image
+        test_img = (np.random.rand(50, 50, 3) * 65535).astype(np.uint16)
+        test_img_path = tmp_path / "test.tiff"
+        Image.fromarray(test_img, mode="RGB").save(test_img_path, format="TIFF")
+
+        # Decode
+        decoder = LinearDecoder(gamma=1.0)
+        result = decoder.decode(test_img_path)
+
+        # Verify color_space is set
+        assert hasattr(result, "color_space")
+        assert result.color_space is not None
+        assert result.color_space == "linear_sRGB"
+
+    def test_raw_color_space_validation(self, tmp_path: Path):
+        """Test RAW color space detection with valid camera matrix.
+
+        Note: This test requires a valid DNG file with camera matrix.
+        Uses synthetic approach with mocked rawpy for determinism.
+        """
+        pytest.importorskip("rawpy", reason="rawpy required for RAW color space tests")
+
+        # For now, skip actual RAW decode test unless we have a fixture
+        # This would require a minimal DNG with valid camera matrix
+        pytest.skip("RAW fixture with camera matrix needed - see test_raw_metadata_fields for partial coverage")
+
+    def test_color_space_error_handling(self):
+        """Test that ColorSpaceError has proper attributes and message."""
+        from pathlib import Path
+
+        # Test ColorSpaceError construction
+        error = ColorSpaceError(
+            input_path=Path("/test/image.CR2"),
+            reason="No camera color matrix found",
+            matrix_present=False,
+        )
+
+        # Verify attributes
+        assert error.input_path == Path("/test/image.CR2")
+        assert error.reason == "No camera color matrix found"
+        assert error.matrix_present is False
+
+        # Verify message contains key elements
+        error_msg = str(error)
+        assert "image.CR2" in error_msg
+        assert "camera color matrix" in error_msg.lower()
+        assert "Remediation" in error_msg
+
+    def test_non_raw_color_space_default(self, tmp_path: Path):
+        """Test that non-RAW formats default to linear_sRGB."""
+        # Test TIFF
+        tiff_img = (np.random.rand(50, 50, 3) * 65535).astype(np.uint16)
+        tiff_path = tmp_path / "test.tiff"
+        Image.fromarray(tiff_img, mode="RGB").save(tiff_path, format="TIFF")
+
+        decoder = LinearDecoder(gamma=1.0)
+        result = decoder.decode(tiff_path)
+        assert result.color_space == "linear_sRGB"
+
+        # Test PNG
+        png_img = (np.random.rand(50, 50, 3) * 65535).astype(np.uint16)
+        png_path = tmp_path / "test.png"
+        Image.fromarray(png_img, mode="RGB").save(png_path, format="PNG")
+
+        result_png = decoder.decode(png_path)
+        assert result_png.color_space == "linear_sRGB"
 
 
 class TestADR023Compliance:

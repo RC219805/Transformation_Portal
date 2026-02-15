@@ -37,6 +37,7 @@ from __future__ import annotations
 
 from .exceptions import (
     BitDepthViolationError,
+    ColorSpaceError,
     LinearIngestError,
     LinearityViolationError,
     ManifestError,
@@ -82,6 +83,7 @@ __all__ = [
     # Exceptions
     "LinearIngestError",
     "BitDepthViolationError",
+    "ColorSpaceError",
     "LinearityViolationError",
     "RangeViolationError",
     "SchemaVersionError",

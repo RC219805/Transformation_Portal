@@ -370,3 +370,50 @@ class UnsupportedFormatError(LinearIngestError):
             )
 
         super().__init__(message)
+
+
+class ColorSpaceError(LinearIngestError):
+    """Raised when color space validation fails for RAW files.
+
+    This error is raised when:
+    - RAW file is missing camera color matrix metadata
+    - Color matrix is malformed or invalid
+    - Color space cannot be determined reliably
+
+    Attributes:
+        input_path: Path to input RAW file.
+        reason: Reason for color space validation failure.
+        matrix_present: Whether color matrix metadata was found.
+    """
+
+    def __init__(
+        self,
+        input_path: Path,
+        reason: str,
+        matrix_present: bool = False,
+        message: Optional[str] = None,
+    ):
+        """Initialize color space error.
+
+        Args:
+            input_path: Path to input RAW file.
+            reason: Reason for failure.
+            matrix_present: Whether color matrix was found.
+            message: Optional custom message.
+        """
+        self.input_path = input_path
+        self.reason = reason
+        self.matrix_present = matrix_present
+
+        if message is None:
+            message = (
+                f"Color space validation failed for {input_path.name}: {reason}\n\n"
+                f"Remediation:\n"
+                f"  - Verify RAW file has embedded camera color matrix metadata\n"
+                f"  - Use RAW files from supported cameras with full EXIF data\n"
+                f"  - Convert to calibrated linear TIFF if RAW metadata is missing\n\n"
+                f"Context: Accurate color space information is required for training data provenance.\n"
+                f"RAW files must contain camera color matrices for proper linear RGB conversion."
+            )
+
+        super().__init__(message)
