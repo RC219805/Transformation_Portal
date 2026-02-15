@@ -102,7 +102,6 @@ def test_default_alias():
 @pytest.mark.ml
 def test_realesrgan_upscaler(monkeypatch):
     """Test Real-ESRGAN upscaler (requires ML deps, mocked for offline)."""
-    import torch
 
     # Mock __init__ to bypass security guard (CVE-2024-27763 block)
     def mock_init(self, device="cpu", model="RealESRGAN_x2plus", half_precision=False):
@@ -145,6 +144,8 @@ def test_realesrgan_upscaler(monkeypatch):
 
     from transformation_portal.upscaling.backends.realesrgan import RealESRGANUpscaler
 
+    # Mock AVAILABLE flag to allow registration (bypass CVE-2024-27763 block)
+    monkeypatch.setattr(RealESRGANUpscaler, "AVAILABLE", True)
     monkeypatch.setattr(RealESRGANUpscaler, "__init__", mock_init)
     monkeypatch.setattr(RealESRGANUpscaler, "_load_model", mock_load_model)
 

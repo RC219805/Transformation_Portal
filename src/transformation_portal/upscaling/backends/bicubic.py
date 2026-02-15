@@ -87,8 +87,9 @@ class BicubicUpscaler:
         if scale_factor < 1.0 or scale_factor > 4.0:
             raise ValueError(f"scale_factor must be in [1.0, 4.0], got {scale_factor}")
 
-        new_h = int(h * scale_factor)
-        new_w = int(w * scale_factor)
+        # Use rounding instead of truncation to match expectations for fractional scales
+        new_h = max(1, int(round(h * scale_factor)))
+        new_w = max(1, int(round(w * scale_factor)))
 
         # Use OpenCV for high-quality bicubic interpolation
         # cv2.INTER_CUBIC preserves precision for both uint8 and float32

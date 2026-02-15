@@ -45,6 +45,8 @@ class UpscalerBackend(Protocol):
         Args:
             image: Input image as numpy array (H, W, 3).
                    Can be uint8 [0-255] or float32 [0-1].
+                   Note: float32 inputs are expected to be normalized to [0, 1],
+                   but out-of-range values will be clipped during processing.
             scale_factor: Upscaling factor (1.0-4.0).
                          For Real-ESRGAN: 2.0 or 4.0 recommended.
 

@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -58,6 +58,9 @@ class RealESRGANUpscaler:
     # Class-level metadata (for registry introspection without instantiation)
     REQUIRES_ML = True
 
+    # Availability flag (False due to CVE-2024-27763 in BasicSR)
+    AVAILABLE = False
+
     def __init__(
         self,
         device: str = "cpu",
@@ -75,15 +78,10 @@ class RealESRGANUpscaler:
             ImportError: If torch or basicsr not installed.
             ValueError: If model name is invalid.
         """
-        # Instance attributes (for pylint, even though unreachable)
-        self._model_name: str = model
-        self._device: str = device
-        self._half_precision: bool = half_precision
-        self._model: Optional[Any] = None
-        self._netscale: int = 2
-
         # SECURITY: BasicSR is blocked due to CVE-2024-27763
         # Real-ESRGAN backend is currently unavailable until a safe alternative is implemented
+        # NOTE: Real-ESRGAN initialization logic is intentionally omitted while BasicSR is blocked.
+        # Expected wiring for a future safe implementation is documented in tests/test_upscaling.py.
         raise ImportError(
             "Real-ESRGAN backend is currently unavailable due to CVE-2024-27763 in BasicSR. "
             "Use 'bicubic' backend instead. "
@@ -291,10 +289,32 @@ class RealESRGANUpscaler:
             Upscaled image with same dtype as input.
 
         Raises:
+            ValueError: If image has invalid shape/values or scale_factor is invalid.
             RuntimeError: If upscaling fails.
         """
         import torch
-        import torch.nn.functional as F
+
+        # Validate input shape first (fail fast on fundamentally invalid inputs)
+        if image.ndim != 3:
+            raise ValueError(f"Expected 3D image array (H, W, C), got {image.ndim}D")
+        if image.shape[2] != 3:
+            raise ValueError(f"Expected 3 channels (RGB), got {image.shape[2]}")
+
+        # Validate dimensions are non-zero
+        h, w = image.shape[:2]
+        if h <= 0 or w <= 0:
+            raise ValueError(f"Image dimensions must be positive, got {h}x{w}")
+
+        # Validate dtype and values (data integrity before operation constraints)
+        if image.dtype not in (np.uint8, np.float32):
+            raise ValueError(f"Expected dtype uint8 or float32, got {image.dtype}")
+
+        if not np.all(np.isfinite(image)):
+            raise ValueError("Image contains non-finite values (NaN or Inf)")
+
+        # Validate scale factor (operation-specific constraint checked last)
+        if scale_factor < 1.0 or scale_factor > 4.0:
+            raise ValueError(f"scale_factor must be in [1.0, 4.0], got {scale_factor}")
 
         # Lazy load model
         self._load_model()
@@ -328,12 +348,10 @@ class RealESRGANUpscaler:
                 # Note: PIL.Image.BICUBIC deprecated in Pillow 10+, use Image.Resampling.BICUBIC
                 from PIL import Image
 
-                pil_img = Image.fromarray(output_rgb[..., ::-1])  # BGR to RGB
-                pil_resized = pil_img.resize(
-                    (target_w, target_h),
-                    resample=Image.Resampling.BICUBIC if hasattr(Image, "Resampling") else 3,
-                )
-                output_rgb = np.array(pil_resized)[..., ::-1]  # RGB to BGR
+                # output_rgb is already RGB; PIL expects RGB
+                pil_img = Image.fromarray(output_rgb)
+                pil_resized = pil_img.resize((target_w, target_h), Image.BICUBIC)
+                output_rgb = np.array(pil_resized)
 
             # Convert back to original dtype
             if input_dtype == np.float32:

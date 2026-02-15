@@ -70,7 +70,7 @@ upscaled = upscaler.upscale(image, scale_factor=2.0)
 - **Performance**: ~100-200 images/hour for 4K→8K
 - **Memory**: ~50MB per image
 - **Quality**: Good for 2x, acceptable for 4x
-- **License**: HPND (commercial-safe)
+- **License**: BSD-3-Clause (or Apache 2.0 depending on OpenCV version) (commercial-safe)
 
 ### Real-ESRGAN (`realesrgan`)
 
@@ -275,5 +275,3 @@ pytest tests/test_upscaling.py -v -m ml
 - **Paper**: [Real-ESRGAN: Training Real-World Blind Super-Resolution with Pure Synthetic Data](https://arxiv.org/abs/2107.10833)
 - **Code**: https://github.com/xinntao/Real-ESRGAN
 - **License**: https://github.com/xinntao/Real-ESRGAN/blob/master/LICENSE
-- **Quick Reference**: `docs/architecture/PHASE3_ML_UPSCALING_QUICKREF.md`
-- **Implementation Report**: `docs/architecture/PHASE3_ML_UPSCALING_IMPLEMENTATION_REPORT.md`

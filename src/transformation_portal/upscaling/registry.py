@@ -54,7 +54,11 @@ class UpscalerRegistry:
         try:
             from .backends.realesrgan import RealESRGANUpscaler
 
-            if "realesrgan" not in self._backends:
+            # Check availability flag (CVE-2024-27763 guard)
+            available = getattr(RealESRGANUpscaler, "AVAILABLE", True)
+            if not available:
+                logger.debug("RealESRGANUpscaler marked unavailable; skipping registration.")
+            elif "realesrgan" not in self._backends:
                 self._backends["realesrgan"] = RealESRGANUpscaler
         except ImportError:
             logger.debug("RealESRGANUpscaler not available (missing ML dependencies)")
@@ -65,6 +69,13 @@ class UpscalerRegistry:
 
         Args:
             backend_class: Backend class implementing UpscalerBackend protocol.
+
+        Note:
+            This registry uses backend_class.BACKEND_ID (class attribute) for registration,
+            while DepthBackendRegistry uses backend_class.name (instance property).
+            This divergence is intentional: BACKEND_ID is a class-level constant that can
+            be accessed without instantiation, enabling registry introspection before
+            backend initialization. The name property is still provided for runtime use.
         """
         # Use class-level BACKEND_ID constant instead of property
         # (properties return property objects at class level, not strings)
@@ -82,9 +93,9 @@ class UpscalerRegistry:
         """
         return {
             name: {
-                "requires_ml": cls.REQUIRES_ML,
+                "requires_ml": getattr(backend_cls, "REQUIRES_ML", None),
             }
-            for name, cls in self._backends.items()
+            for name, backend_cls in self._backends.items()
         }
 
     def get_backend_class(self, backend_id: str) -> Optional[Type[UpscalerBackend]]:
