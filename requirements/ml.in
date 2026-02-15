@@ -9,6 +9,9 @@ diffusers>=0.36.0,<1
 controlnet-aux>=0.0.6,<1
 # realesrgan>=0.3.0,<1  # BANNED: Unmaintained, use local implementation
 
+# RAW file processing (optional, for spatial_ai linear ingest)
+rawpy==0.26.0               # Pinned for deterministic RAW demosaic (LibRaw wrapper)
+
 # HuggingFace ecosystem and vision utilities
 transformers>=4.57.0,<6
 huggingface-hub>=0.19.0,<2

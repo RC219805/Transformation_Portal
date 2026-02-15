@@ -77,6 +77,8 @@ class IngestMetadata:
     loader_module: str
     loader_version: str = "1.0.0"  # Corresponds to Issue #890 Phase I
     schema_version: str = field(default_factory=lambda: CURRENT_SCHEMA_VERSION)
+    rawpy_version: Optional[str] = None  # RAW decoder library version
+    libraw_version: Optional[str] = None  # LibRaw backend version
 
 
 @dataclass
@@ -200,6 +202,11 @@ class ProvenanceCapture:
             # Compute source file hash
             source_hash = self._compute_file_hash(source_path)
 
+            # Get RAW library versions (if RAW file detected by demosaic_method)
+            rawpy_version, libraw_version = None, None
+            if demosaic_method is not None:
+                rawpy_version, libraw_version = self._get_raw_library_versions()
+
             # Create ingest metadata
             ingest = IngestMetadata(
                 timestamp=datetime.now(timezone.utc).isoformat(),
@@ -207,6 +214,8 @@ class ProvenanceCapture:
                 source_file_size_bytes=source_path.stat().st_size,
                 source_file_hash_sha256=source_hash,
                 loader_module=self.loader_module,
+                rawpy_version=rawpy_version,
+                libraw_version=libraw_version,
             )
 
             # Create transform metadata
@@ -437,6 +446,41 @@ class ProvenanceCapture:
             return str(value)
         except (ValueError, TypeError):
             return None
+
+    @staticmethod
+    def _get_raw_library_versions() -> tuple[Optional[str], Optional[str]]:
+        """Get rawpy and LibRaw library versions for provenance tracking.
+
+        Returns:
+            Tuple of (rawpy_version, libraw_version). Either may be None if unavailable.
+        """
+        rawpy_version = None
+        libraw_version = None
+
+        try:
+            import rawpy
+
+            # Get rawpy version
+            if hasattr(rawpy, "__version__"):
+                rawpy_version = rawpy.__version__
+
+            # Get LibRaw version (if available)
+            # rawpy exposes libraw version info via rawpy.libraw_version
+            if hasattr(rawpy, "libraw_version"):
+                libraw_version = rawpy.libraw_version
+            # Fallback: try to get from version tuple
+            elif hasattr(rawpy, "version"):
+                # Some versions expose it as version tuple
+                libraw_version = str(rawpy.version) if rawpy.version else None
+
+        except ImportError:
+            # rawpy not installed or import failed
+            pass
+        except Exception:
+            # Unexpected error getting versions - don't fail provenance capture
+            pass
+
+        return rawpy_version, libraw_version
 
     @staticmethod
     def _parse_exposure_program(value: int) -> str:

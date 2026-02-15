@@ -410,6 +410,84 @@ class TestColorSpaceValidation:
         assert result_png.color_space == "linear_sRGB"
 
 
+class TestRAWDemosaicDeterminism:
+    """Tests for P1-2: RAW demosaic determinism and library version tracking."""
+
+    def test_provenance_captures_rawpy_version(self, tmp_path: Path):
+        """Test that provenance captures rawpy and libraw versions for RAW files."""
+        pytest.importorskip("rawpy", reason="rawpy required for RAW provenance tests")
+
+        from transformation_portal.spatial_ai.ingest.provenance import ProvenanceCapture
+
+        # Create a dummy RAW file (just needs to exist for provenance capture)
+        raw_path = tmp_path / "test.cr2"
+        raw_path.write_bytes(b"dummy RAW content")
+
+        # Create a simple test tensor
+        tensor = np.random.rand(100, 100, 3).astype(np.float32)
+
+        # Create provenance with demosaic_method set (indicates RAW file)
+        capture = ProvenanceCapture()
+        prov = capture.capture(
+            source_path=raw_path,
+            tensor=tensor,
+            gamma=1.0,
+            bit_depth=32,
+            demosaic_method="AHD",  # Indicates RAW processing
+            white_balance_method="camera_wb",
+        )
+
+        # Verify rawpy version is captured
+        assert prov.ingest.rawpy_version is not None
+        assert isinstance(prov.ingest.rawpy_version, str)
+        # Should be semantic version format
+        assert "." in prov.ingest.rawpy_version
+
+        # LibRaw version may or may not be available depending on rawpy version
+        # Just check it's captured (can be None)
+        assert hasattr(prov.ingest, "libraw_version")
+
+    def test_provenance_no_rawpy_for_non_raw(self, tmp_path: Path):
+        """Test that rawpy version is not captured for non-RAW files."""
+        from transformation_portal.spatial_ai.ingest.provenance import ProvenanceCapture
+
+        # Create a dummy TIFF file
+        tiff_path = tmp_path / "test.tiff"
+        tiff_path.write_bytes(b"dummy TIFF content")
+
+        # Create a simple test tensor
+        tensor = np.random.rand(100, 100, 3).astype(np.float32)
+
+        # Create provenance WITHOUT demosaic_method (non-RAW file)
+        capture = ProvenanceCapture()
+        prov = capture.capture(
+            source_path=tiff_path,
+            tensor=tensor,
+            gamma=1.0,
+            bit_depth=32,
+            # No demosaic_method - indicates non-RAW file
+        )
+
+        # Verify rawpy version is None for non-RAW
+        assert prov.ingest.rawpy_version is None
+        assert prov.ingest.libraw_version is None
+
+    def test_raw_demosaic_determinism(self, tmp_path: Path):
+        """Test RAW demosaic produces deterministic results (hash reproducibility).
+
+        Note: This test requires a valid DNG fixture with camera matrix.
+        Skipped if no fixture available.
+        """
+        pytest.importorskip("rawpy", reason="rawpy required for determinism tests")
+
+        # For Phase I, this test is a placeholder
+        # Real determinism test requires:
+        # 1. Valid DNG file with camera matrix
+        # 2. Cross-platform hash validation
+        # 3. Baseline reference hashes
+        pytest.skip("RAW determinism test requires DNG fixture - " "tracked in PR #946 documentation for Phase II validation")
+
+
 class TestADR023Compliance:
     """Tests for ADR-023 (Spatial AI Ingest Isolation) compliance."""
 
