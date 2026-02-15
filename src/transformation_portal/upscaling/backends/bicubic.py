@@ -93,19 +93,15 @@ class BicubicUpscaler:
 
         # Use OpenCV for high-quality bicubic interpolation
         # cv2.INTER_CUBIC preserves precision for both uint8 and float32
-        # Note: OpenCV uses BGR, so we need to convert RGB→BGR→RGB
+        # Note: cv2.resize() is channel-agnostic (no BGR conversion needed)
         input_dtype = image.dtype
 
-        # For float32, work directly without dtype conversion (preserves 16-bit quality)
-        # Convert RGB to BGR for OpenCV
-        image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)  # pylint: disable=no-member
-        upscaled_bgr = cv2.resize(
-            image_bgr,
+        # Resize directly (OpenCV resize works on RGB without conversion)
+        upscaled = cv2.resize(
+            image,
             (new_w, new_h),
             interpolation=cv2.INTER_CUBIC,  # pylint: disable=no-member
         )
-        # Convert BGR back to RGB
-        upscaled = cv2.cvtColor(upscaled_bgr, cv2.COLOR_BGR2RGB)  # pylint: disable=no-member
 
         # Return with dtype preservation (float32 clipped to [0,1], uint8 as-is)
         if input_dtype == np.float32:
