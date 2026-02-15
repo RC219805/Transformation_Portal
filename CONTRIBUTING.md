@@ -144,9 +144,34 @@ python -m build
 twine check dist/*
 ```
 
-## Branch Protection Rules
+## Branch Protection and Merge Requirements
 
-The `main` branch is protected with the following enforced rules (verified 2026-02-10):
+The `main` branch is protected to ensure code quality and stability. All changes must:
+
+1. **Go through Pull Request review**
+   - Minimum 1 approval recommended (not currently enforced, but best practice)
+   - 2 approvals required for architectural changes (ADRs, security, dependencies)
+
+2. **Pass all required CI checks:**
+   - CI Gate (build + core tests)
+   - Lint (critical errors)
+   - Core test suite
+
+3. **Resolve all review conversations** (recommended)
+   - Address all reviewer comments before merge
+
+4. **Maintain linear history**
+   - Use "Squash and merge" or "Rebase and merge"
+   - Merge commits are allowed but squash is preferred
+
+5. **Keep branch up to date**
+   - Strict status checks enabled: must be up-to-date with main before merge
+
+**For detailed branch protection verification procedures, troubleshooting, and governance:** See [Branch Protection Verification](docs/governance/BRANCH_PROTECTION_VERIFICATION.md)
+
+---
+
+### Current Branch Protection Rules (Verified 2026-02-10)
 
 ### Required Status Checks (✅ ENFORCED)
 - **CI Gate** (GitHub App ID: 15368) must pass
