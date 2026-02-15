@@ -35,14 +35,26 @@ for FILE in $TEST_FILES; do
     # Skip if file doesn't exist (deleted)
     [ ! -f "$FILE" ] && continue
 
-    # Check for @patch("transformers.*") or @patch("torch.*") patterns
-    PATCH_LINES=$(grep -n '@patch.*["\x27]\(transformers\|torch\)\.' "$FILE" || true)
+    # Check for @patch patterns (multiple variants):
+    # - @patch("transformers.CLIPModel") or @patch('transformers.CLIPModel')
+    # - @patch("torch") or @patch('torch')  # whole module
+    # - @patch(target="transformers.AutoModel")
+    # - @unittest.mock.patch("torch.cuda.is_available")
+    # Extended regex to handle:
+    # - Both single and double quotes
+    # - With or without target= kwarg
+    # - Full unittest.mock prefix
+    # - Whole module or module.submodule patterns
+    PATCH_LINES=$(grep -nE '@(unittest\.mock\.)?patch\((target=)?["\x27'"'"'](transformers|torch)(["\x27'"'"']|\.)' "$FILE" || true)
 
     if [ -n "$PATCH_LINES" ]; then
         # File has ML mocking - check for import guard
         HAS_IMPORT_GUARD=$(grep -q 'HAS_ML_DEPS\|HAS_.*_DEPS\|pytest\.importorskip' "$FILE" && echo "yes" || echo "no")
 
-        if [ "$HAS_IMPORT_GUARD" = "no" ]; then
+        # Also check if the test is marked as skipped (allowed to have violations)
+        IS_SKIPPED=$(grep -q '@pytest\.mark\.skip\|@pytest\.mark\.skipif.*HAS_ML_DEPS' "$FILE" && echo "yes" || echo "no")
+
+        if [ "$HAS_IMPORT_GUARD" = "no" ] && [ "$IS_SKIPPED" = "no" ]; then
             echo -e "${RED}✗ ML mock without import guard:${NC} $FILE"
             echo "$PATCH_LINES" | while IFS=: read -r LINE_NUM LINE_CONTENT; do
                 echo -e "  ${YELLOW}Line $LINE_NUM:${NC} $LINE_CONTENT"

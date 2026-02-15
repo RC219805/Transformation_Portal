@@ -154,7 +154,7 @@ See: docs/architecture/ADR-031-test-dependency-isolation.md
 
 **Workflow:** `.github/workflows/ci-quality-firewall.yml`
 
-**Job:** `validate-test-isolation`
+**Job:** `test-isolation`
 
 **Check:**
 ```bash
@@ -301,10 +301,10 @@ img = Image.fromarray(uint16_array, mode="RGB")  # TypeError!
 ## Enforcement Checklist
 
 - [x] ADR published (this document)
-- [ ] Pre-commit hook implemented (`scripts/check_ml_test_isolation.sh`)
-- [ ] Hook integrated (`.pre-commit-config.yaml`)
-- [ ] CI validation job added (`.github/workflows/ci-quality-firewall.yml`)
-- [ ] Existing violations fixed (PR #949)
+- [x] Pre-commit hook implemented (`scripts/check_ml_test_isolation.sh`)
+- [x] Hook integrated (`.pre-commit-config.yaml`)
+- [x] CI validation job added (`.github/workflows/ci-quality-firewall.yml` - job `test-isolation`)
+- [x] Existing violations fixed (PR #949)
 - [ ] Documentation updated (`CONTRIBUTING.md`)
 
 ---

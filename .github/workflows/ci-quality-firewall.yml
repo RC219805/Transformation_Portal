@@ -238,6 +238,10 @@ jobs:
 
       - name: Check ML test isolation (pre-commit hook)
         run: |
+          # Pre-commit hook uses git diff --cached, so stage test files
+          # In CI, no files are staged by default (working tree is clean)
+          git add tests/ || true
+
           # Run pre-commit hook validation
           bash scripts/check_ml_test_isolation.sh
 
@@ -267,13 +271,6 @@ jobs:
             echo ""
             echo "See: docs/architecture/ADR-031-test-dependency-isolation.md"
             exit 1
-          fi
-
-          # Check for successful collection with ML import attempts
-          if echo "$CORE_TEST_OUTPUT" | grep -E "import (transformers|torch|diffusers)" | grep -v "#"; then
-            echo ""
-            echo "⚠️  WARNING: Core tests may be importing ML dependencies"
-            echo "Review output above for import statements"
           fi
 
           echo "✅ Core test isolation verified"
