@@ -212,16 +212,15 @@ class TestLinearDecoder:
         assert result1.content_hash == result2.content_hash
         assert len(result1.content_hash) == 64  # SHA-256 hex
 
-    def test_16bit_png_decode(self, tmp_path: Path):
-        """Test decoding of 16-bit PNG."""
+    def test_16bit_tiff_decode(self, tmp_path: Path):
+        """Test decoding of 16-bit TIFF files."""
         # Create 16-bit test image
         # Use tifffile for uint16 RGB - PIL doesn't support this mode
         import tifffile
 
         test_img = (np.random.rand(100, 100, 3) * 65535).astype(np.uint16)
-        test_img_path = tmp_path / "test_16bit.png"
-        # Save as TIFF instead of PNG (PNG 16-bit is grayscale only in PIL)
-        # The decoder will still handle it correctly
+        test_img_path = tmp_path / "test_16bit.tiff"
+        # Save as TIFF (PNG 16-bit is grayscale only in PIL)
         tifffile.imwrite(test_img_path, test_img)
 
         # Decode
@@ -230,8 +229,8 @@ class TestLinearDecoder:
         # Verify
         assert result.linear_rgb.dtype == np.float32
         assert result.gamma == 1.0
-        # Format will be TIFF since we saved as TIFF
-        assert result.input_format in ("TIFF", "PNG")
+        # Format will be TIFF
+        assert result.input_format == "TIFF"
         assert result.input_size == (100, 100)
 
     def test_grayscale_conversion(self, tmp_path: Path):
