@@ -187,7 +187,6 @@ pillow==12.1.1
     #   diffusers
     #   imageio
     #   scikit-image
-    #   sentence-transformers
     #   torchvision
 protobuf==6.33.5
     # via
@@ -252,7 +251,7 @@ scipy==1.17.0
     #   scikit-image
     #   scikit-learn
     #   sentence-transformers
-sentence-transformers==2.7.0
+sentence-transformers==5.2.2
     # via
     #   -c all.txt
     #   -r ml.in
@@ -316,6 +315,7 @@ typing-extensions==4.15.0
     #   anyio
     #   cattrs
     #   huggingface-hub
+    #   sentence-transformers
     #   torch
 urllib3==2.6.3
     # via

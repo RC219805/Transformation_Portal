@@ -29,7 +29,8 @@ psutil>=5.9.0
 memory-profiler>=0.61.0
 
 # Vector search for RAG system
-sentence-transformers>=2.2.0,<3
+# Updated to >=3.1.0 for CVE-73169 remediation (arbitrary code execution vulnerability)
+sentence-transformers>=3.1.0,<6
 
 # Additional ML support
 accelerate>=0.20.0,<2      # improves model loading speed
