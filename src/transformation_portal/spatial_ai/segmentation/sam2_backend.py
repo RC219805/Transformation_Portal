@@ -192,6 +192,16 @@ class SAM2Backend:
         # 1. Use SAM2's native automatic mask generator API
         # 2. Or implement custom grid-based prompting with the transformers model
         # 3. Ensure output format matches SegmentationResult contract
+        # 4. Wrap inference in try-finally with _cleanup_inference_state() (A6)
+        #
+        # Example pattern for future implementation:
+        #     inference_state = None
+        #     try:
+        #         inference_state = self._model.init_state(image)
+        #         masks, scores, logits = self._model.predict(...)
+        #         return SegmentationResult(...)
+        #     finally:
+        #         self._cleanup_inference_state(inference_state)
         #
         # For Phase 2.1 scaffolding, this remains unimplemented to prevent runtime crashes
         # on untested placeholder code.
@@ -211,9 +221,19 @@ class SAM2Backend:
 
         Returns:
             SegmentationResult with prompted masks.
+
+        Note:
+            When implementing, use try-finally pattern with _cleanup_inference_state() (A6).
         """
-        # TODO: Implement prompted segmentation
-        # This requires parsing prompts and passing to SAM2
+        # TODO: Implement prompted segmentation with memory cleanup
+        # Pattern:
+        #     inference_state = None
+        #     try:
+        #         inference_state = self._model.init_state(image)
+        #         masks, scores = self._model.predict(prompts=...)
+        #         return SegmentationResult(...)
+        #     finally:
+        #         self._cleanup_inference_state(inference_state)
         raise NotImplementedError("Prompted segmentation not yet implemented")
 
     def _segment_video(self, seg_input: SegmentationInput) -> SegmentationResult:
@@ -224,10 +244,71 @@ class SAM2Backend:
 
         Returns:
             SegmentationResult with temporally-tracked masks.
+
+        Note:
+            When implementing, use try-finally pattern with _cleanup_inference_state() (A6).
+            This is CRITICAL for video mode to prevent VRAM accumulation across frames.
         """
-        # TODO: Implement video tracking
-        # This requires temporal propagation of masks
+        # TODO: Implement video tracking with memory cleanup
+        # Pattern:
+        #     inference_state = None
+        #     try:
+        #         inference_state = self._model.init_state(image)
+        #         # Propagate masks from previous frame
+        #         masks, scores = self._model.track(prev_masks=...)
+        #         return SegmentationResult(...)
+        #     finally:
+        #         self._cleanup_inference_state(inference_state)  # CRITICAL for video!
         raise NotImplementedError("Video tracking not yet implemented")
+
+    def _cleanup_inference_state(self, inference_state: object) -> None:
+        """Clean up SAM2 inference state to prevent memory leaks.
+
+        SAM2's memory bank retains CUDA tensors across frames in video mode.
+        Explicit cleanup prevents VRAM accumulation during batch processing.
+
+        This method is defensive and should never raise exceptions.
+
+        Args:
+            inference_state: SAM2 inference state object to clean up.
+
+        Note:
+            Called in finally block to guarantee cleanup even on errors.
+        """
+        if inference_state is None:
+            return
+
+        try:
+            import gc
+
+            import torch
+
+            # Device-agnostic synchronization before cleanup
+            if hasattr(torch, "cuda") and torch.cuda.is_available():
+                torch.cuda.synchronize()
+            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                # MPS doesn't have synchronize(), but we can still proceed with cleanup
+                pass
+
+            # Reset state if the method exists (defensive check)
+            if hasattr(inference_state, "reset_state"):
+                inference_state.reset_state()
+
+            # Delete reference
+            del inference_state
+
+            # Force garbage collection
+            gc.collect()
+
+            # Empty device cache (device-specific)
+            if hasattr(torch, "cuda") and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                torch.mps.empty_cache()
+
+        except Exception as e:
+            # Defensive: log but don't raise, cleanup should never crash
+            logger.warning(f"Error during SAM2 inference state cleanup: {e}")
 
     def _linear_to_srgb(self, linear_rgb: np.ndarray) -> np.ndarray:
         """Convert linear RGB to sRGB uint8 for SAM2 preprocessing.

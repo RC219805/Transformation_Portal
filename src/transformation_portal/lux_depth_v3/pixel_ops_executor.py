@@ -46,15 +46,18 @@ def _canonical_mask(mask: np.ndarray) -> np.ndarray:
 
 
 def _bounding_box(mask: np.ndarray) -> tuple[int, int, int, int] | None:
-    """Compute bounding box from 2D mask.
+    """Compute bounding box from mask.
 
     Args:
-        mask: 2D mask of shape (H, W)
+        mask: Mask of shape (H, W), (H, W, 1), or (1, H, W)
 
     Returns:
         Bounding box (x0, y0, x1, y1) or None if mask is empty
     """
-    ys, xs = np.where(mask > 0.5)
+    # A1: Canonicalize mask to handle SAM2's (H, W, 1) format
+    mask_2d = _canonical_mask(mask)
+
+    ys, xs = np.where(mask_2d > 0.5)
     if ys.size == 0 or xs.size == 0:
         return None
     return int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1
