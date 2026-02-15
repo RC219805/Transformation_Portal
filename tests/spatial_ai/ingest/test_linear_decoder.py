@@ -45,10 +45,12 @@ class TestLinearDecoder:
         assert hdr_img.max() > 1.0  # Verify HDR
 
         # Save as 16-bit TIFF (will be normalized to [0, 65535])
+        # Use tifffile instead of PIL - PIL doesn't support uint16 RGB mode
+        import tifffile
+
         img_uint16 = np.clip(hdr_img / hdr_img.max() * 65535, 0, 65535).astype(np.uint16)
         test_img_path = tmp_path / "hdr_test.tiff"
-        img = Image.fromarray(img_uint16, mode="RGB")
-        img.save(test_img_path, format="TIFF")
+        tifffile.imwrite(test_img_path, img_uint16)
 
         # Decode
         decoder = LinearDecoder(gamma=1.0, bit_depth=32)
@@ -210,13 +212,16 @@ class TestLinearDecoder:
         assert result1.content_hash == result2.content_hash
         assert len(result1.content_hash) == 64  # SHA-256 hex
 
-    def test_16bit_png_decode(self, tmp_path: Path):
-        """Test decoding of 16-bit PNG."""
+    def test_16bit_tiff_decode(self, tmp_path: Path):
+        """Test decoding of 16-bit TIFF files."""
         # Create 16-bit test image
+        # Use tifffile for uint16 RGB - PIL doesn't support this mode
+        import tifffile
+
         test_img = (np.random.rand(100, 100, 3) * 65535).astype(np.uint16)
-        test_img_path = tmp_path / "test_16bit.png"
-        img = Image.fromarray(test_img, mode="RGB")
-        img.save(test_img_path, format="PNG", bits=16)
+        test_img_path = tmp_path / "test_16bit.tiff"
+        # Save as TIFF (PNG 16-bit is grayscale only in PIL)
+        tifffile.imwrite(test_img_path, test_img)
 
         # Decode
         result = decode(test_img_path, gamma=1.0)
@@ -224,7 +229,8 @@ class TestLinearDecoder:
         # Verify
         assert result.linear_rgb.dtype == np.float32
         assert result.gamma == 1.0
-        assert result.input_format == "PNG"
+        # Format will be TIFF
+        assert result.input_format == "TIFF"
         assert result.input_size == (100, 100)
 
     def test_grayscale_conversion(self, tmp_path: Path):
@@ -343,9 +349,12 @@ class TestColorSpaceValidation:
     def test_color_space_in_result(self, tmp_path: Path):
         """Test that color_space field is populated in LinearIngestResult."""
         # Create simple 16-bit test image
+        # Use tifffile - PIL doesn't support uint16 RGB mode
+        import tifffile
+
         test_img = (np.random.rand(50, 50, 3) * 65535).astype(np.uint16)
         test_img_path = tmp_path / "test.tiff"
-        Image.fromarray(test_img, mode="RGB").save(test_img_path, format="TIFF")
+        tifffile.imwrite(test_img_path, test_img)
 
         # Decode
         decoder = LinearDecoder(gamma=1.0)
@@ -392,17 +401,19 @@ class TestColorSpaceValidation:
 
     def test_non_raw_color_space_default(self, tmp_path: Path):
         """Test that non-RAW formats default to linear_sRGB."""
-        # Test TIFF
+        import tifffile
+
+        # Test TIFF - use tifffile for uint16 RGB (PIL doesn't support this)
         tiff_img = (np.random.rand(50, 50, 3) * 65535).astype(np.uint16)
         tiff_path = tmp_path / "test.tiff"
-        Image.fromarray(tiff_img, mode="RGB").save(tiff_path, format="TIFF")
+        tifffile.imwrite(tiff_path, tiff_img)
 
         decoder = LinearDecoder(gamma=1.0)
         result = decoder.decode(tiff_path)
         assert result.color_space == "linear_sRGB"
 
-        # Test PNG
-        png_img = (np.random.rand(50, 50, 3) * 65535).astype(np.uint16)
+        # Test PNG - use PIL for uint8 (standard case)
+        png_img = (np.random.rand(50, 50, 3) * 255).astype(np.uint8)
         png_path = tmp_path / "test.png"
         Image.fromarray(png_img, mode="RGB").save(png_path, format="PNG")
 
