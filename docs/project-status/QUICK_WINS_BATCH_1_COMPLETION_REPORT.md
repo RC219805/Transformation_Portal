@@ -93,20 +93,30 @@ The `actions/cache@v5` steps were configured (lines 153-159, 272-279) but **inef
 
 **Solution Implemented**:
 ```yaml
-# .github/workflows/build.yml (NEW)
+# .github/workflows/build.yml (UPDATED)
 env:
   # Pip configuration
-  # Note: PIP_NO_CACHE_DIR removed to enable GitHub Actions cache (Issue #817)
+  # Note: PIP_NO_CACHE_DIR removed and --no-cache-dir flags removed from install commands (Issue #817)
   # actions/cache@v5 manages ~/.cache/pip for 3-5 min savings per job
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
 ```
 
+**Changes Applied**:
+1. Removed top-level `PIP_NO_CACHE_DIR=1` environment variable
+2. Removed `--no-cache-dir` flags from individual pip install commands:
+   - ML job: torch, torchvision, `.[ml]`, scikit-learn (3 locations)
+   - Core job: package installation (1 location)
+   - Manifest job: pandas, numpy (1 location)
+3. Removed `pip cache purge` from ML job cleanup
+4. Cache now fully functional across all CI jobs
+
 **Impact**:
-- **Time Savings**: 3-5 minutes per job on cache hit
+- **Time Savings**: 3-5 minutes per job on cache hit (now applies to ALL pip installs)
 - **Monthly Savings**: Estimated 200-500 CI minutes/month
 - **Jobs Affected**:
-  - `lint` (Python 3.12)
-  - `test` matrix (Python 3.11, 3.12, core and ml variants)
+  - `lint` (Python 3.12) - ✅ fully cached
+  - `test` matrix (Python 3.11, 3.12, core and ml variants) - ✅ fully cached
+  - `Build Montecito Manifest` - ✅ fully cached
 - **Cache Strategy**:
   - Key: `${{ runner.os }}-pip-${{ matrix.test-type }}-${{ hashFiles('requirements-ci.txt') }}`
   - Restore keys: Fallback to partial matches for faster installs
@@ -122,7 +132,7 @@ env:
 ```
 
 **Files Modified**:
-- `.github/workflows/build.yml` - Removed `PIP_NO_CACHE_DIR` env var
+- `.github/workflows/build.yml` - Removed `PIP_NO_CACHE_DIR` env var and all `--no-cache-dir` flags (6 total changes)
 
 **Testing Plan**:
 1. ✅ Syntax validated (pre-commit hooks passed)
@@ -189,7 +199,7 @@ python -m transformation_portal.lux_depth_v3 \
 ## Repository Impact
 
 ### Files Modified
-1. `.github/workflows/build.yml` - Enabled pip cache (1 line removed, 3 lines added)
+1. `.github/workflows/build.yml` - Enabled pip cache fully (1 env var removed + 5 `--no-cache-dir` flags removed + 1 `pip cache purge` removed)
 
 ### Files Verified (No Changes Needed)
 1. `src/transformation_portal/depth/backends/registry.py` - Public API exists

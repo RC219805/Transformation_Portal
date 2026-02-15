@@ -21,7 +21,7 @@ defaults:
 
 env:
   # Pip configuration
-  # Note: PIP_NO_CACHE_DIR removed to enable GitHub Actions cache (Issue #817)
+  # Note: PIP_NO_CACHE_DIR removed and --no-cache-dir flags removed from install commands (Issue #817)
   # actions/cache@v5 manages ~/.cache/pip for 3-5 min savings per job
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
 
@@ -296,18 +296,18 @@ jobs:
           TRANSFORMERS_CACHE: "/tmp/transformers_cache"
         run: |
           set -euo pipefail
-          # CPU-only torch wheels
-          python -m pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          # CPU-only torch wheels (cache enabled for 3-5 min savings)
+          python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           # ML extras installs the package too
-          python -m pip install --no-cache-dir -e ".[ml]"
+          python -m pip install -e ".[ml]"
 
           # Respect scikit-learn constraint if present
           SKLEARN_CONSTRAINT="$(grep -E '^scikit-learn[^#]*' requirements-ci.txt | head -n1 || true)"
           if [ -n "$SKLEARN_CONSTRAINT" ]; then
-            python -m pip install --no-cache-dir --force-reinstall "$SKLEARN_CONSTRAINT"
+            python -m pip install --force-reinstall "$SKLEARN_CONSTRAINT"
           fi
 
-          pip cache purge || true
+          # Note: pip cache purge removed - cache now managed by actions/cache@v5
           rm -rf ~/.cache/huggingface || true
           rm -rf /tmp/pip-* || true
           echo "Disk space after ML install:"
@@ -317,7 +317,7 @@ jobs:
         if: matrix.test-type == 'core'
         run: |
           set -euo pipefail
-          python -m pip install --no-cache-dir -e .
+          python -m pip install -e .
 
       - name: Run tests with coverage
         env:
@@ -423,7 +423,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install --no-cache-dir pandas numpy
+          python -m pip install pandas numpy
 
       - name: Run Montecito Manifest Tool
         id: manifest
