@@ -173,6 +173,65 @@ class SAM2Backend:
         else:
             raise ValueError(f"Unsupported mode: {seg_input.mode}")
 
+    def _extract_sam2_predictions(self, model_output) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Extract masks, IoU scores, and stability scores from SAM2 output.
+
+        SAM2's mask decoder outputs:
+        - pred_masks: (N, H, W) boolean masks
+        - iou_predictions: (N,) float32 scores in [0, 1]
+        - stability_scores: (N,) float32 scores in [0, 1]
+
+        This method provides defensive extraction with fallback to 1.0
+        if attributes are missing (e.g., in stub implementations).
+
+        Args:
+            model_output: SAM2 model output object
+
+        Returns:
+            Tuple of (masks, iou_scores, stability_scores)
+            - masks: np.ndarray of shape (N, H, W), dtype bool
+            - iou_scores: np.ndarray of shape (N,), dtype float32
+            - stability_scores: np.ndarray of shape (N,), dtype float32
+
+        Note:
+            If SAM2 attributes are missing (stub backend), falls back
+            to 1.0 for all scores to maintain backward compatibility.
+        """
+        # Extract masks (always present) with torch.Tensor handling
+        masks = model_output.pred_masks  # (N, H, W) bool or torch.Tensor
+
+        # Handle torch.Tensor masks (SAM2 returns CUDA/MPS tensors)
+        if hasattr(masks, "detach"):  # torch.Tensor
+            masks = masks.detach().cpu().numpy().astype(bool)
+        else:
+            masks = np.asarray(masks, dtype=bool)
+
+        n_masks = len(masks)
+
+        # Extract IoU scores (defensive) with torch.Tensor handling
+        if hasattr(model_output, "iou_predictions") and model_output.iou_predictions is not None:
+            iou_preds = model_output.iou_predictions
+            if hasattr(iou_preds, "detach"):  # torch.Tensor
+                iou_scores = iou_preds.detach().cpu().numpy().astype(np.float32)
+            else:
+                iou_scores = np.asarray(iou_preds, dtype=np.float32)
+        else:
+            # Fallback for stub backends
+            iou_scores = np.ones(n_masks, dtype=np.float32)
+
+        # Extract stability scores (defensive) with torch.Tensor handling
+        if hasattr(model_output, "stability_scores") and model_output.stability_scores is not None:
+            stab_scores = model_output.stability_scores
+            if hasattr(stab_scores, "detach"):  # torch.Tensor
+                stability_scores = stab_scores.detach().cpu().numpy().astype(np.float32)
+            else:
+                stability_scores = np.asarray(stab_scores, dtype=np.float32)
+        else:
+            # Fallback for stub backends
+            stability_scores = np.ones(n_masks, dtype=np.float32)
+
+        return masks, iou_scores, stability_scores
+
     def _segment_auto(self, seg_input: SegmentationInput) -> SegmentationResult:
         """Automatic mask generation (entire image).
 
@@ -198,8 +257,27 @@ class SAM2Backend:
         #     inference_state = None
         #     try:
         #         inference_state = self._model.init_state(image)
-        #         masks, scores, logits = self._model.predict(...)
-        #         return SegmentationResult(...)
+        #         model_output = self._model.predict(...)
+        #
+        #         # Phase C.2: Extract real SAM2 scores (not placeholders)
+        #         masks, iou_scores, stability_scores = self._extract_sam2_predictions(model_output)
+        #
+        #         # Build metadata with real stability scores
+        #         metadata_list = []
+        #         for i, mask in enumerate(masks):
+        #             # ... compute area, bbox ...
+        #             metadata = MaskMetadata(
+        #                 area=area,
+        #                 bbox=bbox,
+        #                 stability_score=stability_scores[i],  # Real SAM2 confidence
+        #             )
+        #             metadata_list.append(metadata)
+        #
+        #         return SegmentationResult(
+        #             masks=masks,
+        #             scores=iou_scores,  # Real SAM2 IoU predictions
+        #             metadata=metadata_list,
+        #         )
         #     finally:
         #         self._cleanup_inference_state(inference_state)
         #
@@ -230,8 +308,27 @@ class SAM2Backend:
         #     inference_state = None
         #     try:
         #         inference_state = self._model.init_state(image)
-        #         masks, scores = self._model.predict(prompts=...)
-        #         return SegmentationResult(...)
+        #         model_output = self._model.predict(prompts=...)
+        #
+        #         # Phase C.2: Extract real SAM2 scores (not placeholders)
+        #         masks, iou_scores, stability_scores = self._extract_sam2_predictions(model_output)
+        #
+        #         # Build metadata with real stability scores
+        #         metadata_list = []
+        #         for i, mask in enumerate(masks):
+        #             # ... compute area, bbox ...
+        #             metadata = MaskMetadata(
+        #                 area=area,
+        #                 bbox=bbox,
+        #                 stability_score=stability_scores[i],  # Real SAM2 confidence
+        #             )
+        #             metadata_list.append(metadata)
+        #
+        #         return SegmentationResult(
+        #             masks=masks,
+        #             scores=iou_scores,  # Real SAM2 IoU predictions
+        #             metadata=metadata_list,
+        #         )
         #     finally:
         #         self._cleanup_inference_state(inference_state)
         raise NotImplementedError("Prompted segmentation not yet implemented")
@@ -255,8 +352,28 @@ class SAM2Backend:
         #     try:
         #         inference_state = self._model.init_state(image)
         #         # Propagate masks from previous frame
-        #         masks, scores = self._model.track(prev_masks=...)
-        #         return SegmentationResult(...)
+        #         model_output = self._model.track(prev_masks=...)
+        #
+        #         # Phase C.2: Extract real SAM2 scores (not placeholders)
+        #         masks, iou_scores, stability_scores = self._extract_sam2_predictions(model_output)
+        #
+        #         # Build metadata with real stability scores
+        #         metadata_list = []
+        #         for i, mask in enumerate(masks):
+        #             # ... compute area, bbox ...
+        #             metadata = MaskMetadata(
+        #                 area=area,
+        #                 bbox=bbox,
+        #                 stability_score=stability_scores[i],  # Real SAM2 confidence
+        #             )
+        #             metadata_list.append(metadata)
+        #
+        #         return SegmentationResult(
+        #             masks=masks,
+        #             scores=iou_scores,  # Real SAM2 IoU predictions
+        #             metadata=metadata_list,
+        #             temporal_ids=...,  # Frame-to-frame tracking IDs
+        #         )
         #     finally:
         #         self._cleanup_inference_state(inference_state)  # CRITICAL for video!
         raise NotImplementedError("Video tracking not yet implemented")
