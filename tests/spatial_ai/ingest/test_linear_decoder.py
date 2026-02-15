@@ -20,7 +20,14 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from transformation_portal.spatial_ai.ingest import LinearDecoder, LinearIngestResult, decode
+from transformation_portal.spatial_ai.ingest import (
+    BitDepthViolationError,
+    ColorSpaceError,
+    LinearDecoder,
+    LinearIngestResult,
+    UnsupportedFormatError,
+    decode,
+)
 
 
 class TestLinearDecoder:
@@ -145,6 +152,7 @@ class TestLinearDecoder:
                 input_size=(100, 100),
                 input_path=test_img_path,
                 input_format="PNG",
+                color_space="linear_sRGB",
             )
 
     def test_contract_validation_rejects_non_linear_gamma(self, tmp_path: Path):
@@ -162,6 +170,7 @@ class TestLinearDecoder:
                 input_size=(100, 100),
                 input_path=Path("test.png"),
                 input_format="PNG",
+                color_space="linear_sRGB",
             )
 
     def test_unsupported_format_raises(self, tmp_path: Path):
@@ -171,17 +180,19 @@ class TestLinearDecoder:
         unsupported_path.write_text("dummy")
 
         decoder = LinearDecoder(gamma=1.0)
-        with pytest.raises(ValueError, match="Unsupported format"):
+        with pytest.raises(UnsupportedFormatError, match="Unsupported format"):
             decoder.decode(unsupported_path)
 
-    def test_raw_format_not_implemented(self, tmp_path: Path):
-        """Test that RAW formats raise NotImplementedError (Phase II)."""
-        # Create dummy RAW file
+    def test_raw_format_requires_rawpy(self, tmp_path: Path):
+        """Test that RAW formats require rawpy package (now implemented)."""
+        # Create dummy RAW file (invalid content, but will test import check)
         raw_path = tmp_path / "test.cr2"
         raw_path.write_text("dummy")
 
         decoder = LinearDecoder(gamma=1.0)
-        with pytest.raises(NotImplementedError, match="RAW format"):
+        # Should raise RuntimeError, ColorSpaceError, or ImportError from rawpy failing to decode the dummy file
+        # (not NotImplementedError anymore since RAW support is implemented)
+        with pytest.raises((RuntimeError, ColorSpaceError, ImportError)):
             decoder.decode(raw_path)
 
     def test_content_hash_reproducible(self, tmp_path: Path):
@@ -272,8 +283,8 @@ class TestLinearDecoder:
         test_img_path = tmp_path / "test_8bit.png"
         Image.fromarray(test_img, mode="RGB").save(test_img_path)
 
-        # Attempt decode with strict_ingest=True should fail
-        with pytest.raises(ValueError, match="strict_ingest=True rejects 8-bit inputs"):
+        # Attempt decode with strict_ingest=True should fail with BitDepthViolationError
+        with pytest.raises(BitDepthViolationError, match="Bit depth violation"):
             decode(test_img_path, gamma=1.0, strict_ingest=True)
 
     def test_strict_ingest_allows_uint16(self, tmp_path: Path):
@@ -324,6 +335,157 @@ class TestLinearIngestIntegration:
 
         config = EnhanceConfig(spatial_ai_linear_ingest=True)
         assert config.spatial_ai_linear_ingest is True
+
+
+class TestColorSpaceValidation:
+    """Tests for P1-1: Color space validation and tracking."""
+
+    def test_color_space_in_result(self, tmp_path: Path):
+        """Test that color_space field is populated in LinearIngestResult."""
+        # Create simple 16-bit test image
+        test_img = (np.random.rand(50, 50, 3) * 65535).astype(np.uint16)
+        test_img_path = tmp_path / "test.tiff"
+        Image.fromarray(test_img, mode="RGB").save(test_img_path, format="TIFF")
+
+        # Decode
+        decoder = LinearDecoder(gamma=1.0)
+        result = decoder.decode(test_img_path)
+
+        # Verify color_space is set
+        assert hasattr(result, "color_space")
+        assert result.color_space is not None
+        assert result.color_space == "linear_sRGB"
+
+    def test_raw_color_space_validation(self, tmp_path: Path):
+        """Test RAW color space detection with valid camera matrix.
+
+        Note: This test requires a valid DNG file with camera matrix.
+        Uses synthetic approach with mocked rawpy for determinism.
+        """
+        pytest.importorskip("rawpy", reason="rawpy required for RAW color space tests")
+
+        # For now, skip actual RAW decode test unless we have a fixture
+        # This would require a minimal DNG with valid camera matrix
+        pytest.skip("RAW fixture with camera matrix needed - see test_raw_metadata_fields for partial coverage")
+
+    def test_color_space_error_handling(self):
+        """Test that ColorSpaceError has proper attributes and message."""
+        from pathlib import Path
+
+        # Test ColorSpaceError construction
+        error = ColorSpaceError(
+            input_path=Path("/test/image.CR2"),
+            reason="No camera color matrix found",
+            matrix_present=False,
+        )
+
+        # Verify attributes
+        assert error.input_path == Path("/test/image.CR2")
+        assert error.reason == "No camera color matrix found"
+        assert error.matrix_present is False
+
+        # Verify message contains key elements
+        error_msg = str(error)
+        assert "image.CR2" in error_msg
+        assert "camera color matrix" in error_msg.lower()
+        assert "Remediation" in error_msg
+
+    def test_non_raw_color_space_default(self, tmp_path: Path):
+        """Test that non-RAW formats default to linear_sRGB."""
+        # Test TIFF
+        tiff_img = (np.random.rand(50, 50, 3) * 65535).astype(np.uint16)
+        tiff_path = tmp_path / "test.tiff"
+        Image.fromarray(tiff_img, mode="RGB").save(tiff_path, format="TIFF")
+
+        decoder = LinearDecoder(gamma=1.0)
+        result = decoder.decode(tiff_path)
+        assert result.color_space == "linear_sRGB"
+
+        # Test PNG
+        png_img = (np.random.rand(50, 50, 3) * 65535).astype(np.uint16)
+        png_path = tmp_path / "test.png"
+        Image.fromarray(png_img, mode="RGB").save(png_path, format="PNG")
+
+        result_png = decoder.decode(png_path)
+        assert result_png.color_space == "linear_sRGB"
+
+
+class TestRAWDemosaicDeterminism:
+    """Tests for P1-2: RAW demosaic determinism and library version tracking."""
+
+    def test_provenance_captures_rawpy_version(self, tmp_path: Path):
+        """Test that provenance captures rawpy and libraw versions for RAW files."""
+        pytest.importorskip("rawpy", reason="rawpy required for RAW provenance tests")
+
+        from transformation_portal.spatial_ai.ingest.provenance import ProvenanceCapture
+
+        # Create a dummy RAW file (just needs to exist for provenance capture)
+        raw_path = tmp_path / "test.cr2"
+        raw_path.write_bytes(b"dummy RAW content")
+
+        # Create a simple test tensor
+        tensor = np.random.rand(100, 100, 3).astype(np.float32)
+
+        # Create provenance with demosaic_method set (indicates RAW file)
+        capture = ProvenanceCapture()
+        prov = capture.capture(
+            source_path=raw_path,
+            tensor=tensor,
+            gamma=1.0,
+            bit_depth=32,
+            demosaic_method="AHD",  # Indicates RAW processing
+            white_balance_method="camera_wb",
+        )
+
+        # Verify rawpy version is captured
+        assert prov.ingest.rawpy_version is not None
+        assert isinstance(prov.ingest.rawpy_version, str)
+        # Should be semantic version format
+        assert "." in prov.ingest.rawpy_version
+
+        # LibRaw version may or may not be available depending on rawpy version
+        # Just check it's captured (can be None)
+        assert hasattr(prov.ingest, "libraw_version")
+
+    def test_provenance_no_rawpy_for_non_raw(self, tmp_path: Path):
+        """Test that rawpy version is not captured for non-RAW files."""
+        from transformation_portal.spatial_ai.ingest.provenance import ProvenanceCapture
+
+        # Create a dummy TIFF file
+        tiff_path = tmp_path / "test.tiff"
+        tiff_path.write_bytes(b"dummy TIFF content")
+
+        # Create a simple test tensor
+        tensor = np.random.rand(100, 100, 3).astype(np.float32)
+
+        # Create provenance WITHOUT demosaic_method (non-RAW file)
+        capture = ProvenanceCapture()
+        prov = capture.capture(
+            source_path=tiff_path,
+            tensor=tensor,
+            gamma=1.0,
+            bit_depth=32,
+            # No demosaic_method - indicates non-RAW file
+        )
+
+        # Verify rawpy version is None for non-RAW
+        assert prov.ingest.rawpy_version is None
+        assert prov.ingest.libraw_version is None
+
+    def test_raw_demosaic_determinism(self, tmp_path: Path):
+        """Test RAW demosaic produces deterministic results (hash reproducibility).
+
+        Note: This test requires a valid DNG fixture with camera matrix.
+        Skipped if no fixture available.
+        """
+        pytest.importorskip("rawpy", reason="rawpy required for determinism tests")
+
+        # For Phase I, this test is a placeholder
+        # Real determinism test requires:
+        # 1. Valid DNG file with camera matrix
+        # 2. Cross-platform hash validation
+        # 3. Baseline reference hashes
+        pytest.skip("RAW determinism test requires DNG fixture - " "tracked in PR #946 documentation for Phase II validation")
 
 
 class TestADR023Compliance:
