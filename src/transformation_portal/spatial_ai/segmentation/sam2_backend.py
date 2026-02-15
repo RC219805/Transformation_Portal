@@ -197,20 +197,35 @@ class SAM2Backend:
             If SAM2 attributes are missing (stub backend), falls back
             to 1.0 for all scores to maintain backward compatibility.
         """
-        # Extract masks (always present)
-        masks = model_output.pred_masks  # (N, H, W) bool
+        # Extract masks (always present) with torch.Tensor handling
+        masks = model_output.pred_masks  # (N, H, W) bool or torch.Tensor
+
+        # Handle torch.Tensor masks (SAM2 returns CUDA/MPS tensors)
+        if hasattr(masks, "detach"):  # torch.Tensor
+            masks = masks.detach().cpu().numpy().astype(bool)
+        else:
+            masks = np.asarray(masks, dtype=bool)
+
         n_masks = len(masks)
 
-        # Extract IoU scores (defensive)
+        # Extract IoU scores (defensive) with torch.Tensor handling
         if hasattr(model_output, "iou_predictions") and model_output.iou_predictions is not None:
-            iou_scores = np.asarray(model_output.iou_predictions, dtype=np.float32)
+            iou_preds = model_output.iou_predictions
+            if hasattr(iou_preds, "detach"):  # torch.Tensor
+                iou_scores = iou_preds.detach().cpu().numpy().astype(np.float32)
+            else:
+                iou_scores = np.asarray(iou_preds, dtype=np.float32)
         else:
             # Fallback for stub backends
             iou_scores = np.ones(n_masks, dtype=np.float32)
 
-        # Extract stability scores (defensive)
+        # Extract stability scores (defensive) with torch.Tensor handling
         if hasattr(model_output, "stability_scores") and model_output.stability_scores is not None:
-            stability_scores = np.asarray(model_output.stability_scores, dtype=np.float32)
+            stab_scores = model_output.stability_scores
+            if hasattr(stab_scores, "detach"):  # torch.Tensor
+                stability_scores = stab_scores.detach().cpu().numpy().astype(np.float32)
+            else:
+                stability_scores = np.asarray(stab_scores, dtype=np.float32)
         else:
             # Fallback for stub backends
             stability_scores = np.ones(n_masks, dtype=np.float32)

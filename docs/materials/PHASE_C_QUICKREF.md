@@ -33,7 +33,7 @@
 
 **Files to modify:**
 - `src/transformation_portal/spatial_ai/segmentation/sam2_backend.py` (~50 lines)
-- `tests/spatial_ai/test_sam2_confidence_semantics.py` (new, ~100 lines)
+- `tests/spatial_ai/segmentation/test_sam2_confidence.py` (new, ~342 lines)
 
 **No contract changes required** — fields already exist, just populating them properly.
 
