@@ -34,5 +34,12 @@ repos:
         files: ^tests/.*\.py$
         pass_filenames: false
 
+      - id: validate-dependency-constraints
+        name: Validate Dependency Constraints (ADR-032)
+        entry: scripts/validate_dependency_constraints.sh
+        language: script
+        files: ^requirements/.*\.in$|^requirements/.*\.txt$
+        pass_filenames: false
+
 # Manual run: pre-commit run --all-files
 # Install: pre-commit install

@@ -1,0 +1,293 @@
+#!/usr/bin/env bash
+# scripts/validate_dependency_constraints.sh
+#
+# Validates dependency constraints in requirements/*.in files.
+# Enforces ADR-032: Dependency Pinning Strategy
+#
+# Exit codes:
+#   0 - All validations pass
+#   1 - Blocking violations found (unpinned, banned, security)
+#   2 - Non-blocking warnings (suggested improvements)
+#
+# Usage:
+#   ./scripts/validate_dependency_constraints.sh [--verbose]
+
+set -eo pipefail
+
+# Colors for output
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+BOLD='\033[1m'
+NC='\033[0m' # No Color
+
+# Counters
+ERRORS=0
+WARNINGS=0
+FILES_CHECKED=0
+
+# Verbose mode
+VERBOSE=0
+if [[ "${1:-}" == "--verbose" ]]; then
+    VERBOSE=1
+fi
+
+# Function: Check if package is banned
+is_banned_package() {
+    local package="$1"
+    case "$package" in
+        "realesrgan")
+            echo "Unmaintained (no updates since 2022)|Use local implementation in src/spatial_ai/reconstruction/"
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+# Function: Get security minimum version
+get_security_minimum() {
+    local package="$1"
+    case "$package" in
+        "sentence-transformers")
+            echo "3.1.0|CVE-73169 (arbitrary code execution)"
+            return 0
+            ;;
+        "Pillow")
+            echo "10.0.0|Multiple CVEs in 9.x series"
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+# Function: Check if package has approved exception
+get_approved_exception() {
+    local package="$1"
+    case "$package" in
+        "mypy") echo "dev.in|Type checker: benefits from latest rules"; return 0 ;;
+        "black") echo "dev.in|Formatter: deterministic, auto-updates OK"; return 0 ;;
+        "flake8") echo "dev.in|Linter: new rules are improvements"; return 0 ;;
+        "pylint") echo "dev.in|Linter: CLI stable across minor versions"; return 0 ;;
+        "types-PyYAML") echo "dev.in|Type stubs: must track PyYAML version"; return 0 ;;
+        "PyYAML") echo "ml.in|Config parser: strong backward compatibility"; return 0 ;;
+        "colour-science") echo "ml.in|Color math library: stable API"; return 0 ;;
+        "coremltools") echo "ml.in|Apple ML tools: platform-specific updates"; return 0 ;;
+        "psutil") echo "ml.in|System utilities: OS compatibility layer"; return 0 ;;
+        "memory-profiler") echo "ml.in|Dev/profiling tool in optional deps"; return 0 ;;
+        "pypdf") echo "ci.in|PDF utilities: backward compat in 3.x"; return 0 ;;
+    esac
+    return 1
+}
+
+# Production files (require range pins or strict pins)
+PRODUCTION_FILES=("base.in" "ml.in")
+
+echo -e "${BLUE}${BOLD}🔍 Validating dependency constraints...${NC}\n"
+
+# Function: Extract package name from dependency line
+extract_package_name() {
+    local line="$1"
+    # Remove version constraints and extras, handle pip-compile markers
+    echo "$line" | sed -E 's/[>=<~!]=.*$//' | sed 's/\[.*\]$//' | tr -d ' '
+}
+
+# Function: Extract version from constraint
+extract_version() {
+    local constraint="$1"
+    # Extract version number from patterns like >=X.Y.Z or ==X.Y.Z
+    echo "$constraint" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1
+}
+
+# Function: Compare semantic versions (returns 0 if v1 >= v2, 1 otherwise)
+version_gte() {
+    local v1="$1"
+    local v2="$2"
+
+    # Use Python for accurate semantic version comparison
+    python3 << EOF
+from packaging.version import Version
+import sys
+try:
+    result = Version("$v1") >= Version("$v2")
+    sys.exit(0 if result else 1)
+except Exception as e:
+    sys.exit(1)
+EOF
+}
+
+# Function: Validate single .in file
+validate_in_file() {
+    local in_file="$1"
+    local basename
+    basename=$(basename "$in_file")
+    local file_errors=0
+    local file_warnings=0
+
+    FILES_CHECKED=$((FILES_CHECKED + 1))
+
+    [[ $VERBOSE -eq 1 ]] && echo -e "${BLUE}Checking $basename...${NC}"
+
+    # Check if file is a production file
+    local is_production=0
+    for prod_file in "${PRODUCTION_FILES[@]}"; do
+        if [[ "$basename" == "$prod_file" ]]; then
+            is_production=1
+            break
+        fi
+    done
+
+    local line_num=0
+    while IFS= read -r line; do
+        line_num=$((line_num + 1))
+
+        # Skip comments, empty lines, and -r includes
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+        [[ "$line" =~ ^-r ]] && continue
+
+        # Extract package name
+        local package
+        package=$(extract_package_name "$line")
+        [[ -z "$package" ]] && continue
+
+        # Check for banned packages
+        if banned_info=$(is_banned_package "$package"); then
+            IFS='|' read -r reason migration <<< "$banned_info"
+            echo -e "${RED}❌ $basename:$line_num: $line${NC}"
+            echo -e "   ${BOLD}ERROR:${NC} Package '$package' is BANNED ($reason)"
+            echo -e "   ${BOLD}Migration:${NC} $migration\n"
+            file_errors=$((file_errors + 1))
+            continue
+        fi
+
+        # Validate constraint style
+        if echo "$line" | grep -qE '^[a-zA-Z0-9_-]+[[:space:]]*$'; then
+            # Unpinned dependency
+            echo -e "${RED}❌ $basename:$line_num: $line${NC}"
+            echo -e "   ${BOLD}ERROR:${NC} Unpinned dependency (no version constraint)"
+            echo -e "   ${BOLD}Fix:${NC} Add version constraint:"
+            echo -e "     - Production deps: Use range pin (>=X.Y,<Z)"
+            echo -e "     - Dev tools: Use lower-bound (>=X.Y) if CLI is stable\n"
+            file_errors=$((file_errors + 1))
+
+        elif echo "$line" | grep -qE '^[a-zA-Z0-9_-]+>=[0-9.]+$'; then
+            # Lower-bound-only constraint
+            local pkg
+            pkg=$(echo "$line" | sed -E 's/>=.*//')
+
+            # Check if this is an approved exception
+            if exception_info=$(get_approved_exception "$pkg"); then
+                IFS='|' read -r allowed_file reason <<< "$exception_info"
+                if [[ "$basename" != "$allowed_file" ]]; then
+                    echo -e "${RED}❌ $basename:$line_num: $line${NC}"
+                    echo -e "   ${BOLD}ERROR:${NC} Lower-bound-only constraint in wrong file"
+                    echo -e "   ${BOLD}Approved for:${NC} $allowed_file ($reason)"
+                    echo -e "   ${BOLD}Fix:${NC} Either move to $allowed_file or add upper bound\n"
+                    file_errors=$((file_errors + 1))
+                fi
+            elif [[ $is_production -eq 1 ]]; then
+                # Production file without approved exception
+                echo -e "${RED}❌ $basename:$line_num: $line${NC}"
+                echo -e "   ${BOLD}ERROR:${NC} Lower-bound-only constraint in production file"
+                echo -e "   ${BOLD}Fix:${NC} Add upper bound for determinism (>=X.Y,<Z)"
+                echo -e "   ${BOLD}Exception:${NC} Add to ADR-032 Section 4 if strong rationale exists\n"
+                file_errors=$((file_errors + 1))
+            else
+                # Dev/CI file without approved exception
+                echo -e "${YELLOW}⚠️  $basename:$line_num: $line${NC}"
+                echo -e "   ${BOLD}WARNING:${NC} Lower-bound-only constraint without approved exception"
+                echo -e "   ${BOLD}Consider:${NC} Adding upper bound for safety or documenting exception in ADR-032\n"
+                file_warnings=$((file_warnings + 1))
+            fi
+
+        elif echo "$line" | grep -qE '^[a-zA-Z0-9_-]+==[0-9.]+'; then
+            # Strict pin - should have inline comment
+            if ! echo "$line" | grep -q '#'; then
+                echo -e "${YELLOW}⚠️  $basename:$line_num: $line${NC}"
+                echo -e "   ${BOLD}WARNING:${NC} Strict pin without inline comment"
+                echo -e "   ${BOLD}Best practice:${NC} Add comment explaining rationale (e.g., '# Deterministic builds')\n"
+                file_warnings=$((file_warnings + 1))
+            fi
+        fi
+
+        # Check security minimums
+        if security_info=$(get_security_minimum "$package"); then
+            IFS='|' read -r min_version reason <<< "$security_info"
+
+            # Extract current lower bound from constraint (works for both >=X.Y and >=X.Y,<Z)
+            if echo "$line" | grep -qE '>=[0-9.]+'; then
+                local current_version
+                current_version=$(echo "$line" | grep -oE '>=[0-9.]+' | head -1 | sed 's/>=//') || current_version=""
+
+                if [[ -n "$current_version" ]] && ! version_gte "$current_version" "$min_version"; then
+                    echo -e "${RED}❌ $basename:$line_num: $line${NC}"
+                    echo -e "   ${BOLD}ERROR:${NC} Security minimum not met (need >=$min_version for $reason)"
+                    echo -e "   ${BOLD}Current:${NC} >=$current_version"
+                    echo -e "   ${BOLD}Fix:${NC} Update constraint to >=$min_version,<...\n"
+                    file_errors=$((file_errors + 1))
+                fi
+            fi
+        fi
+
+    done < "$in_file"
+
+    # Check corresponding .txt file freshness
+    local txt_file="${in_file%.in}.txt"
+    if [[ -f "$txt_file" ]]; then
+        if [[ "$txt_file" -ot "$in_file" ]]; then
+            echo -e "${YELLOW}⚠️  $basename: Compiled .txt file is stale${NC}"
+            echo -e "   ${BOLD}WARNING:${NC} $(basename "$txt_file") is older than $basename"
+            echo -e "   ${BOLD}Fix:${NC} Run 'cd requirements && make compile' to regenerate\n"
+            file_warnings=$((file_warnings + 1))
+        fi
+
+        # Check for pip-compile header (ensures it wasn't manually edited)
+        if ! head -5 "$txt_file" | grep -q "autogenerated by pip-compile"; then
+            echo -e "${YELLOW}⚠️  $(basename "$txt_file"): Missing pip-compile header${NC}"
+            echo -e "   ${BOLD}WARNING:${NC} File may have been manually edited"
+            echo -e "   ${BOLD}Fix:${NC} Regenerate with 'cd requirements && make compile'\n"
+            file_warnings=$((file_warnings + 1))
+        fi
+    fi
+
+    ERRORS=$((ERRORS + file_errors))
+    WARNINGS=$((WARNINGS + file_warnings))
+
+    if [[ $file_errors -eq 0 && $file_warnings -eq 0 ]]; then
+        echo -e "${GREEN}✅ $basename: All constraints valid${NC}"
+    fi
+}
+
+# Main validation loop
+shopt -s nullglob
+IN_FILES=(requirements/*.in)
+
+if [[ ${#IN_FILES[@]} -eq 0 ]]; then
+    echo -e "${RED}❌ No .in files found in requirements/ directory${NC}"
+    exit 1
+fi
+
+for in_file in "${IN_FILES[@]}"; do
+    # Skip all.in (it just includes other files)
+    [[ "$(basename "$in_file")" == "all.in" ]] && continue
+
+    validate_in_file "$in_file"
+    echo # Blank line between files
+done
+
+# Summary
+echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+if [[ $ERRORS -eq 0 && $WARNINGS -eq 0 ]]; then
+    echo -e "${GREEN}${BOLD}✅ All $FILES_CHECKED dependency files validated successfully!${NC}"
+    echo -e "${BLUE}Run 'cd requirements && make compile' to update .txt files after changes.${NC}"
+    exit 0
+elif [[ $ERRORS -gt 0 ]]; then
+    echo -e "${RED}${BOLD}❌ Validation failed: $ERRORS error(s), $WARNINGS warning(s)${NC}"
+    echo -e "${BLUE}Fix errors in .in files, then run 'cd requirements && make compile'.${NC}"
+    exit 1
+else
+    echo -e "${YELLOW}${BOLD}⚠️  Validation passed with warnings: $WARNINGS warning(s)${NC}"
+    echo -e "${BLUE}Consider addressing warnings for best practices.${NC}"
+    exit 2
+fi
