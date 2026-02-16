@@ -215,6 +215,7 @@ packaging==26.0
     #   lazy-loader
     #   pyproject-api
     #   pytest
+    #   pytest-rerunfailures
     #   safety
     #   scikit-image
     #   tox
@@ -280,7 +281,18 @@ pytest==9.0.2
     # via
     #   -r dev.in
     #   pytest-cov
+    #   pytest-json-report
+    #   pytest-metadata
+    #   pytest-rerunfailures
 pytest-cov==7.0.0
+    # via -r dev.in
+pytest-json-report==1.5.0
+    # via
+    #   -r ci.in
+    #   -r dev.in
+pytest-metadata==3.1.1
+    # via pytest-json-report
+pytest-rerunfailures==14.0
     # via -r dev.in
 pytokens==0.4.1
     # via black

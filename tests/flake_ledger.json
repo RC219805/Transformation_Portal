@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Test flake tracking ledger - monitors test stability over time",
+  "version": "1.0.0",
+  "last_updated": "2026-02-16T06:11:21.832111+00:00",
+  "config": {
+    "flake_threshold": 0.01,
+    "min_runs_for_analysis": 10,
+    "quarantine_threshold": 0.03,
+    "auto_quarantine_enabled": false
+  },
+  "tests": {}
+}

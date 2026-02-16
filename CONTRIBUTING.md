@@ -156,6 +156,39 @@ pytest tests/ -m "not slow and not benchmark" -v
 bash scripts/check_ml_test_isolation.sh
 ```
 
+### Test Stability & Flake Management
+
+Tests must be **deterministic** and **reliable**. Flaky tests (intermittent failures) are not acceptable.
+
+**Flake Rate Monitoring:**
+- All tests tracked in `tests/flake_ledger.json`
+- Repository target: **<1% flake rate**
+- Tests with >3% flake rate are quarantined
+
+**If you encounter a flaky test:**
+1. Check ledger: `python scripts/analyze_flakes.py`
+2. Reproduce locally (run 20+ times)
+3. Fix root cause (see ADR-033 for common patterns)
+4. **Do not** just re-run CI hoping it passes
+
+**Quarantine mechanism:**
+```python
+import pytest
+
+@pytest.mark.flaky(reruns=3, reruns_delay=1)
+def test_sometimes_flaky():
+    # Last resort - prefer fixing root cause
+    pass
+```
+
+**Common flake sources:**
+- Race conditions / timing assumptions
+- Environmental dependencies (network, filesystem)
+- Test order dependencies
+- Non-deterministic inputs (unseeded random)
+
+See [`docs/architecture/ADR-033-test-flake-management.md`](docs/architecture/ADR-033-test-flake-management.md) for full guide.
+
 ### Documentation
 - Docstrings for all public functions/classes
 - Update relevant docs in `docs/` if behavior changes
