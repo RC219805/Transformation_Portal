@@ -613,7 +613,7 @@ new-lib>=0.5.0
 
 ### Quarterly Dependency Audit
 
-Transformations Portal conducts quarterly dependency audits:
+Transformation Portal conducts quarterly dependency audits:
 
 - **Security patches**: CVEs reviewed and updated
 - **Staleness check**: Packages >6 months old evaluated
