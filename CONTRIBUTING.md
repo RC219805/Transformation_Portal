@@ -495,6 +495,133 @@ python -m build
 pip install dist/*.whl --force-reinstall
 ```
 
+## Dependency Management
+
+Transformation Portal uses `pip-compile` for dependency management. All dependencies are defined in abstract `.in` files and compiled to pinned `.txt` files for deterministic builds.
+
+### Constraint Style Guidelines (ADR-032)
+
+**When adding dependencies, use the correct constraint style:**
+
+| Style              | Format          | Use Case                                          | Example                                  |
+|--------------------|-----------------|---------------------------------------------------|------------------------------------------|
+| **Range Pin**      | `>=X.Y,<Z`      | Production dependencies (base.in, ml.in)          | `numpy>=1.24,<2.3.0`                     |
+| **Strict Pin**     | `==X.Y.Z`       | Deterministic builds, known incompatibilities     | `rawpy==0.26.0  # RAW demosaic`          |
+| **Lower-bound**    | `>=X.Y`         | Dev tools with stable CLI (dev.in, ci.in only)    | `black>=24.8  # Formatter`               |
+| **Unpinned**       | (none)          | **NEVER ALLOWED** (causes non-deterministic builds) | ❌                                       |
+
+**Decision tree:**
+
+1. Is this a production dependency (`base.in` or `ml.in`)?
+   - **Yes**: Use **range pin** (`>=X.Y,<Z`) unless determinism is critical
+   - **No**: Continue to step 2
+
+2. Is this a development tool with a stable CLI (`dev.in` or `ci.in`)?
+   - **Yes**: Use **lower-bound** (`>=X.Y`) if benefits from latest features
+   - **No**: Use **range pin** for safety
+
+3. Does it need deterministic behavior (ML models, RAW processing)?
+   - **Yes**: Use **strict pin** (`==X.Y.Z`) with inline comment
+
+### Adding/Updating Dependencies
+
+**Workflow:**
+
+```bash
+# 1. Edit the appropriate .in file
+vim requirements/base.in       # Production runtime deps
+vim requirements/ml.in         # Optional ML/AI deps
+vim requirements/dev.in        # Testing and linting tools
+vim requirements/ci.in         # CI-only tools
+
+# 2. Add dependency with correct constraint style
+echo "new-package>=1.0.0,<2    # Brief description" >> requirements/base.in
+
+# 3. Recompile all .txt files
+cd requirements && make compile
+
+# 4. Validate constraints
+cd .. && ./scripts/validate_dependency_constraints.sh
+
+# 5. Commit both .in and .txt files
+git add requirements/*.in requirements/*.txt
+git commit -m "deps: add new-package for feature XYZ"
+```
+
+### Banned Packages
+
+The following packages are **banned** and must not be added:
+
+| Package      | Reason                                      | Alternative                                      |
+|--------------|---------------------------------------------|--------------------------------------------------|
+| `realesrgan` | Unmaintained (no updates since 2022)        | Use local implementation in `src/spatial_ai/reconstruction/` |
+
+### Security Minimums
+
+Certain packages require minimum versions due to CVEs:
+
+| Package                 | Minimum Version | Reason                              |
+|-------------------------|-----------------|-------------------------------------|
+| `sentence-transformers` | >=3.1.0         | CVE-73169 (arbitrary code execution) |
+| `Pillow`                | >=10.0.0        | Multiple CVEs in 9.x series         |
+
+### Approved Exceptions
+
+Lower-bound-only constraints are approved for these development tools:
+
+- `mypy`, `black`, `flake8`, `pylint` (linters/formatters with stable CLIs)
+- `pypdf` (CI utilities with backward compat)
+- `PyYAML`, `coremltools`, `psutil` (optional ML deps with stable APIs)
+
+See [`docs/architecture/ADR-032-dependency-pinning-strategy.md`](docs/architecture/ADR-032-dependency-pinning-strategy.md) for full rationale.
+
+### Enforcement
+
+Dependencies are validated automatically:
+
+**Pre-commit hook** (local):
+```bash
+# Runs on git commit for .in or .txt changes
+# Blocks unpinned deps, banned packages, stale .txt files
+```
+
+**CI job** (automated):
+```bash
+# Runs in CI Quality Firewall workflow
+# Blocks PR merge on violations
+```
+
+**Manual validation:**
+```bash
+./scripts/validate_dependency_constraints.sh --verbose
+```
+
+### Exception Process
+
+If you need to violate a constraint rule:
+
+1. Document rationale (why is the exception necessary?)
+2. Assess risk (what could break?)
+3. Add to ADR-032 approved exceptions table, or
+4. Add inline comment in `.in` file with reviewer name and date
+
+**Example:**
+```
+# Exception: new-lib has no stable release yet (approved by @reviewer, 2026-02-16)
+new-lib>=0.5.0
+```
+
+### Quarterly Dependency Audit
+
+Transformation Portal conducts quarterly dependency audits:
+
+- **Security patches**: CVEs reviewed and updated
+- **Staleness check**: Packages >6 months old evaluated
+- **Banned packages**: New unmaintained packages identified
+- **Exception review**: Approved exceptions re-validated
+
+Next audit: **2026-05-16 (Q2 2026)**
+
 ## Release Process
 
 Releases follow semantic versioning:

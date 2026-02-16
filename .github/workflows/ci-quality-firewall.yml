@@ -275,9 +275,56 @@ jobs:
 
           echo "✅ Core test isolation verified"
 
+  validate-dependency-constraints:
+    name: Validate Dependency Constraints (ADR-032)
+    needs: preflight
+    if: needs.preflight.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.preflight.outputs.head_sha }}
+
+      - name: Set up Python ${{ env.PYTHON_VERSION_TEST_MIN }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION_TEST_MIN }}
+          cache: 'pip'
+          cache-dependency-path: 'requirements-ci.txt'
+
+      - name: Install validation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install packaging
+
+      - name: Validate dependency constraints
+        run: |
+          echo "🔍 Validating dependency constraints (ADR-032)..."
+          bash scripts/validate_dependency_constraints.sh --verbose
+          status=$?
+          if [ "$status" -eq 2 ]; then
+            echo "⚠️  Dependency constraints validation completed with warnings (non-blocking)."
+            exit 0
+          elif [ "$status" -ne 0 ]; then
+            echo "❌ Dependency constraints validation failed with exit code $status."
+            exit "$status"
+          fi
+
+      - name: Upload validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-validation-report
+          path: |
+            requirements/*.in
+            requirements/*.txt
+          retention-days: 7
+
   test-core:
     name: Core Tests (Python ${{ matrix.python-version }})
-    needs: [preflight, test-isolation]
+    needs: [preflight, test-isolation, validate-dependency-constraints]
     if: needs.preflight.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
