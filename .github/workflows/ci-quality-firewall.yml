@@ -303,6 +303,14 @@ jobs:
         run: |
           echo "🔍 Validating dependency constraints (ADR-032)..."
           bash scripts/validate_dependency_constraints.sh --verbose
+          status=$?
+          if [ "$status" -eq 2 ]; then
+            echo "⚠️  Dependency constraints validation completed with warnings (non-blocking)."
+            exit 0
+          elif [ "$status" -ne 0 ]; then
+            echo "❌ Dependency constraints validation failed with exit code $status."
+            exit "$status"
+          fi
 
       - name: Upload validation report
         if: always()
