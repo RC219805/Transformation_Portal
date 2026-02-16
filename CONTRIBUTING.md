@@ -35,7 +35,7 @@ python -c "import transformation_portal; print('OK')"
 
 ### Code Style
 - **Line length**: Maximum 127 characters
-- **Python version**: 3.10+ (test on 3.10, 3.11, 3.12)
+- **Python version**: 3.11+ (minimum supported version)
 - **Formatting**: Use `black` with line length 127
 - **Import sorting**: Use `isort` with black profile
 - **Type hints**: Required for public APIs
@@ -47,6 +47,114 @@ All contributions must include tests:
 - **Integration tests** for cross-module functionality
 - **CLI contract tests** for command-line interfaces
 - **Regression tests** for bug fixes
+
+### Test Dependency Isolation (ADR-031)
+
+**CRITICAL:** Tests are strictly isolated by dependency requirements to ensure fast, offline CI.
+
+#### Test Classification
+
+| Marker | Dependencies | Python Versions | Command | Runtime Target |
+|--------|--------------|-----------------|---------|----------------|
+| *(default)* | Core only (no ML) | 3.11, 3.12 | `pytest -m "not ml and not slow"` | ~30s |
+| `@pytest.mark.ml` | transformers, torch, diffusers | 3.11 | `pytest -m "ml and not slow"` | ~5min |
+| `@pytest.mark.slow` | Any | 3.11 | Manual/nightly | No limit |
+| `@pytest.mark.benchmark` | Any | 3.11 | Manual/nightly | No limit |
+
+#### Writing ML Tests: Required Patterns
+
+ML dependencies (transformers, torch, diffusers) are **NOT installed** in core CI environments.
+
+**Pattern A: Module-level import guard** ✅ (RECOMMENDED)
+
+```python
+# tests/spatial_ai/segmentation/test_material_classifier.py
+
+try:
+    import transformers
+    import torch
+    HAS_ML_DEPS = True
+except ImportError:
+    HAS_ML_DEPS = False
+
+@pytest.mark.ml
+@pytest.mark.skipif(not HAS_ML_DEPS, reason="ML dependencies required")
+class TestMaterialClassifier:
+    def test_inference(self):
+        # Safe to import here - skipif prevents collection in offline CI
+        from transformers import CLIPModel
+        model = CLIPModel.from_pretrained(...)
+        ...
+```
+
+**Pattern B: Inline import skip** ✅
+
+```python
+@pytest.mark.ml
+def test_inference(self):
+    transformers = pytest.importorskip("transformers")
+    torch = pytest.importorskip("torch")
+    # Use imports...
+```
+
+#### Import-Before-Mock Anti-Pattern
+
+**WRONG** ❌ - This will fail in offline CI:
+
+```python
+from unittest.mock import patch
+
+@patch("transformers.CLIPModel")  # ❌ Imports transformers BEFORE patching!
+def test_foo(mock_clip):
+    pass
+```
+
+**Why it fails:** `@patch("transformers.CLIPModel")` imports the `transformers` module during test collection (before patching), causing `ModuleNotFoundError` when transformers is not installed.
+
+**CORRECT** ✅ - Add import guard:
+
+```python
+try:
+    import transformers
+    HAS_ML_DEPS = True
+except ImportError:
+    HAS_ML_DEPS = False
+
+@pytest.mark.ml
+@pytest.mark.skipif(not HAS_ML_DEPS, reason="ML dependencies required")
+@patch("transformers.CLIPModel")  # ✅ Safe: skip decorator prevents collection
+def test_foo(mock_clip):
+    pass
+```
+
+#### Enforcement (3 Layers)
+
+1. **Pre-commit hook**: Blocks commits with `@patch("transformers|torch")` without import guards
+   - Script: `scripts/check_ml_test_isolation.sh`
+   - Auto-runs on `git commit`
+
+2. **CI validation**: Verifies core tests don't import ML dependencies
+   - Job: `test-isolation` in Quality Firewall workflow
+   - Fails fast with clear diagnostics
+
+3. **Documentation**: Full specification and rationale
+   - See: [`docs/architecture/ADR-031-test-dependency-isolation.md`](docs/architecture/ADR-031-test-dependency-isolation.md)
+
+#### Quick Reference
+
+```bash
+# Run core tests (what CI runs for fast feedback)
+pytest tests/ -m "not ml and not slow" -v
+
+# Run ML tests (requires ML dependencies installed)
+pytest tests/ -m "ml and not slow" -v
+
+# Run all tests except slow/benchmark
+pytest tests/ -m "not slow and not benchmark" -v
+
+# Check if your test will violate isolation
+bash scripts/check_ml_test_isolation.sh
+```
 
 ### Documentation
 - Docstrings for all public functions/classes
@@ -74,7 +182,7 @@ All pull requests must pass these automated gates before merge:
 - **Exit code**: Must be 0
 
 ### 4. Tests (BLOCKING)
-- **Core tests**: Python 3.10 and 3.12
+- **Core tests**: Python 3.11 and 3.12
 - **ML tests**: Python 3.11
 - **All tests must pass**
 - **No skipped tests without justification**
