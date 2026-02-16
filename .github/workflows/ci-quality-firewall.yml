@@ -326,10 +326,20 @@ jobs:
             --cov-report=term \
             --cov-report=html \
             --cov-config=pyproject.toml \
+            --json-report \
+            --json-report-file=test-results/core-py${{ matrix.python-version }}.json \
             --maxfail=3 \
             --tb=short
         env:
           PYTHONNOUSERSITE: 1
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-core-py${{ matrix.python-version }}
+          path: test-results/
+          retention-days: 7
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.12'
@@ -424,6 +434,8 @@ jobs:
             --cov-report=xml \
             --cov-report=term \
             --cov-report=html \
+            --json-report \
+            --json-report-file=test-results/ml-py3.11.json \
             --maxfail=3 \
             --tb=short
         env:
@@ -432,6 +444,14 @@ jobs:
           # Prevents cold-cache failures on first run
           TRANSFORMERS_OFFLINE: ${{ steps.cache-models.outputs.cache-hit == 'true' && '1' || '0' }}
           HF_HUB_OFFLINE: ${{ steps.cache-models.outputs.cache-hit == 'true' && '1' || '0' }}
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-ml-py3.11
+          path: test-results/
+          retention-days: 7
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
@@ -620,6 +640,83 @@ jobs:
               echo "WARNING: Pattern '$pattern' not in .gitignore"
             fi
           done
+
+  flake-analysis:
+    name: Flake Rate Analysis
+    needs: [test-core, test-ml]
+    if: always() && (needs.test-core.result == 'success' || needs.test-ml.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Install tracking script dependencies
+        run: |
+          python -m pip install --upgrade pip
+
+      - name: Download test results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-results-*
+          path: test-results/
+          merge-multiple: true
+
+      - name: Track flakes
+        id: track
+        continue-on-error: true
+        run: |
+          for report in test-results/*.json; do
+            if [ -f "$report" ]; then
+              echo "Processing $report..."
+              python scripts/track_test_flakes.py "$report"
+            fi
+          done
+
+      - name: Generate flake report
+        if: always()
+        run: |
+          python scripts/analyze_flakes.py --format=markdown > flake-report.md
+          python scripts/analyze_flakes.py --format=text
+
+      - name: Upload flake ledger
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flake-ledger
+          path: tests/flake_ledger.json
+          retention-days: 30
+
+      - name: Upload flake report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flake-report
+          path: flake-report.md
+          retention-days: 30
+
+      - name: Check flake threshold
+        if: always()
+        run: |
+          # Extract repo-wide flake rate
+          FLAKE_RATE=$(python scripts/analyze_flakes.py --format=json | python -c "import sys, json; print(json.load(sys.stdin).get('repo_flake_rate', 0.0))")
+          THRESHOLD=0.01  # 1%
+
+          echo "Repository flake rate: $FLAKE_RATE"
+          echo "Threshold: $THRESHOLD"
+
+          # Non-blocking for now - just report
+          if (( $(echo "$FLAKE_RATE > $THRESHOLD" | bc -l) )); then
+            echo "::warning::Flake rate ($FLAKE_RATE) exceeds threshold ($THRESHOLD)"
+          else
+            echo "✅ Flake rate within threshold"
+          fi
 
   quality-summary:
     name: Quality Gate Summary

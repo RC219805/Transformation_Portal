@@ -72,6 +72,7 @@ packaging==26.0
     #   -c all.txt
     #   black
     #   pytest
+    #   pytest-rerunfailures
 pathspec==1.0.4
     # via
     #   -c all.txt
@@ -109,7 +110,22 @@ pytest==9.0.2
     #   -c all.txt
     #   -r dev.in
     #   pytest-cov
+    #   pytest-json-report
+    #   pytest-metadata
+    #   pytest-rerunfailures
 pytest-cov==7.0.0
+    # via
+    #   -c all.txt
+    #   -r dev.in
+pytest-json-report==1.5.0
+    # via
+    #   -c all.txt
+    #   -r dev.in
+pytest-metadata==3.1.1
+    # via
+    #   -c all.txt
+    #   pytest-json-report
+pytest-rerunfailures==14.0
     # via
     #   -c all.txt
     #   -r dev.in

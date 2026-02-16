@@ -66,6 +66,10 @@ importlib-metadata==8.7.1
     #   -c all.txt
     #   keyring
     #   twine
+iniconfig==2.3.0
+    # via
+    #   -c all.txt
+    #   pytest
 jaraco-classes==3.4.0
     # via
     #   -c all.txt
@@ -105,6 +109,7 @@ packaging==26.0
     #   build
     #   dparse
     #   pyproject-api
+    #   pytest
     #   safety
     #   tox
 pkginfo==1.12.1.2
@@ -119,10 +124,12 @@ platformdirs==4.5.1
 pluggy==1.6.0
     # via
     #   -c all.txt
+    #   pytest
     #   tox
 pygments==2.19.2
     # via
     #   -c all.txt
+    #   pytest
     #   readme-renderer
     #   rich
 pypdf==6.7.0
@@ -137,6 +144,19 @@ pyproject-hooks==1.2.0
     # via
     #   -c all.txt
     #   build
+pytest==9.0.2
+    # via
+    #   -c all.txt
+    #   pytest-json-report
+    #   pytest-metadata
+pytest-json-report==1.5.0
+    # via
+    #   -c all.txt
+    #   -r ci.in
+pytest-metadata==3.1.1
+    # via
+    #   -c all.txt
+    #   pytest-json-report
 pyyaml==6.0.3
     # via
     #   -c all.txt
