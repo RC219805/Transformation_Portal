@@ -712,10 +712,11 @@ jobs:
           echo "Threshold: $THRESHOLD"
 
           # Non-blocking for now - just report
-          if (( $(echo "$FLAKE_RATE > $THRESHOLD" | bc -l) )); then
-            echo "::warning::Flake rate ($FLAKE_RATE) exceeds threshold ($THRESHOLD)"
-          else
+          # Use Python for robust float comparison (handles empty/invalid values)
+          if python3 -c "import sys; flake_rate = float('${FLAKE_RATE}' or '0.0'); threshold = float('${THRESHOLD}' or '0.01'); sys.exit(1 if flake_rate > threshold else 0)" 2>/dev/null; then
             echo "✅ Flake rate within threshold"
+          else
+            echo "::warning::Flake rate ($FLAKE_RATE) exceeds threshold ($THRESHOLD)"
           fi
 
   quality-summary:

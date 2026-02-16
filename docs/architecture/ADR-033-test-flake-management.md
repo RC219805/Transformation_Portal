@@ -343,9 +343,9 @@ After baseline:
 - [x] CI job added (`flake-analysis`)
 - [x] Test jobs generate JSON reports
 - [x] ADR published (this document)
+- [x] CONTRIBUTING.md updated with flake guidance
 - [ ] Baseline established (30 days of data)
 - [ ] Thresholds tuned based on baseline
-- [ ] CONTRIBUTING.md updated with flake guidance
 - [ ] Transition to blocking enforcement (after baseline)
 
 ---

@@ -47,19 +47,43 @@ def load_ledger() -> dict[str, Any]:
 
 
 def save_ledger(ledger: dict[str, Any]) -> None:
-    """Save the flake tracking ledger."""
+    """Save the flake tracking ledger with atomic writes."""
     ledger["last_updated"] = datetime.now(timezone.utc).isoformat()
     LEDGER_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(LEDGER_PATH, "w") as f:
-        json.dump(ledger, f, indent=2, sort_keys=False)
-        f.write("\n")  # Trailing newline
+    # Atomic write: write to temp file, then replace
+    temp_path = LEDGER_PATH.with_suffix(".tmp")
+    try:
+        with open(temp_path, "w") as f:
+            json.dump(ledger, f, indent=2, sort_keys=False)
+            f.write("\n")  # Trailing newline
+            f.flush()  # Ensure data written to disk
+        # Atomic rename (POSIX guarantees atomicity)
+        temp_path.replace(LEDGER_PATH)
+    except Exception as e:
+        # Clean up temp file on error
+        if temp_path.exists():
+            temp_path.unlink()
+        raise e
 
 
 def parse_pytest_json(report_path: Path) -> dict[str, Any]:
-    """Parse pytest JSON report."""
-    with open(report_path) as f:
-        return json.load(f)
+    """Parse pytest JSON report with error handling."""
+    try:
+        with open(report_path) as f:
+            return json.load(f)
+    except json.JSONDecodeError as e:
+        print(
+            f"⚠️  Error: Malformed JSON in {report_path}: {e}",
+            file=sys.stderr,
+        )
+        return {"tests": []}  # Return empty but valid structure
+    except IOError as e:
+        print(
+            f"⚠️  Error: Cannot read {report_path}: {e}",
+            file=sys.stderr,
+        )
+        return {"tests": []}
 
 
 def update_test_record(ledger: dict[str, Any], test_id: str, outcome: str, duration: float) -> None:
