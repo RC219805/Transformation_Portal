@@ -8,6 +8,7 @@
 # Testing / coverage / property-based tests
 pytest>=8,<10
 pytest-cov>=4.0,<8
+pytest-json-report>=1.5,<2
 hypothesis>=6,<7
 
 # Required for RAG system and workflow tests

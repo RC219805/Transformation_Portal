@@ -29,9 +29,9 @@ class TestProvenanceCapture:
     def test_capture_basic_provenance(self, tmp_path: Path):
         """Test basic provenance capture without EXIF."""
         # Create test image
-        img = (np.random.rand(100, 100, 3) * 65535).astype(np.uint16)
+        img = (np.random.rand(100, 100, 3) * 255).astype(np.uint8)
         img_path = tmp_path / "test.tiff"
-        Image.fromarray(img, mode="RGB").save(img_path)
+        Image.fromarray(img).save(img_path)
 
         # Create test tensor
         tensor = np.random.rand(100, 100, 3).astype(np.float32)
@@ -58,9 +58,9 @@ class TestProvenanceCapture:
     def test_provenance_hashes_deterministic(self, tmp_path: Path):
         """Test that hashes are deterministic (same input → same hash)."""
         # Create test image
-        img = (np.random.rand(50, 50, 3) * 65535).astype(np.uint16)
+        img = (np.random.rand(50, 50, 3) * 255).astype(np.uint8)
         img_path = tmp_path / "test.tiff"
-        Image.fromarray(img, mode="RGB").save(img_path)
+        Image.fromarray(img).save(img_path)
 
         # Create deterministic tensor
         tensor = np.ones((50, 50, 3), dtype=np.float32) * 0.5

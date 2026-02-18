@@ -640,8 +640,9 @@ def download_sam2_checkpoint(model_size: Literal["base", "large"] = "large", out
     Raises:
         RuntimeError: If download fails.
     """
-    import urllib.request
+    import http.client
     from pathlib import Path
+    from urllib.parse import urlparse
 
     CHECKPOINT_URLS = {
         "base": "https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2_hiera_base_plus.pt",
@@ -651,6 +652,7 @@ def download_sam2_checkpoint(model_size: Literal["base", "large"] = "large", out
     url = CHECKPOINT_URLS[model_size]
     filename = SAM2Backend.DEFAULT_CHECKPOINTS[model_size]
     output_path = Path(output_dir) / filename
+    allowed_hosts = {"dl.fbaipublicfiles.com"}
 
     # Create output directory
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -659,12 +661,57 @@ def download_sam2_checkpoint(model_size: Literal["base", "large"] = "large", out
         logger.info(f"Checkpoint already exists: {output_path}")
         return output_path
 
+    parsed_url = urlparse(url)
+    if parsed_url.scheme != "https" or parsed_url.hostname not in allowed_hosts:
+        raise RuntimeError(f"Refusing to download checkpoint from untrusted URL: {url}")
+
     logger.info(f"Downloading SAM2 {model_size} checkpoint from {url}...")
     logger.info(f"This may take several minutes (checkpoint is ~200-400 MB)...")
 
+    temp_path = output_path.with_suffix(f"{output_path.suffix}.tmp")
+    current_url = url
+    max_redirects = 3
     try:
-        urllib.request.urlretrieve(url, output_path)
-        logger.info(f"✅ Downloaded: {output_path}")
-        return output_path
+        for _ in range(max_redirects + 1):
+            parsed_url = urlparse(current_url)
+            host = parsed_url.hostname
+            if parsed_url.scheme != "https" or host not in allowed_hosts:
+                raise RuntimeError(f"Refusing to download checkpoint from untrusted URL: {current_url}")
+
+            request_path = parsed_url.path or "/"
+            if parsed_url.query:
+                request_path = f"{request_path}?{parsed_url.query}"
+
+            connection = http.client.HTTPSConnection(host, parsed_url.port or 443, timeout=300)
+            try:
+                connection.request("GET", request_path, headers={"User-Agent": "transformation-portal/ci"})
+                response = connection.getresponse()
+                if response.status in {301, 302, 303, 307, 308}:
+                    redirect_location = response.getheader("Location")
+                    response.read()  # Drain body before reusing loop
+                    if not redirect_location:
+                        raise RuntimeError("Checkpoint download redirect missing Location header")
+                    if redirect_location.startswith("/"):
+                        current_url = f"https://{host}{redirect_location}"
+                    else:
+                        current_url = redirect_location
+                    continue
+                if response.status != 200:
+                    raise RuntimeError(f"Checkpoint download failed with HTTP {response.status}: {response.reason}")
+
+                with temp_path.open("wb") as handle:
+                    while True:
+                        chunk = response.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        handle.write(chunk)
+                temp_path.replace(output_path)
+                logger.info(f"✅ Downloaded: {output_path}")
+                return output_path
+            finally:
+                connection.close()
+
+        raise RuntimeError("Too many redirects while downloading SAM2 checkpoint")
     except Exception as e:
+        temp_path.unlink(missing_ok=True)
         raise RuntimeError(f"Failed to download SAM2 checkpoint: {e}") from e

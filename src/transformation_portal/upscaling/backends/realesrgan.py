@@ -110,7 +110,8 @@ class RealESRGANUpscaler:
         Args:
             model_path: Path to save model weights.
         """
-        import urllib.request
+        import http.client
+        from urllib.parse import urlparse
 
         # Model URLs from official Real-ESRGAN releases
         model_urls = {
@@ -119,15 +120,66 @@ class RealESRGANUpscaler:
         }
 
         url = model_urls[self._model_name]
+        allowed_hosts = {
+            "github.com",
+            "objects.githubusercontent.com",
+            "release-assets.githubusercontent.com",
+            "github-releases.githubusercontent.com",
+        }
         logger.info(f"Downloading model weights from {url}")
         logger.info(f"Saving to {model_path}")
 
         model_path.parent.mkdir(parents=True, exist_ok=True)
+        parsed_url = urlparse(url)
+        if parsed_url.scheme != "https" or parsed_url.hostname not in allowed_hosts:
+            raise RuntimeError(f"Refusing to download model weights from untrusted URL: {url}")
 
+        temp_path = model_path.with_suffix(f"{model_path.suffix}.tmp")
+        current_url = url
+        max_redirects = 5
         try:
-            urllib.request.urlretrieve(url, model_path)
-            logger.info("Model weights downloaded successfully")
+            for _ in range(max_redirects + 1):
+                parsed_url = urlparse(current_url)
+                host = parsed_url.hostname
+                if parsed_url.scheme != "https" or host not in allowed_hosts:
+                    raise RuntimeError(f"Refusing to download model weights from untrusted URL: {current_url}")
+
+                request_path = parsed_url.path or "/"
+                if parsed_url.query:
+                    request_path = f"{request_path}?{parsed_url.query}"
+
+                connection = http.client.HTTPSConnection(host, parsed_url.port or 443, timeout=300)
+                try:
+                    connection.request("GET", request_path, headers={"User-Agent": "transformation-portal/ci"})
+                    response = connection.getresponse()
+                    if response.status in {301, 302, 303, 307, 308}:
+                        redirect_location = response.getheader("Location")
+                        response.read()  # Drain body before reusing loop
+                        if not redirect_location:
+                            raise RuntimeError("Model download redirect missing Location header")
+                        if redirect_location.startswith("/"):
+                            current_url = f"https://{host}{redirect_location}"
+                        else:
+                            current_url = redirect_location
+                        continue
+                    if response.status != 200:
+                        raise RuntimeError(f"Model download failed with HTTP {response.status}: {response.reason}")
+
+                    with temp_path.open("wb") as handle:
+                        while True:
+                            chunk = response.read(1024 * 1024)
+                            if not chunk:
+                                break
+                            handle.write(chunk)
+                    temp_path.replace(model_path)
+                    logger.info("Model weights downloaded successfully")
+                    return
+                finally:
+                    connection.close()
+
+            raise RuntimeError("Too many redirects while downloading model weights")
         except Exception as e:
+            temp_path.unlink(missing_ok=True)
             raise RuntimeError(f"Failed to download model weights: {e}") from e
 
     def _load_model(self):
