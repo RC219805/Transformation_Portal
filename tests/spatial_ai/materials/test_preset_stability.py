@@ -44,7 +44,7 @@ def test_stable_preset_immutable():
         f"If this change is intentional:\n"
         f"  1. Bump version in preset YAML (version: 5.1.0)\n"
         f"  2. Update EXPECTED_HASH_V5_0_0 in this test\n"
-        f"  3. Document in CHANGELOG.md\n"
+        f"  3. Document in CHANGELOG.md and mention this in PR description\n"
         f"  4. Update docs/guides/MATERIAL_PBR_MIGRATION.md\n"
         f"\n"
         f"Stable presets require explicit promotion governance."
@@ -129,3 +129,24 @@ def test_preset_hierarchy_documented():
     assert "name" in preset, "Preset must have name"
     assert "version" in preset, "Preset must have version"
     assert "tier" in preset, "Preset must have tier"
+
+
+def test_material_pbr_docs_exist():
+    """Verify preset-referenced Material PBR docs exist in the repository."""
+    required_docs = [
+        Path("docs/guides/MATERIAL_PBR_GUIDE.md"),
+        Path("docs/guides/MATERIAL_PBR_MIGRATION.md"),
+    ]
+
+    for doc_path in required_docs:
+        assert doc_path.exists(), f"Missing required Material PBR documentation: {doc_path}"
+
+
+def test_material_pbr_release_documented_in_changelog():
+    """Verify the stable/canary preset release is documented in CHANGELOG."""
+    changelog_path = Path("CHANGELOG.md")
+    assert changelog_path.exists(), "CHANGELOG.md missing"
+
+    changelog = changelog_path.read_text(encoding="utf-8")
+    assert "material_pbr.yaml" in changelog, "Stable PBR preset entry missing from CHANGELOG.md"
+    assert "material_pbr_canary.yaml" in changelog, "Canary PBR preset entry missing from CHANGELOG.md"

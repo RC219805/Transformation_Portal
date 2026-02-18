@@ -33,11 +33,11 @@ class PBRBackendProtocol(Protocol):
 
     Usage:
         >>> backend: PBRBackendProtocol = MaterialBackend(backend="heuristic")
-        >>> result = backend.generate(rgb, depth=depth, material_hint="wood")
+        >>> result = backend.generate_pbr_textures(rgb, depth=depth, material_hint="wood")
         >>> assert result.metadata.backend == "heuristic_v5.0.0"
     """
 
-    def generate(
+    def generate_pbr_textures(
         self,
         rgb: np.ndarray,
         mask: Optional[np.ndarray] = None,
@@ -140,19 +140,19 @@ def validate_backend_protocol(backend: PBRBackendProtocol) -> bool:
         TypeError: If backend missing required methods.
     """
     # Check for required method
-    if not hasattr(backend, "generate"):
-        raise TypeError(f"Backend {type(backend).__name__} missing 'generate' method")
+    if not hasattr(backend, "generate_pbr_textures"):
+        raise TypeError(f"Backend {type(backend).__name__} missing 'generate_pbr_textures' method")
 
     # Check method signature (basic validation)
     import inspect
 
-    sig = inspect.signature(backend.generate)
+    sig = inspect.signature(backend.generate_pbr_textures)
     required_params = {"rgb"}
     actual_params = set(sig.parameters.keys())
 
     if not required_params.issubset(actual_params):
         missing = required_params - actual_params
-        raise TypeError(f"Backend {type(backend).__name__}.generate() missing parameters: {missing}")
+        raise TypeError(f"Backend {type(backend).__name__}.generate_pbr_textures() missing parameters: {missing}")
 
     return True
 

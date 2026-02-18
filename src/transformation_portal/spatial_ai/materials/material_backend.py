@@ -141,13 +141,24 @@ class MaterialBackend:
         else:
             raise ValueError(f"Unknown backend: {self.backend}")
 
-        # Unpack result - handle both old (7-tuple) and new (8-tuple with metadata) formats
-        if len(result) == 8:
+        # Validate/unpack result - handle both old (7-tuple) and new (8-tuple with metadata) formats
+        if not isinstance(result, tuple):
+            raise TypeError(
+                f"Material backend '{self.backend}' returned {type(result)!r}, " "expected a tuple of 7 or 8 elements."
+            )
+
+        result_len = len(result)
+        if result_len == 8:
             albedo, normal, roughness, metallic, ao, height, properties, metadata = result
-        else:
+        elif result_len == 7:
             # Fallback for backends that don't provide metadata yet
             albedo, normal, roughness, metallic, ao, height, properties = result
             metadata = None
+        else:
+            raise ValueError(
+                f"Material backend '{self.backend}' returned {result_len} values; "
+                "expected 7 (without metadata) or 8 (with metadata)."
+            )
 
         # Wrap into PBRTextures contract
         return PBRTextures(
