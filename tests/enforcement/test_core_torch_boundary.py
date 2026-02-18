@@ -120,8 +120,16 @@ def test_lazy_import_only_loads_torch_when_accessed():
     A complementary test should exist in tests/spatial_ai/reconstruction/
     for ML-tier verification.
     """
-    # Skip if torch not available (expected in Layer 1/Enforcement)
-    pytest.importorskip("torch")
+    # Use an isolated interpreter probe so this test does not get a false
+    # positive from another test polluting sys.modules["torch"] with a stub.
+    torch_probe = subprocess.run(
+        [sys.executable, "-c", "import torch"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    if torch_probe.returncode != 0:
+        pytest.skip("torch not available in isolated interpreter")
 
     # Python code to test lazy loading behavior
     test_script = """

@@ -17,6 +17,34 @@ from PIL import Image
 # ``lux_render_pipeline`` depends on heavy diffusion stacks. Provide small stubs
 # so we can import the module and exercise the finishing helpers without the
 # runtime dependencies.
+_ORIGINAL_TORCH = sys.modules.get("torch")
+_ORIGINAL_TORCH_CUDA = sys.modules.get("torch.cuda")
+_ORIGINAL_DIFFUSERS = sys.modules.get("diffusers")
+_ORIGINAL_CONTROLNET_AUX = sys.modules.get("controlnet_aux")
+
+
+def _restore_optional_dependency_modules() -> None:
+    if _ORIGINAL_TORCH is not None:
+        sys.modules["torch"] = _ORIGINAL_TORCH
+    else:
+        sys.modules.pop("torch", None)
+
+    if _ORIGINAL_TORCH_CUDA is not None:
+        sys.modules["torch.cuda"] = _ORIGINAL_TORCH_CUDA
+    else:
+        sys.modules.pop("torch.cuda", None)
+
+    if _ORIGINAL_DIFFUSERS is not None:
+        sys.modules["diffusers"] = _ORIGINAL_DIFFUSERS
+    else:
+        sys.modules.pop("diffusers", None)
+
+    if _ORIGINAL_CONTROLNET_AUX is not None:
+        sys.modules["controlnet_aux"] = _ORIGINAL_CONTROLNET_AUX
+    else:
+        sys.modules.pop("controlnet_aux", None)
+
+
 torch_stub = types.ModuleType("torch")
 torch_cuda = types.ModuleType("torch.cuda")
 
@@ -119,6 +147,9 @@ except (ImportError, RuntimeError, TypeError) as exc:
     # Provide stub for type checking
     def apply_material_response_finishing(*args, **kwargs):  # type: ignore[misc]
         raise RuntimeError(f"Material response finishing unavailable: {IMPORT_ERROR}")  # pragma: no cover
+
+
+_restore_optional_dependency_modules()
 
 
 def _make_texture(path: Path, color: tuple[int, int, int]) -> None:
