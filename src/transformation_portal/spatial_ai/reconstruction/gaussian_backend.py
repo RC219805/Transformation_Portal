@@ -77,6 +77,7 @@ class GaussianBackend:
         model_repo: str = "graphdeco-inria/gaussian-splatting",
         model_revision: str = "NEEDS_VERIFICATION_0000000000000000000000",
         cache_dir: Optional[str] = None,
+        optimization_seed: Optional[int] = None,
     ):
         """Initialize Gaussian Splatting backend.
 
@@ -87,6 +88,8 @@ class GaussianBackend:
             model_repo: HuggingFace model repository.
             model_revision: Model commit hash (must be verified).
             cache_dir: Optional cache directory for models.
+            optimization_seed: Optional seed for deterministic optimization.
+                Defaults to None (production behavior, no forced seeding).
 
         Raises:
             LicenseRestrictionError: If tier is not research-only.
@@ -103,6 +106,7 @@ class GaussianBackend:
         self.model_repo = model_repo
         self.model_revision = model_revision
         self.cache_dir = cache_dir
+        self.optimization_seed = optimization_seed
 
         # Device detection
         if device is None:
@@ -113,7 +117,42 @@ class GaussianBackend:
         self._model = None
         self._model_loaded = False
 
-        logger.info(f"GaussianBackend initialized (tier={tier}, device={device})")
+        logger.info(f"GaussianBackend initialized (tier={tier}, device={device}, optimization_seed={optimization_seed})")
+
+    def _setup_deterministic_optimization_seed(self) -> Optional[Dict[str, Any]]:
+        """Optionally set deterministic seed and capture RNG state for restoration."""
+        if self.optimization_seed is None:
+            return None
+
+        saved_state: Dict[str, Any] = {
+            "python": random.getstate(),
+            "torch": torch.get_rng_state(),
+            "numpy": np.random.get_state(),
+            "cuda": None,
+        }
+        if hasattr(torch, "cuda") and torch.cuda.is_available():
+            saved_state["cuda"] = [torch.cuda.get_rng_state(i) for i in range(torch.cuda.device_count())]
+
+        random.seed(self.optimization_seed)
+        torch.manual_seed(self.optimization_seed)
+        np.random.seed(self.optimization_seed)
+        if hasattr(torch, "cuda") and torch.cuda.is_available():
+            torch.cuda.manual_seed_all(self.optimization_seed)
+
+        return saved_state
+
+    def _restore_optimization_rng_state(self, saved_state: Optional[Dict[str, Any]]) -> None:
+        """Restore RNG state captured by _setup_deterministic_optimization_seed."""
+        if saved_state is None:
+            return
+
+        random.setstate(saved_state["python"])
+        torch.set_rng_state(saved_state["torch"])
+        np.random.set_state(saved_state["numpy"])
+        cuda_states = saved_state.get("cuda")
+        if cuda_states is not None:
+            for i, state in enumerate(cuda_states):
+                torch.cuda.set_rng_state(state, i)
 
     def _detect_device(self) -> str:
         """Detect optimal device (cuda > mps > cpu)."""
@@ -455,21 +494,7 @@ class GaussianBackend:
         """
         logger.info(f"Starting optimization ({iterations} iterations)...")
 
-        # Determinism: Save and set RNG state for reproducible optimization
-        # Restore afterwards to avoid leaking state to other tests
-        saved_python_state = random.getstate()
-        saved_torch_state = torch.get_rng_state()
-        saved_numpy_state = np.random.get_state()
-        if hasattr(torch, "cuda") and torch.cuda.is_available():
-            saved_cuda_states = [torch.cuda.get_rng_state(i) for i in range(torch.cuda.device_count())]
-        else:
-            saved_cuda_states = None
-
-        random.seed(42)
-        torch.manual_seed(42)
-        np.random.seed(42)
-        if hasattr(torch, "cuda") and torch.cuda.is_available():
-            torch.cuda.manual_seed_all(42)
+        saved_rng_state = self._setup_deterministic_optimization_seed()
 
         try:
             device = self.device
@@ -614,13 +639,7 @@ class GaussianBackend:
 
             return optimized_splats, final_rmse, convergence
         finally:
-            # Restore RNG states to avoid leaking determinism to other tests
-            random.setstate(saved_python_state)
-            torch.set_rng_state(saved_torch_state)
-            np.random.set_state(saved_numpy_state)
-            if saved_cuda_states is not None:
-                for i, state in enumerate(saved_cuda_states):
-                    torch.cuda.set_rng_state(state, i)
+            self._restore_optimization_rng_state(saved_rng_state)
 
     def render_view(self, scene: Scene3D, camera: CameraParams) -> np.ndarray:
         """Render novel view from scene.

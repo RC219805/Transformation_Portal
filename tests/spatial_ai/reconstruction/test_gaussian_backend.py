@@ -3,6 +3,8 @@
 import numpy as np
 import pytest
 
+pytest.importorskip("torch", reason="torch is required for Gaussian backend tests")
+
 from transformation_portal.spatial_ai.reconstruction import (
     CameraParams,
     GaussianBackend,
@@ -40,6 +42,43 @@ class TestGaussianBackend:
         """Test explicit device specification."""
         backend = GaussianBackend(tier="apex_research", device="cpu")
         assert backend.device == "cpu"
+
+    def test_optimization_seed_defaults_to_none(self):
+        """Test deterministic optimization is opt-in by default."""
+        backend = GaussianBackend(tier="apex_research")
+        assert backend.optimization_seed is None
+
+    def test_optimization_seed_enables_deterministic_runs(self):
+        """Test deterministic optimization when seed is explicitly configured."""
+        backend = GaussianBackend(tier="apex_research", device="cpu", optimization_seed=42)
+
+        images = [np.ones((60, 80, 3), dtype=np.float32) * 0.5 for _ in range(2)]
+        intrinsics = np.eye(3, dtype=np.float32)
+        intrinsics[0, 0] = intrinsics[1, 1] = 100.0
+        intrinsics[0, 2] = 40.0
+        intrinsics[1, 2] = 30.0
+        cameras = [CameraParams(intrinsics, np.eye(4, dtype=np.float32), 80, 60) for _ in range(2)]
+
+        reconstruction_input_a = ReconstructionInput(
+            images=[img.copy() for img in images],
+            gamma=1.0,
+            cameras=cameras,
+            tier="apex_research",
+        )
+        reconstruction_input_b = ReconstructionInput(
+            images=[img.copy() for img in images],
+            gamma=1.0,
+            cameras=cameras,
+            tier="apex_research",
+        )
+
+        scene_a = backend.reconstruct(reconstruction_input_a, iterations=20)
+        scene_b = backend.reconstruct(reconstruction_input_b, iterations=20)
+
+        assert np.allclose(scene_a.splats.positions, scene_b.splats.positions, atol=1e-6)
+        assert np.allclose(scene_a.splats.colors, scene_b.splats.colors, atol=1e-6)
+        assert np.allclose(scene_a.splats.scales, scene_b.splats.scales, atol=1e-6)
+        assert np.allclose(scene_a.splats.opacities, scene_b.splats.opacities, atol=1e-6)
 
     def test_model_lazy_loading(self):
         """Test that model is not loaded on initialization."""

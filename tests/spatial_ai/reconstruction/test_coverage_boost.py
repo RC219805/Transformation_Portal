@@ -7,6 +7,8 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
+pytest.importorskip("torch", reason="torch is required for reconstruction coverage tests")
+
 from transformation_portal.spatial_ai.reconstruction import (
     CameraParams,
     GaussianSplat,

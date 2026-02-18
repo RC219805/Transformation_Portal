@@ -61,14 +61,28 @@ jobs:
 
       - name: Run performance tests
         run: |
-          # Create performance test directory if needed
-          mkdir -p tests/performance
+          BASELINE_FILE=""
+          for candidate in baseline/benchmark.json baseline/current-benchmark.json; do
+            if [ -f "$candidate" ]; then
+              BASELINE_FILE="$candidate"
+              break
+            fi
+          done
 
-          # Run benchmarks
-          pytest tests/ -k "benchmark or performance" \
+          COMPARE_ARGS=()
+          if [ -n "$BASELINE_FILE" ]; then
+            echo "Using baseline benchmark file: $BASELINE_FILE"
+            COMPARE_ARGS=(
+              "--benchmark-compare=$BASELINE_FILE"
+              "--benchmark-compare-fail=mean:10%"
+            )
+          else
+            echo "No baseline benchmark found; running without regression comparison."
+          fi
+
+          pytest tests/ -m "benchmark" \
             --benchmark-json=current-benchmark.json \
-            --benchmark-compare=baseline/benchmark.json \
-            --benchmark-compare-fail=mean:10% || true
+            "${COMPARE_ARGS[@]}" || true
 
       - name: Analyze memory usage
         run: |
