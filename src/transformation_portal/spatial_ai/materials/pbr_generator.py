@@ -92,24 +92,13 @@ class PBRGenerator:
             material_hint=material_hint,
         )
 
-        # Generate textures
-        albedo, normal, roughness, metallic, ao, height, properties = self.backend_engine.generate_pbr_textures(
+        # Generate textures - returns PBRTextures directly now
+        pbr_textures = self.backend_engine.generate_pbr_textures(
             rgb=mat_input.image,
             mask=mat_input.mask,
             depth=mat_input.depth,
             material_hint=mat_input.material_hint,
             config=config,
-        )
-
-        # Validate output via contract
-        pbr_textures = PBRTextures(
-            albedo=albedo,
-            normal=normal,
-            roughness=roughness,
-            metallic=metallic,
-            ambient_occlusion=ao,
-            height=height,
-            properties=properties,
         )
 
         return pbr_textures

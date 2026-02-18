@@ -1,0 +1,276 @@
+# PBR Material Generation - Canary Preset
+#
+# Status: CANARY v5.0.0-canary (Pre-production testing)
+# Phase: 5B (PBRFusion Integration)
+# Last Updated: 2026-02-18
+#
+# Purpose:
+#   Pre-production PBR texture generation with optional GPU-accelerated
+#   PBRFusion diffusion model. Falls back to enhanced heuristic if
+#   PBRFusion is not installed.
+#
+# Backend:
+#   - PBRFusion (primary, optional): Apache 2.0 licensed ✅
+#     * State-of-the-art 2026 diffusion model
+#     * Requires ComfyUI + custom nodes (32GB install)
+#     * GPU-accelerated (CUDA/MPS)
+#   - Heuristic (fallback, always available)
+#     * Phase 5C enhanced
+#     * CPU-friendly, no dependencies
+#
+# Model:
+#   - Repo: NightRaven109/PBRFusion4-RTXREMIX-Portable
+#   - License: Apache 2.0 (commercial use OK)
+#   - Revision: 4ebe0ed10266bca0d7593e5461618e61d064cd9e (pinned 2026-02-11)
+#   - Size: 32GB portable package
+#
+# Installation:
+#   1. Install ComfyUI portable or custom nodes
+#   2. Set PBRFUSION_PATH environment variable
+#   3. See docs/guides/MATERIAL_PBR_GUIDE.md for setup
+#
+# Usage:
+#   export PBRFUSION_PATH=/path/to/ComfyUI
+#   python scripts/enhance_image.py \
+#     --preset config/presets/material_pbr_canary.yaml \
+#     --input scene.tiff \
+#     --output output/
+#
+# ADR Compliance:
+#   ✅ Optional ML dependency (graceful fallback)
+#   ✅ Canary tier (pre-production testing)
+#   ✅ Clear activation requirements
+#   ✅ No stable preset schema changes required
+
+name: "PBR Material Generation (Canary + PBRFusion)"
+version: "5.0.0-canary"
+tier: "canary"  # Pre-production testing
+
+# Backend Configuration
+backend:
+  type: "pbr_fusion"  # Primary: GPU-accelerated diffusion model
+  fallback: "heuristic"  # Always available CPU fallback
+
+  # PBRFusion Model
+  model:
+    repo_id: "NightRaven109/PBRFusion4-RTXREMIX-Portable"
+    revision: "4ebe0ed10266bca0d7593e5461618e61d064cd9e"  # Pinned 2026-02-11 for determinism
+    license: "apache-2.0"  # Commercial use OK
+
+  # Device detection (automatic)
+  device: "auto"  # Prefers: mps > cuda > cpu
+
+  # Environment variable activation
+  env_path: "PBRFUSION_PATH"  # Must point to ComfyUI installation
+
+  # Requirements
+  requirements:
+    vram_gb: 8  # Minimum recommended
+    comfyui_version: ">=1.0.0"
+    custom_nodes:
+      - "PBRFusion4"
+
+# PBR Generation Parameters
+pbr:
+  # Resolution (PBRFusion supports upscaling)
+  resolution: 1024  # Output resolution (upscales if needed)
+
+  # Diffusion model parameters (PBRFusion)
+  diffusion:
+    steps: 20  # Inference steps (10-50, more=slower/better)
+    guidance_scale: 7.5  # Classifier-free guidance
+    strength: 1.0  # Denoising strength
+
+  # Upscaling (unique to PBRFusion)
+  upscale:
+    enabled: true
+    factor: 2  # 2x upscale (1024 → 2048)
+    quality: "high"  # Options: "fast", "balanced", "high"
+
+  # Albedo generation (new in PBRFusion v4)
+  albedo:
+    generate: true
+    lighting_removal: true  # AI-based lighting removal
+
+  # Normal map generation
+  normal:
+    generate: true
+    strength: 1.0  # [0, 2]
+    depth_aware: true  # Use depth map if provided
+
+  # Roughness map generation
+  roughness:
+    generate: true
+    material_hint_weight: 0.7  # How much to trust material hints
+
+  # Height/displacement map
+  height:
+    generate: true
+    scale: 1.0  # Displacement intensity
+
+  # Ambient occlusion (approximated from diffusion model)
+  ao:
+    generate: true
+    intensity: 0.7
+
+  # Metallic (inferred from material hints + diffusion)
+  metallic:
+    generate: true
+    default_value: 0.0  # For non-metallic materials
+
+# Fallback Parameters (Heuristic Backend)
+# Used when PBRFusion not available
+fallback_pbr:
+  normal_strength: 1.0
+  normal_depth_scale: 5.0
+  ao_intensity: 0.7
+  ao_concavity_weight: 0.7
+  albedo_bilateral_d: 9
+  albedo_bilateral_sigma_color: 75
+  albedo_bilateral_sigma_space: 75
+
+# Material Classification Integration
+material_classifier:
+  enabled: true
+
+  # Material hints enhance PBRFusion quality
+  hint_weight: 0.7  # How much PBRFusion trusts CLIP labels
+
+  supported_classes:
+    - wood
+    - stone
+    - metal
+    - glass
+    - fabric
+    - concrete
+    - leather
+    - ceramic
+
+# SAM2 Segmentation Integration
+segmentation:
+  enabled: true
+  use_material_labels: true
+  batch_mode: true  # Process multiple segments in parallel
+
+# Input Contract (SpatialCaptureV1)
+input:
+  gamma: 1.0  # Enforced
+  dtype: "float32"
+  channels: 3
+  bit_depth: 32
+  depth_optional: true  # Strongly recommended for PBRFusion
+  mask_optional: true
+
+# Output Configuration
+output:
+  emit_albedo: true
+  emit_normal: true
+  emit_roughness: true
+  emit_metallic: true
+  emit_ao: true
+  emit_height: true
+  emit_properties: true
+  format: "png"  # Or "exr" for 16/32-bit
+  bit_depth: 16  # Higher quality for canary
+
+# Performance
+performance:
+  # PBRFusion (GPU)
+  target_time_1024x1024_gpu: "10-30s"  # Diffusion inference
+  memory_limit_gpu: "8GB"  # VRAM
+
+  # Heuristic fallback (CPU)
+  target_time_1024x1024_cpu: "2-5s"
+  memory_limit_cpu: "500MB"
+
+  # Batch processing
+  batch_size: 1  # PBRFusion processes one at a time
+  enable_caching: true  # Cache ComfyUI model loads
+
+# Validation
+validation:
+  check_gamma: true
+  check_contract: true
+  check_value_ranges: true
+  check_dtype: true
+  check_pbrfusion_install: false  # Optional (graceful fallback)
+
+# Quality Firewall Thresholds (Stricter for Canary)
+quality_firewall:
+  # Value ranges (same as stable)
+  albedo_range: [0.0, 1.0]
+  normal_range: [-1.0, 1.0]
+  roughness_range: [0.0, 1.0]
+  metallic_range: [0.0, 1.0]
+  ao_range: [0.0, 1.0]
+  height_range: [0.0, 1.0]
+
+  # Performance (relaxed for GPU diffusion)
+  max_time_per_megapixel: 30.0  # Allow slower for quality
+  max_memory_mb_gpu: 10000  # 10GB VRAM max
+
+  # Quality comparison (PBRFusion vs Heuristic)
+  # These are baselines for A/B testing
+  min_quality_improvement_psnr: 3.0  # dB over heuristic
+  min_quality_improvement_ssim: 0.05  # SSIM delta
+
+# Experimental Features (Canary Testing)
+experimental:
+  # Multi-layer material decomposition
+  multi_layer: false
+
+  # AI-guided material optimization
+  ai_optimization: false
+
+  # Procedural texture synthesis
+  procedural_synthesis: false
+
+# Limitations
+limitations:
+  - "PBRFusion requires 32GB install (optional)"
+  - "GPU-only for PBRFusion (8GB+ VRAM)"
+  - "Slower than stable (10-30s vs 2-5s)"
+  - "ComfyUI subprocess overhead (~1-2s)"
+  - "Falls back to heuristic if not installed"
+
+# Testing Instructions
+testing:
+  validation_images:
+    - "Small: 288x192 TIFF (fast validation)"
+    - "Medium: 1024x1024 (performance baseline)"
+    - "Large: 4000x3000 12MP (production simulation)"
+
+  comparison_metrics:
+    - "Visual quality (side-by-side PBRFusion vs Heuristic)"
+    - "PSNR/SSIM (if reference available)"
+    - "Generation time (GPU vs CPU)"
+    - "Memory usage profiling"
+
+  acceptance_criteria:
+    - "No regressions vs stable preset"
+    - "PBRFusion quality visibly superior when enabled"
+    - "Graceful fallback behavior validated"
+    - "Performance within Quality Firewall thresholds"
+
+# Promotion Path
+promotion:
+  # Promote to stable when:
+  conditions:
+    - "2+ weeks canary testing with no critical issues"
+    - "PBRFusion setup instructions validated by 2+ users"
+    - "Quality improvements documented with metrics"
+    - "Performance acceptable for production workflows"
+
+  target_version: "5.1.0"  # Next stable release
+  blocked_by:
+    - "PBRFusion HF revision pinning (commit SHA)"
+    - "ComfyUI integration complete (subprocess wrapper)"
+    - "Cross-platform validation (Windows/Linux/Mac)"
+
+# References
+references:
+  - "Phase 5B: PBRFusion Integration Foundation"
+  - "Phase 5C: Enhanced Heuristic Implementation"
+  - "files/phase5b_pbrfusion_strategy.md (session artifacts)"
+  - "https://huggingface.co/NightRaven109/PBRFusion4-RTXREMIX-Portable"
+  - "docs/guides/MATERIAL_PBR_GUIDE.md"

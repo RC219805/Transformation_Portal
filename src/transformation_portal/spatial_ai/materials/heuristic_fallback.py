@@ -92,14 +92,24 @@ class HeuristicFallback:
         # Clip to [0, 1] for stability
         rgb_clipped = np.clip(rgb, 0, 1)
 
-        # Simple approach: slightly desaturate and normalize brightness
-        # In a full implementation, we'd use bilateral filtering
-        # For now, use a simple Gaussian blur to reduce lighting artifacts
-        albedo = rgb_clipped.copy()
+        # Convert to uint8 for bilateral filtering (cv2 requirement)
+        try:
+            import cv2
 
-        # Smooth each channel slightly
-        for c in range(3):
-            albedo[:, :, c] = ndimage.gaussian_filter(albedo[:, :, c], sigma=1.0)
+            rgb_uint8 = (rgb_clipped * 255).astype(np.uint8)
+
+            # Bilateral filter: smooth lighting while preserving edges
+            # d=9: diameter of pixel neighborhood
+            # sigmaColor=75: color space sigma (larger = more colors mixed)
+            # sigmaSpace=75: coordinate space sigma (larger = farther pixels mixed)
+            albedo_uint8 = cv2.bilateralFilter(rgb_uint8, d=9, sigmaColor=75, sigmaSpace=75)
+            albedo = albedo_uint8.astype(np.float32) / 255.0
+
+        except ImportError:
+            # Fallback to Gaussian if cv2 not available
+            albedo = rgb_clipped.copy()
+            for c in range(3):
+                albedo[:, :, c] = ndimage.gaussian_filter(albedo[:, :, c], sigma=1.0)
 
         # Apply mask
         albedo[~mask] = 0.0
@@ -110,20 +120,28 @@ class HeuristicFallback:
         """Generate normal map from gradients.
 
         Uses Sobel edge detection to compute gradients, then converts
-        to tangent-space normals.
+        to tangent-space normals. Prioritizes depth map when available
+        for geometry-aware normal estimation.
         """
         H, W = rgb.shape[:2]
 
-        # Use depth if available, otherwise use luminance
+        # Use depth if available (much better quality), otherwise use luminance
         if depth is not None:
-            surface = depth
+            # Smooth depth slightly to reduce noise
+            surface = ndimage.gaussian_filter(depth, sigma=0.5)
+
+            # Use central differences for better gradient accuracy
+            # Scale factor for depth (meters) to normal space
+            scale_factor = 5.0  # Adjustable for different depth ranges
+            dx = ndimage.sobel(surface, axis=1) * strength * scale_factor
+            dy = ndimage.sobel(surface, axis=0) * strength * scale_factor
         else:
-            # Convert RGB to luminance
+            # Convert RGB to luminance (fallback)
             surface = 0.2126 * rgb[:, :, 0] + 0.7152 * rgb[:, :, 1] + 0.0722 * rgb[:, :, 2]
 
-        # Compute gradients using Sobel
-        dx = ndimage.sobel(surface, axis=1) * strength
-        dy = ndimage.sobel(surface, axis=0) * strength
+            # Compute gradients using Sobel
+            dx = ndimage.sobel(surface, axis=1) * strength
+            dy = ndimage.sobel(surface, axis=0) * strength
 
         # Convert gradients to normal map
         # Normal = (-dx, -dy, 1) normalized
@@ -132,7 +150,7 @@ class HeuristicFallback:
         normal[:, :, 1] = -dy
         normal[:, :, 2] = 1.0
 
-        # Normalize
+        # Normalize to unit vectors
         norm = np.sqrt(np.sum(normal**2, axis=2, keepdims=True))
         norm = np.maximum(norm, 1e-6)  # Avoid division by zero
         normal = normal / norm
@@ -147,6 +165,7 @@ class HeuristicFallback:
 
         High-variance regions = rough surfaces.
         Low-variance regions = smooth surfaces.
+        Material hints provide physically-accurate baseline values.
         """
         H, W = rgb.shape[:2]
 
@@ -158,17 +177,31 @@ class HeuristicFallback:
         variance = ndimage.generic_filter(luminance, np.var, size=5)
 
         # Normalize to [0, 1]
-        variance = np.clip(variance, 0, 1)
-
-        # Material-specific adjustments
-        if material_hint == "metal":
-            roughness = variance * 0.3  # Metals tend to be smoother
-        elif material_hint in ["wood", "fabric", "concrete"]:
-            roughness = 0.5 + variance * 0.5  # These materials are rougher
-        elif material_hint == "glass":
-            roughness = variance * 0.1  # Glass is very smooth
+        if np.max(variance) > 1e-6:
+            variance = variance / np.max(variance)
         else:
-            roughness = variance * 0.6 + 0.2  # Default: moderate roughness
+            variance = np.zeros_like(variance)
+
+        # Material-specific adjustments with physically-accurate values
+        MATERIAL_ROUGHNESS = {
+            "metal": (0.1, 0.3),  # Polished metal range
+            "wood": (0.6, 0.8),  # Natural wood
+            "fabric": (0.7, 0.9),  # Textile surfaces
+            "concrete": (0.8, 0.95),  # Rough concrete
+            "glass": (0.02, 0.1),  # Glass/ceramic
+            "stone": (0.5, 0.75),  # Natural stone
+            "leather": (0.4, 0.6),  # Leather surfaces
+            "ceramic": (0.2, 0.4),  # Glazed ceramic
+        }
+
+        if material_hint in MATERIAL_ROUGHNESS:
+            base, var_scale = MATERIAL_ROUGHNESS[material_hint]
+            roughness = base + variance * (var_scale - base)
+        else:
+            # Default: moderate roughness with variance modulation
+            roughness = 0.5 + variance * 0.3
+
+        roughness = np.clip(roughness, 0, 1)
 
         # Apply mask
         roughness[~mask] = 0.5  # Default neutral roughness
@@ -216,28 +249,43 @@ class HeuristicFallback:
         """Generate ambient occlusion approximation.
 
         AO darkens crevices and corners. We approximate this using:
-        - Depth gradients (if depth available)
+        - Depth gradients + concavity detection (if depth available)
         - Luminance valleys (otherwise)
         """
         H, W = rgb.shape[:2]
 
         if depth is not None:
-            # Use depth for AO: deeper areas are more occluded
-            # Compute local depth variance (corners/crevices have high variance)
-            depth_variance = ndimage.generic_filter(depth, np.var, size=5)
+            # Enhanced depth-based AO with concavity detection
+            # Smooth depth to reduce noise
+            depth_smooth = ndimage.gaussian_filter(depth, sigma=1.0)
 
-            # Normalize
-            depth_variance = depth_variance / (np.max(depth_variance) + 1e-6)
+            # Compute second derivatives (concavity/convexity)
+            # Concave areas (crevices) should be darker
+            laplacian = ndimage.laplace(depth_smooth)
 
-            # AO = 1 - (variance * intensity)
-            ao = 1.0 - depth_variance * intensity
+            # Normalize laplacian to [0, 1] where positive = concave (darker)
+            concavity = np.clip(laplacian, 0, None)  # Only keep concave regions
+            if np.max(concavity) > 1e-6:
+                concavity = concavity / np.max(concavity)
+
+            # Also compute local depth variance (corners/edges)
+            depth_variance = ndimage.generic_filter(depth_smooth, np.var, size=5)
+            if np.max(depth_variance) > 1e-6:
+                depth_variance = depth_variance / np.max(depth_variance)
+
+            # Combine concavity and variance for AO
+            # Concavity contributes 70%, variance 30%
+            occlusion = (concavity * 0.7 + depth_variance * 0.3) * intensity
+
+            # AO = 1 - occlusion (AO=1 means fully lit)
+            ao = 1.0 - np.clip(occlusion, 0, 1)
         else:
-            # Use luminance as proxy
+            # Luminance-based fallback
             luminance = 0.2126 * rgb[:, :, 0] + 0.7152 * rgb[:, :, 1] + 0.0722 * rgb[:, :, 2]
 
-            # Dark regions are more occluded
-            # Invert and scale
-            ao = 1.0 - (1.0 - luminance) * intensity * 0.5
+            # Dark regions are more likely to be occluded
+            # But be conservative to avoid over-darkening
+            ao = 1.0 - (1.0 - luminance) * intensity * 0.3
 
         ao = np.clip(ao, 0, 1)
 
