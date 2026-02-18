@@ -26,6 +26,7 @@ Performance targets:
 from __future__ import annotations
 
 import logging
+import random
 import time
 from functools import lru_cache
 from typing import Any, Dict, List, Optional, Tuple
@@ -454,129 +455,172 @@ class GaussianBackend:
         """
         logger.info(f"Starting optimization ({iterations} iterations)...")
 
-        device = self.device
-
-        # Convert numpy to PyTorch tensors
-        positions = torch.from_numpy(splats.positions).to(device).requires_grad_(True)
-        colors = torch.from_numpy(splats.colors).to(device).requires_grad_(True)
-        scales = torch.from_numpy(splats.scales).to(device).requires_grad_(True)
-        rotations = torch.from_numpy(splats.rotations).to(device).requires_grad_(True)
-        opacities = torch.from_numpy(splats.opacities).to(device).requires_grad_(True)
-
-        # Prepare target images
-        target_images = [torch.from_numpy(img).to(device) for img in reconstruction_input.images]
-        cameras = reconstruction_input.cameras
-
-        # Optimizer (Adam with learning rate from defaults)
-        optimizer = torch.optim.Adam(
-            [
-                {"params": [positions], "lr": self.DEFAULT_POSITION_LR},
-                {"params": [colors], "lr": 0.0025},  # Color learning rate
-                {"params": [scales], "lr": self.DEFAULT_SCALING_LR},
-                {"params": [rotations], "lr": self.DEFAULT_ROTATION_LR},
-                {"params": [opacities], "lr": 0.05},  # Opacity learning rate
-            ]
-        )
-
-        # Optimization loop
-        start_time = time.time()
-        loss_history = []
-
-        for iteration in range(iterations):
-            optimizer.zero_grad()
-
-            # Render each view and compute loss
-            total_loss = 0.0
-            for view_idx, (target_img, camera) in enumerate(zip(target_images, cameras)):
-                # Prepare camera parameters
-                intrinsics = torch.from_numpy(camera.intrinsics).to(device)
-                extrinsics = torch.from_numpy(camera.extrinsics).to(device)
-                image_size = (camera.height, camera.width)
-
-                # Render view
-                rendered = render_gaussians(
-                    positions=positions,
-                    colors=colors,
-                    scales=scales,
-                    rotations=rotations,
-                    opacities=opacities,
-                    intrinsics=intrinsics,
-                    extrinsics=extrinsics,
-                    image_size=image_size,
-                    use_rotation=False,  # Phase 6A: isotropic Gaussians
-                    device=device,
-                )
-
-                # Compute RGB loss
-                loss = compute_rgb_loss(rendered, target_img)
-                total_loss += loss
-
-            # Average loss across views
-            total_loss = total_loss / len(target_images)
-
-            # Backpropagation
-            total_loss.backward()
-
-            # Gradient clipping (prevent instability)
-            torch.nn.utils.clip_grad_norm_([positions, colors, scales, rotations, opacities], max_norm=1.0)
-
-            # Optimizer step
-            optimizer.step()
-
-            # Normalize quaternions (maintain unit length)
-            with torch.no_grad():
-                rotations.data = rotations.data / (torch.norm(rotations.data, dim=1, keepdim=True) + 1e-8)
-
-                # Clamp values to valid ranges
-                colors.data = torch.clamp(colors.data, 0.0, 1.0)
-                scales.data = torch.clamp(scales.data, 1e-6, 10.0)  # Prevent negative/huge scales
-                opacities.data = torch.clamp(opacities.data, 0.01, 1.0)  # Keep opacity in valid range
-
-            # Log progress
-            loss_history.append(total_loss.item())
-            if iteration % (iterations // 10) == 0 or iteration == iterations - 1:
-                elapsed = time.time() - start_time
-                logger.info(
-                    f"Iteration {iteration}/{iterations}: " f"loss={total_loss.item():.6f}, " f"elapsed={elapsed:.1f}s"
-                )
-
-            # Early stopping if loss is very low
-            if total_loss.item() < 1e-5:
-                logger.info(f"Early convergence at iteration {iteration}")
-                break
-
-        # Compute final RMSE
-        final_loss = loss_history[-1] if loss_history else 0.0
-        final_rmse = np.sqrt(final_loss)  # RMSE from MSE
-
-        # Convergence status
-        if final_rmse < self.RMSE_THRESHOLD:
-            convergence = "converged"
-        elif len(loss_history) > 10 and np.mean(loss_history[-5:]) < np.mean(loss_history[-10:-5]):
-            convergence = "improving"
+        # Determinism: Save and set RNG state for reproducible optimization
+        # Restore afterwards to avoid leaking state to other tests
+        saved_python_state = random.getstate()
+        saved_torch_state = torch.get_rng_state()
+        saved_numpy_state = np.random.get_state()
+        if hasattr(torch, "cuda") and torch.cuda.is_available():
+            saved_cuda_states = [torch.cuda.get_rng_state(i) for i in range(torch.cuda.device_count())]
         else:
-            convergence = "stalled"
+            saved_cuda_states = None
 
-        # Convert back to numpy
-        optimized_splats = GaussianSplat(
-            positions=positions.detach().cpu().numpy().astype(np.float32),
-            colors=colors.detach().cpu().numpy().astype(np.float32),
-            scales=scales.detach().cpu().numpy().astype(np.float32),
-            rotations=rotations.detach().cpu().numpy().astype(np.float32),
-            opacities=opacities.detach().cpu().numpy().astype(np.float32),
-            metadata={
-                **splats.metadata,
-                "optimized": True,
-                "iterations": len(loss_history),
-                "convergence": convergence,
-                "final_loss": final_loss,
-                "loss_history": loss_history[:100],  # Store first 100 for analysis
-            },
-        )
+        random.seed(42)
+        torch.manual_seed(42)
+        np.random.seed(42)
+        if hasattr(torch, "cuda") and torch.cuda.is_available():
+            torch.cuda.manual_seed_all(42)
 
-        logger.info(f"Optimization complete: RMSE={final_rmse:.6f}, status={convergence}")
+        try:
+            device = self.device
 
-        return optimized_splats, final_rmse, convergence
+            # Convert numpy to PyTorch tensors
+            positions = torch.from_numpy(splats.positions).to(device).requires_grad_(True)
+            colors = torch.from_numpy(splats.colors).to(device).requires_grad_(True)
+            scales = torch.from_numpy(splats.scales).to(device).requires_grad_(True)
+            rotations = torch.from_numpy(splats.rotations).to(device).requires_grad_(True)
+            opacities = torch.from_numpy(splats.opacities).to(device).requires_grad_(True)
+
+            # Prepare target images
+            target_images = [torch.from_numpy(img).to(device) for img in reconstruction_input.images]
+            cameras = reconstruction_input.cameras
+
+            # Log device placement for verification (especially important for MPS)
+            logger.info(f"Optimization device: {device}")
+            logger.info(f"Tensor device: {positions.device} (positions sample)")
+
+            # Optimizer (Adam with learning rate from defaults)
+            optimizer = torch.optim.Adam(
+                [
+                    {"params": [positions], "lr": self.DEFAULT_POSITION_LR},
+                    {"params": [colors], "lr": 0.0025},  # Color learning rate
+                    {"params": [scales], "lr": self.DEFAULT_SCALING_LR},
+                    {"params": [rotations], "lr": self.DEFAULT_ROTATION_LR},
+                    {"params": [opacities], "lr": 0.05},  # Opacity learning rate
+                ]
+            )
+
+            # Optimization loop
+            start_time = time.time()
+            loss_history = []
+
+            for iteration in range(iterations):
+                optimizer.zero_grad()
+
+                # Render each view and compute loss
+                total_loss = 0.0
+                for view_idx, (target_img, camera) in enumerate(zip(target_images, cameras)):
+                    # Prepare camera parameters
+                    intrinsics = torch.from_numpy(camera.intrinsics).to(device)
+                    extrinsics = torch.from_numpy(camera.extrinsics).to(device)
+                    image_size = (camera.height, camera.width)
+
+                    # Render view
+                    rendered = render_gaussians(
+                        positions=positions,
+                        colors=colors,
+                        scales=scales,
+                        rotations=rotations,
+                        opacities=opacities,
+                        intrinsics=intrinsics,
+                        extrinsics=extrinsics,
+                        image_size=image_size,
+                        use_rotation=False,  # Phase 6A: isotropic Gaussians
+                        device=device,
+                    )
+
+                    # Compute RGB loss
+                    loss = compute_rgb_loss(rendered, target_img)
+                    total_loss += loss
+
+                # Average loss across views
+                total_loss = total_loss / len(target_images)
+
+                # Backpropagation
+                total_loss.backward()
+
+                # Gradient sanity check (prevent NaN propagation)
+                for param_name, param in [
+                    ("positions", positions),
+                    ("colors", colors),
+                    ("scales", scales),
+                    ("rotations", rotations),
+                    ("opacities", opacities),
+                ]:
+                    if param.grad is not None and torch.isnan(param.grad).any():
+                        logger.warning(f"NaN gradients detected in {param_name} at iteration {iteration}")
+                        # Zero out NaN gradients to prevent explosion
+                        param.grad = torch.where(torch.isnan(param.grad), torch.zeros_like(param.grad), param.grad)
+
+                # Gradient clipping (prevent instability)
+                torch.nn.utils.clip_grad_norm_([positions, colors, scales, rotations, opacities], max_norm=1.0)
+
+                # Optimizer step
+                optimizer.step()
+
+                # Normalize quaternions (maintain unit length)
+                with torch.no_grad():
+                    rotations.data = rotations.data / (torch.norm(rotations.data, dim=1, keepdim=True) + 1e-8)
+
+                    # Clamp values to valid ranges
+                    colors.data = torch.clamp(colors.data, 0.0, 1.0)
+                    scales.data = torch.clamp(scales.data, 1e-6, 10.0)  # Prevent negative/huge scales
+                    opacities.data = torch.clamp(opacities.data, 0.01, 1.0)  # Keep opacity in valid range
+
+                # Log progress
+                loss_history.append(total_loss.item())
+                log_interval = max(1, iterations // 10)  # Prevent division by zero for small iteration counts
+                if iteration % log_interval == 0 or iteration == iterations - 1:
+                    elapsed = time.time() - start_time
+                    logger.info(
+                        f"Iteration {iteration}/{iterations}: " f"loss={total_loss.item():.6f}, " f"elapsed={elapsed:.1f}s"
+                    )
+
+                # Early stopping if loss is very low
+                if total_loss.item() < 1e-5:
+                    logger.info(f"Early convergence at iteration {iteration}")
+                    break
+
+            # Compute final RMSE
+            final_loss = loss_history[-1] if loss_history else 0.0
+            final_rmse = np.sqrt(final_loss)  # RMSE from MSE
+
+            # Convergence status
+            if final_rmse < self.RMSE_THRESHOLD:
+                convergence = "converged"
+            elif len(loss_history) > 10 and np.mean(loss_history[-5:]) < np.mean(loss_history[-10:-5]):
+                convergence = "improving"
+            else:
+                convergence = "stalled"
+
+            # Convert back to numpy
+            optimized_splats = GaussianSplat(
+                positions=positions.detach().cpu().numpy().astype(np.float32),
+                colors=colors.detach().cpu().numpy().astype(np.float32),
+                scales=scales.detach().cpu().numpy().astype(np.float32),
+                rotations=rotations.detach().cpu().numpy().astype(np.float32),
+                opacities=opacities.detach().cpu().numpy().astype(np.float32),
+                metadata={
+                    **splats.metadata,
+                    "optimized": True,
+                    "iterations": len(loss_history),
+                    "convergence": convergence,
+                    "final_loss": final_loss,
+                    "loss_history": loss_history[:100],  # Store first 100 for analysis
+                },
+            )
+
+            logger.info(f"Optimization complete: RMSE={final_rmse:.6f}, status={convergence}")
+
+            return optimized_splats, final_rmse, convergence
+        finally:
+            # Restore RNG states to avoid leaking determinism to other tests
+            random.setstate(saved_python_state)
+            torch.set_rng_state(saved_torch_state)
+            np.random.set_state(saved_numpy_state)
+            if saved_cuda_states is not None:
+                for i, state in enumerate(saved_cuda_states):
+                    torch.cuda.set_rng_state(state, i)
 
     def render_view(self, scene: Scene3D, camera: CameraParams) -> np.ndarray:
         """Render novel view from scene.
@@ -590,12 +634,15 @@ class GaussianBackend:
         """
         device = self.device
 
+        # Extract splats from scene
+        splats = scene.splats
+
         # Convert to PyTorch tensors
-        positions = torch.from_numpy(scene.splats.positions).to(device)
-        colors = torch.from_numpy(scene.splats.colors).to(device)
-        scales = torch.from_numpy(scene.splats.scales).to(device)
-        rotations = torch.from_numpy(scene.splats.rotations).to(device)
-        opacities = torch.from_numpy(scene.splats.opacities).to(device)
+        positions = torch.from_numpy(splats.positions).to(device)
+        colors = torch.from_numpy(splats.colors).to(device)
+        scales = torch.from_numpy(splats.scales).to(device)
+        rotations = torch.from_numpy(splats.rotations).to(device)
+        opacities = torch.from_numpy(splats.opacities).to(device)
 
         intrinsics = torch.from_numpy(camera.intrinsics).to(device)
         extrinsics = torch.from_numpy(camera.extrinsics).to(device)
