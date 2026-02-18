@@ -163,7 +163,8 @@ jobs:
       - name: Free disk space
         run: |
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          # DO NOT delete AGENT_TOOLSDIRECTORY - breaks Python setup-python cache
+          # See: docs/incidents/2026-02-03_ci_python_toolcache_deletion.md
           sudo docker image prune --all --force
           df -h
 
@@ -261,7 +262,8 @@ jobs:
       - name: Free disk space
         run: |
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          # DO NOT delete AGENT_TOOLSDIRECTORY - breaks Python setup-python cache
+          # See: docs/incidents/2026-02-03_ci_python_toolcache_deletion.md
           sudo docker image prune --all --force
           df -h
 
