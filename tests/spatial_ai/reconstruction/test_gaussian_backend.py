@@ -14,6 +14,7 @@ from transformation_portal.spatial_ai.reconstruction import (
 )
 
 
+@pytest.mark.slow
 class TestGaussianBackend:
     """Test Gaussian Splatting backend."""
 
