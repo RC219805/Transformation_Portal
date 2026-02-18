@@ -33,19 +33,12 @@ def test_sam2_backend_invalid_model_size():
         SAM2Backend(model_size="invalid", device="cpu")
 
 
-def test_sam2_video_mode_not_implemented():
-    """Test video mode raises NotImplementedError (Phase 4)."""
+def test_sam2_video_mode_requires_video_path():
+    """Test video mode requires video_path parameter."""
     from transformation_portal.spatial_ai.segmentation.contracts import SegmentationInput
-    from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
 
-    checkpoint_path = "checkpoints/sam2_hiera_large.pt"
-    if not Path(checkpoint_path).exists():
-        pytest.skip(f"Checkpoint not found: {checkpoint_path}")
-
-    backend = SAM2Backend(model_size="large", checkpoint_path=checkpoint_path, device="cpu")
-
-    test_image = np.random.rand(512, 512, 3).astype(np.float32)
-    seg_input = SegmentationInput(image=test_image, gamma=1.0, mode="video")
-
-    with pytest.raises(NotImplementedError, match="Video tracking.*Phase 4"):
-        backend._segment_video(seg_input)
+    # Video mode without video_path should fail validation
+    with pytest.raises(ValueError, match="requires video_path"):
+        SegmentationInput(
+            image=None, gamma=1.0, mode="video", prompts={"frame_idx": 0, "object_id": 1, "points": [[10, 20]], "labels": [1]}
+        )

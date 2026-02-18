@@ -80,19 +80,49 @@ class TestSegmentationInput:
                 mode="bbox",
             )
 
-    def test_video_mode_requires_prev_masks(self):
-        """Test that video mode requires prev_masks."""
-        image = np.random.rand(512, 512, 3).astype(np.float32)
-
-        with pytest.raises(ValueError, match="requires prev_masks"):
+    def test_video_mode_requires_video_path_and_prompts(self):
+        """Test that video mode requires video_path and prompts."""
+        # Video mode without video_path
+        with pytest.raises(ValueError, match="requires video_path"):
             SegmentationInput(
-                image=image,
+                image=None,
                 gamma=1.0,
                 mode="video",
             )
 
+        # Video mode without prompts
+        with pytest.raises(ValueError, match="requires prompts"):
+            SegmentationInput(
+                image=None,
+                gamma=1.0,
+                mode="video",
+                video_path="/tmp/test.mp4",
+            )
+
+    def test_video_mode_allows_none_image(self):
+        """Test that video mode allows image=None."""
+        seg_input = SegmentationInput(
+            image=None,
+            gamma=1.0,
+            mode="video",
+            video_path="/tmp/test.mp4",
+            prompts={"frame_idx": 0, "object_id": 1, "points": [[10, 20]], "labels": [1]},
+        )
+        assert seg_input.image is None
+        assert seg_input.video_path == "/tmp/test.mp4"
+
+    def test_non_video_mode_requires_image(self):
+        """Test that non-video modes require image."""
+        for mode in ["auto", "points", "bbox"]:
+            with pytest.raises(ValueError, match="requires image"):
+                SegmentationInput(
+                    image=None,
+                    gamma=1.0,
+                    mode=mode,
+                )
+
     def test_prev_masks_validation(self):
-        """Test prev_masks shape and dtype validation."""
+        """Test prev_masks shape and dtype validation (deprecated feature)."""
         image = np.random.rand(512, 512, 3).astype(np.float32)
 
         # Wrong dtype
@@ -100,7 +130,7 @@ class TestSegmentationInput:
             SegmentationInput(
                 image=image,
                 gamma=1.0,
-                mode="video",
+                mode="auto",  # Use auto mode to test prev_masks validation
                 prev_masks=np.random.rand(5, 512, 512).astype(np.float32),
             )
 
@@ -109,7 +139,7 @@ class TestSegmentationInput:
             SegmentationInput(
                 image=image,
                 gamma=1.0,
-                mode="video",
+                mode="auto",
                 prev_masks=np.random.rand(512, 512) > 0.5,
             )
 
@@ -118,7 +148,7 @@ class TestSegmentationInput:
             SegmentationInput(
                 image=image,
                 gamma=1.0,
-                mode="video",
+                mode="auto",
                 prev_masks=np.random.rand(5, 256, 256) > 0.5,
             )
 
@@ -293,3 +323,17 @@ class TestSegmentationResult:
                 metadata=metadata,
                 temporal_ids=np.array([0, 1, 2, 3, 4], dtype=np.float32),
             )
+
+    def test_video_mode_result_with_temporal_ids(self):
+        """Test video mode result with temporal IDs for tracking."""
+        # Simulate 3 frames tracking same object (ID=1)
+        masks = np.random.rand(3, 64, 64) > 0.5
+        scores = np.array([1.0, 1.0, 1.0], dtype=np.float32)
+        metadata = [MaskMetadata(area=100, bbox=(10, 10, 20, 20), stability_score=1.0) for _ in range(3)]
+        temporal_ids = np.array([1, 1, 1], dtype=np.int32)  # Same object across frames
+
+        result = SegmentationResult(masks=masks, scores=scores, metadata=metadata, temporal_ids=temporal_ids)
+
+        assert result.masks.shape == (3, 64, 64)
+        assert all(result.temporal_ids == 1)  # Consistent tracking ID
+        assert len(result.metadata) == 3
