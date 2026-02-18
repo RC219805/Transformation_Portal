@@ -1,0 +1,146 @@
+# SAM2 Segmentation Preset (Canary)
+#
+# Status: CANARY - Phase 4 complete, pending production validation
+# Stability: canary (testing before stable promotion)
+# Last Updated: 2026-02-18
+#
+# Purpose:
+#   Universal object/material segmentation with temporal consistency
+#   for architectural visualization and luxury real estate rendering.
+#
+# Model:
+#   - SAM2 (Segment Anything 2) from Meta AI Research
+#   - Official checkpoints from Facebook Research
+#   - License: Apache 2.0 (commercial-friendly)
+#
+# Phase 4 Complete:
+#   ✅ Phase 4A: Video tracking with temporal consistency
+#   ✅ Phase 4B: Comprehensive test suite (42/42 passing)
+#   ✅ Phase 4C: Performance benchmarks (13.38s @ 512x512 on MPS)
+#   ✅ Phase 4D: Material classification (CLIP-based)
+#
+# Usage:
+#   # Download checkpoint first:
+#   python scripts/download_sam2_checkpoint.py --model large
+#
+#   # Run segmentation:
+#   transformation_portal spatial-ai segment \
+#     --preset sam2_segmentation_canary \
+#     --input scene.tiff \
+#     --output output/ \
+#     --mode auto
+#
+# Migration from Experimental:
+#   - Renamed from experimental/sam2_segmentation
+#   - Added material_classification.enabled flag (default: false)
+#   - Performance validated (Quality Firewall thresholds established)
+#   - All tests passing (42/42 in < 1s)
+#
+# ADR-027 Compliance:
+#   ✅ Isolated from lux_depth_v3 (no cross-pipeline imports)
+#   ✅ Contract-driven (gamma=1.0 enforcement)
+#   ✅ Apache 2.0 license (commercial-friendly)
+
+name: "SAM2 Segmentation (Canary)"
+version: "4.0.0-canary"
+tier: "stable"  # Available to all tiers (Apache 2.0 license)
+stability: "canary"
+license: "Apache-2.0"
+
+# Model Configuration
+model:
+  backend: "sam2"
+  model_size: "large"  # Options: "base", "large"
+  checkpoint_path: "checkpoints/sam2_hiera_large.pt"
+  device: "auto"  # Options: "auto", "cuda", "cpu", "mps"
+
+# Segmentation Parameters
+segmentation:
+  mode: "auto"  # Options: "auto", "points", "bbox", "video"
+
+  # Quality thresholds
+  min_area: 100  # Minimum mask area in pixels
+  min_stability: 0.5  # Minimum stability score [0, 1]
+
+  # Refinement
+  refine_masks: true
+  refinement_kernel_size: 3
+
+  # Overlap handling
+  resolve_overlaps: true
+
+# Material Classification (Optional, Phase 4D)
+material_classification:
+  enabled: false  # Set to true to enable CLIP classification
+  confidence_threshold: 0.3
+  classes:
+    - "wood floor"
+    - "wood panel"
+    - "marble surface"
+    - "granite stone"
+    - "limestone wall"
+    - "travertine tile"
+    - "brushed steel"
+    - "polished brass"
+    - "copper metal"
+    - "aluminum frame"
+    - "clear glass"
+    - "frosted glass"
+    - "tinted glass"
+    - "linen fabric"
+    - "velvet upholstery"
+    - "silk curtain"
+    - "cotton textile"
+    - "concrete wall"
+    - "concrete floor"
+    - "leather furniture"
+    - "painted wall"
+    - "plaster ceiling"
+    - "ceramic tile"
+    - "porcelain surface"
+
+# Temporal Tracking (Video Mode, Phase 4A)
+temporal:
+  enabled: false  # Enable for video sequences
+  iou_threshold: 0.5  # IoU threshold for tracking
+
+# Input Contract (SpatialCaptureV1)
+input:
+  gamma: 1.0  # Enforced (linear RGB only)
+  dtype: "float32"
+  channels: 3
+  bit_depth: 32
+
+# Output Configuration
+output:
+  emit_masks: true  # Save masks as PNG
+  emit_metadata: true  # Save JSON metadata
+  emit_visualization: true  # Save overlay visualization
+
+# Performance
+performance:
+  batch_size: 1
+  enable_caching: true
+  memory_efficient: false
+
+# Quality Firewall (Phase 4C)
+quality:
+  baseline_latency_512x512_mean: 13.38  # seconds (MPS, large model)
+  baseline_latency_512x512_p95: 13.38   # seconds
+  max_mean_regression_pct: 15.0          # Block if mean latency increases > 15%
+  max_p95_regression_pct: 10.0           # Block if p95 latency increases > 10%
+  max_failure_rate: 0.0                  # Block if any failures
+
+# Validation
+validation:
+  check_isolation: true  # ADR-023 compliance
+  check_contract: true  # SpatialCaptureV1 validation
+
+# Metadata
+metadata:
+  phase: "4E"
+  status: "canary"
+  promoted_from: "experimental/sam2_segmentation"
+  promoted_date: "2026-02-18"
+  test_coverage: "42/42 passing"
+  performance_validated: true

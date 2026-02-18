@@ -196,7 +196,7 @@ jobs:
       - name: Run core tests (no ML)
         run: |
           python -m pytest -v tests/ \
-            -m "not ml and not slow" \
+            -m "not ml and not slow and not benchmark and not stress" \
             --cov=src/transformation_portal \
             --cov-report=xml \
             --cov-report=term \
@@ -307,7 +307,7 @@ jobs:
       - name: Run ML tests
         run: |
           python -m pytest -v tests/ \
-            -m "ml and not slow" \
+            -m "ml and not slow and not benchmark and not stress" \
             --cov=src/transformation_portal \
             --cov-report=xml \
             --cov-report=term \

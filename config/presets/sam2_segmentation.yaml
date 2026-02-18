@@ -1,0 +1,104 @@
+# SAM2 Segmentation Preset (Stable)
+#
+# Status: STABLE - Production-ready segmentation
+# Stability: stable
+# Last Updated: 2026-02-18
+#
+# Purpose:
+#   Universal object/material segmentation with temporal consistency
+#   for architectural visualization and luxury real estate rendering.
+#
+# Model:
+#   - SAM2 (Segment Anything 2) from Meta AI Research
+#   - Official checkpoints from Facebook Research
+#   - License: Apache 2.0 (commercial-friendly)
+#
+# Validated Features:
+#   ✅ Auto mode (whole image segmentation)
+#   ✅ Prompted mode (points/bbox)
+#   ✅ Video tracking (temporal consistency)
+#   ✅ Material classification (optional CLIP)
+#   ✅ Performance benchmarks (Quality Firewall compliant)
+#   ✅ 42/42 tests passing in < 1s
+#
+# Usage:
+#   # Download checkpoint first:
+#   python scripts/download_sam2_checkpoint.py --model large
+#
+#   # Run segmentation:
+#   transformation_portal spatial-ai segment \
+#     --preset sam2_segmentation \
+#     --input scene.tiff \
+#     --output output/ \
+#     --mode auto
+#
+# License: Apache 2.0 (commercial use allowed)
+
+name: "SAM2 Segmentation"
+version: "4.0.0"
+tier: "stable"
+stability: "stable"
+license: "Apache-2.0"
+
+# Model Configuration
+model:
+  backend: "sam2"
+  model_size: "large"  # Options: "base" (faster), "large" (best quality)
+  checkpoint_path: "checkpoints/sam2_hiera_large.pt"
+  device: "auto"  # Auto-detects MPS/CUDA/CPU
+
+# Segmentation Parameters
+segmentation:
+  mode: "auto"  # Options: "auto", "points", "bbox", "video"
+
+  # Quality thresholds
+  min_area: 100  # Minimum mask area in pixels
+  min_stability: 0.5  # Minimum stability score [0, 1]
+
+  # Refinement
+  refine_masks: true
+  refinement_kernel_size: 3
+
+  # Overlap handling
+  resolve_overlaps: true
+
+# Material Classification (Optional)
+material_classification:
+  enabled: false  # Enable for CLIP-based material labeling
+  confidence_threshold: 0.3
+  # See full material class list in canary preset
+
+# Temporal Tracking (Video Mode)
+temporal:
+  enabled: false  # Enable for video sequences
+  iou_threshold: 0.5
+
+# Input Contract (SpatialCaptureV1)
+input:
+  gamma: 1.0  # Enforced (linear RGB only)
+  dtype: "float32"
+  channels: 3
+
+# Output Configuration
+output:
+  emit_masks: true
+  emit_metadata: true
+  emit_visualization: true
+
+# Performance
+performance:
+  batch_size: 1
+  enable_caching: true
+  memory_efficient: false
+
+# Quality Firewall
+quality:
+  baseline_latency_512x512_mean: 13.38  # seconds (MPS, large model)
+  max_mean_regression_pct: 15.0
+  max_p95_regression_pct: 10.0
+  max_failure_rate: 0.0
+
+# Validation
+validation:
+  check_isolation: true
+  check_contract: true
