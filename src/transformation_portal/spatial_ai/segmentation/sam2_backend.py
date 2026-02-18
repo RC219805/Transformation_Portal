@@ -69,6 +69,8 @@ class SAM2Backend:
         model_size: Literal["base", "large"] = "base",
         device: Literal["cuda", "cpu", "mps"] = "cuda",
         checkpoint_path: Optional[str] = None,
+        enable_material_classification: bool = False,
+        material_confidence_threshold: float = 0.3,
     ):
         """Initialize SAM2 backend.
 
@@ -77,6 +79,8 @@ class SAM2Backend:
             device: Compute device.
             checkpoint_path: Path to checkpoint file. If None, uses default
                 location in checkpoints/ directory.
+            enable_material_classification: Enable CLIP-based material labeling.
+            material_confidence_threshold: Confidence threshold for material labels.
 
         Raises:
             ValueError: If model_size invalid or checkpoint not found.
@@ -104,8 +108,22 @@ class SAM2Backend:
         self._model = None
         self._mask_generator = None
 
+        # Material classification (optional)
+        self.enable_material_classification = enable_material_classification
+        self._material_classifier = None
+        if enable_material_classification:
+            from transformation_portal.spatial_ai.segmentation.material_classifier import MaterialClassifier
+
+            self._material_classifier = MaterialClassifier(
+                device=device,
+                confidence_threshold=material_confidence_threshold,
+            )
+            logger.info("Material classification enabled")
+
         logger.info(
-            f"SAM2Backend initialized: model={model_size}, " f"device={device}, checkpoint={self.checkpoint_path.name}"
+            f"SAM2Backend initialized: model={model_size}, "
+            f"device={device}, checkpoint={self.checkpoint_path.name}, "
+            f"material_classification={enable_material_classification}"
         )
 
     def _load_model(self):
@@ -254,6 +272,16 @@ class SAM2Backend:
                     )
                 )
 
+            # Material classification (optional)
+            if self.enable_material_classification and self._material_classifier.is_available():
+                logger.info("Running material classification...")
+                # Convert to uint8 for classifier
+                material_results = self._material_classifier.classify_masks(image_uint8, masks)
+                for i, (label, confidence) in enumerate(material_results):
+                    metadata_list[i].material_label = label
+                    metadata_list[i].material_confidence = confidence
+                logger.info(f"Material classification complete: {sum(1 for l, _ in material_results if l)} labeled")
+
             logger.info(f"SAM2 auto mode: generated {len(masks)} masks")
 
             return SegmentationResult(
@@ -292,15 +320,12 @@ class SAM2Backend:
             self._image_predictor.set_image(image_uint8)
 
             if mode == "points":
-                if seg_input.points is None:
-                    raise ValueError("Points mode requires points to be provided")
+                # Extract points from prompts dict
+                if seg_input.prompts is None or "points" not in seg_input.prompts:
+                    raise ValueError("Points mode requires 'points' in prompts dict")
 
-                points = np.array(seg_input.points)
-                labels = (
-                    np.array(seg_input.point_labels)
-                    if seg_input.point_labels is not None
-                    else np.ones(len(points), dtype=np.int32)
-                )
+                points = np.array(seg_input.prompts["points"])
+                labels = np.array(seg_input.prompts.get("labels", [1] * len(points)))  # Default to foreground
 
                 # Predict masks
                 masks, scores, logits = self._image_predictor.predict(
@@ -310,10 +335,11 @@ class SAM2Backend:
                 )
 
             elif mode == "bbox":
-                if seg_input.bbox is None:
-                    raise ValueError("Bbox mode requires bbox to be provided")
+                # Extract bbox from prompts dict
+                if seg_input.prompts is None or "bbox" not in seg_input.prompts:
+                    raise ValueError("Bbox mode requires 'bbox' in prompts dict")
 
-                bbox = np.array(seg_input.bbox)  # [x1, y1, x2, y2]
+                bbox = np.array(seg_input.prompts["bbox"])  # [x1, y1, x2, y2]
 
                 # Predict masks
                 masks, scores, logits = self._image_predictor.predict(
@@ -324,17 +350,55 @@ class SAM2Backend:
             else:
                 raise ValueError(f"Unsupported prompted mode: {mode}")
 
+            # Convert masks to correct format
+            if masks.ndim == 3:
+                # Already (N, H, W)
+                pass
+            elif masks.ndim == 2:
+                # Single mask (H, W) - expand to (1, H, W)
+                masks = masks[np.newaxis, ...]
+
+            # Create metadata for each mask
+            metadata_list = []
+            for i in range(len(masks)):
+                mask = masks[i]
+                area = int(mask.sum())
+
+                # Compute bounding box
+                if area > 0:
+                    ys, xs = np.where(mask)
+                    bbox_xywh = (
+                        int(xs.min()),
+                        int(ys.min()),
+                        int(xs.max() - xs.min()),
+                        int(ys.max() - ys.min()),
+                    )
+                else:
+                    bbox_xywh = (0, 0, 0, 0)
+
+                metadata_list.append(
+                    MaskMetadata(
+                        area=area,
+                        bbox=bbox_xywh,
+                        stability_score=float(scores[i]),
+                    )
+                )
+
+            # Material classification (optional)
+            if self.enable_material_classification and self._material_classifier.is_available():
+                logger.info("Running material classification...")
+                material_results = self._material_classifier.classify_masks(image_uint8, masks)
+                for i, (label, confidence) in enumerate(material_results):
+                    metadata_list[i].material_label = label
+                    metadata_list[i].material_confidence = confidence
+                logger.info(f"Material classification complete: {sum(1 for l, _ in material_results if l)} labeled")
+
             logger.info(f"SAM2 {mode} mode: generated {len(masks)} masks")
 
             return SegmentationResult(
                 masks=masks,
                 scores=scores.astype(np.float32),
-                metadata={
-                    "backend": "sam2",
-                    "model_size": self.model_size,
-                    "mode": mode,
-                    "num_masks": len(masks),
-                },
+                metadata=metadata_list,
             )
 
         except Exception as e:

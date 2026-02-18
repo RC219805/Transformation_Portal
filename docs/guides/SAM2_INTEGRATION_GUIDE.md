@@ -267,3 +267,111 @@ backend = SAM2Backend(model_size="base", device="cuda")  # or "mps"
 - **ADR-027:** Isolated from lux_depth_v3 (no cross-pipeline imports) ✅
 - **ADR-032:** Experimental preset allows checkpoint paths (not HF revisions) ✅
 - **Contract:** SpatialCaptureV1 with gamma=1.0 enforcement ✅
+
+## Material Classification (Phase 4D)
+
+### Overview
+
+Optional CLIP-based material classification automatically labels segmented regions with semantic material names.
+
+**Supported materials:**
+- Wood (floor, panel)
+- Stone (marble, granite, limestone, travertine)
+- Metal (steel, brass, copper, aluminum)
+- Glass (clear, frosted, tinted)
+- Fabric (linen, velvet, silk, cotton)
+- Concrete, leather, ceramic, porcelain
+
+### Usage
+
+Enable material classification when creating the backend:
+
+```python
+from transformation_portal.spatial_ai.segmentation import SAM2Backend
+
+backend = SAM2Backend(
+    model_size="large",
+    device="cuda",
+    enable_material_classification=True,  # Enable CLIP labeling
+    material_confidence_threshold=0.3,    # Minimum confidence
+)
+
+result = backend.segment(seg_input)
+
+# Access material labels per mask
+for i, metadata in enumerate(result.metadata):
+    if metadata.material_label:
+        print(f"Mask {i}: {metadata.material_label} (conf: {metadata.material_confidence:.2f})")
+    else:
+        print(f"Mask {i}: unlabeled")
+```
+
+### Configuration
+
+**Parameters:**
+- `enable_material_classification` (bool): Enable CLIP-based labeling
+- `material_confidence_threshold` (float): Minimum confidence [0, 1] to assign label
+  - Lower = more labels (less selective)
+  - Higher = fewer labels (more conservative)
+  - Default: 0.3 (balanced)
+
+**Graceful Degradation:**
+- If CLIP dependencies unavailable, segmentation still works (no material labels)
+- If confidence below threshold, label is `None`
+- No performance impact when disabled
+
+### Performance
+
+**Auto mode with material classification (512x512):**
+- Mean latency: +2-3s overhead per image
+- Memory: +500MB for CLIP model
+- Device: Uses same device as SAM2 (MPS, CUDA, CPU)
+
+**Optimization:**
+- Material classifier loads lazily (only when first used)
+- CLIP model is cached across calls
+- Material classification runs after mask generation (parallelizable in future)
+
+### Custom Material Classes
+
+Override default material classes with domain-specific labels:
+
+```python
+custom_materials = [
+    "hardwood flooring",
+    "quartz countertop",
+    "stainless steel appliance",
+    "porcelain tile",
+]
+
+backend = SAM2Backend(
+    enable_material_classification=True,
+    material_classes=custom_materials,  # Custom taxonomy
+)
+```
+
+**Note:** The `MaterialClassifier` can be used directly for custom workflows:
+
+```python
+from transformation_portal.spatial_ai.segmentation import MaterialClassifier
+
+classifier = MaterialClassifier(
+    device="cuda",
+    confidence_threshold=0.5,
+    material_classes=["custom_1", "custom_2"],
+)
+
+# Classify pre-segmented masks
+labels = classifier.classify_masks(image, masks)
+```
+
+### Testing
+
+Material classification integration is tested in:
+- `tests/spatial_ai/segmentation/test_sam2_material_integration.py` (7 tests)
+- `tests/spatial_ai/segmentation/test_material_classifier.py` (unit tests)
+
+Run integration tests:
+```bash
+pytest tests/spatial_ai/segmentation/test_sam2_material_integration.py -v
+```
