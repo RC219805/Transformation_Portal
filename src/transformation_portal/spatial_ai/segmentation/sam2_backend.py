@@ -107,6 +107,7 @@ class SAM2Backend:
 
         self._model = None
         self._mask_generator = None
+        self._video_predictor = None  # Initialized by _segment_video when needed
 
         # Material classification (optional)
         self.enable_material_classification = enable_material_classification
@@ -350,6 +351,10 @@ class SAM2Backend:
 
             else:
                 raise ValueError(f"Unsupported prompted mode: {mode}")
+
+            # SAM2ImagePredictor returns float32 probability masks
+            # Convert to bool dtype to match contract (auto mode returns bool)
+            masks = (masks > 0.0).astype(bool)
 
             # Convert masks to correct format
             if masks.ndim == 3:

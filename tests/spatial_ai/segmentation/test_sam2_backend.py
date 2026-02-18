@@ -115,10 +115,17 @@ def test_sam2_checkpoint_path():
 @pytest.mark.slow
 def test_sam2_device_selection():
     """Test device selection logic."""
+    from pathlib import Path
+
     from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
 
-    # CPU should always work
-    backend = SAM2Backend(model_size="base", device="cpu")
+    # Skip if checkpoint not available
+    checkpoint_path = Path("checkpoints/sam2_hiera_large.pt")
+    if not checkpoint_path.exists():
+        pytest.skip(f"Checkpoint not found: {checkpoint_path}")
+
+    # CPU should always work - use large model which we know has checkpoint
+    backend = SAM2Backend(model_size="large", device="cpu")
     assert backend.device == "cpu"
 
     # MPS/CUDA will depend on hardware availability
