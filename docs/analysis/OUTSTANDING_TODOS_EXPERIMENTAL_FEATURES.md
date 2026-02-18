@@ -8,21 +8,25 @@
 ## 🎯 High Priority: Experimental Feature Integration
 
 ### 1. Multi-Model Depth Ensemble
-**Status**: ⚠️ Placeholder
+**Status**: ✅ Implemented (PR #906 + follow-up)
 **Required For**: apex_research_ultra preset
 **Components Needed**:
-- [ ] Ensemble backend implementation
-- [ ] Variance-weighted fusion algorithm
-- [ ] Temporal consistency filter (video)
-- [ ] DepthCrafter integration
-- [ ] Inter-model variance threshold validation
+- [x] Ensemble backend implementation
+- [x] Variance-weighted fusion algorithm
+- [x] Temporal consistency filter (video, opt-in) — EMA filter in DepthCrafterBackend
+- [x] DepthCrafter integration (disabled in default ensemble config) — `src/transformation_portal/depth/backends/depthcrafter.py`
+- [x] Inter-model variance threshold validation
+- [x] `.values()` → `.items()` metric alignment bug fixed (PR #906)
 
-**Blockers**:
-- DepthCrafter checkpoint not available
-- Ensemble fusion logic not implemented
+**Remaining**:
+- DepthCrafter model checkpoint not yet available (backend uses synthetic fallback)
+- Enable `depthcrafter` by default once checkpoint + model inference path are production-ready
 - Performance profiling needed (expected: 2.4x slower than single model)
 
 **Files**:
+- `src/transformation_portal/depth/backends/ensemble.py` (ensemble + fusion)
+- `src/transformation_portal/depth/backends/depthcrafter.py` (temporal backend)
+- `src/transformation_portal/depth/backends/registry.py` (registration)
 - `config/presets/experimental/apex_research_ultra.yaml` (lines 61-100)
 
 ---
@@ -243,10 +247,11 @@ shasum -a 256 checkpoints/*.pt checkpoints/*.pth
 ---
 
 ### 10. Test Coverage for Experimental Features
-**Status**: ❌ Not Implemented
+**Status**: ⚠️ Partially Implemented
 
 **Needed**:
-- [ ] Ensemble depth backend tests
+- [x] Ensemble depth backend tests — `tests/depth/backends/test_ensemble.py` (15 tests)
+- [x] DepthCrafter temporal backend tests — `tests/depth/backends/test_depthcrafter.py` (24 tests)
 - [ ] SAM2 temporal propagation tests
 - [ ] 3DGS convergence tests
 - [ ] MaterialGAN material classification tests
