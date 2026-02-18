@@ -134,6 +134,38 @@ class MaterialProperties:
 
 
 @dataclass
+class PBRGenerationMetadata:
+    """Metadata for PBR generation reproducibility.
+
+    Attributes:
+        backend: Backend identifier with version (e.g., "heuristic_v5.0.0").
+        normal_scale: Normal map scale factor applied.
+        ao_blend_ratio: AO blend configuration (e.g., "0.7_concavity_0.3_variance").
+        bilateral_enabled: Whether bilateral filtering was used for albedo.
+        material_hint: Optional material hint used during generation.
+        depth_used: Whether depth map was provided and used.
+    """
+
+    backend: str
+    normal_scale: float
+    ao_blend_ratio: str
+    bilateral_enabled: bool
+    material_hint: Optional[str] = None
+    depth_used: bool = False
+
+    def to_dict(self) -> dict:
+        """Convert metadata to dictionary for serialization."""
+        return {
+            "backend": self.backend,
+            "normal_scale": self.normal_scale,
+            "ao_blend_ratio": self.ao_blend_ratio,
+            "bilateral_enabled": self.bilateral_enabled,
+            "material_hint": self.material_hint,
+            "depth_used": self.depth_used,
+        }
+
+
+@dataclass
 class PBRTextures:
     """Output contract for PBR texture generation.
 
@@ -153,6 +185,7 @@ class PBRTextures:
         height: Optional height/displacement map (H, W) float32, values in [0, 1].
             Used for parallax occlusion mapping.
         properties: Aggregated material properties.
+        metadata: Generation metadata for reproducibility (Phase 5F).
     """
 
     albedo: np.ndarray
@@ -162,6 +195,7 @@ class PBRTextures:
     ambient_occlusion: np.ndarray
     height: Optional[np.ndarray] = None
     properties: Optional[MaterialProperties] = None
+    metadata: Optional[PBRGenerationMetadata] = None
 
     def __post_init__(self):
         """Validate output contract."""

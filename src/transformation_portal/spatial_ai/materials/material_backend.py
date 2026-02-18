@@ -26,6 +26,7 @@ from transformation_portal.spatial_ai.materials.contracts import (
     MaterialGenerationConfig,
     MaterialInput,
     MaterialProperties,
+    PBRGenerationMetadata,
     PBRTextures,
 )
 from transformation_portal.spatial_ai.materials.heuristic_fallback import HeuristicFallback
@@ -91,24 +92,13 @@ class MaterialBackend:
             device=self.device,
         )
 
-        # Call generate_pbr_textures with unwrapped arguments
-        albedo, normal, roughness, metallic, ao, height, properties = self.generate_pbr_textures(
+        # Call generate_pbr_textures - returns PBRTextures now
+        return self.generate_pbr_textures(
             rgb=mat_input.image,
             mask=mat_input.mask,
             depth=mat_input.depth,
             material_hint=mat_input.material_hint,
             config=config,
-        )
-
-        # Wrap into PBRTextures contract
-        return PBRTextures(
-            albedo=albedo,
-            normal=normal,
-            roughness=roughness,
-            metallic=metallic,
-            ambient_occlusion=ao,
-            height=height,
-            properties=properties,
         )
 
     def generate_pbr_textures(
@@ -118,7 +108,7 @@ class MaterialBackend:
         depth: Optional[np.ndarray] = None,
         material_hint: Optional[str] = None,
         config: Optional[MaterialGenerationConfig] = None,
-    ) -> tuple:
+    ) -> PBRTextures:
         """Generate PBR textures for input image.
 
         Args:
@@ -129,8 +119,7 @@ class MaterialBackend:
             config: Optional generation configuration.
 
         Returns:
-            Tuple of (albedo, normal, roughness, metallic, ao, height, properties).
-            All textures are float32 numpy arrays.
+            PBRTextures contract with all texture maps and metadata.
         """
         # Use default config if not provided
         if config is None:
@@ -139,17 +128,38 @@ class MaterialBackend:
                 device=self.device,
             )
 
-        # Route to appropriate backend
+        # Route to appropriate backend (returns metadata tuple now)
+        result = None
         if self.backend == "pbr_fusion":
-            return self._generate_pbr_fusion(rgb, mask, depth, material_hint, config)
+            result = self._generate_pbr_fusion(rgb, mask, depth, material_hint, config)
         elif self.backend == "nvdiffrec":
-            return self._generate_nvdiffrec(rgb, mask, depth, material_hint, config)
+            result = self._generate_nvdiffrec(rgb, mask, depth, material_hint, config)
         elif self.backend == "material_gan":
-            return self._generate_material_gan(rgb, mask, depth, material_hint, config)
+            result = self._generate_material_gan(rgb, mask, depth, material_hint, config)
         elif self.backend == "heuristic":
-            return self._generate_heuristic(rgb, mask, depth, material_hint, config)
+            result = self._generate_heuristic(rgb, mask, depth, material_hint, config)
         else:
             raise ValueError(f"Unknown backend: {self.backend}")
+
+        # Unpack result - handle both old (7-tuple) and new (8-tuple with metadata) formats
+        if len(result) == 8:
+            albedo, normal, roughness, metallic, ao, height, properties, metadata = result
+        else:
+            # Fallback for backends that don't provide metadata yet
+            albedo, normal, roughness, metallic, ao, height, properties = result
+            metadata = None
+
+        # Wrap into PBRTextures contract
+        return PBRTextures(
+            albedo=albedo,
+            normal=normal,
+            roughness=roughness,
+            metallic=metallic,
+            ambient_occlusion=ao,
+            height=height,
+            properties=properties,
+            metadata=metadata,
+        )
 
     def _generate_heuristic(
         self,
@@ -182,7 +192,17 @@ class MaterialBackend:
             normal_strength=config.normal_strength,
         )
 
-        return albedo, normal, roughness, metallic, ao, height, properties
+        # Phase 5F: Add generation metadata for reproducibility
+        metadata = PBRGenerationMetadata(
+            backend="heuristic_v5.0.0",
+            normal_scale=config.normal_strength,
+            ao_blend_ratio="0.7_concavity_0.3_variance",
+            bilateral_enabled=True,
+            material_hint=material_hint,
+            depth_used=(depth is not None),
+        )
+
+        return albedo, normal, roughness, metallic, ao, height, properties, metadata
 
     def _generate_pbr_fusion(
         self,

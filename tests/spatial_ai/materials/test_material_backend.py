@@ -28,18 +28,18 @@ class TestMaterialBackend:
         """Test heuristic backend initialization."""
         backend = MaterialBackend(backend="heuristic", device="cpu")
 
-        albedo, normal, roughness, metallic, ao, height, properties = backend.generate_pbr_textures(
+        result = backend.generate_pbr_textures(
             rgb=sample_rgb,
         )
 
         # Check outputs
-        assert albedo.shape == sample_rgb.shape
-        assert normal.shape == sample_rgb.shape
-        assert roughness.shape == sample_rgb.shape[:2]
-        assert metallic.shape == sample_rgb.shape[:2]
-        assert ao.shape == sample_rgb.shape[:2]
-        assert height.shape == sample_rgb.shape[:2]
-        assert properties is not None
+        assert result.albedo.shape == sample_rgb.shape
+        assert result.normal.shape == sample_rgb.shape
+        assert result.roughness.shape == sample_rgb.shape[:2]
+        assert result.metallic.shape == sample_rgb.shape[:2]
+        assert result.ambient_occlusion.shape == sample_rgb.shape[:2]
+        assert result.height.shape == sample_rgb.shape[:2]
+        assert result.properties is not None
 
     def test_nvdiffrec_fallback(self, sample_rgb):
         """Test NVDIFFREC falls back to heuristic (not yet implemented)."""
@@ -48,7 +48,7 @@ class TestMaterialBackend:
         # Should warn and fall back to heuristic
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            albedo, normal, roughness, metallic, ao, height, properties = backend.generate_pbr_textures(
+            result = backend.generate_pbr_textures(
                 rgb=sample_rgb,
             )
 
@@ -58,7 +58,7 @@ class TestMaterialBackend:
             assert "falling back" in str(w[0].message).lower()
 
         # Should still return valid outputs
-        assert albedo.shape == sample_rgb.shape
+        assert result.albedo.shape == sample_rgb.shape
 
     def test_material_gan_fallback(self, sample_rgb):
         """Test MaterialGAN falls back to heuristic (not yet implemented)."""
@@ -66,7 +66,7 @@ class TestMaterialBackend:
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            albedo, normal, roughness, metallic, ao, height, properties = backend.generate_pbr_textures(
+            result = backend.generate_pbr_textures(
                 rgb=sample_rgb,
             )
 
@@ -86,12 +86,12 @@ class TestMaterialBackend:
             ao_intensity=0.8,
         )
 
-        albedo, normal, roughness, metallic, ao, height, properties = backend.generate_pbr_textures(
+        result = backend.generate_pbr_textures(
             rgb=sample_rgb,
             config=config,
         )
 
-        assert albedo.shape == sample_rgb.shape
+        assert result.albedo.shape == sample_rgb.shape
 
     def test_with_mask_and_depth(self, sample_rgb, sample_mask):
         """Test backend with mask and depth."""
@@ -99,27 +99,27 @@ class TestMaterialBackend:
 
         depth = np.random.rand(256, 256).astype(np.float32) * 10.0
 
-        albedo, normal, roughness, metallic, ao, height, properties = backend.generate_pbr_textures(
+        result = backend.generate_pbr_textures(
             rgb=sample_rgb,
             mask=sample_mask,
             depth=depth,
         )
 
         # Masked regions should be zeroed in albedo
-        assert np.all(albedo[~sample_mask] == 0.0)
+        assert np.all(result.albedo[~sample_mask] == 0.0)
 
     def test_material_properties_output(self, sample_rgb, sample_mask):
         """Test that material properties are computed correctly."""
         backend = MaterialBackend(backend="heuristic", device="cpu")
 
-        _, _, roughness, metallic, ao, _, properties = backend.generate_pbr_textures(
+        result = backend.generate_pbr_textures(
             rgb=sample_rgb,
             mask=sample_mask,
         )
 
         # Properties should reflect masked region statistics
-        assert properties.roughness_mean == pytest.approx(np.mean(roughness[sample_mask]), abs=0.01)
-        assert properties.metallic_mean == pytest.approx(np.mean(metallic[sample_mask]), abs=0.01)
+        assert result.properties.roughness_mean == pytest.approx(np.mean(result.roughness[sample_mask]), abs=0.01)
+        assert result.properties.metallic_mean == pytest.approx(np.mean(result.metallic[sample_mask]), abs=0.01)
 
     def test_unload_model(self):
         """Test model unloading."""
@@ -130,8 +130,8 @@ class TestMaterialBackend:
 
         # Should still be functional after unload
         rgb = np.random.rand(64, 64, 3).astype(np.float32)
-        albedo, _, _, _, _, _, _ = backend.generate_pbr_textures(rgb=rgb)
-        assert albedo.shape == rgb.shape
+        result = backend.generate_pbr_textures(rgb=rgb)
+        assert result.albedo.shape == rgb.shape
 
     def test_pbr_fusion_fallback(self, sample_rgb):
         """Test PBRFusion falls back to heuristic when not installed (Phase 5B)."""
@@ -140,7 +140,7 @@ class TestMaterialBackend:
         # Should warn and fall back to heuristic
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            albedo, normal, roughness, metallic, ao, height, properties = backend.generate_pbr_textures(
+            result = backend.generate_pbr_textures(
                 rgb=sample_rgb,
             )
 
@@ -149,10 +149,10 @@ class TestMaterialBackend:
             assert "PBRFusion not installed" in str(w[0].message) or "not yet implemented" in str(w[0].message)
 
         # Should still produce valid output (via heuristic fallback)
-        assert albedo.shape == sample_rgb.shape
-        assert normal.shape == sample_rgb.shape
-        assert roughness.shape == sample_rgb.shape[:2]
-        assert metallic.shape == sample_rgb.shape[:2]
-        assert ao.shape == sample_rgb.shape[:2]
-        assert height.shape == sample_rgb.shape[:2]
-        assert properties is not None
+        assert result.albedo.shape == sample_rgb.shape
+        assert result.normal.shape == sample_rgb.shape
+        assert result.roughness.shape == sample_rgb.shape[:2]
+        assert result.metallic.shape == sample_rgb.shape[:2]
+        assert result.ambient_occlusion.shape == sample_rgb.shape[:2]
+        assert result.height.shape == sample_rgb.shape[:2]
+        assert result.properties is not None
