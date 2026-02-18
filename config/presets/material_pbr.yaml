@@ -1,0 +1,177 @@
+# PBR Material Generation - Stable Preset
+#
+# Status: STABLE v5.0.0
+# Phase: 5 (Material Classification & PBR Integration)
+# Last Updated: 2026-02-18
+#
+# Purpose:
+#   Production-ready PBR texture generation for luxury real estate rendering.
+#   Generates physically-based albedo, normal, roughness, metallic, and AO maps
+#   using enhanced heuristic backend (CPU-friendly, no ML dependencies).
+#
+# Backend:
+#   - Heuristic (Phase 5C enhanced)
+#   - Bilateral filtering for albedo
+#   - Depth-aware normal maps with 5x scale factor
+#   - Concavity-based ambient occlusion (Laplacian)
+#   - 8 PBR-accurate material presets
+#
+# License: N/A (CPU-based image processing, no external models)
+#
+# Usage:
+#   transformation_portal spatial-ai generate-pbr \
+#     --preset material_pbr \
+#     --input scene.tiff \
+#     --output output/ \
+#     --material-hint wood
+#
+# Migration:
+#   From experimental → See docs/guides/MATERIAL_PBR_MIGRATION.md
+#
+# ADR Compliance:
+#   ✅ SpatialCaptureV1 contract (gamma=1.0 enforcement)
+#   ✅ Integration with SAM2 segmentation (Phase 4D)
+#   ✅ Material classifier hints supported
+#   ✅ Zero breaking changes
+#
+# Quality Firewall:
+#   - Performance: 2-5s per 1024x1024 on CPU
+#   - Memory: <500MB
+#   - Deterministic output (no randomness)
+#   - Value ranges validated (see contracts.py)
+
+name: "PBR Material Generation (Stable)"
+version: "5.0.0"
+tier: "stable"  # Production-ready
+
+# Backend Configuration
+backend:
+  type: "heuristic"  # CPU-based, no ML dependencies
+  device: "cpu"  # Always CPU for heuristic
+
+# PBR Generation Parameters
+pbr:
+  # Texture resolution (matches input, no upscaling in stable)
+  resolution: "match_input"
+
+  # Albedo: bilateral filtering strength
+  albedo_bilateral_d: 9  # Diameter of pixel neighborhood
+  albedo_bilateral_sigma_color: 75  # Color space sigma
+  albedo_bilateral_sigma_space: 75  # Coordinate space sigma
+
+  # Normal map intensity [0, 2]
+  normal_strength: 1.0  # 0=flat, 1=normal, 2=exaggerated
+  normal_depth_scale: 5.0  # Depth-to-normal scale factor
+
+  # Ambient occlusion parameters
+  ao_intensity: 0.7  # [0, 1] 0=none, 1=maximum darkening
+  ao_concavity_weight: 0.7  # Concavity contribution (70%)
+  ao_variance_weight: 0.3  # Variance contribution (30%)
+
+  # Material-specific roughness ranges (PBR-accurate)
+  material_roughness:
+    metal: [0.1, 0.3]  # Polished metal
+    wood: [0.6, 0.8]  # Natural wood
+    fabric: [0.7, 0.9]  # Textile surfaces
+    concrete: [0.8, 0.95]  # Rough concrete
+    glass: [0.02, 0.1]  # Glass/ceramic
+    stone: [0.5, 0.75]  # Natural stone
+    leather: [0.4, 0.6]  # Leather surfaces
+    ceramic: [0.2, 0.4]  # Glazed ceramic
+
+# Material Classification Integration (Phase 4D)
+material_classifier:
+  # Use CLIP-based material hints from SAM2 segmentation
+  enabled: true
+
+  # Supported material classes (Phase 4D)
+  supported_classes:
+    - wood
+    - stone
+    - metal
+    - glass
+    - fabric
+    - concrete
+    - leather
+    - ceramic
+
+# SAM2 Segmentation Integration (Phase 4)
+segmentation:
+  # Use SAM2 masks for per-segment PBR generation
+  enabled: true
+
+  # Apply material classification labels as hints
+  use_material_labels: true
+
+  # Batch process multiple segments
+  batch_mode: true
+
+# Input Contract (SpatialCaptureV1)
+input:
+  gamma: 1.0  # Enforced (linear RGB only)
+  dtype: "float32"
+  channels: 3
+  bit_depth: 32
+
+  # Optional inputs (enhance quality when provided)
+  depth_optional: true  # Depth map for geometry-aware normals/AO
+  mask_optional: true  # Segmentation mask for per-region processing
+
+# Output Configuration
+output:
+  emit_albedo: true  # Base color map
+  emit_normal: true  # Tangent-space normal map
+  emit_roughness: true  # Surface roughness map [0,1]
+  emit_metallic: true  # Metallic map [0,1]
+  emit_ao: true  # Ambient occlusion map [0,1]
+  emit_height: true  # Height/displacement map [0,1]
+  emit_properties: true  # JSON with aggregated material properties
+  format: "png"  # Options: "png", "exr", "tiff"
+  bit_depth: 8  # 8 or 16-bit output
+
+# Performance
+performance:
+  target_time_1024x1024: "2-5s"  # CPU baseline
+  memory_limit: "500MB"
+  batch_size: 1
+  enable_caching: false  # Heuristic is stateless
+
+# Validation (Enforced)
+validation:
+  check_gamma: true  # SpatialCaptureV1 compliance
+  check_contract: true  # Input validation
+  check_value_ranges: true  # PBR map validation
+  check_dtype: true  # float32 enforcement
+
+# Quality Firewall Thresholds
+quality_firewall:
+  # Value range validation
+  albedo_range: [0.0, 1.0]  # RGB [0,1]
+  normal_range: [-1.0, 1.0]  # Tangent space normalized
+  roughness_range: [0.0, 1.0]
+  metallic_range: [0.0, 1.0]
+  ao_range: [0.0, 1.0]
+  height_range: [0.0, 1.0]
+
+  # Performance thresholds (CPU)
+  max_time_per_megapixel: 5.0  # seconds
+  max_memory_mb: 1000
+
+# Limitations (Documented)
+limitations:
+  - "Heuristic quality lower than neural methods (MaterialGAN, PBRFusion)"
+  - "No texture synthesis (input-dependent only)"
+  - "Lighting removal approximated (not physically-based)"
+  - "Best results with depth map + material hints"
+
+# Upgrade Path
+upgrade:
+  canary: "material_pbr_canary.yaml"  # PBRFusion optional
+  experimental: "experimental/material_pbr.yaml"  # Research features
+
+# References
+references:
+  - "Phase 5C: Enhanced Heuristic Implementation"
+  - "docs/guides/MATERIAL_PBR_GUIDE.md"
+  - "docs/guides/SAM2_INTEGRATION_GUIDE.md (Material PBR section)"
+  - "src/transformation_portal/spatial_ai/materials/heuristic_fallback.py"
