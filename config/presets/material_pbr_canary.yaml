@@ -21,7 +21,7 @@
 # Model:
 #   - Repo: NightRaven109/PBRFusion4-RTXREMIX-Portable
 #   - License: Apache 2.0 (commercial use OK)
-#   - Revision: main  # TODO: Pin to specific commit SHA
+#   - Revision: 4ebe0ed10266bca0d7593e5461618e61d064cd9e (pinned 2026-02-11)
 #   - Size: 32GB portable package
 #
 # Installation:
@@ -54,7 +54,7 @@ backend:
   # PBRFusion Model
   model:
     repo_id: "NightRaven109/PBRFusion4-RTXREMIX-Portable"
-    revision: "main"  # TODO: Pin to commit SHA after validation
+    revision: "4ebe0ed10266bca0d7593e5461618e61d064cd9e"  # Pinned 2026-02-11 for determinism
     license: "apache-2.0"  # Commercial use OK
 
   # Device detection (automatic)
