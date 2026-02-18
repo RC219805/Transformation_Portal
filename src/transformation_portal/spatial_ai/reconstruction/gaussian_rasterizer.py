@@ -30,6 +30,7 @@ References:
 from __future__ import annotations
 
 import logging
+import math
 from typing import Optional, Tuple
 
 import torch
@@ -47,8 +48,20 @@ def quaternion_to_rotation_matrix(quaternions: torch.Tensor) -> torch.Tensor:
     Returns:
         Rotation matrices (N, 3, 3).
     """
+    # Normalize to ensure the resulting rotation matrix is orthonormal even if
+    # callers pass non-unit quaternions.
+    norms = torch.norm(quaternions, dim=1, keepdim=True)
+    safe_norms = torch.clamp(norms, min=1e-8)
+    q_normalized = quaternions / safe_norms
+
+    # Fallback for pathological near-zero quaternions: treat as identity.
+    near_zero = (norms < 1e-8).squeeze(1)
+    if near_zero.any():
+        q_normalized = q_normalized.clone()
+        q_normalized[near_zero] = torch.tensor([1.0, 0.0, 0.0, 0.0], device=quaternions.device, dtype=quaternions.dtype)
+
     # Extract quaternion components
-    w, x, y, z = quaternions[:, 0], quaternions[:, 1], quaternions[:, 2], quaternions[:, 3]
+    w, x, y, z = q_normalized[:, 0], q_normalized[:, 1], q_normalized[:, 2], q_normalized[:, 3]
 
     # Compute rotation matrix elements
     # fmt: off
@@ -207,27 +220,44 @@ def evaluate_gaussian_2d(
     N = mean_2d.shape[0]
     device = pixel_coords.device
 
-    # Flatten pixel coordinates
-    pixels_flat = pixel_coords.reshape(-1, 2)  # (H*W, 2)
+    # Flatten pixel coordinates: (P, 2) where P = H * W
+    pixels_flat = pixel_coords.reshape(-1, 2)
 
-    # Compute for each Gaussian
-    weights = torch.zeros(N, H * W, device=device)
+    # Vectorized over all gaussians:
+    # diff: (N, P, 2), tmp: (N, P, 2), mahal_sq: (N, P)
+    diff = pixels_flat.unsqueeze(0) - mean_2d.unsqueeze(1)
+    tmp = torch.einsum("npc,ncd->npd", diff, cov_2d_inv)
+    mahal_sq = (tmp * diff).sum(dim=-1)
 
-    for i in range(N):
-        # Difference: (H*W, 2)
-        diff = pixels_flat - mean_2d[i].unsqueeze(0)  # (H*W, 2)
+    return torch.exp(-0.5 * mahal_sq).reshape(N, H, W)
 
-        # Mahalanobis distance: d^2 = (x-μ)^T Σ^-1 (x-μ)
-        # d^2 = diff @ cov_inv @ diff.T
-        mahal_sq = torch.sum(diff @ cov_2d_inv[i] * diff, dim=1)  # (H*W,)
 
-        # Gaussian weight: exp(-0.5 * d^2)
-        weights[i] = torch.exp(-0.5 * mahal_sq)
+def _compute_splat_bounds(
+    mean_uv: torch.Tensor,
+    cov_2d: torch.Tensor,
+    image_size: Tuple[int, int],
+    radius_sigma: float = 3.0,
+) -> Optional[Tuple[int, int, int, int]]:
+    """Compute an integer image window that bounds most of a gaussian footprint."""
+    H, W = image_size
 
-    # Reshape to (N, H, W)
-    weights = weights.reshape(N, H, W)
+    sigma_u = torch.sqrt(torch.clamp(cov_2d[0, 0], min=1e-8))
+    sigma_v = torch.sqrt(torch.clamp(cov_2d[1, 1], min=1e-8))
 
-    return weights
+    radius_u = max(1, int(math.ceil(radius_sigma * float(sigma_u.item()))))
+    radius_v = max(1, int(math.ceil(radius_sigma * float(sigma_v.item()))))
+
+    center_u = float(mean_uv[0].item())
+    center_v = float(mean_uv[1].item())
+
+    u_min = max(0, int(math.floor(center_u)) - radius_u)
+    u_max = min(W, int(math.floor(center_u)) + radius_u + 1)
+    v_min = max(0, int(math.floor(center_v)) - radius_v)
+    v_max = min(H, int(math.floor(center_v)) + radius_v + 1)
+
+    if u_min >= u_max or v_min >= v_max:
+        return None
+    return u_min, u_max, v_min, v_max
 
 
 def render_gaussians(
@@ -295,12 +325,6 @@ def render_gaussians(
     colors = colors[depth_order]
     opacities = opacities[depth_order]
 
-    # Create pixel coordinate grid
-    u_coords = torch.arange(W, device=device).float()
-    v_coords = torch.arange(H, device=device).float()
-    v_grid, u_grid = torch.meshgrid(v_coords, u_coords, indexing="ij")
-    pixel_coords = torch.stack([u_grid, v_grid], dim=-1)  # (H, W, 2)
-
     # Compute inverse covariance (for Gaussian evaluation)
     try:
         cov_2d_inv = torch.inverse(cov_2d)  # (N_valid, 2, 2)
@@ -310,33 +334,39 @@ def render_gaussians(
         cov_2d = cov_2d + torch.eye(2, device=device) * 1e-3
         cov_2d_inv = torch.inverse(cov_2d)
 
-    # Evaluate Gaussians at each pixel
-    gaussian_weights = evaluate_gaussian_2d(pixel_coords, mean_2d, cov_2d_inv)  # (N_valid, H, W)
-
     # Alpha composite (back to front)
     rendered = torch.zeros(H, W, 3, device=device)
     accumulated_alpha = torch.zeros(H, W, device=device)
 
-    N_valid = gaussian_weights.shape[0]
-    for i in range(N_valid):
-        # Gaussian contribution at each pixel
-        weight = gaussian_weights[i]  # (H, W)
-        opacity = opacities[i, 0]  # scalar
+    for i in range(mean_2d.shape[0]):
+        bounds = _compute_splat_bounds(mean_2d[i], cov_2d[i], image_size)
+        if bounds is None:
+            continue
+        u_min, u_max, v_min, v_max = bounds
 
-        # Alpha blending
-        alpha_i = weight * opacity  # (H, W)
-        transmittance = 1.0 - accumulated_alpha  # (H, W)
+        # Evaluate only inside the local gaussian window to avoid allocating
+        # a full (N, H, W) tensor during compositing.
+        u_coords = torch.arange(u_min, u_max, device=device, dtype=mean_2d.dtype)
+        v_coords = torch.arange(v_min, v_max, device=device, dtype=mean_2d.dtype)
+        v_grid, u_grid = torch.meshgrid(v_coords, u_coords, indexing="ij")
+        local_pixels = torch.stack([u_grid, v_grid], dim=-1)  # (h, w, 2)
 
-        # Color contribution
-        color_contrib = alpha_i.unsqueeze(-1) * transmittance.unsqueeze(-1) * colors[i]  # (H, W, 3)
-        rendered += color_contrib
+        diff = local_pixels - mean_2d[i].view(1, 1, 2)
+        tmp = torch.einsum("...c,cd->...d", diff, cov_2d_inv[i])
+        mahal_sq = (tmp * diff).sum(dim=-1)
+        weight = torch.exp(-0.5 * mahal_sq)
 
-        # Update accumulated alpha
-        accumulated_alpha += alpha_i * transmittance
+        opacity = opacities[i, 0]
+        alpha_i = weight * opacity
 
-        # Early stopping if fully opaque (optimization)
-        if (accumulated_alpha > 0.999).all():
-            break
+        rendered_patch = rendered[v_min:v_max, u_min:u_max, :]
+        alpha_patch = accumulated_alpha[v_min:v_max, u_min:u_max]
+        transmittance = 1.0 - alpha_patch
+
+        rendered[v_min:v_max, u_min:u_max, :] = (
+            rendered_patch + alpha_i.unsqueeze(-1) * transmittance.unsqueeze(-1) * colors[i]
+        )
+        accumulated_alpha[v_min:v_max, u_min:u_max] = alpha_patch + alpha_i * transmittance
 
     # Clamp to [0, 1]
     rendered = torch.clamp(rendered, 0.0, 1.0)

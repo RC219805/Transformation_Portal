@@ -39,7 +39,9 @@ import argparse
 import csv
 import json
 import logging
+import os
 import re
+import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -185,12 +187,67 @@ def ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
+def write_bytes(path: Path, content: bytes) -> None:
+    """Atomically write bytes to avoid partial artifacts on interruption."""
+    ensure_dir(path.parent)
+
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        tmp_path.replace(path)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
+
+
 def write_text(path: Path, content: str) -> None:
-    path.write_text(content, encoding="utf-8", errors="replace")
+    write_bytes(path, content.encode("utf-8", errors="replace"))
 
 
 def write_json(path: Path, obj: Any) -> None:
-    path.write_text(json.dumps(obj, indent=2, ensure_ascii=False), encoding="utf-8")
+    write_text(path, json.dumps(obj, indent=2, ensure_ascii=False))
+
+
+def write_csv_rows(path: Path, rows: Sequence[Sequence[str]]) -> None:
+    """Atomically write CSV rows."""
+    ensure_dir(path.parent)
+
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            for row in rows:
+                writer.writerow(row)
+            f.flush()
+            os.fsync(f.fileno())
+        tmp_path.replace(path)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
+
+
+def write_csv_dict_rows(path: Path, fieldnames: Sequence[str], rows: Sequence[Dict[str, Any]]) -> None:
+    """Atomically write CSV rows from dictionaries."""
+    ensure_dir(path.parent)
+
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=list(fieldnames))
+            writer.writeheader()
+            writer.writerows(rows)
+            f.flush()
+            os.fsync(f.fileno())
+        tmp_path.replace(path)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
 
 
 def normalize_text(s: str) -> str:
@@ -610,10 +667,8 @@ def extract_tables_pdfplumber(pdf_path: Path, out_dir: Path) -> List[Dict[str, A
                     continue
 
                 csv_path = out_dir / f"page_{page_idx+1:03d}_table_{t_idx:02d}.csv"
-                with csv_path.open("w", newline="", encoding="utf-8") as f:
-                    writer = csv.writer(f)
-                    for row in table:
-                        writer.writerow([normalize_text(str(cell)) if cell is not None else "" for cell in row])
+                csv_rows = [[normalize_text(str(cell)) if cell is not None else "" for cell in row] for row in table]
+                write_csv_rows(csv_path, csv_rows)
 
                 json_path = out_dir / f"page_{page_idx+1:03d}_table_{t_idx:02d}.json"
                 write_json(json_path, table)
@@ -685,7 +740,7 @@ def extract_embedded_images(doc: fitz.Document, page: fitz.Page, out_dir: Path, 
         ext = base.get("ext", "bin")
         img_bytes = base.get("image", b"")
         img_path = out_dir / f"page_{page_number:03d}_img_{idx:03d}.{ext}"
-        img_path.write_bytes(img_bytes)
+        write_bytes(img_path, img_bytes)
         extracted.append(
             {
                 "page_number": page_number,
@@ -705,7 +760,7 @@ def extract_embedded_images(doc: fitz.Document, page: fitz.Page, out_dir: Path, 
 def render_page(page: fitz.Page, out_path: Path, dpi: int = 120) -> None:
     zoom = dpi / 72.0
     pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
-    out_path.write_bytes(pix.tobytes("png"))
+    write_bytes(out_path, pix.tobytes("png"))
 
 
 def ocr_page(page: fitz.Page, dpi: int = 300) -> str:
@@ -827,179 +882,181 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     images_dir = out_dir / "images"
     renders_dir = out_dir / "renders"
 
-    doc = fitz.open(str(pdf_path))
-
-    doc_meta: Dict[str, Any] = dict(doc.metadata or {})
-    doc_meta.update(
-        {
-            "path": str(pdf_path),
-            "page_count": doc.page_count,
-        }
-    )
-    write_json(out_dir / "metadata.json", doc_meta)
-
-    sheets_summary: List[Dict[str, Any]] = []
-    sheet_index_pairs_all: List[Tuple[str, str, int]] = []
-    images_index: List[Dict[str, Any]] = []
-
-    # Optional JSONL + concatenated text output
-    jsonl_path = out_dir / "pages.jsonl"
-    jsonl_f = jsonl_path.open("w", encoding="utf-8") if args.jsonl else None
-    all_text_chunks: List[str] = []
-
-    page_count = doc.page_count
-    max_pages = args.max_pages if args.max_pages and args.max_pages > 0 else page_count
-
-    LOGGER.info("Extracting %s page(s) from %s", min(max_pages, page_count), pdf_path.name)
-
-    for page_idx in range(min(max_pages, page_count)):
-        page = doc.load_page(page_idx)
-        page_number = page_idx + 1
-
-        full_text = normalize_text(page.get_text("text"))
-        if args.ocr_fallback and len(full_text) < args.ocr_min_chars:
-            try:
-                LOGGER.info("OCR fallback for page %s (text chars=%s)", page_number, len(full_text))
-                full_text = ocr_page(page, dpi=args.ocr_dpi)
-            except Exception as e:
-                LOGGER.warning("OCR failed on page %s: %s", page_number, e)
-
-        page_lines = extract_lines(page) if (args.layout_json or args.sheet_index) else []
-
-        tb = title_block_info(page)
-
-        page_base = pages_dir / f"page_{page_number:03d}"
-        write_text(page_base.with_suffix(".txt"), full_text)
-
-        compact = {
-            "page_number": page_number,
-            "page_index": page_idx,
-            "width": float(page.rect.width),
-            "height": float(page.rect.height),
-            "rotation": int(page.rotation),
-            "text_file": page_base.with_suffix(".txt").name,
-            "title_block": asdict(tb),
-        }
-        write_json(page_base.with_suffix(".json"), compact)
-
-        if args.layout_json:
-            layout_json = {
-                "page_number": page_number,
-                "page_index": page_idx,
-                "lines": [asdict(l) for l in page_lines],
+    with fitz.open(str(pdf_path)) as doc:
+        doc_meta: Dict[str, Any] = dict(doc.metadata or {})
+        doc_meta.update(
+            {
+                "path": str(pdf_path),
+                "page_count": doc.page_count,
             }
-            write_json(page_base.with_name(page_base.name + "_layout.json"), layout_json)
-
-        if jsonl_f is not None:
-            jsonl_obj = dict(compact)
-            jsonl_obj["text"] = full_text
-            jsonl_f.write(json.dumps(jsonl_obj, ensure_ascii=False) + "\n")
-
-        # Concatenated text (helps quick grepping / indexing)
-        header = f"\n\n===== PAGE {page_number:03d} | SHEET {tb.sheet_no or ''} | {tb.sheet_title or ''} =====\n"
-        all_text_chunks.append(header + full_text)
-
-        sheet_row = {
-            "page_number": page_number,
-            "sheet_no": tb.sheet_no or "",
-            "sheet_title": tb.sheet_title or "",
-            "project_no": tb.project_no or "",
-            "project_address": tb.project_address or "",
-            "date": tb.date or "",
-            "scale": tb.scale or "",
-            "titleblock_region": tb.region_name,
-        }
-        sheets_summary.append(sheet_row)
-
-        if args.sheet_index:
-            if "SHEET INDEX" in full_text.upper() or "SHEET LIST" in full_text.upper():
-                if not page_lines:
-                    page_lines = extract_lines(page)
-                pairs = parse_sheet_index_from_page_lines(page_lines)
-                for s, t in pairs:
-                    sheet_index_pairs_all.append((s, t, page_number))
-
-        if args.images:
-            page_img_dir = images_dir / f"page_{page_number:03d}"
-            extracted = extract_embedded_images(doc, page, page_img_dir, page_number)
-            for rec in extracted:
-                rec["sheet_no"] = tb.sheet_no or ""
-                rec["sheet_title"] = tb.sheet_title or ""
-            images_index.extend(extracted)
-
-        if args.render_pages:
-            ensure_dir(renders_dir)
-            out_png = renders_dir / f"page_{page_number:03d}.png"
-            try:
-                render_page(page, out_png, dpi=args.render_dpi)
-            except Exception as e:  # pragma: no cover
-                LOGGER.warning("Render failed on page %s: %s", page_number, e)
-
-    if jsonl_f is not None:
-        jsonl_f.close()
-
-    # Concatenated text file
-    write_text(out_dir / "all_text.txt", "".join(all_text_chunks))
-
-    # Sheet summary outputs
-    write_json(out_dir / "sheets.json", sheets_summary)
-    if sheets_summary:
-        with (out_dir / "sheets.csv").open("w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=list(sheets_summary[0].keys()))
-            writer.writeheader()
-            writer.writerows(sheets_summary)
-
-    sheet_lookup: Dict[int, Dict[str, Any]] = {int(r["page_number"]): r for r in sheets_summary}
-
-    # Sheet index outputs
-    sheet_index_records: List[Dict[str, Any]] = [
-        {"sheet_no": s, "sheet_title": t, "source_page_number": pnum} for s, t, pnum in sheet_index_pairs_all
-    ]
-    if sheet_index_records:
-        write_json(out_dir / "sheet_index.json", sheet_index_records)
-        with (out_dir / "sheet_index.csv").open("w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=list(sheet_index_records[0].keys()))
-            writer.writeheader()
-            writer.writerows(sheet_index_records)
-
-    # Table extraction
-    tables_index: List[Dict[str, Any]] = []
-    if args.tables:
-        ensure_dir(tables_dir)
-        LOGGER.info("Extracting tables with pdfplumber...")
-        tables_index.extend(extract_tables_pdfplumber(pdf_path, tables_dir))
-        if args.camelot:
-            LOGGER.info("Extracting tables with camelot...")
-            try:
-                tables_index.extend(extract_tables_camelot(pdf_path, tables_dir))
-            except Exception as e:
-                LOGGER.warning("Camelot table extraction skipped/failed: %s", e)
-
-        # Enrich table records with sheet info
-        for rec in tables_index:
-            pnum = int(rec.get("page_number", 0))
-            info = sheet_lookup.get(pnum)
-            if info:
-                rec["sheet_no"] = info.get("sheet_no", "")
-                rec["sheet_title"] = info.get("sheet_title", "")
-
-        write_json(out_dir / "tables_index.json", tables_index)
-
-    # Images index
-    if images_index:
-        write_json(out_dir / "images_index.json", images_index)
-
-    # Excel summary
-    if args.excel:
-        out_xlsx = out_dir / "extracted_summary.xlsx"
-        LOGGER.info("Writing Excel summary: %s", out_xlsx.name)
-        write_excel_summary(
-            out_xlsx=out_xlsx,
-            doc_meta=doc_meta,
-            sheets=sheets_summary,
-            sheet_index_pairs=sheet_index_records,
-            tables_index=tables_index,
         )
+        write_json(out_dir / "metadata.json", doc_meta)
+
+        sheets_summary: List[Dict[str, Any]] = []
+        sheet_index_pairs_all: List[Tuple[str, str, int]] = []
+        images_index: List[Dict[str, Any]] = []
+
+        # Optional JSONL + concatenated text output
+        jsonl_path = out_dir / "pages.jsonl"
+        jsonl_f = jsonl_path.open("w", encoding="utf-8") if args.jsonl else None
+        all_text_chunks: List[str] = []
+
+        page_count = doc.page_count
+        max_pages = args.max_pages if args.max_pages and args.max_pages > 0 else page_count
+
+        LOGGER.info("Extracting %s page(s) from %s", min(max_pages, page_count), pdf_path.name)
+
+        try:
+            for page_idx in range(min(max_pages, page_count)):
+                page = doc.load_page(page_idx)
+                page_number = page_idx + 1
+
+                full_text = normalize_text(page.get_text("text"))
+                if args.ocr_fallback and len(full_text) < args.ocr_min_chars:
+                    try:
+                        LOGGER.info("OCR fallback for page %s (text chars=%s)", page_number, len(full_text))
+                        full_text = ocr_page(page, dpi=args.ocr_dpi)
+                    except Exception as e:
+                        LOGGER.warning("OCR failed on page %s: %s", page_number, e)
+
+                page_lines = extract_lines(page) if (args.layout_json or args.sheet_index) else []
+
+                tb = title_block_info(page)
+
+                page_base = pages_dir / f"page_{page_number:03d}"
+                write_text(page_base.with_suffix(".txt"), full_text)
+
+                compact = {
+                    "page_number": page_number,
+                    "page_index": page_idx,
+                    "width": float(page.rect.width),
+                    "height": float(page.rect.height),
+                    "rotation": int(page.rotation),
+                    "text_file": page_base.with_suffix(".txt").name,
+                    "title_block": asdict(tb),
+                }
+                write_json(page_base.with_suffix(".json"), compact)
+
+                if args.layout_json:
+                    layout_json = {
+                        "page_number": page_number,
+                        "page_index": page_idx,
+                        "lines": [asdict(l) for l in page_lines],
+                    }
+                    write_json(page_base.with_name(page_base.name + "_layout.json"), layout_json)
+
+                if jsonl_f is not None:
+                    jsonl_obj = dict(compact)
+                    jsonl_obj["text"] = full_text
+                    jsonl_f.write(json.dumps(jsonl_obj, ensure_ascii=False) + "\n")
+
+                # Concatenated text (helps quick grepping / indexing)
+                header = f"\n\n===== PAGE {page_number:03d} | SHEET {tb.sheet_no or ''} | {tb.sheet_title or ''} =====\n"
+                all_text_chunks.append(header + full_text)
+
+                sheet_row = {
+                    "page_number": page_number,
+                    "sheet_no": tb.sheet_no or "",
+                    "sheet_title": tb.sheet_title or "",
+                    "project_no": tb.project_no or "",
+                    "project_address": tb.project_address or "",
+                    "date": tb.date or "",
+                    "scale": tb.scale or "",
+                    "titleblock_region": tb.region_name,
+                }
+                sheets_summary.append(sheet_row)
+
+                if args.sheet_index:
+                    if "SHEET INDEX" in full_text.upper() or "SHEET LIST" in full_text.upper():
+                        if not page_lines:
+                            page_lines = extract_lines(page)
+                        pairs = parse_sheet_index_from_page_lines(page_lines)
+                        for s, t in pairs:
+                            sheet_index_pairs_all.append((s, t, page_number))
+
+                if args.images:
+                    page_img_dir = images_dir / f"page_{page_number:03d}"
+                    extracted = extract_embedded_images(doc, page, page_img_dir, page_number)
+                    for rec in extracted:
+                        rec["sheet_no"] = tb.sheet_no or ""
+                        rec["sheet_title"] = tb.sheet_title or ""
+                    images_index.extend(extracted)
+
+                if args.render_pages:
+                    ensure_dir(renders_dir)
+                    out_png = renders_dir / f"page_{page_number:03d}.png"
+                    try:
+                        render_page(page, out_png, dpi=args.render_dpi)
+                    except Exception as e:  # pragma: no cover
+                        LOGGER.warning("Render failed on page %s: %s", page_number, e)
+        finally:
+            if jsonl_f is not None:
+                jsonl_f.close()
+
+        # Concatenated text file
+        write_text(out_dir / "all_text.txt", "".join(all_text_chunks))
+
+        # Sheet summary outputs
+        write_json(out_dir / "sheets.json", sheets_summary)
+        if sheets_summary:
+            write_csv_dict_rows(
+                out_dir / "sheets.csv",
+                fieldnames=list(sheets_summary[0].keys()),
+                rows=sheets_summary,
+            )
+
+        sheet_lookup: Dict[int, Dict[str, Any]] = {int(r["page_number"]): r for r in sheets_summary}
+
+        # Sheet index outputs
+        sheet_index_records: List[Dict[str, Any]] = [
+            {"sheet_no": s, "sheet_title": t, "source_page_number": pnum} for s, t, pnum in sheet_index_pairs_all
+        ]
+        if sheet_index_records:
+            write_json(out_dir / "sheet_index.json", sheet_index_records)
+            write_csv_dict_rows(
+                out_dir / "sheet_index.csv",
+                fieldnames=list(sheet_index_records[0].keys()),
+                rows=sheet_index_records,
+            )
+
+        # Table extraction
+        tables_index: List[Dict[str, Any]] = []
+        if args.tables:
+            ensure_dir(tables_dir)
+            LOGGER.info("Extracting tables with pdfplumber...")
+            tables_index.extend(extract_tables_pdfplumber(pdf_path, tables_dir))
+            if args.camelot:
+                LOGGER.info("Extracting tables with camelot...")
+                try:
+                    tables_index.extend(extract_tables_camelot(pdf_path, tables_dir))
+                except Exception as e:
+                    LOGGER.warning("Camelot table extraction skipped/failed: %s", e)
+
+            # Enrich table records with sheet info
+            for rec in tables_index:
+                pnum = int(rec.get("page_number", 0))
+                info = sheet_lookup.get(pnum)
+                if info:
+                    rec["sheet_no"] = info.get("sheet_no", "")
+                    rec["sheet_title"] = info.get("sheet_title", "")
+
+            write_json(out_dir / "tables_index.json", tables_index)
+
+        # Images index
+        if images_index:
+            write_json(out_dir / "images_index.json", images_index)
+
+        # Excel summary
+        if args.excel:
+            out_xlsx = out_dir / "extracted_summary.xlsx"
+            LOGGER.info("Writing Excel summary: %s", out_xlsx.name)
+            write_excel_summary(
+                out_xlsx=out_xlsx,
+                doc_meta=doc_meta,
+                sheets=sheets_summary,
+                sheet_index_pairs=sheet_index_records,
+                tables_index=tables_index,
+            )
 
     LOGGER.info("Done. Output: %s", out_dir)
     return 0

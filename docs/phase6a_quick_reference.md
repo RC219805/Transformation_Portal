@@ -101,7 +101,7 @@ python examples/phase6a_gaussian_rasterizer_demo.py
 A: Make sure PyTorch is installed: `pip install torch>=2.10.0`
 
 **Q: Tests timeout?**
-A: Integration tests run optimization (~70s). Use `pytest -k "not slow"` to skip them.
+A: Integration tests run optimization (~70s). Use `pytest -m "not slow"` to skip them.
 
 **Q: MPS errors?**
 A: Backend auto-falls back to CPU if MPS unavailable.

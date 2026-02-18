@@ -35,7 +35,7 @@ import numpy as np
 import torch
 
 from .contracts import CameraParams, GaussianSplat, LicenseRestrictionError, ReconstructionInput, Scene3D
-from .gaussian_rasterizer import compute_rgb_loss, render_gaussians
+from .gaussian_rasterizer import compute_rgb_loss, render_gaussians, render_gaussians_fast
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +64,7 @@ class GaussianBackend:
     DEFAULT_POSITION_LR = 0.00016
     DEFAULT_SCALING_LR = 0.005
     DEFAULT_ROTATION_LR = 0.001
+    DEFAULT_OPTIMIZATION_MAX_GAUSSIANS = 5000
 
     # Quality thresholds
     RMSE_THRESHOLD = 0.02  # 2% target
@@ -78,6 +79,7 @@ class GaussianBackend:
         model_revision: str = "NEEDS_VERIFICATION_0000000000000000000000",
         cache_dir: Optional[str] = None,
         optimization_seed: Optional[int] = None,
+        optimization_max_gaussians: int = DEFAULT_OPTIMIZATION_MAX_GAUSSIANS,
     ):
         """Initialize Gaussian Splatting backend.
 
@@ -90,6 +92,8 @@ class GaussianBackend:
             cache_dir: Optional cache directory for models.
             optimization_seed: Optional seed for deterministic optimization.
                 Defaults to None (production behavior, no forced seeding).
+            optimization_max_gaussians: Cap for gaussians rendered per optimization
+                step to reduce runtime/memory pressure.
 
         Raises:
             LicenseRestrictionError: If tier is not research-only.
@@ -107,6 +111,7 @@ class GaussianBackend:
         self.model_revision = model_revision
         self.cache_dir = cache_dir
         self.optimization_seed = optimization_seed
+        self.optimization_max_gaussians = max(1, int(optimization_max_gaussians))
 
         # Device detection
         if device is None:
@@ -117,7 +122,11 @@ class GaussianBackend:
         self._model = None
         self._model_loaded = False
 
-        logger.info(f"GaussianBackend initialized (tier={tier}, device={device}, optimization_seed={optimization_seed})")
+        logger.info(
+            "GaussianBackend initialized "
+            f"(tier={tier}, device={device}, optimization_seed={optimization_seed}, "
+            f"optimization_max_gaussians={self.optimization_max_gaussians})"
+        )
 
     def _setup_deterministic_optimization_seed(self) -> Optional[Dict[str, Any]]:
         """Optionally set deterministic seed and capture RNG state for restoration."""
@@ -540,8 +549,9 @@ class GaussianBackend:
                     extrinsics = torch.from_numpy(camera.extrinsics).to(device)
                     image_size = (camera.height, camera.width)
 
-                    # Render view
-                    rendered = render_gaussians(
+                    # Use capped rendering during optimization to avoid OOM/runtime
+                    # blow-ups when depth initialization produces many gaussians.
+                    rendered = render_gaussians_fast(
                         positions=positions,
                         colors=colors,
                         scales=scales,
@@ -550,7 +560,7 @@ class GaussianBackend:
                         intrinsics=intrinsics,
                         extrinsics=extrinsics,
                         image_size=image_size,
-                        use_rotation=False,  # Phase 6A: isotropic Gaussians
+                        max_gaussians=self.optimization_max_gaussians,
                         device=device,
                     )
 
@@ -585,12 +595,13 @@ class GaussianBackend:
 
                 # Normalize quaternions (maintain unit length)
                 with torch.no_grad():
-                    rotations.data = rotations.data / (torch.norm(rotations.data, dim=1, keepdim=True) + 1e-8)
+                    rotations_norm = torch.norm(rotations, dim=1, keepdim=True) + 1e-8
+                    rotations.div_(rotations_norm)
 
                     # Clamp values to valid ranges
-                    colors.data = torch.clamp(colors.data, 0.0, 1.0)
-                    scales.data = torch.clamp(scales.data, 1e-6, 10.0)  # Prevent negative/huge scales
-                    opacities.data = torch.clamp(opacities.data, 0.01, 1.0)  # Keep opacity in valid range
+                    colors.clamp_(0.0, 1.0)
+                    scales.clamp_(1e-6, 10.0)  # Prevent negative/huge scales
+                    opacities.clamp_(0.01, 1.0)  # Keep opacity in valid range
 
                 # Log progress
                 loss_history.append(total_loss.item())
@@ -631,6 +642,7 @@ class GaussianBackend:
                     "iterations": len(loss_history),
                     "convergence": convergence,
                     "final_loss": final_loss,
+                    "optimization_max_gaussians": self.optimization_max_gaussians,
                     "loss_history": loss_history[:100],  # Store first 100 for analysis
                 },
             )
