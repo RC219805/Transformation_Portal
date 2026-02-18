@@ -132,3 +132,27 @@ class TestMaterialBackend:
         rgb = np.random.rand(64, 64, 3).astype(np.float32)
         albedo, _, _, _, _, _, _ = backend.generate_pbr_textures(rgb=rgb)
         assert albedo.shape == rgb.shape
+
+    def test_pbr_fusion_fallback(self, sample_rgb):
+        """Test PBRFusion falls back to heuristic when not installed (Phase 5B)."""
+        backend = MaterialBackend(backend="pbr_fusion", device="cpu")
+
+        # Should warn and fall back to heuristic
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            albedo, normal, roughness, metallic, ao, height, properties = backend.generate_pbr_textures(
+                rgb=sample_rgb,
+            )
+
+            # Check warning was issued
+            assert len(w) == 1
+            assert "PBRFusion not installed" in str(w[0].message) or "not yet implemented" in str(w[0].message)
+
+        # Should still produce valid output (via heuristic fallback)
+        assert albedo.shape == sample_rgb.shape
+        assert normal.shape == sample_rgb.shape
+        assert roughness.shape == sample_rgb.shape[:2]
+        assert metallic.shape == sample_rgb.shape[:2]
+        assert ao.shape == sample_rgb.shape[:2]
+        assert height.shape == sample_rgb.shape[:2]
+        assert properties is not None

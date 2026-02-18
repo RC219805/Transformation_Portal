@@ -35,6 +35,7 @@ class MaterialBackend:
     """Unified backend for neural PBR texture generation.
 
     Supports multiple backends:
+    - "pbr_fusion": PBRFusion diffusion model (Apache 2.0, commercial OK)
     - "nvdiffrec": NVIDIA Differentiable Rendering (BSD-3-Clause)
     - "material_gan": MaterialGAN (CC BY-NC 4.0, research only)
     - "heuristic": CPU fallback (no ML dependencies)
@@ -44,7 +45,7 @@ class MaterialBackend:
 
     def __init__(
         self,
-        backend: Literal["nvdiffrec", "material_gan", "heuristic"] = "heuristic",
+        backend: Literal["pbr_fusion", "nvdiffrec", "material_gan", "heuristic"] = "heuristic",
         device: Literal["cuda", "mps", "cpu"] = "cuda",
         model_repo_id: Optional[str] = None,
         model_revision: Optional[str] = None,
@@ -52,7 +53,7 @@ class MaterialBackend:
         """Initialize material backend.
 
         Args:
-            backend: Backend to use ("nvdiffrec", "material_gan", "heuristic").
+            backend: Backend to use ("pbr_fusion", "nvdiffrec", "material_gan", "heuristic").
             device: Compute device ("cuda", "mps", "cpu").
             model_repo_id: HuggingFace model repo ID (e.g., "nvidia/nvdiffrec").
             model_revision: HuggingFace commit SHA for reproducibility.
@@ -139,7 +140,9 @@ class MaterialBackend:
             )
 
         # Route to appropriate backend
-        if self.backend == "nvdiffrec":
+        if self.backend == "pbr_fusion":
+            return self._generate_pbr_fusion(rgb, mask, depth, material_hint, config)
+        elif self.backend == "nvdiffrec":
             return self._generate_nvdiffrec(rgb, mask, depth, material_hint, config)
         elif self.backend == "material_gan":
             return self._generate_material_gan(rgb, mask, depth, material_hint, config)
@@ -180,6 +183,82 @@ class MaterialBackend:
         )
 
         return albedo, normal, roughness, metallic, ao, height, properties
+
+    def _generate_pbr_fusion(
+        self,
+        rgb: np.ndarray,
+        mask: Optional[np.ndarray],
+        depth: Optional[np.ndarray],
+        material_hint: Optional[str],
+        config: MaterialGenerationConfig,
+    ) -> tuple:
+        """Generate textures using PBRFusion diffusion model.
+
+        PBRFusion is a state-of-the-art (2026) diffusion-based model for PBR
+        texture generation and upscaling. It produces high-quality albedo,
+        normal, roughness, and height maps.
+
+        License: Apache 2.0 (commercial use OK)
+        Model: NightRaven109/PBRFusion4-RTXREMIX-Portable
+        Requirements: ComfyUI + custom nodes OR direct PyTorch integration
+
+        Implementation Status:
+        ----------------------
+        This is a PLACEHOLDER implementation pending ComfyUI integration.
+
+        Two integration paths are documented:
+        1. ComfyUI subprocess (easier, 32GB portable package)
+        2. Direct PyTorch (cleaner, requires extracting models)
+
+        For now, we fall back to the enhanced heuristic backend.
+        To enable PBRFusion:
+        - Install ComfyUI with PBRFusion nodes
+        - Set PBRFUSION_PATH environment variable
+        - See docs/guides/MATERIAL_PBR_GUIDE.md
+
+        Args:
+            rgb: Linear RGB image (H, W, 3) float32.
+            mask: Optional segmentation mask (H, W) bool.
+            depth: Optional depth map (H, W) float32.
+            material_hint: Optional material category hint.
+            config: Generation configuration.
+
+        Returns:
+            Tuple of (albedo, normal, roughness, metallic, ao, height, properties).
+
+        Note:
+            Falls back to heuristic if PBRFusion not installed.
+        """
+        import os
+        import warnings
+
+        # Check if PBRFusion is available
+        pbrfusion_path = os.getenv("PBRFUSION_PATH")
+
+        if pbrfusion_path and os.path.exists(pbrfusion_path):
+            # TODO: Implement ComfyUI subprocess integration
+            # For Phase 5B implementation:
+            # 1. Write rgb to temp file
+            # 2. Spawn ComfyUI with PBRFusion workflow
+            # 3. Parse output PBR maps
+            # 4. Return as tuple
+            warnings.warn(
+                "PBRFusion ComfyUI integration not yet implemented. "
+                "Falling back to enhanced heuristic. "
+                "Track progress: Phase 5B implementation.",
+                UserWarning,
+            )
+        else:
+            warnings.warn(
+                "PBRFusion not installed (PBRFUSION_PATH not set). "
+                "Falling back to enhanced heuristic. "
+                "To enable: Install ComfyUI + PBRFusion nodes and set PBRFUSION_PATH. "
+                "See docs/guides/MATERIAL_PBR_GUIDE.md for instructions.",
+                UserWarning,
+            )
+
+        # Fallback to enhanced heuristic (Phase 5C)
+        return self._generate_heuristic(rgb, mask, depth, material_hint, config)
 
     def _generate_nvdiffrec(
         self,
