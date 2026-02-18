@@ -3,6 +3,8 @@
 # -----------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
+# Explicit .pyc required by structural test
+*.pyc
 *$py.class
 *.so
 .Python
