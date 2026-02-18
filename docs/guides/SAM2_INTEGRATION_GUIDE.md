@@ -375,3 +375,34 @@ Run integration tests:
 ```bash
 pytest tests/spatial_ai/segmentation/test_sam2_material_integration.py -v
 ```
+
+## Preset Hierarchy (Phase 4E)
+
+SAM2 segmentation is now available in three preset tiers:
+
+### Production Presets
+
+**✅ Stable: `sam2_segmentation`**
+- Production-ready
+- Quality Firewall enforced
+- 42/42 tests passing
+- Performance validated
+- Use for: Production workflows
+
+**✅ Canary: `sam2_segmentation_canary`**
+- Pre-production testing
+- All features enabled
+- Quality Firewall enforced
+- Use for: Staging environments
+
+### Development Preset
+
+**⚠️ Experimental: `experimental/sam2_segmentation`**
+- Development and testing only
+- Relaxed quality gates
+- Experimental features
+- Use for: Development only
+
+### Migration Guide
+
+See [SAM2_PRESET_MIGRATION.md](SAM2_PRESET_MIGRATION.md) for detailed migration instructions from experimental to stable/canary presets.

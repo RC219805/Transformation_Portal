@@ -1,45 +1,43 @@
 # SAM2 Segmentation Preset (Experimental)
 #
-# Status: EXPERIMENTAL - Phase 3 implementation complete (2026-02-17)
-# Phase: 3.0 (SAM2 Full Integration)
-# Last Updated: 2026-02-17
+# Status: EXPERIMENTAL - Development/testing preset
+# Stability: experimental
+# Last Updated: 2026-02-18
+#
+# ⚠️  WARNING: This preset is for development and testing only.
+# ⚠️  Use sam2_segmentation (stable) or sam2_segmentation_canary for production.
 #
 # Purpose:
-#   Universal object/material segmentation with temporal consistency
-#   for architectural visualization and luxury real estate rendering.
+#   Development and testing of new SAM2 features before promotion
+#   to canary/stable presets.
 #
-# Model:
-#   - SAM2 (Segment Anything 2) from Meta AI Research
-#   - Official checkpoints from Facebook Research
-#   - License: Apache 2.0 (commercial-friendly)
+# Migration Path:
+#   experimental → canary → stable
+#
+# Current Development Features:
+#   - Custom material taxonomies
+#   - Advanced refinement algorithms
+#   - Experimental quality gates
 #
 # Usage:
-#   # Download checkpoint first:
-#   python scripts/download_sam2_checkpoint.py --model large
-#
-#   # Run segmentation:
 #   transformation_portal spatial-ai segment \
 #     --preset experimental/sam2_segmentation \
 #     --input scene.tiff \
-#     --output output/ \
-#     --mode auto
-#
-# Checkpoint Management:
-#   - Checkpoints stored in: checkpoints/sam2_hiera_{base_plus,large}.pt
-#   - Downloaded via: scripts/download_sam2_checkpoint.py
-#   - Verified via SHA256 checksums (July 2024 release)
-#   - NOT loaded from HuggingFace Hub (direct torch.load)
-#
-# ADR-027 Compliance:
-#   ✅ Isolated from lux_depth_v3 (no cross-pipeline imports)
-#   ✅ Contract-driven (gamma=1.0 enforcement)
-#   ✅ Experimental preset (checkpoint paths instead of HF revisions)
+#     --output output/
 
 name: "SAM2 Segmentation (Experimental)"
-version: "3.0.0"
-tier: "dev"  # Available to all tiers (Apache 2.0 license)
+version: "4.0.0-dev"
+tier: "dev"
+stability: "experimental"
+license: "Apache-2.0"
 
-# Model Configuration
+# Extends stable preset
+extends: sam2_segmentation
+
+# Experimental Overrides
+# Can test different model sizes and experimental features
+
+# Model Configuration (override stable defaults)
 model:
   backend: "sam2"
   model_size: "large"  # Options: "base", "large"
