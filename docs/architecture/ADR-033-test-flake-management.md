@@ -98,11 +98,12 @@ python scripts/track_test_flakes.py report.json
 **Job:** `flake-analysis` (runs after `test-core` and `test-ml`)
 
 **Steps:**
-1. Collect JSON reports from all test jobs
-2. Update flake ledger with `track_test_flakes.py`
-3. Generate markdown flake report with `analyze_flakes.py`
-4. Upload ledger + report as CI artifacts
-5. Warn if repo-wide flake rate > 1% (non-blocking)
+1. Restore prior `flake-ledger` artifact from latest successful `main` run (if available)
+2. Collect JSON reports from all test jobs
+3. Update flake ledger with `track_test_flakes.py`
+4. Generate markdown flake report with `analyze_flakes.py`
+5. Upload updated ledger + report as CI artifacts
+6. Warn if repo-wide flake rate > 1% (non-blocking)
 
 **Artifacts:**
 - `flake-ledger` - Updated ledger (retained 30 days)

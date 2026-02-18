@@ -310,11 +310,12 @@ Implement 4-layer defense-in-depth (mirrors ADR-031 test isolation):
 
 **File:** `.github/workflows/ci-quality-firewall.yml`
 
-**Job:** `validate-dependency-constraints`
+**Jobs:** `validate-dependency-constraints`, `validate-python-compatibility`
 
 **Behavior:**
 - Runs after checkout, before tests
 - Fast-fail on violations
+- Simulates dependency resolution for supported Python versions (3.11, 3.12)
 - Uploads validation report as artifact
 - Blocks PR merge on failure
 
@@ -523,6 +524,7 @@ Track implementation progress:
   - [x] Colorized output with fix guidance
 - [x] **CI integration** (`.github/workflows/ci-quality-firewall.yml`)
   - [x] `validate-dependency-constraints` job added
+  - [x] `validate-python-compatibility` matrix job added (3.11, 3.12)
   - [x] Runs on PR and push to main
   - [x] Blocks merge on failure
   - [x] Uploads validation report artifact

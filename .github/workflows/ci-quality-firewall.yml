@@ -25,6 +25,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
 
 env:
   PYTHON_VERSION_LINT: "3.12"
@@ -322,9 +323,47 @@ jobs:
             requirements/*.txt
           retention-days: 7
 
+  validate-python-compatibility:
+    name: Validate Python Resolution (ADR-032, py${{ matrix.python-version }})
+    needs: preflight
+    if: needs.preflight.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.preflight.outputs.head_sha }}
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+          cache-dependency-path: 'requirements-ci.txt'
+
+      - name: Resolver simulation for requirements-ci
+        run: |
+          echo "🔍 Simulating dependency resolution for Python ${{ matrix.python-version }}..."
+          python -m pip install --upgrade pip
+          python -m pip install --dry-run --report "resolver-report-py${{ matrix.python-version }}.json" -r requirements-ci.txt
+          echo "✅ Resolution succeeded for Python ${{ matrix.python-version }}"
+
+      - name: Upload resolver report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resolver-report-py${{ matrix.python-version }}
+          path: resolver-report-py${{ matrix.python-version }}.json
+          retention-days: 7
+
   test-core:
     name: Core Tests (Python ${{ matrix.python-version }})
-    needs: [preflight, test-isolation, validate-dependency-constraints]
+    needs: [preflight, test-isolation, validate-dependency-constraints, validate-python-compatibility]
     if: needs.preflight.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -698,6 +737,75 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Locate previous flake ledger artifact on main
+        id: find-ledger
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const workflow_id = "ci-quality-firewall.yml";
+            const runs = await github.paginate(
+              github.rest.actions.listWorkflowRuns,
+              {
+                owner,
+                repo,
+                workflow_id,
+                branch: "main",
+                status: "completed",
+                per_page: 100
+              },
+              (response) => response.data.workflow_runs
+            );
+
+            for (const run of runs) {
+              if (run.id === context.runId) continue;
+              if (run.conclusion !== "success") continue;
+
+              const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+                owner,
+                repo,
+                run_id: run.id,
+                per_page: 100
+              });
+
+              const flakeLedger = artifacts.data.artifacts.find(
+                (artifact) => artifact.name === "flake-ledger" && !artifact.expired
+              );
+
+              if (flakeLedger) {
+                core.info(`Found prior flake ledger in workflow run ${run.id}`);
+                core.setOutput("found", "true");
+                core.setOutput("run_id", String(run.id));
+                return;
+              }
+            }
+
+            core.info("No prior flake-ledger artifact found on main; using repository baseline.");
+            core.setOutput("found", "false");
+
+      - name: Download previous flake ledger
+        if: steps.find-ledger.outputs.found == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: flake-ledger
+          run-id: ${{ steps.find-ledger.outputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: previous-ledger
+
+      - name: Restore previous flake ledger
+        if: steps.find-ledger.outputs.found == 'true'
+        run: |
+          mkdir -p tests
+          if [ -f previous-ledger/flake_ledger.json ]; then
+            cp previous-ledger/flake_ledger.json tests/flake_ledger.json
+            echo "✅ Restored flake ledger from previous-ledger/flake_ledger.json"
+          elif [ -f previous-ledger/tests/flake_ledger.json ]; then
+            cp previous-ledger/tests/flake_ledger.json tests/flake_ledger.json
+            echo "✅ Restored flake ledger from previous-ledger/tests/flake_ledger.json"
+          else
+            echo "::warning::Previous flake ledger artifact did not include flake_ledger.json; using repository baseline."
+          fi
+
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
@@ -768,7 +876,7 @@ jobs:
 
   quality-summary:
     name: Quality Gate Summary
-    needs: [preflight, lint, typecheck, security, test-core, test-ml, coverage-gate, build, repo-hygiene]
+    needs: [preflight, lint, typecheck, security, validate-python-compatibility, test-core, test-ml, coverage-gate, build, repo-hygiene]
     runs-on: ubuntu-latest
     if: always() && needs.preflight.outputs.should_run == 'true'
     timeout-minutes: 5
@@ -780,6 +888,7 @@ jobs:
           echo "  Lint: ${{ needs.lint.result }}"
           echo "  Type Check: ${{ needs.typecheck.result }}"
           echo "  Security: ${{ needs.security.result }}"
+          echo "  Python Resolution: ${{ needs.validate-python-compatibility.result }}"
           echo "  Core Tests: ${{ needs.test-core.result }}"
           echo "  ML Tests: ${{ needs.test-ml.result }}"
           echo "  Coverage Gate: ${{ needs.coverage-gate.result }}"
@@ -788,6 +897,7 @@ jobs:
 
           if [ "${{ needs.lint.result }}" != "success" ] || \
              [ "${{ needs.security.result }}" != "success" ] || \
+             [ "${{ needs.validate-python-compatibility.result }}" != "success" ] || \
              [ "${{ needs.test-core.result }}" != "success" ] || \
              [ "${{ needs.test-ml.result }}" != "success" ] || \
              [ "${{ needs.coverage-gate.result }}" != "success" ] || \

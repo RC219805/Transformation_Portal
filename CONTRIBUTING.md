@@ -293,10 +293,18 @@ The `main` branch is protected to ensure code quality and stability. All changes
    - Minimum 1 approval recommended (not currently enforced, but best practice)
    - 2 approvals required for architectural changes (ADRs, security, dependencies)
 
-2. **Pass all required CI checks:**
-   - CI Gate (build + core tests)
-   - Lint (critical errors)
-   - Core test suite
+2. **Pass all required CI checks (merge blockers):**
+   - **CI Gate** (`.github/workflows/build.yml`) is the only required status check in branch protection
+   - CI Gate explicitly aggregates and enforces:
+     - `lightweight`
+     - `lint` (when `run_full=true`)
+     - `test` matrix (when `run_full=true`)
+     - `generate-manifest` (when `run_full=true`)
+
+   **Post-merge quality signals (non-blocking):**
+   - `CI Quality Firewall (post-CI) / Quality Gate Summary`
+   - `CI Quality Firewall (post-CI) / Flake Rate Analysis`
+   - `Nightly Deep Checks / Nightly Summary`
 
 3. **Resolve all review conversations** (recommended)
    - Address all reviewer comments before merge
