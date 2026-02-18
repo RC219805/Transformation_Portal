@@ -225,12 +225,7 @@ class SAM2Backend:
                 return SegmentationResult(
                     masks=np.zeros((0, *image.shape[:2]), dtype=bool),
                     scores=np.zeros(0, dtype=np.float32),
-                    metadata={
-                        "backend": "sam2",
-                        "model_size": self.model_size,
-                        "mode": "auto",
-                        "num_masks": 0,
-                    },
+                    metadata=[],  # Empty list for empty result
                 )
 
             # Convert SAM2 output to our format
@@ -241,19 +236,30 @@ class SAM2Backend:
             # Use average of IoU and stability as final score
             scores = (iou_scores + stability_scores) / 2.0
 
+            # Create metadata for each mask
+            metadata_list = []
+            for m, stab_score in zip(masks_data, stability_scores):
+                bbox_xyxy = m["bbox"]  # [x_min, y_min, x_max, y_max]
+                bbox_xywh = (
+                    int(bbox_xyxy[0]),
+                    int(bbox_xyxy[1]),
+                    int(bbox_xyxy[2] - bbox_xyxy[0]),
+                    int(bbox_xyxy[3] - bbox_xyxy[1]),
+                )
+                metadata_list.append(
+                    MaskMetadata(
+                        area=int(m["area"]),
+                        bbox=bbox_xywh,
+                        stability_score=float(stab_score),
+                    )
+                )
+
             logger.info(f"SAM2 auto mode: generated {len(masks)} masks")
 
             return SegmentationResult(
                 masks=masks,
                 scores=scores,
-                metadata={
-                    "backend": "sam2",
-                    "model_size": self.model_size,
-                    "mode": "auto",
-                    "num_masks": len(masks),
-                    "iou_scores": iou_scores.tolist(),
-                    "stability_scores": stability_scores.tolist(),
-                },
+                metadata=metadata_list,
             )
 
         except Exception as e:
