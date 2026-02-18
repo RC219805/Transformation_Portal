@@ -68,6 +68,7 @@ class DepthCrafterBackend:
     name = "depthcrafter"
     license_type = LicenseType.COMMERCIAL  # Apache 2.0
     requires_checkpoint = True
+    _MODEL_INFERENCE_IMPLEMENTED = False
 
     def __init__(
         self,
@@ -92,6 +93,7 @@ class DepthCrafterBackend:
 
         # Checkpoint availability (lazy-checked)
         self._checkpoint_available: Optional[bool] = None
+        self._model_inference_warning_emitted = False
         self._model = None
 
         logger.debug(
@@ -134,6 +136,42 @@ class DepthCrafterBackend:
         """
         return []
 
+    @staticmethod
+    def _normalize_numpy_input(image: np.ndarray) -> np.ndarray:
+        """Normalize numpy input to uint8 image space."""
+        if image.dtype in (np.float16, np.float32, np.float64):
+            image = np.nan_to_num(image, nan=0.0, posinf=255.0, neginf=0.0)
+            if image.size and float(np.max(image)) <= 1.0:
+                return (np.clip(image, 0.0, 1.0) * 255.0).astype(np.uint8)
+            return np.clip(image, 0.0, 255.0).astype(np.uint8)
+
+        if image.dtype != np.uint8:
+            return np.clip(image, 0, 255).astype(np.uint8)
+
+        return image
+
+    @classmethod
+    def _to_rgb_uint8_array(cls, image: Union[Image.Image, np.ndarray]) -> np.ndarray:
+        """Convert PIL/numpy image to an RGB uint8 numpy array."""
+        if isinstance(image, Image.Image):
+            pil_image = image.convert("RGB")
+        else:
+            pil_image = Image.fromarray(cls._normalize_numpy_input(image))
+            if pil_image.mode != "RGB":
+                pil_image = pil_image.convert("RGB")
+        return np.asarray(pil_image, dtype=np.uint8)
+
+    def _checkpoint_path(self) -> str:
+        """Return checkpoint path from config or default location."""
+        checkpoint_path = None
+        if self._config is not None:
+            checkpoint_path = getattr(self._config, "depthcrafter_checkpoint_path", None)
+
+        if checkpoint_path is None:
+            checkpoint_path = "checkpoints/depthcrafter_v1.pt"
+
+        return str(checkpoint_path)
+
     def compute(
         self,
         image: Union[Image.Image, np.ndarray],
@@ -152,16 +190,12 @@ class DepthCrafterBackend:
         Returns:
             DepthResult with temporally-smoothed depth map.
         """
-        # Convert to numpy array
-        if isinstance(image, Image.Image):
-            pil_image = image.convert("RGB")
-            img_array = np.asarray(pil_image, dtype=np.uint8)
-        else:
-            img_array = image.astype(np.uint8) if image.dtype != np.uint8 else image
-            pil_image = Image.fromarray(img_array)
+        # Normalize input image to RGB uint8.
+        img_array = self._to_rgb_uint8_array(image)
+        pil_image = Image.fromarray(img_array)
 
         # Compute raw depth (checkpoint model or synthetic fallback)
-        raw_depth = self._compute_raw_depth(pil_image, img_array, device)
+        raw_depth = self._compute_raw_depth(pil_image, device)
 
         # Apply temporal EMA filter
         smoothed_depth = self._apply_temporal_filter(raw_depth)
@@ -193,14 +227,12 @@ class DepthCrafterBackend:
     def _compute_raw_depth(
         self,
         pil_image: Image.Image,
-        img_array: np.ndarray,
         device: Optional[str],
     ) -> np.ndarray:
         """Compute raw depth map using model or synthetic fallback.
 
         Args:
             pil_image: Input image as PIL.
-            img_array: Input image as numpy array.
             device: Device for inference.
 
         Returns:
@@ -211,12 +243,21 @@ class DepthCrafterBackend:
             self._checkpoint_available = self._check_checkpoint()
 
         if self._checkpoint_available:
+            if not self._MODEL_INFERENCE_IMPLEMENTED:
+                if not self._model_inference_warning_emitted:
+                    logger.info(
+                        "DepthCrafter checkpoint found at %s, but model inference "
+                        "is not implemented yet. Falling back to synthetic depth.",
+                        self._checkpoint_path(),
+                    )
+                    self._model_inference_warning_emitted = True
+                return self._compute_synthetic_depth(pil_image)
             try:
                 return self._infer_model(pil_image, device)
             except Exception as e:
+                self._checkpoint_available = False
                 logger.warning(
-                    "DepthCrafter model inference failed: %s. "
-                    "Falling back to synthetic depth.",
+                    "DepthCrafter model inference failed: %s. " "Falling back to synthetic depth.",
                     e,
                 )
 
@@ -304,13 +345,7 @@ class DepthCrafterBackend:
         """
         from pathlib import Path
 
-        # Check config-specified path first
-        checkpoint_path = None
-        if self._config is not None:
-            checkpoint_path = getattr(self._config, "depthcrafter_checkpoint_path", None)
-
-        if checkpoint_path is None:
-            checkpoint_path = "checkpoints/depthcrafter_v1.pt"
+        checkpoint_path = self._checkpoint_path()
 
         exists = Path(checkpoint_path).exists()
         if not exists:
@@ -333,13 +368,18 @@ class DepthCrafterBackend:
         Returns:
             Cache key string.
         """
-        if isinstance(image, Image.Image):
-            img_array = np.asarray(image.convert("RGB"), dtype=np.uint8)
-        else:
-            img_array = image
+        img_array = self._to_rgb_uint8_array(image)
 
         content_hash = hashlib.sha256(img_array.tobytes()).hexdigest()[:16]
-        return f"depthcrafter-v{__version__}-{content_hash}"
+        config_hash = hashlib.sha256(
+            (
+                f"alpha={self._temporal_alpha:.6f}|"
+                f"buffer={self._max_buffer_size}|"
+                f"checkpoint={self._checkpoint_path()}|"
+                f"version={__version__}"
+            ).encode()
+        ).hexdigest()[:12]
+        return f"depthcrafter-v{__version__}-{config_hash}-{content_hash}"
 
     def reset_temporal_state(self) -> None:
         """Reset temporal filter state.
@@ -358,8 +398,4 @@ class DepthCrafterBackend:
 
     def __repr__(self) -> str:
         mode = "model" if (self._checkpoint_available and self._model) else "fallback"
-        return (
-            f"DepthCrafterBackend(name={self.name!r}, "
-            f"mode={mode!r}, "
-            f"temporal_alpha={self._temporal_alpha})"
-        )
+        return f"DepthCrafterBackend(name={self.name!r}, " f"mode={mode!r}, " f"temporal_alpha={self._temporal_alpha})"

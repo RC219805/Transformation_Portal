@@ -252,7 +252,10 @@ class DepthEnsembleBackend:
 
                 # Run inference
                 logger.debug(f"Running model: {model_config.name}")
-                result = backend.compute(image, device=device or model_config.device)
+                model_device = device
+                if model_device is None and model_config.device != "auto":
+                    model_device = model_config.device
+                result = backend.compute(image, device=model_device)
                 results[model_config.name] = result
 
             except Exception as e:

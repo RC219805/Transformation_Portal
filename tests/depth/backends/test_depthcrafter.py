@@ -61,6 +61,36 @@ class TestDepthCrafterCompute:
 
         assert result.depth_map.shape == (48, 48)
 
+    def test_compute_scales_float_unit_range_numpy_input(self):
+        """Float [0,1] numpy input should be scaled to uint8 before depth inference."""
+        backend = DepthCrafterBackend()
+        img_array = np.full((32, 32, 3), 0.5, dtype=np.float32)
+
+        result = backend.compute(img_array)
+
+        # Regression check: direct uint8 cast would collapse to mostly 0/1.
+        assert result.original_image.dtype == np.uint8
+        assert result.original_image.mean() > 100
+
+    def test_checkpoint_present_without_model_inference_skips_model_path(self, monkeypatch):
+        """Checkpoint presence should not repeatedly call placeholder model inference."""
+        backend = DepthCrafterBackend()
+        backend._checkpoint_available = True
+
+        calls = {"infer": 0}
+
+        def fail_if_called(*args, **kwargs):
+            calls["infer"] += 1
+            raise AssertionError("_infer_model() should not be called while unimplemented")
+
+        monkeypatch.setattr(backend, "_infer_model", fail_if_called)
+        frame = Image.fromarray(np.full((16, 16, 3), 64, dtype=np.uint8))
+
+        backend.compute(frame)
+        backend.compute(frame)
+
+        assert calls["infer"] == 0
+
     def test_compute_depth_values_in_unit_range(self):
         """Synthetic fallback depth values should be in [0, 1]."""
         backend = DepthCrafterBackend()
@@ -249,6 +279,17 @@ class TestCacheKey:
         key = backend.get_cache_key(img)
         assert isinstance(key, str)
         assert len(key) > 0
+
+    def test_cache_key_changes_with_backend_configuration(self):
+        """Cache key should include backend configuration, not only image bytes."""
+        img = np.random.RandomState(0).randint(0, 255, (32, 32, 3)).astype(np.uint8)
+
+        key_alpha = DepthCrafterBackend(temporal_alpha=0.1, max_buffer_size=30).get_cache_key(img)
+        key_buffer = DepthCrafterBackend(temporal_alpha=0.1, max_buffer_size=12).get_cache_key(img)
+        key_default = DepthCrafterBackend(temporal_alpha=0.3, max_buffer_size=30).get_cache_key(img)
+
+        assert key_alpha != key_default
+        assert key_buffer != key_default
 
 
 class TestRegistryIntegration:

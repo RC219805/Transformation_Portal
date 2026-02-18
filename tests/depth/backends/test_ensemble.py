@@ -115,6 +115,64 @@ class TestEnsembleBackend:
         enabled_weights = sum(m.weight for m in ensemble._models if m.enabled)
         assert abs(enabled_weights - 1.0) < 1e-6
 
+    def test_run_models_treats_auto_device_as_none(self, monkeypatch):
+        """ModelConfig.device='auto' should pass None to backend.compute()."""
+        config = EnhanceConfig(non_commercial_ok=True, accept_research_tools_license=True)
+        ensemble = DepthEnsembleBackend(
+            config,
+            models=[ModelConfig(name="mock_model", weight=1.0, device="auto")],
+        )
+
+        received_devices = []
+
+        class StubBackend:
+            def compute(self, image, device=None):
+                received_devices.append(device)
+                return DepthResult(
+                    depth_map=np.zeros((16, 16), dtype=np.float32),
+                    original_image=np.zeros((16, 16, 3), dtype=np.uint8),
+                    metadata={},
+                    depth_units="relative",
+                    backend_id="mock_model",
+                    device="cpu",
+                    dtype="float32",
+                    input_size=(16, 16),
+                )
+
+        monkeypatch.setattr(ensemble, "_get_backend", lambda _: StubBackend())
+        ensemble._run_models(np.zeros((16, 16, 3), dtype=np.uint8), device=None)
+
+        assert received_devices == [None]
+
+    def test_run_models_prefers_explicit_device_override(self, monkeypatch):
+        """Explicit compute(device=...) should override per-model configuration."""
+        config = EnhanceConfig(non_commercial_ok=True, accept_research_tools_license=True)
+        ensemble = DepthEnsembleBackend(
+            config,
+            models=[ModelConfig(name="mock_model", weight=1.0, device="mps")],
+        )
+
+        received_devices = []
+
+        class StubBackend:
+            def compute(self, image, device=None):
+                received_devices.append(device)
+                return DepthResult(
+                    depth_map=np.zeros((16, 16), dtype=np.float32),
+                    original_image=np.zeros((16, 16, 3), dtype=np.uint8),
+                    metadata={},
+                    depth_units="relative",
+                    backend_id="mock_model",
+                    device="cpu",
+                    dtype="float32",
+                    input_size=(16, 16),
+                )
+
+        monkeypatch.setattr(ensemble, "_get_backend", lambda _: StubBackend())
+        ensemble._run_models(np.zeros((16, 16, 3), dtype=np.uint8), device="cpu")
+
+        assert received_devices == ["cpu"]
+
     def test_variance_weighted_fusion_synthetic(self):
         """Test variance-weighted fusion with synthetic backends."""
         # NOTE:

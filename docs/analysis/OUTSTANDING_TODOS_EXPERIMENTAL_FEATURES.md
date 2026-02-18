@@ -13,13 +13,14 @@
 **Components Needed**:
 - [x] Ensemble backend implementation
 - [x] Variance-weighted fusion algorithm
-- [x] Temporal consistency filter (video) — EMA filter in DepthCrafterBackend
-- [x] DepthCrafter integration — `src/transformation_portal/depth/backends/depthcrafter.py`
+- [x] Temporal consistency filter (video, opt-in) — EMA filter in DepthCrafterBackend
+- [x] DepthCrafter integration (disabled in default ensemble config) — `src/transformation_portal/depth/backends/depthcrafter.py`
 - [x] Inter-model variance threshold validation
 - [x] `.values()` → `.items()` metric alignment bug fixed (PR #906)
 
 **Remaining**:
 - DepthCrafter model checkpoint not yet available (backend uses synthetic fallback)
+- Enable `depthcrafter` by default once checkpoint + model inference path are production-ready
 - Performance profiling needed (expected: 2.4x slower than single model)
 
 **Files**:
