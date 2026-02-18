@@ -183,8 +183,11 @@ class MaterialClassifier:
             logger.warning("CLIP not available, returning unlabeled")
             return [(None, None) for _ in range(len(masks))]
 
-        self._load_model()
+        # Empty masks never require model inference; keep this path torch-free.
+        if len(masks) == 0 or not np.any(masks):
+            return [(None, None) for _ in range(len(masks))]
 
+        self._load_model()
         import torch
 
         results = []
