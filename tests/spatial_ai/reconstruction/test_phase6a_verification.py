@@ -10,7 +10,8 @@ These tests verify the specific concerns raised in the technical review:
 
 import numpy as np
 import pytest
-import torch
+
+torch = pytest.importorskip("torch", reason="torch is required for phase6a verification tests")
 
 from transformation_portal.spatial_ai.reconstruction import CameraParams, GaussianBackend, ReconstructionInput
 
