@@ -124,8 +124,17 @@ def test_small_tiff():
     # Generate PBR textures
     print("\n🎨 Generating PBR textures...")
     start_time = time.time()
-    albedo, normal, roughness, metallic, ao, height, properties = backend.generate_pbr_textures(rgb=rgb)
+    result = backend.generate_pbr_textures(rgb=rgb)
     elapsed = time.time() - start_time
+
+    # Extract textures from result object
+    albedo = result.albedo
+    normal = result.normal
+    roughness = result.roughness
+    metallic = result.metallic
+    ao = result.ambient_occlusion
+    height = result.height
+    properties = result.properties
 
     # Validate
     print(f"\n✅ Generated in {elapsed:.2f}s")
@@ -185,8 +194,17 @@ def test_large_tiff():
     # Generate PBR textures
     print("\n🎨 Generating PBR textures for 12MP image...")
     start_time = time.time()
-    albedo, normal, roughness, metallic, ao, height, properties = backend.generate_pbr_textures(rgb=rgb)
+    result = backend.generate_pbr_textures(rgb=rgb)
     elapsed = time.time() - start_time
+
+    # Extract textures from result object
+    albedo = result.albedo
+    normal = result.normal
+    roughness = result.roughness
+    metallic = result.metallic
+    ao = result.ambient_occlusion
+    height = result.height
+    properties = result.properties
 
     # Validate
     print(f"\n✅ Generated in {elapsed:.2f}s")
@@ -240,7 +258,10 @@ def test_with_material_hint():
 
     print("\n🎨 Testing material hints...")
     for material in materials:
-        _, _, roughness, metallic, _, _, properties = backend.generate_pbr_textures(rgb=rgb, material_hint=material)
+        result = backend.generate_pbr_textures(rgb=rgb, material_hint=material)
+        roughness = result.roughness
+        metallic = result.metallic
+        properties = result.properties
 
         print(f"\n   {material.upper()}:")
         print(f"     roughness: [{roughness.min():.3f}, {roughness.max():.3f}] mean={properties.roughness_mean:.3f}")

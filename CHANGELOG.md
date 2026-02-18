@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Phase 5: Material PBR Integration (v5.0.0):** Production-ready physics-based rendering for luxury real estate post-production
+  - **Stable Preset (`material_pbr.yaml`):** Deterministic CPU-only heuristic backend, zero ML dependencies
+  - **Canary Preset (`material_pbr_canary.yaml`):** Optional PBRFusion GPU backend (Apache 2.0) with auto-fallback
+  - **Enhanced Heuristic Backend:** Bilateral filtering, depth-aware normals (5× scale), concavity-based AO (70%/30% blend)
+  - **8 PBR-Accurate Material Presets:** Metal, glass, wood, stone, fabric, concrete, plastic, ceramic with validated roughness/metallic ranges
+  - **PBR Texture Generation:** 6 maps (albedo, normal, roughness, metallic, AO, height) with `MaterialProperties` metadata
+  - **Artifact Fingerprinting:** `PBRGenerationMetadata` tracks backend version, parameters, depth usage for reproducibility
+  - **Backend Protocol:** `PBRBackendProtocol` formal interface for Phase 6 Gaussian Splatting integration
+  - **CI Preset Stability Guard:** SHA256 hash enforcement prevents unintended stable preset modifications
+  - **Performance:** 4.28s/MP @ 12MP (meets <5s/MP Quality Firewall target), <500MB memory
+  - **62 Material Tests:** Comprehensive coverage including backend fallback, device placement, contract validation
+  - **Zero Breaking Changes:** Backward-compatible API, graceful degradation, tuple unpacking fallback
+  - See: [Performance Baselines](docs/performance/PHASE5_PBR_BASELINES.md)
+
 ### Removed
 - **Archived Obsolete Module:** `depth_canonical` module superseded by ADR-019 backend architecture
   - Moved to `archive/depth_canonical/` with full git history preserved
