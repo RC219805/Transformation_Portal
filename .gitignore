@@ -303,3 +303,11 @@ projects/*
 # Client construction documents and architectural PDFs (sensitive)
 # -----------------------------------------------------------------------------
 Architectural_Plans/**/*.pdf
+
+# PDF extraction artifacts
+picacho_architectural/
+picacho_construction/
+artifact_store/
+
+# Generated exports
+*.xlsx

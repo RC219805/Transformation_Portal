@@ -245,13 +245,11 @@ jobs:
 
       - name: Upload coverage reports
         if: matrix.python-version == '3.12'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: coverage-core-py${{ matrix.python-version }}
           include-hidden-files: true
-          path: |
-            .coverage.core-py${{ matrix.python-version }}
-            htmlcov/
+          path: .coverage.core-py${{ matrix.python-version }}
 
   test-ml:
     name: ML Tests (Python 3.11)
@@ -352,12 +350,11 @@ jobs:
           fi
 
       - name: Upload coverage reports
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: coverage-ml-py3.11
           include-hidden-files: true
-          path: |
-            .coverage.ml-py3.11
+          path: .coverage.ml-py3.11
 
   coverage-gate:
     name: Coverage Quality Gate
