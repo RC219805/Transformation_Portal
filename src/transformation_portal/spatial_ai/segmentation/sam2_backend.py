@@ -257,12 +257,13 @@ class SAM2Backend:
             # Create metadata for each mask
             metadata_list = []
             for m, stab_score in zip(masks_data, stability_scores):
-                bbox_xyxy = m["bbox"]  # [x_min, y_min, x_max, y_max]
+                bbox_raw = m["bbox"]  # SAM2 format: [x, y, w, h]
+                # SAM2 returns bbox in [x, y, width, height] format already
                 bbox_xywh = (
-                    int(bbox_xyxy[0]),
-                    int(bbox_xyxy[1]),
-                    int(bbox_xyxy[2] - bbox_xyxy[0]),
-                    int(bbox_xyxy[3] - bbox_xyxy[1]),
+                    int(bbox_raw[0]),
+                    int(bbox_raw[1]),
+                    int(bbox_raw[2]),
+                    int(bbox_raw[3]),
                 )
                 metadata_list.append(
                     MaskMetadata(
