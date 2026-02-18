@@ -67,11 +67,13 @@ def test_sam2_video_mode_not_implemented():
 
     backend = SAM2Backend(model_size="large", checkpoint_path=checkpoint_path, device="cpu")
 
-    test_image = np.random.rand(512, 512, 3).astype(np.float32)
-    seg_input = SegmentationInput(image=test_image, gamma=1.0, mode="video")
+    # Video mode was implemented in Phase 4A
+    # Verify the method exists and is callable
+    assert hasattr(backend, "_segment_video")
+    assert callable(backend._segment_video)
 
-    with pytest.raises(NotImplementedError, match="Video tracking.*Phase 4"):
-        backend._segment_video(seg_input)
+    # Full video mode testing requires decord and valid video files
+    # These are tested in test_sam2_video_integration.py
 
 
 def test_sam2_checkpoint_path_resolution():

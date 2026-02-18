@@ -28,6 +28,15 @@ from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backe
 class TestExtractSAM2Predictions:
     """Test _extract_sam2_predictions() helper method."""
 
+    @pytest.fixture(autouse=True)
+    def skip_if_no_checkpoint(self):
+        """Skip all tests in this class if checkpoint not available."""
+        from pathlib import Path
+
+        checkpoint_path = Path("checkpoints/sam2_hiera_base_plus.pt")
+        if not checkpoint_path.exists():
+            pytest.skip(f"Checkpoint not found: {checkpoint_path}")
+
     def test_extract_sam2_predictions_with_real_scores(self):
         """Test extraction when SAM2 provides real scores."""
         backend = SAM2Backend(device="cpu")
@@ -179,6 +188,15 @@ class TestExtractSAM2Predictions:
 class TestExtractSAM2PredictionsValueRanges:
     """Test that extracted scores respect contract value ranges."""
 
+    @pytest.fixture(autouse=True)
+    def skip_if_no_checkpoint(self):
+        """Skip all tests in this class if checkpoint not available."""
+        from pathlib import Path
+
+        checkpoint_path = Path("checkpoints/sam2_hiera_base_plus.pt")
+        if not checkpoint_path.exists():
+            pytest.skip(f"Checkpoint not found: {checkpoint_path}")
+
     def test_iou_scores_in_valid_range(self):
         """Test that IoU scores are in [0, 1] range."""
         backend = SAM2Backend(device="cpu")
@@ -231,6 +249,15 @@ class TestExtractSAM2PredictionsValueRanges:
 class TestBackwardCompatibility:
     """Test backward compatibility with stub backends."""
 
+    @pytest.fixture(autouse=True)
+    def skip_if_no_checkpoint(self):
+        """Skip all tests in this class if checkpoint not available."""
+        from pathlib import Path
+
+        checkpoint_path = Path("checkpoints/sam2_hiera_base_plus.pt")
+        if not checkpoint_path.exists():
+            pytest.skip(f"Checkpoint not found: {checkpoint_path}")
+
     def test_stub_backend_without_sam2_attributes(self):
         """Test that stub backends (no SAM2) still work with fallback."""
         backend = SAM2Backend(device="cpu")
@@ -264,6 +291,15 @@ class TestBackwardCompatibility:
 
 class TestDefensiveProgramming:
     """Test defensive programming patterns."""
+
+    @pytest.fixture(autouse=True)
+    def skip_if_no_checkpoint(self):
+        """Skip all tests in this class if checkpoint not available."""
+        from pathlib import Path
+
+        checkpoint_path = Path("checkpoints/sam2_hiera_base_plus.pt")
+        if not checkpoint_path.exists():
+            pytest.skip(f"Checkpoint not found: {checkpoint_path}")
 
     def test_no_exceptions_on_missing_attributes(self):
         """Test that missing attributes never raise exceptions."""
@@ -301,6 +337,15 @@ class TestDefensiveProgramming:
 @pytest.mark.benchmark
 class TestPerformance:
     """Test performance characteristics (excluded from core CI)."""
+
+    @pytest.fixture(autouse=True)
+    def skip_if_no_checkpoint(self):
+        """Skip all tests in this class if checkpoint not available."""
+        from pathlib import Path
+
+        checkpoint_path = Path("checkpoints/sam2_hiera_base_plus.pt")
+        if not checkpoint_path.exists():
+            pytest.skip(f"Checkpoint not found: {checkpoint_path}")
 
     def test_zero_overhead_for_attribute_checks(self):
         """Test that hasattr checks have negligible overhead.

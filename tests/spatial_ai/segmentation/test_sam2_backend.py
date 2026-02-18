@@ -84,14 +84,18 @@ def test_sam2_prompted_mode_validation(test_image):
     assert len(seg_input.prompts["points"]) == 2
 
 
-def test_sam2_video_mode_not_implemented(sam2_backend, test_image):
-    """Test video mode raises NotImplementedError."""
-    from transformation_portal.spatial_ai.segmentation.contracts import SegmentationInput
+def test_sam2_video_mode_not_implemented(sam2_backend):
+    """Test that video mode method exists (implemented in Phase 4A)."""
+    # Video mode was implemented in Phase 4A
+    # Verify the method exists and is callable
+    assert hasattr(sam2_backend, "_segment_video")
+    assert callable(sam2_backend._segment_video)
 
-    seg_input = SegmentationInput(image=test_image, gamma=1.0, mode="video")
-
-    with pytest.raises(NotImplementedError, match="Video tracking.*Phase 4"):
-        sam2_backend._segment_video(seg_input)
+    # Full video mode testing requires:
+    # - decord package
+    # - valid video file
+    # - video-specific fixtures
+    # These are tested in test_sam2_video_integration.py
 
 
 def test_sam2_checkpoint_path():
