@@ -255,7 +255,7 @@ class TestCacheKey:
     def test_cache_key_deterministic(self):
         """Same image should produce same cache key."""
         backend = DepthCrafterBackend()
-        img = np.random.RandomState(42).randint(0, 255, (32, 32, 3)).astype(np.uint8)
+        img = np.random.default_rng(42).integers(0, 255, (32, 32, 3), dtype=np.uint8)
 
         key1 = backend.get_cache_key(img)
         key2 = backend.get_cache_key(img)
@@ -282,7 +282,7 @@ class TestCacheKey:
 
     def test_cache_key_changes_with_backend_configuration(self):
         """Cache key should include backend configuration, not only image bytes."""
-        img = np.random.RandomState(0).randint(0, 255, (32, 32, 3)).astype(np.uint8)
+        img = np.random.default_rng(0).integers(0, 255, (32, 32, 3), dtype=np.uint8)
 
         key_alpha = DepthCrafterBackend(temporal_alpha=0.1, max_buffer_size=30).get_cache_key(img)
         key_buffer = DepthCrafterBackend(temporal_alpha=0.1, max_buffer_size=12).get_cache_key(img)
