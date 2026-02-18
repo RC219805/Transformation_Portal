@@ -48,3 +48,12 @@ open-clip-torch>=3.2.0,<4    # OpenCLIP for zero-shot material classification
 # Note: V1 (heuristic-based) works without these dependencies
 # V2 (model-backed) auto-activates when dependencies installed
 # Weights auto-download to ~/.cache/transformation_portal/segmentation/
+
+# 3D Gaussian Splatting (Phase 6 - research license, non-commercial)
+# Inria 3D Gaussian Splatting for real-time novel view synthesis
+# License: Inria research license (non-commercial use only)
+# Requires: tier >= apex_research
+plyfile>=1.0.0,<2                      # PLY mesh export format
+# Note: Core gaussian-splatting implementation will be integrated directly
+# rather than using PyPI package to maintain tighter control over license
+# enforcement and integration with existing reconstruction contracts.
