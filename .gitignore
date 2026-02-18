@@ -1,10 +1,15 @@
+# -----------------------------------------------------------------------------
 # Python
+# -----------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
+# Explicit .pyc required by structural test
 *.pyc
 *$py.class
 *.so
 .Python
+
+# Build / packaging
 build/
 develop-eggs/
 dist/
@@ -23,30 +28,39 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+
+# Caches
 .hypothesis/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
 
-# PyCharm
+# -----------------------------------------------------------------------------
+# IDEs / editors
+# -----------------------------------------------------------------------------
 .idea/
-
-# VS Code
 .vscode/
-
-# Jupyter Notebook
-.ipynb_checkpoints
+.ipynb_checkpoints/
 
 # pyenv
 .python-version
 
+# -----------------------------------------------------------------------------
 # Environments
+# -----------------------------------------------------------------------------
 .env
-.venv
+.venv/
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
+venv_py311/
 
+# -----------------------------------------------------------------------------
 # Security - sensitive files
+# -----------------------------------------------------------------------------
 .bash_history
 .zsh_history
 .sh_history
@@ -56,11 +70,50 @@ id_rsa
 id_dsa
 PKG-INFO
 
+# -----------------------------------------------------------------------------
+# Logs / temp / patches
+# -----------------------------------------------------------------------------
+*.log
+*.tmp
+*.temp
+*.backup
+*.patch
+*.diff
+
+# -----------------------------------------------------------------------------
+# macOS
+# -----------------------------------------------------------------------------
+.DS_Store
+._*
+
+# -----------------------------------------------------------------------------
+# Tools / binaries (install via CI/package managers)
+# -----------------------------------------------------------------------------
+actionlint
+*.exe
+
+# -----------------------------------------------------------------------------
+# Test outputs / build outputs
+# -----------------------------------------------------------------------------
+processed_images/
+output/
+output_*/
+test_output/
+test_artifacts/
+extracted_context/
+docs/api/_build/
+
+# Coverage artifacts
+.coverage
+coverage.json
+htmlcov/
+.coverage.*
+
+# -----------------------------------------------------------------------------
 # Depth Pipeline
+# -----------------------------------------------------------------------------
 # Model cache
 .cache/
-*.mlpackage
-*.mlmodel
 
 # Depth maps and outputs
 *_depth.npy
@@ -68,41 +121,101 @@ PKG-INFO
 *_enhanced.png
 *_enhanced.jpg
 processed_output/
+depth_maps_apex/
 
-# Logs
-*.log
+# Local RAW test inputs (never commit)
+input_images/Richard-Raw-Test/
 
+# Model weights and checkpoints
+*.pth
+*.safetensors
+*.ckpt
+*.bin
+*.pt
+*.pb
+*.onnx
+*.tflite
+*.mlmodel
+*.mlpackage
+
+# Model weights/checkpoints stored at repo root (not Python packages)
+#/models is a data dir; allow src/**/models as python packages below
+/models/
+/weights/
+/checkpoints/
+/pretrained/
+
+# Allow Python packages named 'models'
+!src/**/models/__init__.py
+!src/**/models/*.py
+
+# Real-ESRGAN specific
+RealESRGAN_*.pth
+realesr-*.pth
+
+# -----------------------------------------------------------------------------
 # Generated reports and artifacts
+# -----------------------------------------------------------------------------
 *_report.json
 *-report.json
 material_response_report.json
 *_summary.json
-*.tmp
-*.temp
 
-# macOS
-.DS_Store
-._*
+# Keep quality/metadata/comparison JSON even if matched above
+!*quality*.json
+!*metadata*.json
+!*comparison*.json
+!depth_model_comparison.json
 
-# Tools
-actionlint
-
-# Test outputs
-processed_images/
-output/
-output_*/
-test_output/
-test_artifacts/
-
+# -----------------------------------------------------------------------------
 # Large image files (exclude binary outputs)
+# -----------------------------------------------------------------------------
 *.tif
 *.tiff
+
+# Allow test fixtures (explicit)
 !tests/fixtures/pipelines/**/*.tif
 !tests/fixtures/pipelines/**/*.tiff
-!input_images/.gitkeep
+
+# -----------------------------------------------------------------------------
+# Sample / input images (local development only)
+# Keep directory structure; ignore image contents
+# -----------------------------------------------------------------------------
+data/sample_images/**/*.jpg
+data/sample_images/**/*.jpeg
+data/sample_images/**/*.png
+data/sample_images/**/*.tif
+data/sample_images/**/*.tiff
 !data/sample_images/.gitkeep
 
+input_images/**/*.jpg
+input_images/**/*.jpeg
+input_images/**/*.png
+input_images/**/*.tif
+input_images/**/*.tiff
+!input_images/.gitkeep
+
+# -----------------------------------------------------------------------------
+# RAG system generated files
+# -----------------------------------------------------------------------------
+.rag_cache/
+
+# -----------------------------------------------------------------------------
+# Local backup directories (never commit)
+# -----------------------------------------------------------------------------
+.local_backup/
+.backup_local/
+.branch_cleanup_backup/
+
+# -----------------------------------------------------------------------------
+# Generated logs and artifacts (generic)
+# -----------------------------------------------------------------------------
+logs/
+artifacts/
+
+# -----------------------------------------------------------------------------
 # Temporary markdown files (keep permanent docs only)
+# -----------------------------------------------------------------------------
 *_TEMP.md
 *_WIP.md
 SESSION_*.md
@@ -111,7 +224,7 @@ IMPLEMENTATION_COMPLETE.md
 *_SUMMARY.md
 COMMIT_SUMMARY_OLD.md
 
-# But keep production documentation
+# Keep production documentation
 !750_PICACHO_*.md
 !CRITICAL_*.md
 !Root_Cause_Analysis.md
@@ -131,119 +244,9 @@ COMMIT_SUMMARY_OLD.md
 # But allow important docs in docs/
 !docs/CODE_QUALITY_SYSTEM.md
 
-# Large data files (keep directory structure, ignore large images)
-data/sample_images/**/*.jpg
-data/sample_images/**/*.jpeg
-data/sample_images/**/*.png
-data/sample_images/**/*.tif
-data/sample_images/**/*.tiff
-!data/sample_images/.gitkeep
-
-# Input images (local development only)
-input_images/**/*.jpg
-input_images/**/*.jpeg
-input_images/**/*.png
-input_images/**/*.tif
-input_images/**/*.tiff
-!input_images/.gitkeep
-
-# RAG system generated files
-.rag_cache/
-
-# JSON metadata (keep quality analysis JSON)
-!*quality*.json
-!*metadata*.json
-!*comparison*.json
-!depth_model_comparison.json
-
-# Model weights and checkpoints
-*.pth
-*.safetensors
-*.ckpt
-*.bin
-*.pt
-*.pb
-*.onnx
-*.tflite
-*.mlmodel
-*.mlpackage
-
-# Model weights and checkpoints (not Python packages)
-/models/
-*.pth
-*.pt
-*.onnx
-*.pb
-*.safetensors
-*.bin
-*.tflite
-*.mlmodel
-
-# Allow Python packages named 'models'
-!src/**/models/__init__.py
-!src/**/models/*.py
-
-# Model directories at root
-weights/
-checkpoints/
-pretrained/
-
-# Real-ESRGAN specific
-RealESRGAN_*.pth
-realesr-*.pth
-
-# Local backup directory (client-specific work)
-.local_backup/
-.backup_local/
-
-# Additional PNG exclusions
-input_images/**/*.png
-!input_images/.gitkeep
-
-# Patch files
-*.patch
-*.diff
-.rag_cache/
-
-# Generated logs and artifacts
-logs/
-artifacts/
-
-# Organized outputs directory (all generated content)
-outputs/
-!outputs/README.md
-!outputs/*/.gitkeep
-
-# Keep archive organization but ignore contents
-archive/experiments/
-archive/deprecated/
-archive/legacy/
-archive/*.jpg
-archive/*.jpeg
-archive/*.png
-!archive/README.md
-!archive/*/.gitkeep
-venv_py311/
-
-# Projects directory (client-specific production files - not for version control)
-# Ignore contents but keep directory structure
-projects/*
-!projects/.gitkeep
-
-# Binary executables (install via CI/package managers)
-actionlint
-*.exe
-
-# Security - prevent sensitive local backups
-.local_backup/
-
-# Coverage artifacts
-.coverage
-coverage.json
-htmlcov/
-.coverage.*
-
+# -----------------------------------------------------------------------------
 # Workflow markers (operational artifacts)
+# -----------------------------------------------------------------------------
 DEFER
 MERGE
 ROLLBACK
@@ -255,32 +258,50 @@ INVESTIGATE
 .empty-commit-trigger
 .pr-branch-marker
 .pr-marker-*
-.branch_cleanup_backup/
 .events/
 
-# pytest cache
-.pytest_cache/
+# -----------------------------------------------------------------------------
+# PDF ingest / extraction artifacts (generated)
+# -----------------------------------------------------------------------------
+artifact_store/
+picacho_architectural/
+picacho_construction/
+*.xlsx
+*.xls
 
-# Backup files
-*.backup
-*_old.py
-Archive.zip
-tests.zip
-extracted_context/
-docs/api/_build/
+# -----------------------------------------------------------------------------
+# Organized outputs directory (all generated content)
+# IMPORTANT: ignore contents, not the directory, so exceptions work
+# -----------------------------------------------------------------------------
+outputs/**
+!outputs/**/
+!outputs/README.md
+!outputs/**/.gitkeep
 
-# Local automation helpers
-.execute_fix.sh
-.temp_fix_pr.py
+# -----------------------------------------------------------------------------
+# Archive organization (ignore contents but keep README/.gitkeep)
+# IMPORTANT: ignore contents, not the directory, so exceptions work
+# -----------------------------------------------------------------------------
+archive/experiments/**
+archive/deprecated/**
+archive/legacy/**
+archive/*.jpg
+archive/*.jpeg
+archive/*.png
+!archive/README.md
+!archive/**/
+!archive/**/.gitkeep
 
-# Local debug artifacts
-debug_after_white_balance.jpg
+# -----------------------------------------------------------------------------
+# Projects directory (client-specific production files - not for version control)
+# Ignore contents but keep directory structure
+# -----------------------------------------------------------------------------
+projects/*
+!projects/.gitkeep
 
-# Local RAW test inputs (never commit)
-input_images/Richard-Raw-Test/
-depth_maps_apex/
-
+# -----------------------------------------------------------------------------
 # Client construction documents and architectural PDFs (sensitive)
+# -----------------------------------------------------------------------------
 Architectural_Plans/**/*.pdf
 
 # PDF extraction artifacts
