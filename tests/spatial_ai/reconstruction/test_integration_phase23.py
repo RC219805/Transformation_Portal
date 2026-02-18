@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 pytest.importorskip("torch", reason="torch is required for reconstruction integration tests")
+pytestmark = pytest.mark.ml
 
 from transformation_portal.spatial_ai.reconstruction import CameraParams, GeometricValidator, SceneBuilder
 

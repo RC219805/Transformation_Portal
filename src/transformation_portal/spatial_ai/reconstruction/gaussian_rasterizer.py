@@ -30,8 +30,7 @@ References:
 from __future__ import annotations
 
 import logging
-import math
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 import torch
 import torch.nn.functional as F
@@ -218,7 +217,6 @@ def evaluate_gaussian_2d(
     """
     H, W = pixel_coords.shape[:2]
     N = mean_2d.shape[0]
-    device = pixel_coords.device
 
     # Flatten pixel coordinates: (P, 2) where P = H * W
     pixels_flat = pixel_coords.reshape(-1, 2)
@@ -232,32 +230,39 @@ def evaluate_gaussian_2d(
     return torch.exp(-0.5 * mahal_sq).reshape(N, H, W)
 
 
-def _compute_splat_bounds(
-    mean_uv: torch.Tensor,
+def _compute_splat_bounds_batch(
+    mean_2d: torch.Tensor,
     cov_2d: torch.Tensor,
     image_size: Tuple[int, int],
     radius_sigma: float = 3.0,
-) -> Optional[Tuple[int, int, int, int]]:
-    """Compute an integer image window that bounds most of a gaussian footprint."""
+) -> List[Optional[Tuple[int, int, int, int]]]:
+    """Compute integer image windows for all gaussians with one CPU pre-pass.
+
+    This avoids repeated scalar .item() calls on device tensors in the hot path.
+    """
     H, W = image_size
 
-    sigma_u = torch.sqrt(torch.clamp(cov_2d[0, 0], min=1e-8))
-    sigma_v = torch.sqrt(torch.clamp(cov_2d[1, 1], min=1e-8))
+    # Transfer once for scalar bound math (avoids per-gaussian device sync).
+    mean_cpu = mean_2d.detach().to("cpu")
+    cov_diag_cpu = cov_2d[:, (0, 1), (0, 1)].detach().to("cpu")
 
-    radius_u = max(1, int(math.ceil(radius_sigma * float(sigma_u.item()))))
-    radius_v = max(1, int(math.ceil(radius_sigma * float(sigma_v.item()))))
+    sigma = torch.sqrt(torch.clamp(cov_diag_cpu, min=1e-8))
+    radii = torch.clamp(torch.ceil(sigma * radius_sigma).to(torch.int64), min=1)
+    centers = torch.floor(mean_cpu).to(torch.int64)
 
-    center_u = float(mean_uv[0].item())
-    center_v = float(mean_uv[1].item())
+    u_min = torch.clamp(centers[:, 0] - radii[:, 0], min=0, max=W).tolist()
+    u_max = torch.clamp(centers[:, 0] + radii[:, 0] + 1, min=0, max=W).tolist()
+    v_min = torch.clamp(centers[:, 1] - radii[:, 1], min=0, max=H).tolist()
+    v_max = torch.clamp(centers[:, 1] + radii[:, 1] + 1, min=0, max=H).tolist()
 
-    u_min = max(0, int(math.floor(center_u)) - radius_u)
-    u_max = min(W, int(math.floor(center_u)) + radius_u + 1)
-    v_min = max(0, int(math.floor(center_v)) - radius_v)
-    v_max = min(H, int(math.floor(center_v)) + radius_v + 1)
+    bounds: List[Optional[Tuple[int, int, int, int]]] = []
+    for u0, u1, v0, v1 in zip(u_min, u_max, v_min, v_max):
+        if u0 >= u1 or v0 >= v1:
+            bounds.append(None)
+        else:
+            bounds.append((u0, u1, v0, v1))
 
-    if u_min >= u_max or v_min >= v_max:
-        return None
-    return u_min, u_max, v_min, v_max
+    return bounds
 
 
 def render_gaussians(
@@ -338,8 +343,8 @@ def render_gaussians(
     rendered = torch.zeros(H, W, 3, device=device)
     accumulated_alpha = torch.zeros(H, W, device=device)
 
-    for i in range(mean_2d.shape[0]):
-        bounds = _compute_splat_bounds(mean_2d[i], cov_2d[i], image_size)
+    bounds_by_splat = _compute_splat_bounds_batch(mean_2d, cov_2d, image_size)
+    for i, bounds in enumerate(bounds_by_splat):
         if bounds is None:
             continue
         u_min, u_max, v_min, v_max = bounds

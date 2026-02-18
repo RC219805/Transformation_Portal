@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch", reason="torch is required for phase6a verification tests")
+pytestmark = pytest.mark.ml
 
 from transformation_portal.spatial_ai.reconstruction import CameraParams, GaussianBackend, ReconstructionInput
 

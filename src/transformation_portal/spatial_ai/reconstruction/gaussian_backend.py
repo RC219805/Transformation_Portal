@@ -29,7 +29,7 @@ import logging
 import random
 import time
 from functools import lru_cache
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import numpy as np
 import torch
@@ -262,7 +262,7 @@ class GaussianBackend:
         splats = self._initialize_gaussians(reconstruction_input, use_depth_prior, use_segmentation)
 
         # Optimize
-        splats, rmse, convergence = self._optimize(
+        splats, rmse, convergence, actual_iterations = self._optimize(
             splats,
             reconstruction_input,
             iterations=iterations,
@@ -277,7 +277,7 @@ class GaussianBackend:
             splats=splats,
             cameras=reconstruction_input.cameras,
             rmse=rmse,
-            iteration=iterations,
+            iteration=actual_iterations,
             convergence=convergence,
             metadata={
                 "backend": "gaussian_splatting",
@@ -286,6 +286,8 @@ class GaussianBackend:
                 "num_views": num_views,
                 "num_gaussians": splats.num_gaussians,
                 "elapsed_seconds": elapsed,
+                "requested_iterations": iterations,
+                "actual_iterations": actual_iterations,
                 "use_depth_prior": use_depth_prior,
                 "use_segmentation": use_segmentation,
                 "use_pbr_textures": use_pbr_textures,
@@ -488,7 +490,7 @@ class GaussianBackend:
         iterations: int,
         use_depth_prior: bool,
         use_pbr_textures: bool,
-    ) -> Tuple[GaussianSplat, float, str]:
+    ) -> Tuple[GaussianSplat, float, Literal["converged", "max_iterations", "diverged"], int]:
         """Optimize Gaussian splats via gradient descent.
 
         Args:
@@ -499,7 +501,7 @@ class GaussianBackend:
             use_pbr_textures: Use material-aware rendering.
 
         Returns:
-            Tuple of (optimized_splats, rmse, convergence_status).
+            Tuple of (optimized_splats, rmse, convergence_status, actual_iterations).
         """
         logger.info(f"Starting optimization ({iterations} iterations)...")
 
@@ -621,13 +623,24 @@ class GaussianBackend:
             final_loss = loss_history[-1] if loss_history else 0.0
             final_rmse = np.sqrt(final_loss)  # RMSE from MSE
 
-            # Convergence status
-            if final_rmse < self.RMSE_THRESHOLD:
+            # Convergence status must follow Scene3D contract:
+            # {"converged", "max_iterations", "diverged"}.
+            if not np.isfinite(final_rmse):
+                convergence: Literal["converged", "max_iterations", "diverged"] = "diverged"
+                convergence_detail = "diverged"
+            elif final_rmse < self.RMSE_THRESHOLD:
                 convergence = "converged"
             elif len(loss_history) > 10 and np.mean(loss_history[-5:]) < np.mean(loss_history[-10:-5]):
-                convergence = "improving"
+                convergence = "max_iterations"
+                convergence_detail = "improving"
             else:
-                convergence = "stalled"
+                convergence = "max_iterations"
+                convergence_detail = "stalled"
+
+            if convergence == "converged":
+                convergence_detail = "converged"
+
+            actual_iterations = len(loss_history)
 
             # Convert back to numpy
             optimized_splats = GaussianSplat(
@@ -639,8 +652,9 @@ class GaussianBackend:
                 metadata={
                     **splats.metadata,
                     "optimized": True,
-                    "iterations": len(loss_history),
+                    "iterations": actual_iterations,
                     "convergence": convergence,
+                    "convergence_detail": convergence_detail,
                     "final_loss": final_loss,
                     "optimization_max_gaussians": self.optimization_max_gaussians,
                     "loss_history": loss_history[:100],  # Store first 100 for analysis
@@ -649,7 +663,7 @@ class GaussianBackend:
 
             logger.info(f"Optimization complete: RMSE={final_rmse:.6f}, status={convergence}")
 
-            return optimized_splats, final_rmse, convergence
+            return optimized_splats, final_rmse, convergence, actual_iterations
         finally:
             self._restore_optimization_rng_state(saved_rng_state)
 

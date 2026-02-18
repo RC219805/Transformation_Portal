@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch", reason="torch is required for gaussian rasterizer tests")
+pytestmark = pytest.mark.ml
 
 from transformation_portal.spatial_ai.reconstruction.gaussian_rasterizer import (
     compute_3d_covariance,

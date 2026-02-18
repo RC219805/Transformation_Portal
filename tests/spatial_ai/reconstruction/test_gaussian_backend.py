@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 pytest.importorskip("torch", reason="torch is required for Gaussian backend tests")
+pytestmark = pytest.mark.ml
 
 from transformation_portal.spatial_ai.reconstruction import (
     CameraParams,
@@ -13,7 +14,6 @@ from transformation_portal.spatial_ai.reconstruction import (
 )
 
 
-@pytest.mark.slow
 class TestGaussianBackend:
     """Test Gaussian Splatting backend."""
 
@@ -80,11 +80,31 @@ class TestGaussianBackend:
         assert np.allclose(scene_a.splats.scales, scene_b.splats.scales, atol=1e-6)
         assert np.allclose(scene_a.splats.opacities, scene_b.splats.opacities, atol=1e-6)
 
+    def test_scene_iteration_matches_actual_iterations(self):
+        """Test Scene3D.iteration tracks executed optimizer steps."""
+        backend = GaussianBackend(tier="apex_research", device="cpu")
+
+        images = [np.ones((60, 80, 3), dtype=np.float32) * 0.5 for _ in range(2)]
+        intrinsics = np.eye(3, dtype=np.float32)
+        intrinsics[0, 0] = intrinsics[1, 1] = 100.0
+        intrinsics[0, 2] = 40.0
+        intrinsics[1, 2] = 30.0
+        cameras = [CameraParams(intrinsics, np.eye(4, dtype=np.float32), 80, 60) for _ in range(2)]
+
+        requested_iterations = 20
+        reconstruction_input = ReconstructionInput(images=images, gamma=1.0, cameras=cameras, tier="apex_research")
+        scene = backend.reconstruct(reconstruction_input, iterations=requested_iterations)
+
+        assert scene.iteration == scene.splats.metadata["iterations"]
+        assert scene.metadata["actual_iterations"] == scene.iteration
+        assert scene.metadata["requested_iterations"] == requested_iterations
+
     def test_model_lazy_loading(self):
         """Test that model is not loaded on initialization."""
         backend = GaussianBackend(tier="apex_research")
         assert not backend._model_loaded
 
+    @pytest.mark.slow
     def test_reconstruct_multiview(self):
         """Test multi-view reconstruction."""
         backend = GaussianBackend(tier="apex_research")
@@ -111,6 +131,7 @@ class TestGaussianBackend:
         assert scene.rmse < 0.02  # Within target
         assert len(scene.cameras) == 3
 
+    @pytest.mark.slow
     def test_reconstruct_with_depth_prior(self):
         """Test reconstruction with depth priors."""
         backend = GaussianBackend(tier="apex_research")
@@ -134,6 +155,7 @@ class TestGaussianBackend:
         assert "use_depth_prior" in scene.metadata
         assert scene.metadata["use_depth_prior"] is True
 
+    @pytest.mark.slow
     def test_reconstruct_with_segmentation(self):
         """Test reconstruction with segmentation masks."""
         backend = GaussianBackend(tier="apex_research")
@@ -157,6 +179,7 @@ class TestGaussianBackend:
         assert "use_segmentation" in scene.metadata
         assert scene.metadata["use_segmentation"] is True
 
+    @pytest.mark.slow
     def test_reconstruct_performance(self):
         """Test reconstruction performance targets."""
         backend = GaussianBackend(tier="apex_research")
@@ -183,6 +206,7 @@ class TestGaussianBackend:
         assert "elapsed_seconds" in scene.metadata
         assert scene.metadata["elapsed_seconds"] < 60  # Should be fast for mock
 
+    @pytest.mark.slow
     def test_render_view(self):
         """Test novel view rendering."""
         backend = GaussianBackend(tier="apex_research")
@@ -212,6 +236,7 @@ class TestGaussianBackend:
         assert rendered.dtype == np.float32
         assert np.all(rendered >= 0) and np.all(rendered <= 1)
 
+    @pytest.mark.slow
     def test_convergence_status(self):
         """Test convergence status tracking."""
         backend = GaussianBackend(tier="apex_research")
@@ -229,10 +254,11 @@ class TestGaussianBackend:
 
         scene = backend.reconstruct(reconstruction_input, iterations=50)  # Reduced for speed
 
-        assert scene.convergence in ["converged", "improving", "stalled"]
+        assert scene.convergence in ["converged", "max_iterations", "diverged"]
         assert "optimized" in scene.splats.metadata
         assert scene.splats.metadata["optimized"] is True
 
+    @pytest.mark.slow
     def test_optimization_reduces_loss(self):
         """Test that optimization actually reduces loss over iterations."""
         backend = GaussianBackend(tier="apex_research")
@@ -261,6 +287,7 @@ class TestGaussianBackend:
             final_loss = np.mean(loss_history[-5:])
             assert final_loss < initial_loss, "Loss should decrease during optimization"
 
+    @pytest.mark.slow
     def test_gaussian_initialization_depth_guided(self):
         """Test depth-guided Gaussian initialization."""
         backend = GaussianBackend(tier="apex_research")
@@ -286,6 +313,7 @@ class TestGaussianBackend:
         assert "initialization" in scene.splats.metadata
         assert scene.splats.metadata["initialization"] == "depth"
 
+    @pytest.mark.slow
     def test_gaussian_initialization_sfm_fallback(self):
         """Test structure-from-motion initialization (fallback)."""
         backend = GaussianBackend(tier="apex_research")
