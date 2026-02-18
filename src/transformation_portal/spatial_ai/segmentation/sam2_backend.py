@@ -1,27 +1,29 @@
-"""SAM2 backend for segmentation (Phase 2.1).
+"""SAM2 backend for segmentation (Phase 2.1 - Production Implementation).
 
 This module wraps Meta's Segment Anything Model 2 (SAM2) for:
 - Automatic mask generation (full image)
 - Prompted segmentation (points/bboxes)
-- Video temporal tracking
+- Video temporal tracking (stub for future)
 
-Architecture (ADR-027):
-- HuggingFace model loading with revision pinning
-- GPU/CPU device selection
+Architecture:
+- Direct checkpoint loading (not HuggingFace Hub)
+- GPU/CPU/MPS device selection
 - Batched inference for efficiency
 - Contract-driven input/output
 
 Model Variants:
-- sam2-hiera-base-plus: Faster, good quality
-- sam2-hiera-large: Slower, best quality (research tier)
+- sam2_hiera_base_plus: Faster, good quality
+- sam2_hiera_large: Slower, best quality
 
 Example:
     >>> backend = SAM2Backend(model_size="large", device="cuda")
-    >>> result = backend.segment(
+    >>> from transformation_portal.spatial_ai.segmentation.contracts import SegmentationInput
+    >>> seg_input = SegmentationInput(
     ...     image=linear_rgb,  # (H, W, 3) float32
     ...     gamma=1.0,
     ...     mode="auto"
     ... )
+    >>> result = backend.segment(seg_input)
     >>> print(f"Found {len(result.masks)} segments")
 
 License: Apache 2.0 (commercial OK, no tier restrictions)
@@ -30,6 +32,8 @@ License: Apache 2.0 (commercial OK, no tier restrictions)
 from __future__ import annotations
 
 import logging
+import os
+from pathlib import Path
 from typing import Literal, Optional
 
 import numpy as np
@@ -40,103 +44,125 @@ logger = logging.getLogger(__name__)
 
 
 class SAM2Backend:
-    """SAM2 segmentation backend with HuggingFace integration.
+    """SAM2 segmentation backend with direct checkpoint loading.
 
     Attributes:
         model_size: Model variant ("base" or "large").
         device: Compute device ("cuda", "cpu", "mps").
-        revision: HuggingFace model revision (commit SHA or placeholder).
+        checkpoint_path: Path to model checkpoint file.
     """
 
-    SUPPORTED_MODELS = {
-        "base": "facebook/sam2-hiera-base-plus",
-        "large": "facebook/sam2-hiera-large",
+    # Model configurations (relative to sam2 package)
+    MODEL_CONFIGS = {
+        "base": "sam2_hiera_b+.yaml",
+        "large": "sam2_hiera_l.yaml",
+    }
+
+    # Default checkpoint names
+    DEFAULT_CHECKPOINTS = {
+        "base": "sam2_hiera_base_plus.pt",
+        "large": "sam2_hiera_large.pt",
     }
 
     def __init__(
         self,
         model_size: Literal["base", "large"] = "base",
         device: Literal["cuda", "cpu", "mps"] = "cuda",
-        revision: Optional[str] = None,
+        checkpoint_path: Optional[str] = None,
     ):
         """Initialize SAM2 backend.
 
         Args:
             model_size: Model variant ("base" or "large").
             device: Compute device.
-            revision: HuggingFace commit SHA (None = use latest).
-                For experimental presets: "NEEDS_VERIFICATION_SAM2_..."
-                For stable presets: Must be 40-char commit SHA.
+            checkpoint_path: Path to checkpoint file. If None, uses default
+                location in checkpoints/ directory.
 
         Raises:
-            ValueError: If model_size invalid.
-            ImportError: If SAM2 dependencies missing.
+            ValueError: If model_size invalid or checkpoint not found.
+            ImportError: If SAM2 package missing.
         """
-        if model_size not in self.SUPPORTED_MODELS:
-            raise ValueError(f"Invalid model_size '{model_size}', " f"must be one of {list(self.SUPPORTED_MODELS.keys())}")
+        if model_size not in self.MODEL_CONFIGS:
+            raise ValueError(f"Invalid model_size '{model_size}', " f"must be one of {list(self.MODEL_CONFIGS.keys())}")
 
         self.model_size = model_size
         self.device = device
-        self.revision = revision or "NEEDS_VERIFICATION_SAM2_BASE_20260211"
+
+        # Determine checkpoint path
+        if checkpoint_path is None:
+            checkpoint_path = os.path.join("checkpoints", self.DEFAULT_CHECKPOINTS[model_size])
+        self.checkpoint_path = Path(checkpoint_path)
+
+        # Check checkpoint exists (with helpful error message)
+        if not self.checkpoint_path.exists():
+            raise FileNotFoundError(
+                f"SAM2 checkpoint not found: {self.checkpoint_path}\n"
+                f"Download from: https://github.com/facebookresearch/sam2\n"
+                f"Or use: python scripts/download_sam2_checkpoint.py"
+            )
 
         self._model = None
-        self._processor = None
+        self._mask_generator = None
 
-        logger.info(f"SAM2Backend initialized: model={model_size}, " f"device={device}, revision={self.revision[:12]}...")
+        logger.info(
+            f"SAM2Backend initialized: model={model_size}, " f"device={device}, checkpoint={self.checkpoint_path.name}"
+        )
 
     def _load_model(self):
-        """Lazy load SAM2 model and processor.
+        """Lazy load SAM2 model and mask generator.
 
         Raises:
-            ImportError: If transformers/torch missing.
-            ValueError: If revision is an unverified placeholder.
-            RuntimeError: If model download fails.
+            ImportError: If sam2 package missing.
+            RuntimeError: If model loading fails.
         """
         if self._model is not None:
             return  # Already loaded
 
-        # ADR-027: reject unverified revision placeholders at load time
-        if self.revision.startswith("NEEDS_VERIFICATION"):
-            raise ValueError(
-                f"SAM2 model revision '{self.revision}' is an unverified placeholder. "
-                "Supply a pinned HuggingFace commit SHA for production use. "
-                "See ADR-027 for revision pinning policy."
-            )
-
         try:
             import torch
-            from transformers import AutoModel, AutoProcessor
+            from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
+            from sam2.build_sam import build_sam2
+            from sam2.sam2_image_predictor import SAM2ImagePredictor
         except ImportError as e:
-            raise ImportError("SAM2 requires transformers and torch. " "Install with: pip install transformers torch") from e
+            raise ImportError("SAM2 requires sam2 and torch. " "Install with: pip install sam2 torch torchvision") from e
 
-        model_id = self.SUPPORTED_MODELS[self.model_size]
+        # Find config file in sam2 package
+        import sam2
 
-        logger.info(f"Loading SAM2 model: {model_id} @ {self.revision[:12]}...")
+        sam2_pkg_path = Path(sam2.__file__).parent
+        config_file = sam2_pkg_path / "configs" / self.MODEL_CONFIGS[self.model_size]
+
+        if not config_file.exists():
+            raise FileNotFoundError(
+                f"SAM2 config not found: {config_file}\n" f"This may indicate an incomplete sam2 installation."
+            )
+
+        logger.info(f"Loading SAM2 model: {config_file.name} @ {self.checkpoint_path.name}")
 
         try:
-            # Load processor (handles image preprocessing)
-            self._processor = AutoProcessor.from_pretrained(  # nosec B615
-                model_id,
-                revision=self.revision,
+            # Build SAM2 model
+            self._model = build_sam2(
+                config_file=str(config_file),
+                ckpt_path=str(self.checkpoint_path),
+                device=self.device,
+                mode="eval",
             )
 
-            # Load model
-            self._model = AutoModel.from_pretrained(  # nosec B615
-                model_id,
-                revision=self.revision,
+            # Create automatic mask generator (for auto mode)
+            self._mask_generator = SAM2AutomaticMaskGenerator(
+                model=self._model,
+                points_per_side=32,  # Quality vs speed tradeoff
+                points_per_batch=64,
+                pred_iou_thresh=0.88,  # High confidence threshold
+                stability_score_thresh=0.85,
+                box_nms_thresh=0.7,
+                crop_n_layers=1,
+                crop_nms_thresh=0.7,
             )
 
-            # Move to device
-            if self.device == "cuda" and torch.cuda.is_available():
-                self._model = self._model.to("cuda")
-            elif self.device == "mps" and torch.backends.mps.is_available():
-                self._model = self._model.to("mps")
-            else:
-                self._model = self._model.to("cpu")
-                if self.device != "cpu":
-                    logger.warning(f"Device '{self.device}' unavailable, using CPU")
+            # Create image predictor (for prompted mode)
+            self._image_predictor = SAM2ImagePredictor(self._model)
 
-            self._model.eval()  # Inference mode
             logger.info("SAM2 model loaded successfully")
 
         except Exception as e:
@@ -155,10 +181,10 @@ class SAM2Backend:
             SegmentationResult with masks, scores, and metadata.
 
         Raises:
-            ValueError: If input contract violated.
+            ValueError: If input contract violated or mode unsupported.
             RuntimeError: If inference fails.
         """
-        # Contract is already validated in SegmentationInput.__post_init__
+        # Contract validation already done in SegmentationInput.__post_init__
 
         # Lazy load model
         self._load_model()
@@ -173,67 +199,11 @@ class SAM2Backend:
         else:
             raise ValueError(f"Unsupported mode: {seg_input.mode}")
 
-    def _extract_sam2_predictions(self, model_output) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Extract masks, IoU scores, and stability scores from SAM2 output.
-
-        SAM2's mask decoder outputs:
-        - pred_masks: (N, H, W) boolean masks
-        - iou_predictions: (N,) float32 scores in [0, 1]
-        - stability_scores: (N,) float32 scores in [0, 1]
-
-        This method provides defensive extraction with fallback to 1.0
-        if attributes are missing (e.g., in stub implementations).
-
-        Args:
-            model_output: SAM2 model output object
-
-        Returns:
-            Tuple of (masks, iou_scores, stability_scores)
-            - masks: np.ndarray of shape (N, H, W), dtype bool
-            - iou_scores: np.ndarray of shape (N,), dtype float32
-            - stability_scores: np.ndarray of shape (N,), dtype float32
-
-        Note:
-            If SAM2 attributes are missing (stub backend), falls back
-            to 1.0 for all scores to maintain backward compatibility.
-        """
-        # Extract masks (always present) with torch.Tensor handling
-        masks = model_output.pred_masks  # (N, H, W) bool or torch.Tensor
-
-        # Handle torch.Tensor masks (SAM2 returns CUDA/MPS tensors)
-        if hasattr(masks, "detach"):  # torch.Tensor
-            masks = masks.detach().cpu().numpy().astype(bool)
-        else:
-            masks = np.asarray(masks, dtype=bool)
-
-        n_masks = len(masks)
-
-        # Extract IoU scores (defensive) with torch.Tensor handling
-        if hasattr(model_output, "iou_predictions") and model_output.iou_predictions is not None:
-            iou_preds = model_output.iou_predictions
-            if hasattr(iou_preds, "detach"):  # torch.Tensor
-                iou_scores = iou_preds.detach().cpu().numpy().astype(np.float32)
-            else:
-                iou_scores = np.asarray(iou_preds, dtype=np.float32)
-        else:
-            # Fallback for stub backends
-            iou_scores = np.ones(n_masks, dtype=np.float32)
-
-        # Extract stability scores (defensive) with torch.Tensor handling
-        if hasattr(model_output, "stability_scores") and model_output.stability_scores is not None:
-            stab_scores = model_output.stability_scores
-            if hasattr(stab_scores, "detach"):  # torch.Tensor
-                stability_scores = stab_scores.detach().cpu().numpy().astype(np.float32)
-            else:
-                stability_scores = np.asarray(stab_scores, dtype=np.float32)
-        else:
-            # Fallback for stub backends
-            stability_scores = np.ones(n_masks, dtype=np.float32)
-
-        return masks, iou_scores, stability_scores
-
     def _segment_auto(self, seg_input: SegmentationInput) -> SegmentationResult:
         """Automatic mask generation (entire image).
+
+        Uses SAM2's automatic mask generator to detect all objects
+        in the image without any prompts.
 
         Args:
             seg_input: Validated segmentation input.
@@ -242,57 +212,64 @@ class SAM2Backend:
             SegmentationResult with all detected masks.
 
         Raises:
-            NotImplementedError: SAM2 auto mode not yet integrated.
+            RuntimeError: If mask generation fails.
         """
-        # SAM2 auto mode requires integration with the official automatic mask generator
-        # The transformers AutoModel API does not expose this functionality directly
-        #
-        # To implement:
-        # 1. Use SAM2's native automatic mask generator API
-        # 2. Or implement custom grid-based prompting with the transformers model
-        # 3. Ensure output format matches SegmentationResult contract
-        # 4. Wrap inference in try-finally with _cleanup_inference_state() (A6)
-        #
-        # Example pattern for future implementation:
-        #     inference_state = None
-        #     try:
-        #         inference_state = self._model.init_state(image)
-        #         model_output = self._model.predict(...)
-        #
-        #         # Phase C.2: Extract real SAM2 scores (not placeholders)
-        #         masks, iou_scores, stability_scores = self._extract_sam2_predictions(model_output)
-        #
-        #         # Build metadata with real stability scores
-        #         metadata_list = []
-        #         for i, mask in enumerate(masks):
-        #             # ... compute area, bbox ...
-        #             metadata = MaskMetadata(
-        #                 area=area,
-        #                 bbox=bbox,
-        #                 stability_score=stability_scores[i],  # Real SAM2 confidence
-        #             )
-        #             metadata_list.append(metadata)
-        #
-        #         return SegmentationResult(
-        #             masks=masks,
-        #             scores=iou_scores,  # Real SAM2 IoU predictions
-        #             metadata=metadata_list,
-        #         )
-        #     finally:
-        #         self._cleanup_inference_state(inference_state)
-        #
-        # For Phase 2.1 scaffolding, this remains unimplemented to prevent runtime crashes
-        # on untested placeholder code.
+        image = seg_input.image
 
-        raise NotImplementedError(
-            "SAM2 automatic mask generation not yet integrated with official mask generator. "
-            "The transformers AutoModel does not guarantee 'pred_masks' or 'iou_scores' attributes. "
-            "Use prompted segmentation (mode='points' or mode='bbox') or integrate SAM2's native "
-            "automatic mask generator API for production use."
-        )
+        # Convert to uint8 RGB for SAM2 (expects 0-255 range)
+        if image.dtype == np.float32 or image.dtype == np.float64:
+            # Assume [0, 1] range, scale to [0, 255]
+            image_uint8 = (np.clip(image, 0, 1) * 255).astype(np.uint8)
+        else:
+            image_uint8 = image.astype(np.uint8)
+
+        try:
+            # Generate masks
+            masks_data = self._mask_generator.generate(image_uint8)
+
+            # Extract masks and scores
+            if not masks_data:
+                # No masks found - return empty result
+                logger.warning("SAM2 found no masks in auto mode")
+                return SegmentationResult(
+                    masks=np.zeros((0, *image.shape[:2]), dtype=bool),
+                    scores=np.zeros(0, dtype=np.float32),
+                    metadata={
+                        "backend": "sam2",
+                        "model_size": self.model_size,
+                        "mode": "auto",
+                        "num_masks": 0,
+                    },
+                )
+
+            # Convert SAM2 output to our format
+            masks = np.stack([m["segmentation"] for m in masks_data])
+            iou_scores = np.array([m["predicted_iou"] for m in masks_data], dtype=np.float32)
+            stability_scores = np.array([m["stability_score"] for m in masks_data], dtype=np.float32)
+
+            # Use average of IoU and stability as final score
+            scores = (iou_scores + stability_scores) / 2.0
+
+            logger.info(f"SAM2 auto mode: generated {len(masks)} masks")
+
+            return SegmentationResult(
+                masks=masks,
+                scores=scores,
+                metadata={
+                    "backend": "sam2",
+                    "model_size": self.model_size,
+                    "mode": "auto",
+                    "num_masks": len(masks),
+                    "iou_scores": iou_scores.tolist(),
+                    "stability_scores": stability_scores.tolist(),
+                },
+            )
+
+        except Exception as e:
+            raise RuntimeError(f"SAM2 auto mode segmentation failed: {e}") from e
 
     def _segment_prompted(self, seg_input: SegmentationInput) -> SegmentationResult:
-        """Prompted segmentation (points/bboxes).
+        """Prompted segmentation (points or bounding boxes).
 
         Args:
             seg_input: Validated segmentation input with prompts.
@@ -300,149 +277,134 @@ class SAM2Backend:
         Returns:
             SegmentationResult with prompted masks.
 
-        Note:
-            When implementing, use try-finally pattern with _cleanup_inference_state() (A6).
+        Raises:
+            ValueError: If prompts are invalid.
+            RuntimeError: If segmentation fails.
         """
-        # TODO: Implement prompted segmentation with memory cleanup
-        # Pattern:
-        #     inference_state = None
-        #     try:
-        #         inference_state = self._model.init_state(image)
-        #         model_output = self._model.predict(prompts=...)
-        #
-        #         # Phase C.2: Extract real SAM2 scores (not placeholders)
-        #         masks, iou_scores, stability_scores = self._extract_sam2_predictions(model_output)
-        #
-        #         # Build metadata with real stability scores
-        #         metadata_list = []
-        #         for i, mask in enumerate(masks):
-        #             # ... compute area, bbox ...
-        #             metadata = MaskMetadata(
-        #                 area=area,
-        #                 bbox=bbox,
-        #                 stability_score=stability_scores[i],  # Real SAM2 confidence
-        #             )
-        #             metadata_list.append(metadata)
-        #
-        #         return SegmentationResult(
-        #             masks=masks,
-        #             scores=iou_scores,  # Real SAM2 IoU predictions
-        #             metadata=metadata_list,
-        #         )
-        #     finally:
-        #         self._cleanup_inference_state(inference_state)
-        raise NotImplementedError("Prompted segmentation not yet implemented")
+        image = seg_input.image
+        mode = seg_input.mode
 
-    def _segment_video(self, seg_input: SegmentationInput) -> SegmentationResult:
-        """Video temporal tracking.
-
-        Args:
-            seg_input: Validated segmentation input with prev_masks.
-
-        Returns:
-            SegmentationResult with temporally-tracked masks.
-
-        Note:
-            When implementing, use try-finally pattern with _cleanup_inference_state() (A6).
-            This is CRITICAL for video mode to prevent VRAM accumulation across frames.
-        """
-        # TODO: Implement video tracking with memory cleanup
-        # Pattern:
-        #     inference_state = None
-        #     try:
-        #         inference_state = self._model.init_state(image)
-        #         # Propagate masks from previous frame
-        #         model_output = self._model.track(prev_masks=...)
-        #
-        #         # Phase C.2: Extract real SAM2 scores (not placeholders)
-        #         masks, iou_scores, stability_scores = self._extract_sam2_predictions(model_output)
-        #
-        #         # Build metadata with real stability scores
-        #         metadata_list = []
-        #         for i, mask in enumerate(masks):
-        #             # ... compute area, bbox ...
-        #             metadata = MaskMetadata(
-        #                 area=area,
-        #                 bbox=bbox,
-        #                 stability_score=stability_scores[i],  # Real SAM2 confidence
-        #             )
-        #             metadata_list.append(metadata)
-        #
-        #         return SegmentationResult(
-        #             masks=masks,
-        #             scores=iou_scores,  # Real SAM2 IoU predictions
-        #             metadata=metadata_list,
-        #             temporal_ids=...,  # Frame-to-frame tracking IDs
-        #         )
-        #     finally:
-        #         self._cleanup_inference_state(inference_state)  # CRITICAL for video!
-        raise NotImplementedError("Video tracking not yet implemented")
-
-    def _cleanup_inference_state(self, inference_state: object) -> None:
-        """Clean up SAM2 inference state to prevent memory leaks.
-
-        SAM2's memory bank retains CUDA tensors across frames in video mode.
-        Explicit cleanup prevents VRAM accumulation during batch processing.
-
-        This method is defensive and should never raise exceptions.
-
-        Args:
-            inference_state: SAM2 inference state object to clean up.
-
-        Note:
-            Called in finally block to guarantee cleanup even on errors.
-        """
-        if inference_state is None:
-            return
+        # Convert to uint8 RGB for SAM2
+        if image.dtype == np.float32 or image.dtype == np.float64:
+            image_uint8 = (np.clip(image, 0, 1) * 255).astype(np.uint8)
+        else:
+            image_uint8 = image.astype(np.uint8)
 
         try:
-            import gc
+            # Set image in predictor
+            self._image_predictor.set_image(image_uint8)
 
-            import torch
+            if mode == "points":
+                if seg_input.points is None:
+                    raise ValueError("Points mode requires points to be provided")
 
-            # Device-agnostic synchronization before cleanup
-            if hasattr(torch, "cuda") and torch.cuda.is_available():
-                torch.cuda.synchronize()
-            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-                # MPS doesn't have synchronize(), but we can still proceed with cleanup
-                pass
+                points = np.array(seg_input.points)
+                labels = (
+                    np.array(seg_input.point_labels)
+                    if seg_input.point_labels is not None
+                    else np.ones(len(points), dtype=np.int32)
+                )
 
-            # Reset state if the method exists (defensive check)
-            if hasattr(inference_state, "reset_state"):
-                inference_state.reset_state()
+                # Predict masks
+                masks, scores, logits = self._image_predictor.predict(
+                    point_coords=points,
+                    point_labels=labels,
+                    multimask_output=True,  # Get multiple mask proposals
+                )
 
-            # Delete reference
-            del inference_state
+            elif mode == "bbox":
+                if seg_input.bbox is None:
+                    raise ValueError("Bbox mode requires bbox to be provided")
 
-            # Force garbage collection
-            gc.collect()
+                bbox = np.array(seg_input.bbox)  # [x1, y1, x2, y2]
 
-            # Empty device cache (device-specific)
-            if hasattr(torch, "cuda") and torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-                torch.mps.empty_cache()
+                # Predict masks
+                masks, scores, logits = self._image_predictor.predict(
+                    box=bbox,
+                    multimask_output=True,
+                )
+
+            else:
+                raise ValueError(f"Unsupported prompted mode: {mode}")
+
+            logger.info(f"SAM2 {mode} mode: generated {len(masks)} masks")
+
+            return SegmentationResult(
+                masks=masks,
+                scores=scores.astype(np.float32),
+                metadata={
+                    "backend": "sam2",
+                    "model_size": self.model_size,
+                    "mode": mode,
+                    "num_masks": len(masks),
+                },
+            )
 
         except Exception as e:
-            # Defensive: log but don't raise, cleanup should never crash
-            logger.warning(f"Error during SAM2 inference state cleanup: {e}")
+            raise RuntimeError(f"SAM2 {mode} mode segmentation failed: {e}") from e
 
-    def _linear_to_srgb(self, linear_rgb: np.ndarray) -> np.ndarray:
-        """Convert linear RGB to sRGB uint8 for SAM2 preprocessing.
+    def _segment_video(self, seg_input: SegmentationInput) -> SegmentationResult:
+        """Video segmentation with temporal tracking.
+
+        Note: Video tracking requires sequential frames and state management.
+        This is a stub for future implementation.
 
         Args:
-            linear_rgb: (H, W, 3) float32 linear RGB [0, ∞).
+            seg_input: Validated segmentation input.
 
         Returns:
-            (H, W, 3) uint8 sRGB [0, 255].
+            SegmentationResult (not yet implemented).
+
+        Raises:
+            NotImplementedError: Video tracking not yet implemented.
         """
-        # Clip HDR values (SAM2 expects [0, 1])
-        linear_clipped = np.clip(linear_rgb, 0, 1)
+        raise NotImplementedError(
+            "SAM2 video tracking not yet implemented. "
+            "Use 'auto' or 'points'/'bbox' modes for single images. "
+            "For video, process frames individually or use sam2.video_predictor "
+            "API directly (requires state management across frames)."
+        )
 
-        # Apply sRGB gamma (approximation: gamma 2.2)
-        srgb = np.power(linear_clipped, 1.0 / 2.2)
 
-        # Convert to uint8
-        srgb_uint8 = (srgb * 255).astype(np.uint8)
+# Utility function for download script
+def download_sam2_checkpoint(model_size: Literal["base", "large"] = "large", output_dir: str = "checkpoints") -> Path:
+    """Download SAM2 checkpoint from official repository.
 
-        return srgb_uint8
+    Args:
+        model_size: Model variant to download.
+        output_dir: Directory to save checkpoint.
+
+    Returns:
+        Path to downloaded checkpoint.
+
+    Raises:
+        RuntimeError: If download fails.
+    """
+    import urllib.request
+    from pathlib import Path
+
+    CHECKPOINT_URLS = {
+        "base": "https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2_hiera_base_plus.pt",
+        "large": "https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2_hiera_large.pt",
+    }
+
+    url = CHECKPOINT_URLS[model_size]
+    filename = SAM2Backend.DEFAULT_CHECKPOINTS[model_size]
+    output_path = Path(output_dir) / filename
+
+    # Create output directory
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if output_path.exists():
+        logger.info(f"Checkpoint already exists: {output_path}")
+        return output_path
+
+    logger.info(f"Downloading SAM2 {model_size} checkpoint from {url}...")
+    logger.info(f"This may take several minutes (checkpoint is ~200-400 MB)...")
+
+    try:
+        urllib.request.urlretrieve(url, output_path)
+        logger.info(f"✅ Downloaded: {output_path}")
+        return output_path
+    except Exception as e:
+        raise RuntimeError(f"Failed to download SAM2 checkpoint: {e}") from e

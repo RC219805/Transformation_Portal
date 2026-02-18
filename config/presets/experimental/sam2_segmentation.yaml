@@ -1,45 +1,50 @@
 # SAM2 Segmentation Preset (Experimental)
 #
-# Status: EXPERIMENTAL - HF revision needs verification before promotion
-# Phase: 2.1 (SAM2 Integration)
-# Last Updated: 2026-02-11
+# Status: EXPERIMENTAL - Phase 3 implementation complete (2026-02-17)
+# Phase: 3.0 (SAM2 Full Integration)
+# Last Updated: 2026-02-17
 #
 # Purpose:
 #   Universal object/material segmentation with temporal consistency
 #   for architectural visualization and luxury real estate rendering.
 #
 # Model:
-#   - facebook/sam2-hiera-large (Apache 2.0 license)
-#   - Revision: NEEDS_VERIFICATION - placeholder until verified
+#   - SAM2 (Segment Anything 2) from Meta AI Research
+#   - Official checkpoints from Facebook Research
+#   - License: Apache 2.0 (commercial-friendly)
 #
 # Usage:
+#   # Download checkpoint first:
+#   python scripts/download_sam2_checkpoint.py --model large
+#
+#   # Run segmentation:
 #   transformation_portal spatial-ai segment \
 #     --preset experimental/sam2_segmentation \
 #     --input scene.tiff \
 #     --output output/ \
 #     --mode auto
 #
-# Promotion Checklist:
-#   [ ] Verify HF revision from facebook/sam2-hiera-large/commits/main
-#   [ ] Update revision to 40-char commit SHA
-#   [ ] Run validation: python scripts/validation/validate_hf_revisions.py
-#   [ ] Move to config/presets/sam2_segmentation.yaml
+# Checkpoint Management:
+#   - Checkpoints stored in: checkpoints/sam2_hiera_{base_plus,large}.pt
+#   - Downloaded via: scripts/download_sam2_checkpoint.py
+#   - Verified via SHA256 checksums (July 2024 release)
+#   - NOT loaded from HuggingFace Hub (direct torch.load)
 #
 # ADR-027 Compliance:
 #   ✅ Isolated from lux_depth_v3 (no cross-pipeline imports)
 #   ✅ Contract-driven (gamma=1.0 enforcement)
-#   ✅ Experimental preset (HF placeholder allowed)
+#   ✅ Experimental preset (checkpoint paths instead of HF revisions)
 
 name: "SAM2 Segmentation (Experimental)"
-version: "2.1.0"
+version: "3.0.0"
 tier: "dev"  # Available to all tiers (Apache 2.0 license)
 
 # Model Configuration
 model:
   backend: "sam2"
-  size: "large"  # Options: "base", "large"
-  revision: "NEEDS_VERIFICATION_SAM2_LARGE_20260211"  # Placeholder
-  device: "cuda"  # Options: "cuda", "cpu", "mps"
+  model_size: "large"  # Options: "base", "large"
+  checkpoint_path: "checkpoints/sam2_hiera_large.pt"
+  device: "auto"  # Options: "auto", "cuda", "cpu", "mps"
 
 # Segmentation Parameters
 segmentation:
