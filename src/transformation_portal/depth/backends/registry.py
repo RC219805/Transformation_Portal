@@ -72,6 +72,15 @@ class DepthBackendRegistry:
         except ImportError:
             logger.debug("SyntheticDepthBackend not available (unexpected)")
 
+        # DepthCrafter temporal backend (ADR-026)
+        try:
+            from .depthcrafter import DepthCrafterBackend
+
+            if "depthcrafter" not in self._backends:
+                self._backends["depthcrafter"] = DepthCrafterBackend
+        except ImportError:
+            logger.debug("DepthCrafterBackend not available (missing dependencies)")
+
         # Ensemble backend (ADR-026)
         try:
             from .ensemble import DepthEnsembleBackend

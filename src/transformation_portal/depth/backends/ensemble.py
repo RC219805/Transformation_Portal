@@ -153,13 +153,13 @@ class DepthEnsembleBackend:
                 checkpoint=None,  # Auto-download from HF
                 device="auto",
             ),
-            # DepthCrafter: Stub for now (Phase 2)
+            # DepthCrafter: temporal consistency (Phase 2)
             ModelConfig(
-                name="depthcrafter_stub",
+                name="depthcrafter",
                 weight=0.2,  # Tertiary (temporal consistency)
                 checkpoint=None,
                 device="auto",
-                enabled=False,  # Disabled until Phase 2 implementation
+                enabled=False,  # Disabled until checkpoint available
             ),
         ]
 
@@ -512,8 +512,8 @@ class DepthEnsembleBackend:
         """Return additional required import modules for ensemble.
 
         Per the DepthBackend protocol, torch is assumed and should not be listed here.
-        The ensemble additionally requires ``transformers`` (for DA3). Depth Pro remains
-        optional and will degrade gracefully if its backend is unavailable.
+        The ensemble additionally requires ``transformers`` (for DA3). Depth Pro and
+        DepthCrafter remain optional and will degrade gracefully if unavailable.
 
         Returns:
             List of required module names.

@@ -35,14 +35,14 @@ class TestEnsembleBackend:
         config = EnhanceConfig(non_commercial_ok=True, accept_research_tools_license=True)
         ensemble = DepthEnsembleBackend(config)
 
-        # Should have 3 models (Depth Pro + DA3 + DepthCrafter stub)
+        # Should have 3 models (Depth Pro + DA3 + DepthCrafter)
         assert len(ensemble._models) == 3
 
         # Check model names and weights
         model_names = [m.name for m in ensemble._models]
         assert "depth_pro" in model_names
         assert "da3" in model_names
-        assert "depthcrafter_stub" in model_names
+        assert "depthcrafter" in model_names
 
         # Weights should sum to 1.0 (for enabled models)
         enabled_weights = sum(m.weight for m in ensemble._models if m.enabled)
