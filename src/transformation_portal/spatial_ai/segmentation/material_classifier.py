@@ -183,11 +183,14 @@ class MaterialClassifier:
             logger.warning("CLIP not available, returning unlabeled")
             return [(None, None) for _ in range(len(masks))]
 
+        # Empty masks never require model inference; keep this path torch-free.
+        if len(masks) == 0 or not np.any(masks):
+            return [(None, None) for _ in range(len(masks))]
+
         self._load_model()
 
-        import torch
-
         results = []
+        torch = None
 
         for mask in masks:
             # Extract masked region
@@ -208,6 +211,10 @@ class MaterialClassifier:
             inputs = {k: v.to(self._model.device) for k, v in inputs.items()}
 
             # Run CLIP
+            if torch is None:
+                import torch as _torch
+
+                torch = _torch
             with torch.no_grad():
                 outputs = self._model(**inputs)
 
