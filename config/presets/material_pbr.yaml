@@ -19,11 +19,10 @@
 # License: N/A (CPU-based image processing, no external models)
 #
 # Usage:
-#   transformation_portal spatial-ai generate-pbr \
-#     --preset material_pbr \
+#   python scripts/enhance_image.py \
+#     --preset config/presets/material_pbr.yaml \
 #     --input scene.tiff \
-#     --output output/ \
-#     --material-hint wood
+#     --output output/
 #
 # Migration:
 #   From experimental → See docs/guides/MATERIAL_PBR_MIGRATION.md
@@ -32,7 +31,7 @@
 #   ✅ SpatialCaptureV1 contract (gamma=1.0 enforcement)
 #   ✅ Integration with SAM2 segmentation (Phase 4D)
 #   ✅ Material classifier hints supported
-#   ✅ Zero breaking changes
+#   ⚠️ API breaking change in v5.0.0: `generate_pbr_textures` now returns `PBRTextures`
 #
 # Quality Firewall:
 #   - Performance: 2-5s per 1024x1024 on CPU

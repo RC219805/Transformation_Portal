@@ -44,9 +44,14 @@ def load_tiff(path: Path) -> np.ndarray:
         from PIL import Image
 
         img = Image.open(path)
-        img_array = np.array(img).astype(np.float32)
-        if img_array.max() > 1.0:
-            img_array = img_array / 255.0
+        img_array = np.array(img)
+        if np.issubdtype(img_array.dtype, np.integer):
+            max_val = np.iinfo(img_array.dtype).max
+            img_array = img_array.astype(np.float32) / float(max_val)
+        else:
+            img_array = img_array.astype(np.float32)
+            if img_array.max() > 1.0:
+                img_array = img_array / 255.0
         if img_array.ndim == 2:
             img_array = np.stack([img_array] * 3, axis=-1)
         return img_array

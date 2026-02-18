@@ -28,7 +28,7 @@ def test_stable_preset_immutable():
 
     Rationale: "Stable" must be enforceable, not semantic.
     """
-    EXPECTED_HASH_V5_0_0 = "9d12801be1d3e5fb7026b1a8fbf307881ebed69ed0bf8ae284a02cc83347445d"
+    EXPECTED_HASH_V5_0_0 = "149082a43e215c0c4040d079fe9c5bff909e8bdcb5f833ee0fec2153a56cabf2"
 
     preset_path = Path("config/presets/material_pbr.yaml")
     assert preset_path.exists(), "Stable preset missing"

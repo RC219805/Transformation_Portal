@@ -42,6 +42,20 @@ class WrongReturnTypeBackend:
         return rgb
 
 
+class Pep604OptionalBackend:
+    """Backend using PEP 604 optional unions in annotations."""
+
+    def generate_pbr_textures(
+        self,
+        rgb: np.ndarray,
+        mask: np.ndarray | None = None,
+        depth: np.ndarray | None = None,
+        material_hint: str | None = None,
+        config: MaterialGenerationConfig | None = None,
+    ) -> PBRTextures:
+        raise NotImplementedError
+
+
 def test_validate_backend_protocol_accepts_material_backend():
     backend = MaterialBackend(backend="heuristic", device="cpu")
     assert validate_backend_protocol(backend) is True
@@ -60,3 +74,7 @@ def test_validate_backend_protocol_rejects_missing_optional_defaults():
 def test_validate_backend_protocol_rejects_wrong_return_annotation():
     with pytest.raises(TypeError, match="wrong type for 'return'"):
         validate_backend_protocol(WrongReturnTypeBackend())  # type: ignore[arg-type]
+
+
+def test_validate_backend_protocol_accepts_pep604_optional_annotations():
+    assert validate_backend_protocol(Pep604OptionalBackend()) is True

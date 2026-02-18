@@ -265,7 +265,8 @@ class MaterialBackend:
             config: Generation configuration.
 
         Returns:
-            Tuple of (albedo, normal, roughness, metallic, ao, height, properties).
+            Tuple of (albedo, normal, roughness, metallic, ao, height, properties, metadata).
+            Current fallback path always returns metadata via heuristic backend.
 
         Note:
             Falls back to heuristic if PBRFusion not installed.

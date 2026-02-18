@@ -31,8 +31,8 @@
 #
 # Usage:
 #   export PBRFUSION_PATH=/path/to/ComfyUI
-#   transformation_portal spatial-ai generate-pbr \
-#     --preset material_pbr_canary \
+#   python scripts/enhance_image.py \
+#     --preset config/presets/material_pbr_canary.yaml \
 #     --input scene.tiff \
 #     --output output/
 #
@@ -40,7 +40,7 @@
 #   ✅ Optional ML dependency (graceful fallback)
 #   ✅ Canary tier (pre-production testing)
 #   ✅ Clear activation requirements
-#   ✅ Zero breaking changes to stable
+#   ✅ No stable preset schema changes required
 
 name: "PBR Material Generation (Canary + PBRFusion)"
 version: "5.0.0-canary"

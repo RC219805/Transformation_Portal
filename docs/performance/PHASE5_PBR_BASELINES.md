@@ -24,7 +24,7 @@ Phase 5 PBR generation meets Quality Firewall performance targets with **4.28s/M
 - **Validation Script:** `scripts/validate_pbr_phase5d.py`
 - **Test Images:** Real-world luxury real estate TIFFs from `/input_images/`
 - **Backend:** Heuristic CPU-only (no GPU dependencies)
-- **Runs:** 3 iterations per test (determinism verified)
+- **Runs:** Single iteration per test (latency/throughput only; no multi-run determinism check)
 
 ### Measured Metrics
 - **Latency:** Wall-clock time for full PBR generation (6 texture maps)
@@ -169,9 +169,9 @@ Value ranges: All correct
 | **Height Range** | [0, 1] | [0.000, 1.000] | ✅ Pass |
 
 ### Determinism
-- **Verified:** 3 runs, bitwise identical outputs
-- **Hashing:** SHA256 of all 6 texture maps matches across runs
-- **Variance:** 0.000 (perfect determinism)
+- **Expected:** Deterministic by design (no randomness in heuristic pipeline)
+- **Note:** Multi-run bitwise hashing is not part of `scripts/validate_pbr_phase5d.py` yet
+- **Follow-up:** Add explicit repeated-run hash verification in a future validation pass
 
 ---
 
@@ -209,7 +209,7 @@ Value ranges: All correct
 
 ### CI Integration
 - **Test Suite:** `pytest tests/spatial_ai/materials/ -m "not slow"`
-- **Baseline:** 57/57 tests passing
+- **Baseline:** 62/62 tests passing
 - **Performance Test:** Currently manual (scripts/validate_pbr_phase5d.py)
 - **Future:** Add to nightly benchmark suite (non-blocking for PR gating)
 

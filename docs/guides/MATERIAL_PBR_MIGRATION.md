@@ -91,7 +91,9 @@ normal = result.normal
 # config/presets/material_pbr.yaml
 version: "5.0.0"
 tier: stable
-backend: heuristic  # CPU-only, deterministic
+backend:
+  type: heuristic
+  device: cpu
 ```
 
 **Use when:**
@@ -111,7 +113,9 @@ backend: heuristic  # CPU-only, deterministic
 # config/presets/material_pbr_canary.yaml
 version: "5.0.0-canary"
 tier: canary
-backend: pbr_fusion  # GPU primary, CPU fallback
+backend:
+  type: pbr_fusion
+  fallback: heuristic  # GPU primary, CPU fallback
 ```
 
 **Use when:**
@@ -162,8 +166,9 @@ save_texture(result.albedo, "albedo.png")
 save_texture(result.normal, "normal.png")
 
 # Access metadata (NEW)
-print(f"Backend: {result.metadata.backend_version}")
-print(f"Normal scale: {result.metadata.normal_scale}")
+if result.metadata is not None:
+    print(f"Backend: {result.metadata.backend}")
+    print(f"Normal scale: {result.metadata.normal_scale}")
 ```
 
 **Migration Effort:** Low (15 minutes per script)
@@ -233,7 +238,7 @@ for mask in masks:
 **After:**
 ```python
 # Stable: Formal material classifier integration
-from transformation_portal.spatial_ai.materials import MaterialClassifier
+from transformation_portal.spatial_ai.segmentation import MaterialClassifier
 
 masks = segmenter.segment(image)
 classifier = MaterialClassifier()

@@ -11,7 +11,7 @@ Protocol design principles:
 - Forward-compatible: Extensible for future backends
 """
 
-from typing import Optional, Protocol, get_type_hints, runtime_checkable
+from typing import Optional, Protocol, get_args, get_origin, get_type_hints, runtime_checkable
 
 import numpy as np
 
@@ -79,7 +79,7 @@ class PBRBackendProtocol(Protocol):
             - All output arrays are float32
             - All arrays share same spatial dimensions (H, W)
             - Value ranges strictly enforced (see PBRTextures docstring)
-            - Metadata always populated (for reproducibility)
+            - Metadata may be None for legacy/custom backends
         """
         ...
 
@@ -176,21 +176,42 @@ def validate_backend_protocol(backend: PBRBackendProtocol) -> bool:
             f"Backend {type(backend).__name__}.generate_pbr_textures() has invalid type annotations: {exc}"
         ) from exc
 
-    expected_type_hints = {
-        "rgb": np.ndarray,
-        "mask": Optional[np.ndarray],
-        "depth": Optional[np.ndarray],
-        "material_hint": Optional[str],
-        "config": Optional[MaterialGenerationConfig],
-        "return": PBRTextures,
-    }
+    def _is_optional_of(annotation: object, wrapped: object) -> bool:
+        origin = get_origin(annotation)
+        if origin is None:
+            return False
+        args = set(get_args(annotation))
+        return len(args) == 2 and wrapped in args and type(None) in args
 
-    for name, expected in expected_type_hints.items():
+    def _matches_expected(name: str, annotation: object) -> bool:
+        if name == "rgb":
+            return annotation is np.ndarray
+        if name == "mask":
+            return _is_optional_of(annotation, np.ndarray)
+        if name == "depth":
+            return _is_optional_of(annotation, np.ndarray)
+        if name == "material_hint":
+            return _is_optional_of(annotation, str)
+        if name == "config":
+            return _is_optional_of(annotation, MaterialGenerationConfig)
+        if name == "return":
+            return annotation is PBRTextures
+        return False
+
+    for name in ("rgb", "mask", "depth", "material_hint", "config", "return"):
         actual = type_hints.get(name)
-        if actual != expected:
+        if not _matches_expected(name, actual):
+            expected = {
+                "rgb": "np.ndarray",
+                "mask": "Optional[np.ndarray] (or np.ndarray | None)",
+                "depth": "Optional[np.ndarray] (or np.ndarray | None)",
+                "material_hint": "Optional[str] (or str | None)",
+                "config": "Optional[MaterialGenerationConfig] (or MaterialGenerationConfig | None)",
+                "return": "PBRTextures",
+            }[name]
             raise TypeError(
                 f"Backend {type(backend).__name__}.generate_pbr_textures() has wrong type for '{name}': "
-                f"expected {expected!r}, got {actual!r}"
+                f"expected {expected}, got {actual!r}"
             )
 
     return True

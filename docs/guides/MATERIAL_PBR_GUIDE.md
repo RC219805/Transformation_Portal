@@ -42,10 +42,13 @@ metallic = result.metallic          # [0,1] 0=dielectric, 1=metal
 ao = result.ambient_occlusion       # [0,1] 0=occluded, 1=lit
 height = result.height              # [0,1] normalized displacement
 
-# Access metadata
+# Access metadata (may be None for older/custom backends)
 metadata = result.metadata
-print(f"Backend: {metadata.backend_version}")
-print(f"Normal scale: {metadata.normal_scale}")
+if metadata is not None:
+    print(f"Backend: {metadata.backend}")
+    print(f"Normal scale: {metadata.normal_scale}")
+else:
+    print("Metadata not available for this backend")
 ```
 
 ### 2. With Material Hints (Enhanced Quality)
@@ -148,8 +151,8 @@ python scripts/enhance_image.py \
 ### Full Pipeline Example
 
 ```python
-from transformation_portal.spatial_ai.segmentation import SAM2Segmenter
-from transformation_portal.spatial_ai.materials import MaterialBackend, MaterialClassifier
+from transformation_portal.spatial_ai.segmentation import MaterialClassifier, SAM2Segmenter
+from transformation_portal.spatial_ai.materials import MaterialBackend
 
 # 1. Segment image into zones
 segmenter = SAM2Segmenter(model="sam2_hiera_large")
