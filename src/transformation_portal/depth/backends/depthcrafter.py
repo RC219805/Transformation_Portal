@@ -17,10 +17,10 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from collections import deque
 from typing import TYPE_CHECKING, Deque, Optional, Union
 
 import numpy as np
-from collections import deque
 from PIL import Image
 
 from .protocol import DepthResult, LicenseType

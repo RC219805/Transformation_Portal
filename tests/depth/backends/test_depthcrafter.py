@@ -15,10 +15,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from transformation_portal.depth.backends.depthcrafter import (
-    DepthCrafterBackend,
-    _DEFAULT_TEMPORAL_ALPHA,
-)
+from transformation_portal.depth.backends.depthcrafter import DepthCrafterBackend
 from transformation_portal.depth.backends.protocol import DepthResult, LicenseType
 
 
