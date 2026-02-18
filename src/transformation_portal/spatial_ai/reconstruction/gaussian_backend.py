@@ -31,8 +31,10 @@ from functools import lru_cache
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+import torch
 
 from .contracts import CameraParams, GaussianSplat, LicenseRestrictionError, ReconstructionInput, Scene3D
+from .gaussian_rasterizer import compute_rgb_loss, render_gaussians
 
 logger = logging.getLogger(__name__)
 
@@ -450,29 +452,129 @@ class GaussianBackend:
         Returns:
             Tuple of (optimized_splats, rmse, convergence_status).
         """
-        # Mock optimization for testing
-        # In production, run actual Gaussian Splatting optimization
-
         logger.info(f"Starting optimization ({iterations} iterations)...")
 
-        # Simulate convergence
-        final_rmse = 0.015  # Below 2% threshold
-        convergence = "converged"
+        device = self.device
 
-        # Mock: add small perturbation to positions
+        # Convert numpy to PyTorch tensors
+        positions = torch.from_numpy(splats.positions).to(device).requires_grad_(True)
+        colors = torch.from_numpy(splats.colors).to(device).requires_grad_(True)
+        scales = torch.from_numpy(splats.scales).to(device).requires_grad_(True)
+        rotations = torch.from_numpy(splats.rotations).to(device).requires_grad_(True)
+        opacities = torch.from_numpy(splats.opacities).to(device).requires_grad_(True)
+
+        # Prepare target images
+        target_images = [torch.from_numpy(img).to(device) for img in reconstruction_input.images]
+        cameras = reconstruction_input.cameras
+
+        # Optimizer (Adam with learning rate from defaults)
+        optimizer = torch.optim.Adam(
+            [
+                {"params": [positions], "lr": self.DEFAULT_POSITION_LR},
+                {"params": [colors], "lr": 0.0025},  # Color learning rate
+                {"params": [scales], "lr": self.DEFAULT_SCALING_LR},
+                {"params": [rotations], "lr": self.DEFAULT_ROTATION_LR},
+                {"params": [opacities], "lr": 0.05},  # Opacity learning rate
+            ]
+        )
+
+        # Optimization loop
+        start_time = time.time()
+        loss_history = []
+
+        for iteration in range(iterations):
+            optimizer.zero_grad()
+
+            # Render each view and compute loss
+            total_loss = 0.0
+            for view_idx, (target_img, camera) in enumerate(zip(target_images, cameras)):
+                # Prepare camera parameters
+                intrinsics = torch.from_numpy(camera.intrinsics).to(device)
+                extrinsics = torch.from_numpy(camera.extrinsics).to(device)
+                image_size = (camera.height, camera.width)
+
+                # Render view
+                rendered = render_gaussians(
+                    positions=positions,
+                    colors=colors,
+                    scales=scales,
+                    rotations=rotations,
+                    opacities=opacities,
+                    intrinsics=intrinsics,
+                    extrinsics=extrinsics,
+                    image_size=image_size,
+                    use_rotation=False,  # Phase 6A: isotropic Gaussians
+                    device=device,
+                )
+
+                # Compute RGB loss
+                loss = compute_rgb_loss(rendered, target_img)
+                total_loss += loss
+
+            # Average loss across views
+            total_loss = total_loss / len(target_images)
+
+            # Backpropagation
+            total_loss.backward()
+
+            # Gradient clipping (prevent instability)
+            torch.nn.utils.clip_grad_norm_([positions, colors, scales, rotations, opacities], max_norm=1.0)
+
+            # Optimizer step
+            optimizer.step()
+
+            # Normalize quaternions (maintain unit length)
+            with torch.no_grad():
+                rotations.data = rotations.data / (torch.norm(rotations.data, dim=1, keepdim=True) + 1e-8)
+
+                # Clamp values to valid ranges
+                colors.data = torch.clamp(colors.data, 0.0, 1.0)
+                scales.data = torch.clamp(scales.data, 1e-6, 10.0)  # Prevent negative/huge scales
+                opacities.data = torch.clamp(opacities.data, 0.01, 1.0)  # Keep opacity in valid range
+
+            # Log progress
+            loss_history.append(total_loss.item())
+            if iteration % (iterations // 10) == 0 or iteration == iterations - 1:
+                elapsed = time.time() - start_time
+                logger.info(
+                    f"Iteration {iteration}/{iterations}: " f"loss={total_loss.item():.6f}, " f"elapsed={elapsed:.1f}s"
+                )
+
+            # Early stopping if loss is very low
+            if total_loss.item() < 1e-5:
+                logger.info(f"Early convergence at iteration {iteration}")
+                break
+
+        # Compute final RMSE
+        final_loss = loss_history[-1] if loss_history else 0.0
+        final_rmse = np.sqrt(final_loss)  # RMSE from MSE
+
+        # Convergence status
+        if final_rmse < self.RMSE_THRESHOLD:
+            convergence = "converged"
+        elif len(loss_history) > 10 and np.mean(loss_history[-5:]) < np.mean(loss_history[-10:-5]):
+            convergence = "improving"
+        else:
+            convergence = "stalled"
+
+        # Convert back to numpy
         optimized_splats = GaussianSplat(
-            positions=splats.positions + np.random.randn(*splats.positions.shape).astype(np.float32) * 0.001,
-            colors=splats.colors,
-            scales=splats.scales * 1.05,  # Slightly larger
-            rotations=splats.rotations,
-            opacities=splats.opacities * 0.9,  # Slightly more opaque
+            positions=positions.detach().cpu().numpy().astype(np.float32),
+            colors=colors.detach().cpu().numpy().astype(np.float32),
+            scales=scales.detach().cpu().numpy().astype(np.float32),
+            rotations=rotations.detach().cpu().numpy().astype(np.float32),
+            opacities=opacities.detach().cpu().numpy().astype(np.float32),
             metadata={
                 **splats.metadata,
                 "optimized": True,
-                "iterations": iterations,
+                "iterations": len(loss_history),
                 "convergence": convergence,
+                "final_loss": final_loss,
+                "loss_history": loss_history[:100],  # Store first 100 for analysis
             },
         )
+
+        logger.info(f"Optimization complete: RMSE={final_rmse:.6f}, status={convergence}")
 
         return optimized_splats, final_rmse, convergence
 
@@ -486,14 +588,35 @@ class GaussianBackend:
         Returns:
             Rendered image (H, W, 3) float32 in linear RGB.
         """
-        # Mock rendering
-        # In production, use differentiable Gaussian rasterizer
+        device = self.device
 
-        H, W = camera.height, camera.width
-        rendered = np.zeros((H, W, 3), dtype=np.float32)
+        # Convert to PyTorch tensors
+        positions = torch.from_numpy(scene.splats.positions).to(device)
+        colors = torch.from_numpy(scene.splats.colors).to(device)
+        scales = torch.from_numpy(scene.splats.scales).to(device)
+        rotations = torch.from_numpy(scene.splats.rotations).to(device)
+        opacities = torch.from_numpy(scene.splats.opacities).to(device)
 
-        # Simple mock: fill with mean color
-        mean_color = scene.splats.colors.mean(axis=0)
-        rendered[:, :, :] = mean_color
+        intrinsics = torch.from_numpy(camera.intrinsics).to(device)
+        extrinsics = torch.from_numpy(camera.extrinsics).to(device)
+        image_size = (camera.height, camera.width)
 
-        return rendered
+        # Render
+        with torch.no_grad():
+            rendered = render_gaussians(
+                positions=positions,
+                colors=colors,
+                scales=scales,
+                rotations=rotations,
+                opacities=opacities,
+                intrinsics=intrinsics,
+                extrinsics=extrinsics,
+                image_size=image_size,
+                use_rotation=False,  # Phase 6A: isotropic Gaussians
+                device=device,
+            )
+
+        # Convert back to numpy
+        rendered_np = rendered.cpu().numpy().astype(np.float32)
+
+        return rendered_np

@@ -11,6 +11,7 @@ from transformation_portal.spatial_ai.reconstruction import (
 )
 
 
+@pytest.mark.slow
 class TestGaussianBackend:
     """Test Gaussian Splatting backend."""
 
@@ -179,13 +180,47 @@ class TestGaussianBackend:
         images = [np.random.rand(240, 320, 3).astype(np.float32) for _ in range(2)]
 
         intrinsics = np.eye(3, dtype=np.float32)
+        intrinsics[0, 0] = intrinsics[1, 1] = 262.5
+        intrinsics[0, 2] = 160.0
+        intrinsics[1, 2] = 120.0
+
         cameras = [CameraParams(intrinsics, np.eye(4, dtype=np.float32), 320, 240) for _ in range(2)]
 
         reconstruction_input = ReconstructionInput(images=images, gamma=1.0, cameras=cameras, tier="apex_research")
 
-        scene = backend.reconstruct(reconstruction_input, iterations=1000)
+        scene = backend.reconstruct(reconstruction_input, iterations=50)  # Reduced for speed
 
-        assert scene.convergence in ["converged", "max_iterations", "diverged"]
+        assert scene.convergence in ["converged", "improving", "stalled"]
+        assert "optimized" in scene.splats.metadata
+        assert scene.splats.metadata["optimized"] is True
+
+    def test_optimization_reduces_loss(self):
+        """Test that optimization actually reduces loss over iterations."""
+        backend = GaussianBackend(tier="apex_research")
+
+        # Create simple synthetic scene
+        images = [np.ones((120, 160, 3), dtype=np.float32) * 0.5 for _ in range(2)]  # Gray images
+
+        intrinsics = np.eye(3, dtype=np.float32)
+        intrinsics[0, 0] = intrinsics[1, 1] = 200.0
+        intrinsics[0, 2] = 80.0
+        intrinsics[1, 2] = 60.0
+
+        cameras = [CameraParams(intrinsics, np.eye(4, dtype=np.float32), 160, 120) for _ in range(2)]
+
+        reconstruction_input = ReconstructionInput(images=images, gamma=1.0, cameras=cameras, tier="apex_research")
+
+        scene = backend.reconstruct(reconstruction_input, iterations=100)
+
+        # Check that loss history exists
+        assert "loss_history" in scene.splats.metadata
+        loss_history = scene.splats.metadata["loss_history"]
+
+        # Loss should decrease over time (first loss > last loss)
+        if len(loss_history) > 10:
+            initial_loss = np.mean(loss_history[:5])
+            final_loss = np.mean(loss_history[-5:])
+            assert final_loss < initial_loss, "Loss should decrease during optimization"
 
     def test_gaussian_initialization_depth_guided(self):
         """Test depth-guided Gaussian initialization."""
