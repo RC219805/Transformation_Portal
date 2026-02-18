@@ -66,18 +66,18 @@ Performance Targets:
 """
 
 from .contracts import CameraParams, GaussianSplat, LicenseRestrictionError, ReconstructionInput, Scene3D
-from .gaussian_backend import GaussianBackend
 from .geometric_validator import GeometricValidator
 from .mesh_exporter import MeshExporter
-from .scene_builder import SceneBuilder
 
+# Lazy imports for torch-dependent modules to avoid requiring torch at package import time
+# This is critical for non-ML enforcement tests that run without torch installed
 __all__ = [
     # Core contracts
     "CameraParams",
     "GaussianSplat",
     "ReconstructionInput",
     "Scene3D",
-    # Backend and builders
+    # Backend and builders (lazy-loaded)
     "GaussianBackend",
     "SceneBuilder",
     # Export and validation
@@ -86,3 +86,20 @@ __all__ = [
     # Exceptions
     "LicenseRestrictionError",
 ]
+
+
+def __getattr__(name: str):
+    """Lazy import for torch-dependent modules.
+
+    GaussianBackend and SceneBuilder both depend on torch, which may not be
+    available in non-ML test environments (e.g., enforcement tests).
+    """
+    if name == "GaussianBackend":
+        from .gaussian_backend import GaussianBackend
+
+        return GaussianBackend
+    if name == "SceneBuilder":
+        from .scene_builder import SceneBuilder
+
+        return SceneBuilder
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

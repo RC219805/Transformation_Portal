@@ -349,7 +349,8 @@ def pick_titleblock_region(page: fitz.Page) -> Tuple[str, fitz.Rect, str, List[T
         final = float(base) - (area_frac * 150.0)
 
         # Tie-breakers: higher final, then smaller area, then higher base
-        if best is None or (final, -area_frac, base) > (best[0], -best[1], best[2]):
+        # Note: best is checked for None in assertion below (pylint: disable=unsubscriptable-object)
+        if best is None or (final, -area_frac, base) > (best[0], -best[1], best[2]):  # pylint: disable=unsubscriptable-object
             best = (final, area_frac, base, name, rect, raw_text, lines)
 
     assert best is not None
