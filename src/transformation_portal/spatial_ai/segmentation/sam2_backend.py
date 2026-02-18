@@ -64,10 +64,12 @@ class SAM2Backend:
         "large": "sam2_hiera_large.pt",
     }
 
+    SUPPORTED_DEVICES = {"auto", "cuda", "cpu", "mps"}
+
     def __init__(
         self,
         model_size: Literal["base", "large"] = "base",
-        device: Literal["cuda", "cpu", "mps"] = "cuda",
+        device: Literal["auto", "cuda", "cpu", "mps"] = "cuda",
         checkpoint_path: Optional[str] = None,
         enable_material_classification: bool = False,
         material_confidence_threshold: float = 0.3,
@@ -90,7 +92,7 @@ class SAM2Backend:
             raise ValueError(f"Invalid model_size '{model_size}', " f"must be one of {list(self.MODEL_CONFIGS.keys())}")
 
         self.model_size = model_size
-        self.device = device
+        self.device = self._resolve_device(device)
 
         # Determine checkpoint path
         if checkpoint_path is None:
@@ -116,16 +118,58 @@ class SAM2Backend:
             from transformation_portal.spatial_ai.segmentation.material_classifier import MaterialClassifier
 
             self._material_classifier = MaterialClassifier(
-                device=device,
+                device=self.device,
                 confidence_threshold=material_confidence_threshold,
             )
             logger.info("Material classification enabled")
 
         logger.info(
             f"SAM2Backend initialized: model={model_size}, "
-            f"device={device}, checkpoint={self.checkpoint_path.name}, "
+            f"device={self.device}, checkpoint={self.checkpoint_path.name}, "
             f"material_classification={enable_material_classification}"
         )
+
+    @classmethod
+    def _resolve_device(cls, requested_device: str) -> str:
+        """Resolve a device request to an available execution device."""
+        if requested_device not in cls.SUPPORTED_DEVICES:
+            raise ValueError(f"Invalid device '{requested_device}', " f"must be one of {sorted(cls.SUPPORTED_DEVICES)}")
+
+        # CPU always exists; avoid importing torch for the common explicit CPU path.
+        if requested_device == "cpu":
+            return "cpu"
+
+        try:
+            import torch
+        except ImportError:
+            if requested_device != "cpu":
+                logger.warning(
+                    "Torch is not installed; falling back from device '%s' to 'cpu'",
+                    requested_device,
+                )
+            return "cpu"
+
+        cuda_available = bool(torch.cuda.is_available())
+        mps_available = bool(hasattr(torch.backends, "mps") and torch.backends.mps.is_available())
+
+        if requested_device == "auto":
+            if mps_available:
+                return "mps"
+            if cuda_available:
+                return "cuda"
+            return "cpu"
+
+        if requested_device == "cuda" and not cuda_available:
+            fallback = "mps" if mps_available else "cpu"
+            logger.warning("Requested device 'cuda' unavailable; falling back to '%s'", fallback)
+            return fallback
+
+        if requested_device == "mps" and not mps_available:
+            fallback = "cuda" if cuda_available else "cpu"
+            logger.warning("Requested device 'mps' unavailable; falling back to '%s'", fallback)
+            return fallback
+
+        return requested_device
 
     def _load_model(self):
         """Lazy load SAM2 model and mask generator.
@@ -376,8 +420,8 @@ class SAM2Backend:
                     bbox_xywh = (
                         int(xs.min()),
                         int(ys.min()),
-                        int(xs.max() - xs.min()),
-                        int(ys.max() - ys.min()),
+                        int(xs.max() - xs.min() + 1),
+                        int(ys.max() - ys.min() + 1),
                     )
                 else:
                     bbox_xywh = (0, 0, 0, 0)
@@ -480,18 +524,28 @@ class SAM2Backend:
             bbox = np.array(prompts["bbox"])  # [x1, y1, x2, y2]
             logger.info(f"Adding bbox prompt at frame {frame_idx}, object {object_id}")
 
-            # Convert bbox to point + labels format expected by SAM2
-            # Use corners as positive points
-            points = np.array([[bbox[0], bbox[1]], [bbox[2], bbox[3]]])
-            labels = np.array([2, 3])  # 2=top-left corner, 3=bottom-right corner
-
-            _, out_obj_ids, out_mask_logits = self._video_predictor.add_new_points(
-                inference_state=inference_state,
-                frame_idx=frame_idx,
-                obj_id=object_id,
-                points=points,
-                labels=labels,
-            )
+            # Prefer native SAM2 bbox API when available.
+            add_points_or_box = getattr(self._video_predictor, "add_new_points_or_box", None)
+            if callable(add_points_or_box):
+                _, out_obj_ids, out_mask_logits = add_points_or_box(
+                    inference_state=inference_state,
+                    frame_idx=frame_idx,
+                    obj_id=object_id,
+                    box=bbox,
+                    clear_old_points=True,
+                )
+            else:
+                # Backward compatibility for older predictor API:
+                # bbox corners are represented with SAM2-special labels 2 and 3.
+                points = np.array([[bbox[0], bbox[1]], [bbox[2], bbox[3]]])
+                labels = np.array([2, 3], dtype=np.int32)
+                _, out_obj_ids, out_mask_logits = self._video_predictor.add_new_points(
+                    inference_state=inference_state,
+                    frame_idx=frame_idx,
+                    obj_id=object_id,
+                    points=points,
+                    labels=labels,
+                )
 
         else:
             raise ValueError("Video mode requires 'points' or 'bbox' in prompts")
@@ -501,9 +555,14 @@ class SAM2Backend:
         video_segments = {}  # {frame_idx: {obj_id: mask}}
 
         for out_frame_idx, out_obj_ids, out_mask_logits in self._video_predictor.propagate_in_video(inference_state):
-            video_segments[out_frame_idx] = {
-                obj_id: (out_mask_logits[i] > 0.0).cpu().numpy() for i, obj_id in enumerate(out_obj_ids)
-            }
+            frame_segments = {}
+            for i, obj_id in enumerate(out_obj_ids):
+                mask_logits = out_mask_logits[i]
+                if hasattr(mask_logits, "detach"):
+                    frame_segments[obj_id] = (mask_logits > 0.0).detach().cpu().numpy()
+                else:
+                    frame_segments[obj_id] = np.asarray(mask_logits) > 0.0
+            video_segments[out_frame_idx] = frame_segments
 
         # Extract masks for tracked object
         masks = []
@@ -515,11 +574,7 @@ class SAM2Backend:
             if frame_idx in video_segments and object_id in video_segments[frame_idx]:
                 mask_data = video_segments[frame_idx][object_id]
 
-                # Convert to numpy if needed (could be tensor or ndarray)
-                if hasattr(mask_data, "cpu"):
-                    mask = mask_data.squeeze().cpu().numpy().astype(bool)
-                else:
-                    mask = np.asarray(mask_data).squeeze().astype(bool)
+                mask = np.asarray(mask_data).squeeze().astype(bool)
 
                 masks.append(mask)
                 scores.append(1.0)  # Video tracking doesn't provide scores
@@ -528,9 +583,9 @@ class SAM2Backend:
                 area = int(mask.sum())
                 ys, xs = np.where(mask)
                 if len(xs) > 0:
-                    bbox = (int(xs.min()), int(ys.min()), int(xs.max() - xs.min()), int(ys.max() - ys.min()))
+                    bbox = (int(xs.min()), int(ys.min()), int(xs.max() - xs.min() + 1), int(ys.max() - ys.min() + 1))
                 else:
-                    bbox = (0, 0, 0, 0)
+                    bbox = (0, 0, 1, 1)
 
                 metadata_list.append(
                     MaskMetadata(
