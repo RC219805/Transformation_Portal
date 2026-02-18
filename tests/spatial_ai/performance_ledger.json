@@ -104,5 +104,49 @@
       },
       "backend": "heuristic"
     }
+  },
+  "materials_heuristic_phase5c_production": {
+    "baseline": 4.28,
+    "measurements": [
+      {
+        "duration": 51.39,
+        "timestamp": 1739855521,
+        "resolution": "3000x4000",
+        "megapixels": 12.0,
+        "time_per_mp": 4.28,
+        "phase": "5D_production_validation",
+        "enhancements": [
+          "bilateral_filtering_albedo",
+          "depth_aware_normals_5x",
+          "concavity_ao_70_30",
+          "pbr_material_presets_8"
+        ]
+      },
+      {
+        "duration": 0.29,
+        "timestamp": 1739855521,
+        "resolution": "192x288",
+        "megapixels": 0.06,
+        "time_per_mp": 5.32,
+        "phase": "5D_small_tiff_validation"
+      }
+    ],
+    "metadata": {
+      "phase": "Phase 5C: Enhanced Heuristic",
+      "version": "5.0.0",
+      "preset": "material_pbr.yaml (stable)",
+      "hardware": {
+        "platform": "Darwin",
+        "processor": "arm",
+        "python_version": "3.11.14",
+        "device": "CPU"
+      },
+      "backend": "heuristic_enhanced",
+      "quality_firewall": {
+        "target_time_per_mp": 5.0,
+        "max_memory_mb": 1000,
+        "value_ranges_validated": true
+      }
+    }
   }
 }
