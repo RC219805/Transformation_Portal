@@ -18,8 +18,11 @@ try:
     import torch  # noqa: F401
 
     HAS_SAM2 = True
+    # Check MPS availability safely at module level
+    MPS_AVAILABLE = hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
 except ImportError:
     HAS_SAM2 = False
+    MPS_AVAILABLE = False
 
 pytestmark = [
     pytest.mark.skipif(not HAS_SAM2, reason="SAM2 package not installed"),
@@ -258,7 +261,7 @@ class TestSAM2DeviceHandling:
         result = backend.segment(seg_input)
         assert result.masks.shape[1:] == (64, 64)
 
-    @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="MPS not available")
+    @pytest.mark.skipif(not MPS_AVAILABLE, reason="MPS not available")
     def test_mps_device(self, checkpoint_path, fixtures_dir):
         """Test SAM2 works on MPS (Apple Silicon)."""
         import torch

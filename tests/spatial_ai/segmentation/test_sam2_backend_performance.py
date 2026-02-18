@@ -450,8 +450,9 @@ class TestSAM2PromptedModePerformance:
         fixture = next(f for f in benchmark_images if f["width"] == 512)
         seg_input = SegmentationInput(
             image=fixture["array"],
-            mode=SegmentationMode.BBOX,
-            bbox=[128, 128, 384, 384],  # [x_min, y_min, x_max, y_max]
+            mode="bbox",
+            gamma=1.0,
+            prompts={"bbox": [128, 128, 384, 384]},  # [x_min, y_min, x_max, y_max]
         )
 
         # Warm-up

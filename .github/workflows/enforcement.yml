@@ -55,7 +55,7 @@ jobs:
         run: pip install PyYAML
 
       - name: Validate HF revisions (no placeholders in non-experimental presets)
-        run: python scripts/validation/validate_hf_revisions.py
+        run: python scripts/validation/validate_hf_revisions.py --experimental-ok
 
   test-layer1:
     name: Layer 1 Tests (Fast)
