@@ -48,9 +48,9 @@ This guide documents the migration path from experimental PBR implementations to
 
 ## Breaking Changes Summary
 
-### ⚠️ API Changes (Backward Compatible)
+### ⚠️ API Changes (Breaking)
 
-**Old (Deprecated but still works):**
+**Old (pre-v5.0.0, now breaks):**
 ```python
 albedo, normal, roughness, metallic, ao, height, properties = backend.generate_pbr_textures(rgb)
 ```
@@ -64,9 +64,9 @@ normal = result.normal
 ```
 
 **Migration Strategy:**
-- Old tuple unpacking continues to work (fallback implemented)
-- Update code incrementally to new structured return
-- No immediate action required (but recommended)
+- Tuple unpacking is no longer supported in v5.0.0+
+- Update all call sites to use `PBRTextures` attributes
+- Expected error on old usage: `TypeError: cannot unpack non-iterable PBRTextures object`
 
 ### ✅ Non-Breaking Changes
 
@@ -406,11 +406,11 @@ python tools/performance_ledger.py \
 
 ## Common Issues & Solutions
 
-### Issue: "Tuple unpacking ValueError"
+### Issue: "TypeError: cannot unpack non-iterable PBRTextures object"
 
 **Symptom:**
 ```python
-ValueError: not enough values to unpack (expected 7, got 1)
+TypeError: cannot unpack non-iterable PBRTextures object
 ```
 
 **Cause:** Using old tuple unpacking with new structured return

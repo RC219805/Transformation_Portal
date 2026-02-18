@@ -110,7 +110,8 @@
     "measurements": [
       {
         "duration": 51.39,
-        "timestamp": 1739855521,
+        "timestamp": 1771391521,
+        "timestamp_utc": "2026-02-18T05:12:01Z",
         "resolution": "3000x4000",
         "megapixels": 12.0,
         "time_per_mp": 4.28,
@@ -125,6 +126,7 @@
       {
         "duration": 0.29,
         "timestamp": 1771398348,
+        "timestamp_utc": "2026-02-18T07:05:48Z",
         "resolution": "192x288",
         "megapixels": 0.06,
         "time_per_mp": 5.32,

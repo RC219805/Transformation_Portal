@@ -156,3 +156,14 @@ class TestMaterialBackend:
         assert result.ambient_occlusion.shape == sample_rgb.shape[:2]
         assert result.height.shape == sample_rgb.shape[:2]
         assert result.properties is not None
+
+    def test_metadata_bilateral_flag_reflects_available_backend(self, sample_rgb):
+        """Metadata should record the actual albedo filtering capability."""
+        backend = MaterialBackend(backend="heuristic", device="cpu")
+        backend._bilateral_filter_available = False
+        result = backend.generate_pbr_textures(rgb=sample_rgb)
+        assert result.metadata.bilateral_enabled is False
+
+        backend._bilateral_filter_available = True
+        result = backend.generate_pbr_textures(rgb=sample_rgb)
+        assert result.metadata.bilateral_enabled is True

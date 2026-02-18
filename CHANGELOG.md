@@ -19,7 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **CI Preset Stability Guard:** SHA256 hash enforcement prevents unintended stable preset modifications
   - **Performance:** 4.28s/MP @ 12MP (meets <5s/MP Quality Firewall target), <500MB memory
   - **62 Material Tests:** Comprehensive coverage including backend fallback, device placement, contract validation
-  - **Zero Breaking Changes:** Backward-compatible API, graceful degradation, tuple unpacking fallback
   - See: [Performance Baselines](docs/performance/PHASE5_PBR_BASELINES.md)
 
 ### Removed
@@ -100,6 +99,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Additive-only changes (no enforcement yet, deferred to v2.1.0)
 
 ### Breaking Changes
+- **PBR Texture Generation API (`generate_pbr_textures`)** now returns a `PBRTextures` dataclass instead of a 7-tuple
+  - Old tuple-unpacking call sites now raise: `TypeError: cannot unpack non-iterable PBRTextures object`
+  - Migrate to attribute access (`result.albedo`, `result.normal`, etc.)
+  - See: [Material PBR Migration Guide](docs/guides/MATERIAL_PBR_MIGRATION.md)
 - **Drop Python 3.10 Support:** Minimum required Python version is now 3.11
   - Rationale: Align with ecosystem evolution (scikit-learn 1.8.0 dropped 3.10 support)
   - Impact: Users must upgrade to Python 3.11 or later

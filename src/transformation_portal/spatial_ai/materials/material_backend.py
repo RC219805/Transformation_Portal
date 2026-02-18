@@ -70,6 +70,16 @@ class MaterialBackend:
 
         # Heuristic fallback (always available)
         self._heuristic = HeuristicFallback()
+        self._bilateral_filter_available = self._is_bilateral_filter_available()
+
+    @staticmethod
+    def _is_bilateral_filter_available() -> bool:
+        """Return True if OpenCV bilateral filtering is available."""
+        try:
+            import cv2  # noqa: F401
+        except ImportError:
+            return False
+        return True
 
     def generate(self, mat_input: MaterialInput) -> PBRTextures:
         """Generate PBR textures from MaterialInput contract.
@@ -208,7 +218,7 @@ class MaterialBackend:
             backend="heuristic_v5.0.0",
             normal_scale=config.normal_strength,
             ao_blend_ratio="0.7_concavity_0.3_variance",
-            bilateral_enabled=True,
+            bilateral_enabled=self._bilateral_filter_available,
             material_hint=material_hint,
             depth_used=(depth is not None),
         )

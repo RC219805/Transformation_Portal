@@ -11,13 +11,14 @@ Protocol design principles:
 - Forward-compatible: Extensible for future backends
 """
 
-from typing import Optional, Protocol
+from typing import Optional, Protocol, get_type_hints, runtime_checkable
 
 import numpy as np
 
-from transformation_portal.spatial_ai.materials.contracts import MaterialGenerationConfig, PBRGenerationMetadata, PBRTextures
+from transformation_portal.spatial_ai.materials.contracts import MaterialGenerationConfig, PBRTextures
 
 
+@runtime_checkable
 class PBRBackendProtocol(Protocol):
     """Protocol for PBR texture generation backends.
 
@@ -139,20 +140,58 @@ def validate_backend_protocol(backend: PBRBackendProtocol) -> bool:
     Raises:
         TypeError: If backend missing required methods.
     """
-    # Check for required method
-    if not hasattr(backend, "generate_pbr_textures"):
-        raise TypeError(f"Backend {type(backend).__name__} missing 'generate_pbr_textures' method")
+    if not isinstance(backend, PBRBackendProtocol):
+        raise TypeError(
+            f"Backend {type(backend).__name__} does not satisfy runtime protocol checks "
+            "(missing callable 'generate_pbr_textures')."
+        )
 
-    # Check method signature (basic validation)
+    method = getattr(backend, "generate_pbr_textures", None)
+    if method is None or not callable(method):
+        raise TypeError(f"Backend {type(backend).__name__} missing callable 'generate_pbr_textures' method")
+
+    # Check method signature and defaults
     import inspect
 
-    sig = inspect.signature(backend.generate_pbr_textures)
-    required_params = {"rgb"}
-    actual_params = set(sig.parameters.keys())
+    sig = inspect.signature(method)
+    expected_params = ("rgb", "mask", "depth", "material_hint", "config")
+    actual_params = sig.parameters
 
-    if not required_params.issubset(actual_params):
-        missing = required_params - actual_params
-        raise TypeError(f"Backend {type(backend).__name__}.generate_pbr_textures() missing parameters: {missing}")
+    missing_params = [name for name in expected_params if name not in actual_params]
+    if missing_params:
+        raise TypeError(f"Backend {type(backend).__name__}.generate_pbr_textures() missing parameters: {missing_params}")
+
+    if actual_params["rgb"].default is not inspect.Parameter.empty:
+        raise TypeError("Parameter 'rgb' must be required (no default value).")
+
+    for optional_name in expected_params[1:]:
+        if actual_params[optional_name].default is inspect.Parameter.empty:
+            raise TypeError(f"Parameter '{optional_name}' must be optional and define a default value.")
+
+    # Check type hints for key contract fields
+    try:
+        type_hints = get_type_hints(method)
+    except Exception as exc:  # pragma: no cover - defensive path
+        raise TypeError(
+            f"Backend {type(backend).__name__}.generate_pbr_textures() has invalid type annotations: {exc}"
+        ) from exc
+
+    expected_type_hints = {
+        "rgb": np.ndarray,
+        "mask": Optional[np.ndarray],
+        "depth": Optional[np.ndarray],
+        "material_hint": Optional[str],
+        "config": Optional[MaterialGenerationConfig],
+        "return": PBRTextures,
+    }
+
+    for name, expected in expected_type_hints.items():
+        actual = type_hints.get(name)
+        if actual != expected:
+            raise TypeError(
+                f"Backend {type(backend).__name__}.generate_pbr_textures() has wrong type for '{name}': "
+                f"expected {expected!r}, got {actual!r}"
+            )
 
     return True
 
