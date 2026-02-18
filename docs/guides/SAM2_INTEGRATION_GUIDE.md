@@ -1,8 +1,9 @@
 # SAM2 Integration Guide
 
-**Status:** Phase 3 Complete (2026-02-17)
+**Status:** Phase 4A Complete (2026-02-17)
 **Backend:** Direct checkpoint loading (not HuggingFace Hub)
 **License:** Apache 2.0 (commercial-friendly)
+**Video Mode:** ✅ Operational (temporal tracking)
 
 ## Overview
 
@@ -73,6 +74,96 @@ result = backend.segment(seg_input)
 print(f"Found {len(result.masks)} masks")
 ```
 
+### Video Mode (Temporal Tracking)
+
+**NEW in Phase 4A:** Track objects across video frames with temporal consistency.
+
+```python
+from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
+from transformation_portal.spatial_ai.segmentation.contracts import SegmentationInput
+from pathlib import Path
+
+# Initialize backend
+backend = SAM2Backend(
+    model_size="large",
+    checkpoint_path="checkpoints/sam2_hiera_large.pt",
+    device="cuda"  # or "mps" for Apple Silicon
+)
+
+# Option 1: Video file (MP4/MOV) - requires 'decord' package
+# Note: decord may not be available on macOS
+seg_input = SegmentationInput(
+    image=None,  # Not used for video mode
+    gamma=1.0,
+    mode="video",
+    video_path="scene.mp4",
+    prompts={
+        "frame_idx": 0,  # Which frame to add prompts to
+        "object_id": 1,  # Unique ID for this object
+        "points": [[100, 150]],  # Point on object in initial frame
+        "labels": [1]  # 1=positive, 0=negative
+    }
+)
+
+# Option 2: Frame directory (JPEG images) - works everywhere
+# Convert video to frames: ffmpeg -i video.mp4 frames/%05d.jpg
+seg_input = SegmentationInput(
+    image=None,
+    gamma=1.0,
+    mode="video",
+    video_path="/path/to/frames/",  # Directory with 00000.jpg, 00001.jpg, ...
+    prompts={
+        "frame_idx": 0,
+        "object_id": 1,
+        "points": [[100, 150]],
+        "labels": [1]
+    }
+)
+
+# Run video segmentation
+result = backend.segment(seg_input)
+
+# Result contains masks for ALL frames
+print(f"Tracked {len(result.masks)} frames")
+print(f"Mask shape: {result.masks.shape}")  # (N, H, W) where N=num_frames
+print(f"Temporal IDs: {result.temporal_ids}")  # Same ID for tracked object
+
+# Each frame's mask
+for i, mask in enumerate(result.masks):
+    coverage = mask.sum() / mask.size * 100
+    print(f"Frame {i}: {coverage:.1f}% masked")
+```
+
+**Video mode features:**
+- Temporal consistency across frames
+- Single prompt tracks object through entire video
+- Works with MP4/MOV files (if `decord` available) or JPEG frame directories
+- Returns masks for all frames in video
+- Uses `temporal_ids` to identify same object across time
+
+**Convert video to frames (recommended for portability):**
+```bash
+# Using ffmpeg
+mkdir frames
+ffmpeg -i video.mp4 frames/%05d.jpg
+
+# Using OpenCV (Python)
+import cv2
+from pathlib import Path
+
+cap = cv2.VideoCapture("video.mp4")
+frames_dir = Path("frames")
+frames_dir.mkdir(exist_ok=True)
+
+idx = 0
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        break
+    cv2.imwrite(str(frames_dir / f"{idx:05d}.jpg"), frame)
+    idx += 1
+```
+
 ## Architecture
 
 ### Checkpoint Loading (NOT HuggingFace)
@@ -99,7 +190,7 @@ SAM2Backend uses **direct torch.load()** of official checkpoints from Meta AI Re
 
 ## Integration Status
 
-### ✅ Phase 3 Complete
+### ✅ Phase 3 Complete (2026-02-17)
 - [x] Direct checkpoint loading
 - [x] Auto mode (SAM2AutomaticMaskGenerator)
 - [x] Prompted mode (SAM2ImagePredictor)
@@ -108,9 +199,15 @@ SAM2Backend uses **direct torch.load()** of official checkpoints from Meta AI Re
 - [x] Basic integration tests
 - [x] Updated experimental preset
 
-### ⏳ Phase 4 (Future)
-- [ ] Video tracking mode (temporal consistency)
-- [ ] Full test suite with fixtures
+### ✅ Phase 4A Complete (2026-02-17)
+- [x] Video tracking mode (SAM2VideoPredictor)
+- [x] Temporal consistency across frames
+- [x] Point/bbox prompts for initial frame
+- [x] Object tracking with stable IDs
+- [x] Contract validation passing
+
+### ⏳ Phase 4B-D (Future)
+- [ ] Full test suite with real image fixtures
 - [ ] Performance benchmarks
 - [ ] Material classification integration
 - [ ] Promotion to stable preset

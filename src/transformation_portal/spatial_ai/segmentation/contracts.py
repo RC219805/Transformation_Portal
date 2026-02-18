@@ -27,23 +27,26 @@ class SegmentationInput:
 
     Attributes:
         image: Linear RGB image (H, W, 3) float32, values in [0, ∞).
+               For video mode, can be None (video_path used instead).
         gamma: Gamma value (must be 1.0 for linear).
         mode: Segmentation mode.
             - "auto": Automatic mask generation (entire image)
             - "points": Point prompts (requires prompts)
             - "bbox": Bounding box prompts (requires prompts)
-            - "video": Temporal tracking (requires prev_masks)
+            - "video": Temporal tracking (requires video_path + prompts)
         prompts: Optional prompts for interactive segmentation.
-            Format: [{"type": "point", "coords": [x, y], "label": 1}, ...]
-            or [{"type": "bbox", "coords": [x1, y1, x2, y2]}, ...]
-        prev_masks: Previous frame masks for video mode (N, H, W) bool.
-        frame_idx: Frame index in video sequence (0-based).
+            Format: {"frame_idx": 0, "object_id": 1, "points": [[x,y]], "labels": [1]}
+            or {"frame_idx": 0, "object_id": 1, "bbox": [x1,y1,x2,y2]}
+        video_path: Path to video file (MP4/MOV) for video mode.
+        prev_masks: Previous frame masks for video mode (N, H, W) bool (deprecated, use video_path).
+        frame_idx: Frame index in video sequence (0-based, deprecated).
     """
 
-    image: np.ndarray
+    image: Optional[np.ndarray]
     gamma: float
     mode: Literal["auto", "points", "bbox", "video"]
-    prompts: Optional[List[Dict]] = None
+    prompts: Optional[Dict] = None
+    video_path: Optional[str] = None
     prev_masks: Optional[np.ndarray] = None
     frame_idx: Optional[int] = None
 
@@ -56,6 +59,19 @@ class SegmentationInput:
                 "This violates the SpatialCaptureV1 contract."
             )
 
+        # Video mode has different validation
+        if self.mode == "video":
+            if not self.video_path:
+                raise ValueError("Mode 'video' requires video_path (path to MP4/MOV file)")
+            if not self.prompts:
+                raise ValueError("Mode 'video' requires prompts (initial frame points/bbox)")
+            # Image not required for video mode
+            return
+
+        # Image validation (required for non-video modes)
+        if self.image is None:
+            raise ValueError(f"Mode '{self.mode}' requires image (use video_path for video mode)")
+
         # Dtype enforcement
         if self.image.dtype != np.float32:
             raise ValueError(f"Image must be float32, got {self.image.dtype}. " "Convert to linear float32 first.")
@@ -67,9 +83,6 @@ class SegmentationInput:
         # Mode-specific validation
         if self.mode in ["points", "bbox"] and not self.prompts:
             raise ValueError(f"Mode '{self.mode}' requires prompts")
-
-        if self.mode == "video" and self.prev_masks is None:
-            raise ValueError("Mode 'video' requires prev_masks for temporal tracking")
 
         # Prev masks validation
         if self.prev_masks is not None:

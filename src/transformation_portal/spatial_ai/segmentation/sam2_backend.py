@@ -38,7 +38,7 @@ from typing import Literal, Optional
 
 import numpy as np
 
-from transformation_portal.spatial_ai.segmentation.contracts import SegmentationInput, SegmentationResult
+from transformation_portal.spatial_ai.segmentation.contracts import MaskMetadata, SegmentationInput, SegmentationResult
 
 logger = logging.getLogger(__name__)
 
@@ -52,10 +52,10 @@ class SAM2Backend:
         checkpoint_path: Path to model checkpoint file.
     """
 
-    # Model configurations (relative to sam2 package)
+    # Model configurations (Hydra config names - sam2 package handles paths)
     MODEL_CONFIGS = {
-        "base": "sam2_hiera_b+.yaml",
-        "large": "sam2_hiera_l.yaml",
+        "base": "sam2_hiera_b+",  # Hydra config name (no path, no extension)
+        "large": "sam2_hiera_l",
     }
 
     # Default checkpoint names
@@ -126,23 +126,14 @@ class SAM2Backend:
         except ImportError as e:
             raise ImportError("SAM2 requires sam2 and torch. " "Install with: pip install sam2 torch torchvision") from e
 
-        # Find config file in sam2 package
-        import sam2
-
-        sam2_pkg_path = Path(sam2.__file__).parent
-        config_file = sam2_pkg_path / "configs" / self.MODEL_CONFIGS[self.model_size]
-
-        if not config_file.exists():
-            raise FileNotFoundError(
-                f"SAM2 config not found: {config_file}\n" f"This may indicate an incomplete sam2 installation."
-            )
-
-        logger.info(f"Loading SAM2 model: {config_file.name} @ {self.checkpoint_path.name}")
+        # Config name for Hydra (sam2 package initializes config module in __init__.py)
+        config_name = self.MODEL_CONFIGS[self.model_size]
+        logger.info(f"Loading SAM2 model: {config_name} @ {self.checkpoint_path.name}")
 
         try:
-            # Build SAM2 model
+            # Build SAM2 model (uses Hydra config module initialized by sam2 package)
             self._model = build_sam2(
-                config_file=str(config_file),
+                config_file=config_name,
                 ckpt_path=str(self.checkpoint_path),
                 device=self.device,
                 mode="eval",
@@ -344,25 +335,163 @@ class SAM2Backend:
             raise RuntimeError(f"SAM2 {mode} mode segmentation failed: {e}") from e
 
     def _segment_video(self, seg_input: SegmentationInput) -> SegmentationResult:
-        """Video segmentation with temporal tracking.
+        """Video segmentation with temporal tracking (Phase 4A).
 
-        Note: Video tracking requires sequential frames and state management.
-        This is a stub for future implementation.
+        Uses SAM2VideoPredictor to track objects across video frames.
+        Requires:
+        - video_path: Path to video file (MP4/MOV)
+        - prompts: Initial frame prompts (points or bbox)
 
         Args:
-            seg_input: Validated segmentation input.
+            seg_input: Validated segmentation input with video_path.
 
         Returns:
-            SegmentationResult (not yet implemented).
+            SegmentationResult with masks for all tracked frames.
 
         Raises:
-            NotImplementedError: Video tracking not yet implemented.
+            RuntimeError: If video tracking fails.
+            ImportError: If SAM2 video components missing.
         """
-        raise NotImplementedError(
-            "SAM2 video tracking not yet implemented. "
-            "Use 'auto' or 'points'/'bbox' modes for single images. "
-            "For video, process frames individually or use sam2.video_predictor "
-            "API directly (requires state management across frames)."
+        try:
+            from sam2.build_sam import build_sam2_video_predictor
+        except ImportError as e:
+            raise ImportError("SAM2 video predictor not available. " "Install sam2 package: pip install sam2") from e
+
+        # Validate video file exists
+        video_path = Path(seg_input.video_path)
+        if not video_path.exists():
+            raise FileNotFoundError(f"Video file not found: {video_path}")
+
+        # Build video predictor (lazy load)
+        if not hasattr(self, "_video_predictor") or self._video_predictor is None:
+            logger.info(f"Loading SAM2 video predictor: {self.model_size} on {self.device}")
+            config_name = self.MODEL_CONFIGS[self.model_size]
+
+            self._video_predictor = build_sam2_video_predictor(
+                config_file=config_name,
+                ckpt_path=str(self.checkpoint_path),
+                device=self.device,
+            )
+
+        # Initialize inference state
+        logger.info(f"Initializing video state: {video_path}")
+        inference_state = self._video_predictor.init_state(
+            video_path=str(video_path),
+            offload_video_to_cpu=False,  # Keep on GPU for speed
+            offload_state_to_cpu=False,
+        )
+
+        # Extract prompt information
+        prompts = seg_input.prompts
+        frame_idx = prompts.get("frame_idx", 0)
+        object_id = prompts.get("object_id", 1)
+
+        # Add prompts to initial frame
+        if "points" in prompts:
+            points = np.array(prompts["points"])  # [[x, y], ...]
+            labels = np.array(prompts.get("labels", [1] * len(points)))  # Default: foreground
+
+            logger.info(f"Adding {len(points)} point prompts at frame {frame_idx}, object {object_id}")
+            _, out_obj_ids, out_mask_logits = self._video_predictor.add_new_points(
+                inference_state=inference_state,
+                frame_idx=frame_idx,
+                obj_id=object_id,
+                points=points,
+                labels=labels,
+            )
+
+        elif "bbox" in prompts:
+            bbox = np.array(prompts["bbox"])  # [x1, y1, x2, y2]
+            logger.info(f"Adding bbox prompt at frame {frame_idx}, object {object_id}")
+
+            # Convert bbox to point + labels format expected by SAM2
+            # Use corners as positive points
+            points = np.array([[bbox[0], bbox[1]], [bbox[2], bbox[3]]])
+            labels = np.array([2, 3])  # 2=top-left corner, 3=bottom-right corner
+
+            _, out_obj_ids, out_mask_logits = self._video_predictor.add_new_points(
+                inference_state=inference_state,
+                frame_idx=frame_idx,
+                obj_id=object_id,
+                points=points,
+                labels=labels,
+            )
+
+        else:
+            raise ValueError("Video mode requires 'points' or 'bbox' in prompts")
+
+        # Propagate prompts across all video frames
+        logger.info("Propagating masks across video frames...")
+        video_segments = {}  # {frame_idx: {obj_id: mask}}
+
+        for out_frame_idx, out_obj_ids, out_mask_logits in self._video_predictor.propagate_in_video(inference_state):
+            video_segments[out_frame_idx] = {
+                obj_id: (out_mask_logits[i] > 0.0).cpu().numpy() for i, obj_id in enumerate(out_obj_ids)
+            }
+
+        # Extract masks for tracked object
+        masks = []
+        scores = []
+        metadata_list = []
+        num_frames = inference_state["num_frames"]
+
+        for frame_idx in range(num_frames):
+            if frame_idx in video_segments and object_id in video_segments[frame_idx]:
+                mask_data = video_segments[frame_idx][object_id]
+
+                # Convert to numpy if needed (could be tensor or ndarray)
+                if hasattr(mask_data, "cpu"):
+                    mask = mask_data.squeeze().cpu().numpy().astype(bool)
+                else:
+                    mask = np.asarray(mask_data).squeeze().astype(bool)
+
+                masks.append(mask)
+                scores.append(1.0)  # Video tracking doesn't provide scores
+
+                # Compute metadata for this frame's mask
+                area = int(mask.sum())
+                ys, xs = np.where(mask)
+                if len(xs) > 0:
+                    bbox = (int(xs.min()), int(ys.min()), int(xs.max() - xs.min()), int(ys.max() - ys.min()))
+                else:
+                    bbox = (0, 0, 0, 0)
+
+                metadata_list.append(
+                    MaskMetadata(
+                        area=area if area > 0 else 1,  # Ensure positive
+                        bbox=bbox,
+                        stability_score=1.0,  # Video tracking is stable
+                    )
+                )
+            else:
+                # Object not found in this frame
+                logger.warning(f"Object {object_id} not found in frame {frame_idx}")
+                # Create empty mask
+                h, w = inference_state["video_height"], inference_state["video_width"]
+                empty_mask = np.zeros((h, w), dtype=bool)
+                masks.append(empty_mask)
+                scores.append(0.0)
+                metadata_list.append(
+                    MaskMetadata(
+                        area=1,  # Dummy value for empty mask
+                        bbox=(0, 0, 1, 1),
+                        stability_score=0.0,
+                    )
+                )
+
+        logger.info(f"Video tracking complete: {len(masks)} frames, object {object_id}")
+
+        # Clean up state
+        self._video_predictor.reset_state(inference_state)
+
+        # Stack masks into (N, H, W) array
+        masks_array = np.stack(masks, axis=0)  # (N, H, W)
+
+        return SegmentationResult(
+            masks=masks_array,
+            scores=np.array(scores),
+            metadata=metadata_list,
+            temporal_ids=np.full(len(masks), object_id, dtype=int),  # Same ID for all frames
         )
 
 
