@@ -176,13 +176,39 @@ jobs:
           pip check
 
       - name: Download Results
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        id: download_results
+        continue-on-error: true
+        uses: actions/download-artifact@v7
         with:
           path: apex_downloaded_results
           pattern: apex-results-*
           merge-multiple: true
 
+      - name: Check downloaded results
+        id: results_check
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ ! -d apex_downloaded_results ]; then
+            echo "has_results=false" >> "$GITHUB_OUTPUT"
+            echo "file_count=0" >> "$GITHUB_OUTPUT"
+            echo "::warning::No APEX result artifacts downloaded (directory missing)."
+            exit 0
+          fi
+
+          result_count=$(find apex_downloaded_results -type f | wc -l | tr -d ' ')
+          echo "file_count=${result_count}" >> "$GITHUB_OUTPUT"
+
+          if [ "${result_count}" -gt 0 ]; then
+            echo "has_results=true" >> "$GITHUB_OUTPUT"
+            echo "Downloaded ${result_count} APEX artifact file(s)."
+          else
+            echo "has_results=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No APEX result artifacts found after download; skipping ledger rebuild."
+          fi
+
       - name: Rebuild Ledger
+        if: steps.results_check.outputs.has_results == 'true'
         run: |
           set -euo pipefail
           python scripts/apex_rebuild_ledger.py \
@@ -190,6 +216,7 @@ jobs:
             --ledger-db "${{ env.APEX_LEDGER_DB }}"
 
       - name: Aggregate Stats
+        if: steps.results_check.outputs.has_results == 'true'
         run: |
           set -euo pipefail
           python scripts/apex_aggregate_ledger.py \
@@ -203,6 +230,20 @@ jobs:
           set -euo pipefail
           # Always create apex_comment.md (even on error) to prevent downstream failures
           : > apex_comment.md
+
+          if [[ "${{ steps.results_check.outputs.has_results }}" != "true" ]]; then
+            cat > apex_comment.md <<'ERREOF'
+          # 🎯 APEX Performance Report [PARTIAL]
+
+          ⚠️ **APEX results artifacts were unavailable** (transient Actions artifact issue).
+          Gate/report steps were skipped for this run.
+
+          Run ID: ${{ env.APEX_RUN_ID }}
+          Commit: ${{ env.APEX_COMMIT_SHA }}
+          ERREOF
+            echo "::warning::APEX artifacts unavailable; generated partial report and continuing."
+            exit 0
+          fi
 
           # Determine if run was synthetic based on event type
           MODE="${{ github.event.inputs.mode || 'synthetic' }}"
@@ -235,7 +276,7 @@ jobs:
           Run ID: ${{ env.APEX_RUN_ID }}
           Commit: ${{ env.APEX_COMMIT_SHA }}
           ERREOF
-            exit 1
+            echo "::warning::APEX comment generation failed; continuing in shadow mode."
           }
 
       - name: Write to Job Summary
@@ -269,6 +310,7 @@ jobs:
           fi
 
       - name: Enforce Gate (Shadow Mode - Informational Only)
+        if: steps.results_check.outputs.has_results == 'true'
         run: |
           set -euo pipefail
           # NOTE: Gate is in SHADOW MODE for initial real-data rollout.
@@ -313,7 +355,7 @@ jobs:
           pip install -e .
 
       - name: Download Ledger
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@v7
         with:
           name: apex-ledger
 
