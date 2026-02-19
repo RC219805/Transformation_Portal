@@ -24,6 +24,6 @@ shellingham==1.5.4
 threadpoolctl==3.6.0
 tifffile==2024.12.12
 tqdm==4.67.3
-typer==0.23.0
+typer==0.24.0
 typing-extensions==4.15.0
 typing-inspection==0.4.2

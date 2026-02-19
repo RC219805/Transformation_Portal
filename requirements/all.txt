@@ -477,7 +477,7 @@ triton==3.6.0
     # via torch
 twine==4.0.2
     # via -r requirements/ci.in
-typer==0.23.0
+typer==0.24.0
     # via -r requirements/base.in
 types-pyyaml==6.0.12.20250915
     # via -r requirements/dev.in
