@@ -4,11 +4,7 @@ from unittest.mock import Mock, patch
 
 import numpy as np
 
-from transformation_portal.spatial_ai.segmentation.contracts import (
-    MaskMetadata,
-    SegmentationInput,
-    SegmentationResult,
-)
+from transformation_portal.spatial_ai.segmentation.contracts import MaskMetadata, SegmentationInput, SegmentationResult
 from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
 from transformation_portal.spatial_ai.segmentation.tiling.config import SegmentationTilingConfig
 from transformation_portal.spatial_ai.segmentation.tiling.engine import TiledSegmentationEngine
@@ -73,9 +69,7 @@ def test_video_mode_does_not_route_to_tiling(tmp_path):
         prompts={"frame_idx": 0, "object_id": 1, "points": [[1, 1]], "labels": [1]},
     )
 
-    with patch.object(backend, "_load_model"), patch.object(
-        backend, "_segment_video", return_value=fake_result
-    ) as mock_video:
+    with patch.object(backend, "_load_model"), patch.object(backend, "_segment_video", return_value=fake_result) as mock_video:
         result = backend.segment(seg_input)
 
     assert result is fake_result
@@ -103,9 +97,10 @@ def test_tiling_bypassed_when_mode_not_in_apply_to_modes(tmp_path):
         mode="points",
         prompts={"points": [[5, 5]], "labels": [1]},
     )
-    with patch.object(backend, "_load_model"), patch.object(
-        backend, "_segment_prompted", return_value=fake_result
-    ) as mock_prompted:
+    with (
+        patch.object(backend, "_load_model"),
+        patch.object(backend, "_segment_prompted", return_value=fake_result) as mock_prompted,
+    ):
         result = backend.segment(seg_input)
     assert result is fake_result
     mock_prompted.assert_called_once_with(seg_input)
