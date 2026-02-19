@@ -387,10 +387,10 @@ class TestGradientFlow:
         rotations = torch.tensor([[1.0, 0.0, 0.0, 0.0]], requires_grad=True)
         opacities = torch.tensor([[1.0]], requires_grad=True)
 
-        intrinsics = torch.tensor([[FX, 0.0, CX], [0.0, FY, CY], [0.0, 0.0, 1.0]])
-
         extrinsics = torch.eye(4)
         image_size = (32, 32)
+        # Keep camera principal point aligned to the test render size.
+        intrinsics = torch.tensor([[FX, 0.0, image_size[1] / 2.0], [0.0, FY, image_size[0] / 2.0], [0.0, 0.0, 1.0]])
 
         # Render
         rendered = render_gaussians(
