@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Union
 import numpy as np
 from PIL import Image
 
-from .protocol import DepthResult, LicenseType
+from .protocol import DepthResult, LicenseType, StatefulBackend
 
 if TYPE_CHECKING:
     from ...lux_depth_v3.config import EnhanceConfig
@@ -49,6 +49,94 @@ class ModelConfig:
     checkpoint: Optional[str] = None
     device: str = "auto"
     enabled: bool = True
+
+
+@dataclass
+class TemporalPostFilterConfig:
+    """Configuration for post-fusion temporal filter (ADR-026 §2.2).
+
+    Applied to the fused ensemble depth to provide temporal consistency
+    when DepthCrafter is unavailable or running in synthetic fallback mode.
+
+    Attributes:
+        mode: Filter mode ("ema" for exponential moving average, "off" to disable).
+        alpha: EMA smoothing factor (0.0–1.0). Lower = stronger smoothing.
+    """
+
+    mode: str = "off"
+    alpha: float = 0.3
+
+
+class TemporalPostFilter:
+    """Post-fusion EMA temporal filter for ensemble depth (ADR-026 §2.2).
+
+    Provides a cheap temporal stabilizer on the fused ensemble depth output
+    for video workflows. This is a fallback when DepthCrafter's native
+    temporal prior is unavailable.
+
+    Implements StatefulBackend protocol for orchestrator lifecycle management.
+    """
+
+    def __init__(self, config: Optional[TemporalPostFilterConfig] = None):
+        self._config = config or TemporalPostFilterConfig()
+        self._ema_state: Optional[np.ndarray] = None
+
+    @property
+    def enabled(self) -> bool:
+        """Whether filtering is active."""
+        return self._config.mode == "ema"
+
+    @property
+    def mode(self) -> str:
+        """Current temporal filter mode."""
+        return self._config.mode
+
+    @property
+    def alpha(self) -> float:
+        """Current EMA alpha."""
+        return self._config.alpha
+
+    def get_config(self) -> TemporalPostFilterConfig:
+        """Return a copy of the active filter configuration."""
+        return TemporalPostFilterConfig(mode=self._config.mode, alpha=self._config.alpha)
+
+    def has_state(self) -> bool:
+        """Whether EMA state is initialized."""
+        return self._ema_state is not None
+
+    def apply(self, depth_map: np.ndarray) -> np.ndarray:
+        """Apply temporal filter to a fused depth map.
+
+        Args:
+            depth_map: Fused depth (H, W), float32.
+
+        Returns:
+            Temporally-smoothed depth map (H, W), float32.
+        """
+        if not self.enabled:
+            return depth_map
+
+        depth = depth_map.astype(np.float32)
+
+        if self._ema_state is None or self._ema_state.shape != depth.shape:
+            self._ema_state = depth.copy()
+            return depth
+
+        alpha = self._config.alpha
+        self._ema_state = alpha * depth + (1.0 - alpha) * self._ema_state
+        return self._ema_state.copy()
+
+    def reset_state(self, sequence_id: Optional[str] = None) -> None:
+        """Reset temporal state (StatefulBackend protocol).
+
+        Args:
+            sequence_id: Optional identifier for the new sequence.
+        """
+        self._ema_state = None
+        logger.debug(
+            "TemporalPostFilter state reset (sequence_id=%s)",
+            sequence_id,
+        )
 
 
 @dataclass
@@ -109,6 +197,7 @@ class DepthEnsembleBackend:
         models: Optional[List[ModelConfig]] = None,
         fusion_method: str = "variance_weighted",
         max_variance_threshold: float = 0.15,
+        temporal_post_filter: Optional[TemporalPostFilterConfig] = None,
     ):
         """Initialize depth ensemble backend.
 
@@ -117,10 +206,12 @@ class DepthEnsembleBackend:
             models: List of ModelConfig for ensemble. If None, uses default 3-model config.
             fusion_method: Fusion algorithm ("variance_weighted").
             max_variance_threshold: Max acceptable variance (>threshold flags warning).
+            temporal_post_filter: Optional post-fusion temporal filter config (ADR-026 §2.2).
         """
         self._config = config
         self._fusion_method = fusion_method
         self._max_variance_threshold = max_variance_threshold
+        self._temporal_post_filter = TemporalPostFilter(temporal_post_filter)
 
         # Initialize models
         if models is None:
@@ -225,6 +316,16 @@ class DepthEnsembleBackend:
                 "Review depth map manually for quality."
             )
             fused_result.warnings.append(f"High variance: {fused_result.variance_map.mean():.3f}")
+
+        # ADR-026 §2.2: Apply optional post-fusion temporal filter (video only)
+        if self._temporal_post_filter.enabled:
+            fused_result.depth_map = self._temporal_post_filter.apply(
+                fused_result.depth_map,
+            )
+            fused_result.metadata["temporal_post_filter"] = {
+                "mode": self._temporal_post_filter.mode,
+                "alpha": self._temporal_post_filter.alpha,
+            }
 
         return fused_result
 
@@ -348,10 +449,24 @@ class DepthEnsembleBackend:
         # This yields:
         #   fused = Σ(d_i * w_i * conf_i) / Σ(w_i * conf_i)
         #
+        # ADR-026 §2.1: Synthetic/fallback models get confidence=0 so they
+        # cannot poison the ensemble fusion.
+        #
         epsilon = 1e-6
         denom = variance_map + epsilon
         z2 = (depth_stack - mean_map[None, :, :]) ** 2 / denom[None, :, :]
         conf = np.exp(-0.5 * z2).astype(np.float32)  # (N, H, W)
+
+        # ADR-026 §2.1: Zero out confidence for synthetic/fallback models.
+        # A synthetic depth signal must not distort variance-weighted fusion.
+        for i, name in enumerate(names):
+            result_meta = model_results[name].metadata
+            if result_meta.get("synthetic") or result_meta.get("fallback_mode"):
+                logger.info(
+                    "Model '%s' is in synthetic/fallback mode; " "setting ensemble confidence to 0.",
+                    name,
+                )
+                conf[i] = 0.0
 
         # Get model weights from config
         model_weights = {m.name: m.weight for m in self._models if m.enabled and m.name in aligned_depths}
@@ -439,13 +554,15 @@ class DepthEnsembleBackend:
         else:
             # All relative depth - normalize to [0, 1]
             for name, result in model_results.items():
-                depth = result.depth_map.astype(np.float32)
+                # Use float64 for normalization to avoid precision loss
+                # when vmin is large (float32 epsilon > 1e-6 at ≥50).
+                depth = result.depth_map.astype(np.float64)
                 # Robust normalization
                 vmin = np.percentile(depth, 1)
                 vmax = np.percentile(depth, 99)
                 if vmax <= vmin:
                     vmax = vmin + 1e-6
-                aligned[name] = np.clip((depth - vmin) / (vmax - vmin), 0.0, 1.0)
+                aligned[name] = np.clip((depth - vmin) / (vmax - vmin), 0.0, 1.0).astype(np.float32)
 
         return aligned
 
@@ -522,3 +639,28 @@ class DepthEnsembleBackend:
             List of required module names.
         """
         return ["transformers"]  # DA3 minimum
+
+    def reset_state(self, sequence_id: Optional[str] = None) -> None:
+        """Reset temporal state for a new sequence (StatefulBackend protocol).
+
+        Resets the post-fusion temporal filter and delegates to any stateful
+        sub-backends (e.g., DepthCrafter). Called by the orchestrator at
+        sequence boundaries (ADR-026 §2.3).
+
+        Args:
+            sequence_id: Optional identifier for the new sequence.
+        """
+        # Reset post-fusion temporal filter
+        self._temporal_post_filter.reset_state(sequence_id)
+
+        # Reset stateful sub-backends
+        for backend in self._backends.values():
+            if hasattr(backend, "reset_state"):
+                backend.reset_state(sequence_id)
+            elif hasattr(backend, "reset_temporal_state"):
+                backend.reset_temporal_state()
+
+        logger.debug(
+            "Ensemble state reset (sequence_id=%s)",
+            sequence_id,
+        )

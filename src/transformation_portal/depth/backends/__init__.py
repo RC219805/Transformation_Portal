@@ -6,6 +6,7 @@ governance, and caching behavior.
 
 Public API:
     - DepthBackend: Protocol for depth estimation backends
+    - StatefulBackend: Protocol for backends with temporal/sequence state (ADR-026 §2.3)
     - DepthResult: Unified result dataclass with metric depth support
     - DepthBackendRegistry: Factory for backend selection with license gates
     - LicenseType: Enum for license classification
@@ -35,7 +36,7 @@ See Also:
 """
 
 from .cache import DepthCacheWriter
-from .protocol import DepthBackend, DepthResult, LicenseRestrictionError, LicenseType
+from .protocol import DepthBackend, DepthResult, LicenseRestrictionError, LicenseType, StatefulBackend
 from .registry import DepthBackendRegistry, get_registry
 
 __all__ = [
@@ -46,4 +47,5 @@ __all__ = [
     "LicenseType",
     "LicenseRestrictionError",
     "DepthCacheWriter",
+    "StatefulBackend",
 ]
