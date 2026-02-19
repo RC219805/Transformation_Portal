@@ -478,6 +478,259 @@ class TestVarianceFusion:
         assert result.model_agreement < 0.99
 
 
+class TestSyntheticFallbackFusionGuard:
+    """Tests that synthetic/fallback models don't poison ensemble fusion (ADR-026 §2.1)."""
+
+    def test_synthetic_model_gets_zero_confidence_in_fusion(self):
+        """A model with metadata['synthetic']=True should get confidence=0 in fusion."""
+        test_img = np.ones((32, 32, 3), dtype=np.uint8) * 128
+
+        # Model A: real depth with gradient (non-uniform to avoid degenerate normalization)
+        depth_a = np.linspace(1.0, 10.0, 32 * 32).reshape(32, 32).astype(np.float32)
+        # Model B: synthetic fallback (should be ignored) - wildly different
+        depth_b = np.linspace(50.0, 100.0, 32 * 32).reshape(32, 32).astype(np.float32)
+
+        model_results = {
+            "model_a": DepthResult(
+                depth_map=depth_a,
+                original_image=test_img,
+                metadata={},  # No fallback flag → real model
+                depth_units="relative",
+                backend_id="model_a",
+                device="cpu",
+                dtype="float32",
+                input_size=(32, 32),
+            ),
+            "model_b": DepthResult(
+                depth_map=depth_b,
+                original_image=test_img,
+                metadata={"synthetic": True, "fallback_mode": True, "confidence": 0.0},
+                depth_units="relative",
+                backend_id="model_b",
+                device="cpu",
+                dtype="float32",
+                input_size=(32, 32),
+            ),
+        }
+
+        config = EnhanceConfig(non_commercial_ok=True, accept_research_tools_license=True)
+        ensemble = DepthEnsembleBackend(
+            config,
+            models=[
+                ModelConfig(name="model_a", weight=0.5),
+                ModelConfig(name="model_b", weight=0.5),
+            ],
+        )
+
+        result = ensemble._fuse_predictions(model_results, Image.fromarray(test_img))
+
+        # Fused depth should be very close to model_a (the real model) because
+        # model_b is synthetic and should have confidence=0 in fusion.
+        aligned = ensemble._align_depth_maps(model_results)
+        np.testing.assert_array_almost_equal(
+            result.depth_map,
+            aligned["model_a"],
+            decimal=3,
+            err_msg="Synthetic model should not influence fusion result",
+        )
+
+    def test_fallback_mode_model_excluded_from_fusion(self):
+        """A model with metadata['fallback_mode']=True should not bias the fused result."""
+        test_img = np.ones((32, 32, 3), dtype=np.uint8) * 128
+
+        # Use gradients for non-degenerate normalization
+        depth_real1 = np.linspace(1.0, 10.0, 32 * 32).reshape(32, 32).astype(np.float32)
+        depth_real2 = np.linspace(1.2, 10.2, 32 * 32).reshape(32, 32).astype(np.float32)
+        depth_synthetic = np.linspace(50.0, 100.0, 32 * 32).reshape(32, 32).astype(np.float32)
+
+        model_results = {
+            "real_1": DepthResult(
+                depth_map=depth_real1,
+                original_image=test_img,
+                metadata={},
+                depth_units="relative",
+                backend_id="real_1",
+                device="cpu",
+                dtype="float32",
+                input_size=(32, 32),
+            ),
+            "real_2": DepthResult(
+                depth_map=depth_real2,
+                original_image=test_img,
+                metadata={},
+                depth_units="relative",
+                backend_id="real_2",
+                device="cpu",
+                dtype="float32",
+                input_size=(32, 32),
+            ),
+            "fallback": DepthResult(
+                depth_map=depth_synthetic,
+                original_image=test_img,
+                metadata={"fallback_mode": True},
+                depth_units="relative",
+                backend_id="fallback",
+                device="cpu",
+                dtype="float32",
+                input_size=(32, 32),
+            ),
+        }
+
+        config = EnhanceConfig(non_commercial_ok=True, accept_research_tools_license=True)
+        ensemble = DepthEnsembleBackend(
+            config,
+            models=[
+                ModelConfig(name="real_1", weight=1.0 / 3),
+                ModelConfig(name="real_2", weight=1.0 / 3),
+                ModelConfig(name="fallback", weight=1.0 / 3),
+            ],
+        )
+
+        result = ensemble._fuse_predictions(model_results, Image.fromarray(test_img))
+
+        # Fused result should be close to the real models' consensus,
+        # not dragged toward the synthetic outlier
+        aligned = ensemble._align_depth_maps(model_results)
+        real_consensus = (aligned["real_1"] + aligned["real_2"]) / 2.0
+        fixed_avg = (aligned["real_1"] + aligned["real_2"] + aligned["fallback"]) / 3.0
+
+        dist_to_real = float(np.mean(np.abs(result.depth_map - real_consensus)))
+        dist_to_fixed = float(np.mean(np.abs(result.depth_map - fixed_avg)))
+
+        assert dist_to_real < dist_to_fixed, (
+            f"Fused depth should be closer to real consensus than to fixed average. "
+            f"dist_to_real={dist_to_real:.6f}, dist_to_fixed={dist_to_fixed:.6f}"
+        )
+
+
+class TestTemporalPostFilter:
+    """Tests for post-fusion temporal filter (ADR-026 §2.2)."""
+
+    def test_filter_disabled_by_default(self):
+        """Temporal post filter should be off by default."""
+        from transformation_portal.depth.backends.ensemble import TemporalPostFilter
+
+        tpf = TemporalPostFilter()
+        assert not tpf.enabled
+
+    def test_filter_enabled_with_ema_mode(self):
+        """Filter should be enabled when mode='ema'."""
+        from transformation_portal.depth.backends.ensemble import (
+            TemporalPostFilter,
+            TemporalPostFilterConfig,
+        )
+
+        tpf = TemporalPostFilter(TemporalPostFilterConfig(mode="ema", alpha=0.3))
+        assert tpf.enabled
+
+    def test_filter_passthrough_when_disabled(self):
+        """Disabled filter should return input unchanged."""
+        from transformation_portal.depth.backends.ensemble import TemporalPostFilter
+
+        tpf = TemporalPostFilter()
+        depth = np.ones((32, 32), dtype=np.float32) * 5.0
+        result = tpf.apply(depth)
+        np.testing.assert_array_equal(result, depth)
+
+    def test_ema_smoothing_first_frame(self):
+        """First frame should be returned unmodified."""
+        from transformation_portal.depth.backends.ensemble import (
+            TemporalPostFilter,
+            TemporalPostFilterConfig,
+        )
+
+        tpf = TemporalPostFilter(TemporalPostFilterConfig(mode="ema", alpha=0.5))
+        frame1 = np.ones((32, 32), dtype=np.float32) * 5.0
+        result = tpf.apply(frame1)
+        np.testing.assert_array_almost_equal(result, frame1, decimal=5)
+
+    def test_ema_smoothing_second_frame(self):
+        """Second frame should be EMA-smoothed with the first."""
+        from transformation_portal.depth.backends.ensemble import (
+            TemporalPostFilter,
+            TemporalPostFilterConfig,
+        )
+
+        alpha = 0.5
+        tpf = TemporalPostFilter(TemporalPostFilterConfig(mode="ema", alpha=alpha))
+
+        frame1 = np.ones((32, 32), dtype=np.float32) * 5.0
+        tpf.apply(frame1)
+
+        frame2 = np.ones((32, 32), dtype=np.float32) * 10.0
+        result = tpf.apply(frame2)
+
+        expected = alpha * frame2 + (1.0 - alpha) * frame1
+        np.testing.assert_array_almost_equal(result, expected, decimal=5)
+
+    def test_reset_state_clears_ema(self):
+        """reset_state() should clear temporal state."""
+        from transformation_portal.depth.backends.ensemble import (
+            TemporalPostFilter,
+            TemporalPostFilterConfig,
+        )
+
+        tpf = TemporalPostFilter(TemporalPostFilterConfig(mode="ema", alpha=0.5))
+
+        frame1 = np.ones((32, 32), dtype=np.float32) * 5.0
+        tpf.apply(frame1)
+
+        tpf.reset_state(sequence_id="new_seq")
+
+        frame2 = np.ones((32, 32), dtype=np.float32) * 10.0
+        result = tpf.apply(frame2)
+
+        # After reset, frame2 is treated as first frame → returned unmodified
+        np.testing.assert_array_almost_equal(result, frame2, decimal=5)
+
+
+class TestEnsembleStateReset:
+    """Tests for ensemble reset_state() (ADR-026 §2.3)."""
+
+    def test_ensemble_has_reset_state(self):
+        """DepthEnsembleBackend must expose reset_state()."""
+        config = EnhanceConfig(non_commercial_ok=True, accept_research_tools_license=True)
+        ensemble = DepthEnsembleBackend(config)
+        assert hasattr(ensemble, "reset_state")
+        assert callable(ensemble.reset_state)
+
+    def test_reset_state_resets_temporal_post_filter(self):
+        """reset_state() should reset the post-fusion temporal filter."""
+        from transformation_portal.depth.backends.ensemble import TemporalPostFilterConfig
+
+        config = EnhanceConfig(non_commercial_ok=True, accept_research_tools_license=True)
+        tpf_config = TemporalPostFilterConfig(mode="ema", alpha=0.5)
+        ensemble = DepthEnsembleBackend(config, temporal_post_filter=tpf_config)
+
+        # Prime the filter
+        frame = np.ones((32, 32), dtype=np.float32) * 5.0
+        ensemble._temporal_post_filter.apply(frame)
+        assert ensemble._temporal_post_filter._ema_state is not None
+
+        # Reset
+        ensemble.reset_state(sequence_id="seq_2")
+
+        assert ensemble._temporal_post_filter._ema_state is None
+
+    def test_reset_state_delegates_to_stateful_sub_backends(self):
+        """reset_state() should call reset_state() on cached sub-backends."""
+        config = EnhanceConfig(non_commercial_ok=True, accept_research_tools_license=True)
+        ensemble = DepthEnsembleBackend(config)
+
+        # Simulate a cached stateful backend
+        reset_calls = []
+
+        class MockStatefulBackend:
+            def reset_state(self, sequence_id=None):
+                reset_calls.append(sequence_id)
+
+        ensemble._backends["test_backend"] = MockStatefulBackend()
+
+        ensemble.reset_state(sequence_id="seq_3")
+
+        assert "seq_3" in reset_calls
+
+
 # Pytest markers
 pytestmark = [
     # Repo runs pytest with --strict-markers; only use markers registered in pyproject.toml

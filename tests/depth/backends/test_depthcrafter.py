@@ -339,6 +339,108 @@ class TestEnsembleDefaultModels:
         assert "depthcrafter_stub" not in model_names
 
 
+class TestSyntheticFallbackConfidence:
+    """Test that synthetic fallback exposes confidence=0 (ADR-026 §2.1)."""
+
+    def test_fallback_metadata_includes_synthetic_flag(self):
+        """Synthetic fallback should set metadata['synthetic']=True."""
+        backend = DepthCrafterBackend()
+        img = Image.fromarray(np.zeros((32, 32, 3), dtype=np.uint8))
+
+        result = backend.compute(img)
+
+        assert result.metadata["synthetic"] is True
+
+    def test_fallback_metadata_includes_zero_confidence(self):
+        """Synthetic fallback should set metadata['confidence']=0.0."""
+        backend = DepthCrafterBackend()
+        img = Image.fromarray(np.zeros((32, 32, 3), dtype=np.uint8))
+
+        result = backend.compute(img)
+
+        assert result.metadata["confidence"] == 0.0
+
+    def test_fallback_metadata_includes_availability(self):
+        """Synthetic fallback should report availability='missing_checkpoint'."""
+        backend = DepthCrafterBackend()
+        img = Image.fromarray(np.zeros((32, 32, 3), dtype=np.uint8))
+
+        result = backend.compute(img)
+
+        assert result.metadata["availability"] == "missing_checkpoint"
+
+
+class TestStatefulBackendProtocol:
+    """Test that DepthCrafterBackend implements StatefulBackend protocol (ADR-026 §2.3)."""
+
+    def test_has_reset_state_method(self):
+        """DepthCrafter must expose reset_state() for orchestrator lifecycle."""
+        backend = DepthCrafterBackend()
+        assert hasattr(backend, "reset_state")
+        assert callable(backend.reset_state)
+
+    def test_reset_state_clears_temporal_state(self):
+        """reset_state() should clear EMA and buffer like reset_temporal_state()."""
+        backend = DepthCrafterBackend()
+
+        # Process some frames
+        for i in range(3):
+            img = Image.fromarray(np.full((16, 16, 3), i * 80, dtype=np.uint8))
+            backend.compute(img)
+
+        assert backend.temporal_buffer_length == 3
+
+        # Reset via StatefulBackend protocol
+        backend.reset_state(sequence_id="seq_002")
+
+        assert backend.temporal_buffer_length == 0
+        assert backend._ema_state is None
+
+    def test_reset_state_accepts_sequence_id(self):
+        """reset_state(sequence_id=...) should not raise."""
+        backend = DepthCrafterBackend()
+        backend.reset_state(sequence_id="test_sequence")
+        backend.reset_state(sequence_id=None)
+        backend.reset_state()
+
+    def test_first_frame_after_reset_state_is_unsmoothed(self):
+        """After reset_state(), the next frame should be treated as first frame."""
+        backend = DepthCrafterBackend(temporal_alpha=0.3)
+
+        # Process a frame
+        frame1 = Image.fromarray(np.full((16, 16, 3), 100, dtype=np.uint8))
+        backend.compute(frame1)
+
+        # Reset via StatefulBackend protocol
+        backend.reset_state(sequence_id="new_scene")
+
+        # Next frame should be unsmoothed
+        frame2 = Image.fromarray(np.full((16, 16, 3), 200, dtype=np.uint8))
+        result = backend.compute(frame2)
+
+        raw2 = backend._compute_synthetic_depth(frame2)
+        np.testing.assert_array_almost_equal(result.depth_map, raw2, decimal=5)
+
+    def test_cross_sequence_contamination_prevented(self):
+        """Processing two sequences with reset_state between them should not bleed state."""
+        backend = DepthCrafterBackend(temporal_alpha=0.5)
+
+        # Sequence 1: bright frames
+        for _ in range(5):
+            frame = Image.fromarray(np.full((16, 16, 3), 200, dtype=np.uint8))
+            backend.compute(frame)
+
+        # Reset for new sequence
+        backend.reset_state(sequence_id="seq_2")
+
+        # Sequence 2, frame 1: dark frame - should be unsmoothed (no carryover)
+        dark_frame = Image.fromarray(np.full((16, 16, 3), 50, dtype=np.uint8))
+        result = backend.compute(dark_frame)
+
+        raw_dark = backend._compute_synthetic_depth(dark_frame)
+        np.testing.assert_array_almost_equal(result.depth_map, raw_dark, decimal=5)
+
+
 # Pytest markers
 pytestmark = [
     pytest.mark.unit,
