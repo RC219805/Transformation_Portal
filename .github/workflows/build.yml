@@ -45,7 +45,7 @@ jobs:
     steps:
       - name: Classify change set
         id: classify
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             // Default: full suite for non-PR events (push to main, workflow_dispatch)
@@ -521,7 +521,7 @@ jobs:
 
       - name: Publish Dedicated CI Gate Check
         if: ${{ always() }}
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           GATE_STATUS: ${{ env.GATE_STATUS || 'failure' }}
           GATE_MODE: ${{ env.GATE_MODE || 'unknown' }}

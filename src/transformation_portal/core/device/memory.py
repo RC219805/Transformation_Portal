@@ -10,9 +10,14 @@ import logging
 from dataclasses import dataclass
 from typing import Optional
 
-import torch
-
 logger = logging.getLogger(__name__)
+
+
+def _get_torch():
+    """Lazy import for torch (may be absent in core/CI environments)."""
+    import torch
+
+    return torch
 
 
 @dataclass
@@ -31,6 +36,8 @@ class MemoryManager:
         # 1. Python Garbage Collector
         gc.collect()
 
+        torch = _get_torch()
+
         # 2. PyTorch CUDA Cache
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
@@ -43,6 +50,8 @@ class MemoryManager:
     @staticmethod
     def get_stats(device_index: int = 0) -> Optional[MemoryStats]:
         """Get current VRAM usage (CUDA only)."""
+        torch = _get_torch()
+
         if not torch.cuda.is_available():
             return None
 
