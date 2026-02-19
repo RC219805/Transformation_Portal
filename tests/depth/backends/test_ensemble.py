@@ -615,10 +615,7 @@ class TestTemporalPostFilter:
 
     def test_filter_enabled_with_ema_mode(self):
         """Filter should be enabled when mode='ema'."""
-        from transformation_portal.depth.backends.ensemble import (
-            TemporalPostFilter,
-            TemporalPostFilterConfig,
-        )
+        from transformation_portal.depth.backends.ensemble import TemporalPostFilter, TemporalPostFilterConfig
 
         tpf = TemporalPostFilter(TemporalPostFilterConfig(mode="ema", alpha=0.3))
         assert tpf.enabled
@@ -634,10 +631,7 @@ class TestTemporalPostFilter:
 
     def test_ema_smoothing_first_frame(self):
         """First frame should be returned unmodified."""
-        from transformation_portal.depth.backends.ensemble import (
-            TemporalPostFilter,
-            TemporalPostFilterConfig,
-        )
+        from transformation_portal.depth.backends.ensemble import TemporalPostFilter, TemporalPostFilterConfig
 
         tpf = TemporalPostFilter(TemporalPostFilterConfig(mode="ema", alpha=0.5))
         frame1 = np.ones((32, 32), dtype=np.float32) * 5.0
@@ -646,10 +640,7 @@ class TestTemporalPostFilter:
 
     def test_ema_smoothing_second_frame(self):
         """Second frame should be EMA-smoothed with the first."""
-        from transformation_portal.depth.backends.ensemble import (
-            TemporalPostFilter,
-            TemporalPostFilterConfig,
-        )
+        from transformation_portal.depth.backends.ensemble import TemporalPostFilter, TemporalPostFilterConfig
 
         alpha = 0.5
         tpf = TemporalPostFilter(TemporalPostFilterConfig(mode="ema", alpha=alpha))
@@ -665,10 +656,7 @@ class TestTemporalPostFilter:
 
     def test_reset_state_clears_ema(self):
         """reset_state() should clear temporal state."""
-        from transformation_portal.depth.backends.ensemble import (
-            TemporalPostFilter,
-            TemporalPostFilterConfig,
-        )
+        from transformation_portal.depth.backends.ensemble import TemporalPostFilter, TemporalPostFilterConfig
 
         tpf = TemporalPostFilter(TemporalPostFilterConfig(mode="ema", alpha=0.5))
 

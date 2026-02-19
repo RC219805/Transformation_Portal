@@ -445,8 +445,7 @@ class DepthEnsembleBackend:
             result_meta = model_results[name].metadata
             if result_meta.get("synthetic") or result_meta.get("fallback_mode"):
                 logger.info(
-                    "Model '%s' is in synthetic/fallback mode; "
-                    "setting ensemble confidence to 0.",
+                    "Model '%s' is in synthetic/fallback mode; " "setting ensemble confidence to 0.",
                     name,
                 )
                 conf[i] = 0.0
@@ -545,9 +544,7 @@ class DepthEnsembleBackend:
                 vmax = np.percentile(depth, 99)
                 if vmax <= vmin:
                     vmax = vmin + 1e-6
-                aligned[name] = np.clip(
-                    (depth - vmin) / (vmax - vmin), 0.0, 1.0
-                ).astype(np.float32)
+                aligned[name] = np.clip((depth - vmin) / (vmax - vmin), 0.0, 1.0).astype(np.float32)
 
         return aligned
 
