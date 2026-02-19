@@ -7,7 +7,7 @@
 pytest>=8.0,<10
 pytest-cov>=4.0,<8
 pytest-json-report>=1.5,<2  # JSON test result reporting for flake tracking
-pytest-rerunfailures>=14.0,<15  # Rerun flaky tests automatically
+pytest-rerunfailures>=14.0,<17  # Rerun flaky tests automatically
 hypothesis>=6.0,<7
 
 # Type checking and linting
