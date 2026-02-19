@@ -532,6 +532,7 @@ jobs:
             --cov-report=html \
             --json-report \
             --json-report-file=test-results/ml-py3.11.json \
+            --durations=25 --durations-min=1.0 \
             --maxfail=3 \
             --tb=short
         env:
@@ -540,6 +541,9 @@ jobs:
           # Prevents cold-cache failures on first run
           TRANSFORMERS_OFFLINE: ${{ steps.cache-models.outputs.cache-hit == 'true' && '1' || '0' }}
           HF_HUB_OFFLINE: ${{ steps.cache-models.outputs.cache-hit == 'true' && '1' || '0' }}
+          # Prevent thread oversubscription on shared CI runners
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
 
       - name: Upload test results
         if: always()

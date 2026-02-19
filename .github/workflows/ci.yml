@@ -312,12 +312,16 @@ jobs:
             --cov-report=xml \
             --cov-report=term \
             --cov-report=html \
+            --durations=25 --durations-min=1.0 \
             --maxfail=3 \
             --tb=short
         env:
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
           PYTHONNOUSERSITE: 1
           TRANSFORMERS_OFFLINE: 1
+          # Prevent thread oversubscription on shared CI runners
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
