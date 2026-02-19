@@ -650,9 +650,14 @@ class LinearDecoder:
         def _normalize(matrix: Any) -> Optional[np.ndarray]:
             if matrix is None:
                 return None
-            if not hasattr(matrix, "__len__") or len(matrix) != 9:
+            arr = np.asarray(matrix, dtype=np.float64)
+            # Accept (3, 3) arrays (common rawpy return shape) or flat length-9
+            if arr.shape == (3, 3):
+                arr = arr.reshape(9)
+            elif arr.ndim == 1 and arr.size == 9:
+                pass
+            else:
                 return None
-            arr = np.array(matrix, dtype=np.float64)
             if np.isnan(arr).any():
                 return None
             if np.isinf(arr).any():
