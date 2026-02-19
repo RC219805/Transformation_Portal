@@ -9,11 +9,19 @@ import logging
 import platform
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Tuple
+from typing import TYPE_CHECKING, Optional
 
-import torch
+if TYPE_CHECKING:
+    import torch
 
 logger = logging.getLogger(__name__)
+
+
+def _get_torch():
+    """Lazy import for torch (may be absent in core/CI environments)."""
+    import torch
+
+    return torch
 
 
 class DeviceType(str, Enum):
@@ -37,7 +45,7 @@ class DeviceCapabilities:
 class DeviceInfo:
     """Runtime device configuration."""
 
-    device: torch.device
+    device: "torch.device"
     type: DeviceType
     capabilities: DeviceCapabilities
     index: int = 0
@@ -53,6 +61,8 @@ class DeviceDetector:
     @staticmethod
     def get_optimal_device(force_cpu: bool = False) -> DeviceInfo:
         """Discover the best available compute device."""
+        torch = _get_torch()
+
         if force_cpu:
             return DeviceDetector._get_cpu_info()
 
@@ -69,6 +79,7 @@ class DeviceDetector:
 
     @staticmethod
     def _get_cuda_info(index: int = 0) -> DeviceInfo:
+        torch = _get_torch()
         props = torch.cuda.get_device_properties(index)
         vram_gb = props.total_memory / (1024**3)
 
@@ -90,6 +101,7 @@ class DeviceDetector:
 
     @staticmethod
     def _get_mps_info() -> DeviceInfo:
+        torch = _get_torch()
         # MPS doesn't expose memory queries directly via torch.cuda properties yet
         # We assume standard M1/M2/M3 unified memory behavior
         caps = DeviceCapabilities(
@@ -103,6 +115,7 @@ class DeviceDetector:
 
     @staticmethod
     def _get_cpu_info() -> DeviceInfo:
+        torch = _get_torch()
         import psutil
 
         ram_gb = psutil.virtual_memory().total / (1024**3)
