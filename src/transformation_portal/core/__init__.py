@@ -8,7 +8,7 @@ and other pipelines while providing a clean, maintainable foundation.
 This module provides:
 - Config schemas and preset management (config/)
 - Device detection and optimization (device/)
-- Artifact and cache management (artifacts/)
+- Artifact and cache management (storage/)
 - Security validation and sanitization (security/)
 - Observability integration (observability/)
 
@@ -23,23 +23,8 @@ Version: 1.0.0 (Platform Core Extraction - PR-2)
 """
 
 from .config import ConfigSchema, DeviceConfig, PathsConfig, PerformanceConfig, PresetRegistry, load_preset, validate_config
+from .device import DeviceCapabilities, DeviceDetector, DeviceType, MemoryManager, PerformanceProfiler
 from .security import InputValidator, PathValidator, SanitizationPolicy, safe_resolve_path, validate_input_file
-
-try:
-    from .artifacts import ArtifactStorage, CacheManager, ContentAddressedCache
-except (ImportError, ModuleNotFoundError):
-    ArtifactStorage = None  # type: ignore[assignment, misc]
-    CacheManager = None  # type: ignore[assignment, misc]
-    ContentAddressedCache = None  # type: ignore[assignment, misc]
-
-try:
-    from .device import DeviceCapabilities, DeviceDetector, DeviceType, MemoryManager, PerformanceProfiler
-except (ImportError, ModuleNotFoundError):
-    DeviceCapabilities = None  # type: ignore[assignment, misc]
-    DeviceDetector = None  # type: ignore[assignment, misc]
-    DeviceType = None  # type: ignore[assignment, misc]
-    MemoryManager = None  # type: ignore[assignment, misc]
-    PerformanceProfiler = None  # type: ignore[assignment, misc]
 
 __all__ = [
     # Config
@@ -56,10 +41,6 @@ __all__ = [
     "DeviceType",
     "PerformanceProfiler",
     "MemoryManager",
-    # Artifacts
-    "CacheManager",
-    "ArtifactStorage",
-    "ContentAddressedCache",
     # Security
     "InputValidator",
     "PathValidator",

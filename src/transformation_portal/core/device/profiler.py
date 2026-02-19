@@ -10,11 +10,16 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Optional
 
-import torch
-
 from .memory import MemoryManager
 
 logger = logging.getLogger(__name__)
+
+
+def _get_torch():
+    """Lazy import for torch (may be absent in core/CI environments)."""
+    import torch
+
+    return torch
 
 
 @dataclass
@@ -42,6 +47,7 @@ class PerformanceProfiler:
         self._start_vram = 0.0
 
     def __enter__(self):
+        torch = _get_torch()
         # Sync GPU for accurate timing
         if torch.cuda.is_available():
             torch.cuda.synchronize()
@@ -51,6 +57,7 @@ class PerformanceProfiler:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        torch = _get_torch()
         if torch.cuda.is_available():
             torch.cuda.synchronize()
             end_vram = torch.cuda.memory_allocated()
