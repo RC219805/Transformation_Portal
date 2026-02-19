@@ -7,7 +7,7 @@
 backports-tarfile==1.2.0
 bandit==1.9.3
 build==1.4.0
-cachetools==7.0.0
+cachetools==7.0.1
 certifi==2026.1.4
 cffi==2.0.0
 chardet==5.2.0
@@ -18,7 +18,7 @@ cryptography==46.0.5
 distlib==0.4.0
 docutils==0.22.4
 dparse==0.6.4
-filelock==3.20.3
+filelock==3.24.2
 idna==3.11
 importlib-metadata==8.7.1
 iniconfig==2.3.0
@@ -33,7 +33,7 @@ more-itertools==10.8.0
 nh3==0.3.2
 packaging==26.0
 pkginfo==1.12.1.2
-platformdirs==4.5.1
+platformdirs==4.9.2
 pluggy==1.6.0
 pycparser==3.0
 pygments==2.19.2
@@ -53,7 +53,7 @@ ruamel-yaml==0.19.1
 safety==2.3.4
 secretstorage==3.5.0
 stevedore==5.6.0
-tox==4.34.1
+tox==4.39.0
 twine==4.0.2
 urllib3==2.6.3
 virtualenv==20.36.1
