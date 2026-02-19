@@ -252,7 +252,7 @@ nvidia-nvtx-cu12==12.8.90
     # via torch
 open-clip-torch==3.2.0
     # via -r requirements/ml.in
-opencv-python==4.13.0.90
+opencv-python==4.13.0.92
     # via -r requirements/base.in
 opencv-python-headless==4.13.0.90
     # via controlnet-aux
