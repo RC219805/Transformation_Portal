@@ -18,66 +18,73 @@ from transformation_portal.spatial_ai.reconstruction import (
     SceneBuilder,
 )
 
+H, W = 48, 64
+ITERS = 3
+
+
+@pytest.fixture(scope="module")
+def intrinsics():
+    K = np.eye(3, dtype=np.float32)
+    K[0, 0] = K[1, 1] = 100.0
+    K[0, 2] = W / 2.0
+    K[1, 2] = H / 2.0
+    return K
+
+
+@pytest.fixture(scope="module")
+def cameras(intrinsics):
+    return [CameraParams(intrinsics, np.eye(4, dtype=np.float32), W, H) for _ in range(2)]
+
+
+@pytest.fixture(scope="module")
+def images():
+    rng = np.random.default_rng(0)
+    return [rng.random((H, W, 3), dtype=np.float32) for _ in range(2)]
+
+
+@pytest.fixture(scope="module")
+def builder():
+    return SceneBuilder(tier="apex_research")
+
+
+@pytest.fixture(scope="module")
+def scene(builder, images, cameras):
+    # Build ONCE for the entire module; this is the main PR-time win.
+    return builder.build_from_arrays(images=images, cameras=cameras, iterations=ITERS)
+
+
+@pytest.fixture(scope="module")
+def scene_with_depth(builder, images, cameras):
+    rng = np.random.default_rng(1)
+    depth_maps = [rng.random((H, W), dtype=np.float32) for _ in range(2)]
+    return builder.build_from_arrays(images=images, cameras=cameras, depth_maps=depth_maps, iterations=ITERS)
+
 
 class TestSceneBuilder:
     """Test SceneBuilder."""
 
-    def test_initialization(self):
+    def test_initialization(self, builder):
         """Test scene builder initialization."""
-        builder = SceneBuilder(tier="apex_research")
         assert builder.tier == "apex_research"
 
-    def test_build_from_arrays(self):
+    def test_build_from_arrays(self, scene):
         """Test building scene from numpy arrays."""
-        builder = SceneBuilder(tier="apex_research")
-
-        images = [np.random.rand(240, 320, 3).astype(np.float32) for _ in range(2)]
-        intrinsics = np.eye(3, dtype=np.float32)
-        cameras = [CameraParams(intrinsics, np.eye(4, dtype=np.float32), 320, 240) for _ in range(2)]
-
-        scene = builder.build_from_arrays(images=images, cameras=cameras, iterations=100)
-
         assert scene is not None
         assert scene.splats.num_gaussians > 0
 
-    def test_build_with_depth_maps(self):
+    def test_build_with_depth_maps(self, scene_with_depth):
         """Test building scene with depth maps."""
-        builder = SceneBuilder(tier="apex_research")
+        assert scene_with_depth.metadata["use_depth_prior"]
 
-        images = [np.random.rand(240, 320, 3).astype(np.float32) for _ in range(2)]
-        depth_maps = [np.random.rand(240, 320).astype(np.float32) for _ in range(2)]
-        intrinsics = np.eye(3, dtype=np.float32)
-        cameras = [CameraParams(intrinsics, np.eye(4, dtype=np.float32), 320, 240) for _ in range(2)]
-
-        scene = builder.build_from_arrays(images=images, cameras=cameras, depth_maps=depth_maps, iterations=100)
-
-        assert scene.metadata["use_depth_prior"]
-
-    def test_render_novel_view(self):
+    def test_render_novel_view(self, builder, scene, intrinsics):
         """Test novel view rendering."""
-        builder = SceneBuilder(tier="apex_research")
-
-        images = [np.random.rand(240, 320, 3).astype(np.float32) for _ in range(2)]
-        intrinsics = np.eye(3, dtype=np.float32)
-        cameras = [CameraParams(intrinsics, np.eye(4, dtype=np.float32), 320, 240) for _ in range(2)]
-
-        scene = builder.build_from_arrays(images=images, cameras=cameras, iterations=100)
-
-        novel_camera = CameraParams(intrinsics, np.eye(4, dtype=np.float32), 320, 240)
+        novel_camera = CameraParams(intrinsics, np.eye(4, dtype=np.float32), W, H)
         rendered = builder.render_novel_view(scene, novel_camera)
 
-        assert rendered.shape == (240, 320, 3)
+        assert rendered.shape == (H, W, 3)
 
-    def test_extract_camera_path(self):
+    def test_extract_camera_path(self, builder, scene):
         """Test camera path extraction."""
-        builder = SceneBuilder(tier="apex_research")
-
-        images = [np.random.rand(240, 320, 3).astype(np.float32) for _ in range(2)]
-        intrinsics = np.eye(3, dtype=np.float32)
-        cameras = [CameraParams(intrinsics, np.eye(4, dtype=np.float32), 320, 240) for _ in range(2)]
-
-        scene = builder.build_from_arrays(images=images, cameras=cameras, iterations=100)
-
         path = builder.extract_camera_path(scene, num_frames=50)
 
         assert len(path) == 50
