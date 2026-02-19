@@ -28,7 +28,7 @@ black==26.1.0
     # via -r requirements/dev.in
 build==1.4.0
     # via -r requirements/ci.in
-cachetools==7.0.0
+cachetools==7.0.1
     # via tox
 cattrs==25.3.0
     # via coremltools
@@ -78,7 +78,7 @@ efficientsam==1.0.0
     # via -r requirements/ml.in
 einops==0.8.2
     # via controlnet-aux
-filelock==3.20.3
+filelock==3.24.2
     # via
     #   controlnet-aux
     #   diffusers
@@ -286,7 +286,7 @@ pillow==12.1.1
     #   torchvision
 pkginfo==1.12.1.2
     # via twine
-platformdirs==4.5.1
+platformdirs==4.9.2
     # via
     #   black
     #   pylint
@@ -459,7 +459,7 @@ torchvision==0.25.0
     #   efficientsam
     #   open-clip-torch
     #   timm
-tox==4.34.1
+tox==4.39.0
     # via -r requirements/ci.in
 tqdm==4.67.3
     # via
