@@ -2,7 +2,7 @@
 
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -19,6 +19,20 @@ from transformation_portal.spatial_ai.reconstruction import (
     SceneBuilder,
 )
 
+H, W = 48, 64
+
+
+def _dummy_scene(cameras):
+    """Create a lightweight Scene3D without running reconstruction."""
+    splats = GaussianSplat(
+        positions=np.zeros((1, 3), dtype=np.float32),
+        colors=np.ones((1, 3), dtype=np.float32) * 0.5,
+        scales=np.ones((1, 3), dtype=np.float32) * 0.1,
+        rotations=np.array([[1, 0, 0, 0]], dtype=np.float32),
+        opacities=np.ones((1, 1), dtype=np.float32),
+    )
+    return Scene3D(splats=splats, cameras=cameras, rmse=0.0, iteration=0, convergence="mock")
+
 
 class TestSceneBuilderFileLoading:
     """Test SceneBuilder file loading capabilities."""
@@ -32,18 +46,28 @@ class TestSceneBuilderFileLoading:
         # Create test images
         with tempfile.TemporaryDirectory() as tmpdir:
             image_paths = []
-            for i in range(3):
-                img = Image.new("RGB", (320, 240), color=(i * 50, i * 50, i * 50))
+            for i in range(2):
+                img = Image.new("RGB", (W, H), color=(i * 50, i * 50, i * 50))
                 path = Path(tmpdir) / f"test_{i}.png"
                 img.save(path)
                 image_paths.append(path)
 
             intrinsics = np.eye(3, dtype=np.float32)
-            cameras = [CameraParams(intrinsics, np.eye(4, dtype=np.float32), 320, 240) for _ in range(3)]
+            cameras = [CameraParams(intrinsics, np.eye(4, dtype=np.float32), W, H) for _ in range(2)]
 
-            scene = builder.build_from_images(image_paths=image_paths, cameras=cameras, iterations=100)
+            dummy = _dummy_scene(cameras)
+            # Patch out heavy reconstruction; keep file I/O + preprocessing under test.
+            with patch.object(builder.backend, "reconstruct", return_value=dummy) as m:
+                scene = builder.build_from_images(image_paths=image_paths, cameras=cameras, iterations=999)
 
             assert scene is not None
+            m.assert_called_once()
+            # Validate that images passed into reconstruction input are RGB float32 arrays.
+            reconstruction_input = m.call_args.args[0]
+            imgs = reconstruction_input.images
+            assert len(imgs) == 2
+            assert imgs[0].shape == (H, W, 3)
+            assert imgs[0].dtype == np.float32
 
     def test_load_nonexistent_file(self):
         """Test error handling for missing files."""
@@ -51,7 +75,7 @@ class TestSceneBuilderFileLoading:
 
         fake_paths = [Path("/nonexistent/image1.png"), Path("/nonexistent/image2.png")]
         intrinsics = np.eye(3, dtype=np.float32)
-        cameras = [CameraParams(intrinsics, np.eye(4, dtype=np.float32), 320, 240) for _ in range(2)]
+        cameras = [CameraParams(intrinsics, np.eye(4, dtype=np.float32), W, H) for _ in range(2)]
 
         with pytest.raises(FileNotFoundError):
             builder.build_from_images(image_paths=fake_paths, cameras=cameras)
@@ -65,17 +89,23 @@ class TestSceneBuilderFileLoading:
         with tempfile.TemporaryDirectory() as tmpdir:
             image_paths = []
             for i in range(2):
-                img = Image.new("L", (320, 240), color=128)  # Grayscale
+                img = Image.new("L", (W, H), color=128)  # Grayscale
                 path = Path(tmpdir) / f"gray_{i}.png"
                 img.save(path)
                 image_paths.append(path)
 
             intrinsics = np.eye(3, dtype=np.float32)
-            cameras = [CameraParams(intrinsics, np.eye(4, dtype=np.float32), 320, 240) for _ in range(2)]
+            cameras = [CameraParams(intrinsics, np.eye(4, dtype=np.float32), W, H) for _ in range(2)]
 
-            scene = builder.build_from_images(image_paths=image_paths, cameras=cameras, iterations=100)
+            dummy = _dummy_scene(cameras)
+            with patch.object(builder.backend, "reconstruct", return_value=dummy) as m:
+                scene = builder.build_from_images(image_paths=image_paths, cameras=cameras, iterations=999)
 
             assert scene is not None
+            m.assert_called_once()
+            reconstruction_input = m.call_args.args[0]
+            imgs = reconstruction_input.images
+            assert imgs[0].shape == (H, W, 3)  # grayscale -> RGB
 
     def test_load_rgba_image(self):
         """Test loading RGBA images (alpha dropped)."""
@@ -86,17 +116,23 @@ class TestSceneBuilderFileLoading:
         with tempfile.TemporaryDirectory() as tmpdir:
             image_paths = []
             for i in range(2):
-                img = Image.new("RGBA", (320, 240), color=(100, 150, 200, 255))
+                img = Image.new("RGBA", (W, H), color=(100, 150, 200, 255))
                 path = Path(tmpdir) / f"rgba_{i}.png"
                 img.save(path)
                 image_paths.append(path)
 
             intrinsics = np.eye(3, dtype=np.float32)
-            cameras = [CameraParams(intrinsics, np.eye(4, dtype=np.float32), 320, 240) for _ in range(2)]
+            cameras = [CameraParams(intrinsics, np.eye(4, dtype=np.float32), W, H) for _ in range(2)]
 
-            scene = builder.build_from_images(image_paths=image_paths, cameras=cameras, iterations=100)
+            dummy = _dummy_scene(cameras)
+            with patch.object(builder.backend, "reconstruct", return_value=dummy) as m:
+                scene = builder.build_from_images(image_paths=image_paths, cameras=cameras, iterations=999)
 
             assert scene is not None
+            m.assert_called_once()
+            reconstruction_input = m.call_args.args[0]
+            imgs = reconstruction_input.images
+            assert imgs[0].shape == (H, W, 3)  # alpha dropped
 
 
 class TestGeometricValidatorAdvanced:
