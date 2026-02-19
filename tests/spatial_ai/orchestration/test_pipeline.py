@@ -436,11 +436,15 @@ class TestSpatialAIPipelineIngestStage:
         )
         pipeline = SpatialAIPipeline(config)
 
-        # Patch the import to raise ImportError
+        # Save reference to original __import__ before patching to avoid recursion
+        import builtins
+
+        _real_import = builtins.__import__
+
         def mock_import(name, *args):
             if name == "OpenEXR":
                 raise ImportError("No module named 'OpenEXR'")
-            return __import__(name, *args)
+            return _real_import(name, *args)
 
         with patch("builtins.__import__", side_effect=mock_import):
             with pytest.raises(PipelineError, match="OpenEXR"):

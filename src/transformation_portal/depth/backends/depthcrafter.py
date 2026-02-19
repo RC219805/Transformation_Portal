@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Deque, Optional, Union
 import numpy as np
 from PIL import Image
 
-from .protocol import DepthResult, LicenseType
+from .protocol import DepthResult, LicenseType, StatefulBackend
 
 if TYPE_CHECKING:
     from ...lux_depth_v3.config import EnhanceConfig
@@ -204,13 +204,17 @@ class DepthCrafterBackend:
         self._temporal_buffer.append(smoothed_depth.copy())
 
         checkpoint_used = self._checkpoint_available and self._model is not None
+        is_synthetic = not checkpoint_used
         metadata = {
             "backend": self.name,
             "version": __version__,
             "temporal_alpha": self._temporal_alpha,
             "temporal_buffer_length": len(self._temporal_buffer),
             "checkpoint_used": checkpoint_used,
-            "fallback_mode": not checkpoint_used,
+            "fallback_mode": is_synthetic,
+            "synthetic": is_synthetic,
+            "confidence": 0.0 if is_synthetic else 1.0,
+            "availability": "missing_checkpoint" if is_synthetic else "available",
         }
 
         return DepthResult(
@@ -390,6 +394,25 @@ class DepthCrafterBackend:
         self._ema_state = None
         self._temporal_buffer.clear()
         logger.debug("DepthCrafter temporal state reset")
+
+    def reset_state(self, sequence_id: Optional[str] = None) -> None:
+        """Reset internal state for a new sequence (StatefulBackend protocol).
+
+        Delegates to reset_temporal_state(). The orchestrator calls this
+        at sequence boundaries to prevent cross-sequence contamination.
+
+        Args:
+            sequence_id: Optional identifier for the new sequence.
+        """
+        logger.debug(
+            "DepthCrafter reset_state called (sequence_id=%s)",
+            sequence_id,
+        )
+        self.reset_temporal_state()
+
+    def has_state(self) -> bool:
+        """Whether EMA temporal state is initialized."""
+        return self._ema_state is not None
 
     @property
     def temporal_buffer_length(self) -> int:
