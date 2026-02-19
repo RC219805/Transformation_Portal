@@ -534,8 +534,19 @@ class LinearDecoder:
                         )
 
                 # Validate matrix is well-formed (not all zeros)
-                matrix_to_check = color_matrix if color_matrix is not None else rgb_xyz_matrix
-                if hasattr(matrix_to_check, "__len__"):
+                # Check color_matrix first, but only use if non-zero
+                matrix_to_check = None
+                if color_matrix is not None and hasattr(color_matrix, "__len__"):
+                    color_matrix_array = np.array(color_matrix)
+                    if color_matrix_array.size > 0 and not np.allclose(color_matrix_array, 0.0):
+                        matrix_to_check = color_matrix
+
+                # Fall back to rgb_xyz_matrix if color_matrix is not usable
+                if matrix_to_check is None and rgb_xyz_matrix is not None:
+                    matrix_to_check = rgb_xyz_matrix
+
+                # Final validation: ensure we have a valid matrix
+                if matrix_to_check is not None and hasattr(matrix_to_check, "__len__"):
                     # Convert to numpy array for validation
                     matrix_array = np.array(matrix_to_check)
                     if matrix_array.size > 0:

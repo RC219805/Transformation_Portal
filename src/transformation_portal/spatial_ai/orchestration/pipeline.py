@@ -496,18 +496,22 @@ class SpatialAIPipeline:
 
             model_cfg = self.config.segmentation.get("model", {})
             model_size = model_cfg.get("size", "large")
-            repo_id = model_cfg.get("repo_id", "facebook/sam2-hiera-large")
-            revision = model_cfg.get("revision", None)  # Should be pinned in preset
+            # Note: repo_id and revision are in config for documentation/tracking
+            # but SAM2Backend uses direct checkpoint loading, not HuggingFace Hub
+
+            # Material classification config
+            enable_material = self.config.segmentation.get("material_classification", False)
+            material_threshold = self.config.segmentation.get("material_confidence_threshold", 0.3)
 
             # Select device
             device = self.resource_manager.select_device()
 
-            # Create backend
+            # Create backend (no repo_id/revision - backend uses direct checkpoint loading)
             backend = SAM2Backend(
                 model_size=model_size,
                 device=device,
-                repo_id=repo_id,
-                revision=revision,
+                enable_material_classification=enable_material,
+                material_confidence_threshold=material_threshold,
             )
 
             # Register model for tracking
