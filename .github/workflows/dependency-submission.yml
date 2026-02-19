@@ -43,7 +43,8 @@ jobs:
           sudo rm -rf /usr/local/lib/android
           sudo rm -rf /opt/hostedtoolcache/CodeQL
           sudo rm -rf /usr/local/share/boost
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          # DO NOT delete AGENT_TOOLSDIRECTORY - breaks Python setup-python cache
+          # See: docs/incidents/2026-02-03_ci_python_toolcache_deletion.md
           sudo rm -rf /usr/local/.ghcup
           sudo rm -rf /usr/share/swift
           sudo rm -rf /usr/local/graalvm
