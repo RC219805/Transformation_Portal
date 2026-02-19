@@ -89,7 +89,7 @@ class SegmentationTilingConfig:
             apply_modes = tuple(apply_modes)
 
         return SegmentationTilingConfig(
-            enabled=bool(data.get("enabled", True)),
+            enabled=bool(data.get("enabled", False)),
             policy=data.get("policy", "content_adaptive"),
             tile_size_px=int(data.get("tile_size_px", 1536)),
             overlap_px=int(data.get("overlap_px", 256)),

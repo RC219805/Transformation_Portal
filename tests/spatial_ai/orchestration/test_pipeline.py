@@ -544,6 +544,36 @@ class TestSpatialAIPipelineSegmentationStage:
         assert kwargs["tiling"].tile_size_px == 512
         assert kwargs["tiling"].overlap_px == 64
 
+    def test_run_segmentation_default_no_tiling(self, tmp_path):
+        """Test default segmentation passes tiling disabled when no tiling config is set."""
+        config = PipelineConfig(
+            tier="standard",
+            stages=["segment"],
+            segmentation={"backend": "sam2"},
+        )
+        pipeline = SpatialAIPipeline(config)
+
+        ingest_result = MagicMock(spec=LinearIngestResult)
+        ingest_result.linear_rgb = np.random.rand(128, 128, 3).astype(np.float32)
+        ingest_result.gamma = 1.0
+
+        mock_seg_result = MagicMock(spec=SegmentationResult)
+        mock_seg_result.masks = [np.ones((128, 128), dtype=bool)]
+        mock_seg_result.scores = np.array([0.95])
+        mock_seg_result.metadata = [MaskMetadata(area=128 * 128, bbox=(0, 0, 128, 128), stability_score=0.95)]
+
+        with patch("transformation_portal.spatial_ai.orchestration.pipeline.SAM2Backend") as MockBackend:
+            mock_backend = MockBackend.return_value
+            mock_backend.segment.return_value = mock_seg_result
+            pipeline._run_segmentation(
+                ingest_result=ingest_result,
+                output_dir=tmp_path,
+                save_intermediates=False,
+            )
+
+        _, kwargs = MockBackend.call_args
+        assert kwargs["tiling"].enabled is False
+
     def test_run_segmentation_saves_intermediates(self, tmp_path):
         """Test segmentation saves masks when save_intermediates=True."""
         config = PipelineConfig(tier="standard", stages=["segment"])

@@ -28,3 +28,8 @@ def test_from_dict_parses_nested_values():
     assert cfg.merge.mode == "binary_union"
     assert cfg.merge.instance_merge.iou_threshold == pytest.approx(0.4)
     assert cfg.validation.enabled is False
+
+
+def test_from_dict_requires_explicit_enable_opt_in():
+    cfg = SegmentationTilingConfig.from_dict({"tile_size_px": 512, "overlap_px": 64})
+    assert cfg.enabled is False

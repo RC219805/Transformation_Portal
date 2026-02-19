@@ -314,6 +314,13 @@ class SAM2Backend:
         global_hints: Optional[GlobalSeedHints],
         rng_seed: int,
     ) -> tuple[TileInstance, ...]:
+        """Segment a single tile using existing image-mode SAM2 inference.
+
+        This default implementation intentionally ignores ``global_hints`` and
+        ``rng_seed`` and delegates to current monolithic SAM2 methods for each
+        tile. The parameters remain in the interface for future quality parity
+        enhancements where global context and deterministic sampling are used.
+        """
         del image_hash, global_hints, rng_seed
         tile_prompts = self._translate_prompts_to_tile(prompts, tile_spec, mode)
         seg_input = SegmentationInput(
@@ -347,14 +354,35 @@ class SAM2Backend:
         if not prompts or mode == "auto":
             return prompts
         translated = dict(prompts)
+        offset_x, offset_y = tile_spec.bbox.x0, tile_spec.bbox.y0
+        tile_width = max(0, tile_spec.bbox.x1 - tile_spec.bbox.x0)
+        tile_height = max(0, tile_spec.bbox.y1 - tile_spec.bbox.y0)
+
         if mode == "points" and "points" in translated:
-            offset_x, offset_y = tile_spec.bbox.x0, tile_spec.bbox.y0
-            translated["points"] = [[p[0] - offset_x, p[1] - offset_y] for p in translated["points"]]
+            points = []
+            for point in translated["points"]:
+                x = point[0] - offset_x
+                y = point[1] - offset_y
+                if tile_width > 0:
+                    x = max(0.0, min(float(x), float(tile_width - 1)))
+                if tile_height > 0:
+                    y = max(0.0, min(float(y), float(tile_height - 1)))
+                points.append([x, y])
+            translated["points"] = points
             return translated
         if mode == "bbox" and "bbox" in translated:
-            offset_x, offset_y = tile_spec.bbox.x0, tile_spec.bbox.y0
             x0, y0, x1, y1 = translated["bbox"]
-            translated["bbox"] = [x0 - offset_x, y0 - offset_y, x1 - offset_x, y1 - offset_y]
+            x0 -= offset_x
+            y0 -= offset_y
+            x1 -= offset_x
+            y1 -= offset_y
+            if tile_width > 0:
+                x0 = max(0.0, min(float(x0), float(tile_width)))
+                x1 = max(0.0, min(float(x1), float(tile_width)))
+            if tile_height > 0:
+                y0 = max(0.0, min(float(y0), float(tile_height)))
+                y1 = max(0.0, min(float(y1), float(tile_height)))
+            translated["bbox"] = [x0, y0, x1, y1]
             return translated
         return translated
 
@@ -473,13 +501,34 @@ class SAM2Backend:
         return TiledSegmentationEngine(planner=_Planner(), merger=_Merger(), validator=_Validator())
 
     def _stable_image_hash(self, image: Optional[np.ndarray]) -> str:
+        """Compute a deterministic SHA-256 hash for image shape/dtype/content.
+
+        This hashes the full contiguous image buffer and is O(H*W*C). The full
+        buffer hash is intentional to minimize collisions for equal shape/dtype
+        images with different pixel content.
+        """
         if image is None:
             return "none"
+        arr = image if image.flags.c_contiguous else np.ascontiguousarray(image)
         h = hashlib.sha256()
-        h.update(str(image.shape).encode("utf-8"))
-        h.update(str(image.dtype).encode("utf-8"))
-        h.update(np.ascontiguousarray(image).tobytes())
+        h.update(str(arr.shape).encode("utf-8"))
+        h.update(str(arr.dtype).encode("utf-8"))
+        h.update(arr.tobytes())
         return h.hexdigest()
+
+    def unload(self) -> None:
+        """Release loaded model/material references and best-effort device cache."""
+        self._model = None
+        self._mask_generator = None
+        self._image_predictor = None
+        self._video_predictor = None
+        self._material_classifier = None
+        try:
+            import torch
+        except Exception:
+            return
+        if hasattr(torch, "cuda") and torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     def _segment_auto(self, seg_input: SegmentationInput) -> SegmentationResult:
         """Automatic mask generation (entire image).
