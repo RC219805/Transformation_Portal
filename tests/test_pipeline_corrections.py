@@ -16,10 +16,10 @@ import pytest
 
 from transformation_portal.spatial_ai.orchestration.pipeline import PipelineConfig, SpatialAIPipeline
 
-
 # ---------------------------------------------------------------------------
 # C1: Stage naming + config alias correctness
 # ---------------------------------------------------------------------------
+
 
 class TestStageAliasNormalization:
     """'segment' in pipeline dict must populate segmentation config."""
@@ -80,8 +80,10 @@ class TestStageAliasNormalization:
         mock_ingest = MagicMock()
         mock_seg = MagicMock()
 
-        with patch.object(pipeline, "_run_ingest", return_value=mock_ingest), \
-             patch.object(pipeline, "_run_segmentation", return_value=mock_seg):
+        with (
+            patch.object(pipeline, "_run_ingest", return_value=mock_ingest),
+            patch.object(pipeline, "_run_segmentation", return_value=mock_seg),
+        ):
             result = pipeline.process(input_file, output_dir, save_intermediates=False)
 
         assert "segmentation" in result.stages_completed
@@ -91,6 +93,7 @@ class TestStageAliasNormalization:
 # ---------------------------------------------------------------------------
 # C2: Decouple emit_exr / emit_provenance from save_intermediates for Ultra
 # ---------------------------------------------------------------------------
+
 
 class TestUltraEmissionDecoupling:
     """Ultra tier always emits EXR + provenance as contract artifacts."""
@@ -169,6 +172,7 @@ class TestUltraEmissionDecoupling:
 # C3: Materials stage resource lifecycle
 # ---------------------------------------------------------------------------
 
+
 class TestMaterialsResourceLifecycle:
     """Materials stage must register and unload its backend via resource_manager."""
 
@@ -189,12 +193,14 @@ class TestMaterialsResourceLifecycle:
         mock_seg.masks = []
         mock_seg.metadata = []
 
-        with patch.object(pipeline, "_run_ingest", return_value=mock_ingest), \
-             patch.object(pipeline, "_run_segmentation", return_value=mock_seg), \
-             patch.object(pipeline.resource_manager, "register_model") as mock_register, \
-             patch.object(pipeline.resource_manager, "unload_model") as mock_unload, \
-             patch.object(pipeline.resource_manager, "select_device", return_value="cpu"), \
-             patch("transformation_portal.spatial_ai.orchestration.pipeline.MaterialBackend") as MockBackend:
+        with (
+            patch.object(pipeline, "_run_ingest", return_value=mock_ingest),
+            patch.object(pipeline, "_run_segmentation", return_value=mock_seg),
+            patch.object(pipeline.resource_manager, "register_model") as mock_register,
+            patch.object(pipeline.resource_manager, "unload_model") as mock_unload,
+            patch.object(pipeline.resource_manager, "select_device", return_value="cpu"),
+            patch("transformation_portal.spatial_ai.orchestration.pipeline.MaterialBackend") as MockBackend,
+        ):
             MockBackend.return_value = MagicMock()
             pipeline.process(input_file, output_dir, save_intermediates=False)
 
