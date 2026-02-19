@@ -347,10 +347,10 @@ class SpatialAIPipeline:
                 # Phase 2.1: Segmentation
                 if "segment" in self.config.stages or "segmentation" in self.config.stages:
                     if result.linear_image is None:
-                        raise PipelineError("segment", "Ingest stage required before segmentation")
+                        raise PipelineError("segmentation", "Ingest stage required before segmentation")
 
                     result.segmentation = self._run_segmentation(result.linear_image, output_dir, save_intermediates)
-                    result.stages_completed.append("segment")
+                    result.stages_completed.append("segmentation")
 
                 # Phase 2.2: Materials
                 if "materials" in self.config.stages:
@@ -420,8 +420,11 @@ class SpatialAIPipeline:
         try:
             # Parse config
             strict_ingest = self.config.ingest.get("strict_ingest", False)
-            emit_exr = self.config.ingest.get("emit_exr", False) and save_intermediates
-            emit_provenance = self.config.ingest.get("emit_provenance", False) and save_intermediates
+            # For apex_research_ultra, EXR + provenance are contract artifacts,
+            # not intermediates — always emit regardless of save_intermediates (C2).
+            is_ultra = self.config.tier == "apex_research_ultra"
+            emit_exr = self.config.ingest.get("emit_exr", False) and (save_intermediates or is_ultra)
+            emit_provenance = self.config.ingest.get("emit_provenance", False) and (save_intermediates or is_ultra)
 
             # OpenEXR preflight if strict_ingest enabled
             if strict_ingest and emit_exr:
@@ -592,6 +595,9 @@ class SpatialAIPipeline:
             # Create backend
             backend = MaterialBackend(backend=backend_cfg, device=device)
 
+            # Register model for resource tracking (C3: match segmentation lifecycle)
+            self.resource_manager.register_model("materials", backend)
+
             # Generate materials for each segment
             materials = {}
 
@@ -646,6 +652,9 @@ class SpatialAIPipeline:
 
             self.progress_tracker.complete_stage("materials", success=True)
             logger.info(f"Materials completed: {len(materials)} segments")
+
+            # Unload model to free memory (C3: match segmentation lifecycle)
+            self.resource_manager.unload_model("materials")
 
             return materials
 
@@ -772,12 +781,17 @@ class SpatialAIPipeline:
             else:
                 logger.warning(f"Unknown error strategy '{strategy_str}', using RETRY")
 
+        # Normalize stage aliases: "segment" → "segmentation" (C1 correctness fix)
+        segmentation_data = pipeline_data.get("segmentation") or pipeline_data.get("segment", {})
+        stages = list(pipeline_data.keys())
+        stages = ["segmentation" if s == "segment" else s for s in stages]
+
         # Build config
         config = PipelineConfig(
             tier=data.get("tier", "standard"),
-            stages=list(pipeline_data.keys()),  # Stages are top-level keys in pipeline section
+            stages=stages,
             ingest=pipeline_data.get("ingest", {}),
-            segmentation=pipeline_data.get("segmentation", {}),
+            segmentation=segmentation_data,
             materials=pipeline_data.get("materials", {}),
             reconstruction=pipeline_data.get("reconstruction", {}),
             resource_limits=resource_limits,
