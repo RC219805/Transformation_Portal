@@ -18,6 +18,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from hypothesis import assume, given
+from hypothesis import strategies as st
 from PIL import Image
 
 from transformation_portal.spatial_ai.ingest import (
@@ -532,6 +534,205 @@ class TestADR023Compliance:
         assert "WARNING" in spatial_ai.__doc__.upper()
         assert "training" in spatial_ai.__doc__.lower() or "research" in spatial_ai.__doc__.lower()
         assert "rendering" in spatial_ai.__doc__.lower()
+
+
+class TestColorMatrixSelection:
+    """Regression tests for zero color_matrix fallback (ingest hardening)."""
+
+    def test_zero_color_matrix_falls_back_to_rgb_xyz(self):
+        """Zero-filled color_matrix must not be used; rgb_xyz_matrix is the fallback."""
+        zero_color_matrix = [0.0] * 9
+        valid_rgb_xyz_matrix = [
+            0.4124564,
+            0.3575761,
+            0.1804375,
+            0.2126729,
+            0.7151522,
+            0.0721750,
+            0.0193339,
+            0.1191920,
+            0.9503041,
+        ]
+
+        result = LinearDecoder._select_valid_color_matrix(zero_color_matrix, valid_rgb_xyz_matrix)
+
+        result_array = np.array(result)
+        assert result_array.size == 9
+        assert not np.allclose(result_array, 0.0), "Fallback matrix must not be zero-filled"
+        assert np.allclose(
+            result_array, np.array(valid_rgb_xyz_matrix)
+        ), "rgb_xyz_matrix should be used when color_matrix is zero-filled"
+
+    def test_valid_color_matrix_preferred_over_rgb_xyz(self):
+        """When color_matrix is non-zero, it takes priority over rgb_xyz_matrix."""
+        valid_color_matrix = [
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+        ]
+        fallback_rgb_xyz = [0.1] * 9
+
+        result = LinearDecoder._select_valid_color_matrix(valid_color_matrix, fallback_rgb_xyz)
+
+        assert np.allclose(np.array(result), np.array(valid_color_matrix))
+
+    def test_none_color_matrix_falls_back_to_rgb_xyz(self):
+        """None color_matrix must not raise; rgb_xyz_matrix is used."""
+        valid_rgb_xyz_matrix = [0.5] * 9
+
+        result = LinearDecoder._select_valid_color_matrix(None, valid_rgb_xyz_matrix)
+
+        assert result is not None
+        assert np.allclose(result, np.array(valid_rgb_xyz_matrix, dtype=np.float64))
+
+    def test_both_none_returns_none(self):
+        """Returns None when no usable matrix is available."""
+        result = LinearDecoder._select_valid_color_matrix(None, None)
+
+        assert result is None
+
+    def test_empty_color_matrix_falls_back_to_rgb_xyz(self):
+        """Empty-array color_matrix triggers fallback to rgb_xyz_matrix."""
+        valid_rgb_xyz_matrix = [0.3, 0.5, 0.2, 0.1, 0.7, 0.2, 0.05, 0.12, 0.95]
+
+        result = LinearDecoder._select_valid_color_matrix([], valid_rgb_xyz_matrix)
+
+        assert result is not None
+        assert np.allclose(result, np.array(valid_rgb_xyz_matrix, dtype=np.float64))
+
+
+class TestColorMatrixSelectionProperties:
+    """Property-based tests for _select_valid_color_matrix invariants."""
+
+    _matrix_st = st.lists(
+        st.floats(min_value=-10.0, max_value=10.0, allow_nan=False, allow_infinity=False),
+        min_size=9,
+        max_size=9,
+    )
+
+    @given(_matrix_st, _matrix_st)
+    def test_valid_color_matrix_always_preferred(self, color_matrix, rgb_xyz_matrix):
+        """Non-zero length-9 color_matrix is always preferred over rgb_xyz_matrix."""
+        assume(np.linalg.norm(np.array(color_matrix, dtype=np.float64)) >= 1e-6)
+
+        result = LinearDecoder._select_valid_color_matrix(color_matrix, rgb_xyz_matrix)
+
+        assert result is not None
+        assert np.allclose(result, np.array(color_matrix, dtype=np.float64))
+
+    @given(_matrix_st)
+    def test_near_zero_color_matrix_triggers_fallback(self, rgb_xyz_matrix):
+        """Near-zero color_matrix must always trigger fallback to rgb_xyz_matrix (or None)."""
+        near_zero = [1e-38] * 9  # norm << 1e-6
+
+        result = LinearDecoder._select_valid_color_matrix(near_zero, rgb_xyz_matrix)
+
+        rgb_arr = np.array(rgb_xyz_matrix, dtype=np.float64)
+        if np.linalg.norm(rgb_arr) < 1e-6:
+            assert result is None
+        else:
+            assert np.allclose(result, rgb_arr)
+
+    @given(st.lists(st.floats(allow_nan=False, allow_infinity=False), min_size=0, max_size=20))
+    def test_wrong_length_color_matrix_triggers_fallback(self, bad_matrix):
+        """color_matrix with length != 9 must be ignored."""
+        assume(len(bad_matrix) != 9)
+        valid_fallback = [0.5, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.5]
+
+        result = LinearDecoder._select_valid_color_matrix(bad_matrix, valid_fallback)
+
+        assert result is not None
+        assert np.allclose(result, np.array(valid_fallback, dtype=np.float64))
+
+    @given(st.lists(st.just(float("nan")), min_size=9, max_size=9))
+    def test_nan_color_matrix_triggers_fallback(self, nan_matrix):
+        """NaN-filled color_matrix must be ignored."""
+        valid_fallback = [0.4, 0.3, 0.3, 0.2, 0.6, 0.2, 0.05, 0.1, 0.85]
+
+        result = LinearDecoder._select_valid_color_matrix(nan_matrix, valid_fallback)
+
+        assert result is not None
+        assert np.allclose(result, np.array(valid_fallback, dtype=np.float64))
+
+
+class TestRawMetadataValidation:
+    """Unit tests for _validate_raw_metadata — no rawpy install required."""
+
+    def _make_raw(self, *, wb=None, bl=None, raw_image_shape=None):
+        """Build a minimal mock rawpy object with configurable attributes."""
+        import types
+
+        raw = types.SimpleNamespace()
+        if wb is not None:
+            raw.camera_whitebalance = wb
+        if bl is not None:
+            raw.black_level_per_channel = bl
+        if raw_image_shape is not None:
+            raw.raw_image = np.zeros(raw_image_shape, dtype=np.uint16)
+        return raw
+
+    def test_valid_metadata_passes(self):
+        raw = self._make_raw(
+            wb=[2.0, 1.0, 1.5, 1.0],
+            bl=[512, 512, 512, 512],
+            raw_image_shape=(100, 100),
+        )
+        LinearDecoder._validate_raw_metadata(raw)  # must not raise
+
+    def test_zero_wb_gain_raises(self):
+        raw = self._make_raw(wb=[0.0, 1.0, 1.5, 1.0])
+        with pytest.raises(ValueError, match="zero or negative gain"):
+            LinearDecoder._validate_raw_metadata(raw)
+
+    def test_negative_wb_gain_raises(self):
+        raw = self._make_raw(wb=[-1.0, 1.0, 1.5, 1.0])
+        with pytest.raises(ValueError, match="zero or negative gain"):
+            LinearDecoder._validate_raw_metadata(raw)
+
+    def test_nan_wb_raises(self):
+        raw = self._make_raw(wb=[float("nan"), 1.0, 1.5, 1.0])
+        with pytest.raises(ValueError, match="NaN"):
+            LinearDecoder._validate_raw_metadata(raw)
+
+    def test_empty_wb_raises(self):
+        raw = self._make_raw(wb=[])
+        with pytest.raises(ValueError, match="empty"):
+            LinearDecoder._validate_raw_metadata(raw)
+
+    def test_negative_black_level_raises(self):
+        raw = self._make_raw(wb=[2.0, 1.0, 1.5, 1.0], bl=[-1, 0, 0, 0])
+        with pytest.raises(ValueError, match="negative"):
+            LinearDecoder._validate_raw_metadata(raw)
+
+    def test_nan_black_level_raises(self):
+        raw = self._make_raw(wb=[2.0, 1.0, 1.5, 1.0], bl=[float("nan"), 0, 0, 0])
+        with pytest.raises(ValueError, match="NaN"):
+            LinearDecoder._validate_raw_metadata(raw)
+
+    def test_wrong_channel_count_black_level_raises(self):
+        raw = self._make_raw(wb=[2.0, 1.0, 1.5, 1.0], bl=[512, 512])  # 2 channels — invalid
+        with pytest.raises(ValueError, match="channel count"):
+            LinearDecoder._validate_raw_metadata(raw)
+
+    def test_3d_raw_image_raises(self):
+        raw = self._make_raw(
+            wb=[2.0, 1.0, 1.5, 1.0],
+            bl=[512, 512, 512, 512],
+            raw_image_shape=(100, 100, 3),  # 3D — invalid for Bayer
+        )
+        with pytest.raises(ValueError, match="2D"):
+            LinearDecoder._validate_raw_metadata(raw)
+
+    def test_absent_attributes_do_not_raise(self):
+        """Missing WB/BL attributes (older LibRaw) must not raise."""
+        raw = self._make_raw()  # all attrs absent
+        LinearDecoder._validate_raw_metadata(raw)  # must not raise
 
 
 # Pytest markers for organization
