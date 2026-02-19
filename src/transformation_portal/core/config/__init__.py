@@ -11,6 +11,7 @@ Provides Pydantic schemas for type-safe, validated configuration
 with preset support and automatic validation.
 """
 
+from .preset_health import PresetHealthReport, validate_preset
 from .presets import Preset, PresetRegistry, list_presets, load_preset, register_preset
 from .schemas import ConfigSchema, DeviceConfig, OutputConfig, PathsConfig, PerformanceConfig, ValidationConfig
 from .validation import ConfigValidationError, validate_config
@@ -32,4 +33,7 @@ __all__ = [
     # Validation
     "validate_config",
     "ConfigValidationError",
+    # Preset Health
+    "PresetHealthReport",
+    "validate_preset",
 ]

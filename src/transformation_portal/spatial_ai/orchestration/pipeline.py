@@ -219,6 +219,9 @@ class SpatialAIPipeline:
         self.error_handler = ErrorHandler(max_retries=3)
         self.progress_tracker = ProgressTracker(total_stages=len(self.config.stages))
 
+        # Track stateful backends for sequence lifecycle reset (ADR-026 §2.3)
+        self._stateful_backends: Dict[str, Any] = {}
+
         logger.info(f"Initialized pipeline: tier={self.config.tier}, stages={self.config.stages}")
 
     @classmethod
@@ -237,11 +240,61 @@ class SpatialAIPipeline:
         config = cls._load_preset(preset_name)
         return cls(config)
 
+    def register_stateful_backend(self, name: str, backend: Any) -> None:
+        """Register a stateful backend for sequence lifecycle management.
+
+        Backends registered here will have ``reset_state(sequence_id)`` called
+        at sequence boundaries (ADR-026 §2.3).
+
+        Args:
+            name: Human-readable backend name (e.g., "depth_ensemble").
+            backend: Backend instance.  Must have a ``reset_state()`` method.
+        """
+        if not hasattr(backend, "reset_state"):
+            logger.warning(
+                "Backend '%s' has no reset_state() method; "
+                "skipping stateful registration.",
+                name,
+            )
+            return
+        self._stateful_backends[name] = backend
+        logger.debug("Registered stateful backend: %s", name)
+
+    def reset_sequence(self, sequence_id: Optional[str] = None) -> None:
+        """Reset all stateful backends for a new sequence.
+
+        Must be called between unrelated video sequences or scene switches
+        to prevent temporal bleed (ADR-026 §2.3).
+
+        Args:
+            sequence_id: Optional identifier for the new sequence.
+        """
+        for name, backend in self._stateful_backends.items():
+            try:
+                backend.reset_state(sequence_id)
+                logger.debug(
+                    "Reset stateful backend '%s' for sequence '%s'",
+                    name,
+                    sequence_id,
+                )
+            except Exception as exc:
+                logger.error(
+                    "Failed to reset backend '%s': %s",
+                    name,
+                    exc,
+                )
+        logger.info(
+            "Sequence reset complete: %d backends reset (sequence_id=%s)",
+            len(self._stateful_backends),
+            sequence_id,
+        )
+
     def process(
         self,
         input_path: Union[str, Path],
         output_dir: Union[str, Path],
         save_intermediates: bool = True,
+        sequence_id: Optional[str] = None,
     ) -> PipelineResult:
         """Execute end-to-end pipeline.
 
@@ -249,6 +302,9 @@ class SpatialAIPipeline:
             input_path: Input image path.
             output_dir: Output directory for artifacts.
             save_intermediates: Save intermediate outputs (linear EXR, masks, etc.).
+            sequence_id: Optional sequence identifier.  When provided,
+                ``reset_sequence(sequence_id)`` is called before processing
+                to clear any accumulated temporal state (ADR-026 §2.3).
 
         Returns:
             PipelineResult with all outputs and metadata.
@@ -262,6 +318,10 @@ class SpatialAIPipeline:
 
         if not input_path.exists():
             raise FileNotFoundError(f"Input file not found: {input_path}")
+
+        # ADR-026 §2.3: Reset stateful backends at sequence boundaries
+        if sequence_id is not None:
+            self.reset_sequence(sequence_id)
 
         logger.info(f"Starting pipeline: {input_path} -> {output_dir}")
         logger.info(f"Stages: {', '.join(self.config.stages)}")
