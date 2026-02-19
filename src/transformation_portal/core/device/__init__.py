@@ -4,17 +4,30 @@ Core Device Management Module
 Unified device detection, profiling, and memory management.
 Consolidates patterns from foundation.device_manager and multiple pipelines.
 
-Note: This module requires torch at runtime (lazy-imported in submodules).
-The __init__ import is guarded so that ``import transformation_portal.core``
-succeeds even when torch is absent (e.g., core-only CI).
+Note:
+- ``torch`` and ``psutil`` are optional runtime dependencies.
+- When either dependency is unavailable, exports in this module are set to
+  ``None`` so ``import transformation_portal.core`` still succeeds in lightweight
+  environments (for example, core-only CI).
 """
 
-try:
+from importlib.util import find_spec
+
+
+def _device_deps_available() -> bool:
+    """Return True when all device module optional deps are importable."""
+    try:
+        return find_spec("torch") is not None and find_spec("psutil") is not None
+    except (ImportError, ValueError):
+        return False
+
+
+if _device_deps_available():
     from .detector import DeviceCapabilities, DeviceDetector, DeviceInfo, DeviceType
     from .memory import MemoryManager, MemoryStats, calculate_safe_batch_size, estimate_memory_usage
     from .profiler import PerformanceProfiler, ProfileResult
-except ImportError:
-    # torch (or psutil) not installed — stubs will be None at package level.
+else:
+    # Optional dependency set incomplete — publish stubs at package level.
     # Callers must guard usage behind availability checks.
     DeviceCapabilities = None  # type: ignore[assignment, misc]
     DeviceDetector = None  # type: ignore[assignment, misc]

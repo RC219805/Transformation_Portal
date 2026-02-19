@@ -9,7 +9,10 @@ import logging
 import platform
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Tuple
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    import torch
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +45,7 @@ class DeviceCapabilities:
 class DeviceInfo:
     """Runtime device configuration."""
 
-    device: object  # torch.device (lazy — torch may not be installed)
+    device: "torch.device"
     type: DeviceType
     capabilities: DeviceCapabilities
     index: int = 0

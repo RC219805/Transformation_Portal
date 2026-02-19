@@ -11,18 +11,14 @@ Covers:
 from __future__ import annotations
 
 import json
-import textwrap
+import sys
+import types
 from pathlib import Path
 
 import pytest
 import yaml
 
-from transformation_portal.core.config.preset_health import (
-    HealthIssue,
-    PresetHealthReport,
-    StageStatus,
-    validate_preset,
-)
+from transformation_portal.core.config.preset_health import HealthIssue, PresetHealthReport, StageStatus, validate_preset
 
 
 class TestPlaceholderDetection:
@@ -207,6 +203,33 @@ class TestBackendIdValidation:
         backend_issues = [i for i in report.issues if i.category == "backend_id"]
         assert len(backend_issues) == 1
 
+    def test_registry_unavailable_reports_warning(self, tmp_path, monkeypatch):
+        """When registry lookup fails, report a warning instead of silently passing."""
+        preset = tmp_path / "test.yaml"
+        preset.write_text(
+            yaml.dump(
+                {
+                    "name": "test-preset",
+                    "depth": {"backend": "da3"},
+                }
+            )
+        )
+
+        module_name = "transformation_portal.depth.backends.registry"
+        fake_registry_module = types.ModuleType(module_name)
+
+        class FailingDepthBackendRegistry:
+            def __init__(self):
+                raise RuntimeError("registry unavailable")
+
+        fake_registry_module.DepthBackendRegistry = FailingDepthBackendRegistry
+        monkeypatch.setitem(sys.modules, module_name, fake_registry_module)
+
+        report = validate_preset(preset, available_depth_backend_ids=None)
+        registry_issues = [i for i in report.issues if i.category == "backend_registry_unavailable"]
+        assert len(registry_issues) == 1
+        assert registry_issues[0].severity == "warning"
+
 
 class TestStageStatusReporting:
     """Pipeline stage status should be explicitly reported."""
@@ -267,6 +290,32 @@ class TestStageStatusReporting:
         assert "enhancement" in stage_names
         assert "validation" in stage_names
 
+    def test_depth_backend_availability_is_reported(self, tmp_path):
+        """Depth stage should include backend availability when IDs are known."""
+        preset = tmp_path / "test.yaml"
+        preset.write_text(
+            yaml.dump(
+                {
+                    "name": "test-preset",
+                    "depth": {"backend": "da3"},
+                }
+            )
+        )
+
+        report_valid = validate_preset(
+            preset,
+            available_depth_backend_ids=["da3", "ensemble"],
+        )
+        stage_map_valid = {s.name: s for s in report_valid.stages}
+        assert stage_map_valid["depth"].backend_available is True
+
+        report_invalid = validate_preset(
+            preset,
+            available_depth_backend_ids=["ensemble"],
+        )
+        stage_map_invalid = {s.name: s for s in report_invalid.stages}
+        assert stage_map_invalid["depth"].backend_available is False
+
 
 class TestHealthReportSerialization:
     """Health report should serialize to JSON."""
@@ -307,14 +356,10 @@ class TestHealthReportSerialization:
         report = PresetHealthReport(preset_path="", preset_name="ok")
         assert report.healthy is True
 
-        report.issues.append(
-            HealthIssue(severity="warning", category="test", message="w")
-        )
+        report.issues.append(HealthIssue(severity="warning", category="test", message="w"))
         assert report.healthy is True  # Warnings don't block
 
-        report.issues.append(
-            HealthIssue(severity="error", category="test", message="e")
-        )
+        report.issues.append(HealthIssue(severity="error", category="test", message="e"))
         assert report.healthy is False  # Errors block
 
 
@@ -335,10 +380,7 @@ class TestUltraPresetValidation:
         assert len(da3_models) >= 1, "Expected at least one DA3 model in ultra preset"
 
         for model in da3_models:
-            assert model["name"] == "da3", (
-                f"DA3 model name should be 'da3' (stable registry key), "
-                f"got '{model['name']}'"
-            )
+            assert model["name"] == "da3", f"DA3 model name should be 'da3' (stable registry key), " f"got '{model['name']}'"
 
     def test_ultra_preset_has_placeholders(self):
         """Ultra preset currently has known placeholders; verify they're detected."""
@@ -354,9 +396,7 @@ class TestUltraPresetValidation:
 
         placeholder_issues = [i for i in report.issues if i.category == "placeholder"]
         # Ultra preset still has NEEDS_VERIFICATION and PLACEHOLDER strings
-        assert len(placeholder_issues) >= 1, (
-            "Ultra preset should flag placeholders until revisions/hashes are pinned"
-        )
+        assert len(placeholder_issues) >= 1, "Ultra preset should flag placeholders until revisions/hashes are pinned"
 
     def test_ultra_preset_depth_backend_ids_valid(self):
         """After §1.1 fix, all depth model names should be valid registry IDs."""
@@ -371,8 +411,7 @@ class TestUltraPresetValidation:
 
         backend_issues = [i for i in report.issues if i.category == "backend_id"]
         assert len(backend_issues) == 0, (
-            f"All depth model names should be valid registry IDs. "
-            f"Issues: {[i.message for i in backend_issues]}"
+            f"All depth model names should be valid registry IDs. " f"Issues: {[i.message for i in backend_issues]}"
         )
 
 

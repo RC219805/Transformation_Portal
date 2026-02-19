@@ -248,12 +248,12 @@ class SpatialAIPipeline:
 
         Args:
             name: Human-readable backend name (e.g., "depth_ensemble").
-            backend: Backend instance.  Must have a ``reset_state()`` method.
+            backend: Backend instance. Must expose a callable ``reset_state()``.
         """
-        if not hasattr(backend, "reset_state"):
+        reset_fn = getattr(backend, "reset_state", None)
+        if not callable(reset_fn):
             logger.warning(
-                "Backend '%s' has no reset_state() method; "
-                "skipping stateful registration.",
+                "Backend '%s' has no callable reset_state() method; " "skipping stateful registration.",
                 name,
             )
             return
@@ -282,6 +282,7 @@ class SpatialAIPipeline:
                     "Failed to reset backend '%s': %s",
                     name,
                     exc,
+                    exc_info=True,
                 )
         logger.info(
             "Sequence reset complete: %d backends reset (sequence_id=%s)",

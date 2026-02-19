@@ -3,7 +3,7 @@
 Validates YAML preset files against registry contracts and governance rules:
 - Backend IDs must exist in their respective registries.
 - Placeholder strings (NEEDS_VERIFICATION_*, PLACEHOLDER_*) are flagged.
-- SHA256 hashes are validated against known patterns.
+- Obvious hash placeholders (including long all-zero runs) are flagged.
 - Missing/unimplemented pipeline stages are explicitly reported.
 
 Produces a ``PresetHealthReport`` JSON artifact for CI and runtime consumption.
@@ -189,7 +189,7 @@ def _check_placeholders(data: Dict, prefix: str = "") -> List[HealthIssue]:
 def _check_depth_backend_ids(
     data: Dict,
     available_backend_ids: Optional[List[str]] = None,
-) -> List[HealthIssue]:
+) -> tuple[List[HealthIssue], Optional[List[str]]]:
     """Validate that depth model names map to registered backends."""
     issues: List[HealthIssue] = []
 
@@ -200,9 +200,17 @@ def _check_depth_backend_ids(
 
             registry = DepthBackendRegistry()
             available_backend_ids = registry.available_backend_ids()
-        except Exception:
-            logger.debug("Could not load depth backend registry for validation")
-            return issues
+        except Exception as exc:
+            logger.warning("Could not load depth backend registry for validation: %s", exc)
+            issues.append(
+                HealthIssue(
+                    severity="warning",
+                    category="backend_registry_unavailable",
+                    message=("Depth backend registry could not be loaded; " "backend ID validation was skipped."),
+                    path="depth",
+                )
+            )
+            return issues, None
 
     # Check top-level depth backend
     depth_section = data.get("depth", {})
@@ -212,10 +220,7 @@ def _check_depth_backend_ids(
             HealthIssue(
                 severity="error",
                 category="backend_id",
-                message=(
-                    f"Depth backend '{top_backend}' is not registered. "
-                    f"Available: {available_backend_ids}"
-                ),
+                message=(f"Depth backend '{top_backend}' is not registered. " f"Available: {available_backend_ids}"),
                 path="depth.backend",
             )
         )
@@ -232,17 +237,19 @@ def _check_depth_backend_ids(
                     severity="error",
                     category="backend_id",
                     message=(
-                        f"Depth model name '{name}' is not registered as a backend. "
-                        f"Available: {available_backend_ids}"
+                        f"Depth model name '{name}' is not registered as a backend. " f"Available: {available_backend_ids}"
                     ),
                     path=f"depth.models[{idx}].name",
                 )
             )
 
-    return issues
+    return issues, available_backend_ids
 
 
-def _check_stages(data: Dict) -> List[StageStatus]:
+def _check_stages(
+    data: Dict,
+    available_depth_backend_ids: Optional[List[str]] = None,
+) -> List[StageStatus]:
     """Determine the status of each pipeline stage in the preset."""
     statuses: List[StageStatus] = []
 
@@ -251,8 +258,11 @@ def _check_stages(data: Dict) -> List[StageStatus]:
         declared = section is not None and isinstance(section, dict)
 
         backend_id = None
+        backend_available = None
         if declared and backend_path:
             backend_id = _resolve_yaml_path(data, backend_path)
+            if stage_name == "depth" and backend_id is not None and available_depth_backend_ids is not None:
+                backend_available = backend_id in available_depth_backend_ids
 
         # Determine skip reason for unimplemented stages
         skipped_reason = None
@@ -264,6 +274,7 @@ def _check_stages(data: Dict) -> List[StageStatus]:
                 name=stage_name,
                 declared=declared,
                 backend=backend_id,
+                backend_available=backend_available,
                 skipped_reason=skipped_reason,
             )
         )
@@ -272,7 +283,7 @@ def _check_stages(data: Dict) -> List[StageStatus]:
 
 
 def validate_preset(
-    preset_path: Path,
+    preset_path: str | Path,
     *,
     available_depth_backend_ids: Optional[List[str]] = None,
     strict: bool = False,
@@ -316,12 +327,14 @@ def validate_preset(
     report.issues.extend(_check_placeholders(data))
 
     # 2. Check depth backend IDs against registry
-    report.issues.extend(
-        _check_depth_backend_ids(data, available_depth_backend_ids)
+    depth_issues, resolved_depth_backend_ids = _check_depth_backend_ids(
+        data,
+        available_depth_backend_ids,
     )
+    report.issues.extend(depth_issues)
 
     # 3. Assess pipeline stage status
-    report.stages = _check_stages(data)
+    report.stages = _check_stages(data, resolved_depth_backend_ids)
 
     # 4. Strict mode: promote warnings to errors
     if strict:

@@ -9,7 +9,6 @@ Validates that:
 
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -43,6 +42,15 @@ class TestStatefulBackendRegistration:
         pipeline.register_stateful_backend("plain_backend", mock_backend)
 
         assert "plain_backend" not in pipeline._stateful_backends
+
+    def test_skip_backend_with_non_callable_reset_state(self):
+        """Backends with non-callable reset_state attributes should be skipped."""
+        pipeline = _make_pipeline()
+        backend = type("Backend", (), {"reset_state": "not-callable"})()
+
+        pipeline.register_stateful_backend("broken_backend", backend)
+
+        assert "broken_backend" not in pipeline._stateful_backends
 
 
 class TestResetSequence:
