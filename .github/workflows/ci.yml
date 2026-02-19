@@ -163,7 +163,8 @@ jobs:
       - name: Free disk space
         run: |
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          # DO NOT delete AGENT_TOOLSDIRECTORY - breaks Python setup-python cache
+          # See: docs/incidents/2026-02-03_ci_python_toolcache_deletion.md
           sudo docker image prune --all --force
           df -h
 
@@ -261,7 +262,8 @@ jobs:
       - name: Free disk space
         run: |
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          # DO NOT delete AGENT_TOOLSDIRECTORY - breaks Python setup-python cache
+          # See: docs/incidents/2026-02-03_ci_python_toolcache_deletion.md
           sudo docker image prune --all --force
           df -h
 
@@ -310,12 +312,16 @@ jobs:
             --cov-report=xml \
             --cov-report=term \
             --cov-report=html \
+            --durations=25 --durations-min=1.0 \
             --maxfail=3 \
             --tb=short
         env:
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
           PYTHONNOUSERSITE: 1
           TRANSFORMERS_OFFLINE: 1
+          # Prevent thread oversubscription on shared CI runners
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
