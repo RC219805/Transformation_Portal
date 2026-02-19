@@ -56,14 +56,15 @@ class TestSceneBuilderFileLoading:
             cameras = [CameraParams(intrinsics, np.eye(4, dtype=np.float32), W, H) for _ in range(2)]
 
             dummy = _dummy_scene(cameras)
-            # Patch out reconstruction; keep I/O + preprocessing under test.
-            with patch.object(SceneBuilder, "build_from_arrays", return_value=dummy) as m:
+            # Patch out heavy reconstruction; keep file I/O + preprocessing under test.
+            with patch.object(builder.backend, "reconstruct", return_value=dummy) as m:
                 scene = builder.build_from_images(image_paths=image_paths, cameras=cameras, iterations=999)
 
             assert scene is not None
-            # Validate that images passed into build_from_arrays are RGB float32 arrays.
-            _, kwargs = m.call_args
-            imgs = kwargs["images"]
+            m.assert_called_once()
+            # Validate that images passed into reconstruction input are RGB float32 arrays.
+            reconstruction_input = m.call_args.args[0]
+            imgs = reconstruction_input.images
             assert len(imgs) == 2
             assert imgs[0].shape == (H, W, 3)
             assert imgs[0].dtype == np.float32
@@ -97,11 +98,13 @@ class TestSceneBuilderFileLoading:
             cameras = [CameraParams(intrinsics, np.eye(4, dtype=np.float32), W, H) for _ in range(2)]
 
             dummy = _dummy_scene(cameras)
-            with patch.object(SceneBuilder, "build_from_arrays", return_value=dummy) as m:
+            with patch.object(builder.backend, "reconstruct", return_value=dummy) as m:
                 scene = builder.build_from_images(image_paths=image_paths, cameras=cameras, iterations=999)
 
             assert scene is not None
-            imgs = m.call_args.kwargs["images"]
+            m.assert_called_once()
+            reconstruction_input = m.call_args.args[0]
+            imgs = reconstruction_input.images
             assert imgs[0].shape == (H, W, 3)  # grayscale -> RGB
 
     def test_load_rgba_image(self):
@@ -122,11 +125,13 @@ class TestSceneBuilderFileLoading:
             cameras = [CameraParams(intrinsics, np.eye(4, dtype=np.float32), W, H) for _ in range(2)]
 
             dummy = _dummy_scene(cameras)
-            with patch.object(SceneBuilder, "build_from_arrays", return_value=dummy) as m:
+            with patch.object(builder.backend, "reconstruct", return_value=dummy) as m:
                 scene = builder.build_from_images(image_paths=image_paths, cameras=cameras, iterations=999)
 
             assert scene is not None
-            imgs = m.call_args.kwargs["images"]
+            m.assert_called_once()
+            reconstruction_input = m.call_args.args[0]
+            imgs = reconstruction_input.images
             assert imgs[0].shape == (H, W, 3)  # alpha dropped
 
 
