@@ -6,6 +6,17 @@ import pytest
 torch = pytest.importorskip("torch", reason="torch is required for gaussian rasterizer tests")
 pytestmark = pytest.mark.ml
 
+torch.manual_seed(0)
+# CI-friendly defaults: avoid oversubscription on shared runners.
+torch.set_num_threads(1)
+torch.set_num_interop_threads(1)
+
+H, W = 48, 64
+IMAGE_SIZE = (H, W)
+FX = FY = 100.0
+CX = W / 2.0
+CY = H / 2.0
+
 from transformation_portal.spatial_ai.reconstruction.gaussian_rasterizer import (
     compute_3d_covariance,
     compute_rgb_loss,
@@ -91,19 +102,19 @@ class TestProjection:
         rotations = torch.tensor([[1.0, 0.0, 0.0, 0.0]])
 
         # Simple pinhole camera
-        intrinsics = torch.tensor([[500.0, 0.0, 320.0], [0.0, 500.0, 240.0], [0.0, 0.0, 1.0]])
+        intrinsics = torch.tensor([[FX, 0.0, CX], [0.0, FY, CY], [0.0, 0.0, 1.0]])
 
         # Identity extrinsics (camera at origin)
         extrinsics = torch.eye(4)
 
-        image_size = (480, 640)
+        image_size = IMAGE_SIZE
 
         mean_2d, cov_2d, depths, valid_mask = project_gaussians_2d(
             positions, scales, rotations, intrinsics, extrinsics, image_size, use_rotation=False
         )
 
         # Should project to image center
-        assert torch.allclose(mean_2d[0], torch.tensor([320.0, 240.0]), atol=1.0)
+        assert torch.allclose(mean_2d[0], torch.tensor([CX, CY]), atol=1.0)
 
         # Depth should be 5.0
         assert torch.allclose(depths[0], torch.tensor(5.0), atol=1e-6)
@@ -119,12 +130,12 @@ class TestProjection:
         rotations = torch.tensor([[1.0, 0.0, 0.0, 0.0]])
 
         intrinsics = torch.eye(3)
-        intrinsics[0, 0] = intrinsics[1, 1] = 500.0
-        intrinsics[0, 2] = 320.0
-        intrinsics[1, 2] = 240.0
+        intrinsics[0, 0] = intrinsics[1, 1] = FX
+        intrinsics[0, 2] = CX
+        intrinsics[1, 2] = CY
 
         extrinsics = torch.eye(4)
-        image_size = (480, 640)
+        image_size = IMAGE_SIZE
 
         _, _, _, valid_mask = project_gaussians_2d(
             positions, scales, rotations, intrinsics, extrinsics, image_size, use_rotation=False
@@ -141,12 +152,12 @@ class TestProjection:
         rotations = torch.tensor([[1.0, 0.0, 0.0, 0.0]])
 
         intrinsics = torch.eye(3)
-        intrinsics[0, 0] = intrinsics[1, 1] = 500.0
-        intrinsics[0, 2] = 320.0
-        intrinsics[1, 2] = 240.0
+        intrinsics[0, 0] = intrinsics[1, 1] = FX
+        intrinsics[0, 2] = CX
+        intrinsics[1, 2] = CY
 
         extrinsics = torch.eye(4)
-        image_size = (480, 640)
+        image_size = IMAGE_SIZE
 
         _, _, _, valid_mask = project_gaussians_2d(
             positions, scales, rotations, intrinsics, extrinsics, image_size, use_rotation=False
@@ -206,18 +217,19 @@ class TestRendering:
         rotations = torch.tensor([[1.0, 0.0, 0.0, 0.0]])
         opacities = torch.tensor([[1.0]])
 
-        intrinsics = torch.tensor([[500.0, 0.0, 160.0], [0.0, 500.0, 120.0], [0.0, 0.0, 1.0]])
+        intrinsics = torch.tensor([[FX, 0.0, CX], [0.0, FY, CY], [0.0, 0.0, 1.0]])
 
         extrinsics = torch.eye(4)
 
-        image_size = (240, 320)
+        image_size = IMAGE_SIZE
 
-        rendered = render_gaussians(
-            positions, colors, scales, rotations, opacities, intrinsics, extrinsics, image_size, device="cpu"
-        )
+        with torch.inference_mode():
+            rendered = render_gaussians(
+                positions, colors, scales, rotations, opacities, intrinsics, extrinsics, image_size, device="cpu"
+            )
 
         # Check output shape
-        assert rendered.shape == (240, 320, 3)
+        assert rendered.shape == (H, W, 3)
 
         # Check dtype
         assert rendered.dtype == torch.float32
@@ -227,7 +239,7 @@ class TestRendering:
         assert not torch.isinf(rendered).any()
 
         # Check center pixel has some red
-        center_pixel = rendered[120, 160]
+        center_pixel = rendered[H // 2, W // 2]
         assert center_pixel[0] > 0.1  # Red channel should be bright
 
     def test_render_multiple_gaussians(self):
@@ -243,23 +255,24 @@ class TestRendering:
 
         opacities = torch.tensor([[1.0], [0.8]])  # Blue mostly opaque
 
-        intrinsics = torch.tensor([[500.0, 0.0, 160.0], [0.0, 500.0, 120.0], [0.0, 0.0, 1.0]])
+        intrinsics = torch.tensor([[FX, 0.0, CX], [0.0, FY, CY], [0.0, 0.0, 1.0]])
 
         extrinsics = torch.eye(4)
 
-        image_size = (240, 320)
+        image_size = IMAGE_SIZE
 
-        rendered = render_gaussians(
-            positions, colors, scales, rotations, opacities, intrinsics, extrinsics, image_size, device="cpu"
-        )
+        with torch.inference_mode():
+            rendered = render_gaussians(
+                positions, colors, scales, rotations, opacities, intrinsics, extrinsics, image_size, device="cpu"
+            )
 
         # Check output is valid
-        assert rendered.shape == (240, 320, 3)
+        assert rendered.shape == (H, W, 3)
         assert not torch.isnan(rendered).any()
         assert not torch.isinf(rendered).any()
 
         # Check that center has some color (not completely black)
-        center_pixel = rendered[120, 160]
+        center_pixel = rendered[H // 2, W // 2]
         assert center_pixel.sum() > 0.1, "Center should have visible color"
 
     def test_render_empty_scene(self):
@@ -272,12 +285,12 @@ class TestRendering:
         opacities = torch.tensor([[1.0]])
 
         intrinsics = torch.eye(3)
-        intrinsics[0, 0] = intrinsics[1, 1] = 500.0
-        intrinsics[0, 2] = 160.0
-        intrinsics[1, 2] = 120.0
+        intrinsics[0, 0] = intrinsics[1, 1] = FX
+        intrinsics[0, 2] = CX
+        intrinsics[1, 2] = CY
 
         extrinsics = torch.eye(4)
-        image_size = (240, 320)
+        image_size = IMAGE_SIZE
 
         rendered = render_gaussians(
             positions, colors, scales, rotations, opacities, intrinsics, extrinsics, image_size, device="cpu"
@@ -294,10 +307,10 @@ class TestRendering:
         rotations = torch.tensor([[1.0, 0.0, 0.0, 0.0]])
         opacities = torch.tensor([[1.0]])
 
-        intrinsics = torch.tensor([[500.0, 0.0, 160.0], [0.0, 500.0, 120.0], [0.0, 0.0, 1.0]])
+        intrinsics = torch.tensor([[FX, 0.0, CX], [0.0, FY, CY], [0.0, 0.0, 1.0]])
 
         extrinsics = torch.eye(4)
-        image_size = (240, 320)
+        image_size = IMAGE_SIZE
 
         rendered = render_gaussians(
             positions, colors, scales, rotations, opacities, intrinsics, extrinsics, image_size, device="cpu"
@@ -314,9 +327,9 @@ class TestFastRendering:
     def test_render_fast_culling(self):
         """Test that fast rendering culls distant Gaussians."""
         # Many Gaussians at different depths
-        N = 100
+        N = 25
         positions = torch.rand(N, 3) * 10
-        positions[:, 2] = torch.arange(N, dtype=torch.float32) * 0.1 + 1.0  # Depths 1-11
+        positions[:, 2] = torch.arange(N, dtype=torch.float32) * 0.1 + 1.0
 
         colors = torch.rand(N, 3)
         scales = torch.ones(N, 3) * 0.1
@@ -324,17 +337,17 @@ class TestFastRendering:
         rotations[:, 0] = 1.0  # Identity quaternions
         opacities = torch.ones(N, 1) * 0.5
 
-        intrinsics = torch.tensor([[500.0, 0.0, 160.0], [0.0, 500.0, 120.0], [0.0, 0.0, 1.0]])
+        intrinsics = torch.tensor([[FX, 0.0, CX], [0.0, FY, CY], [0.0, 0.0, 1.0]])
 
         extrinsics = torch.eye(4)
-        image_size = (240, 320)
+        image_size = IMAGE_SIZE
 
         # Render with culling
         rendered = render_gaussians_fast(
-            positions, colors, scales, rotations, opacities, intrinsics, extrinsics, image_size, max_gaussians=50
+            positions, colors, scales, rotations, opacities, intrinsics, extrinsics, image_size, max_gaussians=15
         )
 
-        assert rendered.shape == (240, 320, 3)
+        assert rendered.shape == (H, W, 3)
         assert not torch.isnan(rendered).any()
 
 
@@ -343,8 +356,8 @@ class TestLossComputation:
 
     def test_rgb_loss(self):
         """Test RGB reconstruction loss."""
-        rendered = torch.ones(240, 320, 3) * 0.5
-        target = torch.ones(240, 320, 3) * 0.7
+        rendered = torch.ones(16, 16, 3) * 0.5
+        target = torch.ones(16, 16, 3) * 0.7
 
         loss = compute_rgb_loss(rendered, target)
 
@@ -374,10 +387,10 @@ class TestGradientFlow:
         rotations = torch.tensor([[1.0, 0.0, 0.0, 0.0]], requires_grad=True)
         opacities = torch.tensor([[1.0]], requires_grad=True)
 
-        intrinsics = torch.tensor([[500.0, 0.0, 160.0], [0.0, 500.0, 120.0], [0.0, 0.0, 1.0]])
+        intrinsics = torch.tensor([[FX, 0.0, CX], [0.0, FY, CY], [0.0, 0.0, 1.0]])
 
         extrinsics = torch.eye(4)
-        image_size = (240, 320)
+        image_size = (32, 32)
 
         # Render
         rendered = render_gaussians(
@@ -422,15 +435,15 @@ class TestDeviceCompatibility:
         rotations = torch.tensor([[1.0, 0.0, 0.0, 0.0]]).to(device)
         opacities = torch.tensor([[1.0]]).to(device)
 
-        intrinsics = torch.tensor([[500.0, 0.0, 160.0], [0.0, 500.0, 120.0], [0.0, 0.0, 1.0]]).to(device)
+        intrinsics = torch.tensor([[FX, 0.0, CX], [0.0, FY, CY], [0.0, 0.0, 1.0]]).to(device)
 
         extrinsics = torch.eye(4).to(device)
-        image_size = (240, 320)
+        image_size = IMAGE_SIZE
 
         rendered = render_gaussians(
             positions, colors, scales, rotations, opacities, intrinsics, extrinsics, image_size, device=device
         )
 
         assert rendered.device.type == "mps"
-        assert rendered.shape == (240, 320, 3)
+        assert rendered.shape == (H, W, 3)
         assert not torch.isnan(rendered).any()
