@@ -348,7 +348,7 @@ Replace with **selective cleanup** that preserves toolcache:
 **Alternative:**
 Use GitHub's native disk cleanup action (if disk space is actually a problem):
 ```yaml
-- uses: jlumbroso/free-disk-space@main
+- uses: jlumbroso/free-disk-space@v1
   with:
     tool-cache: false  # NEVER delete tool cache
 ```
@@ -713,7 +713,7 @@ Document CI tiers in a new ADR-034 before implementing:
     - Establish quarterly review cadence
 
 14. **Update CONTRIBUTING.md**
-    ```markdown
+    ````markdown
     ## Running Tests Locally
 
     ### Quick Smoke Test (PR tier)
@@ -731,7 +731,7 @@ Document CI tiers in a new ADR-034 before implementing:
     pip install -r requirements/ml-ci.txt
     pytest -m "ml and not slow" --durations=20
     ```
-    ```
+    ````
 
 15. **Add performance monitoring**
     - Workflow: Log CI job durations to artifact

@@ -50,7 +50,7 @@ run_ml_check:
     - name: Fail-safe check
       run: |
         # ALWAYS run on main/develop
-        if [[ "${{ github.ref }}" =~ main|develop ]]; then
+        if [[ "${{ github.ref }}" == 'refs/heads/main' || "${{ github.ref }}" == 'refs/heads/develop' ]]; then
           echo "run_ml=true" >> $GITHUB_OUTPUT
           exit 0
         fi

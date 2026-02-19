@@ -406,7 +406,7 @@
 
 - [ ] **Add section: "Running Tests Locally"**
 - [ ] **Include tier examples:**
-  ```markdown
+  ````markdown
   ### Quick Smoke Test (PR tier)
   ```bash
   pytest -m "not ml and not slow" --maxfail=3
@@ -422,7 +422,7 @@
   pip install -r requirements/ml-ci.txt
   pytest -m "ml and not slow" --durations=20
   ```
-  ```
+  ````
 
 ### 5.3 Add Performance Monitoring
 
