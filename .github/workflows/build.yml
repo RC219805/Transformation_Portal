@@ -332,6 +332,9 @@ jobs:
           # Prevent thread oversubscription on shared CI runners (ML CPU tests)
           OMP_NUM_THREADS: "1"
           MKL_NUM_THREADS: "1"
+          OPENBLAS_NUM_THREADS: "1"
+          NUMEXPR_NUM_THREADS: "1"
+          VECLIB_MAXIMUM_THREADS: "1"
         run: |
           set -euo pipefail
 
