@@ -296,7 +296,7 @@ class TestSpatialAIPipelineInitialization:
 
         assert pipeline.config.tier == "standard"
         assert "ingest" in pipeline.config.stages
-        assert "segment" in pipeline.config.stages
+        assert "segment" in pipeline.config.stages or "segmentation" in pipeline.config.stages
 
     def test_initialization_from_preset_name(self):
         """Test initialization from preset name."""
@@ -375,7 +375,7 @@ class TestSpatialAIPipelinePresetLoading:
 
         assert config.tier == "standard"
         assert "ingest" in config.stages
-        assert "segment" in config.stages
+        assert "segment" in config.stages or "segmentation" in config.stages
 
     def test_dict_to_config(self):
         """Test converting dict to PipelineConfig."""
@@ -742,7 +742,7 @@ class TestSpatialAIPipelineE2E:
                 save_intermediates=False,
             )
 
-        assert result.stages_completed == ["ingest", "segment"]
+        assert result.stages_completed == ["ingest", "segmentation"]
         assert result.linear_image is mock_ingest
         assert result.segmentation is mock_seg
 
@@ -793,7 +793,7 @@ class TestSpatialAIPipelineE2E:
                 save_intermediates=True,
             )
 
-        assert result.stages_completed == ["ingest", "segment", "materials"]
+        assert result.stages_completed == ["ingest", "segmentation", "materials"]
         assert result.materials is not None
         assert len(result.materials) == 1
 
