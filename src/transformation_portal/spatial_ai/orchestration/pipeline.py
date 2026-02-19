@@ -46,6 +46,7 @@ from transformation_portal.spatial_ai.materials.material_backend import Material
 from transformation_portal.spatial_ai.reconstruction.contracts import Scene3D
 from transformation_portal.spatial_ai.segmentation.contracts import SegmentationInput, SegmentationResult
 from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
+from transformation_portal.spatial_ai.segmentation.tiling.config import SegmentationTilingConfig
 
 from .error_handler import ErrorHandler, ErrorRecoveryStrategy, PipelineError
 from .progress_tracker import ProgressTracker
@@ -496,12 +497,9 @@ class SpatialAIPipeline:
 
             model_cfg = self.config.segmentation.get("model", {})
             model_size = model_cfg.get("size", "large")
-            # Note: repo_id and revision are in config for documentation/tracking
-            # but SAM2Backend uses direct checkpoint loading, not HuggingFace Hub
-
-            # Material classification config
-            enable_material = self.config.segmentation.get("material_classification", False)
-            material_threshold = self.config.segmentation.get("material_confidence_threshold", 0.3)
+            enable_material = bool(self.config.segmentation.get("material_classification", False))
+            material_threshold = float(self.config.segmentation.get("material_confidence_threshold", 0.3))
+            tiling_cfg = SegmentationTilingConfig.from_dict(self.config.segmentation.get("tiling"))
 
             # Select device
             device = self.resource_manager.select_device()
@@ -512,6 +510,7 @@ class SpatialAIPipeline:
                 device=device,
                 enable_material_classification=enable_material,
                 material_confidence_threshold=material_threshold,
+                tiling=tiling_cfg,
             )
 
             # Register model for tracking

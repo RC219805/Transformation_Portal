@@ -1,0 +1,1 @@
+"""Segmentation backend protocol helpers."""
