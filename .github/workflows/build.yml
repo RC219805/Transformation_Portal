@@ -128,13 +128,14 @@ jobs:
           set -euo pipefail
           echo "Initial disk usage:"
           df -h
-          # Aggressive cleanup - free up disk
+          # Selective cleanup - free up disk while preserving Python toolcache
           sudo rm -rf /usr/share/dotnet || true
           sudo rm -rf /opt/ghc || true
           sudo rm -rf /usr/local/lib/android || true
           sudo rm -rf /opt/hostedtoolcache/CodeQL || true
           sudo rm -rf /usr/local/share/boost || true
-          sudo rm -rf "${AGENT_TOOLSDIRECTORY:-/opt/hostedtoolcache}" || true
+          # DO NOT delete AGENT_TOOLSDIRECTORY - breaks Python setup-python cache
+          # See: docs/incidents/2026-02-03_ci_python_toolcache_deletion.md
           sudo rm -rf /usr/local/.ghcup || true
           sudo apt-get clean || true
           sudo apt-get autoremove -y || true
@@ -250,12 +251,14 @@ jobs:
           set -euo pipefail
           echo "Initial disk usage:"
           df -h
+          # Selective cleanup - free up disk while preserving Python toolcache
           sudo rm -rf /usr/share/dotnet || true
           sudo rm -rf /opt/ghc || true
           sudo rm -rf /usr/local/lib/android || true
           sudo rm -rf /opt/hostedtoolcache/CodeQL || true
           sudo rm -rf /usr/local/share/boost || true
-          sudo rm -rf "${AGENT_TOOLSDIRECTORY:-/opt/hostedtoolcache}" || true
+          # DO NOT delete AGENT_TOOLSDIRECTORY - breaks Python setup-python cache
+          # See: docs/incidents/2026-02-03_ci_python_toolcache_deletion.md
           sudo rm -rf /usr/local/.ghcup || true
           sudo apt-get clean || true
           sudo apt-get autoremove -y || true
@@ -319,58 +322,55 @@ jobs:
           set -euo pipefail
           python -m pip install -e .
 
-      - name: Run tests with coverage
+      - name: Run tests
         env:
           PYTHONNOUSERSITE: "1"
           PYTORCH_CUDA_ALLOC_CONF: "max_split_size_mb:128"
           HF_HOME: "/tmp/hf_home"
           TRANSFORMERS_CACHE: "/tmp/transformers_cache"
           TRANSFORMERS_OFFLINE: "1"
+          # Prevent thread oversubscription on shared CI runners (ML CPU tests)
+          OMP_NUM_THREADS: "1"
+          MKL_NUM_THREADS: "1"
         run: |
           set -euo pipefail
 
           echo "Running tests with marker expression: ${{ matrix.markexpr }}"
 
-          # ML tier in offline mode: skip coverage enforcement (most tests are skipped by design)
+          # ML tier: skip coverage (saves tracing + report I/O overhead on PR feedback path)
           # Core tier: enforce 20% minimum coverage
           if [ "${{ matrix.test-type }}" = "ml" ]; then
-            COV_THRESHOLD=""
-            echo "ML tier: coverage collected but not enforced (offline mode skips most tests)"
+            COV_FLAGS="--no-cov"
+            echo "ML tier: coverage disabled for faster PR feedback"
           else
-            COV_THRESHOLD="--cov-fail-under=20"
+            COV_FLAGS="--cov=src/transformation_portal --cov=lux_depth_v3 --cov-report=term-missing --cov-report=xml --cov-report=html --cov-fail-under=20"
             echo "Core tier: enforcing 20% minimum coverage"
           fi
 
-          # Run with coverage for all test types
+          # ML tier: add duration profiling for triage of slow tests
+          if [ "${{ matrix.test-type }}" = "ml" ]; then
+            EXTRA_FLAGS="--durations=25 --durations-min=1.0"
+          else
+            EXTRA_FLAGS=""
+          fi
+
           set +e
           pytest -v tests/ -ra -m "${{ matrix.markexpr }}" --maxfail=1 \
-            --cov=src/transformation_portal \
-            --cov=lux_depth_v3 \
-            --cov-report=term-missing \
-            --cov-report=xml \
-            --cov-report=html \
-            $COV_THRESHOLD
+            $COV_FLAGS \
+            $EXTRA_FLAGS
           rc=$?
           set -e
 
-          # If ML markers aren't fully wired yet, pytest may select zero tests (exit=5).
-          # Keep the ML leg meaningful by falling back to "not slow" under ML deps.
+          # If ML marker expression selects zero tests (exit=5), fail fast.
+          # This signals a marker taxonomy issue that must be fixed, rather than
+          # silently expanding into an unbounded "not slow" fallback run.
           if [ "${{ matrix.test-type }}" = "ml" ] && [ "$rc" -eq 5 ]; then
-            echo "No tests selected by -m '${{ matrix.markexpr }}' (exit=5)." >&2
-            echo "Fallback: running the non-slow suite under ML deps." >&2
-            set +e
-            pytest -v tests/ -ra -m "not slow" --maxfail=1 \
-              --cov=src/transformation_portal \
-              --cov=lux_depth_v3 \
-              --cov-report=term-missing \
-              --cov-report=xml \
-              --cov-report=html \
-              $COV_THRESHOLD
-            rc=$?
-            set -e
+            echo "::error::ML marker expression '${{ matrix.markexpr }}' selected zero tests (exit=5)."
+            echo "Fix marker wiring — do not rely on fallback reruns."
+            exit 1
           fi
 
-          # Display coverage summary
+          # Display coverage summary (core tier only)
           if [ -f coverage.xml ]; then
             echo "Coverage report generated successfully"
             ls -lh coverage.xml htmlcov/ || true

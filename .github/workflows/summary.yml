@@ -3,19 +3,20 @@ name: Issue Summarizer
 on:
   issue_comment: {}
   pull_request: {}
-  pull_request_review: {}
   issues:
     types: [opened, edited]
 
 # Concurrency control: Cancel outdated runs on new events for the same issue/PR
 # This reduces CI minutes and API costs by only processing the latest state
-# Uses issue/PR number from event-specific paths to ensure proper deduplication
+# Includes event_name so pull_request and issue_comment runs do not cancel each other.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
   summarize:
+    # Avoid blocked/required PR checks for bot-authored PR events.
+    if: ${{ !(github.event_name == 'pull_request' && (github.actor == 'Copilot' || github.actor == 'copilot-swe-agent[bot]')) }}
     runs-on: ubuntu-latest
     permissions:
       issues: write
