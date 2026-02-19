@@ -31,14 +31,25 @@ License: Apache 2.0 (commercial OK, no tier restrictions)
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Dict, Literal, Optional
 
 import numpy as np
 
 from transformation_portal.spatial_ai.segmentation.contracts import MaskMetadata, SegmentationInput, SegmentationResult
+from transformation_portal.spatial_ai.segmentation.tiling.config import SegmentationTilingConfig
+from transformation_portal.spatial_ai.segmentation.tiling.engine import TiledSegmentationEngine
+from transformation_portal.spatial_ai.segmentation.tiling.types import (
+    BBox,
+    GlobalSeedHints,
+    SoftMaskPatch,
+    TileInstance,
+    TileManifest,
+    TileSpec,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +76,7 @@ class SAM2Backend:
     }
 
     SUPPORTED_DEVICES = {"auto", "cuda", "cpu", "mps"}
+    name = "sam2"
 
     def __init__(
         self,
@@ -73,6 +85,7 @@ class SAM2Backend:
         checkpoint_path: Optional[str] = None,
         enable_material_classification: bool = False,
         material_confidence_threshold: float = 0.3,
+        tiling: Optional[SegmentationTilingConfig] = None,
     ):
         """Initialize SAM2 backend.
 
@@ -122,6 +135,9 @@ class SAM2Backend:
                 confidence_threshold=material_confidence_threshold,
             )
             logger.info("Material classification enabled")
+
+        self.tiling = tiling or SegmentationTilingConfig(enabled=False)
+        self.tiled_engine: Optional[TiledSegmentationEngine] = None
 
         logger.info(
             f"SAM2Backend initialized: model={model_size}, "
@@ -244,14 +260,275 @@ class SAM2Backend:
         self._load_model()
 
         # Execute segmentation based on mode
+        if seg_input.mode == "video":
+            return self._segment_video(seg_input)
+
+        if self.tiling.enabled and seg_input.mode in self.tiling.apply_to_modes:
+            if self.tiled_engine is None:
+                self.tiled_engine = self._build_default_tiled_engine()
+            image_hash = self._stable_image_hash(seg_input.image)
+            return self.tiled_engine.run(
+                backend=self,
+                seg_input=seg_input,
+                image_hash=image_hash,
+                config=self.tiling,
+            )
+
         if seg_input.mode == "auto":
             return self._segment_auto(seg_input)
-        elif seg_input.mode in ["points", "bbox"]:
+        if seg_input.mode in ["points", "bbox"]:
             return self._segment_prompted(seg_input)
-        elif seg_input.mode == "video":
-            return self._segment_video(seg_input)
-        else:
-            raise ValueError(f"Unsupported mode: {seg_input.mode}")
+        raise ValueError(f"Unsupported mode: {seg_input.mode}")
+
+    def global_seed_pass(
+        self,
+        *,
+        image_linear: np.ndarray,
+        image_hash: str,
+        longest_side: int,
+        rng_seed: int,
+    ) -> GlobalSeedHints:
+        del rng_seed
+        H, W = image_linear.shape[:2]
+        scale = min(1.0, float(longest_side) / float(max(H, W)))
+        low_h = max(1, int(round(H * scale)))
+        low_w = max(1, int(round(W * scale)))
+        return GlobalSeedHints(
+            image_hash=image_hash,
+            low_res_longest_side=longest_side,
+            low_res_W=low_w,
+            low_res_H=low_h,
+            scale_x=low_w / max(1.0, float(W)),
+            scale_y=low_h / max(1.0, float(H)),
+            meta={"backend": self.model_size},
+        )
+
+    def segment_tile(
+        self,
+        *,
+        tile_linear: np.ndarray,
+        image_hash: str,
+        tile_spec: TileSpec,
+        mode: str,
+        prompts: Optional[Dict],
+        global_hints: Optional[GlobalSeedHints],
+        rng_seed: int,
+    ) -> tuple[TileInstance, ...]:
+        """Segment a single tile using existing image-mode SAM2 inference.
+
+        This default implementation intentionally ignores ``global_hints`` and
+        ``rng_seed`` and delegates to current monolithic SAM2 methods for each
+        tile. The parameters remain in the interface for future quality parity
+        enhancements where global context and deterministic sampling are used.
+        """
+        del image_hash, global_hints, rng_seed
+        tile_prompts = self._translate_prompts_to_tile(prompts, tile_spec, mode)
+        seg_input = SegmentationInput(
+            image=tile_linear,
+            gamma=1.0,
+            mode=mode,
+            prompts=tile_prompts,
+        )
+        seg_result = self._segment_auto(seg_input) if mode == "auto" else self._segment_prompted(seg_input)
+
+        instances = []
+        for idx in range(seg_result.masks.shape[0]):
+            mask = seg_result.masks[idx].astype(np.float32, copy=False)
+            instances.append(
+                TileInstance(
+                    local_id=f"{tile_spec.tile_id}:{idx}",
+                    score=float(np.clip(seg_result.scores[idx], 0.0, 1.0)),
+                    stability_score=float(seg_result.metadata[idx].stability_score),
+                    soft_mask=SoftMaskPatch(
+                        bbox=BBox(0, 0, int(mask.shape[1]), int(mask.shape[0])),
+                        values=mask,
+                        space="prob",
+                    ),
+                    material_label=seg_result.metadata[idx].material_label,
+                    material_confidence=seg_result.metadata[idx].material_confidence,
+                )
+            )
+        return tuple(instances)
+
+    def _translate_prompts_to_tile(self, prompts: Optional[Dict], tile_spec: TileSpec, mode: str) -> Optional[Dict]:
+        if not prompts or mode == "auto":
+            return prompts
+        translated = dict(prompts)
+        offset_x, offset_y = tile_spec.bbox.x0, tile_spec.bbox.y0
+        tile_width = max(0, tile_spec.bbox.x1 - tile_spec.bbox.x0)
+        tile_height = max(0, tile_spec.bbox.y1 - tile_spec.bbox.y0)
+
+        if mode == "points" and "points" in translated:
+            points = []
+            for point in translated["points"]:
+                x = point[0] - offset_x
+                y = point[1] - offset_y
+                if tile_width > 0:
+                    x = max(0.0, min(float(x), float(tile_width - 1)))
+                if tile_height > 0:
+                    y = max(0.0, min(float(y), float(tile_height - 1)))
+                points.append([x, y])
+            translated["points"] = points
+            return translated
+        if mode == "bbox" and "bbox" in translated:
+            x0, y0, x1, y1 = translated["bbox"]
+            x0 -= offset_x
+            y0 -= offset_y
+            x1 -= offset_x
+            y1 -= offset_y
+            if tile_width > 0:
+                x0 = max(0.0, min(float(x0), float(tile_width)))
+                x1 = max(0.0, min(float(x1), float(tile_width)))
+            if tile_height > 0:
+                y0 = max(0.0, min(float(y0), float(tile_height)))
+                y1 = max(0.0, min(float(y1), float(tile_height)))
+            translated["bbox"] = [x0, y0, x1, y1]
+            return translated
+        return translated
+
+    def _build_default_tiled_engine(self) -> TiledSegmentationEngine:
+        class _Planner:
+            def plan(self, *, image_hash, W, H, config, global_hints, prompts, mode):
+                del global_hints
+                if mode in {"points", "bbox"} and prompts:
+                    tile = TileSpec(
+                        tile_id="tile_0_0",
+                        bbox=BBox(0, 0, W, H),
+                        overlap_px=config.overlap_px,
+                        pad_mode=config.pad_mode,
+                    )
+                    return TileManifest(
+                        image_hash=image_hash,
+                        W=W,
+                        H=H,
+                        tile_size_px=config.tile_size_px,
+                        overlap_px=config.overlap_px,
+                        stride_px=max(1, config.tile_size_px - config.overlap_px),
+                        policy=config.policy,
+                        seed=config.seed,
+                        tiles=(tile,),
+                    )
+
+                stride = max(1, config.tile_size_px - config.overlap_px)
+                tiles = []
+                tile_idx = 0
+                for y0 in range(0, H, stride):
+                    for x0 in range(0, W, stride):
+                        x1 = min(x0 + config.tile_size_px, W)
+                        y1 = min(y0 + config.tile_size_px, H)
+                        tiles.append(
+                            TileSpec(
+                                tile_id=f"tile_{tile_idx}",
+                                bbox=BBox(int(x0), int(y0), int(x1), int(y1)),
+                                overlap_px=config.overlap_px,
+                                pad_mode=config.pad_mode,
+                            )
+                        )
+                        tile_idx += 1
+
+                return TileManifest(
+                    image_hash=image_hash,
+                    W=W,
+                    H=H,
+                    tile_size_px=config.tile_size_px,
+                    overlap_px=config.overlap_px,
+                    stride_px=stride,
+                    policy=config.policy,
+                    seed=config.seed,
+                    tiles=tuple(tiles),
+                )
+
+        class _Merger:
+            def merge(self, *, image_hash, W, H, manifest, tile_results, global_hints, merge_config):
+                del image_hash, manifest, global_hints, merge_config
+                masks = []
+                scores = []
+                metadata = []
+                for tile_result in tile_results:
+                    for instance in tile_result.instances:
+                        full = np.zeros((H, W), dtype=bool)
+                        probs = instance.soft_mask.values
+                        if instance.soft_mask.space == "logits":
+                            probs = 1.0 / (1.0 + np.exp(-probs))
+                        local_bbox = instance.soft_mask.bbox
+                        x0 = tile_result.tile_spec.bbox.x0 + local_bbox.x0
+                        y0 = tile_result.tile_spec.bbox.y0 + local_bbox.y0
+                        x1 = min(tile_result.tile_spec.bbox.x0 + local_bbox.x1, W)
+                        y1 = min(tile_result.tile_spec.bbox.y0 + local_bbox.y1, H)
+                        region = probs[: max(0, y1 - y0), : max(0, x1 - x0)]
+                        if x1 <= x0 or y1 <= y0 or region.size == 0:
+                            continue
+                        full[y0:y1, x0:x1] = region > 0.5
+                        area = int(full.sum())
+                        if area <= 0:
+                            continue
+                        ys, xs = np.where(full)
+                        metadata.append(
+                            MaskMetadata(
+                                area=area,
+                                bbox=(
+                                    int(xs.min()),
+                                    int(ys.min()),
+                                    int(xs.max() - xs.min() + 1),
+                                    int(ys.max() - ys.min() + 1),
+                                ),
+                                stability_score=float(np.clip(instance.stability_score, 0.0, 1.0)),
+                                material_label=instance.material_label,
+                                material_confidence=instance.material_confidence,
+                            )
+                        )
+                        masks.append(full)
+                        scores.append(float(np.clip(instance.score, 0.0, 1.0)))
+                if not masks:
+                    return (
+                        np.zeros((0, H, W), dtype=bool),
+                        np.zeros((0,), dtype=np.float32),
+                        [],
+                        {"unions_performed": 0, "seam_metrics": {}, "warnings": []},
+                    )
+                return (
+                    np.stack(masks).astype(bool, copy=False),
+                    np.array(scores, dtype=np.float32),
+                    metadata,
+                    {"unions_performed": 0, "seam_metrics": {}, "warnings": []},
+                )
+
+        class _Validator:
+            def validate(self, *, manifest, merge_stats, config):
+                del manifest, merge_stats, config
+                return True, {}
+
+        return TiledSegmentationEngine(planner=_Planner(), merger=_Merger(), validator=_Validator())
+
+    def _stable_image_hash(self, image: Optional[np.ndarray]) -> str:
+        """Compute a deterministic SHA-256 hash for image shape/dtype/content.
+
+        This hashes the full contiguous image buffer and is O(H*W*C). The full
+        buffer hash is intentional to minimize collisions for equal shape/dtype
+        images with different pixel content.
+        """
+        if image is None:
+            return "none"
+        arr = image if image.flags.c_contiguous else np.ascontiguousarray(image)
+        h = hashlib.sha256()
+        h.update(str(arr.shape).encode("utf-8"))
+        h.update(str(arr.dtype).encode("utf-8"))
+        h.update(arr.tobytes())
+        return h.hexdigest()
+
+    def unload(self) -> None:
+        """Release loaded model/material references and best-effort device cache."""
+        self._model = None
+        self._mask_generator = None
+        self._image_predictor = None
+        self._video_predictor = None
+        self._material_classifier = None
+        try:
+            import torch
+        except Exception:
+            return
+        if hasattr(torch, "cuda") and torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     def _segment_auto(self, seg_input: SegmentationInput) -> SegmentationResult:
         """Automatic mask generation (entire image).

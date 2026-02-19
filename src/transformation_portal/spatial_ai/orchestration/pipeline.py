@@ -46,6 +46,7 @@ from transformation_portal.spatial_ai.materials.material_backend import Material
 from transformation_portal.spatial_ai.reconstruction.contracts import Scene3D
 from transformation_portal.spatial_ai.segmentation.contracts import SegmentationInput, SegmentationResult
 from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
+from transformation_portal.spatial_ai.segmentation.tiling.config import SegmentationTilingConfig
 
 from .error_handler import ErrorHandler, ErrorRecoveryStrategy, PipelineError
 from .progress_tracker import ProgressTracker
@@ -496,8 +497,9 @@ class SpatialAIPipeline:
 
             model_cfg = self.config.segmentation.get("model", {})
             model_size = model_cfg.get("size", "large")
-            repo_id = model_cfg.get("repo_id", "facebook/sam2-hiera-large")
-            revision = model_cfg.get("revision", None)  # Should be pinned in preset
+            enable_material = bool(self.config.segmentation.get("material_classification", False))
+            material_threshold = float(self.config.segmentation.get("material_confidence_threshold", 0.3))
+            tiling_cfg = SegmentationTilingConfig.from_dict(self.config.segmentation.get("tiling"))
 
             # Select device
             device = self.resource_manager.select_device()
@@ -506,8 +508,9 @@ class SpatialAIPipeline:
             backend = SAM2Backend(
                 model_size=model_size,
                 device=device,
-                repo_id=repo_id,
-                revision=revision,
+                enable_material_classification=enable_material,
+                material_confidence_threshold=material_threshold,
+                tiling=tiling_cfg,
             )
 
             # Register model for tracking
