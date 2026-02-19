@@ -22,17 +22,18 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost
+          # DO NOT delete AGENT_TOOLSDIRECTORY - breaks Python setup-python cache
+          # See: docs/incidents/2026-02-03_ci_python_toolcache_deletion.md
+          sudo docker image prune --all --force
+          df -h
+
       - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Free disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-          sudo docker image prune --all --force
-          df -h
 
       - name: Install dependencies
         run: |
