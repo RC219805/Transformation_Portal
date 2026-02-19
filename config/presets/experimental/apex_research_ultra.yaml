@@ -96,6 +96,13 @@ depth:
   temporal_consistency: true
   temporal_filter_alpha: 0.3  # Exponential moving average
 
+  # Post-fusion temporal filter (ADR-026 §2.2)
+  # Provides temporal stabilization on the fused ensemble depth when
+  # DepthCrafter is in synthetic fallback mode or unavailable.
+  temporal_post_filter:
+    mode: ema           # "ema" for EMA smoothing, "off" to disable
+    alpha: 0.3          # EMA smoothing factor (0.0-1.0, lower = stronger)
+
   # Quality gate
   max_variance_threshold: 0.15  # Flag for review if inter-model disagreement >15%
 

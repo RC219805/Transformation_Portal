@@ -4,6 +4,7 @@ Defines the contract for all depth estimation backends (DA2, DA3, Depth Pro)
 with consistent input/output types and license governance.
 
 See ADR-019 for architectural rationale.
+See ADR-026 §2.3 for StatefulBackend lifecycle protocol.
 """
 
 from __future__ import annotations
@@ -225,5 +226,34 @@ class DepthBackend(Protocol):
         Example:
             >>> DA3Backend.required_packages()
             ['transformers']
+        """
+        ...
+
+
+class StatefulBackend(Protocol):
+    """Protocol for backends that maintain temporal or sequence state.
+
+    Backends that accumulate state across frames (e.g., temporal filters,
+    video trackers) must implement this protocol so the orchestrator can
+    reset state at sequence boundaries and prevent cross-sequence contamination.
+
+    See ADR-026 §2.3 for sequence lifecycle requirements.
+
+    Example:
+        >>> class MyTemporalBackend:
+        ...     def reset_state(self, sequence_id=None):
+        ...         self._buffer.clear()
+    """
+
+    def reset_state(self, sequence_id: Optional[str] = None) -> None:
+        """Reset internal state for a new sequence.
+
+        Called by the orchestrator at sequence boundaries to prevent
+        temporal blending between unrelated sequences.
+
+        Args:
+            sequence_id: Optional identifier for the new sequence.
+                If provided, backends may use it for logging or
+                provenance tracking. None means "anonymous reset".
         """
         ...
