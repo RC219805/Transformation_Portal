@@ -96,7 +96,7 @@ jobs:
           ref: ${{ needs.preflight.outputs.head_sha }}
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
@@ -140,7 +140,7 @@ jobs:
           ref: ${{ needs.preflight.outputs.head_sha }}
 
       - name: Set up Python ${{ env.PYTHON_VERSION_LINT }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION_LINT }}
           cache: 'pip'
@@ -170,7 +170,7 @@ jobs:
           ref: ${{ needs.preflight.outputs.head_sha }}
 
       - name: Set up Python ${{ env.PYTHON_VERSION_LINT }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION_LINT }}
           cache: 'pip'
@@ -232,7 +232,7 @@ jobs:
           ref: ${{ needs.preflight.outputs.head_sha }}
 
       - name: Set up Python ${{ env.PYTHON_VERSION_TEST_MIN }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION_TEST_MIN }}
           cache: 'pip'
@@ -295,7 +295,7 @@ jobs:
           ref: ${{ needs.preflight.outputs.head_sha }}
 
       - name: Set up Python ${{ env.PYTHON_VERSION_TEST_MIN }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION_TEST_MIN }}
           cache: 'pip'
@@ -346,7 +346,7 @@ jobs:
           ref: ${{ needs.preflight.outputs.head_sha }}
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
@@ -392,7 +392,7 @@ jobs:
           df -h
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
@@ -489,7 +489,7 @@ jobs:
           df -h
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -596,7 +596,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python ${{ env.PYTHON_VERSION_LINT }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION_LINT }}
 
@@ -661,7 +661,7 @@ jobs:
           ref: ${{ needs.preflight.outputs.head_sha }}
 
       - name: Set up Python ${{ env.PYTHON_VERSION_LINT }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION_LINT }}
 
@@ -821,7 +821,7 @@ jobs:
           fi
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: 'pip'
