@@ -689,16 +689,17 @@ class TestEnsembleStateReset:
         config = EnhanceConfig(non_commercial_ok=True, accept_research_tools_license=True)
         tpf_config = TemporalPostFilterConfig(mode="ema", alpha=0.5)
         ensemble = DepthEnsembleBackend(config, temporal_post_filter=tpf_config)
+        temporal_filter = ensemble._temporal_post_filter
 
         # Prime the filter
         frame = np.ones((32, 32), dtype=np.float32) * 5.0
-        ensemble._temporal_post_filter.apply(frame)
-        assert ensemble._temporal_post_filter._ema_state is not None
+        temporal_filter.apply(frame)
+        assert temporal_filter.has_state()
 
         # Reset
         ensemble.reset_state(sequence_id="seq_2")
 
-        assert ensemble._temporal_post_filter._ema_state is None
+        assert not temporal_filter.has_state()
 
     def test_reset_state_delegates_to_stateful_sub_backends(self):
         """reset_state() should call reset_state() on cached sub-backends."""

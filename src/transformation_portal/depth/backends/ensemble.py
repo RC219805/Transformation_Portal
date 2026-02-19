@@ -86,6 +86,24 @@ class TemporalPostFilter:
         """Whether filtering is active."""
         return self._config.mode == "ema"
 
+    @property
+    def mode(self) -> str:
+        """Current temporal filter mode."""
+        return self._config.mode
+
+    @property
+    def alpha(self) -> float:
+        """Current EMA alpha."""
+        return self._config.alpha
+
+    def get_config(self) -> TemporalPostFilterConfig:
+        """Return a copy of the active filter configuration."""
+        return TemporalPostFilterConfig(mode=self._config.mode, alpha=self._config.alpha)
+
+    def has_state(self) -> bool:
+        """Whether EMA state is initialized."""
+        return self._ema_state is not None
+
     def apply(self, depth_map: np.ndarray) -> np.ndarray:
         """Apply temporal filter to a fused depth map.
 
@@ -305,8 +323,8 @@ class DepthEnsembleBackend:
                 fused_result.depth_map,
             )
             fused_result.metadata["temporal_post_filter"] = {
-                "mode": self._temporal_post_filter._config.mode,
-                "alpha": self._temporal_post_filter._config.alpha,
+                "mode": self._temporal_post_filter.mode,
+                "alpha": self._temporal_post_filter.alpha,
             }
 
         return fused_result

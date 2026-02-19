@@ -410,6 +410,10 @@ class DepthCrafterBackend:
         )
         self.reset_temporal_state()
 
+    def has_state(self) -> bool:
+        """Whether EMA temporal state is initialized."""
+        return self._ema_state is not None
+
     @property
     def temporal_buffer_length(self) -> int:
         """Return current temporal buffer length."""

@@ -228,7 +228,7 @@ class TestTemporalReset:
         backend.reset_temporal_state()
 
         assert backend.temporal_buffer_length == 0
-        assert backend._ema_state is None
+        assert not backend.has_state()
 
     def test_first_frame_after_reset_is_unsmoothed(self):
         """After reset, the next frame should be treated as first frame."""
@@ -394,7 +394,7 @@ class TestStatefulBackendProtocol:
         backend.reset_state(sequence_id="seq_002")
 
         assert backend.temporal_buffer_length == 0
-        assert backend._ema_state is None
+        assert not backend.has_state()
 
     def test_reset_state_accepts_sequence_id(self):
         """reset_state(sequence_id=...) should not raise."""
