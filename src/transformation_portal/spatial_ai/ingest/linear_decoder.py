@@ -536,29 +536,16 @@ class LinearDecoder:
                 if hasattr(raw, "rgb_xyz_matrix"):
                     rgb_xyz_matrix = raw.rgb_xyz_matrix
 
-                # Validate that at least one matrix exists
-                if color_matrix is None or (hasattr(color_matrix, "size") and color_matrix.size == 0):
-                    if rgb_xyz_matrix is None or (hasattr(rgb_xyz_matrix, "size") and rgb_xyz_matrix.size == 0):
-                        raise ColorSpaceError(
-                            input_path=path,
-                            reason="No camera color matrix found in RAW metadata",
-                            matrix_present=False,
-                        )
-
-                # Select the best available matrix (prefers color_matrix, falls back to rgb_xyz_matrix)
+                # Select the best available matrix (_select_valid_color_matrix is
+                # the single validation authority: length, NaN, norm, fallback).
                 matrix_to_check = self._select_valid_color_matrix(color_matrix, rgb_xyz_matrix)
 
-                # Final validation: ensure we have a valid matrix
-                if matrix_to_check is not None and hasattr(matrix_to_check, "__len__"):
-                    # Convert to numpy array for validation
-                    matrix_array = np.array(matrix_to_check)
-                    if matrix_array.size > 0:
-                        if np.allclose(matrix_array, 0.0):
-                            raise ColorSpaceError(
-                                input_path=path,
-                                reason="Camera color matrix is all zeros (malformed)",
-                                matrix_present=True,
-                            )
+                if matrix_to_check is None:
+                    raise ColorSpaceError(
+                        input_path=path,
+                        reason="No valid camera color matrix found in RAW metadata",
+                        matrix_present=color_matrix is not None or rgb_xyz_matrix is not None,
+                    )
 
                 # Phase I: We use rawpy.ColorSpace.sRGB in _decode_raw()
                 # This produces linear sRGB output (gamma=1.0)
@@ -586,8 +573,8 @@ class LinearDecoder:
             raw: rawpy RawPy object (open file context).
 
         Raises:
-            ValueError: If metadata is malformed (zero WB gains, NaN values,
-                        wrong channel count, negative black level, etc.).
+            ValueError: If metadata is malformed (non-finite WB gains, wrong
+                        channel count, negative black level, etc.).
         """
         # --- White Balance Gains ---
         # camera_whitebalance: [R, G1, B, G2] multipliers from camera EXIF
@@ -603,8 +590,12 @@ class LinearDecoder:
                     raise ValueError(
                         f"RAW metadata: camera_whitebalance contains NaN values: {wb_arr}. " "Malformed camera EXIF."
                     )
-                if np.any(wb_arr[:3] <= 0.0):
-                    # First 3 channels (R, G1, B) must be positive
+                if np.isinf(wb_arr).any():
+                    raise ValueError(
+                        f"RAW metadata: camera_whitebalance contains infinity values: {wb_arr}. " "Malformed camera EXIF."
+                    )
+                if np.any(wb_arr <= 0.0):
+                    # All channels (R, G1, B, G2) must be positive
                     raise ValueError(
                         f"RAW metadata: camera_whitebalance has zero or negative gain(s): {wb_arr}. "
                         "Cannot apply white balance without positive multipliers."
@@ -620,6 +611,8 @@ class LinearDecoder:
                     raise ValueError("RAW metadata: black_level_per_channel is empty. " "Cannot safely subtract black level.")
                 if np.isnan(bl_arr).any():
                     raise ValueError(f"RAW metadata: black_level_per_channel contains NaN: {bl_arr}.")
+                if np.isinf(bl_arr).any():
+                    raise ValueError(f"RAW metadata: black_level_per_channel contains infinity values: {bl_arr}.")
                 if np.any(bl_arr < 0.0):
                     raise ValueError(
                         f"RAW metadata: black_level_per_channel has negative values: {bl_arr}. "
@@ -643,7 +636,7 @@ class LinearDecoder:
     ) -> Optional[np.ndarray]:
         """Select the best available color matrix, preferring color_matrix over rgb_xyz_matrix.
 
-        Valid matrix: non-None, length==9, no NaNs, norm >= 1e-6.
+        Valid matrix: non-None, length==9, finite values, norm >= 1e-6.
         Falls back to rgb_xyz_matrix when color_matrix is missing or invalid.
 
         Args:
@@ -661,6 +654,8 @@ class LinearDecoder:
                 return None
             arr = np.array(matrix, dtype=np.float64)
             if np.isnan(arr).any():
+                return None
+            if np.isinf(arr).any():
                 return None
             if np.linalg.norm(arr) < 1e-6:
                 return None
