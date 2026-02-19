@@ -297,6 +297,7 @@ class TestSpatialAIPipelineInitialization:
         assert pipeline.config.tier == "standard"
         assert "ingest" in pipeline.config.stages
         assert "segment" in pipeline.config.stages or "segmentation" in pipeline.config.stages
+
     def test_initialization_from_preset_name(self):
         """Test initialization from preset name."""
         pipeline = SpatialAIPipeline.from_preset("spatial_ai_standard")
