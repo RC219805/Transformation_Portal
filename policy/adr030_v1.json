@@ -2,7 +2,7 @@
   "verification_policy_version": "adr030-v1",
   "float_model": "IEEE754_binary32_rn_even",
   "float32_eps_exp": -23,
-  "pixel_parity_multiplier": 128,
+  "pixel_parity_multiplier": 41,
   "mae_threshold": 1e-07,
   "rmse_threshold": 5e-07,
   "nan_policy": "fail_closed",

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Optional
 
 THREAD_ENV_VARS = {
     "OMP_NUM_THREADS": "1",

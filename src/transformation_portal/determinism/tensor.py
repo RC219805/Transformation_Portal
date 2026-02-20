@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple
 
 import numpy as np
 
@@ -33,10 +32,9 @@ def canonicalize_tensor_f32_le_c(tensor: np.ndarray) -> np.ndarray:
 
 def compute_artifact_id(tensor_role: str, tensor: np.ndarray) -> str:
     role = tensor_role.strip().lower()
-    if role != tensor_role:
-        # Enforce ASCII lowercase contract (SPEC-DH-001 §8.2)
-        if tensor_role != role:
-            raise ValueError("tensor_role must be ASCII lowercase")
+    # Enforce ASCII lowercase contract (SPEC-DH-001 §8.2)
+    if tensor_role != role:
+        raise ValueError("tensor_role must be ASCII lowercase")
     arr = canonicalize_tensor_f32_le_c(tensor)
     h, w, c = arr.shape
     header = (f"tensor_role={role}\n" f"dtype=float32\n" f"order=C\n" f"shape={h},{w},{c}\n").encode("ascii")
@@ -52,8 +50,6 @@ def write_tensor_bin(path: Path, tensor: np.ndarray) -> None:
 
 def write_tensor_npy(path: Path, tensor: np.ndarray) -> None:
     # `.npy` is a convenience encoding only; hashing is based on `.bin` bytes.
-    import numpy as np
-
     arr = np.asarray(tensor, dtype=np.float32, order="C")
     np.save(path, arr, allow_pickle=False)
 

@@ -14,8 +14,7 @@ from __future__ import annotations
 
 import json
 import math
-from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 
 
 def _utf16_sort_key(s: str) -> bytes:
