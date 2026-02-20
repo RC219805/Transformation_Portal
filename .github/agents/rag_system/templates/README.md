@@ -135,6 +135,7 @@ Each template follows a structured format with:
 Templates are designed to work with the RAG system's retrieval and reranking:
 
 ```python
+# Run from repository root with: export PYTHONPATH=.github/agents
 from rag_system.templates import PromptTemplates
 from rag_system.retriever import HybridRetriever
 from rag_system.citation import CitationGenerator
