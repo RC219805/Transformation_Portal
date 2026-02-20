@@ -5,12 +5,12 @@ Quick reference for common workflows and commands in this repo.
 ## Common commands (Makefile)
 - `make venv` create local `.venv` if missing.
 - `make setup` install package in editable mode.
-- `make install-core` install core dependencies (with constraints if present).
+- `make install-core` install core runtime + dev tooling dependencies (with constraints if present).
 - `make install-ml` install ML tier dependencies (with constraints if present).
 - `make test-fast` run fast test subset.
-- `make test-novideo` run tests excluding video suite.
+- `make test-novideo` run tests excluding luxury video master grader tests (filters out `video_master_grader`).
 - `make test-full` run full test suite (parallel if xdist installed).
-- `make test-integration` run integration tests (requires `HF_TOKEN`).
+- `make test-integration` run DA3/HuggingFace model-loading integration (`tests/test_da3_inference_integration.py`) with `TP_RUN_HF_MODEL_TESTS=1` (downloads models from HF Hub unless offline; typically requires `HF_TOKEN`).
 - `make test-structure` run codebase structure validation.
 - `make test-utils` run performance/error utility tests.
 - `make lint` run flake8 + pylint (non-blocking).
