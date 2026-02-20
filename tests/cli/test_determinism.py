@@ -2,14 +2,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
+
 
 def test_determinism_cli_hash(tmp_path):
-    # Arrange: copy canonical input tensor to temp dir
+    # Arrange: write canonical deterministic tensor to temp dir
     repo_root = Path(__file__).parent.parent.parent
-    input_tensor = repo_root / "tmp_tensor.npy"
-    assert input_tensor.exists(), f"Missing canonical input: {input_tensor}"
     test_input = tmp_path / "tensor.npy"
-    test_input.write_bytes(input_tensor.read_bytes())
+    np.save(test_input, np.zeros((4, 4, 3), dtype=np.float32), allow_pickle=False)
 
     # Act: run CLI and capture output
     cli_path = repo_root / "src" / "transformation_portal" / "determinism" / "cli.py"

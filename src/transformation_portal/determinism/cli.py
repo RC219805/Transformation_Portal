@@ -19,7 +19,8 @@ from transformation_portal.determinism import cas as caslib
 
 # Backward-compatibility export for legacy tests (do not use directly)
 from transformation_portal.determinism.artifact_utils import parse_artifact_id as _parse_artifact_id
-from transformation_portal.determinism.ingest import ingest_from_npy, probe_subnormals_preserved, seed_everything, sha256_file
+from transformation_portal.determinism.hardware_fpstate import enforce_fpstate_and_probe
+from transformation_portal.determinism.ingest import ingest_from_npy, seed_everything, sha256_file
 from transformation_portal.determinism.jcs import sha256_hex_of_canonical_json
 from transformation_portal.determinism.manifest import build_artifact_manifest
 from transformation_portal.determinism.tensor import compute_artifact_id
@@ -81,7 +82,8 @@ def run(
     if contract != "npy_tensor":
         raise typer.BadParameter("Only 'npy_tensor' supported in minimal runner.")
 
-    subnormals_ok = probe_subnormals_preserved()
+    fpstate_report = enforce_fpstate_and_probe(require_subnormals=False)
+    subnormals_ok = bool(fpstate_report.subnormals_preserved)
 
     execution_id = str(uuid.uuid4())
 
@@ -127,6 +129,10 @@ def run(
                 tensor_hash=tensor_hash,
                 raw_hash=raw_hash,
                 fingerprint_hash=fingerprint_hash,
+                fpstate_enforced=fpstate_report.enforced,
+                fpstate_backend=fpstate_report.backend,
+                subnormals_preserved=subnormals_ok,
+                fpstate_note=fpstate_report.note,
             )
 
             caslib.write_json(stage / "artifact_manifest.json", manifest)
