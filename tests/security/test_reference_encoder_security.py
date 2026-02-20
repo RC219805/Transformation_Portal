@@ -79,4 +79,5 @@ pytestmark = [
     pytest.mark.unit,
     pytest.mark.regression,
     pytest.mark.security,
+    pytest.mark.ml,
 ]
