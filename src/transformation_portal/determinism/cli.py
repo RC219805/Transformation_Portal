@@ -11,8 +11,10 @@ from typing import Any, Dict, Optional
 
 import typer
 
+from transformation_portal.spatial_ai.ingest.phase2_camera_native_linear import ingest_phase2_xyz_d50_linear_fp32
+
 from . import cas as caslib
-from .ingest import ingest_from_npy, ingest_phase2_xyz_d50_linear_fp32, probe_subnormals_preserved, seed_everything
+from .ingest import ingest_from_npy, probe_subnormals_preserved, seed_everything
 from .ingest import sha256_file as sha256_file_bytes
 from .jcs import sha256_hex_of_canonical_json
 from .policy import load_policy
