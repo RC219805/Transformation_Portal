@@ -1,0 +1,7 @@
+{
+  "kind": "matrix",
+  "name": "matrix_wrong_length",
+  "color_matrix": [1,2,3],
+  "rgb_xyz_matrix": null,
+  "expect": { "returns": "none" }
+}

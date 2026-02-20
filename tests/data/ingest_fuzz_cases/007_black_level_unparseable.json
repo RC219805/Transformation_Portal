@@ -1,0 +1,11 @@
+{
+  "kind": "metadata",
+  "name": "black_level_unparseable",
+  "camera_whitebalance": [2.0, 1.0, 1.5, 1.0],
+  "black_level_per_channel": {"bad": "data"},
+  "raw_image_shape": [10, 10],
+  "expect": {
+    "raises": "ValueError",
+    "msg_contains": "black_level_per_channel is unparseable"
+  }
+}

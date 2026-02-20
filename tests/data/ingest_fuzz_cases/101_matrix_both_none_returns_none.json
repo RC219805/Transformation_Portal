@@ -1,0 +1,7 @@
+{
+  "kind": "matrix",
+  "name": "matrix_both_none_returns_none",
+  "color_matrix": null,
+  "rgb_xyz_matrix": null,
+  "expect": { "returns": "none" }
+}
