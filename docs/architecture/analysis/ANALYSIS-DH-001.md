@@ -62,9 +62,11 @@ Only the following artifacts define binding requirements:
 
 - ADR-030 (verification policy: float model, gates, certified tensor semantics, baseline authority)
 - SPEC-DH-001 (mechanism: execution semantics, CAS layout, hashing rules, telemetry/runs)
-- `policy/adr030_vX.(json|py)` (single executable policy representation)
+- `policy/adr030_vX.(json|py)` (planned executable policy representation)
 
 Everything else (including this document) is analysis and implementation commentary.
+
+Implementation status (2026-02-20): the `policy/` artifact is target-state design and is not yet committed in this branch. Until that artifact lands, ADR-030 and SPEC-DH-001 remain the active normative sources for thresholds and gate semantics.
 
 ### 3.2 ADRs as Governance Ledger
 
@@ -87,9 +89,11 @@ This is necessary because even micro-scale numerical drift can cascade into high
 
 ---
 
-## 4. Executable Policy as Single Source of Truth
+## 4. Executable Policy as Target Single Source of Truth (Planned Artifact)
 
-Textual ADRs are not executable. To eliminate the "human transcription gap," Phase II requires a single machine-readable policy representation.
+Textual ADRs are not executable. To eliminate the "human transcription gap," Phase II targets a single machine-readable policy representation.
+
+Current-state note: this section describes the intended policy schema for a follow-up implementation PR; it is not yet wired into repository runtime code.
 
 Example policy structure (illustrative):
 
@@ -97,10 +101,10 @@ Example policy structure (illustrative):
 {
   "verification_policy_version": "adr030-v1",
   "float_model": "IEEE754_binary32",
-  "epsilon": "2^-23",
-  "pixel_parity_multiplier": 128,
-  "mae_threshold": 1e-7,
-  "rmse_threshold": 5e-7,
+  "epsilon": 1.1920928955078125e-07,
+  "max_abs_error_threshold": 5e-6,
+  "mean_abs_error_threshold": 5e-7,
+  "rmse_telemetry_enabled": true,
   "nan_policy": "fail_closed",
   "inf_policy": "fail_closed",
   "subnormal_policy": "preserve",
@@ -111,8 +115,8 @@ Example policy structure (illustrative):
 
 **Design intent:**
 
-* Verification code loads thresholds from this policy artifact.
-* No duplicate threshold constants exist elsewhere in code.
+* Once implemented, verification code loads thresholds from this policy artifact.
+* Before implementation, thresholds are sourced from SPEC-DH-001 Section 4.
 * Evidence captures the policy version and policy digest for forensic traceability.
 
 ---
@@ -126,7 +130,7 @@ Cross-ISA parity is achievable when floating-point hazards are converted into en
 Phase II certification binds epsilon to IEEE-754 binary32 machine epsilon:
 
 * `ε = 2^-23 ≈ 1.1920929e-7`
-* Code alias: `FLOAT32_EPS`
+* Optional code alias (if introduced): `FLOAT32_EPS`
 
 All tolerance constants derive from this value.
 
@@ -191,13 +195,13 @@ diff = reference.astype(np.float64).ravel(order="C") - candidate.astype(np.float
 abs_diff = np.abs(diff)
 
 mae = np.sum(abs_diff, dtype=np.float64) / abs_diff.size
-rmse = np.sqrt(np.sum(diff * diff, dtype=np.float64) / diff.size)
+rmse = np.sqrt(np.sum(np.square(diff), dtype=np.float64) / diff.size)
 max_abs_diff = np.max(abs_diff)
 ```
 
 ---
 
-## 7. Dual Gate Certification Semantics
+## 7. Certification Gates (SPEC-DH-001 aligned)
 
 ### 7.1 Preconditions
 
@@ -205,20 +209,21 @@ max_abs_diff = np.max(abs_diff)
 * dtype float32
 * no NaN/Inf allowed (fail closed)
 
-### 7.2 Pixel parity gate
+### 7.2 Maximum absolute error gate
 
 Passes iff:
 
-* `max_abs_diff <= 128 * ε`
+* `max_abs_diff <= 5e-6`
 
 This gate isolates structural divergence.
 
-### 7.3 Global drift gate
+### 7.3 Mean absolute error gate
 
 Passes iff:
 
-* `MAE < 1e-7`
-* `RMSE < 5e-7`
+* `MAE <= 5e-7`
+
+RMSE remains recommended diagnostic telemetry, but it is non-blocking unless promoted by a future SPEC-DH-001 revision.
 
 Note: NaN/Inf are **not allowed** (automatic failure), consistent with ADR-030.
 
@@ -249,6 +254,9 @@ Auto white balance is permitted only when:
 
 Phase II requires a version-controlled float32 Bradford matrix embedded as constants.
 
+The constants below are derived from the standard Bradford CAT transform:
+`M_B^-1 * diag(D50_LMS / D65_LMS) * M_B`, then rounded to IEEE-754 binary32.
+
 Example constants (float32):
 
 ```text
@@ -263,6 +271,21 @@ Certification constraint:
 * implement as explicit float32 multiply/add sequences with fixed left-to-right evaluation order
 
 This freezes execution order across ISA and avoids hidden vectorized reorderings.
+
+Verification method (reference implementation):
+
+```python
+import hashlib
+import numpy as np
+
+matrix = np.array([
+    [1.0478112, 0.0228866, -0.0501270],
+    [0.0295424, 0.9904844, -0.0170491],
+    [-0.0092319, 0.0150436, 0.7521316],
+], dtype=np.float32)
+digest = hashlib.sha256(matrix.astype("<f4", copy=False).tobytes(order="C")).hexdigest()
+# expected digest: 56c36ead9b6d2af97b304ed647145146b286717f140b761bda26c3b05a40ffe1
+```
 
 ---
 
@@ -367,7 +390,7 @@ To implement Phase II determinism without breaking legacy pipelines:
    * bootstraps deterministic runtime controls (thread neutralization, PYTHONHASHSEED re-exec)
    * materializes CAS artifacts and `.bin` bytes for certified roles
    * runs verification against baseline artifacts when supplied
-3. Add an executable policy representation (`policy/adr030_v1.(json|py)`) consumed by verification code.
+3. Add an executable policy representation (`policy/adr030_v1.(json|py)`) consumed by verification code in a follow-up implementation PR before enabling certification gates.
 4. Add CI parity gates for x86_64 vs arm64 using baseline artifacts.
 
 ---
@@ -393,3 +416,4 @@ This is a rare level of rigor in ML-adjacent pipelines and directly supports lon
 * RFC 8785: JSON Canonicalization Scheme
 * W3C Trace Context specification
 * IEEE 754 floating-point standard
+* Bradford chromatic adaptation transform (D65→D50), CIE XYZ/LMS formulation
