@@ -37,6 +37,16 @@ def test_loader_defaults_to_builtin_only(monkeypatch, tmp_path: Path):
     assert env_plugin_dir.resolve() not in paths
 
 
+def test_loader_rejects_programmatic_external_paths_when_disabled(tmp_path: Path):
+    """Programmatic path additions should honor secure-by-default policy."""
+    loader = PluginLoader(allow_external_plugins=False)
+    with pytest.raises(ValueError, match="External plugin paths are disabled"):
+        loader.add_search_path(tmp_path / "external_plugins")
+
+    paths = [path.resolve() for path in loader.get_search_paths()]
+    assert paths == [_builtin_loader_path()]
+
+
 def test_loader_external_paths_enabled_via_env(monkeypatch, tmp_path: Path):
     """PluginLoader should include user/env plugin paths when opt-in flag is set."""
     env_plugin_dir = tmp_path / "external_plugins"
@@ -81,4 +91,5 @@ def test_registry_external_paths_enabled_via_env(monkeypatch, tmp_path: Path):
 pytestmark = [
     pytest.mark.unit,
     pytest.mark.regression,
+    pytest.mark.security,
 ]

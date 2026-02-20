@@ -121,7 +121,7 @@ class PluginLoader:
     - External plugin search paths are opt-in (secure-by-default)
 
     Example:
-        >>> loader = PluginLoader()
+        >>> loader = PluginLoader(allow_external_plugins=True)
         >>> loader.add_search_path("~/.transformation_portal/plugins")
         >>> plugins = loader.discover_all()
         >>> for plugin in plugins:
@@ -162,7 +162,7 @@ class PluginLoader:
     def _add_default_paths(self) -> None:
         """Add default plugin search paths."""
         # Builtin plugins directory
-        builtin_plugins = Path(__file__).parent / "builtin"
+        builtin_plugins = (Path(__file__).resolve().parent / "builtin").resolve()
         self._search_paths.append(builtin_plugins)
 
         if not self._allow_external_plugins:
@@ -191,6 +191,14 @@ class PluginLoader:
             path: Directory path to add
         """
         path = Path(path).expanduser().resolve()
+        if not self._allow_external_plugins:
+            builtin_plugins = (Path(__file__).resolve().parent / "builtin").resolve()
+            if path != builtin_plugins:
+                raise ValueError(
+                    "External plugin paths are disabled. "
+                    "Set TRANSFORMATION_PORTAL_ENABLE_EXTERNAL_PLUGINS=1 "
+                    "or pass allow_external_plugins=True to PluginLoader."
+                )
         if path not in self._search_paths:
             self._search_paths.append(path)
 

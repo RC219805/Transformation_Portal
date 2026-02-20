@@ -78,4 +78,5 @@ def test_load_features_requires_numpy_array(tmp_path: Path):
 pytestmark = [
     pytest.mark.unit,
     pytest.mark.regression,
+    pytest.mark.security,
 ]

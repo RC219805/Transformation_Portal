@@ -10,7 +10,9 @@ import importlib
 import pickle
 from typing import Any, BinaryIO, Set, Tuple
 
-# Allow only numpy globals required for ndarray reconstruction across versions.
+# Allow only globals required for safe cache reconstruction across versions.
+# `torch.Size` remains for backward compatibility with legacy caches written
+# before `ReferenceImageEncoder.save_features()` normalized shape to tuples.
 _ALLOWED_PICKLE_GLOBALS: Set[Tuple[str, str]] = {
     ("torch", "Size"),
     ("pathlib", "PosixPath"),

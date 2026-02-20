@@ -93,4 +93,5 @@ def test_download_sam2_script_validates_sha256_format():
 pytestmark = [
     pytest.mark.unit,
     pytest.mark.regression,
+    pytest.mark.security,
 ]
