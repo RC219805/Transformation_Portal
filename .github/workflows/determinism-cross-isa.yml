@@ -64,11 +64,11 @@ jobs:
       - name: Capture artifact id
         id: capture
         run: |
-          python - <<'PY'
+          python - <<'PY' >> "$GITHUB_OUTPUT"
           import json
           data = json.load(open("run_result.json", "r", encoding="utf-8"))
           print(f"artifact_id={data['artifact_id']}")
-          PY >> "$GITHUB_OUTPUT"
+          PY
 
       - name: Upload CAS
         uses: actions/upload-artifact@v4
@@ -120,11 +120,11 @@ jobs:
       - name: Capture artifact id
         id: capture
         run: |
-          python - <<'PY'
+          python - <<'PY' >> "$GITHUB_OUTPUT"
           import json
           data = json.load(open("run_result.json", "r", encoding="utf-8"))
           print(f"artifact_id={data['artifact_id']}")
-          PY >> "$GITHUB_OUTPUT"
+          PY
 
       - name: Upload CAS
         uses: actions/upload-artifact@v4
