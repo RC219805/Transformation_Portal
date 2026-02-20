@@ -46,9 +46,9 @@ jobs:
         run: |
           pip install "numpy==1.26.4" --only-binary=:all:
 
-      - name: Install typer
+      - name: Install typer and pillow
         run: |
-          pip install typer
+          pip install typer pillow
 
       - name: Install package (no deps, just compile extension + wire package)
         run: |
@@ -116,9 +116,9 @@ jobs:
         run: |
           pip install "numpy==1.26.4" --only-binary=:all:
 
-      - name: Install typer
+      - name: Install typer and pillow
         run: |
-          pip install typer
+          pip install typer pillow
 
       - name: Install package (no deps, just compile extension + wire package)
         run: |
@@ -186,9 +186,9 @@ jobs:
         run: |
           pip install "numpy==1.26.4" --only-binary=:all:
 
-      - name: Install typer and package
+      - name: Install typer, pillow, and package
         run: |
-          pip install typer
+          pip install typer pillow
           pip install -e . --no-deps
 
       - name: Download baseline CAS
