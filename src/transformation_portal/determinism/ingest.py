@@ -46,7 +46,8 @@ def probe_subnormals_preserved() -> bool:
         return False
     y = x * np.float32(1.0)
     z = x + np.float32(0.0)
-    return (y != np.float32(0.0)) and (z != np.float32(0.0))
+    # NumPy comparisons produce np.bool_; normalize to Python bool for JSON/JCS callers.
+    return bool((y != np.float32(0.0)) and (z != np.float32(0.0)))
 
 
 def _apply_3x3_f32_hwc(vec3: np.ndarray, mat3x3: np.ndarray) -> np.ndarray:

@@ -134,7 +134,8 @@ def run(
         )
 
     # FTZ/DAZ probe (best-effort). Fail closed when policy demands it.
-    subnormals_ok = probe_subnormals_preserved()
+    # Defensive cast: keep evidence JSON strictly native types for JCS serialization.
+    subnormals_ok = bool(probe_subnormals_preserved())
     if policy.ftz_daz_policy == "fail_closed" and strict and not subnormals_ok:
         raise RuntimeError("FTZ/DAZ appears enabled (subnormals flushed). Policy requires fail-closed.")
 
