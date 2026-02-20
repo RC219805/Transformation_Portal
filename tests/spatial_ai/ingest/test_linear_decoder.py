@@ -551,6 +551,15 @@ class TestRawDecodePostprocessGuards:
                 self._rgb = rgb
                 self.camera_whitebalance = [2.0, 1.0, 1.5, 1.0]
                 self.black_level_per_channel = [512, 512, 512, 512]
+                self.color_matrix = np.eye(3, dtype=np.float64)
+                self.rgb_xyz_matrix = np.array(
+                    [
+                        [0.4124564, 0.3575761, 0.1804375],
+                        [0.2126729, 0.7151522, 0.0721750],
+                        [0.0193339, 0.1191920, 0.9503041],
+                    ],
+                    dtype=np.float64,
+                )
                 self.raw_image = np.zeros((8, 8), dtype=np.uint16)
 
             def __enter__(self):
@@ -606,11 +615,30 @@ class TestRawDecodePostprocessGuards:
         assert np.isclose(linear_rgb[0, 0, 0], 32768 / 65535.0)
         assert isinstance(fingerprint, str) and len(fingerprint) == 64
 
+    def test_decode_emits_ingest_fingerprint_in_provenance_json(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        valid_rgb = np.full((6, 4, 3), 32768, dtype=np.uint16)
+        self._install_fake_rawpy(monkeypatch, valid_rgb)
+
+        raw_path = tmp_path / "mock.dng"
+        raw_path.write_bytes(b"not-a-real-raw")
+
+        result = decode(raw_path, gamma=1.0, output_dir=tmp_path, emit_provenance=True)
+
+        assert result.ingest_fingerprint is not None
+        assert len(result.ingest_fingerprint) == 64
+        assert result.provenance_path is not None
+        assert result.provenance_path.exists()
+
+        provenance = json.loads(result.provenance_path.read_text())
+        assert provenance["ingest_fingerprint"] == result.ingest_fingerprint
+
     def test_decode_raw_propagates_metadata_value_error(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         class _FakeRaw:
             def __init__(self):
                 self.camera_whitebalance = ["bad", 1.0, 1.0, 1.0]  # non-numeric payload
                 self.black_level_per_channel = [512, 512, 512, 512]
+                self.color_matrix = np.eye(3, dtype=np.float64)
+                self.rgb_xyz_matrix = np.eye(3, dtype=np.float64)
                 self.raw_image = np.zeros((8, 8), dtype=np.uint16)
 
             def __enter__(self):
@@ -642,6 +670,8 @@ class TestRawDecodePostprocessGuards:
             def __init__(self):
                 self.camera_whitebalance = [2.0, 1.0, 1.5, 1.0]
                 self.black_level_per_channel = [512, 512, 512, 512]
+                self.color_matrix = np.eye(3, dtype=np.float64)
+                self.rgb_xyz_matrix = np.eye(3, dtype=np.float64)
                 self.raw_image = np.zeros((8, 8), dtype=np.uint16)
 
             def __enter__(self):
