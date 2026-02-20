@@ -545,8 +545,14 @@ class LinearDecoder:
                     def _diag(m: Any) -> str:
                         if m is None:
                             return "absent"
-                        arr = np.asarray(m, dtype=np.float64)
-                        norm = np.linalg.norm(arr) if arr.size > 0 else 0.0
+                        try:
+                            arr = np.asarray(m, dtype=np.float64)
+                        except Exception as exc:
+                            return f"unparseable(type={type(m).__name__}, error={exc})"
+                        try:
+                            norm = np.linalg.norm(arr) if arr.size > 0 else 0.0
+                        except Exception as exc:
+                            return f"shape={getattr(arr, 'shape', '?')} norm=uncomputable(error={exc})"
                         return f"shape={arr.shape} norm={norm:.3e}"
 
                     raise ColorSpaceError(
@@ -598,6 +604,11 @@ class LinearDecoder:
                 if wb_arr.size == 0:
                     raise ValueError(
                         "RAW metadata: camera_whitebalance is empty. " "Cannot decode without valid white balance gains."
+                    )
+                if wb_arr.size != 4:
+                    raise ValueError(
+                        f"RAW metadata: camera_whitebalance has unexpected channel count {wb_arr.size} "
+                        f"(expected 4 for [R, G1, B, G2]): {wb_arr.tolist()}."
                     )
                 if np.isnan(wb_arr).any():
                     raise ValueError(
@@ -676,7 +687,10 @@ class LinearDecoder:
         def _normalize(matrix: Any) -> Optional[np.ndarray]:
             if matrix is None:
                 return None
-            arr = np.asarray(matrix, dtype=np.float64)
+            try:
+                arr = np.asarray(matrix, dtype=np.float64)
+            except Exception:
+                return None
             # Accept (3, 3) arrays (common rawpy return shape) or flat length-9
             if arr.shape == (3, 3):
                 arr = arr.reshape(9)
@@ -688,7 +702,10 @@ class LinearDecoder:
                 return None
             if np.isinf(arr).any():
                 return None
-            norm = np.linalg.norm(arr)
+            try:
+                norm = np.linalg.norm(arr)
+            except Exception:
+                return None
             if norm < 1e-6:
                 return None
             return arr

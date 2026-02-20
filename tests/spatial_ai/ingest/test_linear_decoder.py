@@ -605,6 +605,38 @@ class TestRawDecodePostprocessGuards:
         assert np.isclose(linear_rgb[0, 0, 0], 32768 / 65535.0)
 
 
+class TestRawColorSpaceDiagnostics:
+    """Unit tests for robust color-space diagnostics in RAW metadata handling."""
+
+    def test_unparseable_matrices_raise_color_space_error_with_diagnostics(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ):
+        class _FakeRaw:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            @property
+            def color_matrix(self):
+                return object()  # non-coercible to float64
+
+            @property
+            def rgb_xyz_matrix(self):
+                return object()  # non-coercible to float64
+
+        fake_rawpy = types.SimpleNamespace(imread=lambda _path: _FakeRaw())
+        monkeypatch.setitem(sys.modules, "rawpy", fake_rawpy)
+
+        decoder = LinearDecoder(gamma=1.0)
+        raw_path = tmp_path / "mock.dng"
+        raw_path.write_bytes(b"not-a-real-raw")
+
+        with pytest.raises(ColorSpaceError, match=r"unparseable\(type=object"):
+            decoder._detect_raw_color_space(raw_path)
+
+
 class TestColorMatrixSelection:
     """Regression tests for zero color_matrix fallback (ingest hardening)."""
 
@@ -702,6 +734,16 @@ class TestColorMatrixSelection:
         assert result is not None
         assert np.allclose(result, np.array(valid_rgb_xyz_matrix, dtype=np.float64))
 
+    def test_non_numeric_color_matrix_falls_back_to_rgb_xyz(self):
+        """Non-numeric color_matrix must be treated as invalid and trigger fallback."""
+        bad_color_matrix = ["x"] * 9
+        valid_rgb_xyz_matrix = [0.3, 0.5, 0.2, 0.1, 0.7, 0.2, 0.05, 0.12, 0.95]
+
+        result = LinearDecoder._select_valid_color_matrix(bad_color_matrix, valid_rgb_xyz_matrix)
+
+        assert result is not None
+        assert np.allclose(result, np.array(valid_rgb_xyz_matrix, dtype=np.float64))
+
 
 class TestColorMatrixSelectionProperties:
     """Property-based tests for _select_valid_color_matrix invariants."""
@@ -724,16 +766,14 @@ class TestColorMatrixSelectionProperties:
 
     @given(_matrix_st)
     def test_near_zero_color_matrix_triggers_fallback(self, rgb_xyz_matrix):
-        """Near-zero color_matrix must always trigger fallback to rgb_xyz_matrix (or None)."""
+        """Near-zero color_matrix must always trigger fallback to valid rgb_xyz_matrix."""
         near_zero = [1e-38] * 9  # norm << 1e-6
 
         result = LinearDecoder._select_valid_color_matrix(near_zero, rgb_xyz_matrix)
 
         rgb_arr = np.array(rgb_xyz_matrix, dtype=np.float64)
-        if np.linalg.norm(rgb_arr) < 1e-6:
-            assert result is None
-        else:
-            assert np.allclose(result, rgb_arr)
+        assert result is not None
+        assert np.allclose(result, rgb_arr)
 
     @given(st.lists(st.floats(min_value=1e-3, max_value=10.0, allow_nan=False, allow_infinity=False), min_size=0, max_size=20))
     def test_wrong_length_color_matrix_triggers_fallback(self, bad_matrix):
@@ -814,6 +854,11 @@ class TestRawMetadataValidation:
     def test_empty_wb_raises(self):
         raw = self._make_raw(wb=[])
         with pytest.raises(ValueError, match="empty"):
+            LinearDecoder._validate_raw_metadata(raw)
+
+    def test_wrong_channel_count_wb_raises(self):
+        raw = self._make_raw(wb=[2.0, 1.0, 1.5])  # 3 channels — invalid for [R, G1, B, G2]
+        with pytest.raises(ValueError, match="channel count"):
             LinearDecoder._validate_raw_metadata(raw)
 
     def test_negative_black_level_raises(self):
