@@ -301,6 +301,51 @@ class TestArtifactStore:
         assert size_mb > 0.0
         assert size_mb < 10.0  # Compressed, should be < 10MB
 
+    def test_cache_size_tolerates_disappearing_temp_file(
+        self,
+        store: ArtifactStore,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """Cache size scan should ignore transient temp-file ENOENT races."""
+        prefix_dir = store.artifacts_dir / "aa"
+        prefix_dir.mkdir(parents=True, exist_ok=True)
+        disappearing = prefix_dir / "tmp_race_case.json"
+        disappearing.write_text("{}")
+
+        original_is_file = Path.is_file
+        original_stat = Path.stat
+
+        def flaky_is_file(path: Path) -> bool:
+            if path == disappearing:
+                return True
+            return original_is_file(path)
+
+        def flaky_stat(path: Path, *args, **kwargs):
+            if path == disappearing:
+                raise FileNotFoundError(path)
+            return original_stat(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "is_file", flaky_is_file)
+        monkeypatch.setattr(Path, "stat", flaky_stat)
+        size_mb = store.get_cache_size_mb()
+
+        assert size_mb >= 0.0
+
+    def test_check_cache_size_tolerates_size_scan_error(
+        self,
+        store: ArtifactStore,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """Store path should treat cache-size checks as best-effort telemetry."""
+
+        def broken_scan() -> float:
+            raise OSError("simulated transient scan failure")
+
+        monkeypatch.setattr(store, "get_cache_size_mb", broken_scan)
+
+        # Should not raise.
+        store._check_cache_size()
+
     def test_two_level_directory_hierarchy(self, store: ArtifactStore, cache_dir: Path):
         """Test artifacts are stored in two-level directory hierarchy."""
         # Generate a key that starts with "ab" for testing directory structure
