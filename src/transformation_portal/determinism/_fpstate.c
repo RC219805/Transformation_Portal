@@ -13,37 +13,78 @@ static unsigned long read_fpcr(void) {
 }
 #endif
 
+static int set_item_owned(PyObject* d, const char* key, PyObject* value) {
+    if (value == NULL) {
+        return -1;
+    }
+    if (PyDict_SetItemString(d, key, value) < 0) {
+        Py_DECREF(value);
+        return -1;
+    }
+    Py_DECREF(value);
+    return 0;
+}
+
 static PyObject* get_fp_state(PyObject* self, PyObject* args) {
+    (void)self;
+    (void)args;
+
     PyObject* d = PyDict_New();
+    if (d == NULL) {
+        return NULL;
+    }
 
 #if defined(__x86_64__) || defined(__i386__)
     unsigned int mxcsr = _mm_getcsr();
     int ftz = (mxcsr >> 15) & 1;
     int daz = (mxcsr >> 6) & 1;
 
-    PyDict_SetItemString(d, "arch", PyUnicode_FromString("x86"));
-    PyDict_SetItemString(d, "register", PyUnicode_FromString("MXCSR"));
-    PyDict_SetItemString(d, "mxcsr", PyLong_FromUnsignedLong(mxcsr));
-    PyDict_SetItemString(d, "ftz", PyBool_FromLong(ftz));
-    PyDict_SetItemString(d, "daz", PyBool_FromLong(daz));
+    if (set_item_owned(d, "arch", PyUnicode_FromString("x86")) < 0) {
+        goto error;
+    }
+    if (set_item_owned(d, "register", PyUnicode_FromString("MXCSR")) < 0) {
+        goto error;
+    }
+    if (set_item_owned(d, "mxcsr", PyLong_FromUnsignedLong(mxcsr)) < 0) {
+        goto error;
+    }
+    if (set_item_owned(d, "ftz", PyBool_FromLong(ftz)) < 0) {
+        goto error;
+    }
+    if (set_item_owned(d, "daz", PyBool_FromLong(daz)) < 0) {
+        goto error;
+    }
     return d;
 
 #elif defined(__aarch64__)
     unsigned long fpcr = read_fpcr();
     int ftz = (fpcr >> 24) & 1;
 
-    PyDict_SetItemString(d, "arch", PyUnicode_FromString("aarch64"));
-    PyDict_SetItemString(d, "register", PyUnicode_FromString("FPCR"));
-    PyDict_SetItemString(d, "fpcr", PyLong_FromUnsignedLong(fpcr));
-    PyDict_SetItemString(d, "ftz", PyBool_FromLong(ftz));
-    PyDict_SetItemString(d, "daz", PyBool_FromLong(0));
+    if (set_item_owned(d, "arch", PyUnicode_FromString("aarch64")) < 0) {
+        goto error;
+    }
+    if (set_item_owned(d, "register", PyUnicode_FromString("FPCR")) < 0) {
+        goto error;
+    }
+    if (set_item_owned(d, "fpcr", PyLong_FromUnsignedLong(fpcr)) < 0) {
+        goto error;
+    }
+    if (set_item_owned(d, "ftz", PyBool_FromLong(ftz)) < 0) {
+        goto error;
+    }
+    if (set_item_owned(d, "daz", PyBool_FromLong(0)) < 0) {
+        goto error;
+    }
     return d;
 
 #else
-    Py_DECREF(d);
     PyErr_SetString(PyExc_RuntimeError, "Unsupported architecture");
-    return NULL;
+    goto error;
 #endif
+
+error:
+    Py_DECREF(d);
+    return NULL;
 }
 
 static PyMethodDef Methods[] = {
