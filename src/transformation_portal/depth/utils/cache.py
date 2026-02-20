@@ -17,6 +17,8 @@ from typing import Any, Callable, Optional, Union
 
 import numpy as np
 
+from transformation_portal.core.security.serialization import safe_pickle_load
+
 logger = logging.getLogger(__name__)
 
 
@@ -153,6 +155,11 @@ class DepthCache:
         if enable_disk_cache:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
             logger.info(f"Disk cache enabled: {self.cache_dir}")
+
+    @staticmethod
+    def _is_valid_cache_value(value: Any) -> bool:
+        """Validate supported depth cache value types."""
+        return isinstance(value, np.ndarray)
 
     def get_or_compute(
         self,
@@ -318,7 +325,7 @@ class DepthCache:
             # Try to load pickle and validate structure
             try:
                 with open(cache_file, "rb") as f:
-                    result = pickle.load(f)  # nosec B301 - loading self-generated cache
+                    result = safe_pickle_load(f)
             except Exception as e:
                 logger.warning(f"Validation failed: cannot unpickle {cache_file}: {e}")
                 return False
@@ -336,6 +343,12 @@ class DepthCache:
                         f"Validation failed: missing required keys in {cache_file}. "
                         f"Expected one of {required_keys}, got {list(result.keys())}"
                     )
+                    return False
+                if "depth" in result and not self._is_valid_cache_value(result["depth"]):
+                    logger.warning(f"Validation failed: 'depth' has invalid type in {cache_file}")
+                    return False
+                if "depth_raw" in result and not self._is_valid_cache_value(result["depth_raw"]):
+                    logger.warning(f"Validation failed: 'depth_raw' has invalid type in {cache_file}")
                     return False
 
             logger.debug(f"Validation passed for {cache_file}")
@@ -365,7 +378,7 @@ class DepthCache:
 
             # Load validated cache entry
             with open(cache_file, "rb") as f:
-                result = pickle.load(f)  # nosec B301 - loading self-generated cache
+                result = safe_pickle_load(f)
 
             # Convert back to FP32
             if "depth" in result:

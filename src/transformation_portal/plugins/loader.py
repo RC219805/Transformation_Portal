@@ -15,6 +15,15 @@ from .interface import PluginInterface, PluginMetadata, PluginType
 
 logger = logging.getLogger(__name__)
 
+_ENABLE_EXTERNAL_PLUGINS_ENV = "TRANSFORMATION_PORTAL_ENABLE_EXTERNAL_PLUGINS"
+_TRUTHY_VALUES = {"1", "true", "yes", "on"}
+
+
+def _external_plugins_enabled_from_env() -> bool:
+    """Return True when external plugin loading is explicitly enabled."""
+    value = os.environ.get(_ENABLE_EXTERNAL_PLUGINS_ENV, "")
+    return value.strip().lower() in _TRUTHY_VALUES
+
 
 @dataclass
 class PluginManifest:
@@ -109,6 +118,7 @@ class PluginLoader:
     - Dependency resolution and validation
     - Safe module loading with isolation
     - Hot-reload support
+    - External plugin search paths are opt-in (secure-by-default)
 
     Example:
         >>> loader = PluginLoader()
@@ -122,18 +132,24 @@ class PluginLoader:
         self,
         search_paths: Optional[List[Path]] = None,
         auto_resolve_dependencies: bool = True,
+        allow_external_plugins: Optional[bool] = None,
     ):
         """Initialize plugin loader.
 
         Args:
             search_paths: Initial paths to search for plugins
             auto_resolve_dependencies: Automatically check dependencies on load
+            allow_external_plugins: Enable user/env plugin discovery paths.
+                If None, reads TRANSFORMATION_PORTAL_ENABLE_EXTERNAL_PLUGINS.
         """
         self._search_paths: List[Path] = []
         self._loaded_plugins: Dict[str, LoadedPlugin] = {}
         self._module_cache: Dict[str, Any] = {}
         self._lock = Lock()
         self._auto_resolve_deps = auto_resolve_dependencies
+        self._allow_external_plugins = (
+            allow_external_plugins if allow_external_plugins is not None else _external_plugins_enabled_from_env()
+        )
 
         # Add default paths
         self._add_default_paths()
@@ -145,13 +161,23 @@ class PluginLoader:
 
     def _add_default_paths(self) -> None:
         """Add default plugin search paths."""
-        # User plugins directory
-        user_plugins = Path.home() / ".transformation_portal" / "plugins"
-        self._search_paths.append(user_plugins)
-
         # Builtin plugins directory
         builtin_plugins = Path(__file__).parent / "builtin"
         self._search_paths.append(builtin_plugins)
+
+        if not self._allow_external_plugins:
+            env_path = os.environ.get("TRANSFORMATION_PORTAL_PLUGINS")
+            if env_path:
+                logger.warning(
+                    "Ignoring TRANSFORMATION_PORTAL_PLUGINS because external plugin loading is disabled. "
+                    "Set %s=1 to opt in.",
+                    _ENABLE_EXTERNAL_PLUGINS_ENV,
+                )
+            return
+
+        # User plugins directory
+        user_plugins = Path.home() / ".transformation_portal" / "plugins"
+        self._search_paths.append(user_plugins)
 
         # Environment variable path
         env_path = os.environ.get("TRANSFORMATION_PORTAL_PLUGINS")

@@ -17,6 +17,8 @@ import numpy as np
 import torch
 from PIL import Image
 
+from transformation_portal.core.security.serialization import safe_pickle_load
+
 try:
     from transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
 
@@ -218,7 +220,7 @@ class ReferenceImageEncoder:
 
         data = {
             "features": features.cpu().numpy(),
-            "shape": features.shape,
+            "shape": tuple(features.shape),
             "dtype": str(features.dtype),
             "metadata": metadata or {},
         }
@@ -240,10 +242,20 @@ class ReferenceImageEncoder:
         path = Path(path)
 
         with open(path, "rb") as f:
-            data = pickle.load(f)  # nosec B301 - loading self-generated cache
+            try:
+                data = safe_pickle_load(f)
+            except Exception as exc:
+                raise ValueError(f"Unsafe or invalid feature cache file: {path}") from exc
+
+        if not isinstance(data, dict):
+            raise ValueError(f"Invalid feature cache format in {path}: expected dict")
+        if "features" not in data or not isinstance(data["features"], np.ndarray):
+            raise ValueError(f"Invalid feature cache format in {path}: missing ndarray 'features'")
 
         features = torch.from_numpy(data["features"]).to(self.device)
         metadata = data.get("metadata", {})
+        if not isinstance(metadata, dict):
+            metadata = {}
 
         logger.info(f"Features loaded from {path}")
 

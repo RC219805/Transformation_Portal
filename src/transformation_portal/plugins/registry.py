@@ -3,12 +3,22 @@
 import importlib
 import importlib.util
 import inspect
+import os
 import warnings
 from pathlib import Path
 from threading import Lock
 from typing import Any, Dict, List, Optional
 
 from .interface import PluginInterface, PluginMetadata, PluginType
+
+_ENABLE_EXTERNAL_PLUGINS_ENV = "TRANSFORMATION_PORTAL_ENABLE_EXTERNAL_PLUGINS"
+_TRUTHY_VALUES = {"1", "true", "yes", "on"}
+
+
+def _external_plugins_enabled_from_env() -> bool:
+    """Return True when external plugin loading is explicitly enabled."""
+    value = os.environ.get(_ENABLE_EXTERNAL_PLUGINS_ENV, "")
+    return value.strip().lower() in _TRUTHY_VALUES
 
 
 class PluginRegistry:
@@ -25,12 +35,20 @@ class PluginRegistry:
         >>> result = depth_model.execute(image)
     """
 
-    def __init__(self):
-        """Initialize plugin registry."""
+    def __init__(self, allow_external_plugins: Optional[bool] = None):
+        """Initialize plugin registry.
+
+        Args:
+            allow_external_plugins: Enable user/env plugin discovery paths.
+                If None, reads TRANSFORMATION_PORTAL_ENABLE_EXTERNAL_PLUGINS.
+        """
         self._plugins: Dict[str, Dict[str, PluginInterface]] = {}
         self._metadata_cache: Dict[str, PluginMetadata] = {}
         self._lock = Lock()
         self._plugin_paths: List[Path] = []
+        self._allow_external_plugins = (
+            allow_external_plugins if allow_external_plugins is not None else _external_plugins_enabled_from_env()
+        )
 
         # Initialize plugin type categories
         for plugin_type in PluginType:
@@ -209,13 +227,15 @@ class PluginRegistry:
             List of default plugin directories
         """
         paths = [
-            Path.home() / ".transformation_portal" / "plugins",
             Path(__file__).parent / "builtin",
         ]
 
-        # Add environment variable path if set
-        import os
+        if not self._allow_external_plugins:
+            return paths
 
+        paths.append(Path.home() / ".transformation_portal" / "plugins")
+
+        # Add environment variable path if set
         if "TRANSFORMATION_PORTAL_PLUGINS" in os.environ:
             paths.append(Path(os.environ["TRANSFORMATION_PORTAL_PLUGINS"]))
 

@@ -42,6 +42,7 @@ License: Attribution (see LICENSE)
 import argparse
 import hashlib
 import os
+import re
 import shutil
 import sys
 import urllib.request
@@ -69,7 +70,7 @@ REALESRGAN_MODELS = {
     "RealESRGAN_x4plus.pth": {
         "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth",
         "size_mb": 64,
-        "sha256": None,  # Add checksum after first download
+        "sha256": "4fa0d38905f75ac06eb49a7951b426670021be3018265fd191d2125df9d682f1",
         "description": "Real-ESRGAN 4x upscaling (general images)",
         "required": True,
     },
@@ -81,6 +82,8 @@ REALESRGAN_MODELS = {
         "required": False,
     },
 }
+
+_SHA256_HEX_RE = re.compile(r"^[a-fA-F0-9]{64}$")
 
 DEPTH_MODELS = {
     "depth-anything-small": {
@@ -187,8 +190,12 @@ def check_disk_space(required_mb: int) -> bool:
 
 def verify_checksum(file_path: Path, expected_sha256: Optional[str]) -> bool:
     """Verify file SHA256 checksum."""
-    if expected_sha256 is None:
-        return True  # Skip verification
+    if not expected_sha256:
+        print("  ✗ Missing expected SHA256 checksum; refusing unverified artifact")
+        return False
+    if not _SHA256_HEX_RE.fullmatch(expected_sha256.strip()):
+        print(f"  ✗ Invalid expected SHA256 format: {expected_sha256!r}")
+        return False
 
     print("  Verifying checksum...")
     sha256 = hashlib.sha256()
@@ -198,10 +205,11 @@ def verify_checksum(file_path: Path, expected_sha256: Optional[str]) -> bool:
             sha256.update(chunk)
 
     actual = sha256.hexdigest()
+    expected = expected_sha256.lower()
 
-    if actual != expected_sha256:
+    if actual != expected:
         print("  ✗ Checksum mismatch!")
-        print(f"    Expected: {expected_sha256}")
+        print(f"    Expected: {expected}")
         print(f"    Got:      {actual}")
         return False
 
@@ -213,6 +221,9 @@ def download_file_with_retry(
     url: str, output_path: Path, description: str, expected_sha256: Optional[str] = None, max_retries: int = 3
 ) -> bool:
     """Download file with retry logic and checksum verification."""
+    if not expected_sha256 or not _SHA256_HEX_RE.fullmatch(expected_sha256.strip()):
+        print(f"  ✗ Missing or invalid SHA256 for {description}; refusing download")
+        return False
 
     for attempt in range(max_retries):
         try:
@@ -335,16 +346,33 @@ def install_realesrgan_weights(force: bool = False, dry_run: bool = False) -> in
 
     for model_name, config in REALESRGAN_MODELS.items():
         model_path = WEIGHTS_DIR / model_name
+        checksum = config.get("sha256")
 
         print(f"\nModel: {config['description']}")
         print(f"  File: {model_name}")
         print(f"  Size: ~{config['size_mb']} MB")
 
-        if model_path.exists() and not force:
-            size_mb = model_path.stat().st_size / (1024 * 1024)
-            print(f"  ✓ Already installed ({size_mb:.1f} MB)")
-            installed += 1
+        if config["required"] and (not checksum or not _SHA256_HEX_RE.fullmatch(checksum.strip())):
+            print("  ✗ Required model has missing/invalid SHA256 metadata; refusing insecure download")
             continue
+
+        if model_path.exists() and not force:
+            if checksum:
+                if verify_checksum(model_path, checksum):
+                    size_mb = model_path.stat().st_size / (1024 * 1024)
+                    print(f"  ✓ Already installed and verified ({size_mb:.1f} MB)")
+                    installed += 1
+                    continue
+                print("  ⚠️  Existing file failed verification; will re-download")
+                model_path.unlink(missing_ok=True)
+            elif config["required"]:
+                print("  ✗ Required model is missing trusted SHA256 metadata; refusing to use existing file")
+                model_path.unlink(missing_ok=True)
+            else:
+                size_mb = model_path.stat().st_size / (1024 * 1024)
+                print(f"  ✓ Already installed ({size_mb:.1f} MB, checksum unavailable)")
+                installed += 1
+                continue
 
         if not config["required"]:
             print("  ⚠️  Optional model, skipping")
