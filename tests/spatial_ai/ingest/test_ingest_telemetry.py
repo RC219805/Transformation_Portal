@@ -30,6 +30,13 @@ class ListTelemetry:
         self.events.append((event, fields))
 
 
+class RaisingTelemetry:
+    """Test helper: telemetry backend that always fails."""
+
+    def emit(self, event: str, **fields: object) -> None:
+        raise RuntimeError("telemetry backend unavailable")
+
+
 class TestNullTelemetryDefault:
     """Test that NullTelemetry is the default and is a no-op."""
 
@@ -394,3 +401,78 @@ class TestPostprocessGuardEvents:
         assert event == "ingest.postprocess_guard_failed"
         assert fields["reason"] == "shape_mismatch"
         assert fields["shape"] == (100, 100)
+
+
+class TestTelemetryFailureIsolation:
+    """Ensure telemetry backend failures never break ingest logic."""
+
+    def _install_fake_rawpy(self, monkeypatch, postprocess_output, color_matrix):
+        """Install a fake rawpy module for deterministic RAW decode tests."""
+        fake_rawpy_module = types.ModuleType("rawpy")
+
+        class _FakeRaw:
+            def __init__(self, path: str):
+                self.camera_whitebalance = [2.0, 1.0, 1.5, 1.0]
+                self.black_level_per_channel = [512, 512, 512, 512]
+                self.raw_image = np.zeros((100, 100), dtype=np.uint16)
+                self.color_matrix = color_matrix
+                self.rgb_xyz_matrix = np.eye(3)
+
+            def postprocess(self, **kwargs):
+                return postprocess_output
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                pass
+
+        def _fake_imread(path: str):
+            return _FakeRaw(path)
+
+        fake_rawpy_module.imread = _fake_imread
+        fake_rawpy_module.ColorSpace = types.SimpleNamespace(sRGB=1)
+        fake_rawpy_module.DemosaicAlgorithm = types.SimpleNamespace(AHD=3)
+        fake_rawpy_module.HighlightMode = types.SimpleNamespace(Clip=0)
+
+        # Also inject into sys.modules
+        import sys
+
+        monkeypatch.setitem(sys.modules, "rawpy", fake_rawpy_module)
+
+    def test_matrix_fallback_succeeds_when_telemetry_backend_raises(self):
+        """Matrix fallback should still return fallback matrix if telemetry emit fails."""
+        decoder = LinearDecoder(telemetry=RaisingTelemetry())
+
+        result = decoder._select_valid_color_matrix(np.zeros(9), np.eye(3))
+
+        assert result is not None
+        assert result.shape == (9,)
+
+    def test_decode_raw_success_path_survives_telemetry_failure(self, tmp_path, monkeypatch):
+        """RAW decode should succeed even if fallback telemetry emit raises."""
+        fake_output = np.full((100, 100, 3), 1024, dtype=np.uint16)
+        self._install_fake_rawpy(monkeypatch, fake_output, color_matrix=np.zeros(9))
+
+        decoder = LinearDecoder(telemetry=RaisingTelemetry())
+        raw_path = tmp_path / "test.dng"
+        raw_path.write_bytes(b"fake")
+
+        linear_rgb, size, fingerprint = decoder._decode_raw(raw_path, "RAW_DNG")
+
+        assert linear_rgb.shape == (100, 100, 3)
+        assert linear_rgb.dtype == np.float32
+        assert size == (100, 100)
+        assert fingerprint is not None
+
+    def test_decode_raw_guard_error_preserved_when_telemetry_backend_raises(self, tmp_path, monkeypatch):
+        """Postprocess guard error should still surface, not telemetry backend error."""
+        fake_output = np.random.rand(100, 100, 3).astype(np.float32)
+        self._install_fake_rawpy(monkeypatch, fake_output, color_matrix=np.eye(3))
+
+        decoder = LinearDecoder(telemetry=RaisingTelemetry())
+        raw_path = tmp_path / "test.dng"
+        raw_path.write_bytes(b"fake")
+
+        with pytest.raises(RuntimeError, match="expected uint16"):
+            decoder._decode_raw(raw_path, "RAW_DNG")
