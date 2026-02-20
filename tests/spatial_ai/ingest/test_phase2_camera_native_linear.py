@@ -61,6 +61,10 @@ def test_apply_3x3_f32_hwc_validates_inputs():
 
     with pytest.raises(ValueError, match="vec3 must be float32"):
         phase2._apply_3x3_f32_hwc(vec.astype(np.float64), mat)  # pylint: disable=protected-access
+    with pytest.raises(ValueError, match="HWC shape with 3 channels"):
+        phase2._apply_3x3_f32_hwc(np.zeros((2, 2), dtype=np.float32), mat)  # pylint: disable=protected-access
+    with pytest.raises(ValueError, match="HWC shape with 3 channels"):
+        phase2._apply_3x3_f32_hwc(np.zeros((2, 2, 4), dtype=np.float32), mat)  # pylint: disable=protected-access
     with pytest.raises(ValueError, match="mat3x3 must be float32 shape"):
         phase2._apply_3x3_f32_hwc(vec, np.eye(4, dtype=np.float32))  # pylint: disable=protected-access
 

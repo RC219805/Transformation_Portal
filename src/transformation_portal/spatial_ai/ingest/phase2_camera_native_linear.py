@@ -39,6 +39,8 @@ def _apply_3x3_f32_hwc(vec3: np.ndarray, mat3x3: np.ndarray) -> np.ndarray:
     """
     if vec3.dtype != np.float32:
         raise ValueError("vec3 must be float32")
+    if vec3.ndim != 3 or vec3.shape[2] != 3:
+        raise ValueError(f"vec3 must have HWC shape with 3 channels, got {vec3.shape}")
     if mat3x3.dtype != np.float32 or mat3x3.shape != (3, 3):
         raise ValueError("mat3x3 must be float32 shape (3,3)")
 

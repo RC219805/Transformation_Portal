@@ -37,9 +37,7 @@ def decode_contract(input_path: str, opts: IngestOptions) -> np.ndarray:
     """
     if opts.contract == "camera_native_linear":
         if opts.tensor_role != "xyz_d50_linear_fp32":
-            raise ValueError(
-                "camera_native_linear requires tensor_role='xyz_d50_linear_fp32' for Phase II certification."
-            )
+            raise ValueError("camera_native_linear requires tensor_role='xyz_d50_linear_fp32' for Phase II certification.")
         from .phase2_camera_native_linear import ingest_phase2_xyz_d50_linear_fp32
 
         tensor, _ = ingest_phase2_xyz_d50_linear_fp32(

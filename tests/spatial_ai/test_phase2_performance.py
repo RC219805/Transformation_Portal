@@ -238,11 +238,11 @@ class TestPerformanceRegression:
                     }
                 )
 
-            # Detect catastrophic regressions only when both relative and absolute
-            # slowdown are extreme. Keep a modest absolute floor to avoid
-            # micro-benchmark CI variance while still catching true outliers.
-            catastrophic_floor_seconds = 10.0
-            if recent > max(baseline * 5.0, catastrophic_floor_seconds):
+            # Detect catastrophic regressions using the 5x relative rule, but
+            # apply a floor to tiny baselines to reduce CI noise for very fast tests.
+            baseline_floor_seconds = 1.0
+            catastrophic_threshold = max(baseline, baseline_floor_seconds) * 5.0
+            if recent > catastrophic_threshold:
                 catastrophic_regressions.append(
                     {
                         "test": test_name,

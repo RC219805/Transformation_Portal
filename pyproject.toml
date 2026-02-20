@@ -11,9 +11,8 @@ requires-python = ">=3.11"
 authors = [{ name = "RC219805" }]
 # Core dependencies - see requirements/base.in for pinned versions
 dependencies = [
-    # Pin numpy <2 for depth-pro / depth-anything-3 compatibility
-    # opencv-python>=4.13 requires numpy>=2 but depth backends require <2;
-    # resolve by keeping numpy<2 and using opencv-python<4.13 until deps align.
+    # Keep broad runtime ranges in pyproject and enforce tested combos via lockfiles/CI.
+    # This project metadata currently keeps NumPy constrained below 2.
     "numpy>=1.24,<2",
     "Pillow>=10.0.0,<12",
     "scipy>=1.15,<2",
