@@ -200,11 +200,6 @@ def test_detect_raw_color_space_strict_typing(cm, xyz):
 # ---------------------------------------------------------------------------
 
 
-def _coerce_wb_bl(value: Any) -> Any:
-    """Coerce JSON-loaded WB/BL values: list of mixed numerics/strings pass through."""
-    return value
-
-
 @pytest.mark.parametrize(
     "case",
     load_corpus_cases(),
