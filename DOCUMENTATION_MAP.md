@@ -15,6 +15,7 @@
 | **Setup & Installation** | [docs/SETUP_GUIDE.md](docs/SETUP_GUIDE.md) | Detailed installation for all tiers |
 | **Contributing** | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute code, docs, issues |
 | **Security** | [SECURITY.md](SECURITY.md) | Security policy, reporting vulnerabilities |
+| **Security Hardening Report** | [security_best_practices_report.md](security_best_practices_report.md) | Security findings and remediation status |
 
 ---
 
