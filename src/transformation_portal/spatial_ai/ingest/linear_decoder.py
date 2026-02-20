@@ -492,6 +492,11 @@ class LinearDecoder:
 
                 return linear_rgb, (height, width)
 
+        except (ValueError, RuntimeError):
+            # ValueError from _validate_raw_metadata and RuntimeError from postprocess
+            # guards must propagate with their original types — do not collapse into
+            # a generic RuntimeError, which would obscure the error boundary.
+            raise
         except Exception as e:
             raise RuntimeError(f"Failed to decode RAW file {path.name}: {e}") from e
 
@@ -600,7 +605,10 @@ class LinearDecoder:
         if hasattr(raw, "camera_whitebalance"):
             wb = raw.camera_whitebalance
             if wb is not None:
-                wb_arr = np.array(wb, dtype=np.float64)
+                try:
+                    wb_arr = np.array(wb, dtype=np.float64)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(f"RAW metadata: camera_whitebalance is not numeric: {exc}") from exc
                 if wb_arr.size == 0:
                     raise ValueError(
                         "RAW metadata: camera_whitebalance is empty. " "Cannot decode without valid white balance gains."
@@ -632,7 +640,10 @@ class LinearDecoder:
         if hasattr(raw, "black_level_per_channel"):
             bl = raw.black_level_per_channel
             if bl is not None:
-                bl_arr = np.array(bl, dtype=np.float64)
+                try:
+                    bl_arr = np.array(bl, dtype=np.float64)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(f"RAW metadata: black_level_per_channel is not numeric: {exc}") from exc
                 if bl_arr.size == 0:
                     raise ValueError("RAW metadata: black_level_per_channel is empty. " "Cannot safely subtract black level.")
                 if np.isnan(bl_arr).any():

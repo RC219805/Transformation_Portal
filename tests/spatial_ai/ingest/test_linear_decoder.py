@@ -913,6 +913,18 @@ class TestRawMetadataValidation:
         raw = self._make_raw()  # all attrs absent
         LinearDecoder._validate_raw_metadata(raw)  # must not raise
 
+    def test_non_numeric_wb_raises_value_error(self):
+        """Non-numeric WB payload must raise ValueError, not TypeError."""
+        raw = self._make_raw(wb=["not", "a", "number", "!"])
+        with pytest.raises(ValueError, match="not numeric"):
+            LinearDecoder._validate_raw_metadata(raw)
+
+    def test_non_numeric_black_level_raises_value_error(self):
+        """Non-numeric black level payload must raise ValueError, not TypeError."""
+        raw = self._make_raw(wb=[2.0, 1.0, 1.5, 1.0], bl=["bad", "data", "here", "!"])
+        with pytest.raises(ValueError, match="not numeric"):
+            LinearDecoder._validate_raw_metadata(raw)
+
 
 # Pytest markers for organization
 pytestmark = [
