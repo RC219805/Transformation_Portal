@@ -1,0 +1,16 @@
+{
+  "verification_policy_version": "adr030-v1",
+  "float_model": "IEEE754_binary32_rn_even",
+  "float32_eps_exp": -23,
+  "pixel_parity_multiplier": 128,
+  "mae_threshold": 1e-07,
+  "rmse_threshold": 5e-07,
+  "nan_policy": "fail_closed",
+  "inf_policy": "fail_closed",
+  "subnormal_policy": "preserve",
+  "ftz_daz_policy": "fail_closed",
+  "reduction_mode": "single_thread_float64_c_order",
+  "matrix_backend": "explicit_f32_no_blas",
+  "certified_tensor_role": "xyz_d50_linear_fp32",
+  "policy_source": "policy/adr030_v1.json"
+}

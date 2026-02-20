@@ -1,0 +1,181 @@
+name: Determinism Harness / Cross-ISA Parity
+
+on:
+  pull_request:
+    paths:
+      - "src/transformation_portal/determinism/**"
+      - "policy/**"
+      - ".github/workflows/determinism-cross-isa.yml"
+
+permissions:
+  contents: read
+
+env:
+  PYTHONHASHSEED: "0"
+  OMP_NUM_THREADS: "1"
+  OPENBLAS_NUM_THREADS: "1"
+  MKL_NUM_THREADS: "1"
+  VECLIB_MAXIMUM_THREADS: "1"
+  NUMEXPR_NUM_THREADS: "1"
+
+jobs:
+  baseline-x86:
+    name: Baseline (x86_64)
+    runs-on: ubuntu-latest
+    outputs:
+      artifact_id: ${{ steps.capture.outputs.artifact_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install minimal deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy typer
+
+      - name: Generate synthetic tensor input
+        run: |
+          python - <<'PY'
+          import numpy as np
+          from pathlib import Path
+          p = Path("synthetic_xyz.npy")
+          # Fully deterministic across ISA: integer sequence cast to float32 (no math).
+          arr = np.arange(4 * 4 * 3, dtype=np.float32).reshape((4, 4, 3), order="C")
+          np.save(p, arr, allow_pickle=False)
+          print("wrote", p)
+          PY
+
+      - name: Run determinism harness
+        run: |
+          export PYTHONPATH="$GITHUB_WORKSPACE/src"
+          python -m transformation_portal.determinism run \
+            --input synthetic_xyz.npy \
+            --contract npy_tensor \
+            --tensor-role xyz_d50_linear_fp32 \
+            --cas-root cas \
+            --policy policy/adr030_v1.json \
+            > run_result.json
+
+      - name: Capture artifact id
+        id: capture
+        run: |
+          python - <<'PY'
+          import json
+          data = json.load(open("run_result.json", "r", encoding="utf-8"))
+          print(f"artifact_id={data['artifact_id']}")
+          PY >> "$GITHUB_OUTPUT"
+
+      - name: Upload CAS
+        uses: actions/upload-artifact@v4
+        with:
+          name: cas-baseline-x86
+          path: cas
+
+  candidate-arm:
+    name: Candidate (arm64)
+    runs-on: ubuntu-24.04-arm
+    outputs:
+      artifact_id: ${{ steps.capture.outputs.artifact_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install minimal deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy typer
+
+      - name: Generate synthetic tensor input
+        run: |
+          python - <<'PY'
+          import numpy as np
+          from pathlib import Path
+          p = Path("synthetic_xyz.npy")
+          arr = np.arange(4 * 4 * 3, dtype=np.float32).reshape((4, 4, 3), order="C")
+          np.save(p, arr, allow_pickle=False)
+          print("wrote", p)
+          PY
+
+      - name: Run determinism harness
+        run: |
+          export PYTHONPATH="$GITHUB_WORKSPACE/src"
+          python -m transformation_portal.determinism run \
+            --input synthetic_xyz.npy \
+            --contract npy_tensor \
+            --tensor-role xyz_d50_linear_fp32 \
+            --cas-root cas \
+            --policy policy/adr030_v1.json \
+            > run_result.json
+
+      - name: Capture artifact id
+        id: capture
+        run: |
+          python - <<'PY'
+          import json
+          data = json.load(open("run_result.json", "r", encoding="utf-8"))
+          print(f"artifact_id={data['artifact_id']}")
+          PY >> "$GITHUB_OUTPUT"
+
+      - name: Upload CAS
+        uses: actions/upload-artifact@v4
+        with:
+          name: cas-candidate-arm
+          path: cas
+
+  verify:
+    name: Verify (ADR-030 gates)
+    runs-on: ubuntu-latest
+    needs:
+      - baseline-x86
+      - candidate-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install minimal deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy typer
+
+      - name: Download baseline CAS
+        uses: actions/download-artifact@v4
+        with:
+          name: cas-baseline-x86
+          path: cas-baseline
+
+      - name: Download candidate CAS
+        uses: actions/download-artifact@v4
+        with:
+          name: cas-candidate-arm
+          path: cas-candidate
+
+      - name: Merge CAS roots
+        run: |
+          mkdir -p cas
+          rsync -a cas-baseline/ cas/
+          rsync -a cas-candidate/ cas/
+
+      - name: Verify candidate against baseline
+        run: |
+          export PYTHONPATH="$GITHUB_WORKSPACE/src"
+          python -m transformation_portal.determinism verify \
+            --baseline "${{ needs.baseline-x86.outputs.artifact_id }}" \
+            --artifact "${{ needs.candidate-arm.outputs.artifact_id }}" \
+            --cas-root cas \
+            --policy policy/adr030_v1.json \
+            --strict
