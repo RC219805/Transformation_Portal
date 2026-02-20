@@ -35,6 +35,7 @@ Usage:
 
 from __future__ import annotations
 
+from .contracts import IngestOptions, decode_contract
 from .exceptions import (
     BitDepthViolationError,
     ColorSpaceError,
@@ -61,6 +62,9 @@ from .validators import (
 )
 
 __all__ = [
+    # Phase II contract dispatcher
+    "IngestOptions",
+    "decode_contract",
     # Core decoder
     "LinearDecoder",
     "LinearIngestResult",

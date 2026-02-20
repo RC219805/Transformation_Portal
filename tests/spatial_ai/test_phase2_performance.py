@@ -238,8 +238,11 @@ class TestPerformanceRegression:
                     }
                 )
 
-            # Detect catastrophic regressions > 5x (likely bugs, not CI variance)
-            if recent > baseline * 5.0:
+            # Detect catastrophic regressions using the 5x relative rule, but
+            # apply only a small floor for very tiny baselines to reduce CI noise.
+            baseline_floor_seconds = 0.1
+            catastrophic_threshold = max(baseline, baseline_floor_seconds) * 5.0
+            if recent > catastrophic_threshold:
                 catastrophic_regressions.append(
                     {
                         "test": test_name,

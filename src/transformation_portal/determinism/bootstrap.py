@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 import sys
 
+from .fpstate import enforce_ftz_daz_disabled
+
 THREAD_ENV_VARS = {
     "OMP_NUM_THREADS": "1",
     "OPENBLAS_NUM_THREADS": "1",
@@ -32,3 +34,4 @@ def bootstrap() -> None:
     # Must run before importing NumPy / BLAS-linked extensions.
     _ensure_thread_env()
     _ensure_pythonhashseed_zero()
+    enforce_ftz_daz_disabled()
