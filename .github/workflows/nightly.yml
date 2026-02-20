@@ -223,7 +223,8 @@ jobs:
 
       - name: Generate SBOM
         run: |
-          cyclonedx-py --requirements requirements.txt --output sbom.json --format json
+          cyclonedx-py requirements --output-file sbom.json --output-format json requirements.txt || \
+          cyclonedx-py requirements requirements.txt --output sbom.json --format json
 
       - name: Audit all dependencies
         run: |

@@ -761,44 +761,52 @@ jobs:
           script: |
             const { owner, repo } = context.repo;
             const workflow_id = "ci-quality-firewall.yml";
-            const runs = await github.paginate(
-              github.rest.actions.listWorkflowRuns,
-              {
-                owner,
-                repo,
-                workflow_id,
-                branch: "main",
-                status: "completed",
-                per_page: 100
-              },
-              (response) => response.data.workflow_runs
-            );
 
-            for (const run of runs) {
-              if (run.id === context.runId) continue;
-              if (run.conclusion !== "success") continue;
-
-              const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
-                owner,
-                repo,
-                run_id: run.id,
-                per_page: 100
-              });
-
-              const flakeLedger = artifacts.data.artifacts.find(
-                (artifact) => artifact.name === "flake-ledger" && !artifact.expired
+            try {
+              const runs = await github.paginate(
+                github.rest.actions.listWorkflowRuns,
+                {
+                  owner,
+                  repo,
+                  workflow_id,
+                  branch: "main",
+                  status: "completed",
+                  per_page: 100
+                },
+                (response) => response.data?.workflow_runs ?? []
               );
 
-              if (flakeLedger) {
-                core.info(`Found prior flake ledger in workflow run ${run.id}`);
-                core.setOutput("found", "true");
-                core.setOutput("run_id", String(run.id));
-                return;
-              }
-            }
+              for (const run of runs) {
+                if (!run || !run.id) continue;
+                if (run.id === context.runId) continue;
+                if (run.conclusion !== "success") continue;
 
-            core.info("No prior flake-ledger artifact found on main; using repository baseline.");
-            core.setOutput("found", "false");
+                const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+                  owner,
+                  repo,
+                  run_id: run.id,
+                  per_page: 100
+                });
+
+                const artifactList = artifacts.data?.artifacts ?? [];
+                const flakeLedger = artifactList.find(
+                  (artifact) => artifact?.name === "flake-ledger" && !artifact?.expired
+                );
+
+                if (flakeLedger) {
+                  core.info(`Found prior flake ledger in workflow run ${run.id}`);
+                  core.setOutput("found", "true");
+                  core.setOutput("run_id", String(run.id));
+                  return;
+                }
+              }
+
+              core.info("No prior flake-ledger artifact found on main; using repository baseline.");
+              core.setOutput("found", "false");
+            } catch (error) {
+              core.warning(`Unable to query previous flake ledger artifacts: ${error?.message ?? error}`);
+              core.setOutput("found", "false");
+            }
 
       - name: Download previous flake ledger
         if: steps.find-ledger.outputs.found == 'true'
