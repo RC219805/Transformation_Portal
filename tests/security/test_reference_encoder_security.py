@@ -6,7 +6,8 @@ import pickle
 from pathlib import Path
 
 import pytest
-import torch
+
+torch = pytest.importorskip("torch", reason="torch required for reference encoder security tests")
 
 from transformation_portal.style_transfer.reference_encoder import ReferenceImageEncoder
 
