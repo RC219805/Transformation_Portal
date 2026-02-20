@@ -431,7 +431,9 @@ class LinearDecoder:
 
         Raises:
             ImportError: If rawpy is not installed.
-            RuntimeError: If RAW decode fails.
+            ValueError: If RAW metadata is malformed (for example, non-numeric
+                       white-balance/black-level payloads).
+            RuntimeError: If RAW postprocess/decode fails.
         """
         try:
             import rawpy
@@ -608,7 +610,10 @@ class LinearDecoder:
                 try:
                     wb_arr = np.array(wb, dtype=np.float64)
                 except (TypeError, ValueError) as exc:
-                    raise ValueError(f"RAW metadata: camera_whitebalance is not numeric: {exc}") from exc
+                    raise ValueError(
+                        "RAW metadata: camera_whitebalance is unparseable to float64. "
+                        f"type={type(wb).__name__}, value={wb!r}, error={exc}"
+                    ) from exc
                 if wb_arr.size == 0:
                     raise ValueError(
                         "RAW metadata: camera_whitebalance is empty. " "Cannot decode without valid white balance gains."
@@ -643,7 +648,10 @@ class LinearDecoder:
                 try:
                     bl_arr = np.array(bl, dtype=np.float64)
                 except (TypeError, ValueError) as exc:
-                    raise ValueError(f"RAW metadata: black_level_per_channel is not numeric: {exc}") from exc
+                    raise ValueError(
+                        "RAW metadata: black_level_per_channel is unparseable to float64. "
+                        f"type={type(bl).__name__}, value={bl!r}, error={exc}"
+                    ) from exc
                 if bl_arr.size == 0:
                     raise ValueError("RAW metadata: black_level_per_channel is empty. " "Cannot safely subtract black level.")
                 if np.isnan(bl_arr).any():

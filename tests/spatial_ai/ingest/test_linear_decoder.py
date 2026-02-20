@@ -604,6 +604,37 @@ class TestRawDecodePostprocessGuards:
         assert size == (6, 4)
         assert np.isclose(linear_rgb[0, 0, 0], 32768 / 65535.0)
 
+    def test_decode_raw_propagates_metadata_value_error(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        class _FakeRaw:
+            def __init__(self):
+                self.camera_whitebalance = ["bad", 1.0, 1.0, 1.0]  # non-numeric payload
+                self.black_level_per_channel = [512, 512, 512, 512]
+                self.raw_image = np.zeros((8, 8), dtype=np.uint16)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def postprocess(self, **kwargs):
+                raise AssertionError("postprocess must not run when metadata validation fails")
+
+        fake_rawpy = types.SimpleNamespace(
+            ColorSpace=types.SimpleNamespace(sRGB="sRGB"),
+            DemosaicAlgorithm=types.SimpleNamespace(AHD="AHD"),
+            HighlightMode=types.SimpleNamespace(Clip="Clip"),
+            imread=lambda _path: _FakeRaw(),
+        )
+        monkeypatch.setitem(sys.modules, "rawpy", fake_rawpy)
+
+        decoder = LinearDecoder(gamma=1.0)
+        raw_path = tmp_path / "mock.dng"
+        raw_path.write_bytes(b"not-a-real-raw")
+
+        with pytest.raises(ValueError, match="camera_whitebalance is unparseable"):
+            decoder._decode_raw(raw_path, "RAW_DNG")
+
 
 class TestRawColorSpaceDiagnostics:
     """Unit tests for robust color-space diagnostics in RAW metadata handling."""
@@ -916,13 +947,13 @@ class TestRawMetadataValidation:
     def test_non_numeric_wb_raises_value_error(self):
         """Non-numeric WB payload must raise ValueError, not TypeError."""
         raw = self._make_raw(wb=["not", "a", "number", "!"])
-        with pytest.raises(ValueError, match="not numeric"):
+        with pytest.raises(ValueError, match="camera_whitebalance is unparseable to float64"):
             LinearDecoder._validate_raw_metadata(raw)
 
     def test_non_numeric_black_level_raises_value_error(self):
         """Non-numeric black level payload must raise ValueError, not TypeError."""
         raw = self._make_raw(wb=[2.0, 1.0, 1.5, 1.0], bl=["bad", "data", "here", "!"])
-        with pytest.raises(ValueError, match="not numeric"):
+        with pytest.raises(ValueError, match="black_level_per_channel is unparseable to float64"):
             LinearDecoder._validate_raw_metadata(raw)
 
 
