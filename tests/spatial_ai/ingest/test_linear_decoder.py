@@ -806,6 +806,19 @@ class TestColorMatrixSelectionProperties:
         assert result is not None
         assert np.allclose(result, np.array(valid_fallback, dtype=np.float64))
 
+    @given(_matrix_st)
+    def test_selection_is_deterministic(self, color_matrix):
+        """Same inputs must always produce bitwise-identical outputs (no nondeterminism)."""
+        fallback = [0.4, 0.3, 0.3, 0.2, 0.6, 0.2, 0.05, 0.1, 0.85]
+
+        result_a = LinearDecoder._select_valid_color_matrix(color_matrix, fallback)
+        result_b = LinearDecoder._select_valid_color_matrix(color_matrix, fallback)
+
+        assert result_a is not None
+        assert result_b is not None
+        # Bitwise identical — not just allclose — because no stochastic ops involved
+        np.testing.assert_array_equal(result_a, result_b)
+
 
 class TestRawMetadataValidation:
     """Unit tests for _validate_raw_metadata — no rawpy install required."""
