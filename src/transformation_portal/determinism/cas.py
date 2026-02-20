@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import errno
+import hashlib
 import os
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict
 
-from .jcs import dumpb, sha256_hex_of_canonical_json
+from .jcs import dumpb
 
 
 def _fsync_file(path: Path) -> None:
@@ -33,8 +34,6 @@ def _fsync_dir(path: Path) -> None:
 
 
 def sha256_file(path: Path) -> str:
-    import hashlib
-
     h = hashlib.sha256()
     with path.open("rb") as f:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
@@ -82,7 +81,7 @@ def write_json(path: Path, obj) -> str:
     b = dumpb(obj)
     path.write_bytes(b)
     _fsync_file(path)
-    return sha256_hex_of_canonical_json(obj)
+    return hashlib.sha256(b).hexdigest()
 
 
 def build_artifact_manifest(root_dir: Path) -> Dict[str, str]:

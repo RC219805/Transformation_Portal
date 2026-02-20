@@ -15,6 +15,7 @@ from transformation_portal.determinism.cas import (
     stage_dir,
     write_json,
 )
+from transformation_portal.determinism.cli import _parse_artifact_id
 from transformation_portal.determinism.jcs import dumps, sha256_hex_of_canonical_json
 from transformation_portal.determinism.policy import Adr030PolicyV1, load_policy
 from transformation_portal.determinism.tensor import compute_artifact_id
@@ -71,6 +72,12 @@ def test_compute_artifact_id_rejects_non_lowercase_role():
         compute_artifact_id("XYZ_D50_LINEAR_FP32", tensor)
 
 
+def test_parse_artifact_id_normalizes_hex_case():
+    upper = "sha256:" + ("AB" * 32)
+    normalized = _parse_artifact_id(upper)
+    assert normalized == ("ab" * 32)
+
+
 def test_compute_metrics_known_values():
     reference = np.zeros((1, 1, 3), dtype=np.float32)
     candidate = np.array([[[1e-6, -2e-6, 3e-6]]], dtype=np.float32)
@@ -124,6 +131,7 @@ def test_cas_atomic_commit_and_manifest(tmp_path: Path):
     staging = stage_dir(cas_root, "staging-")
     digest = write_json(staging / "meta.json", {"b": 2, "a": 1})
     assert digest == sha256_hex_of_canonical_json({"b": 2, "a": 1})
+    assert digest == sha256_file(staging / "meta.json")
 
     final_dir = cas_root / "sha256" / "artifact_01"
     final_dir.parent.mkdir(parents=True, exist_ok=True)

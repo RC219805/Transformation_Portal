@@ -33,7 +33,7 @@ def _parse_artifact_id(artifact_id: str) -> str:
     hex_ = artifact_id.split("sha256:", 1)[1]
     if len(hex_) != 64 or any(c not in "0123456789abcdef" for c in hex_.lower()):
         raise typer.BadParameter("artifact_id hash must be 64 lowercase hex chars")
-    return hex_
+    return hex_.lower()
 
 
 def _load_tensor_from_cas(cas_root: Path, artifact_id: str):

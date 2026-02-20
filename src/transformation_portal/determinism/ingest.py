@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import hashlib
 import random
 from pathlib import Path
 from typing import Any, Dict
 
 import numpy as np
 
+from .cas import sha256_file as _sha256_file
 from .tensor import canonicalize_tensor_f32_le_c
 
 BRADFORD_D65_TO_D50_F32 = np.array(
@@ -19,17 +19,14 @@ BRADFORD_D65_TO_D50_F32 = np.array(
 )
 
 
+def sha256_file(path: Path) -> str:
+    """Compatibility wrapper; delegates to CAS helper implementation."""
+    return _sha256_file(path)
+
+
 def seed_everything(seed: int = 0) -> None:
     random.seed(seed)
     np.random.seed(seed)
-
-
-def sha256_file(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(1024 * 1024), b""):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 def probe_subnormals_preserved() -> bool:

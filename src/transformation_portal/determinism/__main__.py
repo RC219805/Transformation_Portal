@@ -4,7 +4,13 @@ from .bootstrap import bootstrap
 
 bootstrap()
 
-from .cli import app
+
+def main() -> None:
+    # Import after bootstrap so env/thread controls apply before NumPy stack loads.
+    from .cli import app
+
+    app()
+
 
 if __name__ == "__main__":
-    app()
+    main()
