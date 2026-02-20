@@ -43,6 +43,7 @@ from PIL import Image
 
 from .exceptions import BitDepthViolationError, ColorSpaceError, UnsupportedFormatError
 from .provenance import ProvenanceCapture
+from .telemetry import IngestTelemetry, NullTelemetry
 from .validators import validate_bit_depth, validate_linear_output
 
 logger = logging.getLogger(__name__)
@@ -181,6 +182,7 @@ class LinearDecoder:
         gamma: float = 1.0,
         bit_depth: int = 32,
         strict_ingest: bool = False,
+        telemetry: IngestTelemetry | None = None,
     ):
         """Initialize linear decoder.
 
@@ -190,6 +192,8 @@ class LinearDecoder:
             strict_ingest: If True, reject 8-bit inputs to prevent lossy normalization.
                 For research/training workflows requiring true linear preservation,
                 set strict_ingest=True to enforce >=16-bit inputs only.
+            telemetry: Optional telemetry implementation for ingest boundary instrumentation.
+                Defaults to NullTelemetry (zero overhead).
 
         Raises:
             ValueError: If gamma != 1.0 (linear ingest contract).
@@ -203,6 +207,7 @@ class LinearDecoder:
         self.gamma = gamma
         self.bit_depth = bit_depth
         self.strict_ingest = strict_ingest
+        self._telemetry: IngestTelemetry = telemetry or NullTelemetry()
 
     def decode(
         self,
@@ -533,11 +538,13 @@ class LinearDecoder:
 
                 # Guard: postprocess must return uint16 (H, W, 3)
                 if rgb.dtype != np.uint16:
+                    self._telemetry.emit("ingest.postprocess_guard_failed", reason="dtype_mismatch", dtype=str(rgb.dtype))
                     raise RuntimeError(
                         f"RAW decode: expected uint16 from postprocess (output_bps=16), "
                         f"got {rgb.dtype}. Cannot normalize safely."
                     )
                 if rgb.ndim != 3 or rgb.shape[2] != 3:
+                    self._telemetry.emit("ingest.postprocess_guard_failed", reason="shape_mismatch", shape=tuple(rgb.shape))
                     raise RuntimeError(f"RAW decode: expected (H, W, 3) from postprocess, got shape {rgb.shape}.")
 
                 # Convert uint16 [0, 65535] to float32 [0, 1]
@@ -674,8 +681,7 @@ class LinearDecoder:
                 matrix_present=False,
             ) from e
 
-    @staticmethod
-    def _validate_raw_metadata(raw: Any) -> None:
+    def _validate_raw_metadata(self, raw: Any) -> None:
         """Validate RAW file metadata before decode to prevent silent numeric corruption.
 
         Checks white balance gains, black level, and output shape safety.
@@ -696,30 +702,38 @@ class LinearDecoder:
                 try:
                     wb_arr = np.array(wb, dtype=np.float64)
                 except (TypeError, ValueError) as exc:
+                    self._telemetry.emit("ingest.validation_failed", field="camera_whitebalance", reason="non_numeric")
                     raise ValueError(
                         "RAW metadata: camera_whitebalance is unparseable to float64. "
                         f"type={type(wb).__name__}, value={wb!r}, error={exc}"
                     ) from exc
                 if wb_arr.size == 0:
+                    self._telemetry.emit("ingest.validation_failed", field="camera_whitebalance", reason="empty")
                     raise ValueError(
                         "RAW metadata: camera_whitebalance is empty. " "Cannot decode without valid white balance gains."
                     )
                 if wb_arr.size != 4:
+                    self._telemetry.emit(
+                        "ingest.validation_failed", field="camera_whitebalance", reason="invalid_channel_count"
+                    )
                     raise ValueError(
                         f"RAW metadata: camera_whitebalance has unexpected channel count {wb_arr.size} "
                         f"(expected 4 for [R, G1, B, G2]): {wb_arr.tolist()}."
                     )
                 if np.isnan(wb_arr).any():
+                    self._telemetry.emit("ingest.validation_failed", field="camera_whitebalance", reason="nan")
                     raise ValueError(
                         f"RAW metadata: camera_whitebalance contains NaN values: {wb_arr}. " "Malformed camera EXIF."
                     )
                 if np.isinf(wb_arr).any():
+                    self._telemetry.emit("ingest.validation_failed", field="camera_whitebalance", reason="inf")
                     raise ValueError(
                         f"RAW metadata: camera_whitebalance contains infinity values: {wb_arr}. " "Malformed camera EXIF."
                     )
                 if np.any(wb_arr <= 0.0):
                     # All channels (R, G1, B, G2) must be positive
                     bad_indices = np.where(wb_arr <= 0.0)[0].tolist()
+                    self._telemetry.emit("ingest.validation_failed", field="camera_whitebalance", reason="non_positive")
                     raise ValueError(
                         f"RAW metadata: camera_whitebalance has zero or negative gain(s) "
                         f"at channel(s) {bad_indices}: {wb_arr.tolist()}. "
@@ -734,22 +748,30 @@ class LinearDecoder:
                 try:
                     bl_arr = np.array(bl, dtype=np.float64)
                 except (TypeError, ValueError) as exc:
+                    self._telemetry.emit("ingest.validation_failed", field="black_level_per_channel", reason="non_numeric")
                     raise ValueError(
                         "RAW metadata: black_level_per_channel is unparseable to float64. "
                         f"type={type(bl).__name__}, value={bl!r}, error={exc}"
                     ) from exc
                 if bl_arr.size == 0:
+                    self._telemetry.emit("ingest.validation_failed", field="black_level_per_channel", reason="empty")
                     raise ValueError("RAW metadata: black_level_per_channel is empty. " "Cannot safely subtract black level.")
                 if np.isnan(bl_arr).any():
+                    self._telemetry.emit("ingest.validation_failed", field="black_level_per_channel", reason="nan")
                     raise ValueError(f"RAW metadata: black_level_per_channel contains NaN: {bl_arr}.")
                 if np.isinf(bl_arr).any():
+                    self._telemetry.emit("ingest.validation_failed", field="black_level_per_channel", reason="inf")
                     raise ValueError(f"RAW metadata: black_level_per_channel contains infinity values: {bl_arr}.")
                 if np.any(bl_arr < 0.0):
+                    self._telemetry.emit("ingest.validation_failed", field="black_level_per_channel", reason="negative")
                     raise ValueError(
                         f"RAW metadata: black_level_per_channel has negative values: {bl_arr}. "
                         "Black level must be non-negative."
                     )
                 if bl_arr.size not in (1, 3, 4):
+                    self._telemetry.emit(
+                        "ingest.validation_failed", field="black_level_per_channel", reason="invalid_channel_count"
+                    )
                     raise ValueError(
                         f"RAW metadata: black_level_per_channel has unexpected channel count "
                         f"{bl_arr.size} (expected 1, 3, or 4 for Bayer/RGB layouts): {bl_arr.tolist()}."
@@ -758,10 +780,11 @@ class LinearDecoder:
         # --- Raw image shape sanity ---
         if hasattr(raw, "raw_image") and raw.raw_image is not None:
             if raw.raw_image.ndim != 2:
+                self._telemetry.emit("ingest.validation_failed", field="raw_image", reason="wrong_ndim")
                 raise ValueError(f"RAW metadata: raw_image expected 2D (H×W Bayer), " f"got shape {raw.raw_image.shape}.")
 
-    @staticmethod
     def _select_valid_color_matrix(
+        self,
         color_matrix: Any,
         rgb_xyz_matrix: Any,
     ) -> Optional[np.ndarray]:
@@ -818,7 +841,13 @@ class LinearDecoder:
         primary = _normalize(color_matrix)
         if primary is not None:
             return primary
-        return _normalize(rgb_xyz_matrix)
+
+        # color_matrix was present but invalid, falling back to rgb_xyz_matrix
+        fallback = _normalize(rgb_xyz_matrix)
+        if fallback is not None and color_matrix is not None:
+            # Emit telemetry ONLY when color_matrix was present but invalid
+            self._telemetry.emit("ingest.matrix_fallback_used", from_="color_matrix", to="rgb_xyz_matrix")
+        return fallback
 
     def _compute_content_hash(self, array: np.ndarray) -> str:
         """Compute SHA-256 hash of array content.

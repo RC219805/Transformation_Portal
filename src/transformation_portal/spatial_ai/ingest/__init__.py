@@ -49,6 +49,7 @@ from .exceptions import (
 from .linear_decoder import LinearDecoder, LinearIngestResult, decode
 from .manifest_schema import DatasetManifestBuilder, ImageManifestEntry, ManifestSchema
 from .provenance import CameraMetadata, ProvenanceCapture, ProvenanceData
+from .telemetry import IngestTelemetry, NullTelemetry
 from .validators import (
     CURRENT_SCHEMA_VERSION,
     validate_bit_depth,
@@ -68,6 +69,9 @@ __all__ = [
     "ProvenanceCapture",
     "ProvenanceData",
     "CameraMetadata",
+    # Telemetry
+    "IngestTelemetry",
+    "NullTelemetry",
     # Manifest schema
     "ManifestSchema",
     "DatasetManifestBuilder",
