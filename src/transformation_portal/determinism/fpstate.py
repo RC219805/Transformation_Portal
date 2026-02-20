@@ -10,7 +10,7 @@ class FPStateError(RuntimeError):
 def read_fp_state() -> Dict[str, Any]:
     try:
         from . import _fpstate  # type: ignore
-    except Exception as e:  # pragma: no cover
+    except Exception as e:
         raise FPStateError(
             "Unable to import compiled fpstate probe (transformation_portal.determinism._fpstate). "
             "Reinstall from source with a working C compiler/toolchain."

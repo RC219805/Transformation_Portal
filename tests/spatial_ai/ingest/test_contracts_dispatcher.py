@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import types
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -41,6 +42,29 @@ def test_decode_contract_camera_native_linear_forwards_params(monkeypatch):
     assert out.shape == (2, 2, 3)
     assert np.allclose(out, expected)
     assert captured["wb_mode"] == "auto"
+    assert captured["demosaic"] == "AHD"
+
+
+def test_decode_contract_accepts_path_like_input(monkeypatch):
+    captured = {}
+
+    def _fake_ingest(path, *, wb_mode, demosaic):  # noqa: ANN001
+        captured["path"] = path
+        captured["wb_mode"] = wb_mode
+        captured["demosaic"] = demosaic
+        return np.ones((1, 1, 3), dtype=np.float32), {"contract": "camera_native_linear"}
+
+    monkeypatch.setattr(
+        "transformation_portal.spatial_ai.ingest.phase2_camera_native_linear.ingest_phase2_xyz_d50_linear_fp32",
+        _fake_ingest,
+    )
+
+    opts = IngestOptions(contract="camera_native_linear")
+    out = decode_contract(Path("example.CR3"), opts)
+
+    assert out.shape == (1, 1, 3)
+    assert captured["path"] == Path("example.CR3")
+    assert captured["wb_mode"] == "camera"
     assert captured["demosaic"] == "AHD"
 
 

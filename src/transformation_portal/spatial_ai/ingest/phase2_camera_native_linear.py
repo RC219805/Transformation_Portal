@@ -30,6 +30,7 @@ BRADFORD_D65_TO_D50_F32: np.ndarray = np.array(
     ],
     dtype=np.float32,
 )
+PHASE2_FINGERPRINT_SCHEMA_VERSION = "1.0.0"
 
 
 def _apply_3x3_f32_hwc(vec3: np.ndarray, mat3x3: np.ndarray) -> np.ndarray:
@@ -136,6 +137,7 @@ def ingest_phase2_xyz_d50_linear_fp32(
             camera_wb = None
 
         fingerprint: Dict[str, Any] = {
+            "schema_version": PHASE2_FINGERPRINT_SCHEMA_VERSION,
             "contract": "camera_native_linear",
             "input_kind": "raw",
             "input_path": Path(path).name,

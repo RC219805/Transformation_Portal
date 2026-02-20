@@ -97,6 +97,7 @@ def test_ingest_phase2_valid_decode_and_fingerprint(monkeypatch):
     assert tensor1.shape == (2, 2, 3)
     assert np.allclose(tensor1, tensor2)
     assert fp1 == fp2
+    assert fp1["schema_version"] == "1.0.0"
     assert fp1["contract"] == "camera_native_linear"
     assert fp1["input_path"] == "sample.CR3"
     assert fp1["demosaic"] == "AHD"

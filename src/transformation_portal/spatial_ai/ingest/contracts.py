@@ -13,6 +13,7 @@ ingest_phase2_xyz_d50_linear_fp32 directly from phase2_camera_native_linear.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Literal
 
 import numpy as np
@@ -28,7 +29,7 @@ class IngestOptions:
     demosaic: str = field(default="AHD")
 
 
-def decode_contract(input_path: str, opts: IngestOptions) -> np.ndarray:
+def decode_contract(input_path: Path | str, opts: IngestOptions) -> np.ndarray:
     """Contract dispatcher: returns a float32 HWC tensor for the given contract.
 
     - camera_native_linear: Phase II certified path (xyz_d50_linear_fp32).

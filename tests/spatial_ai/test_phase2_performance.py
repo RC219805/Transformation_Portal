@@ -239,8 +239,8 @@ class TestPerformanceRegression:
                 )
 
             # Detect catastrophic regressions using the 5x relative rule, but
-            # apply a floor to tiny baselines to reduce CI noise for very fast tests.
-            baseline_floor_seconds = 1.0
+            # apply only a small floor for very tiny baselines to reduce CI noise.
+            baseline_floor_seconds = 0.1
             catastrophic_threshold = max(baseline, baseline_floor_seconds) * 5.0
             if recent > catastrophic_threshold:
                 catastrophic_regressions.append(
