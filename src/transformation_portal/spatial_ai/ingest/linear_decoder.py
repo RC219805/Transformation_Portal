@@ -431,7 +431,9 @@ class LinearDecoder:
 
         Raises:
             ImportError: If rawpy is not installed.
-            RuntimeError: If RAW decode fails.
+            ValueError: If RAW metadata is malformed (for example, non-numeric
+                       white-balance/black-level payloads).
+            RuntimeError: If RAW postprocess/decode fails.
         """
         try:
             import rawpy
@@ -444,6 +446,9 @@ class LinearDecoder:
 
         try:
             with rawpy.imread(str(path)) as raw:
+                # Validate RAW metadata before postprocess
+                self._validate_raw_metadata(raw)
+
                 # Decode with linear settings
                 # Key parameters for linear ingest:
                 # - output_color=rawpy.ColorSpace.sRGB: Output in linear sRGB (Phase I)
@@ -467,6 +472,15 @@ class LinearDecoder:
                     highlight_mode=rawpy.HighlightMode.Clip,  # Clip highlights (no reconstruction)
                 )
 
+                # Guard: postprocess must return uint16 (H, W, 3)
+                if rgb.dtype != np.uint16:
+                    raise RuntimeError(
+                        f"RAW decode: expected uint16 from postprocess (output_bps=16), "
+                        f"got {rgb.dtype}. Cannot normalize safely."
+                    )
+                if rgb.ndim != 3 or rgb.shape[2] != 3:
+                    raise RuntimeError(f"RAW decode: expected (H, W, 3) from postprocess, got shape {rgb.shape}.")
+
                 # Convert uint16 [0, 65535] to float32 [0, 1]
                 linear_rgb = rgb.astype(np.float32) / 65535.0
 
@@ -481,6 +495,15 @@ class LinearDecoder:
                 return linear_rgb, (height, width)
 
         except Exception as e:
+            # ValueError from _validate_raw_metadata must propagate unchanged so
+            # callers can distinguish metadata failures. RuntimeError from our
+            # local guards uses a stable "RAW decode:" prefix and should also
+            # propagate directly. All other failures are wrapped with filename
+            # context for diagnostics.
+            if isinstance(e, ValueError):
+                raise
+            if isinstance(e, RuntimeError) and str(e).startswith("RAW decode:"):
+                raise
             raise RuntimeError(f"Failed to decode RAW file {path.name}: {e}") from e
 
     def _detect_raw_color_space(self, path: Path) -> str:
@@ -524,27 +547,35 @@ class LinearDecoder:
                 if hasattr(raw, "rgb_xyz_matrix"):
                     rgb_xyz_matrix = raw.rgb_xyz_matrix
 
-                # Validate that at least one matrix exists
-                if color_matrix is None or (hasattr(color_matrix, "size") and color_matrix.size == 0):
-                    if rgb_xyz_matrix is None or (hasattr(rgb_xyz_matrix, "size") and rgb_xyz_matrix.size == 0):
-                        raise ColorSpaceError(
-                            input_path=path,
-                            reason="No camera color matrix found in RAW metadata",
-                            matrix_present=False,
-                        )
+                # Select the best available matrix (_select_valid_color_matrix is
+                # the single validation authority: length, NaN, norm, fallback).
+                matrix_to_check = self._select_valid_color_matrix(color_matrix, rgb_xyz_matrix)
 
-                # Validate matrix is well-formed (not all zeros)
-                matrix_to_check = color_matrix if color_matrix is not None else rgb_xyz_matrix
-                if hasattr(matrix_to_check, "__len__"):
-                    # Convert to numpy array for validation
-                    matrix_array = np.array(matrix_to_check)
-                    if matrix_array.size > 0:
-                        if np.allclose(matrix_array, 0.0):
-                            raise ColorSpaceError(
-                                input_path=path,
-                                reason="Camera color matrix is all zeros (malformed)",
-                                matrix_present=True,
-                            )
+                if matrix_to_check is None:
+                    # Build diagnostic detail for forensic debugging
+                    def _diag(m: Any) -> str:
+                        if m is None:
+                            return "absent"
+                        try:
+                            arr = np.asarray(m, dtype=np.float64)
+                        except Exception as exc:
+                            return f"unparseable(type={type(m).__name__}, error={exc})"
+                        try:
+                            norm = np.linalg.norm(arr) if arr.size > 0 else 0.0
+                        except Exception as exc:
+                            return f"shape={getattr(arr, 'shape', '?')} norm=uncomputable(error={exc})"
+                        return f"shape={arr.shape} norm={norm:.3e}"
+
+                    raise ColorSpaceError(
+                        input_path=path,
+                        reason=(
+                            "No valid camera color matrix found in RAW metadata. "
+                            f"color_matrix={_diag(color_matrix)}, "
+                            f"rgb_xyz_matrix={_diag(rgb_xyz_matrix)}. "
+                            "Both were rejected (wrong shape, NaN/Inf, or norm < 1e-6)."
+                        ),
+                        matrix_present=color_matrix is not None or rgb_xyz_matrix is not None,
+                    )
 
                 # Phase I: We use rawpy.ColorSpace.sRGB in _decode_raw()
                 # This produces linear sRGB output (gamma=1.0)
@@ -560,6 +591,152 @@ class LinearDecoder:
                 reason=f"Failed to read RAW metadata: {e}",
                 matrix_present=False,
             ) from e
+
+    @staticmethod
+    def _validate_raw_metadata(raw: Any) -> None:
+        """Validate RAW file metadata before decode to prevent silent numeric corruption.
+
+        Checks white balance gains, black level, and output shape safety.
+        Raises ValueError with a clear message on the first detected issue.
+
+        Args:
+            raw: rawpy RawPy object (open file context).
+
+        Raises:
+            ValueError: If metadata is malformed (non-finite WB gains, wrong
+                        channel count, negative black level, etc.).
+        """
+        # --- White Balance Gains ---
+        # camera_whitebalance: [R, G1, B, G2] multipliers from camera EXIF
+        if hasattr(raw, "camera_whitebalance"):
+            wb = raw.camera_whitebalance
+            if wb is not None:
+                try:
+                    wb_arr = np.array(wb, dtype=np.float64)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(
+                        "RAW metadata: camera_whitebalance is unparseable to float64. "
+                        f"type={type(wb).__name__}, value={wb!r}, error={exc}"
+                    ) from exc
+                if wb_arr.size == 0:
+                    raise ValueError(
+                        "RAW metadata: camera_whitebalance is empty. " "Cannot decode without valid white balance gains."
+                    )
+                if wb_arr.size != 4:
+                    raise ValueError(
+                        f"RAW metadata: camera_whitebalance has unexpected channel count {wb_arr.size} "
+                        f"(expected 4 for [R, G1, B, G2]): {wb_arr.tolist()}."
+                    )
+                if np.isnan(wb_arr).any():
+                    raise ValueError(
+                        f"RAW metadata: camera_whitebalance contains NaN values: {wb_arr}. " "Malformed camera EXIF."
+                    )
+                if np.isinf(wb_arr).any():
+                    raise ValueError(
+                        f"RAW metadata: camera_whitebalance contains infinity values: {wb_arr}. " "Malformed camera EXIF."
+                    )
+                if np.any(wb_arr <= 0.0):
+                    # All channels (R, G1, B, G2) must be positive
+                    bad_indices = np.where(wb_arr <= 0.0)[0].tolist()
+                    raise ValueError(
+                        f"RAW metadata: camera_whitebalance has zero or negative gain(s) "
+                        f"at channel(s) {bad_indices}: {wb_arr.tolist()}. "
+                        "Cannot apply white balance without strictly positive multipliers."
+                    )
+
+        # --- Black Level ---
+        # black_level_per_channel: per-channel black point offsets
+        if hasattr(raw, "black_level_per_channel"):
+            bl = raw.black_level_per_channel
+            if bl is not None:
+                try:
+                    bl_arr = np.array(bl, dtype=np.float64)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(
+                        "RAW metadata: black_level_per_channel is unparseable to float64. "
+                        f"type={type(bl).__name__}, value={bl!r}, error={exc}"
+                    ) from exc
+                if bl_arr.size == 0:
+                    raise ValueError("RAW metadata: black_level_per_channel is empty. " "Cannot safely subtract black level.")
+                if np.isnan(bl_arr).any():
+                    raise ValueError(f"RAW metadata: black_level_per_channel contains NaN: {bl_arr}.")
+                if np.isinf(bl_arr).any():
+                    raise ValueError(f"RAW metadata: black_level_per_channel contains infinity values: {bl_arr}.")
+                if np.any(bl_arr < 0.0):
+                    raise ValueError(
+                        f"RAW metadata: black_level_per_channel has negative values: {bl_arr}. "
+                        "Black level must be non-negative."
+                    )
+                if bl_arr.size not in (1, 3, 4):
+                    raise ValueError(
+                        f"RAW metadata: black_level_per_channel has unexpected channel count "
+                        f"{bl_arr.size} (expected 1, 3, or 4 for Bayer/RGB layouts): {bl_arr.tolist()}."
+                    )
+
+        # --- Raw image shape sanity ---
+        if hasattr(raw, "raw_image") and raw.raw_image is not None:
+            if raw.raw_image.ndim != 2:
+                raise ValueError(f"RAW metadata: raw_image expected 2D (H×W Bayer), " f"got shape {raw.raw_image.shape}.")
+
+    @staticmethod
+    def _select_valid_color_matrix(
+        color_matrix: Any,
+        rgb_xyz_matrix: Any,
+    ) -> Optional[np.ndarray]:
+        """Select the best available color matrix, preferring color_matrix over rgb_xyz_matrix.
+
+        Fallback selection order (first valid wins):
+          1. color_matrix  — camera-specific matrix from EXIF
+          2. rgb_xyz_matrix — standardised RGB→XYZ matrix
+          3. None           — caller must raise ColorSpaceError
+
+        A matrix is valid if it:
+          - Has shape (3, 3) or (9,) — (3, 3) is the common rawpy return type
+          - Contains no NaN or Inf values
+          - Has L2 norm >= 1e-6 (rejects zero-filled and near-zero garbage)
+
+        The norm threshold (1e-6) is intentionally conservative. A physically
+        meaningful 3×3 color transform always has a norm well above this value.
+
+        Args:
+            color_matrix: Camera color matrix (may be None, (3,3) ndarray, flat list,
+                          NaN-filled, near-zero, or wrong shape).
+            rgb_xyz_matrix: RGB-to-XYZ matrix (fallback, same acceptance criteria).
+
+        Returns:
+            np.ndarray of shape (9,), dtype float64, or None if neither is usable.
+        """
+
+        def _normalize(matrix: Any) -> Optional[np.ndarray]:
+            if matrix is None:
+                return None
+            try:
+                arr = np.asarray(matrix, dtype=np.float64)
+            except Exception:
+                return None
+            # Accept (3, 3) arrays (common rawpy return shape) or flat length-9
+            if arr.shape == (3, 3):
+                arr = arr.reshape(9)
+            elif arr.ndim == 1 and arr.size == 9:
+                pass
+            else:
+                return None
+            if np.isnan(arr).any():
+                return None
+            if np.isinf(arr).any():
+                return None
+            try:
+                norm = np.linalg.norm(arr)
+            except Exception:
+                return None
+            if norm < 1e-6:
+                return None
+            return arr
+
+        primary = _normalize(color_matrix)
+        if primary is not None:
+            return primary
+        return _normalize(rgb_xyz_matrix)
 
     def _compute_content_hash(self, array: np.ndarray) -> str:
         """Compute SHA-256 hash of array content.

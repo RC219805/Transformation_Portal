@@ -504,7 +504,7 @@ class SpatialAIPipeline:
             # Select device
             device = self.resource_manager.select_device()
 
-            # Create backend
+            # Create backend (no repo_id/revision - backend uses direct checkpoint loading)
             backend = SAM2Backend(
                 model_size=model_size,
                 device=device,
