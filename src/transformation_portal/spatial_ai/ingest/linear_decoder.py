@@ -494,12 +494,16 @@ class LinearDecoder:
 
                 return linear_rgb, (height, width)
 
-        except (ValueError, RuntimeError):
-            # ValueError from _validate_raw_metadata and RuntimeError from postprocess
-            # guards must propagate with their original types — do not collapse into
-            # a generic RuntimeError, which would obscure the error boundary.
-            raise
         except Exception as e:
+            # ValueError from _validate_raw_metadata must propagate unchanged so
+            # callers can distinguish metadata failures. RuntimeError from our
+            # local guards uses a stable "RAW decode:" prefix and should also
+            # propagate directly. All other failures are wrapped with filename
+            # context for diagnostics.
+            if isinstance(e, ValueError):
+                raise
+            if isinstance(e, RuntimeError) and str(e).startswith("RAW decode:"):
+                raise
             raise RuntimeError(f"Failed to decode RAW file {path.name}: {e}") from e
 
     def _detect_raw_color_space(self, path: Path) -> str:
