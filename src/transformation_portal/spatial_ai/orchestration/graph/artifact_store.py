@@ -115,9 +115,6 @@ SAFE_CACHE_KEY = re.compile(r"^[a-f0-9]{64}$")
 # Lock acquisition timeout (seconds) - prevents indefinite hangs
 DEFAULT_LOCK_TIMEOUT = 30.0
 
-# Temp artifact suffixes created during store() before atomic rename.
-_TEMP_ARTIFACT_SUFFIXES = (".npz", ".json", ".committed_tmp")
-
 
 class CacheLockTimeout(Exception):
     """Raised when cache lock acquisition times out.
@@ -831,24 +828,8 @@ class ArtifactStore:
         """
         total_size = 0
         for path in self.artifacts_dir.rglob("*"):
-            try:
-                if not path.is_file():
-                    continue
-
-                # Skip in-flight temp files created by NamedTemporaryFile during store().
-                # They are transient and can disappear mid-scan due to atomic rename.
-                name = path.name
-                if name.startswith("tmp") and any(name.endswith(suffix) for suffix in _TEMP_ARTIFACT_SUFFIXES):
-                    continue
-
+            if path.is_file():
                 total_size += path.stat().st_size
-            except FileNotFoundError:
-                # Concurrent writers may rename/unlink files between directory walk and stat().
-                continue
-            except OSError as e:
-                # Best effort: cache-size telemetry must not break store/load operations.
-                logger.debug(f"Skipping path during cache size scan {path}: {e}")
-                continue
         return total_size / (1024 * 1024)
 
     def get_stats(self) -> Dict[str, Any]:
@@ -1191,11 +1172,7 @@ class ArtifactStore:
         - L1: Warns only, no auto-eviction.
         - L2: Implements LRU eviction.
         """
-        try:
-            size_mb = self.get_cache_size_mb()
-        except OSError as e:
-            logger.debug(f"Cache size check skipped due to transient filesystem error: {e}")
-            return
+        size_mb = self.get_cache_size_mb()
         limit_mb = self.max_size_gb * 1024
 
         if size_mb > limit_mb:

@@ -28,8 +28,6 @@ _ALLOWED_COLORSPACE_EXC = (ColorSpaceError,)
 
 def _make_raw_stub(wb: Any, bl: Any, raw_image_shape: Any) -> Any:
     """Build a SimpleNamespace raw stub — hasattr returns False for absent attrs."""
-    import types as _types
-
     kwargs: dict[str, Any] = {}
     if wb is not None:
         kwargs["camera_whitebalance"] = wb
@@ -37,7 +35,7 @@ def _make_raw_stub(wb: Any, bl: Any, raw_image_shape: Any) -> Any:
         kwargs["black_level_per_channel"] = bl
     if raw_image_shape is not None:
         kwargs["raw_image"] = np.zeros(raw_image_shape, dtype=np.uint16)
-    return _types.SimpleNamespace(**kwargs)
+    return types.SimpleNamespace(**kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -117,7 +115,7 @@ def test_validate_raw_metadata_strict_exception_typing(wb, bl, raw_shape):
     except _ALLOWED_METADATA_EXC:
         return
     except Exception as exc:
-        pytest.fail(f"_validate_raw_metadata leaked invalid exception type " f"{type(exc).__name__}: {exc}")
+        pytest.fail(f"_validate_raw_metadata leaked invalid exception type {type(exc).__name__}: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -133,7 +131,7 @@ def test_select_valid_color_matrix_never_raises(cm, xyz):
     try:
         result = decoder._select_valid_color_matrix(cm, xyz)
     except Exception as exc:
-        pytest.fail(f"_select_valid_color_matrix must never raise, leaked " f"{type(exc).__name__}: {exc}")
+        pytest.fail(f"_select_valid_color_matrix must never raise, leaked {type(exc).__name__}: {exc}")
     if result is not None:
         arr = np.asarray(result, dtype=np.float64)
         assert arr.size == 9, f"Valid result must have 9 elements, got shape {arr.shape}"
@@ -172,21 +170,16 @@ def test_detect_raw_color_space_strict_typing(cm, xyz):
 
         decoder = LinearDecoder()
 
-        # Create temp file without using pytest fixture
-        with tempfile.NamedTemporaryFile(suffix=".dng", delete=False) as f:
-            tmp_path = Path(f.name)
-            tmp_path.write_bytes(b"x")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dng_path = Path(tmpdir) / "fuzz_input.dng"
+            dng_path.write_bytes(b"x")
 
-        try:
-            decoder._detect_raw_color_space(tmp_path)
-        except _ALLOWED_COLORSPACE_EXC:
-            pass
-        except Exception as exc:
-            pytest.fail(f"_detect_raw_color_space leaked invalid exception type " f"{type(exc).__name__}: {exc}")
-        finally:
-            # Clean up temp file
-            if tmp_path.exists():
-                tmp_path.unlink()
+            try:
+                decoder._detect_raw_color_space(dng_path)
+            except _ALLOWED_COLORSPACE_EXC:
+                pass
+            except Exception as exc:
+                pytest.fail(f"_detect_raw_color_space leaked invalid exception type {type(exc).__name__}: {exc}")
     finally:
         # Restore original rawpy module
         if original_rawpy is not None:
