@@ -154,23 +154,22 @@ When escalation criteria are met, provide:
 
 ### Repository Architecture
 ```
-depth_pipeline/          # Depth Anything V2 integration
-├── pipeline.py         # Main orchestration
-├── processors/         # Depth-based processors
-└── models/            # ML model configurations
+src/transformation_portal/lux_depth_v3/   # Golden Path orchestrator + stages
+src/transformation_portal/depth/           # Depth backends, protocols, pipeline logic
+src/transformation_portal/pipelines/       # Production pipeline utilities
 
 Core Scripts:
-├── lux_render_pipeline.py          # AI-powered render refinement
-├── luxury_video_master_grader.py   # Video color grading
-├── material_response.py            # Material Response core
-├── depth_tools.py                  # Depth utilities
-└── hdr_production_pipeline.sh     # HDR finishing
+├── src/transformation_portal/pipelines/lux_render_pipeline.py
+├── src/transformation_portal/processors/luxury_video_master_grader.py
+├── scripts/utilities/material_response.py
+├── src/transformation_portal/pipelines/depth_tools.py
+└── scripts/pipelines/hdr_production_pipeline.sh
 
 Configuration:
-├── config/             # YAML presets for pipelines
-├── assets/luts/film_emulation/  # Kodak and FilmConvert LUTs
-├── assets/luts/location_aesthetic/  # Location-specific profiles
-└── assets/luts/material_response/   # Surface enhancement LUTs
+├── config/                                # YAML presets and workflow config
+├── assets/luts/film_emulation/            # Kodak and FilmConvert LUTs
+├── assets/luts/location_aesthetic/        # Location-specific profiles
+└── assets/luts/material_response/         # Surface enhancement LUTs
 ```
 
 ---
@@ -316,7 +315,7 @@ def build_filter_graph(preset: PresetConfig, hdr: bool = False) -> str:
 ### Import Errors
 - Check dependencies: `pip install -r requirements.txt`
 - ML features: `pip install -e ".[ml]"`
-- TIFF support: `pip install -e ".[tiff]"`
+- TIFF support (included in core install): `pip install -e .`
 - Verify package versions: `pip list | grep <package>`
 
 ### FFmpeg Issues
@@ -341,7 +340,7 @@ def build_filter_graph(preset: PresetConfig, hdr: bool = False) -> str:
 
 ## Quick Reference: Repository Standards
 
-- **Python Version**: 3.10+ (CI tests 3.10, 3.11, 3.12)
+- **Python Version**: 3.11+ (CI tests 3.11, 3.12)
 - **Line Length**: 127 characters max
 - **Testing**: pytest with hypothesis for property tests
 - **Linting**: flake8 (critical), pylint (non-blocking)

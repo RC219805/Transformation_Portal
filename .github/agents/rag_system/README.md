@@ -78,7 +78,7 @@ Indexes repository content into searchable chunks:
 
 **Usage**:
 ```bash
-python -m .github.agents.rag_system.indexer \
+PYTHONPATH=.github/agents python -m rag_system.indexer \
     --repo-root /path/to/repo \
     --output index_stats.json \
     --verbose
@@ -100,7 +100,7 @@ Hybrid retrieval using BM25 for sparse keyword matching:
 
 **Usage**:
 ```bash
-python -m .github.agents.rag_system.retriever \
+PYTHONPATH=.github/agents python -m rag_system.retriever \
     --repo-root /path/to/repo \
     --query "depth pipeline atmospheric effects" \
     --top-k 5 \
@@ -123,7 +123,7 @@ Reranks retrieval results using additional signals:
 
 **Usage**:
 ```bash
-python -m .github.agents.rag_system.reranker \
+PYTHONPATH=.github/agents python -m rag_system.reranker \
     --repo-root /path/to/repo \
     --query "ffmpeg filter graph" \
     --top-k 5
@@ -144,7 +144,7 @@ Generates structured citations with confidence scores:
 
 **Usage**:
 ```bash
-python -m .github.agents.rag_system.citation \
+PYTHONPATH=.github/agents python -m rag_system.citation \
     --repo-root /path/to/repo \
     --query "material response enhancement" \
     --max-citations 5 \
@@ -178,19 +178,19 @@ Canonical templates for common workflows:
 **Usage**:
 ```bash
 # Generate feature template
-python -m .github.agents.rag_system.templates \
+PYTHONPATH=.github/agents python -m rag_system.templates \
     --type feature \
     --description "Add depth-based fog effect" \
     --with-examples
 
 # Generate bug triage template
-python -m .github.agents.rag_system.templates \
+PYTHONPATH=.github/agents python -m rag_system.templates \
     --type bug \
     --description "ImportError: No module named 'torch'" \
     --context "Python 3.10, Ubuntu 20.04"
 
 # Validate response schema
-python -m .github.agents.rag_system.templates \
+PYTHONPATH=.github/agents python -m rag_system.templates \
     --validate response.json
 ```
 
@@ -335,7 +335,8 @@ The RAG system enhances the Transformation Portal Specialist agent by:
 ### Workflow Integration
 
 ```python
-from .github.agents.rag_system import (
+# Run from repository root with: export PYTHONPATH=.github/agents
+from rag_system import (
     RepositoryIndexer,
     HybridRetriever,
     ResultReranker,
@@ -425,17 +426,13 @@ Current implementation uses **in-memory BM25** for simplicity. For enhanced sema
 Run tests for RAG components:
 
 ```bash
-# Test indexing
-pytest tests/test_rag_indexer.py -v
+# End-to-end RAG pipeline test
+pytest .github/agents/rag_system/tests/test_rag_pipeline.py -v
 
-# Test retrieval
-pytest tests/test_rag_retriever.py -v
-
-# Test templates
-pytest tests/test_rag_templates.py -v
-
-# Full RAG pipeline test
-pytest tests/test_rag_pipeline.py -v
+# Target specific component behavior within the same suite
+pytest .github/agents/rag_system/tests/test_rag_pipeline.py -k indexer -v
+pytest .github/agents/rag_system/tests/test_rag_pipeline.py -k retriever -v
+pytest .github/agents/rag_system/tests/test_rag_pipeline.py -k templates -v
 ```
 
 ## Contributing
