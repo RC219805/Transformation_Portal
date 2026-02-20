@@ -135,7 +135,7 @@ def ingest_phase2_xyz_d50_linear_fp32(
         fingerprint: Dict[str, Any] = {
             "contract": "camera_native_linear",
             "input_kind": "raw",
-            "input_path": str(path),
+            "input_path": Path(path).name,
             "wb_mode": wb_mode_n,
             "camera_whitebalance": camera_wb,
             "demosaic": demosaic_alg.name if hasattr(demosaic_alg, "name") else str(demosaic_alg),
