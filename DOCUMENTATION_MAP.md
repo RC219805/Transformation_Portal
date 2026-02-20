@@ -2,7 +2,7 @@
 
 **Purpose:** Single source of truth for finding documentation in Transformation Portal.
 
-**Last Updated:** 2026-02-13
+**Last Updated:** 2026-02-20
 **Maintainer:** Repository Architect
 
 ---
@@ -15,6 +15,7 @@
 | **Setup & Installation** | [docs/SETUP_GUIDE.md](docs/SETUP_GUIDE.md) | Detailed installation for all tiers |
 | **Contributing** | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute code, docs, issues |
 | **Security** | [SECURITY.md](SECURITY.md) | Security policy, reporting vulnerabilities |
+| **Security Hardening Report** | [security_best_practices_report.md](security_best_practices_report.md) | Security findings and remediation status |
 
 ---
 
@@ -25,6 +26,9 @@
 | Topic | Canonical Document | Status |
 |-------|-------------------|--------|
 | **Architecture Overview** | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | ✅ Stable |
+| **Ingest Determinism Policy (ADR-030)** | [docs/architecture/ADR-030-phase2-deterministic-raw-ingest.md](docs/architecture/ADR-030-phase2-deterministic-raw-ingest.md) | 🔄 Proposed (Phase II) |
+| **Determinism Harness Spec (SPEC-DH-001)** | [docs/architecture/specifications/SPEC-DH-001.md](docs/architecture/specifications/SPEC-DH-001.md) | ✅ **NEW** (Phase II, LOCKED) |
+| **Certified Bounded Determinism Analysis (ANALYSIS-DH-001)** | [docs/architecture/analysis/ANALYSIS-DH-001.md](docs/architecture/analysis/ANALYSIS-DH-001.md) | ✅ **NEW** (Phase II, Informative) |
 | **API Reference** | [docs/api/](docs/api/) | ✅ Stable (Sphinx) |
 | **Code Quality Standards** | [docs/CODE_QUALITY_STANDARDS.md](docs/CODE_QUALITY_STANDARDS.md) | ✅ Stable |
 | **Testing Guidelines** | [docs/development/TESTING_GUIDE.md](docs/development/TESTING_GUIDE.md) | 🔄 In Progress |
@@ -83,7 +87,9 @@
 ```
 docs/
 ├── DOCUMENTATION_MAP.md      ← You are here
-├── architecture/             ← Architecture decision records (ADRs)
+├── architecture/             ← Architecture ADRs + specs + analysis
+│   ├── specifications/       ← Normative specs (LOCKED)
+│   └── analysis/             ← Informative analysis
 ├── ci_cd/                    ← CI/CD documentation
 ├── fixes/                    ← Bug fix documentation and postmortems
 ├── guides/                   ← User guides and tutorials
