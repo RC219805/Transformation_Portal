@@ -24,6 +24,12 @@ def test_read_fp_state_uses_compiled_module(monkeypatch):
     assert state["daz"] is False
 
 
+def test_read_fp_state_raises_when_extension_missing(monkeypatch):
+    monkeypatch.setitem(sys.modules, "transformation_portal.determinism._fpstate", None)
+    with pytest.raises(FPStateError, match="Unable to import compiled fpstate probe"):
+        read_fp_state()
+
+
 def test_enforce_ftz_daz_disabled_raises_when_enabled(monkeypatch):
     monkeypatch.setattr(
         "transformation_portal.determinism.fpstate.read_fp_state",
@@ -31,6 +37,23 @@ def test_enforce_ftz_daz_disabled_raises_when_enabled(monkeypatch):
     )
     with pytest.raises(FPStateError, match="FTZ/DAZ enabled"):
         enforce_ftz_daz_disabled()
+
+
+def test_enforce_ftz_daz_disabled_raises_when_daz_enabled(monkeypatch):
+    monkeypatch.setattr(
+        "transformation_portal.determinism.fpstate.read_fp_state",
+        lambda: {"arch": "x86", "ftz": False, "daz": True},
+    )
+    with pytest.raises(FPStateError, match="FTZ/DAZ enabled"):
+        enforce_ftz_daz_disabled()
+
+
+def test_enforce_ftz_daz_disabled_passes_when_disabled(monkeypatch):
+    monkeypatch.setattr(
+        "transformation_portal.determinism.fpstate.read_fp_state",
+        lambda: {"arch": "x86", "ftz": False, "daz": False},
+    )
+    enforce_ftz_daz_disabled()
 
 
 def test_bootstrap_calls_fpstate_enforcement(monkeypatch):

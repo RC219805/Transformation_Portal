@@ -13,7 +13,7 @@ ingest_phase2_xyz_d50_linear_fp32 directly from phase2_camera_native_linear.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal, Optional
+from typing import Literal
 
 import numpy as np
 
