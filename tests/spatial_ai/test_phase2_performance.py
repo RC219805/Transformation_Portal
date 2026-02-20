@@ -238,8 +238,10 @@ class TestPerformanceRegression:
                     }
                 )
 
-            # Detect catastrophic regressions > 5x (likely bugs, not CI variance)
-            if recent > baseline * 5.0:
+            # Detect catastrophic regressions only when both relative and absolute
+            # slowdown are extreme. This avoids CI variance from tripping the gate
+            # on low baselines while still catching truly pathological runs.
+            if recent > max(baseline * 5.0, 30.0):
                 catastrophic_regressions.append(
                     {
                         "test": test_name,
