@@ -1,0 +1,7 @@
+{
+  "kind": "matrix",
+  "name": "matrix_3x3_identity",
+  "color_matrix": [[1,0,0],[0,1,0],[0,0,1]],
+  "rgb_xyz_matrix": null,
+  "expect": { "returns": "matrix" }
+}

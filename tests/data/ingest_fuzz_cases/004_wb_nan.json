@@ -1,0 +1,11 @@
+{
+  "kind": "metadata",
+  "name": "wb_contains_nan",
+  "camera_whitebalance": [2.0, 1.0, 1.5, "nan"],
+  "black_level_per_channel": [512, 512, 512, 512],
+  "raw_image_shape": [10, 10],
+  "expect": {
+    "raises": "ValueError",
+    "msg_contains": "contains NaN"
+  }
+}

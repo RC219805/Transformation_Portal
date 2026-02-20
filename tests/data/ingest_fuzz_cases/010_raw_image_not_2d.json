@@ -1,0 +1,11 @@
+{
+  "kind": "metadata",
+  "name": "raw_image_not_2d",
+  "camera_whitebalance": [2.0, 1.0, 1.5, 1.0],
+  "black_level_per_channel": [512, 512, 512, 512],
+  "raw_image_shape": [10, 10, 3],
+  "expect": {
+    "raises": "ValueError",
+    "msg_contains": "expected 2D"
+  }
+}

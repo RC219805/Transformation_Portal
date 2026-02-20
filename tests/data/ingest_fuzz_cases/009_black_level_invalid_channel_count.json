@@ -1,0 +1,11 @@
+{
+  "kind": "metadata",
+  "name": "black_level_invalid_channel_count",
+  "camera_whitebalance": [2.0, 1.0, 1.5, 1.0],
+  "black_level_per_channel": [512, 512],
+  "raw_image_shape": [10, 10],
+  "expect": {
+    "raises": "ValueError",
+    "msg_contains": "unexpected channel count"
+  }
+}

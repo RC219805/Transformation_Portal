@@ -1,0 +1,11 @@
+{
+  "kind": "metadata",
+  "name": "wb_empty",
+  "camera_whitebalance": [],
+  "black_level_per_channel": [512, 512, 512, 512],
+  "raw_image_shape": [10, 10],
+  "expect": {
+    "raises": "ValueError",
+    "msg_contains": "camera_whitebalance is empty"
+  }
+}
