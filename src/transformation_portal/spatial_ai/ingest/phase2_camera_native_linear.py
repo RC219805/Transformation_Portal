@@ -14,7 +14,7 @@ Constraints (ADR-030, Phase II):
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Literal, Optional, Tuple
+from typing import Any, Dict, Literal, Optional
 
 import numpy as np
 
@@ -70,16 +70,17 @@ def _rawpy_demosaic(name: str):
 
 
 def ingest_phase2_xyz_d50_linear_fp32(
-    path: Path,
+    path: Path | str,
     *,
     wb_mode: Literal["none", "camera", "auto"] = "camera",
     demosaic: str = "AHD",
-) -> Tuple[np.ndarray, Dict[str, Any]]:
+) -> tuple[np.ndarray, Dict[str, Any]]:
     """Certified Phase II decode: RAW -> camera RGB (linear) -> XYZ(D65) -> Bradford(D50) -> float32 HWC.
 
     Raises FPStateError before any processing if FTZ/DAZ are enabled.
     Returns (tensor, fingerprint) where fingerprint is schema-versioned provenance.
     """
+    path = Path(path)
     enforce_ftz_daz_disabled()
 
     try:

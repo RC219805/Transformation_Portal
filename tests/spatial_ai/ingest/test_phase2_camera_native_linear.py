@@ -85,7 +85,7 @@ def test_ingest_phase2_valid_decode_and_fingerprint(monkeypatch):
     monkeypatch.setattr(phase2, "enforce_ftz_daz_disabled", lambda: None)
     _install_fake_rawpy(monkeypatch)
 
-    path = Path("sample.CR3")
+    path = "inputs/sample.CR3"
     tensor1, fp1 = phase2.ingest_phase2_xyz_d50_linear_fp32(path, wb_mode="camera", demosaic="AHD")
     tensor2, fp2 = phase2.ingest_phase2_xyz_d50_linear_fp32(path, wb_mode="camera", demosaic="AHD")
 

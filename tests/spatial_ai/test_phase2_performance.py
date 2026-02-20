@@ -239,9 +239,10 @@ class TestPerformanceRegression:
                 )
 
             # Detect catastrophic regressions only when both relative and absolute
-            # slowdown are extreme. This avoids CI variance from tripping the gate
-            # on low baselines while still catching truly pathological runs.
-            if recent > max(baseline * 5.0, 30.0):
+            # slowdown are extreme. Keep a modest absolute floor to avoid
+            # micro-benchmark CI variance while still catching true outliers.
+            catastrophic_floor_seconds = 10.0
+            if recent > max(baseline * 5.0, catastrophic_floor_seconds):
                 catastrophic_regressions.append(
                     {
                         "test": test_name,

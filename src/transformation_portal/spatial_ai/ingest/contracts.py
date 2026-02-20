@@ -39,7 +39,7 @@ def decode_contract(input_path: str, opts: IngestOptions) -> np.ndarray:
         from .phase2_camera_native_linear import ingest_phase2_xyz_d50_linear_fp32
 
         tensor, _ = ingest_phase2_xyz_d50_linear_fp32(
-            path=input_path,  # type: ignore[arg-type]
+            path=input_path,
             wb_mode=opts.wb_mode,
             demosaic=opts.demosaic,
         )
