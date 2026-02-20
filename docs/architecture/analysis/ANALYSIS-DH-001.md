@@ -165,7 +165,7 @@ Verification logic is certification logic. It is not performance code.
 
 ### 6.2 Thread neutralization
 
-Thread pools must be collapsed before importing numerical C-extensions:
+Thread pools must be collapsed **before** importing numerical C-extensions (NumPy, SciPy, etc.). Setting these variables after library initialization has no effect because thread pools are configured at import time.
 
 ```bash
 export OMP_NUM_THREADS=1
@@ -307,7 +307,7 @@ RFC 8785 mandates ECMAScript-aligned number rendering.
 
 Non-finite numbers (NaN/Infinity) are prohibited in hashed JSON.
 
-Python `json.dumps()` must not be assumed compliant without strict verification.
+Python `json.dumps()` must not be assumed compliant without strict verification. Implementations should use a dedicated RFC 8785 library (e.g., `canonicaljson`) or a verified wrapper that enforces deterministic key ordering, UTF-8 encoding, and ECMAScript number formatting.
 
 ---
 
