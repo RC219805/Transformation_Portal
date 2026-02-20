@@ -17,6 +17,7 @@ ADRs are **binding decisions** that define the repository's architecture, securi
 | [ADR-023](ADR-023-spatial-ai-ingest-isolation.md) | Spatial AI Ingest Isolation | Accepted | 2026 | Architect |
 | [ADR-027](ADR-027-phase2-spatial-ai-extension.md) | Phase 2 Spatial AI Extension | Proposed | 2026-02-11 | Architect |
 | **[ADR-029](ADR-029-execution-graph-abstraction.md)** | **Execution Graph Abstraction** | **Proposed** | **2026-02-12** | **Architect** |
+| **[ADR-030](ADR-030-phase2-deterministic-raw-ingest.md)** | **Phase II Deterministic RAW Ingest** | **Proposed** | **2026-02-20** | **Architect** |
 
 ### Dependency & Security
 
@@ -49,7 +50,7 @@ ADRs are **binding decisions** that define the repository's architecture, securi
 ### Creating New ADRs
 
 1. **Check for conflicts**: Review existing ADRs to avoid duplication
-2. **Use template**: Follow format of ADR-027 or ADR-029 (most recent)
+2. **Use template**: Follow format of ADR-030 or ADR-029 (most recent)
 3. **Required sections**:
    - Executive Summary (decision, principle, abstractions)
    - Context (current state, problem statement)
@@ -83,7 +84,7 @@ These are repository-level rules enforced by ADRs. **Exceptions require an ADR.*
 - ❌ No pipeline imports another pipeline's internal modules
 - ✅ Shared utilities belong in `core/` with clear ownership
 
-### Determinism and Reproducibility (ADR-021, ADR-027, ADR-029)
+### Determinism and Reproducibility (ADR-021, ADR-027, ADR-029, ADR-030)
 
 - ✅ HuggingFace models pinned to commit SHAs (not `main`)
 - ✅ Same inputs → same outputs (deterministic execution)
@@ -114,10 +115,11 @@ These are repository-level rules enforced by ADRs. **Exceptions require an ADR.*
 - Provenance capture (content hashing)
 - Strict ingest policy (8-bit rejection)
 
-### Phase 2: Perception & Materials (ADR-027)
+### Phase 2: Perception & Materials (ADR-027, ADR-030)
 
 **Extension:** Segmentation, materials, 3D reconstruction
 
+- Certified bounded determinism at ingest boundary (`xyz_d50_linear_fp32`) for cross-ISA parity (ADR-030)
 - SAM2 integration (temporal-consistent segmentation)
 - MaterialGAN/NVDIFFREC (PBR texture generation)
 - 3D Gaussian Splatting (geometric verification)
@@ -159,4 +161,4 @@ These are repository-level rules enforced by ADRs. **Exceptions require an ADR.*
 
 ---
 
-*Last Updated: 2026-02-12*
+*Last Updated: 2026-02-20*
