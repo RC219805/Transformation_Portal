@@ -312,3 +312,5 @@ artifact_store/
 # Generated exports
 *.xlsx
 external/
+.cas/
+tmp_tensor.npy
