@@ -107,6 +107,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          # gitleaks-action scans the push commit range (<before>..<after>).
+          # Shallow clones can miss the "before" commit and cause false failures.
+          fetch-depth: 0
 
       - name: Set up Python ${{ env.PYTHON_VERSION_LINT }}
         uses: actions/setup-python@v6
