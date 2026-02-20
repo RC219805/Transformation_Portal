@@ -16,7 +16,11 @@ def read_fp_state() -> Dict[str, Any]:
             "Reinstall from source with a working C compiler/toolchain."
         ) from e
 
-    state = _fpstate.get_fp_state()
+    try:
+        state = _fpstate.get_fp_state()
+    except Exception as e:
+        raise FPStateError("Unable to read floating-point state from compiled fpstate probe.") from e
+
     if not isinstance(state, dict):
         raise FPStateError(f"Invalid fpstate response type: {type(state)}")
     return state

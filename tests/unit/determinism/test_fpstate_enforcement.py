@@ -30,6 +30,13 @@ def test_read_fp_state_raises_when_extension_missing(monkeypatch):
         read_fp_state()
 
 
+def test_read_fp_state_raises_when_probe_call_fails(monkeypatch):
+    fake_mod = types.SimpleNamespace(get_fp_state=lambda: (_ for _ in ()).throw(RuntimeError("probe failed")))
+    monkeypatch.setitem(sys.modules, "transformation_portal.determinism._fpstate", fake_mod)
+    with pytest.raises(FPStateError, match="Unable to read floating-point state"):
+        read_fp_state()
+
+
 def test_enforce_ftz_daz_disabled_raises_when_enabled(monkeypatch):
     monkeypatch.setattr(
         "transformation_portal.determinism.fpstate.read_fp_state",

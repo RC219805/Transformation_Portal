@@ -82,3 +82,13 @@ def test_decode_contract_propagates_phase2_fail_closed(monkeypatch):
     opts = IngestOptions(contract="camera_native_linear")
     with pytest.raises(RuntimeError, match="FTZ/DAZ enabled"):
         decode_contract("example.CR3", opts)
+
+
+def test_decode_contract_camera_native_linear_enforces_tensor_role(monkeypatch):
+    monkeypatch.setattr(
+        "transformation_portal.spatial_ai.ingest.phase2_camera_native_linear.ingest_phase2_xyz_d50_linear_fp32",
+        lambda *args, **kwargs: (np.ones((1, 1, 3), dtype=np.float32), {}),  # noqa: ANN002,ANN003
+    )
+    opts = IngestOptions(contract="camera_native_linear", tensor_role="linear_srgb")
+    with pytest.raises(ValueError, match="requires tensor_role='xyz_d50_linear_fp32'"):
+        decode_contract("example.CR3", opts)

@@ -6,6 +6,7 @@ on:
       - "src/transformation_portal/determinism/**"
       - "src/transformation_portal/spatial_ai/ingest/phase2_camera_native_linear.py"
       - "src/transformation_portal/spatial_ai/ingest/contracts.py"
+      - "pyproject.toml"
       - "policy/**"
       - ".github/workflows/determinism-cross-isa.yml"
 
