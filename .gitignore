@@ -311,3 +311,4 @@ artifact_store/
 
 # Generated exports
 *.xlsx
+external/
