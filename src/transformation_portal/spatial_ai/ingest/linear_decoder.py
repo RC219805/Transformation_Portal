@@ -541,9 +541,22 @@ class LinearDecoder:
                 matrix_to_check = self._select_valid_color_matrix(color_matrix, rgb_xyz_matrix)
 
                 if matrix_to_check is None:
+                    # Build diagnostic detail for forensic debugging
+                    def _diag(m: Any) -> str:
+                        if m is None:
+                            return "absent"
+                        arr = np.asarray(m, dtype=np.float64)
+                        norm = np.linalg.norm(arr) if arr.size > 0 else 0.0
+                        return f"shape={arr.shape} norm={norm:.3e}"
+
                     raise ColorSpaceError(
                         input_path=path,
-                        reason="No valid camera color matrix found in RAW metadata",
+                        reason=(
+                            "No valid camera color matrix found in RAW metadata. "
+                            f"color_matrix={_diag(color_matrix)}, "
+                            f"rgb_xyz_matrix={_diag(rgb_xyz_matrix)}. "
+                            "Both were rejected (wrong shape, NaN/Inf, or norm < 1e-6)."
+                        ),
                         matrix_present=color_matrix is not None or rgb_xyz_matrix is not None,
                     )
 
@@ -596,9 +609,11 @@ class LinearDecoder:
                     )
                 if np.any(wb_arr <= 0.0):
                     # All channels (R, G1, B, G2) must be positive
+                    bad_indices = np.where(wb_arr <= 0.0)[0].tolist()
                     raise ValueError(
-                        f"RAW metadata: camera_whitebalance has zero or negative gain(s): {wb_arr}. "
-                        "Cannot apply white balance without positive multipliers."
+                        f"RAW metadata: camera_whitebalance has zero or negative gain(s) "
+                        f"at channel(s) {bad_indices}: {wb_arr.tolist()}. "
+                        "Cannot apply white balance without strictly positive multipliers."
                     )
 
         # --- Black Level ---
@@ -621,7 +636,7 @@ class LinearDecoder:
                 if bl_arr.size not in (1, 3, 4):
                     raise ValueError(
                         f"RAW metadata: black_level_per_channel has unexpected channel count "
-                        f"{bl_arr.size} (expected 1, 3, or 4)."
+                        f"{bl_arr.size} (expected 1, 3, or 4 for Bayer/RGB layouts): {bl_arr.tolist()}."
                     )
 
         # --- Raw image shape sanity ---
@@ -636,15 +651,26 @@ class LinearDecoder:
     ) -> Optional[np.ndarray]:
         """Select the best available color matrix, preferring color_matrix over rgb_xyz_matrix.
 
-        Valid matrix: non-None, length==9, finite values, norm >= 1e-6.
-        Falls back to rgb_xyz_matrix when color_matrix is missing or invalid.
+        Fallback selection order (first valid wins):
+          1. color_matrix  — camera-specific matrix from EXIF
+          2. rgb_xyz_matrix — standardised RGB→XYZ matrix
+          3. None           — caller must raise ColorSpaceError
+
+        A matrix is valid if it:
+          - Has shape (3, 3) or (9,) — (3, 3) is the common rawpy return type
+          - Contains no NaN or Inf values
+          - Has L2 norm >= 1e-6 (rejects zero-filled and near-zero garbage)
+
+        The norm threshold (1e-6) is intentionally conservative. A physically
+        meaningful 3×3 color transform always has a norm well above this value.
 
         Args:
-            color_matrix: Camera color matrix (may be None, wrong length, NaN, or near-zero).
-            rgb_xyz_matrix: RGB-to-XYZ matrix (fallback).
+            color_matrix: Camera color matrix (may be None, (3,3) ndarray, flat list,
+                          NaN-filled, near-zero, or wrong shape).
+            rgb_xyz_matrix: RGB-to-XYZ matrix (fallback, same acceptance criteria).
 
         Returns:
-            np.ndarray (float64) of the best available matrix, or None if neither is usable.
+            np.ndarray of shape (9,), dtype float64, or None if neither is usable.
         """
 
         def _normalize(matrix: Any) -> Optional[np.ndarray]:
@@ -662,7 +688,8 @@ class LinearDecoder:
                 return None
             if np.isinf(arr).any():
                 return None
-            if np.linalg.norm(arr) < 1e-6:
+            norm = np.linalg.norm(arr)
+            if norm < 1e-6:
                 return None
             return arr
 
