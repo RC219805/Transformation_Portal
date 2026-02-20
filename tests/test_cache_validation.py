@@ -13,6 +13,17 @@ import pytest
 from transformation_portal.depth.utils.cache import DepthCache
 
 
+class _MaliciousPayload:
+    """Payload used to verify restricted pickle loading."""
+
+    def __init__(self, marker_path: Path):
+        self.marker_path = marker_path
+
+    def __reduce__(self):
+        expr = f"__import__('pathlib').Path({str(self.marker_path)!r}).write_text('owned')"
+        return (eval, (expr,))
+
+
 class TestDepthCacheValidation:
     """Tests for DepthCache validation hardening."""
 
@@ -126,3 +137,19 @@ class TestDepthCacheValidation:
             assert cache._validate_disk_entry(cache_file) is False
         finally:
             cache.MAX_DISK_CACHE_SIZE = original_limit
+
+    def test_validate_disk_entry_blocks_malicious_pickle(self, tmp_path):
+        """Test malicious pickle payloads are blocked and not executed."""
+        cache = DepthCache(enable_disk_cache=True, cache_dir=tmp_path)
+        marker = tmp_path / "owned.txt"
+        cache_file = tmp_path / "malicious.pkl"
+
+        payload = {
+            "depth": _MaliciousPayload(marker),
+            "padding": "x" * 1024,  # Keep file larger than minimum size threshold
+        }
+        with open(cache_file, "wb") as f:
+            pickle.dump(payload, f)
+
+        assert cache._validate_disk_entry(cache_file) is False
+        assert not marker.exists()

@@ -11,6 +11,7 @@ and secure file handling.
 
 from .path import PathValidator, is_safe_path, safe_resolve_path
 from .sanitization import SanitizationPolicy, sanitize_filename, validate_input_file
+from .serialization import RestrictedUnpickler, safe_pickle_load
 from .validation import InputValidator, ValidationError, ValidationResult
 
 __all__ = [
@@ -23,4 +24,6 @@ __all__ = [
     "SanitizationPolicy",
     "sanitize_filename",
     "validate_input_file",
+    "RestrictedUnpickler",
+    "safe_pickle_load",
 ]

@@ -34,6 +34,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Dict, Literal, Optional
 
@@ -52,6 +53,25 @@ from transformation_portal.spatial_ai.segmentation.tiling.types import (
 )
 
 logger = logging.getLogger(__name__)
+
+_SHA256_HEX_RE = re.compile(r"^[a-fA-F0-9]{64}$")
+
+
+def _compute_file_sha256(file_path: Path, chunk_size: int = 1024 * 1024) -> str:
+    """Compute SHA-256 for a file using streaming reads."""
+    sha256 = hashlib.sha256()
+    with file_path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(chunk_size), b""):
+            sha256.update(chunk)
+    return sha256.hexdigest()
+
+
+def _validate_sha256_hex(expected_sha256: str) -> str:
+    """Normalize and validate SHA-256 hex format."""
+    normalized = expected_sha256.strip().lower()
+    if not _SHA256_HEX_RE.fullmatch(normalized):
+        raise RuntimeError(f"Invalid SHA256 digest format: {expected_sha256!r}")
+    return normalized
 
 
 class SAM2Backend:
@@ -73,6 +93,12 @@ class SAM2Backend:
     DEFAULT_CHECKPOINTS = {
         "base": "sam2_hiera_base_plus.pt",
         "large": "sam2_hiera_large.pt",
+    }
+
+    # Checkpoint SHA-256 digests (must match downloaded artifacts exactly)
+    CHECKPOINT_SHA256 = {
+        "base": "2257ced71f65bfccb444f4b5c0f4af95a64c865503748e42edee0e40ab36a312",
+        "large": "7442e4e9b732a508f80e141e7c2913437a3610ee0c77381a66658c3a445df87b",
     }
 
     SUPPORTED_DEVICES = {"auto", "cuda", "cpu", "mps"}
@@ -904,12 +930,17 @@ class SAM2Backend:
 
 
 # Utility function for download script
-def download_sam2_checkpoint(model_size: Literal["base", "large"] = "large", output_dir: str = "checkpoints") -> Path:
+def download_sam2_checkpoint(
+    model_size: Literal["base", "large"] = "large",
+    output_dir: str = "checkpoints",
+    expected_sha256: Optional[str] = None,
+) -> Path:
     """Download SAM2 checkpoint from official repository.
 
     Args:
         model_size: Model variant to download.
         output_dir: Directory to save checkpoint.
+        expected_sha256: Optional checksum override. If omitted, uses built-in checksum registry.
 
     Returns:
         Path to downloaded checkpoint.
@@ -929,14 +960,29 @@ def download_sam2_checkpoint(model_size: Literal["base", "large"] = "large", out
     url = CHECKPOINT_URLS[model_size]
     filename = SAM2Backend.DEFAULT_CHECKPOINTS[model_size]
     output_path = Path(output_dir) / filename
+    expected = expected_sha256 or SAM2Backend.CHECKPOINT_SHA256.get(model_size)
+    if not expected:
+        raise RuntimeError(
+            f"No expected SHA256 configured for SAM2 {model_size} checkpoint. " "Provide expected_sha256 explicitly."
+        )
+    expected = _validate_sha256_hex(expected)
     allowed_hosts = {"dl.fbaipublicfiles.com"}
 
     # Create output directory
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     if output_path.exists():
-        logger.info(f"Checkpoint already exists: {output_path}")
-        return output_path
+        existing_sha = _compute_file_sha256(output_path)
+        if existing_sha == expected:
+            logger.info(f"Checkpoint already exists and checksum verified: {output_path}")
+            return output_path
+        logger.warning(
+            "Existing checkpoint checksum mismatch for %s. Expected %s, got %s. Re-downloading.",
+            output_path,
+            expected,
+            existing_sha,
+        )
+        output_path.unlink(missing_ok=True)
 
     parsed_url = urlparse(url)
     if parsed_url.scheme != "https" or parsed_url.hostname not in allowed_hosts:
@@ -982,6 +1028,13 @@ def download_sam2_checkpoint(model_size: Literal["base", "large"] = "large", out
                         if not chunk:
                             break
                         handle.write(chunk)
+
+                actual_sha = _compute_file_sha256(temp_path)
+                if actual_sha != expected:
+                    raise RuntimeError(
+                        f"Checkpoint checksum mismatch for {filename}. " f"Expected {expected}, got {actual_sha}"
+                    )
+
                 temp_path.replace(output_path)
                 logger.info(f"✅ Downloaded: {output_path}")
                 return output_path

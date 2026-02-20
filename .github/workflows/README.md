@@ -40,7 +40,8 @@ The repository includes multiple CI/CD and automation workflows to ensure code q
 **Usage:**
 - **Production Release:** Create and push a version tag (e.g., `git tag v0.1.0 && git push origin v0.1.0`)
 - **Test PyPI Upload:** Manually trigger workflow with `test_pypi` option enabled
-- Requires `PYPI_API_TOKEN` and `TEST_PYPI_API_TOKEN` in repository secrets
+- Uses PyPI Trusted Publishing (OIDC) via `pypa/gh-action-pypi-publish`
+- Requires configured GitHub environments (`pypi`, `testpypi`) and matching trusted publisher setup on PyPI/TestPyPI
 
 ### 3. `pylint.yml`
 **Purpose:** Static code analysis using `pylint`.

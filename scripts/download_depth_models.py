@@ -19,6 +19,8 @@ Examples:
 """
 
 import argparse
+import hashlib
+import re
 import sys
 import urllib.request
 from pathlib import Path
@@ -38,10 +40,14 @@ REALESRGAN_MODEL_URL = (
     f"https://github.com/xinntao/Real-ESRGAN/releases/download/{REALESRGAN_MODEL_VERSION}/RealESRGAN_x4plus.pth"
 )
 REALESRGAN_MODEL_FILENAME = "RealESRGAN_x4plus.pth"
+# Verified SHA-256 for RealESRGAN_x4plus weights.
+REALESRGAN_MODEL_SHA256 = "4fa0d38905f75ac06eb49a7951b426670021be3018265fd191d2125df9d682f1"
 
 # Depth Anything V2 CoreML model (not yet publicly hosted)
 # Will be available once official CoreML models are released
 DEPTH_ANYTHING_V2_COREML_FILENAME = "DepthAnythingV2SmallF16.mlpackage"
+
+_SHA256_HEX_RE = re.compile(r"^[a-fA-F0-9]{64}$")
 
 
 class DownloadProgressBar:
@@ -73,27 +79,62 @@ class DownloadProgressBar:
                     print()  # New line after completion
 
 
-def download_file(url: str, output_path: Path, desc: str = "file") -> bool:
+def compute_file_sha256(file_path: Path, chunk_size: int = 1024 * 1024) -> str:
+    """Compute SHA-256 digest for a file."""
+    digest = hashlib.sha256()
+    with file_path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(chunk_size), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def verify_checksum(file_path: Path, expected_sha256: str) -> bool:
+    """Verify SHA-256 checksum for a downloaded file."""
+    normalized = expected_sha256.strip().lower()
+    if not _SHA256_HEX_RE.fullmatch(normalized):
+        raise ValueError(f"Invalid SHA256 digest format: {expected_sha256!r}")
+    actual = compute_file_sha256(file_path)
+    return actual == normalized
+
+
+def download_file(url: str, output_path: Path, expected_sha256: str, desc: str = "file") -> bool:
     """Download a file with progress bar.
 
     Args:
         url: URL to download from
         output_path: Local path to save the file
+        expected_sha256: Trusted SHA-256 digest (required)
         desc: Description for progress bar
 
     Returns:
         True if successful, False otherwise
     """
     try:
+        if not _SHA256_HEX_RE.fullmatch(expected_sha256.strip()):
+            raise ValueError(f"Missing or invalid SHA256 for {desc}. Refusing to download unverified artifact.")
+
         print(f"Downloading {desc} from {url}")
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = output_path.with_suffix(f"{output_path.suffix}.tmp")
 
-        urllib.request.urlretrieve(url, output_path, reporthook=DownloadProgressBar(desc))
+        urllib.request.urlretrieve(url, temp_path, reporthook=DownloadProgressBar(desc))
+        if not verify_checksum(temp_path, expected_sha256):
+            actual = compute_file_sha256(temp_path)
+            temp_path.unlink(missing_ok=True)
+            print(
+                f"✗ Failed checksum verification for {desc}. " f"Expected {expected_sha256.lower()}, got {actual}",
+                file=sys.stderr,
+            )
+            return False
+
+        temp_path.replace(output_path)
 
         print(f"✓ Successfully downloaded to {output_path}")
         return True
 
     except Exception as e:
+        temp_path = output_path.with_suffix(f"{output_path.suffix}.tmp")
+        temp_path.unlink(missing_ok=True)
         print(f"✗ Failed to download {desc}: {e}", file=sys.stderr)
         return False
 
@@ -147,7 +188,7 @@ def download_depth_anything_v2_coreml(output_dir: Path) -> bool:
     return False  # Manual action required
 
 
-def download_realesrgan_weights(output_dir: Path) -> bool:
+def download_realesrgan_weights(output_dir: Path, expected_sha256: str = REALESRGAN_MODEL_SHA256) -> bool:
     """Download Real-ESRGAN 4x upscaling model weights.
 
     Args:
@@ -163,10 +204,13 @@ def download_realesrgan_weights(output_dir: Path) -> bool:
     print("=" * 70)
 
     if model_path.exists():
-        print(f"✓ Model already exists: {model_path}")
-        return True
+        if verify_checksum(model_path, expected_sha256):
+            print(f"✓ Model already exists and checksum verified: {model_path}")
+            return True
+        print(f"⚠️  Existing model failed checksum verification, re-downloading: {model_path}")
+        model_path.unlink(missing_ok=True)
 
-    return download_file(REALESRGAN_MODEL_URL, model_path, "Real-ESRGAN 4x model")
+    return download_file(REALESRGAN_MODEL_URL, model_path, expected_sha256, "Real-ESRGAN 4x model")
 
 
 def verify_models(model_dir: Path) -> dict:
@@ -207,6 +251,12 @@ def main():
     )
     parser.add_argument("--output-dir", type=str, default="./weights", help="Output directory for models (default: ./weights)")
     parser.add_argument("--verify-only", action="store_true", help="Only verify model status, don't download")
+    parser.add_argument(
+        "--realesrgan-sha256",
+        type=str,
+        default=REALESRGAN_MODEL_SHA256,
+        help="Trusted SHA256 for Real-ESRGAN weights (defaults to known-good digest)",
+    )
 
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
@@ -228,7 +278,7 @@ def main():
 
     if args.model in ["realesrgan", "all"]:
         # Real-ESRGAN weights
-        if not download_realesrgan_weights(output_dir):
+        if not download_realesrgan_weights(output_dir, args.realesrgan_sha256):
             success = False
 
     # Verify final status
