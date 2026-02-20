@@ -32,6 +32,7 @@ from transformation_portal.spatial_ai.ingest import (
     UnsupportedFormatError,
     decode,
 )
+from transformation_portal.spatial_ai.ingest.linear_decoder import _canonical_f64_list, _compute_ingest_fingerprint
 
 
 class TestLinearDecoder:
@@ -597,12 +598,13 @@ class TestRawDecodePostprocessGuards:
         raw_path = tmp_path / "mock.dng"
         raw_path.write_bytes(b"not-a-real-raw")
 
-        linear_rgb, size = decoder._decode_raw(raw_path, "RAW_DNG")
+        linear_rgb, size, fingerprint = decoder._decode_raw(raw_path, "RAW_DNG")
 
         assert linear_rgb.dtype == np.float32
         assert linear_rgb.shape == (6, 4, 3)
         assert size == (6, 4)
         assert np.isclose(linear_rgb[0, 0, 0], 32768 / 65535.0)
+        assert isinstance(fingerprint, str) and len(fingerprint) == 64
 
     def test_decode_raw_propagates_metadata_value_error(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         class _FakeRaw:
@@ -986,6 +988,101 @@ class TestRawMetadataValidation:
         raw = self._make_raw(wb=[2.0, 1.0, 1.5, 1.0], bl=["bad", "data", "here", "!"])
         with pytest.raises(ValueError, match="black_level_per_channel is unparseable to float64"):
             LinearDecoder._validate_raw_metadata(raw)
+
+
+class TestIngestProvenance:
+    """Unit tests for _compute_ingest_fingerprint and _canonical_f64_list."""
+
+    _WB = np.array([2.0, 1.0, 1.5, 1.0])
+    _BL = np.array([512.0, 512.0, 512.0, 512.0])
+    _CM = np.eye(3)
+    _SHAPE = (480, 640)
+
+    def _fp(self, **overrides):
+        kw = dict(wb=self._WB, black_level=self._BL, color_matrix=self._CM, raw_shape=self._SHAPE)
+        kw.update(overrides)
+        return _compute_ingest_fingerprint(**kw)
+
+    # --- _canonical_f64_list ---
+
+    def test_canonical_f64_list_negative_zero_normalized(self):
+        a = np.array([-0.0, 1.0, -0.0])
+        b = np.array([0.0, 1.0, 0.0])
+        assert _canonical_f64_list(a) == _canonical_f64_list(b)
+
+    def test_canonical_f64_list_flattens_row_major(self):
+        mat_3x3 = np.arange(9, dtype=np.float64).reshape(3, 3)
+        flat = np.arange(9, dtype=np.float64)
+        assert _canonical_f64_list(mat_3x3) == _canonical_f64_list(flat)
+
+    # --- _compute_ingest_fingerprint ---
+
+    def test_fingerprint_stable_for_identical_inputs(self):
+        """Same metadata always produces the same fingerprint."""
+        assert self._fp() == self._fp()
+
+    def test_fingerprint_3x3_vs_flat_matrix_equivalent(self):
+        """(3,3) and flattened (9,) matrix representations produce the same fingerprint."""
+        fp_3x3 = self._fp(color_matrix=np.eye(3))
+        fp_flat = self._fp(color_matrix=np.eye(3).ravel())
+        assert fp_3x3 == fp_flat
+
+    def test_fingerprint_negative_zero_normalization(self):
+        """-0.0 and +0.0 in wb array produce the same fingerprint."""
+        wb_pos = np.array([2.0, 1.0, 1.5, 1.0])
+        wb_neg = np.array([2.0, 1.0, 1.5, -0.0])  # -0.0 in last element
+        # Replace 1.0 with -0.0 in a safe position (not a valid WB but fingerprint is pure hashing)
+        wb_with_neg_zero = np.array([2.0, 0.0, 1.5, 1.0])
+        wb_with_pos_zero = np.array([2.0, -0.0, 1.5, 1.0])
+        fp_neg = self._fp(wb=wb_with_neg_zero)
+        fp_pos = self._fp(wb=wb_with_pos_zero)
+        assert fp_neg == fp_pos
+
+    def test_fingerprint_single_element_change_flips_hash(self):
+        """A single-element perturbation (1e-6) changes the fingerprint."""
+        wb_modified = self._WB.copy()
+        wb_modified[0] += 1e-6
+        assert self._fp() != self._fp(wb=wb_modified)
+
+    def test_fingerprint_none_fields_stable(self):
+        """None fields are hashed stably (not omitted)."""
+        fp1 = _compute_ingest_fingerprint(wb=None, black_level=None, color_matrix=None, raw_shape=(480, 640))
+        fp2 = _compute_ingest_fingerprint(wb=None, black_level=None, color_matrix=None, raw_shape=(480, 640))
+        assert fp1 == fp2
+        assert isinstance(fp1, str) and len(fp1) == 64
+
+    def test_fingerprint_shape_change_flips_hash(self):
+        """Different raw_shape always produces a different fingerprint."""
+        assert self._fp(raw_shape=(480, 640)) != self._fp(raw_shape=(480, 641))
+
+    def test_linearingestresult_has_ingest_fingerprint_field(self):
+        """LinearIngestResult exposes ingest_fingerprint as an Optional[str] field."""
+        result = LinearIngestResult(
+            linear_rgb=np.zeros((4, 4, 3), dtype=np.float32),
+            gamma=1.0,
+            bit_depth=32,
+            dtype="float32",
+            input_size=(4, 4),
+            input_path=Path("dummy.dng"),
+            input_format="RAW_DNG",
+            color_space="linear_sRGB",
+            ingest_fingerprint="abc123",
+        )
+        assert result.ingest_fingerprint == "abc123"
+
+    def test_linearingestresult_ingest_fingerprint_defaults_none(self):
+        """ingest_fingerprint defaults to None for non-RAW formats."""
+        result = LinearIngestResult(
+            linear_rgb=np.zeros((4, 4, 3), dtype=np.float32),
+            gamma=1.0,
+            bit_depth=32,
+            dtype="float32",
+            input_size=(4, 4),
+            input_path=Path("dummy.tiff"),
+            input_format="TIFF",
+            color_space="linear_sRGB",
+        )
+        assert result.ingest_fingerprint is None
 
 
 # Pytest markers for organization

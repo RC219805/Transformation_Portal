@@ -48,6 +48,60 @@ from .validators import validate_bit_depth, validate_linear_output
 logger = logging.getLogger(__name__)
 
 
+def _canonical_f64_list(arr: np.ndarray) -> list:
+    """Canonicalize array to a stable float64 list for fingerprint payloads.
+
+    Rules:
+    - Cast to float64 (no float32 precision variance).
+    - Flatten row-major (C order) — (3, 3) and (9,) produce the same list.
+    - Normalize -0.0 → 0.0 (platform-safe equality).
+    """
+    a = np.asarray(arr, dtype=np.float64).ravel(order="C").copy()
+    a[a == 0.0] = 0.0  # coerce -0.0 to +0.0
+    return a.tolist()
+
+
+def _compute_ingest_fingerprint(
+    *,
+    wb: "Optional[np.ndarray]",
+    black_level: "Optional[np.ndarray]",
+    color_matrix: "Optional[np.ndarray]",
+    raw_shape: "Tuple[int, int]",
+) -> str:
+    """Compute a deterministic SHA-256 provenance fingerprint for RAW ingest.
+
+    The fingerprint encodes the validated ingest-critical metadata in a
+    schema-versioned, canonicalized JSON payload before hashing.  It is stable
+    under equivalent numeric representations (e.g. (3,3) vs flattened matrix,
+    -0.0 vs 0.0) and across repeated executions on identical inputs.
+
+    Schema version ``v=1`` payload keys (sorted for determinism):
+    - ``v``: schema version integer (1)
+    - ``raw_shape``: [height, width] as integers
+    - ``wb``: float64 list or null
+    - ``black_level``: float64 list or null
+    - ``color_matrix``: float64 flattened list or null
+
+    Args:
+        wb: Validated camera_whitebalance array, or None.
+        black_level: Validated black_level_per_channel array, or None.
+        color_matrix: Selected color matrix (post _select_valid_color_matrix), or None.
+        raw_shape: (height, width) from the postprocessed visible frame.
+
+    Returns:
+        Lowercase hex SHA-256 digest string (64 characters).
+    """
+    payload = {
+        "v": 1,
+        "raw_shape": [int(raw_shape[0]), int(raw_shape[1])],
+        "wb": None if wb is None else _canonical_f64_list(wb),
+        "black_level": None if black_level is None else _canonical_f64_list(black_level),
+        "color_matrix": None if color_matrix is None else _canonical_f64_list(color_matrix),
+    }
+    serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
 @dataclass
 class LinearIngestResult:
     """Result from linear light ingest decoding.
@@ -65,6 +119,9 @@ class LinearIngestResult:
         provenance_path: Path to provenance JSON (if emit_provenance=True).
         provenance_data: Provenance metadata dict.
         content_hash: SHA-256 hash of linear_rgb array.
+        ingest_fingerprint: Deterministic SHA-256 of validated ingest metadata
+            (wb gains, black level, selected color matrix, RAW shape). Present for
+            RAW formats only; None for TIFF/PNG/EXR inputs.
     """
 
     linear_rgb: np.ndarray
@@ -79,6 +136,7 @@ class LinearIngestResult:
     provenance_path: Optional[Path] = None
     provenance_data: Dict[str, Any] = field(default_factory=dict)
     content_hash: Optional[str] = None
+    ingest_fingerprint: Optional[str] = None
 
     def __post_init__(self):
         """Validate result contract."""
@@ -195,7 +253,7 @@ class LinearDecoder:
         logger.debug(f"Color space: {color_space}")
 
         # Decode to linear RGB
-        linear_rgb, input_size = self._decode_linear(input_path, format_str)
+        linear_rgb, input_size, ingest_fingerprint = self._decode_linear(input_path, format_str)
 
         # Compute content hash
         content_hash = self._compute_content_hash(linear_rgb)
@@ -220,6 +278,7 @@ class LinearDecoder:
             color_space=color_space,
             provenance_data=provenance,
             content_hash=content_hash,
+            ingest_fingerprint=ingest_fingerprint,
         )
 
         # Emit artifacts
@@ -227,12 +286,14 @@ class LinearDecoder:
             result.output_exr_path = self._save_exr(linear_rgb, output_dir, input_path.stem)
 
         if emit_provenance:
+            if ingest_fingerprint is not None:
+                provenance["ingest_fingerprint"] = ingest_fingerprint
             result.provenance_path = self._save_provenance(provenance, output_dir, input_path.stem)
 
         logger.info(
             f"Linear ingest complete: {input_size[1]}x{input_size[0]}, "
             f"range=[{linear_rgb.min():.3f}, {linear_rgb.max():.3f}], "
-            f"hash={content_hash[:16]}"
+            f"hash={content_hash[:16]}" + (f", fingerprint={ingest_fingerprint[:16]}" if ingest_fingerprint else "")
         )
 
         return result
@@ -281,7 +342,7 @@ class LinearDecoder:
                 detected_format=ext,
             )
 
-    def _decode_linear(self, path: Path, format_str: str) -> Tuple[np.ndarray, Tuple[int, int]]:
+    def _decode_linear(self, path: Path, format_str: str) -> Tuple[np.ndarray, Tuple[int, int], Optional[str]]:
         """Decode image to float32 linear RGB.
 
         Args:
@@ -289,7 +350,8 @@ class LinearDecoder:
             format_str: Format string from _detect_format.
 
         Returns:
-            Tuple of (linear_rgb array, (height, width)).
+            Tuple of (linear_rgb array, (height, width), ingest_fingerprint).
+            ingest_fingerprint is a SHA-256 hex string for RAW formats; None otherwise.
 
         Raises:
             BitDepthViolationError: If strict_ingest validation fails.
@@ -297,11 +359,13 @@ class LinearDecoder:
         """
         try:
             if format_str == "EXR":
-                return self._decode_exr(path)
+                linear_rgb, size = self._decode_exr(path)
+                return linear_rgb, size, None
             elif format_str.startswith("RAW_"):
                 return self._decode_raw(path, format_str)
             else:
-                return self._decode_pillow(path, format_str)
+                linear_rgb, size = self._decode_pillow(path, format_str)
+                return linear_rgb, size, None
         except (BitDepthViolationError, UnsupportedFormatError):
             # Let custom exceptions propagate directly
             raise
@@ -413,7 +477,7 @@ class LinearDecoder:
         height, width = img_array.shape[:2]
         return linear_rgb, (height, width)
 
-    def _decode_raw(self, path: Path, format_str: str) -> Tuple[np.ndarray, Tuple[int, int]]:
+    def _decode_raw(self, path: Path, format_str: str) -> Tuple[np.ndarray, Tuple[int, int], Optional[str]]:
         """Decode RAW image using rawpy (LibRaw wrapper).
 
         This method provides proper RAW decode with:
@@ -427,13 +491,8 @@ class LinearDecoder:
             format_str: RAW format string (RAW_CR2, RAW_NEF, etc.).
 
         Returns:
-            Tuple of (linear_rgb array, (height, width)).
-
-        Raises:
-            ImportError: If rawpy is not installed.
-            ValueError: If RAW metadata is malformed (for example, non-numeric
-                       white-balance/black-level payloads).
-            RuntimeError: If RAW postprocess/decode fails.
+            Tuple of (linear_rgb array, (height, width), ingest_fingerprint).
+            ingest_fingerprint is a SHA-256 hex string of validated ingest metadata.
         """
         try:
             import rawpy
@@ -492,7 +551,30 @@ class LinearDecoder:
                     f"range=[{linear_rgb.min():.4f}, {linear_rgb.max():.4f}]"
                 )
 
-                return linear_rgb, (height, width)
+                # Compute deterministic ingest provenance fingerprint from
+                # validated metadata (wb, bl, selected color matrix, shape).
+                wb_for_fp = (
+                    np.asarray(raw.camera_whitebalance, dtype=np.float64)
+                    if hasattr(raw, "camera_whitebalance") and raw.camera_whitebalance is not None
+                    else None
+                )
+                bl_for_fp = (
+                    np.asarray(raw.black_level_per_channel, dtype=np.float64)
+                    if hasattr(raw, "black_level_per_channel") and raw.black_level_per_channel is not None
+                    else None
+                )
+                cm_for_fp = self._select_valid_color_matrix(
+                    raw.color_matrix if hasattr(raw, "color_matrix") else None,
+                    raw.rgb_xyz_matrix if hasattr(raw, "rgb_xyz_matrix") else None,
+                )
+                fingerprint = _compute_ingest_fingerprint(
+                    wb=wb_for_fp,
+                    black_level=bl_for_fp,
+                    color_matrix=cm_for_fp,
+                    raw_shape=(height, width),
+                )
+
+                return linear_rgb, (height, width), fingerprint
 
         except Exception as e:
             # ValueError from _validate_raw_metadata must propagate unchanged so
