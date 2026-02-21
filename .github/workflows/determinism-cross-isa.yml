@@ -157,6 +157,8 @@ jobs:
           BASELINE_ARTIFACT_ID: ${{ needs.baseline-x86.outputs.artifact_id }}
           CANDIDATE_ARTIFACT_ID: ${{ needs.candidate-arm.outputs.artifact_id }}
         run: |
+          # Artifact IDs are SHA-256 over the canonical tensor preimage, so parity
+          # across ISAs is a direct content-equivalence check for this gate.
           echo "baseline=${BASELINE_ARTIFACT_ID}"
           echo "candidate=${CANDIDATE_ARTIFACT_ID}"
           if [ -z "${BASELINE_ARTIFACT_ID}" ] || [ -z "${CANDIDATE_ARTIFACT_ID}" ]; then

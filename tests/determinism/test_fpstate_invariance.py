@@ -22,7 +22,7 @@ def test_fpstate_enforcement_raises_when_subnormals_not_preserved(monkeypatch):
         enforce_fpstate_and_probe(require_subnormals=True)
 
 
-def test_fpstate_enforcement_violation_is_reported_with_failed_note(monkeypatch):
+def test_fpstate_enforcement_failure_captured_in_report_note(monkeypatch):
     def _raise_fpstate_error() -> None:
         raise FPStateError("FTZ/DAZ enabled for this environment")
 

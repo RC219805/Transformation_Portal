@@ -1,8 +1,8 @@
 # PR #990 CI Failure Fix: Complete Summary
 
-**Status:** ✅ FIXED  
-**Architect:** Transformation Portal Architect  
-**Date:** 2026-02-07  
+**Status:** ✅ FIXED
+**Architect:** Transformation Portal Architect
+**Date:** 2026-02-07
 **Branch:** copilot/sub-pr-990
 
 ---
@@ -343,14 +343,14 @@ If this decision needs reversal (unlikely):
 
 ### 2. Hedging Language = Code Smell
 
-**Before:** "Future iterations may add explicit `not benchmark` exclusion"  
+**Before:** "Future iterations may add explicit `not benchmark` exclusion"
 **After:** "EXCLUDED from PR gating CI (enforced in build.yml)"
 
 **Lesson:** Hedging language signals unenforced policy. Be explicit about current reality.
 
 ### 3. Determinism is Non-Negotiable
 
-**Trade-off:** Fast performance feedback vs. deterministic PR gating  
+**Trade-off:** Fast performance feedback vs. deterministic PR gating
 **Choice:** Determinism wins every time
 
 **Reason:** Non-deterministic CI is worse than slow CI because it erodes trust completely.
@@ -411,7 +411,7 @@ Markers are not documentation—they are contracts:
 
 **The fix is complete, robust, and architecturally sound.**
 
-PR #990 will pass CI after this fix is merged. The failing test was not a real regression—it was CI runner variance triggering a performance threshold in a test that should never have been in PR gating CI in the first place.
+PR #990 (this PR) passed CI after this fix was applied during development. The failing test was not a real regression—it was CI runner variance triggering a performance threshold in a test that should never have been in PR gating CI in the first place.
 
 By enforcing the existing governance policy (benchmarks out of PR gating), we:
 1. Fix the immediate CI failure
@@ -424,4 +424,4 @@ By enforcing the existing governance policy (benchmarks out of PR gating), we:
 
 **Governance Authority:** Transformation Portal Architect (ADR-034)
 
-**Status:** ✅ **READY FOR MERGE**
+**Status at Incident Close (2026-02-07):** ✅ **READY FOR MERGE**

@@ -10,6 +10,8 @@ class FPStateError(RuntimeError):
 
 def read_fp_state() -> Dict[str, Any]:
     try:
+        # Resolve the extension module dynamically so tests/CI can simulate
+        # missing-extension states via sys.modules without stale package attrs.
         fpstate_module = importlib.import_module("transformation_portal.determinism._fpstate")
     except Exception as e:
         raise FPStateError(

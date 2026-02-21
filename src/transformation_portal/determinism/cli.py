@@ -208,14 +208,34 @@ def _load_tensor_from_cas(cas_root: Path, artifact_id: str):
 
     npy_path = artifact_dir / "output_tensor.npy"
     if npy_path.exists():
-        return np.load(npy_path, allow_pickle=False).astype(np.float32, copy=False)
+        try:
+            return np.load(npy_path, allow_pickle=False).astype(np.float32, copy=False)
+        except Exception as e:
+            raise RuntimeError(f"Failed to load tensor npy payload for artifact {artifact_id} from {npy_path}") from e
 
     meta_path = artifact_dir / "tensor_meta.json"
     bin_path = artifact_dir / "output_tensor.bin"
     if meta_path.exists() and bin_path.exists():
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        try:
+            meta_text = meta_path.read_text(encoding="utf-8")
+        except OSError as e:
+            raise RuntimeError(f"Failed to read tensor metadata for artifact {artifact_id} from {meta_path}") from e
+
+        try:
+            meta = json.loads(meta_text)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid tensor metadata JSON for artifact {artifact_id} at {meta_path}") from e
+
+        if "shape" not in meta:
+            raise KeyError(f"Missing 'shape' in tensor metadata for artifact {artifact_id} at {meta_path}")
+
         shape = tuple(meta["shape"])
-        return load_tensor_bin(bin_path, shape=shape).astype(np.float32, copy=False)
+        try:
+            return load_tensor_bin(bin_path, shape=shape).astype(np.float32, copy=False)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load tensor binary payload for artifact {artifact_id} " f"from {bin_path} with shape {shape}"
+            ) from e
 
     raise FileNotFoundError(f"No tensor payload found for {artifact_id} in {artifact_dir}")
 

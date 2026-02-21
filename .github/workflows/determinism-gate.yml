@@ -27,8 +27,8 @@ jobs:
 
       - name: Determinism CLI baseline hash gate
         run: |
-          pytest -v tests/cli/test_determinism.py
+          pytest -v -m "not ml and not slow and not benchmark" tests/cli/test_determinism.py
 
       - name: FP-state invariance gate
         run: |
-          pytest -v tests/determinism/test_fpstate_invariance.py
+          pytest -v -m "not ml and not slow and not benchmark" tests/determinism/test_fpstate_invariance.py

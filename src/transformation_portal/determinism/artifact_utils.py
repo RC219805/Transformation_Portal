@@ -16,6 +16,6 @@ def parse_artifact_id(artifact_id: str) -> str:
     hex_part = artifact_id.split("sha256:", 1)[1].lower()
 
     if not re.fullmatch(r"[0-9a-f]{64}", hex_part):
-        raise ValueError("artifact_id must contain 64 lowercase hex characters")
+        raise ValueError(f"artifact_id must contain 64 lowercase hex characters, got: {hex_part!r}")
 
     return hex_part
