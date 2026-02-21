@@ -30,36 +30,29 @@ pytest tests/ -v -m "not benchmark"
 
 ## CI Execution Policy
 
-**Current State:** Benchmarks ARE included in PR gating CI (runs on every PR).
+**Current State (Enforced):** Benchmarks are EXCLUDED from PR gating CI.
 
-Core CI runs with marker expression: `"not ml and not slow"`, which does NOT exclude `benchmark`. This means:
-- ✅ Benchmarks run on every PR for fast feedback
-- ✅ Relaxed assertions (warnings instead of hard failures) handle runner variance
-- ✅ Backend pinned to `synthetic` for offline deterministic execution
-- ✅ No model downloads or network calls
-- ✅ Fast execution (<3s total)
-
-**Policy Decision (L0.0):** Keep benchmarks in PR gating CI with warnings-only approach.
+**Marker Expression:** `"not ml and not slow and not benchmark"`
 
 **Rationale:**
-1. Normalizes performance awareness in development workflow
-2. Detects catastrophic regressions early (10x slowdowns)
-3. Fast enough (<3s) to not impact PR feedback loop
-4. Non-failing approach prevents CI flakiness from runner variance
+1. **Determinism**: PR gating must be deterministic; CI runner variance breaks this invariant
+2. **Governance Alignment**: Repository policy requires benchmarks out of fast PR feedback loops
+3. **Separation of Concerns**: Performance regression detection belongs in nightly/scheduled workflows
+4. **Fast Feedback**: Benchmark tests add latency and variance to critical PR gating
 
-**Future Options:**
-- **If benchmarks become flaky:** Mark with `@pytest.mark.slow` to exclude from PR CI
-- **If benchmarks become slow:** Move to dedicated nightly performance workflow
-- **When L0.2 implements baseline comparison:** Can enable blocking checks with % tolerance
+**Where Benchmarks Run:**
+- Nightly performance workflows (`.github/workflows/nightly.yml`)
+- Manual runs via `pytest -m benchmark`
+- Scheduled deep-check workflows
 
-To exclude benchmarks from PR CI in the future, update `.github/workflows/build.yml`:
+**To Include Benchmark Tests (Not Recommended):**
+Only do this if you need to temporarily debug performance issues in CI. Update `.github/workflows/build.yml`:
 ```yaml
-# Change from:
-markexpr: "not ml and not slow"
-
-# To:
-markexpr: "not ml and not slow and not benchmark"
+# NOT RECOMMENDED: Remove "and not benchmark" from marker expressions
+markexpr: "not ml and not slow"  # Don't do this!
 ```
+
+**Governance Reference:** `.github/copilot-instructions.md` (Testing Taxonomy)
 
 ## Benchmark Tests
 
