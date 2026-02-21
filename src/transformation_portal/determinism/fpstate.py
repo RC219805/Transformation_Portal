@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from typing import Any, Dict
 
 
@@ -9,7 +10,7 @@ class FPStateError(RuntimeError):
 
 def read_fp_state() -> Dict[str, Any]:
     try:
-        from . import _fpstate  # type: ignore
+        fpstate_module = importlib.import_module("transformation_portal.determinism._fpstate")
     except Exception as e:
         raise FPStateError(
             "Unable to import compiled fpstate probe (transformation_portal.determinism._fpstate). "
@@ -17,7 +18,7 @@ def read_fp_state() -> Dict[str, Any]:
         ) from e
 
     try:
-        state = _fpstate.get_fp_state()
+        state = fpstate_module.get_fp_state()
     except Exception as e:
         raise FPStateError("Unable to read floating-point state from compiled fpstate probe.") from e
 

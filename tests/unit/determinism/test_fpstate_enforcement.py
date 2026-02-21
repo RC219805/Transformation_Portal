@@ -8,6 +8,7 @@ import types
 
 import pytest
 
+import transformation_portal.determinism as determinism_pkg
 from transformation_portal.determinism import bootstrap as bootstrap_mod
 from transformation_portal.determinism.fpstate import FPStateError, enforce_ftz_daz_disabled, read_fp_state
 
@@ -25,6 +26,11 @@ def test_read_fp_state_uses_compiled_module(monkeypatch):
 
 
 def test_read_fp_state_raises_when_extension_missing(monkeypatch):
+    fake_mod = types.SimpleNamespace(get_fp_state=lambda: {"arch": "x86", "ftz": False, "daz": False})
+    monkeypatch.setitem(sys.modules, "transformation_portal.determinism._fpstate", fake_mod)
+    monkeypatch.setattr(determinism_pkg, "_fpstate", fake_mod, raising=False)
+    assert read_fp_state()["arch"] == "x86"
+
     monkeypatch.setitem(sys.modules, "transformation_portal.determinism._fpstate", None)
     with pytest.raises(FPStateError, match="Unable to import compiled fpstate probe"):
         read_fp_state()
