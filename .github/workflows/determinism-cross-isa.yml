@@ -84,12 +84,6 @@ jobs:
           print(f"artifact_id={data['artifact_id']}")
           PY
 
-      - name: Upload CAS
-        uses: actions/upload-artifact@v4
-        with:
-          name: cas-baseline-x86
-          path: cas
-
   candidate-arm:
     name: Candidate (arm64)
     runs-on: ubuntu-24.04-arm
@@ -150,12 +144,6 @@ jobs:
           data = json.load(open("run_result.json", "r", encoding="utf-8"))
           print(f"artifact_id={data['artifact_id']}")
           PY
-
-      - name: Upload CAS
-        uses: actions/upload-artifact@v4
-        with:
-          name: cas-candidate-arm
-          path: cas
 
   verify:
     name: Verify (artifact-id parity)
