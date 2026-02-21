@@ -18,9 +18,9 @@ Design constraints:
 
 from __future__ import annotations
 
-import json
 from typing import Any, Dict, Optional
 
+from .jcs import dumps
 
 # Current schema version for new manifests.
 MANIFEST_SCHEMA_VERSION = 3
@@ -85,9 +85,9 @@ def build_artifact_manifest(
 def stable_manifest_json(manifest: Dict[str, Any]) -> str:
     """Serialize manifest to deterministic JSON string.
 
-    Uses sort_keys for deterministic ordering and compact separators.
+    Uses RFC 8785 (JCS) canonical serialization for deterministic ordering.
     """
-    return json.dumps(manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return dumps(manifest)
 
 
 def is_manifest_v3_compatible(manifest: Dict[str, Any]) -> bool:
