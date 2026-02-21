@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **FP Probe Version Governance (ADR-030):** Production-grade probe versioning for cross-ISA determinism
+  - **Governance Contract:** `probe_version` is now a semantic contract with explicit bump criteria
+  - **Locking Test:** `test_probe_version_locked()` enforces conscious version increments
+  - **Manifest Schema v3:** Promotes `probe_version` and `probe_policy` to first-class fields in fpstate section
+  - **Documentation:** Module docstring documents increment vs. no-increment criteria for probe changes
+  - See: `src/transformation_portal/determinism/fp_probe.py` (PROBE VERSION GOVERNANCE section)
+
 - **Phase 5: Material PBR Integration (v5.0.0):** Production-ready physics-based rendering for luxury real estate post-production
   - **Stable Preset (`material_pbr.yaml`):** Deterministic CPU-only heuristic backend, zero ML dependencies
   - **Canary Preset (`material_pbr_canary.yaml`):** Optional PBRFusion GPU backend (Apache 2.0) with auto-fallback

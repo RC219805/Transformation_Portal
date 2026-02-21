@@ -192,6 +192,32 @@ def test_probe_version_one_in_raw_probe():
 
 
 # ---------------------------------------------------------------------------
+# Probe version locking (governance enforcement)
+# ---------------------------------------------------------------------------
+
+
+def test_probe_version_locked():
+    """Enforce conscious probe version increments (governance lock).
+
+    This test MUST be updated when probe_version is intentionally bumped.
+    It prevents accidental algorithm changes without version coordination.
+
+    See fp_probe.py docstring for version bump criteria.
+
+    When bumping probe_version:
+    1. Review the PROBE VERSION GOVERNANCE section in fp_probe.py
+    2. Verify the change meets increment criteria
+    3. Update this test's expected version
+    4. Update any documentation referencing the probe version
+    """
+    raw = probe_fpstate_raw()
+    assert raw.probe_version == 1, (
+        "probe_version changed unexpectedly. If this is intentional, "
+        "update this test and verify version bump criteria in fp_probe.py docstring."
+    )
+
+
+# ---------------------------------------------------------------------------
 # Deterministic output types
 # ---------------------------------------------------------------------------
 
