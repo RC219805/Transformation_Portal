@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -178,7 +179,8 @@ def test_determinism_cli_rejects_directory_input(tmp_path):
     )
 
     assert result.returncode != 0
-    assert "Invalid value for '--input'" in result.stderr
+    clean_stderr = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", result.stderr)
+    assert "Invalid value for '--input'" in clean_stderr
 
 
 def test_determinism_cli_tensor_role_validation_shows_cli_error(tmp_path):
