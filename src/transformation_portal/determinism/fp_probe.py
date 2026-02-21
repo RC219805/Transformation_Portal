@@ -14,6 +14,31 @@ The probe tests:
 
 This dual-path approach reduces false confidence from scalar-only probes,
 which may pass on one ISA while vectorized ufunc kernels behave differently.
+
+-------------------------------------------------------------------------------
+PROBE VERSION GOVERNANCE (Contract Rule)
+-------------------------------------------------------------------------------
+The probe_version is a semantic contract, not just metadata. It must remain
+monotonic and is part of manifest audit evidence for cross-ISA determinism.
+
+INCREMENT probe_version when ANY of these change:
+- Smallest-subnormal detection logic
+- Scalar operations tested (mul/add sequence or comparison)
+- Vector operations tested (mul/add sequence or comparison)
+- Vector length constant (currently 1024)
+- Policy semantics (strict/relaxed/scalar_only/vector_only behavior)
+- Definition of "preserved" (comparison operators or thresholds)
+- Boolean reduction logic (e.g., np.any → np.all)
+- Failure reason semantics (string values returned in FPProbeRaw.note)
+
+DO NOT increment for:
+- Refactors that preserve semantics
+- Formatting, variable renames, docstring edits
+- Type hints, comments
+- Performance-neutral internal cleanup
+
+A locking test (test_probe_version_locked) enforces conscious version increments.
+-------------------------------------------------------------------------------
 """
 
 from __future__ import annotations
