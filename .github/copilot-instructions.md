@@ -241,9 +241,9 @@ Performance regressions are treated as correctness failures.
 | (default / core) | `-m "not ml and not slow"`       | config parsing, schemas, IO utilities, orchestration logic | Must run fast; no torch/model loads.                                      |
 | `ml`             | `-m "ml and not slow"`           | backend wiring, inference shape rules, device placement    | Must be offline; small fixtures only.                                     |
 | `slow`           | (excluded by default)            | stress, large fixtures, full pipelines                     | Run manually or scheduled.                                                |
-| `benchmark`      | (manual / scheduled)             | performance ledger updates, regression thresholds          | Run in nightly/deep checks; not currently excluded from PR gating CI.     |
+| `benchmark`      | (manual / scheduled)             | performance ledger updates, regression thresholds          | **EXCLUDED from PR gating CI** (enforced in build.yml).                   |
 
-**Note:** CI currently uses simple marker expressions (`-m "not ml and not slow"`). Future iterations may add explicit `not benchmark` exclusion for PR gating to fully isolate performance testing from fast feedback loops.
+**Enforcement:** CI workflows use marker expressions with explicit `not benchmark` exclusion to ensure deterministic PR gating.
 
 ### CI matrix (do not break this)
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """FP-state enforcement/probe helpers for ADR-030 determinism evidence.
 
 This module is used by the deterministic CLI runner to capture whether FTZ/DAZ

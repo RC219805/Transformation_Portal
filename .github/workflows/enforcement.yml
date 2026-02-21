@@ -73,7 +73,7 @@ jobs:
           pip install -e ".[dev]" -c requirements/constraints.txt
 
       - name: Run unit and regression tests
-        run: pytest tests/ -m "not ml and not slow" --maxfail=3
+        run: pytest tests/ -m "not ml and not slow and not benchmark" --maxfail=3
 
   test-layer2-ml:
     name: Layer 2 Tests (ML Tier)
@@ -120,7 +120,7 @@ jobs:
         run: pip install -e ".[dev]" -c requirements/constraints.txt
 
       - name: Run golden tests
-        run: pytest tests/ -m "not ml and not slow" --maxfail=1
+        run: pytest tests/ -m "not ml and not slow and not benchmark" --maxfail=1
 
   artifact-boundary:
     name: Verify Artifact Boundary
