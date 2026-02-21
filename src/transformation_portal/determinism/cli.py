@@ -55,7 +55,7 @@ class DeterminismSummary:
 # ---------------------------------------------------------------------
 @app.command("run")
 def run(
-    input_path: Path = typer.Option(..., "--input", exists=True),
+    input_path: Path = typer.Option(..., "--input", exists=True, dir_okay=False, file_okay=True),
     contract: str = typer.Option("npy_tensor", "--contract"),
     tensor_role: str = typer.Option("xyz_d50_linear_fp32", "--tensor-role"),
     wb_mode: str = typer.Option("camera", "--wb-mode"),
@@ -100,10 +100,13 @@ def run(
     raw_hash = f"sha256:{sha256_file(input_path)}"
     fingerprint_hash = f"sha256:{sha256_hex_of_canonical_json(fingerprint)}"
 
-    artifact_id = compute_artifact_id(
-        tensor_role=tensor_role,
-        tensor=tensor,
-    )
+    try:
+        artifact_id = compute_artifact_id(
+            tensor_role=tensor_role,
+            tensor=tensor,
+        )
+    except ValueError as e:
+        raise typer.BadParameter(str(e), param_hint="--tensor-role") from e
 
     # artifact_id is expected to be "sha256:<hex>"
     if not artifact_id.startswith("sha256:"):

@@ -147,3 +147,74 @@ def test_determinism_cli_verify_roundtrip(tmp_path):
     )
     verification = json.loads(verify_result.stdout)
     assert verification["status"] == "pass"
+
+
+def test_determinism_cli_rejects_directory_input(tmp_path):
+    repo_root = Path(__file__).parent.parent.parent
+    cas_root = tmp_path / "cas"
+    env = os.environ.copy()
+    src_path = str(repo_root / "src")
+    existing_path = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = f"{src_path}{os.pathsep}{existing_path}" if existing_path else src_path
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "transformation_portal.determinism.cli",
+            "run",
+            "--input",
+            str(tmp_path),
+            "--contract",
+            "npy_tensor",
+            "--cas-root",
+            str(cas_root),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=repo_root,
+        env=env,
+    )
+
+    assert result.returncode != 0
+    assert "Invalid value for '--input'" in result.stderr
+
+
+def test_determinism_cli_tensor_role_validation_shows_cli_error(tmp_path):
+    repo_root = Path(__file__).parent.parent.parent
+    test_input = tmp_path / "tensor.npy"
+    np.save(test_input, np.zeros((4, 4, 3), dtype=np.float32), allow_pickle=False)
+
+    cas_root = tmp_path / "cas"
+    env = os.environ.copy()
+    src_path = str(repo_root / "src")
+    existing_path = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = f"{src_path}{os.pathsep}{existing_path}" if existing_path else src_path
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "transformation_portal.determinism.cli",
+            "run",
+            "--input",
+            str(test_input),
+            "--contract",
+            "npy_tensor",
+            "--tensor-role",
+            "XYZ_D50_LINEAR_FP32",
+            "--cas-root",
+            str(cas_root),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=repo_root,
+        env=env,
+    )
+
+    assert result.returncode != 0
+    assert "Invalid value" in result.stderr
+    assert "ASCII lowercase" in result.stderr
+    assert "Traceback" not in result.stderr

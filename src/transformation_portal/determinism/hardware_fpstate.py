@@ -44,7 +44,7 @@ def enforce_fpstate_and_probe(*, require_subnormals: bool = False) -> FPStateRep
 
     # Prefer the repo's established hardware-enforcement primitive when present.
     try:
-        from transformation_portal.determinism.fpstate import enforce_ftz_daz_disabled  # type: ignore
+        from transformation_portal.determinism.fpstate import FPStateError, enforce_ftz_daz_disabled  # type: ignore
     except (ImportError, AttributeError) as e:
         # Do not fail here; report and rely on probe.
         note = f"enforce_unavailable:{type(e).__name__}"
@@ -53,6 +53,11 @@ def enforce_fpstate_and_probe(*, require_subnormals: bool = False) -> FPStateRep
     else:
         try:
             enforce_ftz_daz_disabled()
+        except FPStateError as e:
+            # Enforcement path ran and found FTZ/DAZ policy violation.
+            note = f"enforce_failed:{type(e).__name__}:{str(e)}"
+            enforced = False
+            backend = "fpstate.enforce_ftz_daz_disabled"
         except (RuntimeError, OSError, AttributeError) as e:
             # Known enforcement-path failures are non-fatal in minimal mode.
             note = f"enforce_unavailable:{type(e).__name__}"
