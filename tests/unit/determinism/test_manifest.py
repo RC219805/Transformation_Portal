@@ -21,7 +21,6 @@ from transformation_portal.determinism.manifest import (
     stable_manifest_json,
 )
 
-
 pytestmark = [pytest.mark.unit]
 
 

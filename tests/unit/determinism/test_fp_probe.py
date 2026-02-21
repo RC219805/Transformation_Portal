@@ -22,7 +22,6 @@ from transformation_portal.determinism.fp_probe import (
     probe_fpstate_raw,
 )
 
-
 pytestmark = [pytest.mark.unit]
 
 

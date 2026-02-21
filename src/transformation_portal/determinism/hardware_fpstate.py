@@ -16,8 +16,6 @@ The FPStateReport captures:
 Architecture: ADR-030 determinism harness extension.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Optional
 

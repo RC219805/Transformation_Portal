@@ -23,7 +23,6 @@ from typing import Literal, Optional
 
 import numpy as np
 
-
 ProbePolicy = Literal["strict", "relaxed", "scalar_only", "vector_only"]
 
 
