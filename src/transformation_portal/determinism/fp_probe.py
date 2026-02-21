@@ -1,4 +1,10 @@
-"""Cross-ISA FTZ/DAZ behavioral probe with normalization layer.
+"""
+IMPORTANT:
+Bump probe_version when algorithm semantics change (including vector length,
+preservation logic, or policy behavior). This version is part of manifest
+audt evidence and must remain monotonic.
+
+Cross-ISA FTZ/DAZ behavioral probe with normalization layer.
 
 This module provides a versioned, policy-driven FP-state probe that tests both
 scalar and vector operations to detect cross-ISA divergence in subnormal handling.

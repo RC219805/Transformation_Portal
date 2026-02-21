@@ -30,6 +30,13 @@ pytestmark = [pytest.mark.unit]
 # ---------------------------------------------------------------------------
 
 
+def test_probe_version_locked():
+    from transformation_portal.determinism.fp_probe import probe_fpstate_raw
+
+    raw = probe_fpstate_raw()
+    assert raw.probe_version == 1
+
+
 def make_raw(
     *,
     smallest: bool = True,
