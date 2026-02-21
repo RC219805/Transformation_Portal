@@ -15,7 +15,7 @@ from transformation_portal.determinism.cas import (
     stage_dir,
     write_json,
 )
-from transformation_portal.determinism.cli import _parse_artifact_id
+from transformation_portal.determinism.cli import _load_tensor_from_cas, _parse_artifact_id
 from transformation_portal.determinism.jcs import dumps, sha256_hex_of_canonical_json
 from transformation_portal.determinism.policy import Adr030PolicyV1, load_policy
 from transformation_portal.determinism.tensor import compute_artifact_id
@@ -76,6 +76,36 @@ def test_parse_artifact_id_normalizes_hex_case():
     upper = "sha256:" + ("AB" * 32)
     normalized = _parse_artifact_id(upper)
     assert normalized == ("ab" * 32)
+
+
+def test_parse_artifact_id_error_includes_received_value():
+    with pytest.raises(ValueError, match="got:"):
+        _parse_artifact_id("sha256:not-valid-hex")
+
+
+def test_load_tensor_from_cas_reports_corrupt_npy_with_context(tmp_path: Path):
+    cas_root = tmp_path / "cas"
+    tensor_hash = "a" * 64
+    artifact_id = f"sha256:{tensor_hash}"
+    artifact_dir = cas_root / "sha256" / tensor_hash
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    (artifact_dir / "output_tensor.npy").write_bytes(b"not-a-valid-npy")
+
+    with pytest.raises(RuntimeError, match=f"Failed to load tensor npy payload for artifact {artifact_id}"):
+        _load_tensor_from_cas(cas_root, artifact_id)
+
+
+def test_load_tensor_from_cas_reports_missing_shape_with_context(tmp_path: Path):
+    cas_root = tmp_path / "cas"
+    tensor_hash = "b" * 64
+    artifact_id = f"sha256:{tensor_hash}"
+    artifact_dir = cas_root / "sha256" / tensor_hash
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    (artifact_dir / "tensor_meta.json").write_text("{}", encoding="utf-8")
+    (artifact_dir / "output_tensor.bin").write_bytes(b"")
+
+    with pytest.raises(KeyError, match="Missing 'shape' in tensor metadata"):
+        _load_tensor_from_cas(cas_root, artifact_id)
 
 
 def test_compute_metrics_known_values():

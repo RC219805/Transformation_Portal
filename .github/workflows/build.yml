@@ -232,16 +232,16 @@ jobs:
           - python-version: "3.11"
             device: cpu
             test-type: core
-            markexpr: "not ml and not slow"
+            markexpr: "not ml and not slow and not benchmark"
           - python-version: "3.12"
             device: cpu
             test-type: core
-            markexpr: "not ml and not slow"
+            markexpr: "not ml and not slow and not benchmark"
           - python-version: "3.11"
             device: cpu
             test-type: ml
-            # Preferred intent: run ML-marked tests, but never slow integration in PR gating.
-            markexpr: "ml and not slow"
+            # Preferred intent: run ML-marked tests, but never slow integration or benchmarks in PR gating.
+            markexpr: "ml and not slow and not benchmark"
 
     name: test (${{ matrix.python-version }}, ${{ matrix.device }}, ${{ matrix.test-type }})
 

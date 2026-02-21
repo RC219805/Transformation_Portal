@@ -43,7 +43,7 @@ jobs:
 
       - name: Run ingest contract tests
         run: |
-          pytest tests/ingest/ -v --tb=short -m "not ml and not slow"
+          pytest tests/ingest/ -v --tb=short -m "not ml and not slow and not benchmark"
         continue-on-error: false
 
   schema-drift-detection:

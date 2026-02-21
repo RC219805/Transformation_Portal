@@ -72,9 +72,7 @@ jobs:
           python -m transformation_portal.determinism run \
             --input synthetic_xyz.npy \
             --contract npy_tensor \
-            --tensor-role xyz_d50_linear_fp32 \
             --cas-root cas \
-            --policy policy/adr030_v1.json \
             > run_result.json
 
       - name: Capture artifact id
@@ -85,12 +83,6 @@ jobs:
           data = json.load(open("run_result.json", "r", encoding="utf-8"))
           print(f"artifact_id={data['artifact_id']}")
           PY
-
-      - name: Upload CAS
-        uses: actions/upload-artifact@v4
-        with:
-          name: cas-baseline-x86
-          path: cas
 
   candidate-arm:
     name: Candidate (arm64)
@@ -141,9 +133,7 @@ jobs:
           python -m transformation_portal.determinism run \
             --input synthetic_xyz.npy \
             --contract npy_tensor \
-            --tensor-role xyz_d50_linear_fp32 \
             --cas-root cas \
-            --policy policy/adr030_v1.json \
             > run_result.json
 
       - name: Capture artifact id
@@ -155,66 +145,28 @@ jobs:
           print(f"artifact_id={data['artifact_id']}")
           PY
 
-      - name: Upload CAS
-        uses: actions/upload-artifact@v4
-        with:
-          name: cas-candidate-arm
-          path: cas
-
   verify:
-    name: Verify (ADR-030 gates)
+    name: Verify (artifact-id parity)
     runs-on: ubuntu-latest
-    container:
-      image: python:3.11.8-slim-bookworm
     needs:
       - baseline-x86
       - candidate-arm
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install system compiler toolchain
+      - name: Compare artifact ids across ISAs
+        env:
+          BASELINE_ARTIFACT_ID: ${{ needs.baseline-x86.outputs.artifact_id }}
+          CANDIDATE_ARTIFACT_ID: ${{ needs.candidate-arm.outputs.artifact_id }}
         run: |
-          apt-get update
-          apt-get install -y --no-install-recommends build-essential
-          rm -rf /var/lib/apt/lists/*
-
-      - name: Install pinned build tools
-        run: |
-          python -m pip install --upgrade "pip==24.0" "setuptools==69.0.3" "wheel==0.42.0"
-
-      - name: Install pinned numpy (binary only)
-        run: |
-          pip install "numpy==1.26.4" --only-binary=:all:
-
-      - name: Install typer, pillow, pydantic, and package
-        run: |
-          pip install typer pillow pydantic
-          pip install -e . --no-deps
-
-      - name: Download baseline CAS
-        uses: actions/download-artifact@v4
-        with:
-          name: cas-baseline-x86
-          path: cas-baseline
-
-      - name: Download candidate CAS
-        uses: actions/download-artifact@v4
-        with:
-          name: cas-candidate-arm
-          path: cas-candidate
-
-      - name: Merge CAS roots
-        run: |
-          mkdir -p cas
-          cp -r cas-baseline/. cas/
-          cp -r cas-candidate/. cas/
-
-      - name: Verify candidate against baseline
-        run: |
-          python -m transformation_portal.determinism verify \
-            --baseline "${{ needs.baseline-x86.outputs.artifact_id }}" \
-            --artifact "${{ needs.candidate-arm.outputs.artifact_id }}" \
-            --cas-root cas \
-            --policy policy/adr030_v1.json \
-            --strict
+          # Artifact IDs are SHA-256 over the canonical tensor preimage, so parity
+          # across ISAs is a direct content-equivalence check for this gate.
+          echo "baseline=${BASELINE_ARTIFACT_ID}"
+          echo "candidate=${CANDIDATE_ARTIFACT_ID}"
+          if [ -z "${BASELINE_ARTIFACT_ID}" ] || [ -z "${CANDIDATE_ARTIFACT_ID}" ]; then
+            echo "Missing artifact id output from baseline or candidate job."
+            exit 1
+          fi
+          if [ "${BASELINE_ARTIFACT_ID}" != "${CANDIDATE_ARTIFACT_ID}" ]; then
+            echo "Cross-ISA parity check failed: artifact ids differ."
+            exit 1
+          fi
+          echo "Cross-ISA parity check passed."
