@@ -160,6 +160,8 @@ def run(
                 fingerprint_hash=fingerprint_hash,
                 fpstate_enforced=fpstate_report.enforced,
                 fpstate_backend=fpstate_report.backend,
+                probe_version=fpstate_report.probe_version,
+                probe_policy=fpstate_report.probe_policy,
                 subnormals_preserved=subnormals_ok,
                 fpstate_note=fpstate_report.note,
             )

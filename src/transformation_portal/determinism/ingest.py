@@ -34,14 +34,13 @@ def probe_subnormals_preserved() -> bool:
     Returns True if float32 subnormals appear preserved under basic operations.
     This is not a definitive hardware register read, but it detects common FTZ/DAZ
     configurations in NumPy kernels.
+
+    This function now delegates to the cross-ISA normalized probe with scalar_only
+    policy to preserve backward-compatible behavior (scalar-ish checks only).
     """
-    x = np.nextafter(np.float32(0.0), np.float32(1.0), dtype=np.float32)
-    if x == np.float32(0.0):
-        return False
-    y = x * np.float32(1.0)
-    z = x + np.float32(0.0)
-    # NumPy comparisons produce np.bool_; normalize to Python bool for JSON/JCS callers.
-    return bool((y != np.float32(0.0)) and (z != np.float32(0.0)))
+    from .fp_probe import probe_fpstate_normalized
+
+    return bool(probe_fpstate_normalized(policy="scalar_only").subnormals_preserved)
 
 
 def ingest_from_npy(path: Path) -> tuple[np.ndarray, Dict[str, Any]]:
