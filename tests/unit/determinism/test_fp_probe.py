@@ -159,10 +159,10 @@ def test_vector_only_policy_fails_without_vector():
 
 def test_smallest_subnormal_zero_forces_failure():
     """If nextafter returns zero, all policies fail."""
-    raw = make_raw(smallest=False, scalar=True, vector=True, note="nextafter_zero")
+    raw = make_raw(smallest=False, scalar=True, vector=True, note="nextafter_returned_zero")
     out = normalize_fp_probe(raw, policy="strict")
     assert out.subnormals_preserved is False
-    assert out.reason == "nextafter_zero"
+    assert out.reason == "nextafter_returned_zero"
 
 
 def test_smallest_subnormal_zero_forces_failure_all_policies():
