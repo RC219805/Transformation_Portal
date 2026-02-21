@@ -10,10 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from transformation_portal.determinism.hardware_fpstate import (
-    FPStateReport,
-    enforce_fpstate_and_probe,
-)
+from transformation_portal.determinism.hardware_fpstate import FPStateReport, enforce_fpstate_and_probe
 
 pytestmark = [pytest.mark.unit]
 
