@@ -170,6 +170,34 @@ class ManifestTelemetryCliTest(unittest.TestCase):
             payload_fail = json.loads(gate_fail.read_text(encoding="utf-8"))
             self.assertFalse(payload_fail["passed"])
 
+    def test_governance_gate_includes_threshold_mode(self) -> None:
+        """Verify threshold_mode is 'rows' to avoid ambiguity with percentage."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp = Path(tmpdir)
+            governance_csv = temp / "rights_privacy_governance.csv"
+            gate_json = temp / "gate.json"
+
+            with governance_csv.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(["asset_id", "classification"])
+                writer.writerow(["1", "approved"])
+
+            result = self._run_cli(
+                "governance-gate",
+                "--governance-csv",
+                str(governance_csv),
+                "--min-classified",
+                "1",
+                "--out-json",
+                str(gate_json),
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(gate_json.read_text(encoding="utf-8"))
+
+            # Phase 1.1 requirement: explicit threshold_mode to prevent "95% vs 95 rows" ambiguity
+            self.assertIn("threshold_mode", payload, "governance JSON must include threshold_mode")
+            self.assertEqual(payload["threshold_mode"], "rows")
+
 
 if __name__ == "__main__":
     unittest.main()
