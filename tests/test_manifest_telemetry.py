@@ -198,6 +198,170 @@ class ManifestTelemetryCliTest(unittest.TestCase):
             self.assertIn("threshold_mode", payload, "governance JSON must include threshold_mode")
             self.assertEqual(payload["threshold_mode"], "rows")
 
+    def test_merkle_proof_generates_valid_proof(self) -> None:
+        """Verify merkle-proof generates a proof that verifies correctly."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp = Path(tmpdir)
+            manifest_csv = temp / "manifest.csv"
+            proof_json = temp / "proof.json"
+            verify_json = temp / "verify.json"
+
+            with manifest_csv.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(["filename", "bytes", "md5"])
+                writer.writerow(["driveA/file1.txt", "1", "aaa"])
+                writer.writerow(["driveA/file2.txt", "2", "bbb"])
+                writer.writerow(["driveB/file3.txt", "3", "ccc"])
+
+            # Generate proof for first file
+            proof_result = self._run_cli(
+                "merkle-proof",
+                "--manifest",
+                str(manifest_csv),
+                "--filename",
+                "driveA/file1.txt",
+                "--out-json",
+                str(proof_json),
+            )
+            self.assertEqual(proof_result.returncode, 0, msg=proof_result.stderr)
+            self.assertTrue(proof_json.exists())
+
+            proof_payload = json.loads(proof_json.read_text(encoding="utf-8"))
+            self.assertEqual(proof_payload["schema_version"], "1.0")
+            self.assertEqual(proof_payload["target"]["filename"], "driveA/file1.txt")
+            self.assertIn("leaf_hex", proof_payload)
+            self.assertIn("root_hex", proof_payload)
+            self.assertIn("proof", proof_payload)
+            self.assertIn("contract", proof_payload)
+
+            # Verify the proof
+            verify_result = self._run_cli(
+                "merkle-verify",
+                "--proof-json",
+                str(proof_json),
+                "--out-json",
+                str(verify_json),
+            )
+            self.assertEqual(verify_result.returncode, 0, msg=verify_result.stderr)
+            self.assertTrue(verify_json.exists())
+
+            verify_payload = json.loads(verify_json.read_text(encoding="utf-8"))
+            self.assertTrue(verify_payload["verified"])
+            self.assertEqual(verify_payload["expected_root_hex"], verify_payload["computed_root_hex"])
+
+    def test_merkle_proof_root_matches_merkle_command(self) -> None:
+        """Verify merkle-proof generates a root identical to the merkle command."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp = Path(tmpdir)
+            manifest_csv = temp / "manifest.csv"
+            merkle_json = temp / "merkle.json"
+            proof_json = temp / "proof.json"
+
+            with manifest_csv.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(["filename", "bytes", "md5"])
+                writer.writerow(["driveA/file1.txt", "1", "aaa"])
+                writer.writerow(["driveA/file2.txt", "2", "bbb"])
+
+            # Generate merkle root
+            merkle_result = self._run_cli(
+                "merkle",
+                "--manifest",
+                str(manifest_csv),
+                "--out-json",
+                str(merkle_json),
+            )
+            self.assertEqual(merkle_result.returncode, 0, msg=merkle_result.stderr)
+
+            # Generate proof for any file
+            proof_result = self._run_cli(
+                "merkle-proof",
+                "--manifest",
+                str(manifest_csv),
+                "--filename",
+                "driveA/file1.txt",
+                "--out-json",
+                str(proof_json),
+            )
+            self.assertEqual(proof_result.returncode, 0, msg=proof_result.stderr)
+
+            merkle_payload = json.loads(merkle_json.read_text(encoding="utf-8"))
+            proof_payload = json.loads(proof_json.read_text(encoding="utf-8"))
+
+            # Root in proof must match global root from merkle command
+            self.assertEqual(
+                merkle_payload["global_root"],
+                proof_payload["root_hex"],
+                "Merkle proof root must match global root from merkle command",
+            )
+
+    def test_merkle_verify_fails_on_tampered_proof(self) -> None:
+        """Verify merkle-verify fails (exit code 2) when proof is tampered."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp = Path(tmpdir)
+            manifest_csv = temp / "manifest.csv"
+            proof_json = temp / "proof.json"
+            verify_json = temp / "verify.json"
+
+            with manifest_csv.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(["filename", "bytes", "md5"])
+                writer.writerow(["driveA/file1.txt", "1", "aaa"])
+
+            # Generate valid proof
+            self._run_cli(
+                "merkle-proof",
+                "--manifest",
+                str(manifest_csv),
+                "--filename",
+                "driveA/file1.txt",
+                "--out-json",
+                str(proof_json),
+            )
+
+            # Tamper with the proof
+            proof_payload = json.loads(proof_json.read_text(encoding="utf-8"))
+            proof_payload["root_hex"] = "badc0de" * 8
+            proof_json.write_text(json.dumps(proof_payload), encoding="utf-8")
+
+            # Verification should fail with exit code 2
+            verify_result = self._run_cli(
+                "merkle-verify",
+                "--proof-json",
+                str(proof_json),
+                "--out-json",
+                str(verify_json),
+            )
+            self.assertEqual(verify_result.returncode, 2)
+
+            verify_payload = json.loads(verify_json.read_text(encoding="utf-8"))
+            self.assertFalse(verify_payload["verified"])
+            self.assertNotEqual(verify_payload["expected_root_hex"], verify_payload["computed_root_hex"])
+
+    def test_merkle_proof_fails_on_missing_filename(self) -> None:
+        """Verify merkle-proof fails gracefully when filename not in manifest."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp = Path(tmpdir)
+            manifest_csv = temp / "manifest.csv"
+            proof_json = temp / "proof.json"
+
+            with manifest_csv.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(["filename", "bytes", "md5"])
+                writer.writerow(["driveA/file1.txt", "1", "aaa"])
+
+            result = self._run_cli(
+                "merkle-proof",
+                "--manifest",
+                str(manifest_csv),
+                "--filename",
+                "nonexistent.txt",
+                "--out-json",
+                str(proof_json),
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("not found", result.stderr.lower())
+
 
 if __name__ == "__main__":
     unittest.main()
