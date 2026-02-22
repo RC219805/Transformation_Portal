@@ -466,14 +466,19 @@ jobs:
       - name: Governance completeness check (CI Gate)
         id: governance
         run: |
-          set -euo pipefail
+          set -uo pipefail
           if [ -f rights_privacy_governance.csv ]; then
-            python tools/manifest_telemetry.py governance-gate \
+            if python tools/manifest_telemetry.py governance-gate \
               --governance-csv rights_privacy_governance.csv \
               --min-classified "${GOV_MIN_CLASSIFIED}" \
-              --out-json governance_gate_report.json
-            echo "passed=true" >> "$GITHUB_OUTPUT"
-            echo "note=governance gate passed (min_classified=${GOV_MIN_CLASSIFIED})" >> "$GITHUB_OUTPUT"
+              --out-json governance_gate_report.json; then
+              echo "passed=true" >> "$GITHUB_OUTPUT"
+              echo "note=governance gate passed (min_classified=${GOV_MIN_CLASSIFIED})" >> "$GITHUB_OUTPUT"
+            else
+              echo "passed=false" >> "$GITHUB_OUTPUT"
+              echo "note=governance gate FAILED (min_classified=${GOV_MIN_CLASSIFIED})" >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
           else
             echo '{"note":"rights_privacy_governance.csv not present; skipping governance gate"}' > governance_gate_report.json
             echo "passed=skipped" >> "$GITHUB_OUTPUT"
@@ -579,6 +584,26 @@ jobs:
           echo "GATE_MODE=lightweight-only" >> "$GITHUB_ENV"
           echo "✅ CI Gate: PASSED (lightweight-only mode)"
 
+      - name: Set governance status variables
+        if: always()
+        run: |
+          GOV_PASSED="${{ needs['generate-manifest'].outputs.governance_passed || 'N/A' }}"
+          GOV_NOTE="${{ needs['generate-manifest'].outputs.governance_note || 'N/A' }}"
+          if [ "$GOV_PASSED" = "true" ]; then
+            GOV_EMOJI="✅"
+            GOV_STATUS_TEXT="PASSED"
+          elif [ "$GOV_PASSED" = "skipped" ]; then
+            GOV_EMOJI="⏭️"
+            GOV_STATUS_TEXT="SKIPPED"
+          else
+            GOV_EMOJI="❌"
+            GOV_STATUS_TEXT="FAILED or N/A"
+          fi
+          echo "GOV_PASSED=$GOV_PASSED" >> "$GITHUB_ENV"
+          echo "GOV_NOTE=$GOV_NOTE" >> "$GITHUB_ENV"
+          echo "GOV_EMOJI=$GOV_EMOJI" >> "$GITHUB_ENV"
+          echo "GOV_STATUS_TEXT=$GOV_STATUS_TEXT" >> "$GITHUB_ENV"
+
       - name: Write CI Gate Summary
         if: always()
         run: |
@@ -599,17 +624,9 @@ jobs:
             echo "| generate-manifest | ${{ needs['generate-manifest'].result }} |"
             echo ""
             echo "### Dataset Governance Status"
-            GOV_PASSED="${{ needs['generate-manifest'].outputs.governance_passed || 'N/A' }}"
-            GOV_NOTE="${{ needs['generate-manifest'].outputs.governance_note || 'N/A' }}"
-            if [ "$GOV_PASSED" = "true" ]; then
-              echo "✅ **Governance Gate**: PASSED"
-            elif [ "$GOV_PASSED" = "skipped" ]; then
-              echo "⏭️ **Governance Gate**: SKIPPED"
-            else
-              echo "❌ **Governance Gate**: FAILED or N/A"
-            fi
+            echo "${GOV_EMOJI} **Governance Gate**: ${GOV_STATUS_TEXT}"
             echo ""
-            echo "**Note**: $GOV_NOTE"
+            echo "**Note**: ${GOV_NOTE}"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish Dedicated CI Gate Check
@@ -618,12 +635,11 @@ jobs:
         env:
           GATE_STATUS: ${{ env.GATE_STATUS || 'failure' }}
           GATE_MODE: ${{ env.GATE_MODE || 'unknown' }}
-          GOV_PASSED: ${{ needs['generate-manifest'].outputs.governance_passed || 'N/A' }}
-          GOV_NOTE: ${{ needs['generate-manifest'].outputs.governance_note || 'N/A' }}
+          GOV_EMOJI: ${{ env.GOV_EMOJI || '❓' }}
+          GOV_NOTE: ${{ env.GOV_NOTE || 'N/A' }}
         with:
           script: |
             const conclusion = process.env.GATE_STATUS === 'success' ? 'success' : 'failure';
-            const govStatus = process.env.GOV_PASSED === 'true' ? '✅' : (process.env.GOV_PASSED === 'skipped' ? '⏭️' : '❌');
 
             await github.rest.checks.create({
               owner: context.repo.owner,
@@ -634,7 +650,7 @@ jobs:
               conclusion,
               output: {
                 title: conclusion === 'success' ? '✅ CI Gate: PASSED' : '❌ CI Gate: FAILED',
-                summary: `**Mode**: ${process.env.GATE_MODE}\n\n**Reason**: ${process.env.GATE_MODE.includes('full') ? '${{ needs.preflight.outputs.reason }}' : 'docs-only or non-runtime changes'}\n\n**Dataset Governance**: ${govStatus} ${process.env.GOV_NOTE}`,
+                summary: `**Mode**: ${process.env.GATE_MODE}\n\n**Reason**: ${process.env.GATE_MODE.includes('full') ? '${{ needs.preflight.outputs.reason }}' : 'docs-only or non-runtime changes'}\n\n**Dataset Governance**: ${process.env.GOV_EMOJI} ${process.env.GOV_NOTE}`,
                 text: `
             **Preflight Decision**:
             - run_full: ${{ needs.preflight.outputs.run_full }}
