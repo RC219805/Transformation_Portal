@@ -208,7 +208,7 @@ def run(
     )
 
     if print_hash:
-        print(tensor_hash)
+        typer.echo(tensor_hash)
         return
 
     if include_env:
@@ -217,16 +217,16 @@ def run(
         env_fp = environment_fingerprint_dict()
         report = HarnessRunReport(summary=summary, environment=env_fp)
         if json_out:
-            print(stable_manifest_json(report.to_dict()))
+            typer.echo(stable_manifest_json(report.to_dict()))
         else:
             for k, v in report.to_dict().items():
-                print(f"{k}: {v}")
+                typer.echo(f"{k}: {v}")
     else:
         if json_out:
-            print(stable_manifest_json(asdict(summary)))
+            typer.echo(stable_manifest_json(asdict(summary)))
         else:
             for k, v in asdict(summary).items():
-                print(f"{k}: {v}")
+                typer.echo(f"{k}: {v}")
 
 
 def _load_tensor_from_cas(cas_root: Path, artifact_id: str):
