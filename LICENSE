@@ -1,0 +1,133 @@
+TRANSFORMATION PORTAL
+
+PROPRIETARY SOFTWARE AND DATA LICENSE
+
+Copyright © 2026
+Richard Cheetham
+All Rights Reserved.
+
+⸻
+
+1. Ownership
+
+All source code, object code, configuration files, scripts, workflows, manifests, datasets, governance telemetry, cryptographic artifacts (including hashes and Merkle trees), documentation, and all related materials contained in this repository (collectively, the “Materials”) are proprietary and confidential intellectual property of Richard Cheetham.
+
+Access to this repository does not grant ownership rights. All rights not expressly granted herein are reserved.
+
+⸻
+
+2. Limited License Grant
+
+Subject to strict compliance with this License, you are granted a limited, revocable, non-exclusive, non-transferable, non-sublicensable license to:
+	•	View the Materials for informational purposes only; and
+	•	Clone or download the repository solely for personal, non-commercial evaluation.
+
+No other rights are granted.
+
+⸻
+
+3. Restrictions
+
+Without prior express written authorization from the Licensor, you may not:
+	1.	Use the Materials for any commercial purpose;
+	2.	Distribute, publish, sublicense, sell, or transfer the Materials;
+	3.	Modify, adapt, translate, reverse engineer, decompile, or create derivative works;
+	4.	Incorporate the Materials into any product or service;
+	5.	Remove or alter copyright or attribution notices;
+	6.	Circumvent any governance, cryptographic, integrity, or enforcement mechanisms contained in the Materials;
+	7.	Use the Materials for Machine Learning Use (defined below);
+	8.	Scrape, harvest, extract, or programmatically collect repository contents beyond permitted evaluation use.
+
+⸻
+
+4. Machine Learning and AI Prohibition
+
+The Materials may not be used, directly or indirectly, for:
+	•	Training, fine-tuning, or improving machine learning models;
+	•	Reinforcement learning, alignment training, or evaluation;
+	•	Model benchmarking or performance testing;
+	•	Embedding generation, feature extraction, or representation learning;
+	•	Synthetic dataset generation;
+	•	Any other use intended to enhance artificial intelligence or automated decision systems.
+
+This restriction applies regardless of:
+	•	Transformation, anonymization, tokenization, summarization, or embedding;
+	•	Partial extraction or derivative transformation;
+	•	Use of telemetry, manifests, hashes, or structural metadata.
+
+⸻
+
+5. Anti-Extraction and Anti-Scraping
+
+You may not:
+	•	Extract structured or unstructured data from the Materials for reuse;
+	•	Reconstruct datasets from manifests or governance artifacts;
+	•	Replicate repository structure using cryptographic hashes or Merkle roots;
+	•	Perform automated scraping, harvesting, indexing, or bulk downloading beyond minimal evaluation use.
+
+⸻
+
+6. No Implied Rights
+
+This License does not grant:
+	•	Any patent rights;
+	•	Any trademark rights;
+	•	Any database rights;
+	•	Any rights by implication, estoppel, or otherwise.
+
+Public visibility of this repository does not constitute an open-source release.
+
+⸻
+
+7. Contributor Submissions
+
+Any contribution submitted to this repository is subject to explicit acceptance by the Licensor.
+
+Unless otherwise agreed in writing:
+	•	The Licensor retains full control over licensing and distribution of accepted contributions;
+	•	Contributors grant the Licensor a perpetual, irrevocable, worldwide license to use, modify, and distribute submitted materials under this License;
+	•	No contributor acquires rights to redistribute the Materials independently.
+
+⸻
+
+8. Termination
+
+This License terminates automatically upon violation of any provision.
+
+Upon termination, you must:
+	•	Immediately cease use of the Materials;
+	•	Destroy all copies in your possession or control;
+	•	Certify destruction upon written request.
+
+⸻
+
+9. Disclaimer of Warranty
+
+THE MATERIALS ARE PROVIDED “AS IS” WITHOUT WARRANTY OF ANY KIND.
+
+To the maximum extent permitted by law, the Licensor disclaims all warranties, express or implied, including but not limited to merchantability, fitness for a particular purpose, and non-infringement.
+
+⸻
+
+10. Limitation of Liability
+
+In no event shall the Licensor be liable for any indirect, incidental, consequential, special, or exemplary damages arising from use of the Materials.
+
+⸻
+
+11. Governing Law and Dispute Resolution
+
+This License shall be governed by the laws of the State of California, without regard to conflict-of-law principles.
+
+Any dispute arising under this License shall be resolved by binding arbitration in California under the rules of JAMS. Judgment on the award may be entered in any court of competent jurisdiction.
+
+⸻
+
+12. Commercial Licensing
+
+Commercial use, redistribution rights, or machine learning rights may be obtained only through a separate written agreement with the Licensor.
+
+For licensing inquiries, contact:
+
+Richard Cheetham
+rcsir.805@proton.me
