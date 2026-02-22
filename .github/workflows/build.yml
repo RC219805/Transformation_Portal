@@ -415,7 +415,8 @@ jobs:
     timeout-minutes: 10
 
     env:
-      # Governance gate threshold: Phase 1 default (ratchet later to 95)
+      # Governance gate threshold: Phase 1 = 0 (no enforcement yet)
+      # Target: 95% classified rows in Phase 2
       GOV_MIN_CLASSIFIED: "0"
 
     outputs:
@@ -466,12 +467,16 @@ jobs:
       - name: Governance completeness check (CI Gate)
         id: governance
         run: |
-          set -uo pipefail
+          set -euo pipefail
           if [ -f rights_privacy_governance.csv ]; then
-            if python tools/manifest_telemetry.py governance-gate \
+            set +e
+            python tools/manifest_telemetry.py governance-gate \
               --governance-csv rights_privacy_governance.csv \
               --min-classified "${GOV_MIN_CLASSIFIED}" \
-              --out-json governance_gate_report.json; then
+              --out-json governance_gate_report.json
+            GOV_EXIT=$?
+            set -e
+            if [ "$GOV_EXIT" -eq 0 ]; then
               echo "passed=true" >> "$GITHUB_OUTPUT"
               echo "note=governance gate passed (min_classified=${GOV_MIN_CLASSIFIED})" >> "$GITHUB_OUTPUT"
             else
