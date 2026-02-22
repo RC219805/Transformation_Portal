@@ -50,6 +50,21 @@ class DeterminismSummary:
     artifact_created: bool
 
 
+@dataclass(frozen=True)
+class HarnessRunReport:
+    """Full harness run report including environment fingerprint per SPEC-DH-001."""
+
+    summary: DeterminismSummary
+    environment: dict  # Environment fingerprint
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            **asdict(self.summary),
+            "environment": self.environment,
+        }
+
+
 # ---------------------------------------------------------------------
 # RUN COMMAND
 # ---------------------------------------------------------------------
@@ -62,6 +77,7 @@ def run(
     demosaic: str = typer.Option("AHD", "--demosaic"),
     print_hash: bool = typer.Option(False, "--print-hash"),
     json_out: bool = typer.Option(True, "--json/--no-json"),
+    include_env: bool = typer.Option(False, "--include-env", help="Include environment fingerprint per SPEC-DH-001"),
     cas_root: Path = typer.Option(Path(".cas"), "--cas-root"),
 ):
     """
@@ -195,11 +211,22 @@ def run(
         print(tensor_hash)
         return
 
-    if json_out:
-        print(stable_manifest_json(asdict(summary)))
+    if include_env:
+        from transformation_portal.determinism.environment import environment_fingerprint_dict
+
+        env_fp = environment_fingerprint_dict()
+        report = HarnessRunReport(summary=summary, environment=env_fp)
+        if json_out:
+            print(stable_manifest_json(report.to_dict()))
+        else:
+            for k, v in report.to_dict().items():
+                print(f"{k}: {v}")
     else:
-        for k, v in asdict(summary).items():
-            print(f"{k}: {v}")
+        if json_out:
+            print(stable_manifest_json(asdict(summary)))
+        else:
+            for k, v in asdict(summary).items():
+                print(f"{k}: {v}")
 
 
 def _load_tensor_from_cas(cas_root: Path, artifact_id: str):
@@ -267,6 +294,36 @@ def verify(
 
     if strict and vr.status != "pass":
         raise typer.Exit(code=2)
+
+
+# ---------------------------------------------------------------------
+# INFO COMMAND (Environment Fingerprint)
+# ---------------------------------------------------------------------
+@app.command("info")
+def info(
+    json_out: bool = typer.Option(True, "--json/--no-json"),
+):
+    """
+    Print environment fingerprint and harness engine version.
+
+    Per SPEC-DH-001 Section 5, the harness must report OS, ISA, runtime version,
+    and dependency lock IDs for cross-ISA audit and reproducibility.
+    """
+    from transformation_portal.determinism.environment import (
+        HARNESS_ENGINE_VERSION,
+        environment_fingerprint_dict,
+    )
+
+    fingerprint = environment_fingerprint_dict()
+
+    if json_out:
+        typer.echo(stable_manifest_json(fingerprint))
+    else:
+        typer.echo(f"Harness Engine Version: {HARNESS_ENGINE_VERSION}")
+        typer.echo(f"OS: {fingerprint['os_system']} {fingerprint['os_release']}")
+        typer.echo(f"ISA: {fingerprint['os_machine']}")
+        typer.echo(f"Python: {fingerprint['python_version']} ({fingerprint['python_implementation']})")
+        typer.echo(f"NumPy: {fingerprint['numpy_version']}")
 
 
 def main() -> None:
