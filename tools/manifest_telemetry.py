@@ -238,6 +238,7 @@ def write_governance_metrics(governance_csv: Path, out_json: Path) -> None:
 def run_governance_gate(governance_csv: Path, min_classified: int, out_json: Path) -> None:
     payload = _governance_metrics(governance_csv)
     payload["min_classified_required"] = min_classified
+    payload["threshold_mode"] = "rows"  # Explicit: threshold is row count, not percentage
     payload["passed"] = payload["classified_rows"] >= min_classified
     _write_json(out_json, payload)
     if not payload["passed"]:

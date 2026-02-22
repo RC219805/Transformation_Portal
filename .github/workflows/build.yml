@@ -415,9 +415,10 @@ jobs:
     timeout-minutes: 10
 
     env:
-      # Governance gate threshold is an absolute classified-row count.
+      # Governance gate threshold: absolute classified-row count (not a percentage).
       # Phase 1 = 0 (no enforcement yet); raise to a concrete row-count target in Phase 2.
-      GOV_MIN_CLASSIFIED: "0"
+      # Use GOV_MIN_CLASSIFIED_ROWS to avoid "95% vs 95 rows" ambiguity.
+      GOV_MIN_CLASSIFIED_ROWS: "0"
 
     outputs:
       governance_passed: ${{ steps.governance.outputs.passed }}
@@ -472,16 +473,16 @@ jobs:
             set +e
             python tools/manifest_telemetry.py governance-gate \
               --governance-csv rights_privacy_governance.csv \
-              --min-classified "${GOV_MIN_CLASSIFIED}" \
+              --min-classified "${GOV_MIN_CLASSIFIED_ROWS}" \
               --out-json governance_gate_report.json
             GOV_EXIT=$?
             set -e
             if [ "$GOV_EXIT" -eq 0 ]; then
               echo "passed=true" >> "$GITHUB_OUTPUT"
-              echo "note=governance gate passed (min_classified=${GOV_MIN_CLASSIFIED})" >> "$GITHUB_OUTPUT"
+              echo "note=governance gate passed (min_classified_rows=${GOV_MIN_CLASSIFIED_ROWS})" >> "$GITHUB_OUTPUT"
             else
               echo "passed=false" >> "$GITHUB_OUTPUT"
-              echo "note=governance gate FAILED (min_classified=${GOV_MIN_CLASSIFIED})" >> "$GITHUB_OUTPUT"
+              echo "note=governance gate FAILED (min_classified_rows=${GOV_MIN_CLASSIFIED_ROWS})" >> "$GITHUB_OUTPUT"
               exit 1
             fi
           else
@@ -495,7 +496,8 @@ jobs:
             "unclassified_rows": 0,
             "coverage_percent": 0.0,
             "classification_column": null,
-            "min_classified_required": ${GOV_MIN_CLASSIFIED},
+            "min_classified_required": ${GOV_MIN_CLASSIFIED_ROWS},
+            "threshold_mode": "rows",
             "passed": null,
             "note": "rights_privacy_governance.csv not present; skipping governance gate"
           }
