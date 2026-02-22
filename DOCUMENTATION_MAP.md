@@ -26,9 +26,9 @@
 | Topic | Canonical Document | Status |
 |-------|-------------------|--------|
 | **Architecture Overview** | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | ✅ Stable |
-| **Ingest Determinism Policy (ADR-030)** | [docs/architecture/ADR-030-phase2-deterministic-raw-ingest.md](docs/architecture/ADR-030-phase2-deterministic-raw-ingest.md) | 🔄 Proposed (Phase II) |
-| **Determinism Harness Spec (SPEC-DH-001)** | [docs/architecture/specifications/SPEC-DH-001.md](docs/architecture/specifications/SPEC-DH-001.md) | ✅ **NEW** (Phase II, LOCKED) |
-| **Certified Bounded Determinism Analysis (ANALYSIS-DH-001)** | [docs/architecture/analysis/ANALYSIS-DH-001.md](docs/architecture/analysis/ANALYSIS-DH-001.md) | ✅ **NEW** (Phase II, Informative) |
+| **Ingest Determinism Policy (ADR-030)** | [docs/architecture/ADR-030-phase2-deterministic-raw-ingest.md](docs/architecture/ADR-030-phase2-deterministic-raw-ingest.md) | ✅ Implemented (Phase II) |
+| **Determinism Harness Spec (SPEC-DH-001)** | [docs/architecture/specifications/SPEC-DH-001.md](docs/architecture/specifications/SPEC-DH-001.md) | ✅ LOCKED (Phase II) |
+| **Certified Bounded Determinism Analysis (ANALYSIS-DH-001)** | [docs/architecture/analysis/ANALYSIS-DH-001.md](docs/architecture/analysis/ANALYSIS-DH-001.md) | ✅ Informative (Phase II) |
 | **API Reference** | [docs/api/](docs/api/) | ✅ Stable (Sphinx) |
 | **Code Quality Standards** | [docs/CODE_QUALITY_STANDARDS.md](docs/CODE_QUALITY_STANDARDS.md) | ✅ Stable |
 | **Testing Guidelines** | [docs/development/TESTING_GUIDE.md](docs/development/TESTING_GUIDE.md) | 🔄 In Progress |
