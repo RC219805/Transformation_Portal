@@ -414,6 +414,14 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
 
+    env:
+      # Governance gate threshold: Phase 1 default (ratchet later to 95)
+      GOV_MIN_CLASSIFIED: "0"
+
+    outputs:
+      governance_passed: ${{ steps.governance.outputs.passed }}
+      governance_note: ${{ steps.governance.outputs.note }}
+
     steps:
       - uses: actions/checkout@v6
 
@@ -440,6 +448,38 @@ jobs:
           fi
           echo "manifest_path=$OUT" >> "$GITHUB_OUTPUT"
 
+      - name: Generate deterministic dataset telemetry
+        run: |
+          set -euo pipefail
+          python tools/manifest_telemetry.py metrics \
+            --manifest montecito_manifest.csv \
+            --out-json manifest_metrics.json \
+            --out-audit-csv manifest_audit_extract.csv
+
+      - name: Generate Merkle roots
+        run: |
+          set -euo pipefail
+          python tools/manifest_telemetry.py merkle \
+            --manifest montecito_manifest.csv \
+            --out-json manifest_merkle.json
+
+      - name: Governance completeness check (CI Gate)
+        id: governance
+        run: |
+          set -euo pipefail
+          if [ -f rights_privacy_governance.csv ]; then
+            python tools/manifest_telemetry.py governance-gate \
+              --governance-csv rights_privacy_governance.csv \
+              --min-classified "${GOV_MIN_CLASSIFIED}" \
+              --out-json governance_gate_report.json
+            echo "passed=true" >> "$GITHUB_OUTPUT"
+            echo "note=governance gate passed (min_classified=${GOV_MIN_CLASSIFIED})" >> "$GITHUB_OUTPUT"
+          else
+            echo '{"note":"rights_privacy_governance.csv not present; skipping governance gate"}' > governance_gate_report.json
+            echo "passed=skipped" >> "$GITHUB_OUTPUT"
+            echo "note=rights_privacy_governance.csv not present; governance gate skipped" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Upload manifest artifact
         if: ${{ steps.manifest.outputs.manifest_path != '' }}
         uses: actions/upload-artifact@v5
@@ -448,6 +488,19 @@ jobs:
           path: ${{ steps.manifest.outputs.manifest_path }}
           if-no-files-found: error
           retention-days: 7
+
+      - name: Upload governance artifacts
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: dataset-governance-telemetry
+          path: |
+            manifest_metrics.json
+            manifest_audit_extract.csv
+            manifest_merkle.json
+            governance_gate_report.json
+          if-no-files-found: ignore
+          retention-days: 30
 
   ci_gate:
     name: CI Gate
@@ -471,6 +524,10 @@ jobs:
           echo "  lint:              ${{ needs.lint.result }}"
           echo "  test:              ${{ needs.test.result }}"
           echo "  generate-manifest: ${{ needs['generate-manifest'].result }}"
+          echo ""
+          echo "Dataset Governance:"
+          echo "  governance_passed: ${{ needs['generate-manifest'].outputs.governance_passed || 'N/A' }}"
+          echo "  governance_note:   ${{ needs['generate-manifest'].outputs.governance_note || 'N/A' }}"
 
       - name: Enforce pass/fail
         id: gate
@@ -522,15 +579,51 @@ jobs:
           echo "GATE_MODE=lightweight-only" >> "$GITHUB_ENV"
           echo "✅ CI Gate: PASSED (lightweight-only mode)"
 
+      - name: Write CI Gate Summary
+        if: always()
+        run: |
+          set -euo pipefail
+          {
+            echo "## CI Gate Summary"
+            echo ""
+            echo "### Preflight Decision"
+            echo "- **run_full**: ${{ needs.preflight.outputs.run_full }}"
+            echo "- **reason**: ${{ needs.preflight.outputs.reason }}"
+            echo ""
+            echo "### Job Results"
+            echo "| Job | Status |"
+            echo "|-----|--------|"
+            echo "| lightweight | ${{ needs.lightweight.result }} |"
+            echo "| lint | ${{ needs.lint.result }} |"
+            echo "| test | ${{ needs.test.result }} |"
+            echo "| generate-manifest | ${{ needs['generate-manifest'].result }} |"
+            echo ""
+            echo "### Dataset Governance Status"
+            GOV_PASSED="${{ needs['generate-manifest'].outputs.governance_passed || 'N/A' }}"
+            GOV_NOTE="${{ needs['generate-manifest'].outputs.governance_note || 'N/A' }}"
+            if [ "$GOV_PASSED" = "true" ]; then
+              echo "✅ **Governance Gate**: PASSED"
+            elif [ "$GOV_PASSED" = "skipped" ]; then
+              echo "⏭️ **Governance Gate**: SKIPPED"
+            else
+              echo "❌ **Governance Gate**: FAILED or N/A"
+            fi
+            echo ""
+            echo "**Note**: $GOV_NOTE"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Publish Dedicated CI Gate Check
         if: ${{ always() }}
         uses: actions/github-script@v8
         env:
           GATE_STATUS: ${{ env.GATE_STATUS || 'failure' }}
           GATE_MODE: ${{ env.GATE_MODE || 'unknown' }}
+          GOV_PASSED: ${{ needs['generate-manifest'].outputs.governance_passed || 'N/A' }}
+          GOV_NOTE: ${{ needs['generate-manifest'].outputs.governance_note || 'N/A' }}
         with:
           script: |
             const conclusion = process.env.GATE_STATUS === 'success' ? 'success' : 'failure';
+            const govStatus = process.env.GOV_PASSED === 'true' ? '✅' : (process.env.GOV_PASSED === 'skipped' ? '⏭️' : '❌');
 
             await github.rest.checks.create({
               owner: context.repo.owner,
@@ -541,7 +634,7 @@ jobs:
               conclusion,
               output: {
                 title: conclusion === 'success' ? '✅ CI Gate: PASSED' : '❌ CI Gate: FAILED',
-                summary: `**Mode**: ${process.env.GATE_MODE}\n\n**Reason**: ${process.env.GATE_MODE.includes('full') ? '${{ needs.preflight.outputs.reason }}' : 'docs-only or non-runtime changes'}`,
+                summary: `**Mode**: ${process.env.GATE_MODE}\n\n**Reason**: ${process.env.GATE_MODE.includes('full') ? '${{ needs.preflight.outputs.reason }}' : 'docs-only or non-runtime changes'}\n\n**Dataset Governance**: ${govStatus} ${process.env.GOV_NOTE}`,
                 text: `
             **Preflight Decision**:
             - run_full: ${{ needs.preflight.outputs.run_full }}
@@ -552,6 +645,10 @@ jobs:
             - lint: ${{ needs.lint.result }}
             - test: ${{ needs.test.result }}
             - generate-manifest: ${{ needs['generate-manifest'].result }}
+
+            **Dataset Governance**:
+            - governance_passed: ${{ needs['generate-manifest'].outputs.governance_passed || 'N/A' }}
+            - governance_note: ${{ needs['generate-manifest'].outputs.governance_note || 'N/A' }}
             `,
               }
             });
