@@ -26,7 +26,14 @@ def _sha256_hex(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def _read_manifest(manifest_csv: Path) -> list[ManifestRow]:
+def _digest_algorithm_for_key(digest_key: str) -> str:
+    normalized = digest_key.strip().lower()
+    if normalized in {"md5", "sha256"}:
+        return normalized
+    return "unspecified"
+
+
+def _read_manifest(manifest_csv: Path) -> tuple[list[ManifestRow], str, str]:
     with manifest_csv.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
         if not reader.fieldnames:
@@ -35,6 +42,7 @@ def _read_manifest(manifest_csv: Path) -> list[ManifestRow]:
         filename_key = _pick_key(reader.fieldnames, ("filename", "path", "file", "relative_path"))
         bytes_key = _pick_key(reader.fieldnames, ("bytes", "size_bytes", "size"))
         digest_key = _pick_key(reader.fieldnames, ("md5", "sha256", "hash"))
+        digest_algorithm = _digest_algorithm_for_key(digest_key)
 
         rows: list[ManifestRow] = []
         for raw in reader:
@@ -53,7 +61,7 @@ def _read_manifest(manifest_csv: Path) -> list[ManifestRow]:
             rows.append(ManifestRow(filename=filename, size_bytes=size_bytes, digest=digest))
 
     rows.sort(key=lambda row: row.filename)
-    return rows
+    return rows, digest_key, digest_algorithm
 
 
 def _pick_key(fieldnames: list[str], candidates: tuple[str, ...]) -> str:
@@ -65,7 +73,7 @@ def _pick_key(fieldnames: list[str], candidates: tuple[str, ...]) -> str:
 
 
 def write_metrics(manifest_csv: Path, out_json: Path, out_audit_csv: Path) -> None:
-    rows = _read_manifest(manifest_csv)
+    rows, digest_column, digest_algorithm = _read_manifest(manifest_csv)
     total_bytes = sum(row.size_bytes for row in rows)
 
     extension_stats: dict[str, dict[str, int]] = {}
@@ -92,7 +100,7 @@ def write_metrics(manifest_csv: Path, out_json: Path, out_audit_csv: Path) -> No
             {
                 "filename": row.filename,
                 "bytes": row.size_bytes,
-                "md5": row.digest,
+                "digest": row.digest,
                 "extension": extension,
                 "top_level_dir": drive,
             }
@@ -103,7 +111,9 @@ def write_metrics(manifest_csv: Path, out_json: Path, out_audit_csv: Path) -> No
 
     metrics_payload: dict[str, Any] = {
         "schema_version": "1.0",
-        "manifest_path": str(manifest_csv),
+        "manifest_name": manifest_csv.name,
+        "digest_column": digest_column,
+        "digest_algorithm": digest_algorithm,
         "totals": {"files": len(rows), "bytes": total_bytes},
         "duplicates": {"groups": duplicate_groups, "excess_files": duplicate_file_excess},
         "extensions": [
@@ -114,15 +124,13 @@ def write_metrics(manifest_csv: Path, out_json: Path, out_audit_csv: Path) -> No
             {"drive": key, "files": value["files"], "bytes": value["bytes"]}
             for key, value in sorted(drive_stats.items(), key=lambda pair: pair[0])
         ],
-        "manifest_content_sha256": _sha256_hex(
-            "\n".join(f"{row.filename}\t{row.size_bytes}\t{row.digest}" for row in rows)
-        ),
+        "manifest_content_sha256": _sha256_hex("\n".join(f"{row.filename}\t{row.size_bytes}\t{row.digest}" for row in rows)),
     }
 
     _write_json(out_json, metrics_payload)
     _write_csv(
         out_audit_csv,
-        fieldnames=["filename", "bytes", "md5", "extension", "top_level_dir"],
+        fieldnames=["filename", "bytes", "digest", "extension", "top_level_dir"],
         rows=audit_rows,
     )
 
@@ -135,19 +143,13 @@ def _merkle_root(hex_leaves: list[str]) -> str:
     while len(level) > 1:
         if len(level) % 2 == 1:
             level.append(level[-1])
-        level = [
-            _sha256_hex(f"{level[index]}{level[index + 1]}")
-            for index in range(0, len(level), 2)
-        ]
+        level = [_sha256_hex(f"{level[index]}{level[index + 1]}") for index in range(0, len(level), 2)]
     return level[0]
 
 
 def write_merkle(manifest_csv: Path, out_json: Path) -> None:
-    rows = _read_manifest(manifest_csv)
-    leaf_hashes = [
-        _sha256_hex(f"{row.filename}\n{row.size_bytes}\n{row.digest}")
-        for row in rows
-    ]
+    rows, _, _ = _read_manifest(manifest_csv)
+    leaf_hashes = [_sha256_hex(f"{row.filename}\n{row.size_bytes}\n{row.digest}") for row in rows]
 
     per_drive_leaves: dict[str, list[str]] = {}
     for row in rows:
@@ -157,7 +159,7 @@ def write_merkle(manifest_csv: Path, out_json: Path) -> None:
 
     payload = {
         "schema_version": "1.0",
-        "manifest_path": str(manifest_csv),
+        "manifest_name": manifest_csv.name,
         "leaf_count": len(leaf_hashes),
         "global_root": _merkle_root(leaf_hashes),
         "per_drive_roots": [
