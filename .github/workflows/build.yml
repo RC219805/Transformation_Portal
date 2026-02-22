@@ -473,7 +473,7 @@ jobs:
 import pandas as pd
 df = pd.read_csv("montecito_manifest.csv")
 fn = str(df.iloc[0]["filename"])
-with open("merkle_target.txt","w",encoding="utf-8") as f:
+with open("merkle_target.txt", "w", encoding="utf-8") as f:
     f.write(fn + "\n")
 print(fn)
 PY
