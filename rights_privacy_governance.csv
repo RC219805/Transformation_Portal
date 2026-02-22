@@ -1,0 +1,11 @@
+filename,classification,notes
+README.md,public,Repository documentation - public distribution
+LICENSE,public,License file - public distribution
+SECURITY.md,public,Security policy - public disclosure
+CONTRIBUTING.md,public,Contribution guidelines - public
+CHANGELOG.md,public,Public changelog
+pyproject.toml,public,Build configuration - public
+Makefile,public,Build automation - public
+requirements.txt,public,Dependency list - public
+requirements-ci.txt,public,CI dependency list - public
+requirements-dev.txt,public,Dev dependency list - public

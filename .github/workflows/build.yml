@@ -416,9 +416,9 @@ jobs:
 
     env:
       # Governance gate threshold: absolute classified-row count (not a percentage).
-      # Phase 1 = 0 (no enforcement yet); raise to a concrete row-count target in Phase 2.
+      # Phase 2: require at least 10 classified rows for governance enforcement.
       # Use GOV_MIN_CLASSIFIED_ROWS to avoid "95% vs 95 rows" ambiguity.
-      GOV_MIN_CLASSIFIED_ROWS: "0"
+      GOV_MIN_CLASSIFIED_ROWS: "10"
 
     outputs:
       governance_passed: ${{ steps.governance.outputs.passed }}
@@ -525,7 +525,7 @@ jobs:
             manifest_audit_extract.csv
             manifest_merkle.json
             governance_gate_report.json
-          if-no-files-found: ignore
+          if-no-files-found: error
           retention-days: 30
 
   ci_gate:
