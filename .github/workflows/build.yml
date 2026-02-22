@@ -415,8 +415,8 @@ jobs:
     timeout-minutes: 10
 
     env:
-      # Governance gate threshold: Phase 1 = 0 (no enforcement yet)
-      # Target: 95% classified rows in Phase 2
+      # Governance gate threshold is an absolute classified-row count.
+      # Phase 1 = 0 (no enforcement yet); raise to a concrete row-count target in Phase 2.
       GOV_MIN_CLASSIFIED: "0"
 
     outputs:
@@ -486,7 +486,7 @@ jobs:
             fi
           else
             # Produce JSON with consistent schema even when governance file is absent
-            cat > governance_gate_report.json << 'SKIPPED_JSON'
+            cat > governance_gate_report.json <<SKIPPED_JSON
           {
             "schema_version": "1.0",
             "governance_csv": null,
@@ -495,7 +495,7 @@ jobs:
             "unclassified_rows": 0,
             "coverage_percent": 0.0,
             "classification_column": null,
-            "min_classified_required": 0,
+            "min_classified_required": ${GOV_MIN_CLASSIFIED},
             "passed": null,
             "note": "rights_privacy_governance.csv not present; skipping governance gate"
           }
@@ -611,12 +611,18 @@ jobs:
           if [ "$GOV_PASSED" = "true" ]; then
             GOV_EMOJI="✅"
             GOV_STATUS_TEXT="PASSED"
+          elif [ "$GOV_PASSED" = "false" ]; then
+            GOV_EMOJI="❌"
+            GOV_STATUS_TEXT="FAILED"
           elif [ "$GOV_PASSED" = "skipped" ]; then
             GOV_EMOJI="⏭️"
             GOV_STATUS_TEXT="SKIPPED"
+          elif [ "$GOV_PASSED" = "N/A" ]; then
+            GOV_EMOJI="⏹️"
+            GOV_STATUS_TEXT="NOT RUN"
           else
-            GOV_EMOJI="❌"
-            GOV_STATUS_TEXT="FAILED or N/A"
+            GOV_EMOJI="❓"
+            GOV_STATUS_TEXT="UNKNOWN"
           fi
           echo "GOV_PASSED=$GOV_PASSED" >> "$GITHUB_ENV"
           echo "GOV_NOTE=$GOV_NOTE" >> "$GITHUB_ENV"
