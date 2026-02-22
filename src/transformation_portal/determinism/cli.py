@@ -309,10 +309,7 @@ def info(
     Per SPEC-DH-001 Section 5, the harness must report OS, ISA, runtime version,
     and dependency lock IDs for cross-ISA audit and reproducibility.
     """
-    from transformation_portal.determinism.environment import (
-        HARNESS_ENGINE_VERSION,
-        environment_fingerprint_dict,
-    )
+    from transformation_portal.determinism.environment import HARNESS_ENGINE_VERSION, environment_fingerprint_dict
 
     fingerprint = environment_fingerprint_dict()
 
