@@ -69,8 +69,8 @@ def _get_numpy_config() -> Dict[str, Any]:
     try:
         # NumPy 2.x uses np.show_config(mode='dicts')
         if hasattr(np, "show_config"):
-            import io
             import contextlib
+            import io
 
             # Capture show_config output as string for parsing
             f = io.StringIO()
