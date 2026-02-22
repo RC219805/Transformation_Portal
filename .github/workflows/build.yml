@@ -485,7 +485,21 @@ jobs:
               exit 1
             fi
           else
-            echo '{"note":"rights_privacy_governance.csv not present; skipping governance gate"}' > governance_gate_report.json
+            # Produce JSON with consistent schema even when governance file is absent
+            cat > governance_gate_report.json << 'SKIPPED_JSON'
+          {
+            "schema_version": "1.0",
+            "governance_csv": null,
+            "rows_total": 0,
+            "classified_rows": 0,
+            "unclassified_rows": 0,
+            "coverage_percent": 0.0,
+            "classification_column": null,
+            "min_classified_required": 0,
+            "passed": null,
+            "note": "rights_privacy_governance.csv not present; skipping governance gate"
+          }
+          SKIPPED_JSON
             echo "passed=skipped" >> "$GITHUB_OUTPUT"
             echo "note=rights_privacy_governance.csv not present; governance gate skipped" >> "$GITHUB_OUTPUT"
           fi
