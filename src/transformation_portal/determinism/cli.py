@@ -4,7 +4,7 @@ import json
 import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import typer
 
@@ -55,9 +55,9 @@ class HarnessRunReport:
     """Full harness run report including environment fingerprint per SPEC-DH-001."""
 
     summary: DeterminismSummary
-    environment: dict  # Environment fingerprint
+    environment: Dict[str, Any]  # Environment fingerprint (SPEC-DH-001 Section 5)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
             **asdict(self.summary),

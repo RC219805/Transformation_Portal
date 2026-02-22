@@ -79,11 +79,13 @@ def test_capture_environment_has_required_fields():
 
 
 def test_capture_environment_os_machine_is_isa():
-    """os_machine reflects ISA (architecture)."""
+    """os_machine reflects ISA (architecture) - non-empty string."""
     fp = capture_environment()
-    # Common ISAs
-    valid_isas = {"x86_64", "amd64", "arm64", "aarch64", "i686", "i386"}
-    assert fp.os_machine.lower() in valid_isas or len(fp.os_machine) > 0
+    # os_machine should be a non-empty string representing the architecture.
+    # Common values include x86_64, amd64, arm64, aarch64, i686, i386, etc.
+    # We don't restrict to a specific set to avoid maintenance burden.
+    assert isinstance(fp.os_machine, str)
+    assert len(fp.os_machine) > 0
 
 
 def test_capture_environment_numpy_config_has_version():
