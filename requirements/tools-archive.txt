@@ -1,0 +1,17 @@
+# Archive manifest reporting tool dependencies
+# Pinned for reproducibility and deterministic behavior across environments
+#
+# Usage:
+#   pip install -r requirements/tools-archive.txt
+#
+# Context:
+#   These dependencies are required for tools/archive_manifest_reports.py
+#   to generate Phase 2 archive indexing and asset grouping reports.
+#   Note: schema validation is not currently performed via jsonschema.
+
+# These pins guarantee identical pandas groupby + sorting behavior
+# across Python 3.11–3.13 (critical for deterministic reports)
+numpy==2.2.6
+pandas==2.2.3
+
+jsonschema==4.23.0   # Optional: enables --validate-schemas
