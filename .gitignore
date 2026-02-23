@@ -317,3 +317,7 @@ tmp_tensor.npy
 
 # Local archive reports (reproducible)
 archive_reports/
+
+# Local scratch/artifacts
+local_artifacts/
+*.numbers
