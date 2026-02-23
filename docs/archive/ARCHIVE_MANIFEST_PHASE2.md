@@ -32,11 +32,21 @@ Generated into an output directory:
 
 ## Dependencies
 
-This tool requires optional Python dependencies that may not be present in minimal environments:
+This tool requires optional Python dependencies that may not be present in minimal environments.
+
+**Recommended (pinned versions for reproducibility):**
+
+```bash
+pip install -r requirements/tools-archive.txt
+```
+
+**Alternatively (latest versions):**
 
 ```bash
 pip install numpy pandas
 ```
+
+The pinned versions in `requirements/tools-archive.txt` are tested for deterministic behavior across platforms.
 
 ## Usage
 

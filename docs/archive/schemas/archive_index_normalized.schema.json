@@ -75,9 +75,9 @@
       "description": "Coarse category for inventory rollups."
     },
     {
-      "name": "filesize_approx_bytes",
+      "name": "filesize_approx_bytes_decimal",
       "type": "int",
-      "description": "Approximate bytes parsed from human-readable FileSize."
+      "description": "Approximate bytes parsed from human-readable FileSize using DECIMAL units (MB = 10^6, not 2^20). Diagnostic only - MUST NOT be used as integrity anchor. For forensic integrity, use hash-first vault layer."
     },
     {
       "name": "Model",
