@@ -1,0 +1,12 @@
+# Archive manifest reporting tool dependencies
+# Pinned for reproducibility and deterministic behavior across environments
+#
+# Usage:
+#   pip install -r requirements/tools-archive.txt
+#
+# Context:
+#   These dependencies are required for tools/archive_manifest_reports.py
+#   to generate Phase 2 archive indexing and asset grouping reports.
+
+numpy==2.2.1
+pandas==2.2.3

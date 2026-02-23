@@ -20,8 +20,9 @@
       "type": "int"
     },
     {
-      "name": "approx_bytes",
-      "type": "int"
+      "name": "approx_bytes_decimal",
+      "type": "int",
+      "description": "Sum of approximate bytes (decimal units). Diagnostic only."
     },
     {
       "name": "approx_TB",
