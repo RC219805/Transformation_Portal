@@ -23,6 +23,7 @@ Outputs (in --outdir):
 Optional:
   - --by-drive : emit per-origin-drive partitions under outdir/by_origin_drive/
   - --chunk-mb : split large outputs into .partNNN files for transport (recombine with cat)
+  - Requires optional dependencies: numpy, pandas
 
 Determinism properties:
   - Stable path canonicalization
@@ -39,11 +40,16 @@ import argparse
 import json
 import os
 import re
-from dataclasses import dataclass
 from typing import Dict, List, Optional
 
-import numpy as np
-import pandas as pd
+try:
+    import numpy as np
+    import pandas as pd
+except ImportError as exc:
+    raise SystemExit(
+        "archive_manifest_reports.py requires optional dependencies 'numpy' and 'pandas'. "
+        "Install them with: pip install numpy pandas"
+    ) from exc
 
 _SIZE_RE = re.compile(r"^\s*([0-9]*\.?[0-9]+)\s*([A-Za-z]+)\s*$")
 
@@ -130,8 +136,15 @@ def build_reports(
     origin_drive = parts[0].fillna("")
     partition = parts[1].fillna("")
 
-    dir_rel = relpath.str.rsplit("/", n=1, expand=True)[0].fillna("")
-    filename = relpath.str.rsplit("/", n=1, expand=True)[1].fillna("")
+    # Split relpath into (dir_rel, filename) while handling no-separator rows.
+    split_path = relpath.str.rsplit("/", n=1, expand=True)
+    if split_path.shape[1] == 1:
+        dir_rel = pd.Series("", index=relpath.index, dtype=str)
+        filename = split_path[0].fillna("")
+    else:
+        has_sep = relpath.str.contains("/", regex=False)
+        dir_rel = split_path[0].where(has_sep, "").fillna("")
+        filename = split_path[1].where(has_sep, split_path[0]).fillna("")
 
     ext = filename.str.extract(r"\.([^\.]+)$", expand=False).fillna("").str.lower()
     basename = filename.str.replace(r"\.[^\.]+$", "", regex=True)
@@ -220,7 +233,7 @@ def build_reports(
             "n_files": g.size().values,
             "origin_drive": g["origin_drive"].first().values,
             "partition": g["partition"].first().values,
-            "dir_rel": g["relpath"].apply(lambda s: str(s.iloc[0]).rsplit("/", 1)[0] if len(s) > 0 else "").values,
+            "dir_rel": g["dir_within_drive"].first().values,
             "basename": g["basename"].first().values,
             "n_raw_files": g["is_primary_raw"].sum().astype(int).values,
             "n_raster_files": g["is_primary_raster"].sum().astype(int).values,
@@ -234,29 +247,32 @@ def build_reports(
         }
     )
 
-    def classify_asset_type(row: pd.Series) -> str:
-        has_raw = row["n_raw_files"] > 0
-        has_raster = row["n_raster_files"] > 0
-        has_video = row["n_video_files"] > 0
-        has_primary = has_raw or has_raster or has_video
-        has_sidecar = row["n_sidecar"] > 0
-        has_other = row["n_other_files"] > 0
+    has_raw = asset["n_raw_files"] > 0
+    has_raster = asset["n_raster_files"] > 0
+    has_video = asset["n_video_files"] > 0
+    has_primary = has_raw | has_raster | has_video
+    has_sidecar = asset["n_sidecar"] > 0
+    has_other = asset["n_other_files"] > 0
 
-        if has_raw and not (has_raster or has_video) and not has_other:
-            return "raw"
-        if has_raster and not (has_raw or has_video) and not has_other:
-            return "raster"
-        if has_video and not (has_raw or has_raster) and not has_other:
-            return "video"
-        if has_raw and has_raster and not has_video and not has_other:
-            return "raw+raster"
-        if (not has_primary) and has_sidecar and (not has_other):
-            return "sidecar_only"
-        if has_other and not (has_raw or has_raster or has_video):
-            return "other"
-        return "hybrid"
-
-    asset["asset_type"] = asset.apply(classify_asset_type, axis=1)
+    asset["asset_type"] = np.select(
+        [
+            has_raw & ~has_raster & ~has_video & ~has_other,
+            has_raster & ~has_raw & ~has_video & ~has_other,
+            has_video & ~has_raw & ~has_raster & ~has_other,
+            has_raw & has_raster & ~has_video & ~has_other,
+            ~has_primary & has_sidecar & ~has_other,
+            has_other & ~has_raw & ~has_raster & ~has_video,
+        ],
+        [
+            "raw",
+            "raster",
+            "video",
+            "raw+raster",
+            "sidecar_only",
+            "other",
+        ],
+        default="hybrid",
+    )
 
     # Anomaly flags
     asset["flag_xmp_orphan_no_raw_jpeg"] = (asset["n_xmp"] > 0) & ((asset["n_raw_files"] + asset["n_jpeg_files"]) == 0)
@@ -319,12 +335,24 @@ def build_reports(
     out_hotspots = os.path.join(outdir, "anomaly_hotspots.csv")
     out_summary = os.path.join(outdir, "summary.json")
 
-    archive_index.to_csv(out_archive_index, index=False, compression="gzip")
+    helper_cols = [
+        "is_primary_raw",
+        "is_primary_raster",
+        "is_primary_video",
+        "is_xmp",
+        "is_thm",
+        "is_sidecar",
+        "is_other",
+        "is_jpeg",
+    ]
+    archive_index_out = archive_index.drop(columns=helper_cols)
+
+    archive_index_out.to_csv(out_archive_index, index=False, compression="gzip")
     asset.to_csv(out_asset_groups, index=False, compression="gzip")
     hotspots.to_csv(out_hotspots, index=False)
 
     # Summary metrics
-    video_rows = archive_index[archive_index["category"] == "Video"]
+    video_rows = archive_index_out[archive_index_out["category"] == "Video"]
     by_ext = (
         video_rows.groupby("ext")
         .agg(total=("ext", "size"), missing=("dt_missing", "sum"))
@@ -335,7 +363,7 @@ def build_reports(
     )
 
     summary = {
-        "rows_total_files": int(len(archive_index)),
+        "rows_total_files": int(len(archive_index_out)),
         "rows_total_asset_groups": int(len(asset)),
         "orphan_xmp_groups_raw_jpeg": int(asset["flag_xmp_orphan_no_raw_jpeg"].sum()),
         "orphan_xmp_groups_no_image_any_raster": int(asset["flag_xmp_orphan_no_image_any_raster"].sum()),
@@ -359,12 +387,12 @@ def build_reports(
         out_by_drive = os.path.join(outdir, "by_origin_drive")
         os.makedirs(out_by_drive, exist_ok=True)
 
-        drive_values = sorted(archive_index["origin_drive"].unique())
+        drive_values = sorted(archive_index_out["origin_drive"].unique())
         for drv in drive_values:
             safe = re.sub(r"[^A-Za-z0-9._-]+", "_", drv)[:80]
             ai_path = os.path.join(out_by_drive, f"archive_index__{safe}.csv.gz")
             ag_path = os.path.join(out_by_drive, f"asset_groups__{safe}.csv.gz")
-            archive_index.loc[archive_index["origin_drive"] == drv].to_csv(ai_path, index=False, compression="gzip")
+            archive_index_out.loc[archive_index_out["origin_drive"] == drv].to_csv(ai_path, index=False, compression="gzip")
             asset.loc[asset["origin_drive"] == drv].to_csv(ag_path, index=False, compression="gzip")
 
         outputs["by_drive_dir"] = out_by_drive

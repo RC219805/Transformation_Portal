@@ -18,6 +18,7 @@ Generated into an output directory:
 - `asset_grouping_report.csv.gz`
   One row per **basekey** = `(directory + basename)`. Includes anomaly flags:
   - `flag_xmp_orphan_no_raw_jpeg` (matches exec-summary definition)
+  - `flag_xmp_orphan_no_image_any_raster`
   - `flag_sidecar_only`
   - `flag_video_still_collision`
   - `flag_container_imovie`
@@ -28,6 +29,14 @@ Generated into an output directory:
 
 - `summary.json`
   High-signal rollups for dashboards / procurement packets.
+
+## Dependencies
+
+This tool requires optional Python dependencies that may not be present in minimal environments:
+
+```bash
+pip install numpy pandas
+```
 
 ## Usage
 

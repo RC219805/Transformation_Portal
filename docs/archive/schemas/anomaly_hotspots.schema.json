@@ -20,6 +20,10 @@
       "type": "int"
     },
     {
+      "name": "approx_bytes",
+      "type": "int"
+    },
+    {
       "name": "approx_TB",
       "type": "float"
     },
