@@ -470,13 +470,13 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-import pandas as pd
-df = pd.read_csv("montecito_manifest.csv")
-fn = str(df.iloc[0]["filename"])
-with open("merkle_target.txt", "w", encoding="utf-8") as f:
-    f.write(fn + "\n")
-print(fn)
-PY
+          import pandas as pd
+          df = pd.read_csv("montecito_manifest.csv")
+          fn = str(df.iloc[0]["filename"])
+          with open("merkle_target.txt", "w", encoding="utf-8") as f:
+              f.write(fn + "\n")
+          print(fn)
+          PY
           echo "filename=$(cat merkle_target.txt)" >> "$GITHUB_OUTPUT"
 
       - name: Merkle inclusion proof verification (CI Gate)
