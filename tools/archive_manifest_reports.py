@@ -910,7 +910,7 @@ def build_reports(
             files=("relpath", "size"),
             approx_bytes_decimal=(
                 "filesize_approx_bytes_decimal",
-                lambda s: pd.to_numeric(s, errors="coerce").fillna(0).sum(),
+                lambda s: int(pd.to_numeric(s, errors="coerce").fillna(0).sum()),
             ),
             raw_files=("category", lambda s: int((s == "RAW").sum())),
             jpeg_files=("category", lambda s: int((s == "JPEG").sum())),

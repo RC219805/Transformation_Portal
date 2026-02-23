@@ -30,9 +30,10 @@ The tool applies the following transformations in order:
    - **CRITICAL**: Prevents empty `origin_drive` from absolute paths
    - Stabilizes cross-environment behavior
 
-6. **Empty Path Placeholder**
-   - Replace `""` with `"."` after lstrip
-   - Prevents downstream empty-string issues
+6. **Empty Path Handling**
+   - Detect empty/NaN values after leading-slash normalization
+   - In strict mode (`--strict-root-marker`), fail fast with a non-zero exit
+   - Otherwise fill empties with `"."` to keep downstream parsing stable
 
 ## Edge Cases Handled
 
@@ -108,10 +109,13 @@ SourceFile = "/"
 **Normalization:**
 ```python
 # After lstrip("/")
-relpath = ""  # Empty!
+relpath = pd.Series([""], dtype=str)  # Empty row in the normalized relpath column
 
-# Placeholder replacement
-relpath = "."  # ✅ Prevents empty string
+empty_relpath = relpath.eq("") | relpath.isna()
+if empty_relpath.any():
+    if strict_root_marker:
+        raise SystemExit(...)
+    relpath = relpath.mask(empty_relpath, ".")  # ✅ Prevents empty string
 ```
 
 **Result:**
@@ -229,5 +233,5 @@ If `root_marker` doesn't match, you get mount-structure-derived drive names:
 
 - **Comment ID:** 3946806396 (PR #1000)
 - **Author:** @RC219805
-- **Implementation:** Lines 332-339 in `tools/archive_manifest_reports.py`
-- **Tests:** Lines 353-end in `tests/test_archive_manifest_reports.py`
+- **Implementation:** Path canonicalization block in `tools/archive_manifest_reports.py`
+- **Tests:** `ArchiveManifestReportsCliTest` in `tests/test_archive_manifest_reports.py`

@@ -18,7 +18,11 @@ This document summarizes the fixes implemented in response to the comprehensive 
 
 ```python
 relpath = relpath.str.lstrip("/")
-relpath = relpath.replace("", ".")  # Edge case: empty path → placeholder
+empty_relpath = relpath.eq("") | relpath.isna()
+if empty_relpath.any():
+    if strict_root_marker:
+        raise SystemExit(...)
+    relpath = relpath.mask(empty_relpath, ".")  # Edge case: empty path → placeholder
 ```
 
 ### The Bug (Before Fix)
@@ -80,7 +84,8 @@ relpath = relpath.str.lstrip("/")
 **Scenario**:
 - Input: `SourceFile="/"`
 - After `lstrip("/")`: `relpath=""`
-- Placeholder replacement: `relpath="."`
+- Strict mode: exits non-zero if empty values are found
+- Non-strict mode: `relpath` is masked to `"."`
 - Result: Prevents downstream empty-string issues ✅
 
 ### 4. ✅ Multiple Occurrences of Root Marker
@@ -113,27 +118,30 @@ relpath = relpath.str.lstrip("/")
 
 **File**: `tools/archive_manifest_reports.py`
 
-**Lines 332-340** (added):
+**Path canonicalization block**:
 ```python
 relpath = pd.Series(relpath, name="relpath").astype(str)
 # CRITICAL: Strip leading slashes to prevent empty origin_drive when root_marker is missing
 # and fallback produces absolute paths (e.g., /vault/All Archive/DriveA/...)
 # This stabilizes absolute-path fallback and prevents cross-environment drift.
 relpath = relpath.str.lstrip("/")
-# Handle edge case: if relpath becomes empty after lstrip (e.g., SourceFile was just "/"),
-# replace with a placeholder to prevent downstream empty-string issues
-relpath = relpath.replace("", ".")
+empty_relpath = relpath.eq("") | relpath.isna()
+if empty_relpath.any():
+    if strict_root_marker:
+        raise SystemExit(...)
+    # Handle edge case: if relpath is empty after lstrip (e.g., SourceFile was just "/")
+    relpath = relpath.mask(empty_relpath, ".")
 ```
 
-**Lines 8-15** (docstring updated):
+**Docstring updates**:
 - Added bullet: "Leading slash removal (lstrip "/") to prevent empty origin_drive from absolute paths"
-- Added bullet: "Empty relpath placeholder ("." for edge cases like SourceFile="/")"
+- Added bullet: "Strict-mode failure for empty relpaths, with non-strict placeholder fallback (`"."`)"
 
 ### 2. Test Changes
 
 **File**: `tests/test_archive_manifest_reports.py`
 
-**Added 4 new comprehensive tests** (lines 353-611):
+**Added 4 new comprehensive tests**:
 1. `test_absolute_paths_without_root_marker_get_leading_slash_stripped`
    - Tests `/vault/...` and `/Volumes/...` patterns
    - Verifies `origin_drive` is NOT empty
@@ -250,7 +258,7 @@ Analysis Result for 'python'. Found 0 alerts:
 **Status**: ✅ **IMPLEMENTED EXACTLY AS RECOMMENDED**
 
 ### Additional Safeguards Added
-1. Empty string placeholder (`replace("", ".")`) for edge case `SourceFile="/"`
+1. Empty-relpath detection with strict-mode failure and non-strict placeholder masking
 2. Comprehensive test coverage (4 new tests)
 3. Detailed documentation (`PATH_CANONICALIZATION.md`)
 4. Docstring updates to reflect new invariants
