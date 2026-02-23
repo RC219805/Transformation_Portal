@@ -1,0 +1,127 @@
+{
+  "name": "archive_index_normalized",
+  "version": "1.0",
+  "description": "Per-file normalized index derived deterministically from Archive_Manifest (ExifTool CSV).",
+  "columns": [
+    {
+      "name": "SourceFile",
+      "type": "string",
+      "description": "Original absolute path as recorded in ExifTool manifest."
+    },
+    {
+      "name": "relpath",
+      "type": "string",
+      "description": "Path relative to the archive root marker (default: 'All Archive/')."
+    },
+    {
+      "name": "origin_drive",
+      "type": "string",
+      "description": "Top-level folder under All Archive (custody provenance)."
+    },
+    {
+      "name": "partition",
+      "type": "string",
+      "description": "Second-level folder under origin_drive (triage/partition axis)."
+    },
+    {
+      "name": "dir_within_drive",
+      "type": "string",
+      "description": "Directory path within origin_drive."
+    },
+    {
+      "name": "FileName",
+      "type": "string",
+      "description": "Filename from ExifTool manifest."
+    },
+    {
+      "name": "ext",
+      "type": "string",
+      "description": "Lowercased extension."
+    },
+    {
+      "name": "basename",
+      "type": "string",
+      "description": "Filename without extension."
+    },
+    {
+      "name": "basekey",
+      "type": "string",
+      "description": "(directory + basename) key used for Phase-1 asset grouping."
+    },
+    {
+      "name": "role",
+      "type": "string",
+      "enum": [
+        "primary_raw",
+        "primary_raster",
+        "primary_video",
+        "sidecar",
+        "other"
+      ],
+      "description": "Deterministic role classification."
+    },
+    {
+      "name": "category",
+      "type": "string",
+      "enum": [
+        "RAW",
+        "JPEG",
+        "TIFF_non_RAW",
+        "Video",
+        "XMP",
+        "THM",
+        "Other"
+      ],
+      "description": "Coarse category for inventory rollups."
+    },
+    {
+      "name": "filesize_approx_bytes_decimal",
+      "type": "int",
+      "description": "Approximate bytes parsed from human-readable FileSize using DECIMAL units (MB = 10^6, not 2^20). Diagnostic only - MUST NOT be used as integrity anchor. For forensic integrity, use hash-first vault layer."
+    },
+    {
+      "name": "Model",
+      "type": "string"
+    },
+    {
+      "name": "DateTimeOriginal",
+      "type": "string"
+    },
+    {
+      "name": "dt_missing",
+      "type": "bool"
+    },
+    {
+      "name": "ImageSize",
+      "type": "string"
+    },
+    {
+      "name": "Quality",
+      "type": "string"
+    },
+    {
+      "name": "FocalLength",
+      "type": "string"
+    },
+    {
+      "name": "ShutterSpeed",
+      "type": "string"
+    },
+    {
+      "name": "Aperture",
+      "type": "string"
+    },
+    {
+      "name": "ISO",
+      "type": "string"
+    },
+    {
+      "name": "WhiteBalance",
+      "type": "string"
+    },
+    {
+      "name": "Flash",
+      "type": "string"
+    }
+  ]
+}

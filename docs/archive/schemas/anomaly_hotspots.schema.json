@@ -1,0 +1,92 @@
+{
+  "name": "anomaly_hotspots",
+  "version": "1.0",
+  "description": "Aggregation by (origin_drive, partition) to surface high-risk anomalies.",
+  "columns": [
+    {
+      "name": "origin_drive",
+      "type": "string"
+    },
+    {
+      "name": "partition",
+      "type": "string"
+    },
+    {
+      "name": "asset_groups",
+      "type": "int"
+    },
+    {
+      "name": "files",
+      "type": "int"
+    },
+    {
+      "name": "approx_bytes_decimal",
+      "type": "int",
+      "description": "Sum of approximate bytes (decimal units). Diagnostic only."
+    },
+    {
+      "name": "approx_TB",
+      "type": "float"
+    },
+    {
+      "name": "xmp_orphan_raw_jpeg",
+      "type": "int"
+    },
+    {
+      "name": "sidecar_only",
+      "type": "int"
+    },
+    {
+      "name": "video_still_collision",
+      "type": "int"
+    },
+    {
+      "name": "imovie_container",
+      "type": "int"
+    },
+    {
+      "name": "still_missing_datetime",
+      "type": "int"
+    },
+    {
+      "name": "other_only",
+      "type": "int"
+    },
+    {
+      "name": "hybrid",
+      "type": "int"
+    },
+    {
+      "name": "risk_score",
+      "type": "int"
+    },
+    {
+      "name": "raw_files",
+      "type": "int"
+    },
+    {
+      "name": "jpeg_files",
+      "type": "int"
+    },
+    {
+      "name": "video_files",
+      "type": "int"
+    },
+    {
+      "name": "xmp_files",
+      "type": "int"
+    },
+    {
+      "name": "thm_files",
+      "type": "int"
+    },
+    {
+      "name": "other_files",
+      "type": "int"
+    },
+    {
+      "name": "dt_missing_files",
+      "type": "int"
+    }
+  ]
+}

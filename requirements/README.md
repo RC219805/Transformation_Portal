@@ -16,6 +16,8 @@ requirements/
 ├── dev.txt            # Development tools (pinned)
 ├── ci.in              # CI/CD tools (abstract)
 ├── ci.txt             # CI/CD tools (pinned)
+├── tools-archive.in   # Archive reporting tool deps (abstract)
+├── tools-archive.txt  # Archive reporting tool deps (pinned)
 ├── all.in             # Aggregate of all dependencies
 └── all.txt            # Aggregate pinned requirements
 ```
@@ -30,6 +32,7 @@ Dependencies are organized into logical layers:
 - **ml**: Optional machine learning and deep learning dependencies (heavy packages)
 - **dev**: Developer tools for testing, linting, and formatting
 - **ci**: CI/CD pipeline tools for builds, security scanning, and releases
+- **tools-archive**: dependencies for `tools/archive_manifest_reports.py`
 - **all**: Convenience layer that includes everything
 
 ### Abstract vs Pinned
@@ -80,7 +83,7 @@ pip install -e .
 
 #### Adding New Dependencies
 
-1. Edit the appropriate `.in` file (e.g., `base.in`, `ml.in`, `dev.in`, or `ci.in`)
+1. Edit the appropriate `.in` file (e.g., `base.in`, `ml.in`, `dev.in`, `ci.in`, or `tools-archive.in`)
 2. Add your dependency with a version constraint (e.g., `requests>=2.28,<3`)
 3. Recompile all requirements:
 
