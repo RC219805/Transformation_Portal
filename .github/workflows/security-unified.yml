@@ -1,6 +1,7 @@
 # =============================================================================
 # Unified Security Scanning Workflow
-# Phase 1 Optimization: Consolidates security-scan.yml, security-gates.yml, codeql.yml
+# Phase 1 Optimization: Consolidates security-scan.yml and security-gates.yml
+# (CodeQL scanning remains in .github/workflows/codeql.yml)
 # =============================================================================
 
 name: Security Unified
@@ -27,7 +28,6 @@ on:
   pull_request:
     branches: [main]
     # Do NOT use paths filtering on PRs.
-    # Branch protection requires CodeQL results for every PR SHA (including docs-only changes).
 
   workflow_dispatch:
     inputs:
@@ -50,46 +50,7 @@ concurrency:
 
 jobs:
   # ===========================================================================
-  # Job 1: CodeQL Analysis
-  # ===========================================================================
-  codeql:
-    # Emit canonical CodeQL check names so branch protection can match them reliably:
-    #   - Analyze (python)
-    #   - Analyze (actions)
-    name: Analyze (${{ matrix.language }})
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-      packages: read
-      actions: read
-      contents: read
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - language: actions
-            build-mode: none
-          - language: python
-            build-mode: none
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: ${{ matrix.language }}
-          build-mode: ${{ matrix.build-mode }}
-
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
-        with:
-          category: "/language:${{ matrix.language }}"
-
-  # ===========================================================================
-  # Job 2: Dependency Security Scan (REQUIRED FOR PR MERGE)
+  # Job 1: Dependency Security Scan (REQUIRED FOR PR MERGE)
   # ===========================================================================
   dependency-scan:
     name: Dependency Security
@@ -232,7 +193,7 @@ jobs:
           echo "✅ Security checks completed" >> $GITHUB_STEP_SUMMARY
 
   # ===========================================================================
-  # Job 3: Security Gates
+  # Job 2: Security Gates
   # ===========================================================================
   security-gates:
     name: Security Artifact Verification
