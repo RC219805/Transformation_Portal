@@ -322,6 +322,13 @@ jobs:
           set -euo pipefail
           python -m pip install -e .
 
+      - name: Install archive report test dependencies (core legs only)
+        if: matrix.test-type == 'core'
+        run: |
+          set -euo pipefail
+          python -m pip install pandas==2.2.3 jsonschema==4.23.0
+          python -c "import numpy, pandas"
+
       - name: Run tests
         env:
           PYTHONNOUSERSITE: "1"
