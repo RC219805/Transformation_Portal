@@ -1,0 +1,98 @@
+{
+  "name": "asset_grouping_report",
+  "version": "1.0",
+  "description": "One row per basekey (directory+basename) group. Used to detect orphans, collisions, and ingest-risk hotspots.",
+  "columns": [
+    {
+      "name": "basekey",
+      "type": "string"
+    },
+    {
+      "name": "n_files",
+      "type": "int"
+    },
+    {
+      "name": "origin_drive",
+      "type": "string"
+    },
+    {
+      "name": "partition",
+      "type": "string"
+    },
+    {
+      "name": "dir_rel",
+      "type": "string"
+    },
+    {
+      "name": "basename",
+      "type": "string"
+    },
+    {
+      "name": "n_raw_files",
+      "type": "int"
+    },
+    {
+      "name": "n_raster_files",
+      "type": "int"
+    },
+    {
+      "name": "n_video_files",
+      "type": "int"
+    },
+    {
+      "name": "n_jpeg_files",
+      "type": "int"
+    },
+    {
+      "name": "n_xmp",
+      "type": "int"
+    },
+    {
+      "name": "n_thm",
+      "type": "int"
+    },
+    {
+      "name": "n_sidecar",
+      "type": "int"
+    },
+    {
+      "name": "n_other_files",
+      "type": "int"
+    },
+    {
+      "name": "any_dt_missing",
+      "type": "bool"
+    },
+    {
+      "name": "asset_type",
+      "type": "string",
+      "description": "Derived classification (raw, raster, video, raw+raster, sidecar_only, other, hybrid)."
+    },
+    {
+      "name": "flag_xmp_orphan_no_raw_jpeg",
+      "type": "bool",
+      "description": "XMP present but no RAW/JPEG primary for the group (matches exec-summary definition)."
+    },
+    {
+      "name": "flag_xmp_orphan_no_image_any_raster",
+      "type": "bool",
+      "description": "XMP present but no RAW/any-raster primary."
+    },
+    {
+      "name": "flag_sidecar_only",
+      "type": "bool"
+    },
+    {
+      "name": "flag_video_still_collision",
+      "type": "bool"
+    },
+    {
+      "name": "flag_container_imovie",
+      "type": "bool"
+    },
+    {
+      "name": "flag_still_missing_datetime",
+      "type": "bool"
+    }
+  ]
+}
