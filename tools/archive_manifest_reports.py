@@ -73,6 +73,8 @@ NOTE: This tool is intentionally "no hashes" because it operates on the ExifTool
 from __future__ import annotations
 
 import argparse
+import csv
+import gzip
 import json
 import re
 from pathlib import Path
@@ -126,6 +128,47 @@ def write_json_atomic(path: Path, payload: Any, *, indent: int = 2, sort_keys: b
             json.dump(payload, handle, indent=indent, sort_keys=sort_keys)
 
     atomic_write(path, _write)
+
+
+def validate_outputs_against_schemas(outdir: Path) -> None:
+    """Validate CSV outputs against documented column schemas."""
+    schema_dir = Path(__file__).parent.parent / "docs" / "archive" / "schemas"
+
+    validations = {
+        "archive_index_normalized.csv.gz": "archive_index_normalized.schema.json",
+        "asset_grouping_report.csv.gz": "asset_grouping_report.schema.json",
+        "anomaly_hotspots.csv": "anomaly_hotspots.schema.json",
+    }
+
+    for out_file, schema_file in validations.items():
+        out_path = outdir / out_file
+        schema_path = schema_dir / schema_file
+
+        if not out_path.exists():
+            raise SystemExit(f"Missing output file: {out_file}")
+        if not schema_path.exists():
+            raise SystemExit(f"Missing schema file: {schema_file}")
+
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        expected_cols = {c["name"] for c in schema["columns"]}
+
+        if out_file.endswith(".gz"):
+            with gzip.open(out_path, "rt", encoding="utf-8", newline="") as f:
+                reader = csv.DictReader(f)
+                actual_cols = set(reader.fieldnames or [])
+        else:
+            with out_path.open("r", encoding="utf-8", newline="") as f:
+                reader = csv.DictReader(f)
+                actual_cols = set(reader.fieldnames or [])
+
+        if actual_cols != expected_cols:
+            raise SystemExit(
+                f"Schema mismatch in {out_file}\n"
+                f"Expected: {sorted(expected_cols)}\n"
+                f"Actual:   {sorted(actual_cols)}"
+            )
+
+        print(f"✅ Schema validation passed: {out_file}")
 
 
 def parse_filesize_to_bytes(s: object) -> Optional[int]:
@@ -217,6 +260,7 @@ def build_reports(
     root_marker: str = "All Archive/",
     by_drive: bool = True,
     chunk_mb: int = 0,
+    validate_schemas: bool = False,
 ) -> Dict[str, object]:
     """Build deterministic archive index, asset grouping, and hotspot reports.
 
@@ -235,6 +279,7 @@ def build_reports(
         root_marker: Substring used to strip prefix from SourceFile (default: "All Archive/")
         by_drive: If True, emit per-drive partitions in outdir/by_origin_drive/
         chunk_mb: If >0, split large outputs into N MB chunks
+        validate_schemas: If True, validate output CSVs against documented column schemas
 
     Returns:
         Dict mapping output keys to file paths (+ split_manifest if chunking enabled)
@@ -620,6 +665,10 @@ def build_reports(
     }
     write_json_atomic(out_summary, summary, indent=2, sort_keys=True)
 
+    # Validate schema if requested
+    if validate_schemas:
+        validate_outputs_against_schemas(outdir_path)
+
     outputs = {
         "archive_index_gz": str(out_archive_index),
         "asset_groups_gz": str(out_asset_groups),
@@ -684,6 +733,13 @@ def main() -> None:
     ap.add_argument("--root-marker", default="All Archive/", help="Substring used to strip prefix from SourceFile")
     ap.add_argument("--no-by-drive", action="store_true", help="Disable per-drive partition outputs")
     ap.add_argument("--chunk-mb", type=int, default=0, help="If >0, split large outputs into N MB parts")
+    ap.add_argument(
+        "--validate-schemas",
+        action="store_true",
+        default=False,
+        help="Validate all generated CSV outputs against column schemas "
+             "(fails fast on schema drift)",
+    )
     args = ap.parse_args()
 
     outputs = build_reports(
@@ -692,6 +748,7 @@ def main() -> None:
         root_marker=args.root_marker,
         by_drive=not args.no_by_drive,
         chunk_mb=args.chunk_mb,
+        validate_schemas=args.validate_schemas,
     )
     print(json.dumps(outputs, indent=2, sort_keys=True))
 
