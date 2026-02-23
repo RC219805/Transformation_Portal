@@ -451,12 +451,13 @@ def build_reports(
 
     # CRITICAL: Group by (origin_drive, basekey) to avoid cross-drive collisions
     g = archive_index.groupby(["origin_drive", "basekey"], sort=True)
+    g_size = g.size()
 
     asset = pd.DataFrame(
         {
-            "origin_drive": [key[0] for key in g.size().index],
-            "basekey": [key[1] for key in g.size().index],
-            "n_files": g.size().values,
+            "origin_drive": [key[0] for key in g_size.index],
+            "basekey": [key[1] for key in g_size.index],
+            "n_files": g_size.values,
             "partition": g["partition"].first().values,
             "dir_rel": g["dir_within_drive"].first().values,
             "basename": g["basename"].first().values,
@@ -638,7 +639,7 @@ def build_reports(
     by_ext = (
         video_rows.groupby("ext")
         .agg(total=("ext", "size"), missing=("dt_missing", "sum"))
-        .assign(missing_rate=lambda d: d["missing"] / d["total"])
+        .assign(missing_rate=lambda d: (d["missing"] / d["total"]).round(6))
         .sort_values("total", ascending=False)
         .reset_index()
         .to_dict(orient="records")

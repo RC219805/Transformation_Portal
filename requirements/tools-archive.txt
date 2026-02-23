@@ -7,6 +7,7 @@
 # Context:
 #   These dependencies are required for tools/archive_manifest_reports.py
 #   to generate Phase 2 archive indexing and asset grouping reports.
+#   Note: schema validation is not currently performed via jsonschema.
 
 # These pins guarantee identical pandas groupby + sorting behavior
 # across Python 3.11–3.13 (critical for deterministic reports)
