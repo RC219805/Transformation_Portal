@@ -465,6 +465,32 @@ jobs:
             --manifest montecito_manifest.csv \
             --out-json manifest_merkle.json
 
+      - name: Select deterministic Merkle proof target
+        id: merkle_target
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+import pandas as pd
+df = pd.read_csv("montecito_manifest.csv")
+fn = str(df.iloc[0]["filename"])
+with open("merkle_target.txt", "w", encoding="utf-8") as f:
+    f.write(fn + "\n")
+print(fn)
+PY
+          echo "filename=$(cat merkle_target.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Merkle inclusion proof verification (CI Gate)
+        run: |
+          set -euo pipefail
+          TARGET="${{ steps.merkle_target.outputs.filename }}"
+          python tools/manifest_telemetry.py merkle-proof \
+            --manifest montecito_manifest.csv \
+            --filename "$TARGET" \
+            --out-json merkle_proof.json
+          python tools/manifest_telemetry.py merkle-verify \
+            --proof-json merkle_proof.json \
+            --out-json merkle_verify_report.json
+
       - name: Governance completeness check (CI Gate)
         id: governance
         run: |
@@ -524,6 +550,9 @@ jobs:
             manifest_metrics.json
             manifest_audit_extract.csv
             manifest_merkle.json
+            merkle_target.txt
+            merkle_proof.json
+            merkle_verify_report.json
             governance_gate_report.json
           if-no-files-found: error
           retention-days: 30
