@@ -57,6 +57,17 @@ python tools/archive_manifest_reports.py \
   --chunk-mb 50
 ```
 
+For fail-closed reproducibility enforcement (recommended in CI/governed runs):
+
+```bash
+python tools/archive_manifest_reports.py \
+  --input /path/to/archive_manifest.csv \
+  --outdir /path/to/out_reports \
+  --validate-schemas \
+  --strict-root-marker \
+  --min-root-marker-coverage 0.95
+```
+
 ### Recombine chunked outputs
 
 If `--chunk-mb` produced `.partNNN` files:

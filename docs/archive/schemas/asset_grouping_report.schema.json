@@ -66,6 +66,15 @@
     {
       "name": "asset_type",
       "type": "string",
+      "enum": [
+        "raw",
+        "raster",
+        "video",
+        "raw+raster",
+        "sidecar_only",
+        "other",
+        "hybrid"
+      ],
       "description": "Derived classification (raw, raster, video, raw+raster, sidecar_only, other, hybrid)."
     },
     {

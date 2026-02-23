@@ -29,7 +29,7 @@ INTEGRITY CONTRACT ANCHORS:
 
   4. Semantic Integrity Guards:
      - Required column validation (fail-fast on missing columns)
-     - root_marker coverage warning (suspicious if <50%)
+     - root_marker coverage threshold (warn by default, fail closed in strict mode)
      - filesize_approx_bytes_decimal: DIAGNOSTIC ONLY (decimal units, not forensic anchor)
 
   5. Chunk Splitting:
@@ -96,6 +96,19 @@ except ImportError as exc:
 
 _SIZE_RE = re.compile(r"^\s*([0-9]*\.?[0-9]+)\s*([A-Za-z]+)\s*$")
 
+DETERMINISTIC_GZIP_COMPRESSION = {"method": "gzip", "compresslevel": 9, "mtime": 0}
+DEFAULT_MIN_ROOT_MARKER_COVERAGE = 0.95
+
+ENUM_DOMAIN_DEFAULTS: Dict[str, Dict[str, set[str]]] = {
+    "archive_index_normalized.csv.gz": {
+        "role": {"primary_raw", "primary_raster", "primary_video", "sidecar", "other"},
+        "category": {"RAW", "JPEG", "TIFF_non_RAW", "Video", "XMP", "THM", "Other"},
+    },
+    "asset_grouping_report.csv.gz": {
+        "asset_type": {"raw", "raster", "video", "raw+raster", "sidecar_only", "other", "hybrid"},
+    },
+}
+
 
 def atomic_write(path: Path, writer_func: Callable[[Path], None]) -> None:
     """Write path atomically by writing to a temp file then replacing."""
@@ -109,14 +122,22 @@ def atomic_write(path: Path, writer_func: Callable[[Path], None]) -> None:
             tmp_path.unlink()
 
 
-def write_csv_atomic(df: pd.DataFrame, path: Path, *, compression: Optional[str] = None) -> None:
+def write_csv_atomic(df: pd.DataFrame, path: Path, *, compression: Optional[str | Dict[str, Any]] = None) -> None:
     """Write CSV deterministically and atomically."""
 
     def _write(tmp_path: Path) -> None:
+        csv_compression: Optional[str | Dict[str, Any]] = compression
+        if compression == "gzip":
+            csv_compression = dict(DETERMINISTIC_GZIP_COMPRESSION)
+        elif isinstance(compression, dict) and compression.get("method") == "gzip":
+            csv_compression = dict(DETERMINISTIC_GZIP_COMPRESSION)
+            csv_compression.update(compression)
+            csv_compression["mtime"] = 0
+
         df.to_csv(
             tmp_path,
             index=False,
-            compression=compression,
+            compression=csv_compression,
             encoding="utf-8",
             lineterminator="\n",
         )
@@ -144,6 +165,54 @@ def write_bytes_atomic(path: Path, data: bytes) -> None:
     atomic_write(path, _write)
 
 
+def _enum_domains_for_output(out_file: str, schema: Dict[str, Any]) -> Dict[str, set[str]]:
+    """Extract enum domain requirements from schema plus governance defaults."""
+    enum_domains = {col: set(vals) for col, vals in ENUM_DOMAIN_DEFAULTS.get(out_file, {}).items()}
+    for col_spec in schema.get("columns", []):
+        if not isinstance(col_spec, dict):
+            continue
+        col_name = col_spec.get("name")
+        enum_values = col_spec.get("enum")
+        if isinstance(col_name, str) and isinstance(enum_values, list):
+            enum_domains[col_name] = {str(v) for v in enum_values}
+    return enum_domains
+
+
+def _read_csv_header_and_invalid_enums(
+    out_file: str,
+    out_path: Path,
+    schema: Dict[str, Any],
+) -> tuple[List[str], Dict[str, set[str]]]:
+    """Read CSV header and collect invalid enum values for schema-governed columns."""
+    enum_domains = _enum_domains_for_output(out_file, schema)
+    invalid_values: Dict[str, set[str]] = {}
+
+    if out_file.endswith(".gz"):
+        with gzip.open(out_path, "rt", encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f)
+            actual_cols_ordered = list(reader.fieldnames or [])
+            cols_to_check = {k: v for k, v in enum_domains.items() if k in actual_cols_ordered}
+            if cols_to_check:
+                for row in reader:
+                    for col_name, allowed in cols_to_check.items():
+                        value = row.get(col_name, "")
+                        if value not in allowed:
+                            invalid_values.setdefault(col_name, set()).add(value)
+    else:
+        with out_path.open("r", encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f)
+            actual_cols_ordered = list(reader.fieldnames or [])
+            cols_to_check = {k: v for k, v in enum_domains.items() if k in actual_cols_ordered}
+            if cols_to_check:
+                for row in reader:
+                    for col_name, allowed in cols_to_check.items():
+                        value = row.get(col_name, "")
+                        if value not in allowed:
+                            invalid_values.setdefault(col_name, set()).add(value)
+
+    return actual_cols_ordered, invalid_values
+
+
 def validate_outputs_against_schemas(outdir: Path) -> None:
     """Validate CSV outputs against documented column schemas."""
     schema_dir = Path(__file__).parent.parent / "docs" / "archive" / "schemas"
@@ -166,15 +235,7 @@ def validate_outputs_against_schemas(outdir: Path) -> None:
         schema = json.loads(schema_path.read_text(encoding="utf-8"))
         expected_cols_ordered = [c["name"] for c in schema["columns"]]
         expected_cols = set(expected_cols_ordered)
-
-        if out_file.endswith(".gz"):
-            with gzip.open(out_path, "rt", encoding="utf-8", newline="") as f:
-                reader = csv.DictReader(f)
-                actual_cols_ordered = list(reader.fieldnames or [])
-        else:
-            with out_path.open("r", encoding="utf-8", newline="") as f:
-                reader = csv.DictReader(f)
-                actual_cols_ordered = list(reader.fieldnames or [])
+        actual_cols_ordered, invalid_enum_values = _read_csv_header_and_invalid_enums(out_file, out_path, schema)
 
         actual_cols = set(actual_cols_ordered)
 
@@ -191,6 +252,12 @@ def validate_outputs_against_schemas(outdir: Path) -> None:
                 f"Expected order: {expected_cols_ordered}\n"
                 f"Actual order:   {actual_cols_ordered}"
             )
+
+        if invalid_enum_values:
+            pretty: Dict[str, List[str]] = {}
+            for col_name, vals in invalid_enum_values.items():
+                pretty[col_name] = sorted("<empty>" if v == "" else str(v) for v in vals)
+            raise SystemExit(f"Enum domain mismatch in {out_file}\n" f"Invalid values: {json.dumps(pretty, sort_keys=True)}")
 
         print(f"✅ Schema validation passed: {out_file}")
 
@@ -280,6 +347,8 @@ def build_reports(
     by_drive: bool = True,
     chunk_mb: int = 0,
     validate_schemas: bool = False,
+    strict_root_marker: bool = False,
+    min_root_marker_coverage: float = DEFAULT_MIN_ROOT_MARKER_COVERAGE,
 ) -> Dict[str, object]:
     """Build deterministic archive index, asset grouping, and hotspot reports.
 
@@ -299,6 +368,8 @@ def build_reports(
         by_drive: If True, emit per-drive partitions in outdir/by_origin_drive/
         chunk_mb: If >0, split large outputs into N MB chunks
         validate_schemas: If True, validate output CSVs against documented column schemas
+        strict_root_marker: If True, fail when root_marker coverage is below threshold
+        min_root_marker_coverage: Minimum required fraction of rows containing root_marker
 
     Returns:
         Dict mapping output keys to file paths (+ split_manifest if chunking enabled)
@@ -309,6 +380,14 @@ def build_reports(
     input_csv_path = Path(input_csv)
     outdir_path = Path(outdir)
     df = pd.read_csv(input_csv_path, dtype=str, keep_default_na=False)
+
+    if not 0.0 <= min_root_marker_coverage <= 1.0:
+        raise SystemExit("--min-root-marker-coverage must be between 0.0 and 1.0")
+
+    normalized_root_marker = re.sub(r"/+", "/", root_marker.replace("\\", "/")).strip("/")
+    if not normalized_root_marker:
+        raise SystemExit("--root-marker must include at least one non-slash character")
+    root_marker = f"{normalized_root_marker}/"
 
     # Validate required columns (fail-fast)
     required_cols = {
@@ -335,34 +414,42 @@ def build_reports(
     # Collapse repeated slashes and strip trailing slashes
     sf = sf.str.replace(r"/+", "/", regex=True).str.rstrip("/")
 
+    marker_found = sf.str.contains(root_marker, regex=False)
     rel = sf.str.split(root_marker, n=1, expand=True)
-
-    # Determine if root_marker was found and what relpath should be
-    if rel.shape[1] > 1:
-        # root_marker found in at least some rows
-        has_marker_mask = rel[1].notna() & (rel[1] != "")
-        relpath = np.where(has_marker_mask, rel[1], sf.values)
-        marker_coverage = has_marker_mask.sum() / len(df) if len(df) > 0 else 0.0
+    if marker_found.any() and rel.shape[1] > 1:
+        relpath = np.where(marker_found, rel[1].fillna("").values, sf.values)
     else:
-        # root_marker not found in any row - use full path as relpath
         relpath = sf.values
-        marker_coverage = 0.0
+    marker_coverage = float(marker_found.mean()) if len(df) > 0 else 0.0
 
     relpath = pd.Series(relpath, name="relpath").astype(str)
     # CRITICAL: Strip leading slashes to prevent empty origin_drive when root_marker is missing
     # and fallback produces absolute paths (e.g., /vault/All Archive/DriveA/...)
     # This stabilizes absolute-path fallback and prevents cross-environment drift.
     relpath = relpath.str.lstrip("/")
-    # Handle edge case: if relpath becomes empty after lstrip (e.g., SourceFile was just "/"),
-    # replace with a placeholder to prevent downstream empty-string issues
-    relpath = relpath.replace("", ".")
+    empty_relpath = relpath.eq("") | relpath.isna()
+    if empty_relpath.any():
+        if strict_root_marker:
+            raise SystemExit(f"Found {int(empty_relpath.sum())} rows with empty relpath after canonicalization.")
+        # Handle edge case: if relpath becomes empty after lstrip (e.g., SourceFile was just "/"),
+        # replace with a placeholder to prevent downstream empty-string issues
+        relpath = relpath.mask(empty_relpath, ".")
 
-    # Validate root_marker coverage (warn if suspiciously low, but don't fail for test compatibility)
-    # In production, paths without root_marker will use full SourceFile as relpath
-    if marker_coverage > 0 and marker_coverage < 0.5:
-        import sys
-
-        print(f"Warning: root_marker '{root_marker}' found in only {marker_coverage:.1%} of rows.", file=sys.stderr)
+    # Validate root_marker coverage. Strict mode fails closed; default mode warns.
+    if marker_coverage < min_root_marker_coverage:
+        unmatched_examples = sf[~marker_found].head(5).tolist()
+        coverage_msg = (
+            f"root_marker coverage {marker_coverage:.3f} < {min_root_marker_coverage:.3f} " f"for marker '{root_marker}'"
+        )
+        if strict_root_marker:
+            raise SystemExit(
+                f"{coverage_msg}. Non-comparable run context. " f"Examples (unmatched SourceFile): {unmatched_examples}"
+            )
+        print(
+            f"Warning: {coverage_msg}. Outputs may be system-context-dependent. "
+            f"Examples (unmatched SourceFile): {unmatched_examples}",
+            file=sys.stderr,
+        )
 
     # Split relpath into (dir_rel, filename) while handling no-separator rows.
     split_path = relpath.str.rsplit("/", n=1, expand=True)
@@ -656,8 +743,8 @@ def build_reports(
     ]
     asset = asset[asset_col_order]
 
-    write_csv_atomic(archive_index_out, out_archive_index, compression="gzip")
-    write_csv_atomic(asset, out_asset_groups, compression="gzip")
+    write_csv_atomic(archive_index_out, out_archive_index, compression=DETERMINISTIC_GZIP_COMPRESSION)
+    write_csv_atomic(asset, out_asset_groups, compression=DETERMINISTIC_GZIP_COMPRESSION)
     write_csv_atomic(hotspots, out_hotspots)
 
     # Summary metrics
@@ -730,12 +817,12 @@ def build_reports(
             write_csv_atomic(
                 archive_index_out.loc[archive_index_out["origin_drive"] == drv],
                 ai_path,
-                compression="gzip",
+                compression=DETERMINISTIC_GZIP_COMPRESSION,
             )
             write_csv_atomic(
                 asset.loc[asset["origin_drive"] == drv],
                 ag_path,
-                compression="gzip",
+                compression=DETERMINISTIC_GZIP_COMPRESSION,
             )
 
         outputs["by_drive_dir"] = str(out_by_drive)
@@ -775,6 +862,21 @@ def main() -> None:
     ap.add_argument("--no-by-drive", action="store_true", help="Disable per-drive partition outputs")
     ap.add_argument("--chunk-mb", type=int, default=0, help="If >0, split large outputs into N MB parts")
     ap.add_argument(
+        "--strict-root-marker",
+        action="store_true",
+        default=False,
+        help=(
+            "Fail closed when root marker coverage is below --min-root-marker-coverage "
+            "or canonicalization yields empty relpath rows"
+        ),
+    )
+    ap.add_argument(
+        "--min-root-marker-coverage",
+        type=float,
+        default=DEFAULT_MIN_ROOT_MARKER_COVERAGE,
+        help="Minimum required fraction [0.0-1.0] of rows containing root_marker (default: 0.95)",
+    )
+    ap.add_argument(
         "--validate-schemas",
         action="store_true",
         default=False,
@@ -789,6 +891,8 @@ def main() -> None:
         by_drive=not args.no_by_drive,
         chunk_mb=args.chunk_mb,
         validate_schemas=args.validate_schemas,
+        strict_root_marker=args.strict_root_marker,
+        min_root_marker_coverage=args.min_root_marker_coverage,
     )
     print(json.dumps(outputs, indent=2, sort_keys=True))
 

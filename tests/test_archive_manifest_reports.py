@@ -41,7 +41,9 @@ MANIFEST_COLUMNS = [
 class ArchiveManifestReportsCliTest(unittest.TestCase):
     """Validate deterministic report generation and root-level path handling."""
 
-    def _run_cli(self, input_csv: Path, outdir: Path) -> subprocess.CompletedProcess[str]:
+    def _run_cli(
+        self, input_csv: Path, outdir: Path, *, extra_args: list[str] | None = None
+    ) -> subprocess.CompletedProcess[str]:
         cmd = [
             sys.executable,
             str(TOOL_PATH),
@@ -51,6 +53,8 @@ class ArchiveManifestReportsCliTest(unittest.TestCase):
             str(outdir),
             "--no-by-drive",
         ]
+        if extra_args:
+            cmd.extend(extra_args)
         return subprocess.run(
             cmd,
             cwd=str(PROJECT_ROOT),
@@ -58,6 +62,14 @@ class ArchiveManifestReportsCliTest(unittest.TestCase):
             text=True,
             check=False,
         )
+
+    def _load_tool_module(self):
+        spec = importlib.util.spec_from_file_location("archive_manifest_reports_tool", TOOL_PATH)
+        if spec is None or spec.loader is None:
+            raise RuntimeError("Failed to load archive_manifest_reports module")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
 
     def _write_manifest(self, manifest_csv: Path, rows: list[dict[str, str]]) -> None:
         with manifest_csv.open("w", encoding="utf-8", newline="") as handle:
@@ -258,10 +270,12 @@ class ArchiveManifestReportsCliTest(unittest.TestCase):
             archive_a = (out_a / "archive_index_normalized.csv.gz").read_bytes()
             archive_b = (out_b / "archive_index_normalized.csv.gz").read_bytes()
             self.assertEqual(archive_a, archive_b)
+            self.assertEqual(int.from_bytes(archive_a[4:8], "little"), 0)
 
             asset_a = (out_a / "asset_grouping_report.csv.gz").read_bytes()
             asset_b = (out_b / "asset_grouping_report.csv.gz").read_bytes()
             self.assertEqual(asset_a, asset_b)
+            self.assertEqual(int.from_bytes(asset_a[4:8], "little"), 0)
 
             hotspots_a = (out_a / "anomaly_hotspots.csv").read_text(encoding="utf-8")
             hotspots_b = (out_b / "anomaly_hotspots.csv").read_text(encoding="utf-8")
@@ -546,6 +560,105 @@ class ArchiveManifestReportsCliTest(unittest.TestCase):
             # Verify relpath doesn't start with "/"
             self.assertFalse(vault_row["relpath"].startswith("/"))
             self.assertFalse(volumes_row["relpath"].startswith("/"))
+
+    def test_strict_root_marker_fails_when_coverage_below_threshold(self) -> None:
+        """Verify strict root marker mode fails closed when marker coverage is too low."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp = Path(tmpdir)
+            manifest_csv = temp / "manifest.csv"
+            outdir = temp / "out"
+
+            self._write_manifest(
+                manifest_csv,
+                [
+                    {
+                        "SourceFile": "/vault/All Archive/DriveA/IMG_0001.CR2",
+                        "FileName": "IMG_0001.CR2",
+                        "FileSize": "10 MB",
+                        "Model": "Canon",
+                        "DateTimeOriginal": "2024:01:01 10:00:00",
+                        "ImageSize": "100x100",
+                        "Quality": "RAW",
+                        "FocalLength": "",
+                        "ShutterSpeed": "",
+                        "Aperture": "",
+                        "ISO": "",
+                        "WhiteBalance": "",
+                        "Flash": "",
+                    },
+                    {
+                        "SourceFile": "/unmatched_path/DriveB/IMG_0002.JPG",
+                        "FileName": "IMG_0002.JPG",
+                        "FileSize": "2 MB",
+                        "Model": "Nikon",
+                        "DateTimeOriginal": "2024:01:01 10:01:00",
+                        "ImageSize": "100x100",
+                        "Quality": "",
+                        "FocalLength": "",
+                        "ShutterSpeed": "",
+                        "Aperture": "",
+                        "ISO": "",
+                        "WhiteBalance": "",
+                        "Flash": "",
+                    },
+                ],
+            )
+
+            result = self._run_cli(
+                manifest_csv,
+                outdir,
+                extra_args=["--strict-root-marker", "--min-root-marker-coverage", "0.95"],
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("root_marker coverage", result.stderr)
+
+    def test_validate_schemas_rejects_invalid_asset_type_enum(self) -> None:
+        """Verify schema validation catches enum-domain drift for governed categorical fields."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp = Path(tmpdir)
+            manifest_csv = temp / "manifest.csv"
+            outdir = temp / "out"
+
+            self._write_manifest(
+                manifest_csv,
+                [
+                    {
+                        "SourceFile": "/vault/All Archive/DriveA/IMG_0001.CR2",
+                        "FileName": "IMG_0001.CR2",
+                        "FileSize": "10 MB",
+                        "Model": "Canon",
+                        "DateTimeOriginal": "2024:01:01 10:00:00",
+                        "ImageSize": "100x100",
+                        "Quality": "RAW",
+                        "FocalLength": "",
+                        "ShutterSpeed": "",
+                        "Aperture": "",
+                        "ISO": "",
+                        "WhiteBalance": "",
+                        "Flash": "",
+                    }
+                ],
+            )
+
+            result = self._run_cli(manifest_csv, outdir)
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+            asset_path = outdir / "asset_grouping_report.csv.gz"
+            asset_rows = self._read_csv_gz_rows(asset_path)
+            self.assertGreaterEqual(len(asset_rows), 1)
+            asset_rows[0]["asset_type"] = "invalid_asset_type"
+            with gzip.open(asset_path, "wt", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=list(asset_rows[0].keys()))
+                writer.writeheader()
+                writer.writerows(asset_rows)
+
+            tool_module = self._load_tool_module()
+            with self.assertRaises(SystemExit) as ctx:
+                tool_module.validate_outputs_against_schemas(outdir)
+
+            msg = str(ctx.exception)
+            self.assertIn("Enum domain mismatch in asset_grouping_report.csv.gz", msg)
+            self.assertIn("asset_type", msg)
 
     def test_unc_path_normalization_produces_stable_origin_drive(self) -> None:
         """Verify that Windows UNC paths (\\server\share\...) get normalized consistently.
