@@ -199,6 +199,49 @@ def _load_schema(schema_path: Path) -> Dict[str, Any]:
     return json.loads(schema_path.read_text(encoding="utf-8"))
 
 
+def _expected_column_order_for_output(output_name: str) -> Optional[List[str]]:
+    """Return schema-defined column order for a named output if schema is available."""
+    schema_file = CSV_SCHEMA_VALIDATIONS.get(output_name)
+    if not schema_file:
+        return None
+
+    schema_path = _schema_dir() / schema_file
+    if not schema_path.exists():
+        return None
+
+    schema_doc = _load_schema(schema_path)
+    columns = schema_doc.get("columns")
+    if not isinstance(columns, list):
+        raise SystemExit(f"Invalid schema format in {schema_file}: expected top-level 'columns' list")
+
+    expected_cols_ordered: List[str] = []
+    for idx, col_spec in enumerate(columns):
+        if not isinstance(col_spec, dict):
+            raise SystemExit(f"Invalid schema format in {schema_file}: columns[{idx}] must be an object")
+        col_name = col_spec.get("name")
+        if not isinstance(col_name, str) or not col_name:
+            raise SystemExit(f"Invalid schema format in {schema_file}: columns[{idx}] missing non-empty 'name'")
+        expected_cols_ordered.append(col_name)
+    return expected_cols_ordered
+
+
+def _reorder_frame_columns_to_schema(output_name: str, frame: pd.DataFrame) -> pd.DataFrame:
+    """Reorder frame columns to schema order when shapes are compatible."""
+    expected_cols_ordered = _expected_column_order_for_output(output_name)
+    if not expected_cols_ordered:
+        return frame
+
+    actual_cols_ordered = list(frame.columns)
+    if set(actual_cols_ordered) != set(expected_cols_ordered):
+        # Preserve original frame so validator can emit explicit schema mismatch diagnostics.
+        return frame
+
+    if actual_cols_ordered == expected_cols_ordered:
+        return frame
+
+    return frame.loc[:, expected_cols_ordered]
+
+
 def _normalize_schema_type(raw_type: str) -> str:
     type_map = {
         "string": "string",
@@ -964,6 +1007,9 @@ def build_reports(
         "flag_still_missing_datetime",
     ]
     asset = asset[asset_col_order]
+
+    # Align hotspots output column order with documented schema contract before validation/write.
+    hotspots = _reorder_frame_columns_to_schema("anomaly_hotspots.csv", hotspots)
 
     # Summary metrics
     video_rows = archive_index_out[archive_index_out["category"] == "Video"]
