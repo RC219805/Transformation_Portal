@@ -77,6 +77,7 @@ from __future__ import annotations
 import argparse
 import csv
 import gzip
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -89,7 +90,8 @@ try:
 except ImportError as exc:
     raise SystemExit(
         "archive_manifest_reports.py requires optional dependencies 'numpy' and 'pandas'. "
-        "Install them with: pip install numpy pandas"
+        "Install pinned tool dependencies with: pip install -r requirements/tools-archive.txt "
+        "(or, if you explicitly prefer unpinned versions, run: pip install numpy pandas)."
     ) from exc
 
 _SIZE_RE = re.compile(r"^\s*([0-9]*\.?[0-9]+)\s*([A-Za-z]+)\s*$")
@@ -162,20 +164,32 @@ def validate_outputs_against_schemas(outdir: Path) -> None:
             raise SystemExit(f"Missing schema file: {schema_file}")
 
         schema = json.loads(schema_path.read_text(encoding="utf-8"))
-        expected_cols = {c["name"] for c in schema["columns"]}
+        expected_cols_ordered = [c["name"] for c in schema["columns"]]
+        expected_cols = set(expected_cols_ordered)
 
         if out_file.endswith(".gz"):
             with gzip.open(out_path, "rt", encoding="utf-8", newline="") as f:
                 reader = csv.DictReader(f)
-                actual_cols = set(reader.fieldnames or [])
+                actual_cols_ordered = list(reader.fieldnames or [])
         else:
             with out_path.open("r", encoding="utf-8", newline="") as f:
                 reader = csv.DictReader(f)
-                actual_cols = set(reader.fieldnames or [])
+                actual_cols_ordered = list(reader.fieldnames or [])
+
+        actual_cols = set(actual_cols_ordered)
 
         if actual_cols != expected_cols:
             raise SystemExit(
-                f"Schema mismatch in {out_file}\n" f"Expected: {sorted(expected_cols)}\n" f"Actual:   {sorted(actual_cols)}"
+                f"Schema mismatch in {out_file}\n"
+                f"Expected columns (set): {sorted(expected_cols)}\n"
+                f"Actual columns (set):   {sorted(actual_cols)}"
+            )
+
+        if actual_cols_ordered != expected_cols_ordered:
+            raise SystemExit(
+                f"Column order mismatch in {out_file}\n"
+                f"Expected order: {expected_cols_ordered}\n"
+                f"Actual order:   {actual_cols_ordered}"
             )
 
         print(f"✅ Schema validation passed: {out_file}")
@@ -695,8 +709,22 @@ def build_reports(
         out_by_drive.mkdir(parents=True, exist_ok=True)
 
         drive_values = sorted(archive_index_out["origin_drive"].unique())
+        used_drive_labels: set[str] = set()
         for drv in drive_values:
-            safe = re.sub(r"[^A-Za-z0-9._-]+", "_", drv)[:80]
+            raw_label = drv if drv else "__ROOT__"
+            safe = re.sub(r"[^A-Za-z0-9._-]+", "_", raw_label)[:80]
+            drive_hash = hashlib.sha1(raw_label.encode("utf-8")).hexdigest()[:8]
+
+            # Avoid ambiguous/empty labels and prevent collisions after sanitize+truncate.
+            if not safe or not safe.strip("_"):
+                safe = f"drive__{drive_hash}"
+
+            if safe in used_drive_labels:
+                suffix = f"__{drive_hash}"
+                safe = f"{safe[: max(1, 80 - len(suffix))]}{suffix}"
+
+            used_drive_labels.add(safe)
+
             ai_path = out_by_drive / f"archive_index__{safe}.csv.gz"
             ag_path = out_by_drive / f"asset_groups__{safe}.csv.gz"
             write_csv_atomic(

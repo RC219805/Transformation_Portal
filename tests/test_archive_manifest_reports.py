@@ -255,16 +255,12 @@ class ArchiveManifestReportsCliTest(unittest.TestCase):
             self.assertEqual(first.returncode, 0, msg=first.stderr)
             self.assertEqual(second.returncode, 0, msg=second.stderr)
 
-            with gzip.open(out_a / "archive_index_normalized.csv.gz", "rt", encoding="utf-8") as handle:
-                archive_a = handle.read()
-            with gzip.open(out_b / "archive_index_normalized.csv.gz", "rt", encoding="utf-8") as handle:
-                archive_b = handle.read()
+            archive_a = (out_a / "archive_index_normalized.csv.gz").read_bytes()
+            archive_b = (out_b / "archive_index_normalized.csv.gz").read_bytes()
             self.assertEqual(archive_a, archive_b)
 
-            with gzip.open(out_a / "asset_grouping_report.csv.gz", "rt", encoding="utf-8") as handle:
-                asset_a = handle.read()
-            with gzip.open(out_b / "asset_grouping_report.csv.gz", "rt", encoding="utf-8") as handle:
-                asset_b = handle.read()
+            asset_a = (out_a / "asset_grouping_report.csv.gz").read_bytes()
+            asset_b = (out_b / "asset_grouping_report.csv.gz").read_bytes()
             self.assertEqual(asset_a, asset_b)
 
             hotspots_a = (out_a / "anomaly_hotspots.csv").read_text(encoding="utf-8")
@@ -349,6 +345,111 @@ class ArchiveManifestReportsCliTest(unittest.TestCase):
             self.assertEqual(drive_b_asset["n_raw_files"], "1")
             # Verify basekeys are different (includes drive prefix for root-level files)
             self.assertNotEqual(drive_a_asset["basekey"], drive_b_asset["basekey"])
+
+    def test_by_drive_outputs_avoid_filename_collisions_and_handle_root_placeholder(self) -> None:
+        """Verify per-drive outputs are unique even when drive labels sanitize/truncate to same stem."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp = Path(tmpdir)
+            manifest_csv = temp / "manifest.csv"
+            outdir = temp / "out"
+
+            collision_stem = "D" * 80
+            drive_a = collision_stem + "A" * 8
+            drive_b = collision_stem + "B" * 8
+
+            self._write_manifest(
+                manifest_csv,
+                [
+                    {
+                        "SourceFile": f"/vault/All Archive/{drive_a}/Part1/IMG_COLLIDE_A.CR2",
+                        "FileName": "IMG_COLLIDE_A.CR2",
+                        "FileSize": "10 MB",
+                        "Model": "Canon",
+                        "DateTimeOriginal": "2024:01:01 10:00:00",
+                        "ImageSize": "100x100",
+                        "Quality": "RAW",
+                        "FocalLength": "",
+                        "ShutterSpeed": "",
+                        "Aperture": "",
+                        "ISO": "",
+                        "WhiteBalance": "",
+                        "Flash": "",
+                    },
+                    {
+                        "SourceFile": f"/vault/All Archive/{drive_b}/Part1/IMG_COLLIDE_B.CR2",
+                        "FileName": "IMG_COLLIDE_B.CR2",
+                        "FileSize": "12 MB",
+                        "Model": "Canon",
+                        "DateTimeOriginal": "2024:01:02 10:00:00",
+                        "ImageSize": "100x100",
+                        "Quality": "RAW",
+                        "FocalLength": "",
+                        "ShutterSpeed": "",
+                        "Aperture": "",
+                        "ISO": "",
+                        "WhiteBalance": "",
+                        "Flash": "",
+                    },
+                    {
+                        "SourceFile": "IMG_ROOT.CR2",
+                        "FileName": "IMG_ROOT.CR2",
+                        "FileSize": "8 MB",
+                        "Model": "Nikon",
+                        "DateTimeOriginal": "2024:01:03 10:00:00",
+                        "ImageSize": "100x100",
+                        "Quality": "RAW",
+                        "FocalLength": "",
+                        "ShutterSpeed": "",
+                        "Aperture": "",
+                        "ISO": "",
+                        "WhiteBalance": "",
+                        "Flash": "",
+                    },
+                ],
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(TOOL_PATH),
+                    "--input",
+                    str(manifest_csv),
+                    "--outdir",
+                    str(outdir),
+                ],
+                cwd=str(PROJECT_ROOT),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+            by_drive_dir = outdir / "by_origin_drive"
+            self.assertTrue(by_drive_dir.exists())
+
+            archive_files = sorted(by_drive_dir.glob("archive_index__*.csv.gz"))
+            asset_files = sorted(by_drive_dir.glob("asset_groups__*.csv.gz"))
+            self.assertEqual(len(archive_files), 3)
+            self.assertEqual(len(asset_files), 3)
+            self.assertEqual(len({p.name for p in archive_files}), 3)
+            self.assertEqual(len({p.name for p in asset_files}), 3)
+
+            self.assertTrue((by_drive_dir / "archive_index____ROOT__.csv.gz").exists())
+            self.assertTrue((by_drive_dir / "asset_groups____ROOT__.csv.gz").exists())
+
+            found_drives: set[str] = set()
+            for path in archive_files:
+                rows = self._read_csv_gz_rows(path)
+                self.assertGreaterEqual(len(rows), 1)
+                found_drives.update(row["origin_drive"] for row in rows)
+
+            self.assertEqual(found_drives, {"", drive_a, drive_b})
+
+            collision_labels = [
+                path.name[len("archive_index__") : -len(".csv.gz")] for path in archive_files if "__ROOT__" not in path.name
+            ]
+            self.assertEqual(len(collision_labels), 2)
+            self.assertTrue(any("__" in label for label in collision_labels))
 
     def test_absolute_paths_without_root_marker_get_leading_slash_stripped(self) -> None:
         """Verify that absolute paths without matching root_marker get leading slashes stripped.
