@@ -352,13 +352,13 @@ class ArchiveManifestReportsCliTest(unittest.TestCase):
 
     def test_absolute_paths_without_root_marker_get_leading_slash_stripped(self) -> None:
         """Verify that absolute paths without matching root_marker get leading slashes stripped.
-        
+
         This prevents the bug where:
         - SourceFile="/vault/All Archive/DriveA/Part1/file.CR2"
         - root_marker not found → relpath uses full sf
         - leading "/" → dir_rel starts with "/" → parts[0] becomes ""
         - Result: origin_drive = "" (empty), partition = "vault" (WRONG!)
-        
+
         After fix with lstrip("/"), we get:
         - relpath = "vault/All Archive/DriveA/Part1/file.CR2"
         - origin_drive = "vault", partition = "All Archive" (stable, deterministic)
@@ -428,7 +428,7 @@ class ArchiveManifestReportsCliTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, msg=result.stderr)
 
             archive_rows = self._read_csv_gz_rows(outdir / "archive_index_normalized.csv.gz")
-            
+
             # Verify that origin_drive is NOT empty (would be "" before fix)
             vault_row = next(row for row in archive_rows if "DriveA" in row["relpath"])
             volumes_row = next(row for row in archive_rows if "DriveB" in row["relpath"])
@@ -448,13 +448,13 @@ class ArchiveManifestReportsCliTest(unittest.TestCase):
 
     def test_unc_path_normalization_produces_stable_origin_drive(self) -> None:
         """Verify that Windows UNC paths (\\server\share\...) get normalized consistently.
-        
+
         UNC paths convert:
         - \\server\share\DriveA\file.CR2
         - → //server/share/DriveA/file.CR2 (backslash→forward)
         - → /server/share/DriveA/file.CR2 (collapse //)
         - → server/share/DriveA/file.CR2 (lstrip "/")
-        
+
         Result: origin_drive="server", partition="share" (stable, deterministic)
         """
         with tempfile.TemporaryDirectory() as tmpdir:
