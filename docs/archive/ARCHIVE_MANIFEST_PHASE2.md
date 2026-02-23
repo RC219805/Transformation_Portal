@@ -73,6 +73,21 @@ Get-Content archive_index_normalized.csv.gz.part* -Encoding Byte | Set-Content a
 gzip -d archive_index_normalized.csv.gz
 ```
 
+### Verify Determinism (Recommended)
+
+After recombining (or on any run), quickly confirm byte-for-byte reproducibility:
+
+```bash
+# Linux / macOS
+sha256sum archive_index_normalized.csv.gz \
+         asset_grouping_report.csv.gz \
+         anomaly_hotspots.csv \
+         summary.json
+
+# Windows PowerShell
+Get-FileHash archive_index_normalized.csv.gz, asset_grouping_report.csv.gz, anomaly_hotspots.csv, summary.json -Algorithm SHA256 | Format-Table Hash, Path
+```
+
 ## Notes
 
 - These reports are **no-hash** by design. Hash-first identity (SHA-256) belongs in the vault ingest layer.
