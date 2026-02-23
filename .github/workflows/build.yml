@@ -326,8 +326,8 @@ jobs:
         if: matrix.test-type == 'core'
         run: |
           set -euo pipefail
-          python -m pip install pandas==2.2.3 jsonschema==4.23.0
-          python -c "import numpy, pandas"
+          python -m pip install numpy==2.2.6 pandas==2.2.3 jsonschema==4.23.0
+          python -c "import numpy, pandas, jsonschema"
 
       - name: Run tests
         env:

@@ -71,8 +71,8 @@ jobs:
       - name: Install core dependencies
         run: |
           python -m pip install -e ".[dev]" -c requirements/constraints.txt
-          python -m pip install pandas==2.2.3 jsonschema==4.23.0
-          python -c "import numpy, pandas"
+          python -m pip install numpy==2.2.6 pandas==2.2.3 jsonschema==4.23.0
+          python -c "import numpy, pandas, jsonschema"
 
       - name: Run unit and regression tests
         run: pytest tests/ -m "not ml and not slow and not benchmark" --maxfail=3
@@ -121,8 +121,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install -e ".[dev]" -c requirements/constraints.txt
-          python -m pip install pandas==2.2.3 jsonschema==4.23.0
-          python -c "import numpy, pandas"
+          python -m pip install numpy==2.2.6 pandas==2.2.3 jsonschema==4.23.0
+          python -c "import numpy, pandas, jsonschema"
 
       - name: Run golden tests
         run: pytest tests/ -m "not ml and not slow and not benchmark" --maxfail=1
