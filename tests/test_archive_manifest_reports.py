@@ -350,6 +350,267 @@ class ArchiveManifestReportsCliTest(unittest.TestCase):
             # Verify basekeys are different (includes drive prefix for root-level files)
             self.assertNotEqual(drive_a_asset["basekey"], drive_b_asset["basekey"])
 
+    def test_absolute_paths_without_root_marker_get_leading_slash_stripped(self) -> None:
+        """Verify that absolute paths without matching root_marker get leading slashes stripped.
+        
+        This prevents the bug where:
+        - SourceFile="/vault/All Archive/DriveA/Part1/file.CR2"
+        - root_marker not found → relpath uses full sf
+        - leading "/" → dir_rel starts with "/" → parts[0] becomes ""
+        - Result: origin_drive = "" (empty), partition = "vault" (WRONG!)
+        
+        After fix with lstrip("/"), we get:
+        - relpath = "vault/All Archive/DriveA/Part1/file.CR2"
+        - origin_drive = "vault", partition = "All Archive" (stable, deterministic)
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp = Path(tmpdir)
+            manifest_csv = temp / "manifest.csv"
+            outdir = temp / "out"
+
+            # Use absolute paths with a root_marker that won't match
+            self._write_manifest(
+                manifest_csv,
+                [
+                    {
+                        "SourceFile": "/vault/DriveA/Part1/IMG_0001.CR2",
+                        "FileName": "IMG_0001.CR2",
+                        "FileSize": "10 MB",
+                        "Model": "Canon",
+                        "DateTimeOriginal": "2024:01:01 10:00:00",
+                        "ImageSize": "100x100",
+                        "Quality": "RAW",
+                        "FocalLength": "",
+                        "ShutterSpeed": "",
+                        "Aperture": "",
+                        "ISO": "",
+                        "WhiteBalance": "",
+                        "Flash": "",
+                    },
+                    {
+                        "SourceFile": "/Volumes/RAID/Archive/DriveB/IMG_0002.JPG",
+                        "FileName": "IMG_0002.JPG",
+                        "FileSize": "2 MB",
+                        "Model": "Nikon",
+                        "DateTimeOriginal": "2024:02:01 14:00:00",
+                        "ImageSize": "200x200",
+                        "Quality": "",
+                        "FocalLength": "",
+                        "ShutterSpeed": "",
+                        "Aperture": "",
+                        "ISO": "",
+                        "WhiteBalance": "",
+                        "Flash": "",
+                    },
+                ],
+            )
+
+            # Use a root_marker that won't match (intentionally)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(TOOL_PATH),
+                    "--input",
+                    str(manifest_csv),
+                    "--outdir",
+                    str(outdir),
+                    "--root-marker",
+                    "NONEXISTENT_MARKER/",
+                    "--no-by-drive",
+                ],
+                cwd=str(PROJECT_ROOT),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            # Should succeed (with warning about marker coverage, but not fail)
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+            archive_rows = self._read_csv_gz_rows(outdir / "archive_index_normalized.csv.gz")
+            
+            # Verify that origin_drive is NOT empty (would be "" before fix)
+            vault_row = next(row for row in archive_rows if "DriveA" in row["relpath"])
+            volumes_row = next(row for row in archive_rows if "DriveB" in row["relpath"])
+
+            # After lstrip("/"), first segment becomes "vault" and "Volumes" respectively
+            self.assertEqual(vault_row["origin_drive"], "vault")
+            self.assertEqual(vault_row["partition"], "DriveA")
+            self.assertNotEqual(vault_row["origin_drive"], "")  # Critical: NOT empty
+
+            self.assertEqual(volumes_row["origin_drive"], "Volumes")
+            self.assertEqual(volumes_row["partition"], "RAID")
+            self.assertNotEqual(volumes_row["origin_drive"], "")  # Critical: NOT empty
+
+            # Verify relpath doesn't start with "/"
+            self.assertFalse(vault_row["relpath"].startswith("/"))
+            self.assertFalse(volumes_row["relpath"].startswith("/"))
+
+    def test_unc_path_normalization_produces_stable_origin_drive(self) -> None:
+        """Verify that Windows UNC paths (\\server\share\...) get normalized consistently.
+        
+        UNC paths convert:
+        - \\server\share\DriveA\file.CR2
+        - → //server/share/DriveA/file.CR2 (backslash→forward)
+        - → /server/share/DriveA/file.CR2 (collapse //)
+        - → server/share/DriveA/file.CR2 (lstrip "/")
+        
+        Result: origin_drive="server", partition="share" (stable, deterministic)
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp = Path(tmpdir)
+            manifest_csv = temp / "manifest.csv"
+            outdir = temp / "out"
+
+            self._write_manifest(
+                manifest_csv,
+                [
+                    {
+                        "SourceFile": "\\\\fileserver\\archive_vault\\DriveA\\Part1\\IMG_0001.CR2",
+                        "FileName": "IMG_0001.CR2",
+                        "FileSize": "10 MB",
+                        "Model": "Canon",
+                        "DateTimeOriginal": "2024:01:01 10:00:00",
+                        "ImageSize": "100x100",
+                        "Quality": "RAW",
+                        "FocalLength": "",
+                        "ShutterSpeed": "",
+                        "Aperture": "",
+                        "ISO": "",
+                        "WhiteBalance": "",
+                        "Flash": "",
+                    },
+                ],
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(TOOL_PATH),
+                    "--input",
+                    str(manifest_csv),
+                    "--outdir",
+                    str(outdir),
+                    "--root-marker",
+                    "NONEXISTENT/",
+                    "--no-by-drive",
+                ],
+                cwd=str(PROJECT_ROOT),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+            archive_rows = self._read_csv_gz_rows(outdir / "archive_index_normalized.csv.gz")
+            unc_row = archive_rows[0]
+
+            # Verify stable UNC parsing: origin_drive should be "fileserver"
+            self.assertEqual(unc_row["origin_drive"], "fileserver")
+            self.assertEqual(unc_row["partition"], "archive_vault")
+            self.assertNotEqual(unc_row["origin_drive"], "")  # Not empty
+
+            # Verify relpath is stable and doesn't start with "/"
+            self.assertFalse(unc_row["relpath"].startswith("/"))
+            self.assertIn("DriveA", unc_row["relpath"])
+
+    def test_edge_case_root_slash_only_gets_placeholder(self) -> None:
+        """Verify that edge-case paths like "/" get converted to placeholder "." to prevent empty strings."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp = Path(tmpdir)
+            manifest_csv = temp / "manifest.csv"
+            outdir = temp / "out"
+
+            self._write_manifest(
+                manifest_csv,
+                [
+                    {
+                        "SourceFile": "/",
+                        "FileName": "",
+                        "FileSize": "0 bytes",
+                        "Model": "",
+                        "DateTimeOriginal": "",
+                        "ImageSize": "",
+                        "Quality": "",
+                        "FocalLength": "",
+                        "ShutterSpeed": "",
+                        "Aperture": "",
+                        "ISO": "",
+                        "WhiteBalance": "",
+                        "Flash": "",
+                    },
+                ],
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(TOOL_PATH),
+                    "--input",
+                    str(manifest_csv),
+                    "--outdir",
+                    str(outdir),
+                    "--no-by-drive",
+                ],
+                cwd=str(PROJECT_ROOT),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+            archive_rows = self._read_csv_gz_rows(outdir / "archive_index_normalized.csv.gz")
+            edge_row = archive_rows[0]
+
+            # After lstrip("/"), we get "" which should be replaced with "."
+            self.assertEqual(edge_row["relpath"], ".")
+            # dir_rel will be empty, so origin_drive and partition should be ""
+            self.assertEqual(edge_row["origin_drive"], "")
+            self.assertEqual(edge_row["partition"], "")
+
+    def test_multiple_occurrences_of_root_marker_uses_first_only(self) -> None:
+        """Verify that if root_marker appears multiple times in path, only first occurrence is used."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp = Path(tmpdir)
+            manifest_csv = temp / "manifest.csv"
+            outdir = temp / "out"
+
+            self._write_manifest(
+                manifest_csv,
+                [
+                    {
+                        "SourceFile": "/vault/All Archive/DriveA/All Archive/nested/IMG_0001.CR2",
+                        "FileName": "IMG_0001.CR2",
+                        "FileSize": "10 MB",
+                        "Model": "Canon",
+                        "DateTimeOriginal": "2024:01:01 10:00:00",
+                        "ImageSize": "100x100",
+                        "Quality": "RAW",
+                        "FocalLength": "",
+                        "ShutterSpeed": "",
+                        "Aperture": "",
+                        "ISO": "",
+                        "WhiteBalance": "",
+                        "Flash": "",
+                    },
+                ],
+            )
+
+            result = self._run_cli(manifest_csv, outdir)
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+            archive_rows = self._read_csv_gz_rows(outdir / "archive_index_normalized.csv.gz")
+            multi_marker_row = archive_rows[0]
+
+            # Should split on first "All Archive/" occurrence only (n=1 in split)
+            # Result: relpath = "DriveA/All Archive/nested/IMG_0001.CR2"
+            self.assertIn("DriveA", multi_marker_row["relpath"])
+            self.assertIn("All Archive/nested", multi_marker_row["relpath"])
+            self.assertEqual(multi_marker_row["origin_drive"], "DriveA")
+
 
 if __name__ == "__main__":
     unittest.main()
+

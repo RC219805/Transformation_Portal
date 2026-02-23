@@ -11,6 +11,8 @@ INTEGRITY CONTRACT ANCHORS:
      - Repeated slash collapse (//+ → /)
      - Trailing slash removal
      - root_marker split with fallback to full path
+     - Leading slash removal (lstrip "/") to prevent empty origin_drive from absolute paths
+     - Empty relpath placeholder ("." for edge cases like SourceFile="/")
      - CRITICAL: origin_drive and partition derived from dir_rel (not relpath)
        to prevent drive-root file misclassification
 
@@ -330,6 +332,13 @@ def build_reports(
         marker_coverage = 0.0
 
     relpath = pd.Series(relpath, name="relpath").astype(str)
+    # CRITICAL: Strip leading slashes to prevent empty origin_drive when root_marker is missing
+    # and fallback produces absolute paths (e.g., /vault/All Archive/DriveA/...)
+    # This stabilizes absolute-path fallback and prevents cross-environment drift.
+    relpath = relpath.str.lstrip("/")
+    # Handle edge case: if relpath becomes empty after lstrip (e.g., SourceFile was just "/"),
+    # replace with a placeholder to prevent downstream empty-string issues
+    relpath = relpath.replace("", ".")
 
     # Validate root_marker coverage (warn if suspiciously low, but don't fail for test compatibility)
     # In production, paths without root_marker will use full SourceFile as relpath
