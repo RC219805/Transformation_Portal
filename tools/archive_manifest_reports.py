@@ -132,6 +132,16 @@ def write_json_atomic(path: Path, payload: Any, *, indent: int = 2, sort_keys: b
     atomic_write(path, _write)
 
 
+def write_bytes_atomic(path: Path, data: bytes) -> None:
+    """Write raw bytes deterministically and atomically."""
+
+    def _write(tmp_path: Path) -> None:
+        with tmp_path.open("wb") as handle:
+            handle.write(data)
+
+    atomic_write(path, _write)
+
+
 def validate_outputs_against_schemas(outdir: Path) -> None:
     """Validate CSV outputs against documented column schemas."""
     schema_dir = Path(__file__).parent.parent / "docs" / "archive" / "schemas"
@@ -165,9 +175,7 @@ def validate_outputs_against_schemas(outdir: Path) -> None:
 
         if actual_cols != expected_cols:
             raise SystemExit(
-                f"Schema mismatch in {out_file}\n"
-                f"Expected: {sorted(expected_cols)}\n"
-                f"Actual:   {sorted(actual_cols)}"
+                f"Schema mismatch in {out_file}\n" f"Expected: {sorted(expected_cols)}\n" f"Actual:   {sorted(actual_cols)}"
             )
 
         print(f"✅ Schema validation passed: {out_file}")
@@ -245,12 +253,7 @@ def split_file(path: Path, chunk_bytes: int) -> tuple[list[str], int]:
             if not chunk:
                 break
             part_path = path.with_name(f"{path.name}.part{i:03d}")
-
-            def _write_chunk(tmp_path: Path, data: bytes = chunk) -> None:
-                with tmp_path.open("wb") as pf:
-                    pf.write(data)
-
-            atomic_write(part_path, _write_chunk)
+            write_bytes_atomic(part_path, chunk)
             parts.append(str(part_path))
             i += 1
     return parts, original_size
@@ -747,8 +750,7 @@ def main() -> None:
         "--validate-schemas",
         action="store_true",
         default=False,
-        help="Validate all generated CSV outputs against column schemas "
-             "(fails fast on schema drift)",
+        help="Validate all generated CSV outputs against column schemas " "(fails fast on schema drift)",
     )
     args = ap.parse_args()
 
