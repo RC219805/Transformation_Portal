@@ -314,3 +314,6 @@ artifact_store/
 external/
 .cas/
 tmp_tensor.npy
+
+# Local archive reports (reproducible)
+archive_reports/
