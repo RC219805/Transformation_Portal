@@ -265,23 +265,24 @@ Analysis Result for 'python'. Found 0 alerts:
 
 ## Future Enhancements (Not Implemented)
 
-Per the comment's recommendations, these are **not** implemented in this PR but documented for future consideration:
+Per the comment's recommendations, these are documented for future consideration:
 
-### 1. Strict Root Marker Mode
-- **Recommendation**: `--strict-root-marker` flag
-- **Behavior**: Exit non-zero if marker coverage < threshold
-- **Rationale**: Fail-closed behavior for contract-grade guarantees
-- **Status**: Not implemented (would be breaking change)
-
-### 2. Case-Insensitive Root Marker
+### 1. Case-Insensitive Root Marker
 - **Recommendation**: Optional `.str.lower()` normalization
 - **Trade-off**: Loses original case fidelity
 - **Status**: Not implemented (policy-dependent, keep explicit)
 
-### 3. UNC Prefix Detection
+### 2. UNC Prefix Detection
 - **Recommendation**: Optionally detect and preserve UNC semantics
 - **Example**: Prefix UNC paths with `__UNC__/server/share/...`
 - **Status**: Out of scope for Phase 2
+
+## Implemented Since Initial Review
+
+### Strict Root Marker Mode
+- **Implemented flags**: `--strict-root-marker` and `--min-root-marker-coverage` (alias: `--root-marker-min-coverage`)
+- **Behavior**: Exit non-zero if marker coverage falls below threshold
+- **Rationale**: Fail-closed behavior for contract-grade guarantees
 
 ---
 
@@ -330,7 +331,7 @@ The implementation maintains the 6-point integrity contract while hardening agai
 
 ---
 
-**Branch**: `copilot/sub-pr-1000`  
-**Primary Commit**: `64e59e7`  
-**Style Fix Commit**: `6267b2b`  
+**Branch**: `copilot/sub-pr-1000`
+**Primary Commit**: `64e59e7`
+**Style Fix Commit**: `6267b2b`
 **Status**: ✅ Ready for merge (pending push permissions)

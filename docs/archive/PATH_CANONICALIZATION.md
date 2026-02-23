@@ -204,26 +204,26 @@ If `root_marker` doesn't match, you get mount-structure-derived drive names:
 **Mitigation:**
 - Ensure `root_marker` matches ExifTool output context
 - Monitor marker coverage warning (emitted if < 50%)
-- Consider `--strict-root-marker` mode in future (fail if coverage too low)
+- Use `--strict-root-marker` in governed/CI runs to fail closed when coverage is too low
 
 ## Future Enhancements
 
-Potential improvements (not currently implemented):
-
-1. **Strict Root Marker Mode**
-   - `--strict-root-marker` flag
-   - Exit non-zero if marker coverage < threshold
-   - Fail-closed behavior for contract-grade guarantees
-
-2. **Case-Insensitive Root Marker**
+1. **Case-Insensitive Root Marker**
    - Optional `.str.lower()` normalization
    - Trade-off: loses original case fidelity
    - Policy-dependent, not currently implemented
 
-3. **UNC Prefix Detection**
+2. **UNC Prefix Detection**
    - Optionally detect and preserve UNC semantics
    - Prefix UNC-derived paths with marker (e.g., `__UNC__/server/share/...`)
    - Out of scope for Phase 2
+
+## Implemented Hardening
+
+1. **Strict Root Marker Mode**
+   - `--strict-root-marker` flag
+   - `--min-root-marker-coverage` / `--root-marker-min-coverage` threshold control
+   - Exit non-zero if marker coverage falls below threshold (fail-closed behavior)
 
 ## References
 

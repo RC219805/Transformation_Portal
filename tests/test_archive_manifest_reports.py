@@ -6,6 +6,7 @@ import csv
 import gzip
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -17,8 +18,9 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TOOL_PATH = PROJECT_ROOT / "tools" / "archive_manifest_reports.py"
 HAS_TOOL_DEPS = importlib.util.find_spec("numpy") is not None and importlib.util.find_spec("pandas") is not None
+RUNNING_IN_CI = os.getenv("CI", "").strip().lower() in {"1", "true", "yes"}
 
-pytestmark = [pytest.mark.unit, pytest.mark.regression]
+pytestmark = [pytest.mark.regression]
 
 MANIFEST_COLUMNS = [
     "SourceFile",
@@ -37,9 +39,16 @@ MANIFEST_COLUMNS = [
 ]
 
 
-@unittest.skipUnless(HAS_TOOL_DEPS, "archive_manifest_reports requires numpy and pandas")
 class ArchiveManifestReportsCliTest(unittest.TestCase):
     """Validate deterministic report generation and root-level path handling."""
+
+    def setUp(self) -> None:
+        if HAS_TOOL_DEPS:
+            return
+        msg = "archive_manifest_reports requires numpy and pandas (install requirements/tools-archive.txt)."
+        if RUNNING_IN_CI:
+            self.fail(f"{msg} CI must install tool dependencies so these regression tests are not silently skipped.")
+        self.skipTest(msg)
 
     def _run_cli(
         self, input_csv: Path, outdir: Path, *, extra_args: list[str] | None = None

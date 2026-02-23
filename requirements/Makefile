@@ -21,9 +21,10 @@ help:
 	@echo "  ml.txt       Compile ml.txt (constrained by all.txt)"
 	@echo "  dev.txt      Compile dev.txt (constrained by all.txt)"
 	@echo "  ci.txt       Compile ci.txt (constrained by all.txt)"
+	@echo "  tools-archive.txt Compile tools-archive.txt (constrained by all.txt)"
 
 # Compile all requirements in correct order
-compile: all.txt base.txt ml.txt dev.txt ci.txt
+compile: all.txt base.txt ml.txt dev.txt ci.txt tools-archive.txt
 	@echo "✓ All requirements compiled successfully"
 
 compile-all: compile
@@ -50,6 +51,10 @@ ci.txt: ci.in all.txt
 	@echo "Compiling ci.txt..."
 	@$(PIP_COMPILE) -c all.txt ci.in -o ci.txt
 
+tools-archive.txt: tools-archive.in all.txt
+	@echo "Compiling tools-archive.txt..."
+	@$(PIP_COMPILE) -c all.txt tools-archive.in -o tools-archive.txt
+
 # Update all dependencies to latest allowed versions
 update:
 	@echo "Updating all dependencies to latest versions..."
@@ -58,6 +63,7 @@ update:
 	@$(PIP_COMPILE) --upgrade -c all.txt ml.in -o ml.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt dev.in -o dev.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt ci.in -o ci.txt
+	@$(PIP_COMPILE) --upgrade -c all.txt tools-archive.in -o tools-archive.txt
 	@echo "✓ All requirements updated successfully"
 
 # Check if .txt files are up-to-date
@@ -73,10 +79,12 @@ check:
 		(echo "❌ dev.txt is out of date. Run 'make compile' to update." && exit 1)
 	@$(PIP_COMPILE) --dry-run --quiet -c all.txt ci.in -o ci.txt 2>&1 | grep -q "No changes" || \
 		(echo "❌ ci.txt is out of date. Run 'make compile' to update." && exit 1)
+	@$(PIP_COMPILE) --dry-run --quiet -c all.txt tools-archive.in -o tools-archive.txt 2>&1 | grep -q "No changes" || \
+		(echo "❌ tools-archive.txt is out of date. Run 'make compile' to update." && exit 1)
 	@echo "✓ All requirements are up-to-date"
 
 # Clean compiled files
 clean:
 	@echo "Removing compiled .txt files..."
-	@rm -f all.txt base.txt ml.txt dev.txt ci.txt
+	@rm -f all.txt base.txt ml.txt dev.txt ci.txt tools-archive.txt
 	@echo "✓ Cleanup complete"
