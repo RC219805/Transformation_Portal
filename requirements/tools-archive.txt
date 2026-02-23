@@ -8,5 +8,5 @@
 #   These dependencies are required for tools/archive_manifest_reports.py
 #   to generate Phase 2 archive indexing and asset grouping reports.
 
-numpy==2.2.1
+numpy==2.2.6
 pandas==2.2.3

@@ -74,9 +74,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
-from typing import Dict, List, Optional
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
+from uuid import uuid4
 
 try:
     import numpy as np
@@ -90,16 +91,53 @@ except ImportError as exc:
 _SIZE_RE = re.compile(r"^\s*([0-9]*\.?[0-9]+)\s*([A-Za-z]+)\s*$")
 
 
+def atomic_write(path: Path, writer_func: Callable[[Path], None]) -> None:
+    """Write path atomically by writing to a temp file then replacing."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    try:
+        writer_func(tmp_path)
+        tmp_path.replace(path)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink()
+
+
+def write_csv_atomic(df: pd.DataFrame, path: Path, *, compression: Optional[str] = None) -> None:
+    """Write CSV deterministically and atomically."""
+
+    def _write(tmp_path: Path) -> None:
+        df.to_csv(
+            tmp_path,
+            index=False,
+            compression=compression,
+            encoding="utf-8",
+            lineterminator="\n",
+        )
+
+    atomic_write(path, _write)
+
+
+def write_json_atomic(path: Path, payload: Any, *, indent: int = 2, sort_keys: bool = True) -> None:
+    """Write JSON deterministically and atomically."""
+
+    def _write(tmp_path: Path) -> None:
+        with tmp_path.open("w", encoding="utf-8", newline="\n") as handle:
+            json.dump(payload, handle, indent=indent, sort_keys=sort_keys)
+
+    atomic_write(path, _write)
+
+
 def parse_filesize_to_bytes(s: object) -> Optional[int]:
     """Parse ExifTool human-readable FileSize to approximate bytes (decimal units).
-    
+
     INTEGRITY NOTE: This uses DECIMAL multipliers (MB = 10^6, not 2^20).
     Results are approximate and MUST NOT be used as forensic integrity anchors.
     For audit-grade integrity, use hash-first vault layer with exact byte counts.
-    
+
     Args:
         s: FileSize string from ExifTool (e.g., "10 MB", "2.5 GB", "100 bytes")
-    
+
     Returns:
         Approximate byte count (int) or None if parsing fails
     """
@@ -116,7 +154,7 @@ def parse_filesize_to_bytes(s: object) -> Optional[int]:
         if s.lower().endswith("bytes"):
             try:
                 return int(float(s.lower().replace("bytes", "").strip()))
-            except Exception:
+            except (TypeError, ValueError):
                 return None
         return None
 
@@ -147,24 +185,28 @@ def parse_filesize_to_bytes(s: object) -> Optional[int]:
     return int(round(num * mult))
 
 
-def split_file(path: str, chunk_bytes: int) -> tuple[list[str], int]:
+def split_file(path: Path, chunk_bytes: int) -> tuple[list[str], int]:
     """Split a file into .partNNN chunks.
-    
+
     Returns:
         (parts, original_size) for integrity verification during recombination.
     """
     parts: List[str] = []
-    original_size = os.path.getsize(path)
-    with open(path, "rb") as f:
+    original_size = path.stat().st_size
+    with path.open("rb") as f:
         i = 1
         while True:
             chunk = f.read(chunk_bytes)
             if not chunk:
                 break
-            part_path = f"{path}.part{i:03d}"
-            with open(part_path, "wb") as pf:
-                pf.write(chunk)
-            parts.append(part_path)
+            part_path = path.with_name(f"{path.name}.part{i:03d}")
+
+            def _write_chunk(tmp_path: Path, data: bytes = chunk) -> None:
+                with tmp_path.open("wb") as pf:
+                    pf.write(data)
+
+            atomic_write(part_path, _write_chunk)
+            parts.append(str(part_path))
             i += 1
     return parts, original_size
 
@@ -177,7 +219,7 @@ def build_reports(
     chunk_mb: int = 0,
 ) -> Dict[str, object]:
     """Build deterministic archive index, asset grouping, and hotspot reports.
-    
+
     INTEGRITY CONTRACT:
     - Deterministic path canonicalization (backslash→slash, collapse //, strip trailing /)
     - Fail-fast validation: required columns must be present
@@ -186,21 +228,23 @@ def build_reports(
     - Group by (origin_drive, basekey) to prevent cross-drive collisions
     - Explicit column ordering + UTF-8 + LF line endings for byte-level reproducibility
     - Floats rounded to 6 decimals in JSON for cross-version stability
-    
+
     Args:
         input_csv: Path to ExifTool CSV manifest
         outdir: Output directory for reports (created if missing)
         root_marker: Substring used to strip prefix from SourceFile (default: "All Archive/")
         by_drive: If True, emit per-drive partitions in outdir/by_origin_drive/
         chunk_mb: If >0, split large outputs into N MB chunks
-    
+
     Returns:
         Dict mapping output keys to file paths (+ split_manifest if chunking enabled)
-    
+
     Raises:
         SystemExit: If required columns are missing or root_marker validation fails
     """
-    df = pd.read_csv(input_csv, dtype=str, keep_default_na=False)
+    input_csv_path = Path(input_csv)
+    outdir_path = Path(outdir)
+    df = pd.read_csv(input_csv_path, dtype=str, keep_default_na=False)
 
     # Validate required columns (fail-fast)
     required_cols = {
@@ -226,9 +270,9 @@ def build_reports(
     sf = df["SourceFile"].astype(str).str.replace("\\", "/", regex=False)
     # Collapse repeated slashes and strip trailing slashes
     sf = sf.str.replace(r"/+", "/", regex=True).str.rstrip("/")
-    
+
     rel = sf.str.split(root_marker, n=1, expand=True)
-    
+
     # Determine if root_marker was found and what relpath should be
     if rel.shape[1] > 1:
         # root_marker found in at least some rows
@@ -239,17 +283,15 @@ def build_reports(
         # root_marker not found in any row - use full path as relpath
         relpath = sf.values
         marker_coverage = 0.0
-    
+
     relpath = pd.Series(relpath, name="relpath").astype(str)
-    
+
     # Validate root_marker coverage (warn if suspiciously low, but don't fail for test compatibility)
     # In production, paths without root_marker will use full SourceFile as relpath
     if marker_coverage > 0 and marker_coverage < 0.5:
         import sys
-        print(
-            f"Warning: root_marker '{root_marker}' found in only {marker_coverage:.1%} of rows.",
-            file=sys.stderr
-        )
+
+        print(f"Warning: root_marker '{root_marker}' found in only {marker_coverage:.1%} of rows.", file=sys.stderr)
 
     # Split relpath into (dir_rel, filename) while handling no-separator rows.
     split_path = relpath.str.rsplit("/", n=1, expand=True)
@@ -260,7 +302,7 @@ def build_reports(
         has_sep = relpath.str.contains("/", regex=False)
         dir_rel = split_path[0].where(has_sep, "").fillna("")
         filename = split_path[1].where(has_sep, split_path[0]).fillna("")
-    
+
     # CRITICAL: Derive origin_drive and partition from dir_rel (not relpath)
     # to avoid misclassifying drive-root files as partitions
     parts = dir_rel.str.split("/", n=2, expand=True)
@@ -268,7 +310,7 @@ def build_reports(
         origin_drive = parts[0].fillna("")
     else:
         origin_drive = pd.Series("", index=dir_rel.index)
-    
+
     if parts.shape[1] >= 2:
         partition = parts[1].fillna("")
     else:
@@ -315,13 +357,19 @@ def build_reports(
         default="Other",
     )
 
+    dir_split = dir_rel.str.split("/", n=1, expand=True)
+    if dir_split.shape[1] > 1:
+        dir_within_drive = dir_split[1].fillna("")
+    else:
+        dir_within_drive = pd.Series("", index=dir_rel.index, dtype=str)
+
     archive_index = pd.DataFrame(
         {
             "SourceFile": df["SourceFile"],
             "relpath": relpath,
             "origin_drive": origin_drive,
             "partition": partition,
-            "dir_within_drive": dir_rel.str.split("/", n=1, expand=True)[1] if dir_rel.str.contains("/").any() else pd.Series("", index=dir_rel.index),
+            "dir_within_drive": dir_within_drive,
             "FileName": df["FileName"],
             "ext": ext,
             "basename": basename,
@@ -436,7 +484,10 @@ def build_reports(
         archive_index.groupby(["origin_drive", "partition"], sort=True)
         .agg(
             files=("relpath", "size"),
-            approx_bytes_decimal=("filesize_approx_bytes_decimal", lambda s: pd.to_numeric(s, errors="coerce").fillna(0).sum()),
+            approx_bytes_decimal=(
+                "filesize_approx_bytes_decimal",
+                lambda s: pd.to_numeric(s, errors="coerce").fillna(0).sum(),
+            ),
             raw_files=("category", lambda s: int((s == "RAW").sum())),
             jpeg_files=("category", lambda s: int((s == "JPEG").sum())),
             video_files=("category", lambda s: int((s == "Video").sum())),
@@ -461,11 +512,11 @@ def build_reports(
     hotspots = hotspots.sort_values(["risk_score", "xmp_orphan_raw_jpeg", "sidecar_only", "files"], ascending=False)
 
     # Output paths
-    os.makedirs(outdir, exist_ok=True)
-    out_archive_index = os.path.join(outdir, "archive_index_normalized.csv.gz")
-    out_asset_groups = os.path.join(outdir, "asset_grouping_report.csv.gz")
-    out_hotspots = os.path.join(outdir, "anomaly_hotspots.csv")
-    out_summary = os.path.join(outdir, "summary.json")
+    outdir_path.mkdir(parents=True, exist_ok=True)
+    out_archive_index = outdir_path / "archive_index_normalized.csv.gz"
+    out_asset_groups = outdir_path / "asset_grouping_report.csv.gz"
+    out_hotspots = outdir_path / "anomaly_hotspots.csv"
+    out_summary = outdir_path / "summary.json"
 
     helper_cols = [
         "is_primary_raw",
@@ -478,7 +529,7 @@ def build_reports(
         "is_jpeg",
     ]
     archive_index_out = archive_index.drop(columns=helper_cols)
-    
+
     # Lock explicit column ordering for CSV stability
     archive_index_col_order = [
         "SourceFile",
@@ -506,7 +557,7 @@ def build_reports(
         "Flash",
     ]
     archive_index_out = archive_index_out[archive_index_col_order]
-    
+
     asset_col_order = [
         "origin_drive",
         "basekey",
@@ -533,9 +584,9 @@ def build_reports(
     ]
     asset = asset[asset_col_order]
 
-    archive_index_out.to_csv(out_archive_index, index=False, compression="gzip", encoding="utf-8", lineterminator="\n")
-    asset.to_csv(out_asset_groups, index=False, compression="gzip", encoding="utf-8", lineterminator="\n")
-    hotspots.to_csv(out_hotspots, index=False, encoding="utf-8", lineterminator="\n")
+    write_csv_atomic(archive_index_out, out_archive_index, compression="gzip")
+    write_csv_atomic(asset, out_asset_groups, compression="gzip")
+    write_csv_atomic(hotspots, out_hotspots)
 
     # Summary metrics
     video_rows = archive_index_out[archive_index_out["category"] == "Video"]
@@ -567,41 +618,51 @@ def build_reports(
             "hybrid": 2,
         },
     }
-    with open(out_summary, "w", encoding="utf-8") as f:
-        json.dump(summary, f, indent=2, sort_keys=True)
+    write_json_atomic(out_summary, summary, indent=2, sort_keys=True)
 
     outputs = {
-        "archive_index_gz": out_archive_index,
-        "asset_groups_gz": out_asset_groups,
-        "hotspots_csv": out_hotspots,
-        "summary_json": out_summary,
+        "archive_index_gz": str(out_archive_index),
+        "asset_groups_gz": str(out_asset_groups),
+        "hotspots_csv": str(out_hotspots),
+        "summary_json": str(out_summary),
     }
 
     # Optional: partitions by drive
     if by_drive:
-        out_by_drive = os.path.join(outdir, "by_origin_drive")
-        os.makedirs(out_by_drive, exist_ok=True)
+        out_by_drive = outdir_path / "by_origin_drive"
+        out_by_drive.mkdir(parents=True, exist_ok=True)
 
         drive_values = sorted(archive_index_out["origin_drive"].unique())
         for drv in drive_values:
             safe = re.sub(r"[^A-Za-z0-9._-]+", "_", drv)[:80]
-            ai_path = os.path.join(out_by_drive, f"archive_index__{safe}.csv.gz")
-            ag_path = os.path.join(out_by_drive, f"asset_groups__{safe}.csv.gz")
-            archive_index_out.loc[archive_index_out["origin_drive"] == drv].to_csv(ai_path, index=False, compression="gzip")
-            asset.loc[asset["origin_drive"] == drv].to_csv(ag_path, index=False, compression="gzip")
+            ai_path = out_by_drive / f"archive_index__{safe}.csv.gz"
+            ag_path = out_by_drive / f"asset_groups__{safe}.csv.gz"
+            write_csv_atomic(
+                archive_index_out.loc[archive_index_out["origin_drive"] == drv],
+                ai_path,
+                compression="gzip",
+            )
+            write_csv_atomic(
+                asset.loc[asset["origin_drive"] == drv],
+                ag_path,
+                compression="gzip",
+            )
 
-        outputs["by_drive_dir"] = out_by_drive
+        outputs["by_drive_dir"] = str(out_by_drive)
 
     # Optional: split outputs into chunks
     if chunk_mb and chunk_mb > 0:
         chunk_bytes = int(chunk_mb) * 1024 * 1024
         split_manifest: Dict[str, Dict[str, object]] = {}
         for k, p in outputs.items():
-            if not isinstance(p, str) or not os.path.isfile(p):
+            if not isinstance(p, str):
                 continue
-            if os.path.getsize(p) > chunk_bytes:
-                parts, orig_size = split_file(p, chunk_bytes)
-                split_manifest[p] = {
+            output_path = Path(p)
+            if not output_path.is_file():
+                continue
+            if output_path.stat().st_size > chunk_bytes:
+                parts, orig_size = split_file(output_path, chunk_bytes)
+                split_manifest[str(output_path)] = {
                     "parts": parts,
                     "original_size": orig_size,
                     "part_count": len(parts),
@@ -609,10 +670,9 @@ def build_reports(
         if split_manifest:
             outputs["split_manifest"] = split_manifest
             # Write split manifest to JSON for recombination verification
-            split_manifest_path = os.path.join(outdir, "split_manifest.json")
-            with open(split_manifest_path, "w", encoding="utf-8") as f:
-                json.dump(split_manifest, f, indent=2, sort_keys=True)
-            outputs["split_manifest_json"] = split_manifest_path
+            split_manifest_path = outdir_path / "split_manifest.json"
+            write_json_atomic(split_manifest_path, split_manifest, indent=2, sort_keys=True)
+            outputs["split_manifest_json"] = str(split_manifest_path)
 
     return outputs
 

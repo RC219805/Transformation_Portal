@@ -12,9 +12,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import pytest
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TOOL_PATH = PROJECT_ROOT / "tools" / "archive_manifest_reports.py"
 HAS_TOOL_DEPS = importlib.util.find_spec("numpy") is not None and importlib.util.find_spec("pandas") is not None
+
+pytestmark = [pytest.mark.unit, pytest.mark.regression]
 
 MANIFEST_COLUMNS = [
     "SourceFile",
@@ -139,6 +143,54 @@ class ArchiveManifestReportsCliTest(unittest.TestCase):
             self.assertEqual(root_asset["dir_rel"], "")
             self.assertEqual(root_asset["n_raw_files"], "1")
             self.assertEqual(root_asset["n_xmp"], "1")
+
+    def test_all_root_level_paths_do_not_raise_dir_split_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp = Path(tmpdir)
+            manifest_csv = temp / "manifest.csv"
+            outdir = temp / "out"
+
+            self._write_manifest(
+                manifest_csv,
+                [
+                    {
+                        "SourceFile": "IMG_1001.CR2",
+                        "FileName": "IMG_1001.CR2",
+                        "FileSize": "10 MB",
+                        "Model": "Canon",
+                        "DateTimeOriginal": "2024:01:01 10:00:00",
+                        "ImageSize": "100x100",
+                        "Quality": "RAW",
+                        "FocalLength": "",
+                        "ShutterSpeed": "",
+                        "Aperture": "",
+                        "ISO": "",
+                        "WhiteBalance": "",
+                        "Flash": "",
+                    },
+                    {
+                        "SourceFile": "IMG_1002.JPG",
+                        "FileName": "IMG_1002.JPG",
+                        "FileSize": "2 MB",
+                        "Model": "Canon",
+                        "DateTimeOriginal": "2024:01:01 10:01:00",
+                        "ImageSize": "100x100",
+                        "Quality": "",
+                        "FocalLength": "",
+                        "ShutterSpeed": "",
+                        "Aperture": "",
+                        "ISO": "",
+                        "WhiteBalance": "",
+                        "Flash": "",
+                    },
+                ],
+            )
+
+            result = self._run_cli(manifest_csv, outdir)
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+            archive_rows = self._read_csv_gz_rows(outdir / "archive_index_normalized.csv.gz")
+            self.assertTrue(all(row["dir_within_drive"] == "" for row in archive_rows))
 
     def test_outputs_are_deterministic_and_emit_expected_flags(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -284,9 +336,13 @@ class ArchiveManifestReportsCliTest(unittest.TestCase):
 
             asset_rows = self._read_csv_gz_rows(outdir / "asset_grouping_report.csv.gz")
             # Both should exist as separate asset groups
-            drive_a_asset = next((row for row in asset_rows if row["origin_drive"] == "DriveA" and row["basename"] == "IMG_0001"), None)
-            drive_b_asset = next((row for row in asset_rows if row["origin_drive"] == "DriveB" and row["basename"] == "IMG_0001"), None)
-            
+            drive_a_asset = next(
+                (row for row in asset_rows if row["origin_drive"] == "DriveA" and row["basename"] == "IMG_0001"), None
+            )
+            drive_b_asset = next(
+                (row for row in asset_rows if row["origin_drive"] == "DriveB" and row["basename"] == "IMG_0001"), None
+            )
+
             self.assertIsNotNone(drive_a_asset, "DriveA asset with basename IMG_0001 should exist")
             self.assertIsNotNone(drive_b_asset, "DriveB asset with basename IMG_0001 should exist")
             self.assertEqual(drive_a_asset["n_raw_files"], "1")

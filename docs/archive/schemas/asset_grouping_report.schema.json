@@ -1,8 +1,12 @@
 {
   "name": "asset_grouping_report",
   "version": "1.0",
-  "description": "One row per basekey (directory+basename) group. Used to detect orphans, collisions, and ingest-risk hotspots.",
+  "description": "One row per (origin_drive + basekey) group. Used to detect orphans, collisions, and ingest-risk hotspots.",
   "columns": [
+    {
+      "name": "origin_drive",
+      "type": "string"
+    },
     {
       "name": "basekey",
       "type": "string"
@@ -10,10 +14,6 @@
     {
       "name": "n_files",
       "type": "int"
-    },
-    {
-      "name": "origin_drive",
-      "type": "string"
     },
     {
       "name": "partition",
