@@ -29,7 +29,7 @@ def sanitize_filename(filename: str, replacement: str = "_") -> str:
     """
     Make a string safe for use as a filename.
 
-    Removes dangerous characters like / \ : * ? " < > |
+    Removes dangerous characters like / \\ : * ? " < > |
     """
     # 1. Strip path components (we only want the name)
     name = Path(filename).name
