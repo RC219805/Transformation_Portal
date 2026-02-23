@@ -441,6 +441,26 @@ def _read_csv_header_and_sample_rows(
     return actual_cols_ordered, sample
 
 
+def _format_json_error_path(path_parts: List[Any]) -> str:
+    """Format jsonschema error path parts as a stable JSONPath-like string."""
+    if not path_parts:
+        return "$"
+
+    tokens = ["$"]
+    for part in path_parts:
+        if isinstance(part, int):
+            tokens.append(f"[{part}]")
+            continue
+
+        key = str(part)
+        if re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", key):
+            tokens.append(f".{key}")
+        else:
+            tokens.append(f"[{key!r}]")
+
+    return "".join(tokens)
+
+
 def _validate_summary_contract(summary_obj: Dict[str, Any], *, schema_path: Path) -> None:
     jsonschema = _require_jsonschema()
     if not schema_path.exists():
@@ -450,7 +470,9 @@ def _validate_summary_contract(summary_obj: Dict[str, Any], *, schema_path: Path
     validator = jsonschema.Draft202012Validator(schema)
     errors = sorted(validator.iter_errors(summary_obj), key=lambda e: list(e.path))
     if errors:
-        raise SystemExit(f"Schema validation failed for {schema_path.name}: {errors[0].message}")
+        first_error = errors[0]
+        error_path = _format_json_error_path(list(first_error.path))
+        raise SystemExit(f"Schema validation failed for {schema_path.name} at {error_path}: {first_error.message}")
 
 
 def validate_outputs_against_schemas(
