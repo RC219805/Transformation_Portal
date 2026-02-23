@@ -99,7 +99,9 @@ sha256sum archive_index_normalized.csv.gz \
 Get-FileHash archive_index_normalized.csv.gz, asset_grouping_report.csv.gz, anomaly_hotspots.csv, summary.json -Algorithm SHA256 | Format-Table Hash, Path
 ```
 
+> Note: `.csv.gz` outputs are written deterministically with fixed gzip `mtime=0` and no embedded source filename.
+
 ## Notes
 
 - These reports are **no-hash** by design. Hash-first identity (SHA-256) belongs in the vault ingest layer.
-- The schemas for each output are in `docs/archive/schemas/`.
+- The schemas for each output are in `docs/archive/schemas/` (including `summary.schema.json`).

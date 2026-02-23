@@ -7,12 +7,12 @@
 # Context:
 #   These dependencies are required for tools/archive_manifest_reports.py
 #   to generate Phase 2 archive indexing and asset grouping reports.
-#   Note: --validate-schemas currently validates CSV column names against
-#   schema files; it does not perform full JSON Schema validation via jsonschema.
+#   Note: --validate-schemas performs strict schema checks (column contract + sampled
+#   row validation + summary JSON validation) using the jsonschema package.
 
 # These pins guarantee identical pandas groupby + sorting behavior
 # across Python 3.11–3.13 (critical for deterministic reports)
 numpy==2.2.6
 pandas==2.2.3
 
-jsonschema==4.23.0   # Reserved for potential future full JSON Schema validation.
+jsonschema==4.23.0

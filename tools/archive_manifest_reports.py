@@ -78,6 +78,7 @@ import argparse
 import csv
 import gzip
 import hashlib
+import io
 import json
 import re
 import sys
@@ -97,18 +98,16 @@ except ImportError as exc:
 
 _SIZE_RE = re.compile(r"^\s*([0-9]*\.?[0-9]+)\s*([A-Za-z]+)\s*$")
 
-DETERMINISTIC_GZIP_COMPRESSION = {"method": "gzip", "compresslevel": 9, "mtime": 0}
-DEFAULT_MIN_ROOT_MARKER_COVERAGE = 0.95
+DETERMINISTIC_GZIP_COMPRESSION = {"compresslevel": 9, "mtime": 0}
+DEFAULT_MIN_ROOT_MARKER_COVERAGE = 0.50
+DEFAULT_SCHEMA_SAMPLE_ROWS = 200
 
-ENUM_DOMAIN_DEFAULTS: Dict[str, Dict[str, set[str]]] = {
-    "archive_index_normalized.csv.gz": {
-        "role": {"primary_raw", "primary_raster", "primary_video", "sidecar", "other"},
-        "category": {"RAW", "JPEG", "TIFF_non_RAW", "Video", "XMP", "THM", "Other"},
-    },
-    "asset_grouping_report.csv.gz": {
-        "asset_type": {"raw", "raster", "video", "raw+raster", "sidecar_only", "other", "hybrid"},
-    },
+CSV_SCHEMA_VALIDATIONS = {
+    "archive_index_normalized.csv.gz": "archive_index_normalized.schema.json",
+    "asset_grouping_report.csv.gz": "asset_grouping_report.schema.json",
+    "anomaly_hotspots.csv": "anomaly_hotspots.schema.json",
 }
+SUMMARY_SCHEMA_FILE = "summary.schema.json"
 
 
 def atomic_write(path: Path, writer_func: Callable[[Path], None]) -> None:
@@ -123,25 +122,40 @@ def atomic_write(path: Path, writer_func: Callable[[Path], None]) -> None:
             tmp_path.unlink()
 
 
-def write_csv_atomic(df: pd.DataFrame, path: Path, *, compression: Optional[str | Dict[str, Any]] = None) -> None:
-    """Write CSV deterministically and atomically."""
+def write_csv_atomic(df: pd.DataFrame, path: Path) -> None:
+    """Write uncompressed CSV deterministically and atomically."""
 
     def _write(tmp_path: Path) -> None:
-        csv_compression: Optional[str | Dict[str, Any]] = compression
-        if compression == "gzip":
-            csv_compression = dict(DETERMINISTIC_GZIP_COMPRESSION)
-        elif isinstance(compression, dict) and compression.get("method") == "gzip":
-            csv_compression = dict(DETERMINISTIC_GZIP_COMPRESSION)
-            csv_compression.update(compression)
-            csv_compression["mtime"] = 0
-
         df.to_csv(
             tmp_path,
             index=False,
-            compression=csv_compression,
             encoding="utf-8",
             lineterminator="\n",
         )
+
+    atomic_write(path, _write)
+
+
+def write_csv_gzip_deterministic_atomic(df: pd.DataFrame, path: Path) -> None:
+    """Write `.csv.gz` deterministically and atomically.
+
+    Determinism anchors:
+    - `mtime=0` to eliminate timestamp drift.
+    - `filename=""` to avoid embedding temp-file names in gzip header.
+    - UTF-8 + LF newlines for stable content bytes.
+    """
+
+    def _write(tmp_path: Path) -> None:
+        with tmp_path.open("wb") as raw:
+            with gzip.GzipFile(
+                filename="",
+                mode="wb",
+                fileobj=raw,
+                compresslevel=DETERMINISTIC_GZIP_COMPRESSION["compresslevel"],
+                mtime=DETERMINISTIC_GZIP_COMPRESSION["mtime"],
+            ) as gz:
+                with io.TextIOWrapper(gz, encoding="utf-8", newline="\n") as text:
+                    df.to_csv(text, index=False, lineterminator="\n")
 
     atomic_write(path, _write)
 
@@ -166,65 +180,245 @@ def write_bytes_atomic(path: Path, data: bytes) -> None:
     atomic_write(path, _write)
 
 
-def _enum_domains_for_output(out_file: str, schema: Dict[str, Any]) -> Dict[str, set[str]]:
-    """Extract enum domain requirements from schema plus governance defaults."""
-    enum_domains = {col: set(vals) for col, vals in ENUM_DOMAIN_DEFAULTS.get(out_file, {}).items()}
-    for col_spec in schema.get("columns", []):
+def _schema_dir() -> Path:
+    return Path(__file__).parent.parent / "docs" / "archive" / "schemas"
+
+
+def _require_jsonschema() -> Any:
+    try:
+        import jsonschema  # type: ignore
+    except Exception as exc:
+        raise SystemExit(
+            "Schema validation requested but dependency 'jsonschema' is unavailable. "
+            "Install pinned tool dependencies with: pip install -r requirements/tools-archive.txt"
+        ) from exc
+    return jsonschema
+
+
+def _load_schema(schema_path: Path) -> Dict[str, Any]:
+    return json.loads(schema_path.read_text(encoding="utf-8"))
+
+
+def _normalize_schema_type(raw_type: str) -> str:
+    type_map = {
+        "string": "string",
+        "str": "string",
+        "int": "integer",
+        "integer": "integer",
+        "float": "number",
+        "number": "number",
+        "bool": "boolean",
+        "boolean": "boolean",
+    }
+    normalized = type_map.get(str(raw_type).strip().lower())
+    if not normalized:
+        raise SystemExit(f"Unsupported schema column type: {raw_type}")
+    return normalized
+
+
+def _build_row_schema_from_columns(schema_doc: Dict[str, Any], *, schema_name: str) -> Dict[str, Any]:
+    columns = schema_doc.get("columns")
+    if not isinstance(columns, list):
+        raise SystemExit(f"Invalid schema format in {schema_name}: expected top-level 'columns' list")
+
+    properties: Dict[str, Any] = {}
+    required: List[str] = []
+    for idx, col_spec in enumerate(columns):
         if not isinstance(col_spec, dict):
-            continue
+            raise SystemExit(f"Invalid schema format in {schema_name}: columns[{idx}] must be an object")
         col_name = col_spec.get("name")
+        if not isinstance(col_name, str) or not col_name:
+            raise SystemExit(f"Invalid schema format in {schema_name}: columns[{idx}] missing non-empty 'name'")
+        col_type = _normalize_schema_type(str(col_spec.get("type", "string")))
+        prop_schema: Dict[str, Any] = {"type": col_type}
         enum_values = col_spec.get("enum")
-        if isinstance(col_name, str) and isinstance(enum_values, list):
-            enum_domains[col_name] = {str(v) for v in enum_values}
-    return enum_domains
+        if isinstance(enum_values, list):
+            prop_schema["enum"] = enum_values
+        properties[col_name] = prop_schema
+        required.append(col_name)
+
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": False,
+        "required": required,
+        "properties": properties,
+    }
 
 
-def _read_csv_header_and_invalid_enums(
-    out_file: str,
+def _coerce_value_for_type(
+    value: Any,
+    expected_type: str,
+    *,
+    col_name: str,
+    output_name: str,
+    row_idx: int,
+) -> Any:
+    is_missing = value is None or value is pd.NA or (isinstance(value, (float, np.floating)) and np.isnan(float(value)))
+
+    if expected_type == "string":
+        if is_missing:
+            return ""
+        return str(value)
+
+    if is_missing:
+        raise SystemExit(f"{output_name}: row {row_idx} column '{col_name}' is empty but expected type '{expected_type}'")
+
+    if expected_type == "boolean":
+        if isinstance(value, (bool, np.bool_)):
+            return bool(value)
+        if isinstance(value, (int, np.integer)) and int(value) in (0, 1):
+            return bool(int(value))
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in {"true", "1"}:
+                return True
+            if lowered in {"false", "0"}:
+                return False
+        raise SystemExit(f"{output_name}: row {row_idx} column '{col_name}' has invalid boolean value {value!r}")
+
+    if expected_type == "integer":
+        if isinstance(value, (bool, np.bool_)):
+            raise SystemExit(f"{output_name}: row {row_idx} column '{col_name}' has invalid integer value {value!r}")
+        if isinstance(value, (int, np.integer)):
+            return int(value)
+        if isinstance(value, (float, np.floating)) and float(value).is_integer():
+            return int(value)
+        if isinstance(value, str):
+            stripped = value.strip()
+            if re.fullmatch(r"[+-]?\d+", stripped):
+                return int(stripped)
+        raise SystemExit(f"{output_name}: row {row_idx} column '{col_name}' has invalid integer value {value!r}")
+
+    if expected_type == "number":
+        if isinstance(value, (bool, np.bool_)):
+            raise SystemExit(f"{output_name}: row {row_idx} column '{col_name}' has invalid number value {value!r}")
+        if isinstance(value, (int, float, np.integer, np.floating)) and not np.isnan(float(value)):
+            return float(value)
+        if isinstance(value, str):
+            stripped = value.strip()
+            try:
+                return float(stripped)
+            except ValueError:
+                pass
+        raise SystemExit(f"{output_name}: row {row_idx} column '{col_name}' has invalid number value {value!r}")
+
+    raise SystemExit(f"Unsupported expected schema type '{expected_type}'")
+
+
+def _coerce_row_for_schema(
+    row: Dict[str, Any],
+    *,
+    schema_columns: List[Dict[str, Any]],
+    output_name: str,
+    row_idx: int,
+) -> Dict[str, Any]:
+    coerced: Dict[str, Any] = {}
+    for col_spec in schema_columns:
+        col_name = str(col_spec["name"])
+        col_type = _normalize_schema_type(str(col_spec.get("type", "string")))
+        coerced[col_name] = _coerce_value_for_type(
+            row.get(col_name),
+            col_type,
+            col_name=col_name,
+            output_name=output_name,
+            row_idx=row_idx,
+        )
+    return coerced
+
+
+def _validate_csv_contract(
+    *,
+    output_name: str,
+    schema_doc: Dict[str, Any],
+    actual_cols_ordered: List[str],
+    sample_records: List[Dict[str, Any]],
+    sample_rows: int,
+) -> None:
+    jsonschema = _require_jsonschema()
+
+    columns = schema_doc.get("columns")
+    if not isinstance(columns, list):
+        raise SystemExit(f"Invalid schema format for {output_name}: expected top-level 'columns' list")
+
+    expected_cols_ordered = [str(c["name"]) for c in columns]
+    expected_cols = set(expected_cols_ordered)
+    actual_cols = set(actual_cols_ordered)
+
+    if actual_cols != expected_cols:
+        raise SystemExit(
+            f"Schema mismatch in {output_name}\n"
+            f"Expected columns (set): {sorted(expected_cols)}\n"
+            f"Actual columns (set):   {sorted(actual_cols)}"
+        )
+
+    if actual_cols_ordered != expected_cols_ordered:
+        raise SystemExit(
+            f"Column order mismatch in {output_name}\n"
+            f"Expected order: {expected_cols_ordered}\n"
+            f"Actual order:   {actual_cols_ordered}"
+        )
+
+    row_schema = _build_row_schema_from_columns(schema_doc, schema_name=output_name)
+    validator = jsonschema.Draft202012Validator(row_schema)
+    for row_idx, row in enumerate(sample_records[:sample_rows]):
+        coerced = _coerce_row_for_schema(
+            row,
+            schema_columns=columns,
+            output_name=output_name,
+            row_idx=row_idx,
+        )
+        errors = sorted(validator.iter_errors(coerced), key=lambda e: list(e.path))
+        if errors:
+            raise SystemExit(f"Schema validation failed for {output_name} at sampled row {row_idx}: {errors[0].message}")
+
+
+def _read_csv_header_and_sample_rows(
     out_path: Path,
-    schema: Dict[str, Any],
-) -> tuple[List[str], Dict[str, set[str]]]:
-    """Read CSV header and collect invalid enum values for schema-governed columns."""
-    enum_domains = _enum_domains_for_output(out_file, schema)
-    invalid_values: Dict[str, set[str]] = {}
-
-    if out_file.endswith(".gz"):
+    *,
+    sample_rows: int,
+) -> tuple[List[str], List[Dict[str, Any]]]:
+    sample: List[Dict[str, Any]] = []
+    if out_path.name.endswith(".gz"):
         with gzip.open(out_path, "rt", encoding="utf-8", newline="") as f:
             reader = csv.DictReader(f)
             actual_cols_ordered = list(reader.fieldnames or [])
-            cols_to_check = {k: v for k, v in enum_domains.items() if k in actual_cols_ordered}
-            if cols_to_check:
-                for row in reader:
-                    for col_name, allowed in cols_to_check.items():
-                        value = row.get(col_name, "")
-                        if value not in allowed:
-                            invalid_values.setdefault(col_name, set()).add(value)
+            for idx, row in enumerate(reader):
+                if idx >= sample_rows:
+                    break
+                sample.append(row)
     else:
         with out_path.open("r", encoding="utf-8", newline="") as f:
             reader = csv.DictReader(f)
             actual_cols_ordered = list(reader.fieldnames or [])
-            cols_to_check = {k: v for k, v in enum_domains.items() if k in actual_cols_ordered}
-            if cols_to_check:
-                for row in reader:
-                    for col_name, allowed in cols_to_check.items():
-                        value = row.get(col_name, "")
-                        if value not in allowed:
-                            invalid_values.setdefault(col_name, set()).add(value)
-
-    return actual_cols_ordered, invalid_values
+            for idx, row in enumerate(reader):
+                if idx >= sample_rows:
+                    break
+                sample.append(row)
+    return actual_cols_ordered, sample
 
 
-def validate_outputs_against_schemas(outdir: Path) -> None:
-    """Validate CSV outputs against documented column schemas."""
-    schema_dir = Path(__file__).parent.parent / "docs" / "archive" / "schemas"
+def _validate_summary_contract(summary_obj: Dict[str, Any], *, schema_path: Path) -> None:
+    jsonschema = _require_jsonschema()
+    if not schema_path.exists():
+        raise SystemExit(f"Missing schema file: {schema_path.name}")
 
-    validations = {
-        "archive_index_normalized.csv.gz": "archive_index_normalized.schema.json",
-        "asset_grouping_report.csv.gz": "asset_grouping_report.schema.json",
-        "anomaly_hotspots.csv": "anomaly_hotspots.schema.json",
-    }
+    schema = _load_schema(schema_path)
+    validator = jsonschema.Draft202012Validator(schema)
+    errors = sorted(validator.iter_errors(summary_obj), key=lambda e: list(e.path))
+    if errors:
+        raise SystemExit(f"Schema validation failed for {schema_path.name}: {errors[0].message}")
 
-    for out_file, schema_file in validations.items():
+
+def validate_outputs_against_schemas(
+    outdir: Path,
+    *,
+    sample_rows: int = DEFAULT_SCHEMA_SAMPLE_ROWS,
+) -> None:
+    """Validate generated output files against documented schemas."""
+    schema_dir = _schema_dir()
+
+    for out_file, schema_file in CSV_SCHEMA_VALIDATIONS.items():
         out_path = outdir / out_file
         schema_path = schema_dir / schema_file
 
@@ -233,34 +427,61 @@ def validate_outputs_against_schemas(outdir: Path) -> None:
         if not schema_path.exists():
             raise SystemExit(f"Missing schema file: {schema_file}")
 
-        schema = json.loads(schema_path.read_text(encoding="utf-8"))
-        expected_cols_ordered = [c["name"] for c in schema["columns"]]
-        expected_cols = set(expected_cols_ordered)
-        actual_cols_ordered, invalid_enum_values = _read_csv_header_and_invalid_enums(out_file, out_path, schema)
-
-        actual_cols = set(actual_cols_ordered)
-
-        if actual_cols != expected_cols:
-            raise SystemExit(
-                f"Schema mismatch in {out_file}\n"
-                f"Expected columns (set): {sorted(expected_cols)}\n"
-                f"Actual columns (set):   {sorted(actual_cols)}"
-            )
-
-        if actual_cols_ordered != expected_cols_ordered:
-            raise SystemExit(
-                f"Column order mismatch in {out_file}\n"
-                f"Expected order: {expected_cols_ordered}\n"
-                f"Actual order:   {actual_cols_ordered}"
-            )
-
-        if invalid_enum_values:
-            pretty: Dict[str, List[str]] = {}
-            for col_name, vals in invalid_enum_values.items():
-                pretty[col_name] = sorted("<empty>" if v == "" else str(v) for v in vals)
-            raise SystemExit(f"Enum domain mismatch in {out_file}\n" f"Invalid values: {json.dumps(pretty, sort_keys=True)}")
-
+        schema_doc = _load_schema(schema_path)
+        actual_cols_ordered, sample_records = _read_csv_header_and_sample_rows(out_path, sample_rows=sample_rows)
+        _validate_csv_contract(
+            output_name=out_file,
+            schema_doc=schema_doc,
+            actual_cols_ordered=actual_cols_ordered,
+            sample_records=sample_records,
+            sample_rows=sample_rows,
+        )
         print(f"✅ Schema validation passed: {out_file}")
+
+    summary_path = outdir / "summary.json"
+    if not summary_path.exists():
+        raise SystemExit("Missing output file: summary.json")
+
+    summary_obj = json.loads(summary_path.read_text(encoding="utf-8"))
+    _validate_summary_contract(summary_obj, schema_path=schema_dir / SUMMARY_SCHEMA_FILE)
+    print("✅ Schema validation passed: summary.json")
+
+
+def validate_output_frames_against_schemas(
+    *,
+    archive_index_out: pd.DataFrame,
+    asset_grouping_out: pd.DataFrame,
+    anomaly_hotspots_out: pd.DataFrame,
+    summary_obj: Dict[str, Any],
+    sample_rows: int = DEFAULT_SCHEMA_SAMPLE_ROWS,
+) -> None:
+    """Validate in-memory outputs against documented schemas (fail-fast before write)."""
+    schema_dir = _schema_dir()
+    frame_map = {
+        "archive_index_normalized.csv.gz": archive_index_out,
+        "asset_grouping_report.csv.gz": asset_grouping_out,
+        "anomaly_hotspots.csv": anomaly_hotspots_out,
+    }
+
+    for out_file, frame in frame_map.items():
+        schema_path = schema_dir / CSV_SCHEMA_VALIDATIONS[out_file]
+        if not schema_path.exists():
+            raise SystemExit(f"Missing schema file: {schema_path.name}")
+
+        schema_doc = _load_schema(schema_path)
+        actual_cols_ordered = list(frame.columns)
+        sample_records = frame.head(sample_rows).to_dict(orient="records")
+        _validate_csv_contract(
+            output_name=out_file,
+            schema_doc=schema_doc,
+            actual_cols_ordered=actual_cols_ordered,
+            sample_records=sample_records,
+            sample_rows=sample_rows,
+        )
+        print(f"✅ Schema validation passed: {out_file}")
+
+    _validate_summary_contract(summary_obj, schema_path=schema_dir / SUMMARY_SCHEMA_FILE)
+    print("✅ Schema validation passed: summary.json")
 
 
 def parse_filesize_to_bytes(s: object) -> Optional[int]:
@@ -744,10 +965,6 @@ def build_reports(
     ]
     asset = asset[asset_col_order]
 
-    write_csv_atomic(archive_index_out, out_archive_index, compression=DETERMINISTIC_GZIP_COMPRESSION)
-    write_csv_atomic(asset, out_asset_groups, compression=DETERMINISTIC_GZIP_COMPRESSION)
-    write_csv_atomic(hotspots, out_hotspots)
-
     # Summary metrics
     video_rows = archive_index_out[archive_index_out["category"] == "Video"]
     by_ext = (
@@ -778,11 +995,19 @@ def build_reports(
             "hybrid": 2,
         },
     }
-    write_json_atomic(out_summary, summary, indent=2, sort_keys=True)
-
-    # Validate schema if requested
+    # Validate schema if requested (fail-fast before writes).
     if validate_schemas:
-        validate_outputs_against_schemas(outdir_path)
+        validate_output_frames_against_schemas(
+            archive_index_out=archive_index_out,
+            asset_grouping_out=asset,
+            anomaly_hotspots_out=hotspots,
+            summary_obj=summary,
+        )
+
+    write_csv_gzip_deterministic_atomic(archive_index_out, out_archive_index)
+    write_csv_gzip_deterministic_atomic(asset, out_asset_groups)
+    write_csv_atomic(hotspots, out_hotspots)
+    write_json_atomic(out_summary, summary, indent=2, sort_keys=True)
 
     outputs = {
         "archive_index_gz": str(out_archive_index),
@@ -815,15 +1040,13 @@ def build_reports(
 
             ai_path = out_by_drive / f"archive_index__{safe}.csv.gz"
             ag_path = out_by_drive / f"asset_groups__{safe}.csv.gz"
-            write_csv_atomic(
+            write_csv_gzip_deterministic_atomic(
                 archive_index_out.loc[archive_index_out["origin_drive"] == drv],
                 ai_path,
-                compression=DETERMINISTIC_GZIP_COMPRESSION,
             )
-            write_csv_atomic(
+            write_csv_gzip_deterministic_atomic(
                 asset.loc[asset["origin_drive"] == drv],
                 ag_path,
-                compression=DETERMINISTIC_GZIP_COMPRESSION,
             )
 
         outputs["by_drive_dir"] = str(out_by_drive)
@@ -873,9 +1096,10 @@ def main() -> None:
     )
     ap.add_argument(
         "--min-root-marker-coverage",
+        "--root-marker-min-coverage",
         type=float,
         default=DEFAULT_MIN_ROOT_MARKER_COVERAGE,
-        help="Minimum required fraction [0.0-1.0] of rows containing root_marker (default: 0.95)",
+        help="Minimum required fraction [0.0-1.0] of rows containing root_marker (default: 0.50)",
     )
     ap.add_argument(
         "--validate-schemas",

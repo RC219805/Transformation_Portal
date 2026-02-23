@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "archive_manifest_summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "rows_total_files",
+    "rows_total_asset_groups",
+    "orphan_xmp_groups_raw_jpeg",
+    "orphan_xmp_groups_no_image_any_raster",
+    "sidecar_only_groups",
+    "asset_type_counts",
+    "video_datetimeoriginal_missing_rate",
+    "video_datetimeoriginal_missing_by_ext",
+    "risk_model_version",
+    "risk_weights"
+  ],
+  "properties": {
+    "rows_total_files": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "rows_total_asset_groups": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "orphan_xmp_groups_raw_jpeg": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "orphan_xmp_groups_no_image_any_raster": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "sidecar_only_groups": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "asset_type_counts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "video_datetimeoriginal_missing_rate": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "video_datetimeoriginal_missing_by_ext": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ext",
+          "total",
+          "missing",
+          "missing_rate"
+        ],
+        "properties": {
+          "ext": {
+            "type": "string"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "missing": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "missing_rate": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      }
+    },
+    "risk_model_version": {
+      "type": "string"
+    },
+    "risk_weights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "xmp_orphan_raw_jpeg",
+        "sidecar_only",
+        "imovie_container",
+        "still_missing_datetime",
+        "video_still_collision",
+        "hybrid"
+      ],
+      "properties": {
+        "xmp_orphan_raw_jpeg": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sidecar_only": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "imovie_container": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "still_missing_datetime": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "video_still_collision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "hybrid": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

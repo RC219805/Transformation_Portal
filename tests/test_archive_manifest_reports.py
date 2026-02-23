@@ -271,11 +271,13 @@ class ArchiveManifestReportsCliTest(unittest.TestCase):
             archive_b = (out_b / "archive_index_normalized.csv.gz").read_bytes()
             self.assertEqual(archive_a, archive_b)
             self.assertEqual(int.from_bytes(archive_a[4:8], "little"), 0)
+            self.assertEqual(archive_a[3] & 0x08, 0)  # FNAME flag must be unset.
 
             asset_a = (out_a / "asset_grouping_report.csv.gz").read_bytes()
             asset_b = (out_b / "asset_grouping_report.csv.gz").read_bytes()
             self.assertEqual(asset_a, asset_b)
             self.assertEqual(int.from_bytes(asset_a[4:8], "little"), 0)
+            self.assertEqual(asset_a[3] & 0x08, 0)  # FNAME flag must be unset.
 
             hotspots_a = (out_a / "anomaly_hotspots.csv").read_text(encoding="utf-8")
             hotspots_b = (out_b / "anomaly_hotspots.csv").read_text(encoding="utf-8")
@@ -657,8 +659,52 @@ class ArchiveManifestReportsCliTest(unittest.TestCase):
                 tool_module.validate_outputs_against_schemas(outdir)
 
             msg = str(ctx.exception)
-            self.assertIn("Enum domain mismatch in asset_grouping_report.csv.gz", msg)
-            self.assertIn("asset_type", msg)
+            self.assertIn("Schema validation failed for asset_grouping_report.csv.gz", msg)
+            self.assertIn("invalid_asset_type", msg)
+
+    def test_validate_schemas_rejects_invalid_summary_payload(self) -> None:
+        """Verify summary.json is validated against schema when schema checks run."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp = Path(tmpdir)
+            manifest_csv = temp / "manifest.csv"
+            outdir = temp / "out"
+
+            self._write_manifest(
+                manifest_csv,
+                [
+                    {
+                        "SourceFile": "/vault/All Archive/DriveA/IMG_0001.CR2",
+                        "FileName": "IMG_0001.CR2",
+                        "FileSize": "10 MB",
+                        "Model": "Canon",
+                        "DateTimeOriginal": "2024:01:01 10:00:00",
+                        "ImageSize": "100x100",
+                        "Quality": "RAW",
+                        "FocalLength": "",
+                        "ShutterSpeed": "",
+                        "Aperture": "",
+                        "ISO": "",
+                        "WhiteBalance": "",
+                        "Flash": "",
+                    }
+                ],
+            )
+
+            result = self._run_cli(manifest_csv, outdir)
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+            summary_path = outdir / "summary.json"
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            summary["risk_weights"] = "not-an-object"
+            summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")
+
+            tool_module = self._load_tool_module()
+            with self.assertRaises(SystemExit) as ctx:
+                tool_module.validate_outputs_against_schemas(outdir)
+
+            msg = str(ctx.exception)
+            self.assertIn("Schema validation failed for summary.schema.json", msg)
+            self.assertIn("risk_weights", msg)
 
     def test_unc_path_normalization_produces_stable_origin_drive(self) -> None:
         """Verify that Windows UNC paths (\\server\share\...) get normalized consistently.
