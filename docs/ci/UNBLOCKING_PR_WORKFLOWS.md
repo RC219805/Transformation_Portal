@@ -147,18 +147,35 @@ GitHub requires maintainer approval before running workflows from:
 
 ## This Repository's Required Checks
 
-The following checks are **required** for merging to `main`:
+> **Authoritative Source**: The definitive list of required checks is defined in
+> **Settings → Branches → Branch protection rules for `main`**.
+>
+> This documentation is explanatory, not declarative. Branch protection is the
+> single source of truth for merge requirements.
 
-| Check Name | Workflow File | Purpose |
-|------------|---------------|---------|
-| `CI Gate` | `build.yml` | Main CI gate (lint, test, manifest) |
-| `Analyze (python)` | `security-unified.yml` | CodeQL Python analysis |
-| `Analyze (actions)` | `security-unified.yml` | CodeQL Actions analysis |
+### How to Find Current Required Checks
 
-To verify these are correctly configured:
-1. Open any passing PR
-2. Note the exact check names in the Checks section
-3. Ensure branch protection lists these exact names
+1. Go to **Settings → Branches → Edit rule for `main`**
+2. Look under **Require status checks to pass before merging**
+3. The checked items are the current required checks
+
+### How to Verify Checks Are Working
+
+1. Open any passing PR targeting `main`
+2. Look at the **Checks** tab
+3. Required checks will show with a ✓ when passing
+4. If a required check shows "Expected", see Pattern A above
+
+### Common Check Categories
+
+| Category | Purpose | Workflow Location |
+|----------|---------|-------------------|
+| CI Gate | Lint, test, manifest validation | `build.yml` |
+| Security Analysis | CodeQL scanning | `security-unified.yml`, `codeql.yml` |
+| Quality Gates | Code quality enforcement | Various `*-gate.yml` files |
+
+> **Note**: Specific check names may change as workflows evolve. Always verify
+> against branch protection settings rather than relying on documentation.
 
 ---
 
