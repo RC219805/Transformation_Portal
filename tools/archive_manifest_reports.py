@@ -5,6 +5,39 @@ archive_manifest_reports.py
 Deterministic, manifest-first reporting tool for the Patrick W. Price "Archive_Manifest"
 (ExifTool CSV) to support Phase 2: Ground Truth Vault + Spatial AI substrate.
 
+INTEGRITY CONTRACT ANCHORS:
+  1. Path Canonicalization:
+     - Backslash → forward slash normalization
+     - Repeated slash collapse (//+ → /)
+     - Trailing slash removal
+     - root_marker split with fallback to full path
+     - CRITICAL: origin_drive and partition derived from dir_rel (not relpath)
+       to prevent drive-root file misclassification
+
+  2. Grouping Determinism:
+     - Explicit sort_values(["origin_drive", "basekey", "relpath"]) before groupby
+     - Grouping by (origin_drive, basekey) to prevent cross-drive collisions
+     - Stable pandas groupby(sort=True) for reproducibility
+
+  3. Output Stability:
+     - Explicit column ordering locked in code
+     - encoding="utf-8", lineterminator="\n" for cross-platform byte-level reproducibility
+     - Floats rounded to 6 decimals in JSON summary
+     - Helper columns (is_*) dropped before CSV write
+
+  4. Semantic Integrity Guards:
+     - Required column validation (fail-fast on missing columns)
+     - root_marker coverage warning (suspicious if <50%)
+     - filesize_approx_bytes_decimal: DIAGNOSTIC ONLY (decimal units, not forensic anchor)
+
+  5. Chunk Splitting:
+     - split_manifest.json emitted with part order + original_size for recombination verification
+     - Atomic file write pattern (temp → rename)
+
+  6. Risk Scoring:
+     - risk_model_version and risk_weights documented in summary.json
+     - Future weight changes must bump version
+
 Inputs:
   - ExifTool CSV with at least these columns:
       SourceFile, FileName, FileSize, Model, DateTimeOriginal, ImageSize, Quality,
@@ -14,11 +47,11 @@ Outputs (in --outdir):
   - archive_index_normalized.csv.gz
       Per-file normalized index (path normalization, role/category tagging, approx bytes).
   - asset_grouping_report.csv.gz
-      One row per (directory + basename) group ("basekey") with counts & anomaly flags.
+      One row per (origin_drive + directory + basename) group with counts & anomaly flags.
   - anomaly_hotspots.csv
       Partition-level aggregation for triage (by origin_drive + partition).
   - summary.json
-      High-signal rollups.
+      High-signal rollups + risk model version + weights.
 
 Optional:
   - --by-drive : emit per-origin-drive partitions under outdir/by_origin_drive/
@@ -31,6 +64,7 @@ Determinism properties:
   - Stable path canonicalization
   - Stable groupby ordering (sort=True)
   - Stable column ordering for outputs
+  - Cross-platform byte-level reproducibility (UTF-8 + LF line endings)
 
 NOTE: This tool is intentionally "no hashes" because it operates on the ExifTool manifest only.
       Integrity hashing (SHA-256) should be implemented as a separate vault ingest step.
@@ -57,7 +91,18 @@ _SIZE_RE = re.compile(r"^\s*([0-9]*\.?[0-9]+)\s*([A-Za-z]+)\s*$")
 
 
 def parse_filesize_to_bytes(s: object) -> Optional[int]:
-    """Parse ExifTool human-readable FileSize to approximate bytes (decimal units)."""
+    """Parse ExifTool human-readable FileSize to approximate bytes (decimal units).
+    
+    INTEGRITY NOTE: This uses DECIMAL multipliers (MB = 10^6, not 2^20).
+    Results are approximate and MUST NOT be used as forensic integrity anchors.
+    For audit-grade integrity, use hash-first vault layer with exact byte counts.
+    
+    Args:
+        s: FileSize string from ExifTool (e.g., "10 MB", "2.5 GB", "100 bytes")
+    
+    Returns:
+        Approximate byte count (int) or None if parsing fails
+    """
     if s is None:
         return None
     if isinstance(s, float) and np.isnan(s):
@@ -131,6 +176,30 @@ def build_reports(
     by_drive: bool = True,
     chunk_mb: int = 0,
 ) -> Dict[str, object]:
+    """Build deterministic archive index, asset grouping, and hotspot reports.
+    
+    INTEGRITY CONTRACT:
+    - Deterministic path canonicalization (backslash→slash, collapse //, strip trailing /)
+    - Fail-fast validation: required columns must be present
+    - origin_drive and partition derived from dir_rel (not relpath) to prevent misclassification
+    - Explicit sort before groupby for reproducible ordering
+    - Group by (origin_drive, basekey) to prevent cross-drive collisions
+    - Explicit column ordering + UTF-8 + LF line endings for byte-level reproducibility
+    - Floats rounded to 6 decimals in JSON for cross-version stability
+    
+    Args:
+        input_csv: Path to ExifTool CSV manifest
+        outdir: Output directory for reports (created if missing)
+        root_marker: Substring used to strip prefix from SourceFile (default: "All Archive/")
+        by_drive: If True, emit per-drive partitions in outdir/by_origin_drive/
+        chunk_mb: If >0, split large outputs into N MB chunks
+    
+    Returns:
+        Dict mapping output keys to file paths (+ split_manifest if chunking enabled)
+    
+    Raises:
+        SystemExit: If required columns are missing or root_marker validation fails
+    """
     df = pd.read_csv(input_csv, dtype=str, keep_default_na=False)
 
     # Validate required columns (fail-fast)
