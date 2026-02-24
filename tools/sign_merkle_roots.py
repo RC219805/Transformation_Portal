@@ -15,6 +15,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 
 EXIT_SIGN_FAILURE = 4
+EXPECTED_ROOTS_FILENAME = "merkle_roots.json"
 
 
 def atomic_write(path: Path, data: bytes) -> None:
@@ -52,6 +53,9 @@ def main() -> int:
     out_path = Path(args.out)
 
     try:
+        if roots_path.name != EXPECTED_ROOTS_FILENAME:
+            raise ValueError(f"--roots must reference {EXPECTED_ROOTS_FILENAME}")
+
         artifact_bytes = roots_path.read_bytes()
         artifact_digest = hashlib.sha256(artifact_bytes).hexdigest()
 
@@ -77,7 +81,7 @@ def main() -> int:
 
         print(f"Signature written to {out_path}")
         return 0
-    except (OSError, TypeError, ValueError, UnsupportedAlgorithm) as exc:  # pragma: no cover - CLI failure path
+    except (OSError, TypeError, ValueError, UnsupportedAlgorithm) as exc:
         print(f"Signing failed: {exc}")
         return EXIT_SIGN_FAILURE
 

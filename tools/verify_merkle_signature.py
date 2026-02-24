@@ -11,14 +11,25 @@ import json
 import re
 from pathlib import Path
 
-from cryptography.exceptions import InvalidSignature, UnsupportedAlgorithm
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-from cryptography.hazmat.primitives.serialization import load_pem_public_key
-
 EXIT_INVALID_SIG = 5
 EXIT_ARTIFACT_MISMATCH = 6
 EXIT_MALFORMED = 7
+EXPECTED_ROOTS_FILENAME = "merkle_roots.json"
+CRYPTOGRAPHY_INSTALL_HINT = (
+    "Install dependencies with `pip install -r requirements/tools-archive.txt` "
+    "or `pip install transformation-portal[archive-signing]`."
+)
 SHA256_HEX_RE = re.compile(r"^[a-f0-9]{64}$")
+
+
+def _load_crypto_primitives() -> tuple[object, object, object, object] | None:
+    try:
+        from cryptography.exceptions import InvalidSignature, UnsupportedAlgorithm
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+        from cryptography.hazmat.primitives.serialization import load_pem_public_key
+    except ImportError:
+        return None
+    return InvalidSignature, UnsupportedAlgorithm, Ed25519PublicKey, load_pem_public_key
 
 
 def main() -> int:
@@ -44,6 +55,10 @@ def main() -> int:
     sig_path = Path(args.signature)
     pub_path = Path(args.public_key)
 
+    if roots_path.name != EXPECTED_ROOTS_FILENAME:
+        print(f"Artifact mismatch: --roots must reference {EXPECTED_ROOTS_FILENAME}")
+        return EXIT_ARTIFACT_MISMATCH
+
     try:
         envelope = json.loads(sig_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -60,12 +75,21 @@ def main() -> int:
         print("Malformed signature file")
         return EXIT_MALFORMED
 
+    crypto_primitives = _load_crypto_primitives()
+    if crypto_primitives is None:
+        print(
+            "Verification failed: missing optional dependency 'cryptography'.",
+            CRYPTOGRAPHY_INSTALL_HINT,
+        )
+        return EXIT_INVALID_SIG
+    InvalidSignature, UnsupportedAlgorithm, Ed25519PublicKey, load_pem_public_key = crypto_primitives
+
     try:
         if envelope["signature_algorithm"] != "ed25519":
             print("Unsupported signature algorithm")
             return EXIT_INVALID_SIG
 
-        if envelope["signed_artifact"] != roots_path.name:
+        if envelope["signed_artifact"] != EXPECTED_ROOTS_FILENAME:
             print("Signed artifact name mismatch")
             return EXIT_ARTIFACT_MISMATCH
 
@@ -94,7 +118,10 @@ def main() -> int:
     except (KeyError, TypeError, binascii.Error) as exc:
         print(f"Malformed signature file: {exc}")
         return EXIT_MALFORMED
-    except (OSError, ValueError, InvalidSignature, UnsupportedAlgorithm) as exc:
+    except OSError as exc:
+        print(f"Verification failed: {exc}")
+        return EXIT_ARTIFACT_MISMATCH
+    except (ValueError, InvalidSignature, UnsupportedAlgorithm) as exc:
         print(f"Verification failed: {exc}")
         return EXIT_INVALID_SIG
 

@@ -135,6 +135,26 @@ def _verify(roots_path: Path, signature_path: Path, public_key_path: Path) -> su
     )
 
 
+def _verify_without_site_packages(
+    roots_path: Path,
+    signature_path: Path,
+    public_key_path: Path,
+) -> subprocess.CompletedProcess[str]:
+    return _run_cli(
+        [
+            sys.executable,
+            "-S",
+            str(VERIFY_TOOL),
+            "--roots",
+            str(roots_path),
+            "--signature",
+            str(signature_path),
+            "--public-key",
+            str(public_key_path),
+        ]
+    )
+
+
 def test_sign_and_verify_roundtrip_success(tmp_path: Path) -> None:
     roots_path = tmp_path / "merkle_roots.json"
     signature_path = tmp_path / "merkle_roots.sig.json"
@@ -185,6 +205,17 @@ def test_sign_fails_with_missing_roots_file(tmp_path: Path) -> None:
     sign_result = _sign(missing_roots_path, private_key_path, signature_path)
     assert sign_result.returncode == 4
     assert "Signing failed" in sign_result.stdout
+
+
+def test_sign_fails_when_roots_filename_is_not_merkle_roots_json(tmp_path: Path) -> None:
+    roots_path = tmp_path / "other_roots.json"
+    signature_path = tmp_path / "merkle_roots.sig.json"
+    _write_roots(roots_path)
+    private_key_path, _ = _write_keypair(tmp_path, "primary")
+
+    sign_result = _sign(roots_path, private_key_path, signature_path)
+    assert sign_result.returncode == 4
+    assert "--roots must reference merkle_roots.json" in sign_result.stdout
 
 
 def test_sign_fails_with_missing_private_key_file(tmp_path: Path) -> None:
@@ -246,7 +277,22 @@ def test_verify_fails_with_missing_roots_file(tmp_path: Path) -> None:
     assert sign_result.returncode == 0, sign_result.stderr
 
     verify_result = _verify(roots_path, signature_path, public_key_path)
-    assert verify_result.returncode == 5
+    assert verify_result.returncode == 6
+    assert "Verification failed" in verify_result.stdout
+
+
+def test_verify_fails_with_missing_public_key_file(tmp_path: Path) -> None:
+    roots_path = tmp_path / "merkle_roots.json"
+    signature_path = tmp_path / "merkle_roots.sig.json"
+    missing_public_key_path = tmp_path / "missing_public_key.pem"
+    _write_roots(roots_path)
+    private_key_path, _ = _write_keypair(tmp_path, "primary")
+
+    sign_result = _sign(roots_path, private_key_path, signature_path)
+    assert sign_result.returncode == 0, sign_result.stderr
+
+    verify_result = _verify(roots_path, signature_path, missing_public_key_path)
+    assert verify_result.returncode == 6
     assert "Verification failed" in verify_result.stdout
 
 
@@ -350,7 +396,7 @@ def test_verify_fails_with_invalid_digest_format(tmp_path: Path) -> None:
     assert "signed_artifact_sha256" in verify_result.stdout
 
 
-def test_verify_fails_when_artifact_name_binding_mismatches(tmp_path: Path) -> None:
+def test_verify_fails_when_roots_filename_is_not_merkle_roots_json(tmp_path: Path) -> None:
     roots_path = tmp_path / "merkle_roots.json"
     alternate_roots_path = tmp_path / "other_roots.json"
     signature_path = tmp_path / "merkle_roots.sig.json"
@@ -363,4 +409,37 @@ def test_verify_fails_when_artifact_name_binding_mismatches(tmp_path: Path) -> N
     alternate_roots_path.write_bytes(roots_path.read_bytes())
     verify_result = _verify(alternate_roots_path, signature_path, public_key_path)
     assert verify_result.returncode == 6
+    assert "--roots must reference merkle_roots.json" in verify_result.stdout
+
+
+def test_verify_fails_when_artifact_name_binding_mismatches(tmp_path: Path) -> None:
+    roots_path = tmp_path / "merkle_roots.json"
+    signature_path = tmp_path / "merkle_roots.sig.json"
+    _write_roots(roots_path)
+    private_key_path, public_key_path = _write_keypair(tmp_path, "primary")
+
+    sign_result = _sign(roots_path, private_key_path, signature_path)
+    assert sign_result.returncode == 0, sign_result.stderr
+
+    envelope = _load_envelope(signature_path)
+    envelope["signed_artifact"] = "other_roots.json"
+    signature_path.write_text(json.dumps(envelope, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    verify_result = _verify(roots_path, signature_path, public_key_path)
+    assert verify_result.returncode == 6
     assert "Signed artifact name mismatch" in verify_result.stdout
+
+
+def test_verify_fails_with_missing_cryptography_dependency(tmp_path: Path) -> None:
+    roots_path = tmp_path / "merkle_roots.json"
+    signature_path = tmp_path / "merkle_roots.sig.json"
+    _write_roots(roots_path)
+    private_key_path, public_key_path = _write_keypair(tmp_path, "primary")
+
+    sign_result = _sign(roots_path, private_key_path, signature_path)
+    assert sign_result.returncode == 0, sign_result.stderr
+
+    verify_result = _verify_without_site_packages(roots_path, signature_path, public_key_path)
+    assert verify_result.returncode == 5
+    assert "missing optional dependency 'cryptography'" in verify_result.stdout
+    assert "requirements/tools-archive.txt" in verify_result.stdout
