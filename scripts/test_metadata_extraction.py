@@ -387,7 +387,8 @@ def run_extract_batch(
     total_start = time.time()
 
     for image_path in images:
-        relative_path = str(image_path.relative_to(input_dir))
+        relative_path = image_path.relative_to(input_dir)
+        relative_path_str = str(relative_path)
 
         try:
             start_time = time.time()
@@ -400,8 +401,7 @@ def run_extract_batch(
             )
 
             # Create output path preserving directory structure
-            rel_path = image_path.relative_to(input_dir)
-            output_subdir = output_dir / rel_path.parent
+            output_subdir = output_dir / relative_path.parent
             output_subdir.mkdir(parents=True, exist_ok=True)
             out_path = output_subdir / f"{image_path.stem}_provenance.json"
 
@@ -409,12 +409,12 @@ def run_extract_batch(
             write_sidecar(sidecar, out_path, fsync=fsync)
 
             elapsed = time.time() - start_time
-            result.results[relative_path] = (True, str(out_path), elapsed)
+            result.results[relative_path_str] = (True, str(out_path), elapsed)
             result.processed += 1
             result.successful += 1
 
         except ExiftoolNotFoundError as e:
-            result.results[relative_path] = (False, str(e), 0)
+            result.results[relative_path_str] = (False, str(e), 0)
             result.processed += 1
             result.failed += 1
             result.failure_types[EXIT_OTHER_FAILURE] = result.failure_types.get(EXIT_OTHER_FAILURE, 0) + 1
@@ -422,7 +422,7 @@ def run_extract_batch(
                 break
 
         except Exception as e:
-            result.results[relative_path] = (False, str(e), 0)
+            result.results[relative_path_str] = (False, str(e), 0)
             result.processed += 1
             result.failed += 1
             result.failure_types[EXIT_OTHER_FAILURE] = result.failure_types.get(EXIT_OTHER_FAILURE, 0) + 1
@@ -733,7 +733,8 @@ def render_validate(result: ValidateResult, verbose: bool = False) -> None:
         print(f"   Run ID:         {data.get('run_id')}")
         fi = data.get("file_integrity", {})
         sha256 = fi.get("sha256", "N/A")
-        print(f"   File SHA256:    {sha256[:16]}..." if len(sha256) > 16 else f"   File SHA256:    {sha256}")
+        sha256_display = f"{sha256[:16]}..." if len(sha256) > 16 else sha256
+        print(f"   File SHA256:    {sha256_display}")
         print(f"   File size:      {format_size(fi.get('size_bytes', 0))}")
 
 
