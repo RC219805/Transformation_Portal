@@ -303,7 +303,7 @@ def cmd_extract(args: argparse.Namespace) -> int:
         if exif.datetime_original:
             print(f"   Date taken:        {exif.datetime_original}")
         if exif.gps_latitude and exif.gps_longitude:
-            print(f"   GPS:               {exif.gps_latitude:.6f}, {exif.gps_longitude:.6f}")
+            print("   GPS present:       yes")
         print(f"   Total EXIF tags:   {len(exif.all_tags)}")
         print()
         print("🔧 Toolchain:")
