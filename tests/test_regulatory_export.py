@@ -16,7 +16,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TOOLS_DIR = PROJECT_ROOT / "tools"
 GENERATE_TOOL = TOOLS_DIR / "generate_evidence_bundle_manifest.py"
 COMPUTE_ROOT_TOOL = TOOLS_DIR / "compute_bundle_root.py"
-REGULATORY_EXPORT_TOOL = TOOLS_DIR / "regulatory_export.py"
+REG_EXPORT_TOOL = TOOLS_DIR / "regulatory_export.py"
 
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
@@ -290,7 +290,7 @@ def _run_regulatory_export(
 ) -> subprocess.CompletedProcess[str]:
     command = [
         sys.executable,
-        str(REGULATORY_EXPORT_TOOL),
+        str(REG_EXPORT_TOOL),
         "--bundle-manifest",
         str(manifest_path),
         "--risk-metadata",
