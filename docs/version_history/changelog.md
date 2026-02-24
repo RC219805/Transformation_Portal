@@ -7,7 +7,7 @@
 **Runtime Impact:** None
 **Integrity Contract Change:** None
 
-- Added deterministic Regulatory Export Mode as the compliance-layer capstone on top of frozen Phase 3.4.1 integrity contracts.
+- Documented and named the existing deterministic Regulatory Export Mode as the compliance-layer capstone on top of frozen Phase 3.4.1 integrity contracts (no runtime changes).
 - Added formal release notes: `docs/version_history/RELEASE_NOTES_v3.5.0.md`.
 - Added regulator overview and Annex-level traceability matrix:
   - `docs/compliance/REGULATOR_COMPLIANCE_OVERVIEW_ART53.md`

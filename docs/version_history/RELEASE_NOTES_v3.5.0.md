@@ -55,7 +55,7 @@ This release completes the transformation from engineering-grade integrity tooli
 - No changes to core evidence bundle format
 - No changes to root projection contract
 - No regressions in determinism enforcement
-- CodeQL clean
+- CodeQL scanning enabled in CI for this repository (as of tag `v3.5.0`)
 - Cross-runtime root parity enforced in CI
 - Exit-code contracts frozen and documented
 
@@ -63,8 +63,9 @@ This release completes the transformation from engineering-grade integrity tooli
 
 ## Determinism Statement
 
-All regulatory export artifacts produced in v3.5.0 remain byte-for-byte stable
-under identical inputs across supported Python versions (3.11 and 3.12).
+Regulatory export artifacts are deterministic for identical inputs in the same
+runtime configuration (validated by regression tests). Cross-runtime parity
+enforcement in CI currently covers the bundle-root contract (Python 3.11/3.12).
 No nondeterministic timestamps or environment-derived fields are introduced.
 
 ---
