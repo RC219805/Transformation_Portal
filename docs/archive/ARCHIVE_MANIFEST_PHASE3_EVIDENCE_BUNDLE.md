@@ -47,7 +47,7 @@ evidence_bundle_manifest.json
 - `timestamp_target`
 - `timestamp_path`
 - `timestamp_sha256`
-- `root_count`
+- `global_leaf_count`
 - `phase3_version`
 - `phase3_1_version`
 - `phase3_2_version`
@@ -63,15 +63,16 @@ evidence_bundle_manifest.json
 - `timestamp_target`: whether timestamp was taken over `roots` or `signature`.
 - `timestamp_path`: relative path of detached RFC 3161 response artifact.
 - `timestamp_sha256`: digest of exact `.tsr` bytes.
-- `root_count`: global leaf count from deterministic roots artifact.
+- `global_leaf_count`: global leaf count from deterministic roots artifact.
 - `phase3_version`, `phase3_1_version`, `phase3_2_version`: contract versions
   used to produce and validate bundle members.
 
 ## Recommended timestamp target
 
-When `merkle_roots.sig.json` is present, timestamping the signature artifact is
+For Phase 3.3 evidence bundles, timestamping the signature artifact is
 recommended (`timestamp_target = "signature"`), since identity and time are
-bound in the same detached chain.
+bound in the same detached chain. Signature artifacts are mandatory in this
+bundle contract.
 
 ---
 
@@ -98,7 +99,7 @@ This keeps emitted manifests deterministic across hosts and Python versions.
   "phase3_1_version": "1",
   "phase3_2_version": "1",
   "phase3_version": "1",
-  "root_count": 48291,
+  "global_leaf_count": 48291,
   "roots_path": "merkle_roots.json",
   "roots_sha256": "2f44bcaee8cf9fc5fe91f8c9f8ce87b17cf5f6e11323191b37a89f2df5a37a99",
   "signature_path": "merkle_roots.sig.json",
@@ -121,7 +122,7 @@ Phase 3.3 bundle verification MUST:
 4. Verify timestamp target consistency:
    - `timestamp_target = "signature"` implies `timestamp_path = "merkle_roots.sig.tsr"`
    - `timestamp_target = "roots"` implies `timestamp_path = "merkle_roots.tsr"`
-5. Verify `root_count` matches `merkle_roots.json` global leaf count.
+5. Verify `global_leaf_count` matches `merkle_roots.json` global leaf count.
 6. Fail non-zero on any mismatch.
 
 ---

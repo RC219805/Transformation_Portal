@@ -13,7 +13,7 @@
     "timestamp_target",
     "timestamp_path",
     "timestamp_sha256",
-    "root_count",
+    "global_leaf_count",
     "phase3_version",
     "phase3_1_version",
     "phase3_2_version"
@@ -57,7 +57,7 @@
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"
     },
-    "root_count": {
+    "global_leaf_count": {
       "type": "integer",
       "minimum": 0
     },
