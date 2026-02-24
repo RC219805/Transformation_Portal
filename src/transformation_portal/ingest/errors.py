@@ -28,9 +28,10 @@ PRIORITY_BIT_DEPTH_VIOLATION = 20
 PRIORITY_GAMMA_VIOLATION = 30
 PRIORITY_SCHEMA_DRIFT = 40
 PRIORITY_OTHER_FAILURE = 0
+PRIORITY_SUCCESS = -1
 
 
-@dataclass(eq=True, frozen=True)
+@dataclass(eq=False, frozen=True)
 class IngestError(Exception):
     """Base typed ingest error with explicit severity priority."""
 
@@ -44,6 +45,14 @@ class IngestError(Exception):
 
     def __str__(self) -> str:
         return self.message
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}("
+            f"exit_code={int(self.exit_code)}, "
+            f"priority={self.priority}, "
+            f"message={self.message!r})"
+        )
 
 
 class SchemaValidationFailure(IngestError):
@@ -102,6 +111,7 @@ class OtherIngestFailure(IngestError):
 
 
 _PRIORITY_BY_EXIT_CODE = {
+    IngestExitCode.SUCCESS: PRIORITY_SUCCESS,
     IngestExitCode.SCHEMA_DRIFT: PRIORITY_SCHEMA_DRIFT,
     IngestExitCode.GAMMA_VIOLATION: PRIORITY_GAMMA_VIOLATION,
     IngestExitCode.BIT_DEPTH_VIOLATION: PRIORITY_BIT_DEPTH_VIOLATION,

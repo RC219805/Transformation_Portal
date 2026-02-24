@@ -24,6 +24,7 @@ from transformation_portal.ingest.errors import (
     SchemaValidationFailure,
     aggregate_errors,
     aggregate_exit_code,
+    exit_code_priority,
 )
 from transformation_portal.ingest.schemas import (
     ExifMetadata,
@@ -95,6 +96,15 @@ class TestTypedIngestErrors:
         error = SchemaValidationFailure("schema issue")
         assert error.args == ("schema issue",)
 
+    def test_ingest_error_uses_identity_equality(self):
+        first_error = SchemaValidationFailure("schema issue")
+        second_error = SchemaValidationFailure("schema issue")
+        assert first_error != second_error
+
+    def test_ingest_error_repr_is_stable_and_compact(self):
+        error = SchemaDriftFailure("drift issue")
+        assert repr(error) == "SchemaDriftFailure(exit_code=4, priority=40, message='drift issue')"
+
     def test_aggregate_errors_uses_priority_not_exit_code_magnitude(self):
         errors = [
             OtherIngestFailure("fallback failure"),  # exit code 5, lowest priority
@@ -109,6 +119,9 @@ class TestTypedIngestErrors:
     def test_aggregate_exit_code_empty_returns_success(self):
         assert aggregate_errors([]) is None
         assert aggregate_exit_code([]) == IngestExitCode.SUCCESS
+
+    def test_exit_code_priority_includes_success(self):
+        assert exit_code_priority(IngestExitCode.SUCCESS) < exit_code_priority(IngestExitCode.OTHER_FAILURE)
 
     def test_validate_schema_errors_returns_typed_errors(self):
         sidecar = ProvenanceSidecar(
