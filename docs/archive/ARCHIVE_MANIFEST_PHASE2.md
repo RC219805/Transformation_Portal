@@ -105,3 +105,4 @@ Get-FileHash archive_index_normalized.csv.gz, asset_grouping_report.csv.gz, anom
 
 - These reports are **no-hash** by design. Hash-first identity (SHA-256) belongs in the vault ingest layer.
 - The schemas for each output are in `docs/archive/schemas/` (including `summary.schema.json`).
+- Phase 3 hash-first follow-on is documented in `docs/archive/ARCHIVE_MANIFEST_PHASE3.md`.

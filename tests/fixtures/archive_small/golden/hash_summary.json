@@ -1,0 +1,10 @@
+{
+  "hash_algorithm": "sha256",
+  "hash_manifest_schema_version": "1.0",
+  "hashed_ok": 3,
+  "missing": 0,
+  "rows_total": 3,
+  "skipped": 0,
+  "total_bytes_hashed": 55,
+  "unreadable": 0
+}

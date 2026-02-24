@@ -1,0 +1,26 @@
+{
+  "global": {
+    "leaf_count": 3,
+    "root_sha256": "f8e28b93afd47b1be3eb71aec67ac3299b79b7fb63671082e62814d3e8460c8e"
+  },
+  "hash_algorithm": "sha256",
+  "leaf_format": "sha256(origin_drive\\0partition\\0relpath\\0hash_status\\0sha256_hex)",
+  "leaf_format_version": "1.0",
+  "leaf_hash_algorithm": "sha256",
+  "partitions": [
+    {
+      "leaf_count": 2,
+      "origin_drive": "DriveA",
+      "partition": "Part1",
+      "root_sha256": "2e1362b4cc4e87bced716fe7c8f2aaf68b7dc9cd2ca3f501b59df38db87fe072"
+    },
+    {
+      "leaf_count": 1,
+      "origin_drive": "DriveB",
+      "partition": "Part2",
+      "root_sha256": "ed0f93bfef0bf5da21c0f35c8f8f4c6fec8911c11ba18d3623c4030f46a88162"
+    }
+  ],
+  "tree_method": "binary_duplicate_last",
+  "tree_method_version": "1.0"
+}

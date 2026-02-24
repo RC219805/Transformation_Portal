@@ -1,0 +1,9 @@
+{
+  "hash_algorithm": "sha256",
+  "mismatches": [],
+  "rows_checked": 3,
+  "rows_in_manifest": 3,
+  "rows_matched": 3,
+  "rows_mismatched": 0,
+  "verify_mode": "all"
+}
