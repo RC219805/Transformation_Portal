@@ -17,7 +17,17 @@ from __future__ import annotations
 __all__ = [
     "IngestManifest",
     "ProvenanceSidecar",
+    "IngestExitCode",
+    "IngestError",
+    "SchemaValidationFailure",
+    "BitDepthViolation",
+    "GammaViolation",
+    "SchemaDriftFailure",
+    "OtherIngestFailure",
+    "aggregate_errors",
+    "aggregate_exit_code",
     "validate_schema",
+    "validate_schema_errors",
     "classify_validation_exit_code",
     "classify_validation_error",
     "classify_validation_errors",
@@ -48,6 +58,10 @@ def __getattr__(name: str):
         from .validator import validate_schema
 
         return validate_schema
+    elif name == "validate_schema_errors":
+        from .validator import validate_schema_errors
+
+        return validate_schema_errors
     elif name == "classify_validation_exit_code":
         from .validator import classify_validation_exit_code
 
@@ -92,6 +106,42 @@ def __getattr__(name: str):
         from .provenance import capture_provenance
 
         return capture_provenance
+    elif name == "IngestExitCode":
+        from .errors import IngestExitCode
+
+        return IngestExitCode
+    elif name == "IngestError":
+        from .errors import IngestError
+
+        return IngestError
+    elif name == "SchemaValidationFailure":
+        from .errors import SchemaValidationFailure
+
+        return SchemaValidationFailure
+    elif name == "BitDepthViolation":
+        from .errors import BitDepthViolation
+
+        return BitDepthViolation
+    elif name == "GammaViolation":
+        from .errors import GammaViolation
+
+        return GammaViolation
+    elif name == "SchemaDriftFailure":
+        from .errors import SchemaDriftFailure
+
+        return SchemaDriftFailure
+    elif name == "OtherIngestFailure":
+        from .errors import OtherIngestFailure
+
+        return OtherIngestFailure
+    elif name == "aggregate_errors":
+        from .errors import aggregate_errors
+
+        return aggregate_errors
+    elif name == "aggregate_exit_code":
+        from .errors import aggregate_exit_code
+
+        return aggregate_exit_code
     elif name == "write_sidecar":
         from .sidecar import write_sidecar
 
