@@ -273,7 +273,7 @@ def main() -> int:
             return EXIT_INVALID_TIMESTAMP_RESPONSE
 
         atomic_write(Path(args.out), response_bytes)
-        print(f"Timestamp response written to {args.out} " f"(target={target_kind}, sha256={digest_hex}, nonce={nonce})")
+        print(f"Timestamp response written to {args.out} (target={target_kind}, sha256={digest_hex}, nonce={nonce})")
         return 0
     except urllib.error.HTTPError as exc:
         print(f"Timestamp request failed: HTTP {exc.code}")

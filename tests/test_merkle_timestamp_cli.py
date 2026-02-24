@@ -36,6 +36,7 @@ def _timestamp(
     tsa_url: str,
     out_path: Path,
     nonce: int | None = None,
+    cert_req: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     command = [
         sys.executable,
@@ -49,6 +50,8 @@ def _timestamp(
     ]
     if nonce is not None:
         command.extend(["--nonce", str(nonce)])
+    if cert_req:
+        command.append("--cert-req")
     return _run_cli(command)
 
 
@@ -179,7 +182,7 @@ def _der_decode_oid(value: bytes) -> str:
     return ".".join(str(component) for component in components)
 
 
-def _decode_timestamp_query(query_bytes: bytes) -> tuple[str, bytes, int]:
+def _decode_timestamp_query(query_bytes: bytes) -> tuple[str, bytes, int, bool]:
     req_tag, req_value, req_end = _der_read_tlv(query_bytes, 0)
     assert req_tag == 0x30
     assert req_end == len(query_bytes)
@@ -206,11 +209,19 @@ def _decode_timestamp_query(query_bytes: bytes) -> tuple[str, bytes, int]:
     assert digest_tag == 0x04
     assert digest_end == len(imprint_value)
 
-    nonce_tag, nonce_value, _ = _der_read_tlv(req_value, offset)
+    nonce_tag, nonce_value, offset = _der_read_tlv(req_value, offset)
     assert nonce_tag == 0x02
     nonce = _der_decode_integer(nonce_value)
 
-    return SHA256_OID, digest_value, nonce
+    cert_req = False
+    if offset < len(req_value):
+        cert_req_tag, cert_req_value, offset = _der_read_tlv(req_value, offset)
+        assert cert_req_tag == 0x01
+        assert cert_req_value in (b"\x00", b"\xFF")
+        cert_req = cert_req_value == b"\xFF"
+    assert offset == len(req_value)
+
+    return SHA256_OID, digest_value, nonce, cert_req
 
 
 @contextlib.contextmanager
@@ -277,10 +288,11 @@ def test_timestamp_roots_success_writes_detached_tsr(tmp_path: Path) -> None:
     assert state["request_content_type"] == "application/timestamp-query"
     assert state["request_accept"] == "application/timestamp-reply"
 
-    oid, digest, nonce = _decode_timestamp_query(state["request_body"])  # type: ignore[arg-type]
+    oid, digest, nonce, cert_req = _decode_timestamp_query(state["request_body"])  # type: ignore[arg-type]
     assert oid == SHA256_OID
     assert digest == hashlib.sha256(roots_path.read_bytes()).digest()
     assert nonce == 42
+    assert cert_req is False
 
 
 def test_timestamp_signature_success_hashes_signature_bytes(tmp_path: Path) -> None:
@@ -301,9 +313,33 @@ def test_timestamp_signature_success_hashes_signature_bytes(tmp_path: Path) -> N
     assert result.returncode == 0, result.stderr
     assert tsr_path.exists()
 
-    _, digest, nonce = _decode_timestamp_query(state["request_body"])  # type: ignore[arg-type]
+    _, digest, nonce, cert_req = _decode_timestamp_query(state["request_body"])  # type: ignore[arg-type]
     assert digest == hashlib.sha256(signature_path.read_bytes()).digest()
     assert nonce == 7
+    assert cert_req is False
+
+
+def test_timestamp_includes_cert_req_when_flag_set(tmp_path: Path) -> None:
+    roots_path = tmp_path / "merkle_roots.json"
+    tsr_path = tmp_path / "merkle_roots.tsr"
+    _write_roots(roots_path)
+
+    response = _build_timestamp_response(0, include_token=True)
+    with _tsa_server(response_body=response) as (tsa_url, state):
+        result = _timestamp(
+            target_flag="--roots",
+            target_path=roots_path,
+            tsa_url=tsa_url,
+            out_path=tsr_path,
+            nonce=314159,
+            cert_req=True,
+        )
+
+    assert result.returncode == 0, result.stderr
+    _, digest, nonce, cert_req = _decode_timestamp_query(state["request_body"])  # type: ignore[arg-type]
+    assert digest == hashlib.sha256(roots_path.read_bytes()).digest()
+    assert nonce == 314159
+    assert cert_req is True
 
 
 def test_timestamp_fails_when_target_filename_is_invalid(tmp_path: Path) -> None:
