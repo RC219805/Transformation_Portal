@@ -8,6 +8,10 @@
     "hash_algorithm",
     "roots_path",
     "roots_sha256",
+    "hash_manifest_path",
+    "hash_manifest_sha256",
+    "hash_summary_path",
+    "hash_summary_sha256",
     "signature_path",
     "signature_sha256",
     "timestamp_target",
@@ -16,7 +20,9 @@
     "global_leaf_count",
     "phase3_version",
     "phase3_1_version",
-    "phase3_2_version"
+    "phase3_2_version",
+    "bundle_tool_name",
+    "bundle_tool_version"
   ],
   "properties": {
     "bundle_version": {
@@ -32,6 +38,22 @@
       "const": "merkle_roots.json"
     },
     "roots_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "hash_manifest_path": {
+      "type": "string",
+      "const": "hash_manifest.csv.gz"
+    },
+    "hash_manifest_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "hash_summary_path": {
+      "type": "string",
+      "const": "hash_summary.json"
+    },
+    "hash_summary_sha256": {
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"
     },
@@ -69,6 +91,14 @@
     },
     "phase3_2_version": {
       "type": "string"
+    },
+    "bundle_tool_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "bundle_tool_version": {
+      "type": "string",
+      "minLength": 1
     }
   },
   "allOf": [

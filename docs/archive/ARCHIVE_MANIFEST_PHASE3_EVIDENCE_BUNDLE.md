@@ -5,8 +5,11 @@ Proposed (Phase 3.3 - Evidence Bundle Layer)
 
 ## Context
 
-Phase 3 and later layers currently emit detached artifacts:
+Phase 3 and later layers currently emit artifacts across integrity,
+attestation, and timestamp layers:
 
+- `hash_manifest.csv.gz` (deterministic hash manifest)
+- `hash_summary.json` (deterministic hash manifest summary)
 - `merkle_roots.json` (deterministic integrity)
 - `merkle_roots.sig.json` (detached attestation)
 - `merkle_roots.sig.tsr` or `merkle_roots.tsr` (detached timestamp)
@@ -42,6 +45,10 @@ evidence_bundle_manifest.json
 - `hash_algorithm`
 - `roots_path`
 - `roots_sha256`
+- `hash_manifest_path`
+- `hash_manifest_sha256`
+- `hash_summary_path`
+- `hash_summary_sha256`
 - `signature_path`
 - `signature_sha256`
 - `timestamp_target`
@@ -51,6 +58,8 @@ evidence_bundle_manifest.json
 - `phase3_version`
 - `phase3_1_version`
 - `phase3_2_version`
+- `bundle_tool_name`
+- `bundle_tool_version`
 
 ## Field semantics
 
@@ -58,6 +67,10 @@ evidence_bundle_manifest.json
 - `hash_algorithm`: digest algorithm used for manifest digests (`sha256`).
 - `roots_path`: relative path of deterministic roots artifact.
 - `roots_sha256`: digest of exact `merkle_roots.json` bytes.
+- `hash_manifest_path`: relative path of deterministic hash manifest artifact.
+- `hash_manifest_sha256`: digest of exact `hash_manifest.csv.gz` bytes.
+- `hash_summary_path`: relative path of deterministic hash summary artifact.
+- `hash_summary_sha256`: digest of exact `hash_summary.json` bytes.
 - `signature_path`: relative path of detached signature artifact.
 - `signature_sha256`: digest of exact `merkle_roots.sig.json` bytes.
 - `timestamp_target`: whether timestamp was taken over `roots` or `signature`.
@@ -66,6 +79,8 @@ evidence_bundle_manifest.json
 - `global_leaf_count`: global leaf count from deterministic roots artifact.
 - `phase3_version`, `phase3_1_version`, `phase3_2_version`: contract versions
   used to produce and validate bundle members.
+- `bundle_tool_name`: identifier of bundle-manifest emitting tool.
+- `bundle_tool_version`: version of bundle-manifest emitting tool.
 
 ## Recommended timestamp target
 
@@ -99,7 +114,13 @@ This keeps emitted manifests deterministic across hosts and Python versions.
   "phase3_1_version": "1",
   "phase3_2_version": "1",
   "phase3_version": "1",
+  "bundle_tool_name": "phase3_bundle_builder",
+  "bundle_tool_version": "1.0.0",
   "global_leaf_count": 48291,
+  "hash_manifest_path": "hash_manifest.csv.gz",
+  "hash_manifest_sha256": "6cd77312a9ee3c11d73dbf17d02fd5f1e6e8cf70f92f9d0377ce4d79073e34ee",
+  "hash_summary_path": "hash_summary.json",
+  "hash_summary_sha256": "48ad5e285629f854ea5f93f3f0562ec3e13793a7a8ccf8a07c1f0bdd1818f26c",
   "roots_path": "merkle_roots.json",
   "roots_sha256": "2f44bcaee8cf9fc5fe91f8c9f8ce87b17cf5f6e11323191b37a89f2df5a37a99",
   "signature_path": "merkle_roots.sig.json",
@@ -117,13 +138,19 @@ This keeps emitted manifests deterministic across hosts and Python versions.
 Phase 3.3 bundle verification MUST:
 
 1. Load and schema-validate `evidence_bundle_manifest.json`.
-2. Recompute SHA-256 for each referenced artifact path.
+2. Recompute SHA-256 for each referenced artifact path:
+   - `merkle_roots.json`
+   - `hash_manifest.csv.gz`
+   - `hash_summary.json`
+   - `merkle_roots.sig.json`
+   - detached timestamp response (`.tsr`)
 3. Compare recomputed digests against manifest digest fields.
 4. Verify timestamp target consistency:
    - `timestamp_target = "signature"` implies `timestamp_path = "merkle_roots.sig.tsr"`
    - `timestamp_target = "roots"` implies `timestamp_path = "merkle_roots.tsr"`
 5. Verify `global_leaf_count` matches `merkle_roots.json` global leaf count.
-6. Fail non-zero on any mismatch.
+6. Verify `bundle_tool_name` and `bundle_tool_version` are present and non-empty.
+7. Fail non-zero on any mismatch.
 
 ---
 
