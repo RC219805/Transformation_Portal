@@ -29,3 +29,7 @@ Start here:
 8. `schemas/risk_assessment_report.schema.json` - CPPA-aligned privacy risk assessment governance schema.
 9. `schemas/cybersecurity_audit_record.schema.json` - CPPA-aligned cybersecurity audit governance schema.
 10. `schemas/admt_governance.schema.json` - CPPA ADMT governance declaration schema.
+
+### Phase 3.7 — Governance Hardening
+
+11. `SCHEMA_VERSION_POLICY.md` - schema version discipline (MAJOR/MINOR/PATCH) and CI enforcement requirements.

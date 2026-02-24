@@ -1,7 +1,9 @@
 # ADR-036 Accountability Governance Invariants
 
+**STATUS: LOCKED**
+
 ## Status
-Proposed
+LOCKED
 
 ## Date
 2026-02-24
@@ -75,6 +77,21 @@ root projection inputs.
 
 CI MUST validate compliance schemas on every PR path, including docs-only
 changes, so schema drift cannot bypass required checks.
+
+### D7. Locked Invariants
+
+The following invariants are LOCKED for Phase 3.6+ governance behavior:
+
+1. Governance artifacts MUST NOT alter bundle-root projection semantics.
+2. Governance export MUST remain additive to the Phase 3.5 export contract.
+3. Governance export serialization MUST be deterministic for identical inputs.
+4. Governance export MUST be independently verifiable with explicit CLI checks.
+
+### D8. Violation Consequence
+
+Any change affecting governance root-binding semantics, additive/export
+boundaries, or verification behavior REQUIRES a new ADR and explicit contract
+versioning updates before merge.
 
 ## Alternatives Considered
 

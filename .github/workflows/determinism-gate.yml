@@ -59,3 +59,13 @@ jobs:
             --python-a "$PY311" \
             --python-b "$PY312" \
             --project-root "$GITHUB_WORKSPACE"
+
+      - name: Governance export cross-runtime parity gate (3.11 vs 3.12)
+        env:
+          PY311: ${{ steps.setup-python-311.outputs.python-path }}
+          PY312: ${{ steps.setup-python-312.outputs.python-path }}
+        run: |
+          "$PY312" tools/check_governance_export_cross_runtime.py \
+            --python-a "$PY311" \
+            --python-b "$PY312" \
+            --project-root "$GITHUB_WORKSPACE"

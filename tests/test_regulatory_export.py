@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import gzip
+import hashlib
 import io
 import json
 import subprocess
@@ -315,6 +316,31 @@ def _run_regulatory_export(
     return _run_cli(command)
 
 
+def _run_verify_governance_export(
+    manifest_path: Path,
+    governance_export_path: Path,
+    risk_assessment_path: Path,
+    cybersecurity_audit_path: Path,
+    *,
+    admt_governance_path: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
+    command = [
+        sys.executable,
+        str(REG_EXPORT_TOOL),
+        "--bundle-manifest",
+        str(manifest_path),
+        "--risk-assessment-report",
+        str(risk_assessment_path),
+        "--cybersecurity-audit-record",
+        str(cybersecurity_audit_path),
+        "--verify-governance-export",
+        str(governance_export_path),
+    ]
+    if admt_governance_path is not None:
+        command.extend(["--admt-governance", str(admt_governance_path)])
+    return _run_cli(command)
+
+
 def test_regulatory_export_generates_bound_outputs(tmp_path: Path) -> None:
     bundle_manifest = _write_bundle_with_root(tmp_path / "bundle")
     risk_path = tmp_path / "risk_metadata.json"
@@ -458,6 +484,190 @@ def test_regulatory_export_generates_governance_export(tmp_path: Path) -> None:
     assert governance_payload["bundle_binding"]["bundle_root_sha256"] == manifest_payload["bundle_root_sha256"]
     assert "admt_governance_sha256" in governance_payload["governance_artifact_digests"]
     assert "Governance export written to" in result.stdout
+
+
+def test_governance_export_is_deterministic_for_same_inputs(tmp_path: Path) -> None:
+    bundle_manifest = _write_bundle_with_root(tmp_path / "bundle")
+    risk_path = tmp_path / "risk_metadata.json"
+    taxonomy_path = tmp_path / "source_taxonomy.json"
+    risk_assessment_path = tmp_path / "risk_assessment_report.json"
+    cybersecurity_audit_path = tmp_path / "cybersecurity_audit_record.json"
+    admt_path = tmp_path / "admt_governance.json"
+    _write_risk_metadata(risk_path)
+    _write_source_taxonomy(taxonomy_path)
+    _write_risk_assessment_report(risk_assessment_path)
+    _write_cybersecurity_audit_record(cybersecurity_audit_path)
+    _write_admt_governance(admt_path)
+
+    out_json_a = tmp_path / "regulatory_a.json"
+    out_md_a = tmp_path / "regulatory_a.md"
+    governance_export_a = tmp_path / "governance_a.json"
+    out_json_b = tmp_path / "regulatory_b.json"
+    out_md_b = tmp_path / "regulatory_b.md"
+    governance_export_b = tmp_path / "governance_b.json"
+
+    first = _run_regulatory_export(
+        bundle_manifest,
+        risk_path,
+        taxonomy_path,
+        out_json_a,
+        out_md_a,
+        risk_assessment_path=risk_assessment_path,
+        cybersecurity_audit_path=cybersecurity_audit_path,
+        admt_governance_path=admt_path,
+        governance_export_path=governance_export_a,
+    )
+    second = _run_regulatory_export(
+        bundle_manifest,
+        risk_path,
+        taxonomy_path,
+        out_json_b,
+        out_md_b,
+        risk_assessment_path=risk_assessment_path,
+        cybersecurity_audit_path=cybersecurity_audit_path,
+        admt_governance_path=admt_path,
+        governance_export_path=governance_export_b,
+    )
+
+    assert first.returncode == 0, first.stdout + first.stderr
+    assert second.returncode == 0, second.stdout + second.stderr
+    digest_a = hashlib.sha256(governance_export_a.read_bytes()).hexdigest()
+    digest_b = hashlib.sha256(governance_export_b.read_bytes()).hexdigest()
+    assert digest_a == digest_b
+
+
+def test_verify_governance_export_passes_for_valid_inputs(tmp_path: Path) -> None:
+    bundle_manifest = _write_bundle_with_root(tmp_path / "bundle")
+    risk_path = tmp_path / "risk_metadata.json"
+    taxonomy_path = tmp_path / "source_taxonomy.json"
+    risk_assessment_path = tmp_path / "risk_assessment_report.json"
+    cybersecurity_audit_path = tmp_path / "cybersecurity_audit_record.json"
+    admt_path = tmp_path / "admt_governance.json"
+    _write_risk_metadata(risk_path)
+    _write_source_taxonomy(taxonomy_path)
+    _write_risk_assessment_report(risk_assessment_path)
+    _write_cybersecurity_audit_record(cybersecurity_audit_path)
+    _write_admt_governance(admt_path)
+
+    out_json = tmp_path / "regulatory_export.json"
+    out_md = tmp_path / "regulatory_export.md"
+    governance_export = tmp_path / "governance_export.json"
+    generated = _run_regulatory_export(
+        bundle_manifest,
+        risk_path,
+        taxonomy_path,
+        out_json,
+        out_md,
+        risk_assessment_path=risk_assessment_path,
+        cybersecurity_audit_path=cybersecurity_audit_path,
+        admt_governance_path=admt_path,
+        governance_export_path=governance_export,
+    )
+    assert generated.returncode == 0, generated.stdout + generated.stderr
+
+    verified = _run_verify_governance_export(
+        bundle_manifest,
+        governance_export,
+        risk_assessment_path,
+        cybersecurity_audit_path,
+        admt_governance_path=admt_path,
+    )
+    assert verified.returncode == 0, verified.stdout + verified.stderr
+    assert "verification passed" in verified.stdout.lower()
+
+
+def test_verify_governance_export_rejects_digest_mismatch(tmp_path: Path) -> None:
+    bundle_manifest = _write_bundle_with_root(tmp_path / "bundle")
+    risk_path = tmp_path / "risk_metadata.json"
+    taxonomy_path = tmp_path / "source_taxonomy.json"
+    risk_assessment_path = tmp_path / "risk_assessment_report.json"
+    cybersecurity_audit_path = tmp_path / "cybersecurity_audit_record.json"
+    _write_risk_metadata(risk_path)
+    _write_source_taxonomy(taxonomy_path)
+    _write_risk_assessment_report(risk_assessment_path)
+    _write_cybersecurity_audit_record(cybersecurity_audit_path)
+
+    out_json = tmp_path / "regulatory_export.json"
+    out_md = tmp_path / "regulatory_export.md"
+    governance_export = tmp_path / "governance_export.json"
+    generated = _run_regulatory_export(
+        bundle_manifest,
+        risk_path,
+        taxonomy_path,
+        out_json,
+        out_md,
+        risk_assessment_path=risk_assessment_path,
+        cybersecurity_audit_path=cybersecurity_audit_path,
+        governance_export_path=governance_export,
+    )
+    assert generated.returncode == 0, generated.stdout + generated.stderr
+
+    risk_payload = json.loads(risk_assessment_path.read_text(encoding="utf-8"))
+    risk_payload["benefits"] = "mutated after export"
+    risk_assessment_path.write_text(json.dumps(risk_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    verified = _run_verify_governance_export(
+        bundle_manifest,
+        governance_export,
+        risk_assessment_path,
+        cybersecurity_audit_path,
+    )
+    assert verified.returncode == 31
+    assert "verification failed" in verified.stdout.lower()
+
+
+def test_verify_governance_export_rejects_generation_args(tmp_path: Path) -> None:
+    bundle_manifest = _write_bundle_with_root(tmp_path / "bundle")
+    risk_path = tmp_path / "risk_metadata.json"
+    taxonomy_path = tmp_path / "source_taxonomy.json"
+    risk_assessment_path = tmp_path / "risk_assessment_report.json"
+    cybersecurity_audit_path = tmp_path / "cybersecurity_audit_record.json"
+    _write_risk_metadata(risk_path)
+    _write_source_taxonomy(taxonomy_path)
+    _write_risk_assessment_report(risk_assessment_path)
+    _write_cybersecurity_audit_record(cybersecurity_audit_path)
+
+    out_json = tmp_path / "regulatory_export.json"
+    out_md = tmp_path / "regulatory_export.md"
+    governance_export = tmp_path / "governance_export.json"
+    generated = _run_regulatory_export(
+        bundle_manifest,
+        risk_path,
+        taxonomy_path,
+        out_json,
+        out_md,
+        risk_assessment_path=risk_assessment_path,
+        cybersecurity_audit_path=cybersecurity_audit_path,
+        governance_export_path=governance_export,
+    )
+    assert generated.returncode == 0, generated.stdout + generated.stderr
+
+    mixed_mode = _run_cli(
+        [
+            sys.executable,
+            str(REG_EXPORT_TOOL),
+            "--bundle-manifest",
+            str(bundle_manifest),
+            "--risk-assessment-report",
+            str(risk_assessment_path),
+            "--cybersecurity-audit-record",
+            str(cybersecurity_audit_path),
+            "--verify-governance-export",
+            str(governance_export),
+            "--risk-metadata",
+            str(risk_path),
+            "--source-taxonomy",
+            str(taxonomy_path),
+            "--out-json",
+            str(tmp_path / "ignored.json"),
+        ]
+    )
+
+    assert mixed_mode.returncode == 31
+    assert "generation-only arguments are not allowed" in mixed_mode.stdout
+    assert "--risk-metadata" in mixed_mode.stdout
+    assert "--source-taxonomy" in mixed_mode.stdout
+    assert "--out-json" in mixed_mode.stdout
 
 
 def test_regulatory_export_rejects_governance_inputs_without_output(tmp_path: Path) -> None:

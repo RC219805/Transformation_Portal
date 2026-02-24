@@ -28,9 +28,11 @@ from bundle_root_common import (
 
 EXIT_EXPORT_BUILD_FAILURE = 31
 EXIT_EXPORT_WRITE_FAILURE = 32
+EXIT_GOVERNANCE_VERIFY_FAILURE = EXIT_EXPORT_BUILD_FAILURE
 EXPORT_MODE_VERSION = "1"
 RISK_METADATA_SCHEMA_VERSION = "1"
 SOURCE_TAXONOMY_SCHEMA_VERSION = "1"
+# Bump when governance export structure or serialization invariants change.
 GOVERNANCE_EXPORT_MODE_VERSION = "1"
 RISK_ASSESSMENT_REPORT_SCHEMA_VERSION = "1"
 CYBERSECURITY_AUDIT_RECORD_SCHEMA_VERSION = "1"
@@ -85,6 +87,19 @@ def sha256_hexdigest(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             hasher.update(chunk)
     return hasher.hexdigest()
+
+
+def _canonical_json_bytes(payload: Mapping[str, object]) -> bytes:
+    # Serialization format is contract-frozen; changes require mode version bump.
+    return (
+        json.dumps(
+            payload,
+            indent=2,
+            sort_keys=True,
+            separators=(",", ": "),
+        ).encode("utf-8")
+        + b"\n"
+    )
 
 
 def _require_string(payload: Mapping[str, object], field: str, context: str) -> str:
@@ -1219,10 +1234,17 @@ def build_governance_export_payload(
             "--risk-assessment-report <RISK_ASSESSMENT_REPORT_JSON> "
             "--cybersecurity-audit-record <CYBERSECURITY_AUDIT_RECORD_JSON> "
             "--governance-export <OUTPUT_DIR>/governance_export.json",
+            "python tools/regulatory_export.py "
+            f"--bundle-manifest <BUNDLE_DIR>/{EXPECTED_MANIFEST_FILENAME} "
+            "--risk-assessment-report <RISK_ASSESSMENT_REPORT_JSON> "
+            "--cybersecurity-audit-record <CYBERSECURITY_AUDIT_RECORD_JSON> "
+            "[--admt-governance <ADMT_GOVERNANCE_JSON>] "
+            "--verify-governance-export <OUTPUT_DIR>/governance_export.json",
         ],
         "verification_expected_exit_codes": {
             "verify_evidence_bundle_manifest": 0,
             "regulatory_export": 0,
+            "verify_governance_export": 0,
         },
     }
     if admt_governance is not None:
@@ -1276,8 +1298,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Optional override path for hash_summary.json (default: bundle-manifest declared path)",
     )
-    parser.add_argument("--risk-metadata", required=True, help="Path to risk metadata JSON")
-    parser.add_argument("--source-taxonomy", required=True, help="Path to source taxonomy JSON")
+    parser.add_argument("--risk-metadata", default=None, help="Path to risk metadata JSON")
+    parser.add_argument("--source-taxonomy", default=None, help="Path to source taxonomy JSON")
     parser.add_argument(
         "--risk-assessment-report",
         default=None,
@@ -1293,7 +1315,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Optional path to CPPA ADMT governance declaration JSON",
     )
-    parser.add_argument("--out-json", required=True, help="Path to write regulatory export JSON")
+    parser.add_argument("--out-json", default=None, help="Path to write regulatory export JSON")
     parser.add_argument(
         "--out-markdown",
         default=None,
@@ -1326,12 +1348,203 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=True,
         help="Strictly validate evidence bundle manifest shape (default: true)",
     )
+    parser.add_argument(
+        "--verify-governance-export",
+        default=None,
+        help="Optional path to verify governance export JSON integrity and bindings",
+    )
     return parser.parse_args(argv)
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = parse_args(argv)
+def _run_governance_export_verification(args: argparse.Namespace) -> int:
+    if args.verify_governance_export is None:
+        print("Governance verification failed: --verify-governance-export is required")
+        return EXIT_GOVERNANCE_VERIFY_FAILURE
+    if args.bundle_manifest is None:
+        print("Governance verification failed: --bundle-manifest is required")
+        return EXIT_GOVERNANCE_VERIFY_FAILURE
+    if args.risk_assessment_report is None or args.cybersecurity_audit_record is None:
+        print(
+            "Governance verification failed: --verify-governance-export requires "
+            "--risk-assessment-report and --cybersecurity-audit-record"
+        )
+        return EXIT_GOVERNANCE_VERIFY_FAILURE
+    mixed_mode_args: list[str] = []
+    if args.risk_metadata is not None:
+        mixed_mode_args.append("--risk-metadata")
+    if args.source_taxonomy is not None:
+        mixed_mode_args.append("--source-taxonomy")
+    if args.out_json is not None:
+        mixed_mode_args.append("--out-json")
+    if mixed_mode_args:
+        print(
+            "Governance verification failed: generation-only arguments are not allowed "
+            f"with --verify-governance-export: {', '.join(mixed_mode_args)}"
+        )
+        return EXIT_GOVERNANCE_VERIFY_FAILURE
 
+    try:
+        manifest_path = Path(args.bundle_manifest)
+        manifest = _load_evidence_manifest(manifest_path, strict=args.strict)
+        governance_export_path = Path(args.verify_governance_export)
+        governance_export_payload = _load_json_object(governance_export_path, context="governance-export")
+
+        _validate_exact_fields(
+            governance_export_payload,
+            allowed={
+                "governance_export_mode_version",
+                "governance_profile_id",
+                "bundle_binding",
+                "governance_artifact_digests",
+                "risk_assessment_report",
+                "cybersecurity_audit_record",
+                "admt_governance",
+                "verification_commands",
+                "verification_expected_exit_codes",
+            },
+            required={
+                "governance_export_mode_version",
+                "governance_profile_id",
+                "bundle_binding",
+                "governance_artifact_digests",
+                "risk_assessment_report",
+                "cybersecurity_audit_record",
+            },
+            context="governance-export",
+        )
+        if governance_export_payload["governance_export_mode_version"] != GOVERNANCE_EXPORT_MODE_VERSION:
+            raise ValueError("governance-export.governance_export_mode_version must be " f"{GOVERNANCE_EXPORT_MODE_VERSION!r}")
+        _require_string(governance_export_payload, "governance_profile_id", "governance-export")
+
+        bundle_binding = _require_object(governance_export_payload, "bundle_binding", "governance-export")
+        _validate_exact_fields(
+            bundle_binding,
+            allowed={
+                "bundle_manifest_sha256",
+                "bundle_root_algorithm",
+                "bundle_root_preimage_version",
+                "bundle_root_sha256",
+                "phase_versions",
+            },
+            required={
+                "bundle_manifest_sha256",
+                "bundle_root_algorithm",
+                "bundle_root_preimage_version",
+                "bundle_root_sha256",
+                "phase_versions",
+            },
+            context="governance-export.bundle_binding",
+        )
+        _ensure_digest_matches(
+            manifest_path,
+            expected_sha256=_require_string(bundle_binding, "bundle_manifest_sha256", "governance-export.bundle_binding"),
+            field_name="governance-export.bundle_binding.bundle_manifest_sha256",
+        )
+        if _require_string(bundle_binding, "bundle_root_algorithm", "governance-export.bundle_binding") != str(
+            manifest["bundle_root_algorithm"]
+        ):
+            raise ValueError("governance-export bundle_root_algorithm does not match bundle manifest")
+        if _require_string(bundle_binding, "bundle_root_preimage_version", "governance-export.bundle_binding") != str(
+            manifest["bundle_root_preimage_version"]
+        ):
+            raise ValueError("governance-export bundle_root_preimage_version does not match bundle manifest")
+        if _require_string(bundle_binding, "bundle_root_sha256", "governance-export.bundle_binding") != str(
+            manifest["bundle_root_sha256"]
+        ):
+            raise ValueError("governance-export bundle_root_sha256 does not match bundle manifest")
+
+        phase_versions = _require_object(bundle_binding, "phase_versions", "governance-export.bundle_binding")
+        _validate_exact_fields(
+            phase_versions,
+            allowed={"phase3_version", "phase3_1_version", "phase3_2_version"},
+            required={"phase3_version", "phase3_1_version", "phase3_2_version"},
+            context="governance-export.bundle_binding.phase_versions",
+        )
+        for field in ("phase3_version", "phase3_1_version", "phase3_2_version"):
+            if _require_string(phase_versions, field, "governance-export.bundle_binding.phase_versions") != str(
+                manifest[field]
+            ):
+                raise ValueError(f"governance-export bundle phase version mismatch for {field}")
+
+        digests = _require_object(governance_export_payload, "governance_artifact_digests", "governance-export")
+        _validate_exact_fields(
+            digests,
+            allowed={
+                "risk_assessment_report_sha256",
+                "cybersecurity_audit_record_sha256",
+                "admt_governance_sha256",
+            },
+            required={"risk_assessment_report_sha256", "cybersecurity_audit_record_sha256"},
+            context="governance-export.governance_artifact_digests",
+        )
+
+        risk_assessment_report_path = Path(args.risk_assessment_report)
+        risk_assessment_report = validate_risk_assessment_report(
+            _load_json_object(risk_assessment_report_path, context="risk-assessment-report")
+        )
+        if governance_export_payload["risk_assessment_report"] != risk_assessment_report:
+            raise ValueError("governance-export.risk_assessment_report does not match validated source record")
+        _ensure_digest_matches(
+            risk_assessment_report_path,
+            expected_sha256=_require_string(
+                digests,
+                "risk_assessment_report_sha256",
+                "governance-export.governance_artifact_digests",
+            ),
+            field_name="governance-export.governance_artifact_digests.risk_assessment_report_sha256",
+        )
+
+        cybersecurity_audit_record_path = Path(args.cybersecurity_audit_record)
+        cybersecurity_audit_record = validate_cybersecurity_audit_record(
+            _load_json_object(cybersecurity_audit_record_path, context="cybersecurity-audit-record")
+        )
+        if governance_export_payload["cybersecurity_audit_record"] != cybersecurity_audit_record:
+            raise ValueError("governance-export.cybersecurity_audit_record does not match validated source record")
+        _ensure_digest_matches(
+            cybersecurity_audit_record_path,
+            expected_sha256=_require_string(
+                digests,
+                "cybersecurity_audit_record_sha256",
+                "governance-export.governance_artifact_digests",
+            ),
+            field_name="governance-export.governance_artifact_digests.cybersecurity_audit_record_sha256",
+        )
+
+        has_admt_payload = "admt_governance" in governance_export_payload
+        if has_admt_payload and args.admt_governance is None:
+            raise ValueError("--admt-governance is required when governance export includes admt_governance")
+        if not has_admt_payload and args.admt_governance is not None:
+            raise ValueError("--admt-governance was provided but governance export does not include admt_governance")
+
+        if args.admt_governance is not None:
+            admt_governance_path = Path(args.admt_governance)
+            admt_governance = validate_admt_governance(_load_json_object(admt_governance_path, context="admt-governance"))
+            if governance_export_payload["admt_governance"] != admt_governance:
+                raise ValueError("governance-export.admt_governance does not match validated source record")
+            _ensure_digest_matches(
+                admt_governance_path,
+                expected_sha256=_require_string(
+                    digests,
+                    "admt_governance_sha256",
+                    "governance-export.governance_artifact_digests",
+                ),
+                field_name="governance-export.governance_artifact_digests.admt_governance_sha256",
+            )
+        elif "admt_governance_sha256" in digests:
+            raise ValueError(
+                "governance-export.governance_artifact_digests.admt_governance_sha256 "
+                "is present but admt_governance payload is absent"
+            )
+
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        print(f"Governance verification failed: {exc}")
+        return EXIT_GOVERNANCE_VERIFY_FAILURE
+
+    print(f"Governance export verification passed: {args.verify_governance_export}")
+    return 0
+
+
+def _run_export_generation(args: argparse.Namespace) -> int:
     if args.top_n <= 0:
         print("Regulatory export failed: --top-n must be positive")
         return EXIT_EXPORT_BUILD_FAILURE
@@ -1339,6 +1552,15 @@ def main(argv: list[str] | None = None) -> int:
     governance_payload: dict[str, object] | None = None
 
     try:
+        if args.bundle_manifest is None:
+            raise ValueError("--bundle-manifest is required")
+        if args.risk_metadata is None:
+            raise ValueError("--risk-metadata is required")
+        if args.source_taxonomy is None:
+            raise ValueError("--source-taxonomy is required")
+        if args.out_json is None:
+            raise ValueError("--out-json is required")
+
         manifest_path = Path(args.bundle_manifest)
         bundle_dir = Path(args.bundle_dir) if args.bundle_dir is not None else manifest_path.parent
         manifest = _load_evidence_manifest(manifest_path, strict=args.strict)
@@ -1425,30 +1647,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Regulatory export failed: {exc}")
         return EXIT_EXPORT_BUILD_FAILURE
 
-    json_bytes = (
-        json.dumps(
-            export_payload,
-            indent=2,
-            sort_keys=True,
-            separators=(",", ": "),
-        ).encode("utf-8")
-        + b"\n"
-    )
+    json_bytes = _canonical_json_bytes(export_payload)
     markdown_bytes: bytes | None = None
     if args.out_markdown is not None:
         markdown = render_markdown(export_payload, top_n=args.top_n)
         markdown_bytes = markdown.encode("utf-8") + b"\n"
     governance_bytes: bytes | None = None
     if args.governance_export is not None and governance_payload is not None:
-        governance_bytes = (
-            json.dumps(
-                governance_payload,
-                indent=2,
-                sort_keys=True,
-                separators=(",", ": "),
-            ).encode("utf-8")
-            + b"\n"
-        )
+        governance_bytes = _canonical_json_bytes(governance_payload)
 
     try:
         atomic_write(Path(args.out_json), json_bytes)
@@ -1466,6 +1672,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.governance_export is not None:
         print(f"Governance export written to {args.governance_export}")
     return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    if args.verify_governance_export is not None:
+        return _run_governance_export_verification(args)
+    return _run_export_generation(args)
 
 
 if __name__ == "__main__":

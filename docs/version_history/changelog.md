@@ -31,6 +31,26 @@
 - Added lightweight CI compliance-schema validation gate:
   - `scripts/validation/validate_compliance_schemas.py`
 
+### Phase 3.7 — Governance Hardening
+**Type:** Feature / Governance Hardening
+**Runtime Impact:** Additive (verification mode + determinism gates)
+**Integrity Contract Change:** None (bundle-root projection unchanged)
+
+- Added governance export verification mode:
+  - `tools/regulatory_export.py --verify-governance-export`
+- Added governance export determinism hardening coverage:
+  - repeated-run byte-stability tests
+  - explicit governance verification tests
+  - cross-runtime parity harness: `tools/check_governance_export_cross_runtime.py`
+- Added cross-runtime governance parity gate in CI:
+  - `.github/workflows/determinism-gate.yml`
+- Added schema version discipline policy:
+  - `docs/compliance/SCHEMA_VERSION_POLICY.md`
+- Enforced governance schema metadata guardrails in CI validation:
+  - required `$schema_version` (semver)
+  - required top-level `additionalProperties: false`
+- Locked ADR-036 status and invariants for additive/deterministic/verifiable governance exports.
+
 ## 2026-01-29
 
 **Security & Bug Fixes:**
