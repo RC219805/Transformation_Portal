@@ -13,6 +13,14 @@ All failures are explicit and actionable (no silent fallbacks).
 Drift detection is handled automatically by Pydantic models configured
 with ConfigDict(extra="forbid").
 
+Exit Codes (contract-aligned for CI integration):
+- EXIT_SUCCESS (0): Validation passed
+- EXIT_SCHEMA_VALIDATION_FAILED (1): Schema validation failed
+- EXIT_8BIT_CONVERSION (2): 8-bit conversion detected
+- EXIT_GAMMA_VIOLATION (3): Gamma correction detected
+- EXIT_SCHEMA_DRIFT (4): Schema drift detected (unknown fields)
+- EXIT_OTHER_FAILURE (5): Other failure (e.g., file not found)
+
 Usage:
     from transformation_portal.ingest import validate_schema
 
@@ -34,6 +42,97 @@ from pydantic import ValidationError
 from .schemas import IngestManifest, ProvenanceSidecar
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Exit Codes (aligned with ingest contract categories for CI compatibility)
+# =============================================================================
+
+EXIT_SUCCESS = 0
+EXIT_SCHEMA_VALIDATION_FAILED = 1
+EXIT_8BIT_CONVERSION = 2
+EXIT_GAMMA_VIOLATION = 3
+EXIT_SCHEMA_DRIFT = 4
+EXIT_OTHER_FAILURE = 5
+
+
+def classify_validation_exit_code(error: object) -> int:
+    """Classify a validation error into a contract-aligned exit code.
+
+    This function centralizes exit code classification logic, ensuring
+    consistent behavior between CLI tools and programmatic usage.
+
+    The classification strategy:
+    1. Check for structured error metadata (error_type, code attributes)
+    2. Fall back to message-based heuristics for string errors
+    3. Default to EXIT_SCHEMA_VALIDATION_FAILED for unclassified errors
+
+    Args:
+        error: An error object (string, exception, or structured error)
+
+    Returns:
+        Contract-aligned exit code (1-5)
+    """
+    # Strategy 1: Check for structured error metadata
+    error_type = getattr(error, "error_type", None)
+    error_code = getattr(error, "code", None)
+
+    if error_type == "schema_drift" or error_code == "schema_drift":
+        return EXIT_SCHEMA_DRIFT
+    if error_type == "schema_version_mismatch" or error_code == "schema_version_mismatch":
+        return EXIT_SCHEMA_VALIDATION_FAILED
+    if error_type == "8bit_conversion" or error_code == "8bit_conversion":
+        return EXIT_8BIT_CONVERSION
+    if error_type == "gamma_violation" or error_code == "gamma_violation":
+        return EXIT_GAMMA_VIOLATION
+
+    # Strategy 2: Message-based heuristics for string errors
+    error_msg = str(error).lower()
+    if "drift" in error_msg or "unknown field" in error_msg or "extra field" in error_msg:
+        return EXIT_SCHEMA_DRIFT
+    if "schema version" in error_msg:
+        return EXIT_SCHEMA_VALIDATION_FAILED
+    if "8-bit" in error_msg or "8bit" in error_msg or "uint8" in error_msg:
+        return EXIT_8BIT_CONVERSION
+    if "gamma" in error_msg or "non-linear" in error_msg:
+        return EXIT_GAMMA_VIOLATION
+
+    # Default: generic schema validation failure
+    return EXIT_SCHEMA_VALIDATION_FAILED
+
+
+def classify_validation_errors(errors: List[Any]) -> int:
+    """Classify a list of validation errors and return highest-severity exit code.
+
+    Severity ordering (highest to lowest):
+    - EXIT_SCHEMA_DRIFT (4) - structural contract violation
+    - EXIT_GAMMA_VIOLATION (3) - data quality violation
+    - EXIT_8BIT_CONVERSION (2) - data quality violation
+    - EXIT_SCHEMA_VALIDATION_FAILED (1) - general validation failure
+
+    Args:
+        errors: List of error objects (strings, exceptions, or structured errors)
+
+    Returns:
+        Highest-severity exit code from the error list
+    """
+    if not errors:
+        return EXIT_SUCCESS
+
+    # Classify all errors and return highest-severity code
+    exit_codes = [classify_validation_exit_code(e) for e in errors]
+
+    # EXIT_SCHEMA_DRIFT is highest priority (structural violation)
+    if EXIT_SCHEMA_DRIFT in exit_codes:
+        return EXIT_SCHEMA_DRIFT
+    if EXIT_GAMMA_VIOLATION in exit_codes:
+        return EXIT_GAMMA_VIOLATION
+    if EXIT_8BIT_CONVERSION in exit_codes:
+        return EXIT_8BIT_CONVERSION
+    if EXIT_SCHEMA_VALIDATION_FAILED in exit_codes:
+        return EXIT_SCHEMA_VALIDATION_FAILED
+
+    return EXIT_OTHER_FAILURE
 
 
 class SchemaValidationError(Exception):

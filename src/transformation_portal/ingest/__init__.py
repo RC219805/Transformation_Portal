@@ -21,6 +21,16 @@ __all__ = [
     "capture_provenance",
     "write_sidecar",
     "load_sidecar",
+    # Exit codes (contract-aligned for CI compatibility)
+    "EXIT_SUCCESS",
+    "EXIT_SCHEMA_VALIDATION_FAILED",
+    "EXIT_8BIT_CONVERSION",
+    "EXIT_GAMMA_VIOLATION",
+    "EXIT_SCHEMA_DRIFT",
+    "EXIT_OTHER_FAILURE",
+    # Exit code classification functions
+    "classify_validation_exit_code",
+    "classify_validation_errors",
 ]
 
 
@@ -50,4 +60,38 @@ def __getattr__(name: str):
         from .sidecar import load_sidecar
 
         return load_sidecar
+    # Exit codes
+    elif name == "EXIT_SUCCESS":
+        from .validator import EXIT_SUCCESS
+
+        return EXIT_SUCCESS
+    elif name == "EXIT_SCHEMA_VALIDATION_FAILED":
+        from .validator import EXIT_SCHEMA_VALIDATION_FAILED
+
+        return EXIT_SCHEMA_VALIDATION_FAILED
+    elif name == "EXIT_8BIT_CONVERSION":
+        from .validator import EXIT_8BIT_CONVERSION
+
+        return EXIT_8BIT_CONVERSION
+    elif name == "EXIT_GAMMA_VIOLATION":
+        from .validator import EXIT_GAMMA_VIOLATION
+
+        return EXIT_GAMMA_VIOLATION
+    elif name == "EXIT_SCHEMA_DRIFT":
+        from .validator import EXIT_SCHEMA_DRIFT
+
+        return EXIT_SCHEMA_DRIFT
+    elif name == "EXIT_OTHER_FAILURE":
+        from .validator import EXIT_OTHER_FAILURE
+
+        return EXIT_OTHER_FAILURE
+    # Classification functions
+    elif name == "classify_validation_exit_code":
+        from .validator import classify_validation_exit_code
+
+        return classify_validation_exit_code
+    elif name == "classify_validation_errors":
+        from .validator import classify_validation_errors
+
+        return classify_validation_errors
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

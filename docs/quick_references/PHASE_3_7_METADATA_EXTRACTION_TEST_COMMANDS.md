@@ -7,6 +7,9 @@ Quick reference for testing Phase 3.7 metadata extraction capabilities on images
 Ensure the following dependencies are installed:
 
 ```bash
+# Required: Install the package first
+pip install -e .
+
 # Required: exiftool
 brew install exiftool        # macOS
 apt-get install libimage-exiftool-perl  # Linux
@@ -41,6 +44,9 @@ python scripts/test_metadata_extraction.py extract /path/to/input_images/your_im
 
 # With durable write (fsync)
 python scripts/test_metadata_extraction.py extract /path/to/input_images/your_image.tif --fsync
+
+# Debug mode (full tracebacks on errors)
+python scripts/test_metadata_extraction.py --debug extract /path/to/input_images/your_image.tif
 ```
 
 ### 3. Batch Extraction (Entire Directory)
@@ -59,6 +65,9 @@ python scripts/test_metadata_extraction.py extract-batch /path/to/input_images/ 
 
 # Stop on first error
 python scripts/test_metadata_extraction.py extract-batch /path/to/input_images/ --fail-fast
+
+# Verbose output (show per-file status)
+python scripts/test_metadata_extraction.py extract-batch /path/to/input_images/ -v
 ```
 
 ### 4. Validate Sidecar Files
@@ -97,7 +106,22 @@ For programmatic access to metadata extraction:
 
 ```python
 from pathlib import Path
-from transformation_portal.ingest import capture_provenance, write_sidecar, load_sidecar
+from transformation_portal.ingest import (
+    capture_provenance,
+    write_sidecar,
+    load_sidecar,
+    validate_schema,
+    # Exit codes (contract-aligned for CI compatibility)
+    EXIT_SUCCESS,
+    EXIT_SCHEMA_VALIDATION_FAILED,
+    EXIT_8BIT_CONVERSION,
+    EXIT_GAMMA_VIOLATION,
+    EXIT_SCHEMA_DRIFT,
+    EXIT_OTHER_FAILURE,
+    # Exit code classification functions
+    classify_validation_exit_code,
+    classify_validation_errors,
+)
 
 # Extract metadata from single image
 image_path = Path("/path/to/input_images/your_image.tif")
@@ -120,6 +144,12 @@ print(f"Total EXIF tags: {len(sidecar.exif.all_tags)}")
 # Load existing sidecar
 loaded = load_sidecar(output_path, schema_type="provenance")
 print(f"Schema version: {loaded.schema_version}")
+
+# Validate and classify errors
+errors = validate_schema(output_path, schema_type="provenance")
+if errors:
+    exit_code = classify_validation_errors(errors)
+    print(f"Validation failed with exit code: {exit_code}")
 ```
 
 ## Using Existing CI Validation Script
@@ -132,6 +162,8 @@ python scripts/validate_ingest_contract.py --test-dir /path/to/input_images/prov
 ```
 
 ## Exit Codes
+
+Exit codes are defined in `transformation_portal.ingest.validator` and exported from `transformation_portal.ingest` for programmatic use.
 
 | Code | Meaning | Example |
 |------|---------|---------|
