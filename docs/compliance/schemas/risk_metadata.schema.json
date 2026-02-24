@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "risk_metadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "risk_profile_id",
+    "regulatory_regime",
+    "content_rights",
+    "copyright_compliance"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1"
+    },
+    "risk_profile_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "regulatory_regime": {
+      "type": "string",
+      "minLength": 1
+    },
+    "content_rights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_id",
+        "policy_version"
+      ],
+      "properties": {
+        "policy_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "notes": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "copyright_compliance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tdm_opt_out_detection",
+        "signals_supported",
+        "removal_process_documented",
+        "removal_deltas_affect_root"
+      ],
+      "properties": {
+        "tdm_opt_out_detection": {
+          "type": "boolean"
+        },
+        "signals_supported": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "enum": [
+              "http_headers",
+              "meta_tags",
+              "platform_api",
+              "rights_registry",
+              "robots_txt"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "removal_process_documented": {
+          "type": "boolean"
+        },
+        "removal_deltas_affect_root": {
+          "type": "boolean"
+        }
+      }
+    },
+    "risk_controls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "control_id",
+          "description",
+          "status"
+        ],
+        "properties": {
+          "control_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "implemented",
+              "not_applicable",
+              "planned"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
