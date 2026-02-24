@@ -12,6 +12,7 @@ from transformation_portal.ingest.errors import (
     SchemaValidationFailure,
 )
 from transformation_portal.ingest.machine_output import (
+    batch_item_to_dict,
     batch_result_to_dict,
     dump_json,
     error_to_dict,
@@ -51,6 +52,7 @@ def test_extract_result_to_dict_shape() -> None:
     payload = extract_result_to_dict(result, preset="luxury")
 
     assert payload["input_path"] == "/tmp/input.cr2"
+    assert payload["success"] is False
     assert payload["output_path"] is None
     assert payload["preset"] == "luxury"
     assert payload["error"]["type"] == "OtherIngestFailure"
@@ -72,6 +74,7 @@ def test_validate_result_to_dict_serializes_typed_errors() -> None:
 
     assert payload["sidecar_path"] == "/tmp/sidecar.json"
     assert payload["strict"] is True
+    assert payload["success"] is False
     assert [item["type"] for item in payload["errors"]] == [
         "SchemaValidationFailure",
         "SchemaDriftFailure",
@@ -118,9 +121,64 @@ def test_batch_result_to_dict_orders_exit_codes_stably() -> None:
     )
 
     expected_keys = [code.name for code in IngestExitCode if code != IngestExitCode.SUCCESS]
+    assert payload["success"] is False
     assert list(payload["summary_counts"]["by_exit_code"].keys()) == expected_keys
     assert payload["items"][0]["path"] == "/tmp/z.cr2"
     assert payload["items"][1]["path"] == "/tmp/a.cr2"
+
+
+def test_batch_item_to_dict_handles_none_values() -> None:
+    item = BatchItemResult(
+        path=Path("/tmp/input.cr2"),
+        success=False,
+        output_path=None,
+        elapsed_seconds=0.0,
+        error=None,
+    )
+
+    payload = batch_item_to_dict(item)
+
+    assert payload == {
+        "path": "/tmp/input.cr2",
+        "success": False,
+        "output_path": None,
+        "elapsed_seconds": 0.0,
+        "error": None,
+    }
+
+
+def test_batch_result_to_dict_includes_unknown_exit_code_names() -> None:
+    result = BatchExtractResult(
+        items=[],
+        total_elapsed=0.0,
+        summary_counts={
+            "total": 0,
+            "success": 0,
+            "failure": 0,
+            "by_exit_code": {
+                "OTHER_FAILURE": 2,
+                "CUSTOM_UNKNOWN_CODE": 7,
+            },
+        },
+        dominant_error=None,
+    )
+
+    payload = batch_result_to_dict(
+        result,
+        input_root=Path("/tmp/input"),
+        output_dir=Path("/tmp/output"),
+        fail_fast=False,
+        preserve_structure=True,
+    )
+
+    by_exit = payload["summary_counts"]["by_exit_code"]
+    known_keys = [code.name for code in IngestExitCode if code != IngestExitCode.SUCCESS]
+    assert list(by_exit.keys())[: len(known_keys)] == known_keys
+    assert by_exit["OTHER_FAILURE"] == 2
+    assert by_exit["CUSTOM_UNKNOWN_CODE"] == 7
+    assert payload["items"] == []
+    assert payload["dominant_error"] is None
+    assert payload["success"] is True
 
 
 def test_dump_json_is_deterministic() -> None:

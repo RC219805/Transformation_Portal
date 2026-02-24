@@ -39,9 +39,10 @@ def test_validate_json_envelope_is_versioned_and_stable(tmp_path: Path) -> None:
     assert payload["error"] is None
 
     data = payload["data"]
-    assert list(data.keys()) == ["dominant_error", "errors", "sidecar_path", "strict"]
+    assert list(data.keys()) == ["dominant_error", "errors", "sidecar_path", "strict", "success"]
     assert data["sidecar_path"] == str(sidecar_path)
     assert data["strict"] is True
+    assert data["success"] is False
     assert isinstance(data["errors"], list)
     assert data["dominant_error"]["type"] == "OtherIngestFailure"
     assert data["dominant_error"]["exit_code"]["name"] == "OTHER_FAILURE"
@@ -62,6 +63,7 @@ def test_extract_batch_setup_failure_uses_data_not_command_error(tmp_path: Path)
     assert data["summary_counts"]["total"] == 0
     assert data["summary_counts"]["success"] == 0
     assert data["summary_counts"]["failure"] == 0
+    assert data["success"] is False
     assert data["dominant_error"]["type"] == "OtherIngestFailure"
     assert data["dominant_error"]["exit_code"]["value"] == payload["exit_code"]
 

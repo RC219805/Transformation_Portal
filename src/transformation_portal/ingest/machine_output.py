@@ -31,6 +31,7 @@ def extract_result_to_dict(result: ExtractResult, *, preset: Optional[str] = Non
     """Serialize single-item extract result."""
     return {
         "input_path": str(result.path),
+        "success": result.success,
         "output_path": str(result.output_path) if result.output_path is not None else None,
         "elapsed_seconds": result.elapsed_seconds,
         "preset": preset,
@@ -48,6 +49,7 @@ def validate_result_to_dict(
     return {
         "sidecar_path": str(sidecar_path),
         "strict": strict,
+        "success": result.success,
         "errors": [error_to_dict(error) for error in result.errors],
         "dominant_error": error_to_dict(result.dominant_error) if result.dominant_error is not None else None,
     }
@@ -100,6 +102,7 @@ def batch_result_to_dict(
         "output_dir": str(output_dir),
         "fail_fast": fail_fast,
         "preserve_structure": preserve_structure,
+        "success": result.success,
         "items": [batch_item_to_dict(item) for item in result.items],
         "summary_counts": summary_counts,
         "dominant_error": error_to_dict(result.dominant_error) if result.dominant_error is not None else None,
