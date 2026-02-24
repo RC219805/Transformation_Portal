@@ -1,0 +1,185 @@
+"""Unit tests for ingest MetadataExtractionService orchestration."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from transformation_portal.ingest.errors import (
+    BitDepthViolation,
+    IngestExitCode,
+    OtherIngestFailure,
+    SchemaDriftFailure,
+    SchemaValidationFailure,
+)
+from transformation_portal.ingest.metadata_service import (
+    BatchExtractRequest,
+    ExtractRequest,
+    ExtractResult,
+    MetadataExtractionService,
+    ValidateRequest,
+)
+
+
+def _clock() -> float:
+    return 100.0
+
+
+def test_batch_extract_delegates_per_file_to_extract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    input_paths = [tmp_path / "b.cr2", tmp_path / "a.cr2", tmp_path / "c.cr2"]
+    for path in input_paths:
+        path.touch()
+
+    service = MetadataExtractionService(clock_fn=_clock)
+    calls: list[ExtractRequest] = []
+
+    def spy_extract(req: ExtractRequest) -> ExtractResult:
+        calls.append(req)
+        return ExtractResult(
+            path=req.input_path,
+            success=True,
+            output_path=req.output_dir / f"{req.input_path.stem}.provenance.json" if req.output_dir else None,
+            elapsed_seconds=0.1,
+        )
+
+    monkeypatch.setattr(service, "extract", spy_extract)
+
+    result = service.batch_extract(BatchExtractRequest(input_paths=input_paths, output_dir=tmp_path))
+
+    assert len(calls) == len(input_paths)
+    assert [call.input_path for call in calls] == sorted(input_paths, key=lambda path: str(path))
+    assert result.success
+
+
+def test_batch_extract_uses_priority_to_choose_dominant_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    input_paths = [tmp_path / "one.tif", tmp_path / "two.tif", tmp_path / "three.tif"]
+    for path in input_paths:
+        path.touch()
+
+    error_by_name = {
+        "one.tif": OtherIngestFailure("fallback failure"),
+        "two.tif": SchemaValidationFailure("schema failure"),
+        "three.tif": SchemaDriftFailure("drift failure"),
+    }
+
+    service = MetadataExtractionService(clock_fn=_clock)
+
+    def spy_extract(req: ExtractRequest) -> ExtractResult:
+        error = error_by_name[req.input_path.name]
+        return ExtractResult(
+            path=req.input_path,
+            success=False,
+            output_path=None,
+            elapsed_seconds=0.2,
+            error=error,
+        )
+
+    monkeypatch.setattr(service, "extract", spy_extract)
+
+    result = service.batch_extract(
+        BatchExtractRequest(input_paths=input_paths, output_dir=tmp_path, deterministic_order=False)
+    )
+
+    assert not result.success
+    assert isinstance(result.dominant_error, SchemaDriftFailure)
+
+
+def test_batch_extract_summary_counts_are_stable(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    input_paths = [tmp_path / "a.cr2", tmp_path / "b.cr2", tmp_path / "c.cr2", tmp_path / "d.cr2"]
+    for path in input_paths:
+        path.touch()
+
+    response_by_name = {
+        "a.cr2": ExtractResult(
+            path=input_paths[0], success=True, output_path=tmp_path / "a.provenance.json", elapsed_seconds=0.1
+        ),
+        "b.cr2": ExtractResult(
+            path=input_paths[1],
+            success=False,
+            output_path=None,
+            elapsed_seconds=0.1,
+            error=BitDepthViolation("8-bit violation"),
+        ),
+        "c.cr2": ExtractResult(
+            path=input_paths[2],
+            success=False,
+            output_path=None,
+            elapsed_seconds=0.1,
+            error=OtherIngestFailure("other failure"),
+        ),
+        "d.cr2": ExtractResult(
+            path=input_paths[3], success=True, output_path=tmp_path / "d.provenance.json", elapsed_seconds=0.1
+        ),
+    }
+
+    service = MetadataExtractionService(clock_fn=_clock)
+
+    def spy_extract(req: ExtractRequest) -> ExtractResult:
+        return response_by_name[req.input_path.name]
+
+    monkeypatch.setattr(service, "extract", spy_extract)
+
+    result = service.batch_extract(BatchExtractRequest(input_paths=input_paths, output_dir=tmp_path))
+
+    expected_exit_keys = [code.name for code in IngestExitCode if code != IngestExitCode.SUCCESS]
+    assert list(result.summary_counts["by_exit_code"].keys()) == expected_exit_keys
+    assert result.summary_counts["total"] == 4
+    assert result.summary_counts["success"] == 2
+    assert result.summary_counts["failure"] == 2
+    assert result.summary_counts["by_exit_code"]["BIT_DEPTH_VIOLATION"] == 1
+    assert result.summary_counts["by_exit_code"]["OTHER_FAILURE"] == 1
+
+
+def test_extract_wraps_unknown_exception_as_other_ingest_failure(tmp_path: Path) -> None:
+    input_path = tmp_path / "input.cr2"
+    input_path.touch()
+
+    def capture_raises(**_: object) -> object:
+        raise RuntimeError("boom")
+
+    service = MetadataExtractionService(
+        capture_provenance_fn=capture_raises,
+        write_sidecar_fn=lambda *_args, **_kwargs: None,
+        clock_fn=_clock,
+    )
+
+    result = service.extract(ExtractRequest(input_path=input_path, output_dir=tmp_path))
+
+    assert not result.success
+    assert result.error is not None
+    assert isinstance(result.error, OtherIngestFailure)
+    assert "boom" in str(result.error)
+
+
+def test_batch_extract_sorts_items_when_deterministic_order_enabled(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    input_paths = [tmp_path / "z.cr2", tmp_path / "a.cr2", tmp_path / "m.cr2"]
+    for path in input_paths:
+        path.touch()
+
+    service = MetadataExtractionService(clock_fn=_clock)
+
+    def spy_extract(req: ExtractRequest) -> ExtractResult:
+        return ExtractResult(
+            path=req.input_path,
+            success=True,
+            output_path=req.output_dir / f"{req.input_path.stem}.provenance.json" if req.output_dir else None,
+            elapsed_seconds=0.0,
+        )
+
+    monkeypatch.setattr(service, "extract", spy_extract)
+
+    result = service.batch_extract(BatchExtractRequest(input_paths=input_paths, output_dir=tmp_path, deterministic_order=True))
+
+    assert [item.path for item in result.items] == sorted(input_paths, key=lambda path: str(path))
+
+
+def test_validate_returns_typed_result_with_aggregated_dominance() -> None:
+    expected_errors = [SchemaValidationFailure("schema issue"), SchemaDriftFailure("drift issue")]
+    service = MetadataExtractionService(validate_schema_errors_fn=lambda **_: expected_errors, clock_fn=_clock)
+
+    result = service.validate(ValidateRequest(sidecar_path=Path("/tmp/sidecar.json")))
+
+    assert not result.success
+    assert result.errors == expected_errors
+    assert isinstance(result.dominant_error, SchemaDriftFailure)
