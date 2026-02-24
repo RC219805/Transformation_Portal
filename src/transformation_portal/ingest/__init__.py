@@ -41,6 +41,14 @@ __all__ = [
     "capture_provenance",
     "write_sidecar",
     "load_sidecar",
+    "MetadataExtractionService",
+    "ExtractRequest",
+    "ExtractResult",
+    "ValidateRequest",
+    "ValidateResult",
+    "BatchExtractRequest",
+    "BatchItemResult",
+    "BatchExtractResult",
 ]
 
 
@@ -150,4 +158,36 @@ def __getattr__(name: str):
         from .sidecar import load_sidecar
 
         return load_sidecar
+    elif name == "MetadataExtractionService":
+        from .metadata_service import MetadataExtractionService
+
+        return MetadataExtractionService
+    elif name == "ExtractRequest":
+        from .metadata_service import ExtractRequest
+
+        return ExtractRequest
+    elif name == "ExtractResult":
+        from .metadata_service import ExtractResult
+
+        return ExtractResult
+    elif name == "ValidateRequest":
+        from .metadata_service import ValidateRequest
+
+        return ValidateRequest
+    elif name == "ValidateResult":
+        from .metadata_service import ValidateResult
+
+        return ValidateResult
+    elif name == "BatchExtractRequest":
+        from .metadata_service import BatchExtractRequest
+
+        return BatchExtractRequest
+    elif name == "BatchItemResult":
+        from .metadata_service import BatchItemResult
+
+        return BatchItemResult
+    elif name == "BatchExtractResult":
+        from .metadata_service import BatchExtractResult
+
+        return BatchExtractResult
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
