@@ -93,7 +93,10 @@ When requested, Markdown output MUST include:
 2. Public export MUST summarize source categories and high-level provenance
    instead of full corpus membership.
 3. Integrity claims MUST remain independently verifiable from published digests.
-4. Confidential details MAY be disclosed to competent authorities under Article 78.
+4. Public export defaults to summary-level disclosure.
+5. File-level evidence remains retained in bundle artifacts and MAY be provided
+   for competent-authority review under applicable confidentiality safeguards
+   (including Article 78).
 
 ---
 

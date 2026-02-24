@@ -9,7 +9,8 @@ Start here:
 1. `REGULATOR_COMPLIANCE_OVERVIEW_ART53.md`
 2. `ARTICLE53_TRACEABILITY_MATRIX.md`
 3. `EU_AI_ACT_ART53_PROFILE.md`
-4. Verification commands in the overview document
+4. Verification command contract in the overview document
+5. Canonical export artifact names: `regulatory_export.json`, `regulatory_export.md`
 
 ## Files
 

@@ -10,7 +10,7 @@
 
 Version 3.5.0 introduces **Regulatory Export Mode**, a deterministic, schema-governed compliance layer built on top of the frozen Phase 3.4.1 bundle-root contract.
 
-This release completes the transformation from engineering-grade integrity tooling to compliance-grade, regulator-verifiable AI evidence infrastructure.
+This release completes the transformation from engineering-grade integrity tooling to a capability-aligned, regulator-verifiable AI evidence infrastructure.
 
 ---
 
@@ -32,13 +32,14 @@ This release completes the transformation from engineering-grade integrity tooli
 
 - 3.11 vs 3.12 parity CI gate
 - Golden-root drift detection
-- ADR-035: frozen anchoring invariants
+- ADR-035: frozen anchoring invariants (`docs/architecture/ADR-035-bundle-root-anchoring-invariants.md`)
 
 ### Phase 3.5 — Regulatory Export Mode
 
 - `tools/regulatory_export.py`
-- LOCKED specification: `SPEC-REGEXPORT-001.md`
+- LOCKED specification: `docs/compliance/SPEC-REGEXPORT-001.md`
 - Article 53 compliance profile document
+- Canonical export artifact names: `regulatory_export.json` and `regulatory_export.md`
 - Strict schemas:
   - `risk_metadata.schema.json`
   - `source_taxonomy.schema.json`
@@ -78,7 +79,7 @@ v3.5.0 enables:
 - Cryptographic binding to bundle root
 - Deterministic rendering
 - Verification commands embedded in artifact
-- Confidentiality posture aligned with Article 78
+- Summary-default confidentiality posture aligned with Article 78 safeguards
 
 ---
 
@@ -108,3 +109,7 @@ This release does not constitute:
 - Legal certification
 - Third-party audit attestation
 - Notified body approval
+
+Applicability of Article 53 obligations remains deployment-context dependent;
+this release does not assert that this repository itself operates a
+general-purpose AI training or inference service.

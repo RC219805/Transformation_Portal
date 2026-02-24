@@ -1,14 +1,14 @@
 # Regulator-Facing Compliance Overview
 
 **Profile ID:** `EU-AI-ACT-ART53-GPAI-V1`
-**Applies To:** General-Purpose AI model providers
+**Applies To:** Systems requiring Article 53-style traceability and disclosure controls (deployment-context dependent)
 **Version:** 1.0
 
 ---
 
 ## Executive Summary
 
-This system provides a deterministic, cryptographically verifiable training-data traceability and disclosure mechanism aligned with Article 53 of Regulation (EU) 2024/1689.
+This system provides a deterministic, cryptographically verifiable training-data traceability and disclosure mechanism aligned with Article 53-style expectations under Regulation (EU) 2024/1689.
 
 It separates:
 
@@ -18,6 +18,19 @@ It separates:
 All public disclosures are cryptographically anchored to `bundle_root_sha256`.
 
 ---
+
+## Positioning
+
+This document defines a capability alignment profile for deterministic evidence
+integrity and disclosure exports.
+Applicability of Article 53 obligations depends on deployment context and
+operator role.
+The controls in this repository can support compliant deployments where those
+obligations apply.
+This document does not assert that this repository operates a foundation-model
+training service.
+This document does not assert that this repository operates a production
+inference service.
 
 ## Evidence Architecture
 
@@ -41,7 +54,7 @@ All public disclosures are cryptographically anchored to `bundle_root_sha256`.
 
 - Deterministic projection of manifest fields
 - Cross-runtime parity enforced in CI
-- Projection invariants frozen via ADR-035
+- Projection invariants frozen via `docs/architecture/ADR-035-bundle-root-anchoring-invariants.md`
 
 ---
 
@@ -89,8 +102,8 @@ Transparency Controls:
 
 Governance Controls:
 
-- ADR-035 invariant freeze for bundle-root projection
-- LOCKED export rendering contract in `SPEC-REGEXPORT-001`
+- ADR-035 invariant freeze for bundle-root projection (`docs/architecture/ADR-035-bundle-root-anchoring-invariants.md`)
+- LOCKED export rendering contract in `docs/compliance/SPEC-REGEXPORT-001.md`
 - Strict schema controls (`additionalProperties: false`)
 
 ---
@@ -110,30 +123,35 @@ Export includes explicit declarations of:
 
 The public export:
 
-- Provides summary-level transparency
+- Defaults to summary-level disclosure
 - Preserves trade secrets
-- Enables targeted regulator verification
-- Supports controlled disclosure under Article 78
+- Retains file-level evidence in bundle artifacts
+- Supports competent-authority review under applicable confidentiality safeguards (including Article 78)
 
 ---
 
 ## Verification Procedure
 
-Regulators may verify integrity by running:
-
-```bash
-python tools/verify_evidence_bundle_manifest.py \
-  --bundle-manifest evidence_bundle_manifest.json \
-  --bundle-dir <bundle_dir>
-```
+Contract-stable verification example:
 
 ```bash
 python tools/regulatory_export.py \
-  --bundle-manifest evidence_bundle_manifest.json \
-  --risk-metadata risk_metadata.json \
-  --source-taxonomy source_taxonomy.json \
-  --out-json regulatory_export.json \
-  --out-markdown regulatory_export.md
+  --bundle-manifest <BUNDLE_DIR>/evidence_bundle_manifest.json \
+  --risk-metadata <RISK_METADATA_JSON> \
+  --source-taxonomy <SOURCE_TAXONOMY_JSON> \
+  --out-json <OUTPUT_DIR>/regulatory_export.json \
+  --out-markdown <OUTPUT_DIR>/regulatory_export.md
 ```
 
+Run `python tools/regulatory_export.py --help` for full interface; the example
+above is contractually stable per `docs/compliance/SPEC-REGEXPORT-001.md`.
+
 Expected exit code: `0`.
+
+---
+
+## Final Compliance Position
+
+With v3.5.0, this repository is aligned with Article 53-style traceability and
+disclosure expectations and is capable of supporting compliant deployments where
+obligations apply.
