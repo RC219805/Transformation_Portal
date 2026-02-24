@@ -6,6 +6,13 @@ Proposed
 ## Date
 2026-02-24
 
+## Executive Summary
+
+Phase 3.4 introduced a canonical bundle-root digest for evidence bundles. This
+ADR freezes the root projection, preimage serialization, field exclusion rules,
+and exit code behavior so all tools and CI environments compute a stable
+cross-runtime anchor for external timestamping, signatures, and ledger binding.
+
 ## Context
 
 Phase 3.3 introduced canonical evidence bundle manifests and strict digest
@@ -97,6 +104,37 @@ Verifiers must accept:
 - `0`: success
 - `11`: verification mismatch / failure
 - `12`: malformed input
+
+## Alternatives Considered
+
+- Implicit preimage definition via current implementation only:
+  rejected because auditors and external validators need an explicit byte-level
+  contract, not inferred behavior.
+- Including `*_path` and notarization metadata in the root preimage:
+  rejected because relocation and re-anchoring would change the root despite
+  unchanged artifact content.
+- Runtime-specific projections:
+  rejected because bundle roots must remain stable across supported Python
+  runtimes and execution environments.
+
+## Implementation Plan
+
+- Keep canonical projection and serialization logic centralized in
+  `tools/bundle_root_common.py`.
+- Enforce optional root-field co-presence and notarization shape constraints in
+  schema and verifier logic.
+- Maintain CI determinism checks, including cross-runtime parity validation.
+- Preserve verifier compatibility for both Phase 3.3 (no root fields) and
+  Phase 3.4 (with optional root/notarization).
+
+## Success Metrics
+
+- Bundle-root recomputation remains bit-identical for deterministic fixtures
+  under Python 3.11 and Python 3.12.
+- CI determinism gate fails on projection drift, serialization drift, or root
+  mismatch.
+- Existing Phase 3.3 manifests continue to verify without schema or runtime
+  regressions.
 
 ## Enforcement
 

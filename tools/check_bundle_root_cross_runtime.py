@@ -6,87 +6,15 @@ Verify bundle-root digest parity across two Python runtimes.
 from __future__ import annotations
 
 import argparse
-import hashlib
-import json
 import subprocess
 import tempfile
 from pathlib import Path
 
+from bundle_root_fixture import EXPECTED_BUNDLE_ROOT_SHA256, write_bundle_fixture_artifacts
+
 EXIT_RUNTIME_FAILURE = 31
 EXIT_ROOT_MISMATCH = 32
-DEFAULT_EXPECTED_ROOT = "47c09af843470b891e8c33d614fb5b4a4399218fdc7b8461f5c6b11d1fa000ce"
-
-
-def _write_fixture_bundle(bundle_dir: Path) -> Path:
-    roots_path = bundle_dir / "merkle_roots.json"
-    roots_path.write_text(
-        json.dumps(
-            {
-                "hash_algorithm": "sha256",
-                "leaf_hash_algorithm": "sha256",
-                "leaf_format_version": "1",
-                "leaf_format": "v1",
-                "tree_method_version": "1",
-                "tree_method": "duplicate_last",
-                "partitions": [],
-                "global": {"leaf_count": 3, "root_sha256": "0" * 64},
-            },
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-
-    hash_manifest_path = bundle_dir / "hash_manifest.csv.gz"
-    hash_manifest_path.write_bytes(
-        b"# hash_algorithm=sha256\n"
-        b"origin_drive,partition,relpath,filesize_bytes,sha256,hash_status,error\n"
-        b"driveA,partA,a.jpg,5,abc,ok,\n"
-    )
-
-    hash_summary_path = bundle_dir / "hash_summary.json"
-    hash_summary_path.write_text(
-        json.dumps(
-            {
-                "hash_algorithm": "sha256",
-                "hash_manifest_schema_version": "1",
-                "rows_total": 1,
-                "hashed_ok": 1,
-                "missing": 0,
-                "unreadable": 0,
-                "skipped": 0,
-                "total_bytes_hashed": 5,
-            },
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-
-    signature_path = bundle_dir / "merkle_roots.sig.json"
-    signature_path.write_text(
-        json.dumps(
-            {
-                "envelope_version": "1",
-                "signature_algorithm": "ed25519",
-                "artifact_digest_algorithm": "sha256",
-                "signed_artifact": "merkle_roots.json",
-                "signed_artifact_sha256": hashlib.sha256(roots_path.read_bytes()).hexdigest(),
-                "signature_base64": "c2ln",
-            },
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-
-    timestamp_path = bundle_dir / "merkle_roots.sig.tsr"
-    timestamp_path.write_bytes(b"\x30\x03\x30\x01\x00")
-
-    return bundle_dir / "evidence_bundle_manifest.json"
+DEFAULT_EXPECTED_ROOT = EXPECTED_BUNDLE_ROOT_SHA256
 
 
 def _run_checked(command: list[str], *, cwd: Path) -> str:
@@ -106,35 +34,34 @@ def _run_checked(command: list[str], *, cwd: Path) -> str:
     return result.stdout.strip()
 
 
-def _compute_bundle_root(*, python_executable: str, project_root: Path, manifest_path: Path) -> str:
+def _compute_bundle_root(
+    *,
+    python_executable: str,
+    project_root: Path,
+    artifacts: dict[str, Path],
+) -> str:
     tools_dir = project_root / "tools"
     generate_tool = tools_dir / "generate_evidence_bundle_manifest.py"
     compute_tool = tools_dir / "compute_bundle_root.py"
-
-    roots_path = manifest_path.parent / "merkle_roots.json"
-    hash_manifest_path = manifest_path.parent / "hash_manifest.csv.gz"
-    hash_summary_path = manifest_path.parent / "hash_summary.json"
-    signature_path = manifest_path.parent / "merkle_roots.sig.json"
-    timestamp_path = manifest_path.parent / "merkle_roots.sig.tsr"
 
     _run_checked(
         [
             python_executable,
             str(generate_tool),
             "--roots",
-            str(roots_path),
+            str(artifacts["roots"]),
             "--hash-manifest",
-            str(hash_manifest_path),
+            str(artifacts["hash_manifest"]),
             "--hash-summary",
-            str(hash_summary_path),
+            str(artifacts["hash_summary"]),
             "--signature",
-            str(signature_path),
+            str(artifacts["signature"]),
             "--timestamp-target",
             "signature",
             "--timestamp",
-            str(timestamp_path),
+            str(artifacts["timestamp"]),
             "--out",
-            str(manifest_path),
+            str(artifacts["out"]),
         ],
         cwd=project_root,
     )
@@ -143,7 +70,7 @@ def _compute_bundle_root(*, python_executable: str, project_root: Path, manifest
             python_executable,
             str(compute_tool),
             "--bundle-manifest",
-            str(manifest_path),
+            str(artifacts["out"]),
         ],
         cwd=project_root,
     )
@@ -168,17 +95,17 @@ def main() -> int:
 
     project_root = Path(args.project_root).resolve()
     with tempfile.TemporaryDirectory() as tmp:
-        manifest_path = _write_fixture_bundle(Path(tmp))
+        artifacts = write_bundle_fixture_artifacts(Path(tmp), timestamp_target="signature")
         try:
             root_a = _compute_bundle_root(
                 python_executable=args.python_a,
                 project_root=project_root,
-                manifest_path=manifest_path,
+                artifacts=artifacts,
             )
             root_b = _compute_bundle_root(
                 python_executable=args.python_b,
                 project_root=project_root,
-                manifest_path=manifest_path,
+                artifacts=artifacts,
             )
         except RuntimeError as exc:
             print(f"Cross-runtime parity check failed: {exc}")
