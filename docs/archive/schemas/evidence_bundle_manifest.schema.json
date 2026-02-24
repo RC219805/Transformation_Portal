@@ -102,7 +102,87 @@
     "bundle_tool_version": {
       "type": "string",
       "minLength": 1
+    },
+    "bundle_root_algorithm": {
+      "type": "string",
+      "const": "sha256"
+    },
+    "bundle_root_preimage_version": {
+      "type": "string",
+      "const": "1"
+    },
+    "bundle_root_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "notarization": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rfc3161": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "timestamp_path",
+            "timestamp_sha256"
+          ],
+          "properties": {
+            "timestamp_path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "timestamp_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        },
+        "sigstore": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "bundle_path",
+            "bundle_sha256"
+          ],
+          "properties": {
+            "bundle_path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "bundle_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "rfc3161"
+          ]
+        },
+        {
+          "required": [
+            "sigstore"
+          ]
+        }
+      ]
     }
+  },
+  "dependentRequired": {
+    "bundle_root_algorithm": [
+      "bundle_root_preimage_version",
+      "bundle_root_sha256"
+    ],
+    "bundle_root_preimage_version": [
+      "bundle_root_algorithm",
+      "bundle_root_sha256"
+    ],
+    "bundle_root_sha256": [
+      "bundle_root_algorithm",
+      "bundle_root_preimage_version"
+    ]
   },
   "allOf": [
     {
