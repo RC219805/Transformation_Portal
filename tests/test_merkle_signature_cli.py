@@ -3,21 +3,34 @@
 from __future__ import annotations
 
 import base64
+import functools
 import hashlib
+import importlib.util
 import json
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat, PublicFormat
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SIGN_TOOL = PROJECT_ROOT / "tools" / "sign_merkle_roots.py"
 VERIFY_TOOL = PROJECT_ROOT / "tools" / "verify_merkle_signature.py"
-pytestmark = [pytest.mark.regression]
+HAS_CRYPTOGRAPHY = importlib.util.find_spec("cryptography") is not None
+pytestmark = [
+    pytest.mark.regression,
+    pytest.mark.skipif(not HAS_CRYPTOGRAPHY, reason="cryptography is required for Merkle signing CLI tests"),
+]
+
+
+@functools.lru_cache(maxsize=1)
+def _load_cryptography_primitives() -> tuple[object, object, object, object, object, object]:
+    pytest.importorskip("cryptography", reason="cryptography is required for Merkle signing CLI tests")
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat, PublicFormat
+
+    return rsa, Ed25519PrivateKey, Encoding, NoEncryption, PrivateFormat, PublicFormat
 
 
 def _run_cli(command: list[str]) -> subprocess.CompletedProcess[str]:
@@ -42,6 +55,7 @@ def _load_envelope(path: Path) -> dict[str, str]:
 
 
 def _write_keypair(tmp_path: Path, stem: str) -> tuple[Path, Path]:
+    _, Ed25519PrivateKey, Encoding, NoEncryption, PrivateFormat, PublicFormat = _load_cryptography_primitives()
     private_key = Ed25519PrivateKey.generate()
 
     private_key_path = tmp_path / f"{stem}_private.pem"
@@ -65,6 +79,7 @@ def _write_keypair(tmp_path: Path, stem: str) -> tuple[Path, Path]:
 
 
 def _write_rsa_public_key(tmp_path: Path, stem: str) -> Path:
+    rsa, _, Encoding, _, _, PublicFormat = _load_cryptography_primitives()
     rsa_private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     rsa_public_key_path = tmp_path / f"{stem}_rsa_public.pem"
     rsa_public_key_path.write_bytes(
@@ -77,6 +92,7 @@ def _write_rsa_public_key(tmp_path: Path, stem: str) -> Path:
 
 
 def _write_rsa_private_key(tmp_path: Path, stem: str) -> Path:
+    rsa, _, Encoding, NoEncryption, PrivateFormat, _ = _load_cryptography_primitives()
     rsa_private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     rsa_private_key_path = tmp_path / f"{stem}_rsa_private.pem"
     rsa_private_key_path.write_bytes(
