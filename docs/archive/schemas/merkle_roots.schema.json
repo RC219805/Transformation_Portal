@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "archive_hash_merkle_roots",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "hash_algorithm",
+    "leaf_hash_algorithm",
+    "leaf_format_version",
+    "leaf_format",
+    "tree_method_version",
+    "tree_method",
+    "partitions",
+    "global"
+  ],
+  "properties": {
+    "hash_algorithm": {
+      "type": "string",
+      "const": "sha256"
+    },
+    "leaf_hash_algorithm": {
+      "type": "string",
+      "const": "sha256"
+    },
+    "leaf_format_version": {
+      "type": "string"
+    },
+    "leaf_format": {
+      "type": "string"
+    },
+    "tree_method_version": {
+      "type": "string"
+    },
+    "tree_method": {
+      "type": "string"
+    },
+    "partitions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "origin_drive",
+          "partition",
+          "leaf_count",
+          "root_sha256"
+        ],
+        "properties": {
+          "origin_drive": {
+            "type": "string"
+          },
+          "partition": {
+            "type": "string"
+          },
+          "leaf_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "root_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    },
+    "global": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "leaf_count",
+        "root_sha256"
+      ],
+      "properties": {
+        "leaf_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "root_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    }
+  }
+}

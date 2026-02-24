@@ -1,0 +1,4 @@
+origin_drive,partition,relpath
+DriveB,Part2,DriveB/Part2/sub/charlie.txt
+DriveA,Part1,DriveA/Part1/bravo.bin
+DriveA,Part1,DriveA/Part1/alpha.txt

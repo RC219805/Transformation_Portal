@@ -1,0 +1,48 @@
+{
+  "name": "hash_manifest",
+  "version": "1.0",
+  "description": "Deterministic per-file hash manifest derived from Phase 2 archive_index outputs.",
+  "columns": [
+    {
+      "name": "origin_drive",
+      "type": "string",
+      "description": "Top-level custody bucket from archive index."
+    },
+    {
+      "name": "partition",
+      "type": "string",
+      "description": "Partition label within origin_drive."
+    },
+    {
+      "name": "relpath",
+      "type": "string",
+      "description": "Repository-independent relative path rooted at archive root."
+    },
+    {
+      "name": "filesize_bytes",
+      "type": "int",
+      "description": "Exact file byte size from filesystem stat for regular files; 0 for non-hashed statuses."
+    },
+    {
+      "name": "sha256",
+      "type": "string",
+      "description": "Lower-case hex SHA-256 digest for hash_status=ok, else empty string."
+    },
+    {
+      "name": "hash_status",
+      "type": "string",
+      "enum": [
+        "ok",
+        "missing",
+        "unreadable",
+        "skipped"
+      ],
+      "description": "Deterministic hashing outcome for each path."
+    },
+    {
+      "name": "error",
+      "type": "string",
+      "description": "Stable machine-readable error token when hash_status != ok."
+    }
+  ]
+}
