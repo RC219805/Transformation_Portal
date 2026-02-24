@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "archive_evidence_bundle_manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "bundle_version",
+    "hash_algorithm",
+    "roots_path",
+    "roots_sha256",
+    "signature_path",
+    "signature_sha256",
+    "timestamp_target",
+    "timestamp_path",
+    "timestamp_sha256",
+    "root_count",
+    "phase3_version",
+    "phase3_1_version",
+    "phase3_2_version"
+  ],
+  "properties": {
+    "bundle_version": {
+      "type": "string",
+      "const": "1"
+    },
+    "hash_algorithm": {
+      "type": "string",
+      "const": "sha256"
+    },
+    "roots_path": {
+      "type": "string",
+      "const": "merkle_roots.json"
+    },
+    "roots_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "signature_path": {
+      "type": "string",
+      "const": "merkle_roots.sig.json"
+    },
+    "signature_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "timestamp_target": {
+      "type": "string",
+      "enum": [
+        "roots",
+        "signature"
+      ]
+    },
+    "timestamp_path": {
+      "type": "string"
+    },
+    "timestamp_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "root_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "phase3_version": {
+      "type": "string"
+    },
+    "phase3_1_version": {
+      "type": "string"
+    },
+    "phase3_2_version": {
+      "type": "string"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "timestamp_target": {
+            "const": "signature"
+          }
+        },
+        "required": [
+          "timestamp_target"
+        ]
+      },
+      "then": {
+        "properties": {
+          "timestamp_path": {
+            "const": "merkle_roots.sig.tsr"
+          }
+        },
+        "required": [
+          "timestamp_path"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "timestamp_target": {
+            "const": "roots"
+          }
+        },
+        "required": [
+          "timestamp_target"
+        ]
+      },
+      "then": {
+        "properties": {
+          "timestamp_path": {
+            "const": "merkle_roots.tsr"
+          }
+        },
+        "required": [
+          "timestamp_path"
+        ]
+      }
+    }
+  ]
+}
