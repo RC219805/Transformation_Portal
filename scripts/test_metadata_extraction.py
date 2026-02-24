@@ -1,0 +1,1036 @@
+#!/usr/bin/env python3
+"""Test Phase 3.7 metadata extraction capabilities on image directories.
+
+This script provides commands for testing the Phase 3.7 metadata extraction
+capabilities, including:
+- Provenance capture (complete EXIF + toolchain + environment metadata)
+- Sidecar generation (deterministic JSON output)
+- Schema validation (schema compliance verification)
+- Batch processing (multiple images)
+
+Requirements:
+- Package must be installed: pip install -e .
+- exiftool must be installed (brew install exiftool / apt-get install libimage-exiftool-perl)
+
+Usage:
+    # Single image extraction
+    python scripts/test_metadata_extraction.py extract /path/to/image.tif
+
+    # Batch extraction (entire directory)
+    python scripts/test_metadata_extraction.py extract-batch /path/to/images/ --output ./output_sidecars/
+
+    # Validate existing sidecar
+    python scripts/test_metadata_extraction.py validate /path/to/provenance.json
+
+    # Check system readiness
+    python scripts/test_metadata_extraction.py check-system
+
+    # Summary of extraction results
+    python scripts/test_metadata_extraction.py summarize /path/to/sidecars/
+
+Exit Codes:
+    0: Success
+    1: Schema validation failed
+    2: 8-bit conversion detected
+    3: Gamma correction detected
+    4: Schema drift detected
+    5: Other failure (e.g., exiftool not found)
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import time
+import traceback
+from collections import Counter
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+from transformation_portal.ingest import (
+    EXIT_OTHER_FAILURE,
+    EXIT_SUCCESS,
+    aggregate_exit_codes,
+    classify_validation_errors,
+)
+
+# =============================================================================
+# Supported Image Extensions
+# =============================================================================
+
+SUPPORTED_EXTENSIONS = {
+    # RAW formats
+    ".cr2",
+    ".cr3",  # Canon
+    ".nef",
+    ".nrw",  # Nikon
+    ".arw",
+    ".srf",  # Sony
+    ".dng",  # Adobe DNG
+    ".raf",  # Fujifilm
+    ".orf",  # Olympus
+    ".rw2",  # Panasonic
+    ".pef",  # Pentax
+    ".srw",  # Samsung
+    # TIFF formats
+    ".tif",
+    ".tiff",
+    # Common formats
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".heic",
+    ".heif",
+}
+
+
+# =============================================================================
+# Result Dataclasses (Execution/Rendering Separation)
+# =============================================================================
+
+
+@dataclass
+class SystemCheckResult:
+    """Result of system check command."""
+
+    exiftool_available: bool = False
+    exiftool_version: Optional[str] = None
+    pydantic_available: bool = False
+    pydantic_version: Optional[str] = None
+    git_available: bool = False
+    git_version: Optional[str] = None
+    rawpy_available: bool = False
+    rawpy_version: Optional[str] = None
+    libraw_version: Optional[str] = None
+    ingest_module_available: bool = False
+    errors: List[str] = field(default_factory=list)
+
+    @property
+    def all_required_ok(self) -> bool:
+        """Check if all required dependencies are available."""
+        return self.exiftool_available and self.pydantic_available and self.ingest_module_available
+
+
+@dataclass
+class ExtractResult:
+    """Result of single image extraction."""
+
+    success: bool
+    image_path: Path
+    output_path: Optional[Path] = None
+    sidecar: Optional[Any] = None  # ProvenanceSidecar
+    elapsed_seconds: float = 0.0
+    error: Optional[str] = None
+
+
+@dataclass
+class BatchExtractResult:
+    """Result of batch extraction."""
+
+    input_dir: Path
+    output_dir: Path
+    total_images: int
+    processed: int
+    successful: int
+    failed: int
+    total_elapsed: float
+    results: Dict[str, Tuple[bool, str, float]] = field(default_factory=dict)
+    failure_types: Dict[int, int] = field(default_factory=dict)  # exit_code -> count
+
+
+@dataclass
+class ValidateResult:
+    """Result of sidecar validation."""
+
+    success: bool
+    sidecar_path: Path
+    errors: List[str] = field(default_factory=list)
+    exit_code: int = EXIT_SUCCESS
+    sidecar_data: Optional[Dict[str, Any]] = None
+
+
+@dataclass
+class SummarizeResult:
+    """Result of sidecar summarization."""
+
+    sidecar_dir: Path
+    sidecar_count: int
+    total_size_bytes: int = 0
+    total_tags: int = 0
+    gps_count: int = 0
+    cameras: Dict[str, int] = field(default_factory=dict)
+    dimensions: List[Tuple[int, int]] = field(default_factory=list)
+    errors: List[str] = field(default_factory=list)
+
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+
+def find_images(directory: Path, recursive: bool = True) -> List[Path]:
+    """Find all supported image files in directory.
+
+    Args:
+        directory: Directory to search
+        recursive: If True, search subdirectories
+
+    Returns:
+        List of image file paths
+    """
+    images = []
+    pattern = "**/*" if recursive else "*"
+
+    for file_path in directory.glob(pattern):
+        # Normalize suffix to lowercase so extension matching is case-insensitive.
+        if file_path.is_file() and file_path.suffix.lower() in SUPPORTED_EXTENSIONS:
+            images.append(file_path)
+
+    return sorted(images)
+
+
+def format_size(size_bytes: int) -> str:
+    """Format file size in human-readable format."""
+    size_float = float(size_bytes)
+    for unit in ["B", "KB", "MB", "GB"]:
+        if size_float < 1024:
+            return f"{size_float:.1f} {unit}"
+        size_float /= 1024
+    return f"{size_float:.1f} TB"
+
+
+# =============================================================================
+# Execution Functions (Business Logic - Testable)
+# =============================================================================
+
+
+def run_check_system() -> SystemCheckResult:
+    """Execute system check and return structured result."""
+    result = SystemCheckResult()
+
+    # Check exiftool
+    try:
+        from transformation_portal.ingest.provenance import _check_exiftool_available, _get_exiftool_version
+
+        result.exiftool_available = _check_exiftool_available()
+        if result.exiftool_available:
+            result.exiftool_version = _get_exiftool_version()
+    except ImportError as e:
+        result.errors.append(f"exiftool check failed: {e}")
+
+    # Check pydantic
+    try:
+        import pydantic
+
+        result.pydantic_available = True
+        result.pydantic_version = pydantic.__version__
+    except ImportError:
+        result.errors.append("pydantic not found")
+
+    # Check git (optional)
+    try:
+        import subprocess
+
+        git_result = subprocess.run(
+            ["git", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        if git_result.returncode == 0:
+            result.git_available = True
+            result.git_version = git_result.stdout.strip()
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass  # Optional dependency
+
+    # Check rawpy (optional)
+    try:
+        import rawpy
+
+        result.rawpy_available = True
+        result.rawpy_version = rawpy.version.version
+        if hasattr(rawpy, "libraw_version"):
+            result.libraw_version = rawpy.libraw_version
+    except ImportError:
+        pass  # Optional dependency
+
+    # Check ingest module
+    try:
+        from transformation_portal.ingest import capture_provenance, validate_schema, write_sidecar  # noqa: F401
+
+        result.ingest_module_available = True
+    except ImportError as e:
+        result.errors.append(f"ingest module not available: {e}")
+
+    return result
+
+
+def run_extract(
+    image_path: Path,
+    output_path: Optional[Path] = None,
+    preset: Optional[str] = None,
+    fsync: bool = False,
+    cli_args: Optional[List[str]] = None,
+) -> ExtractResult:
+    """Execute single image extraction and return structured result."""
+    from transformation_portal.ingest import capture_provenance, write_sidecar
+
+    if not image_path.exists():
+        return ExtractResult(
+            success=False,
+            image_path=image_path,
+            error=f"Image not found: {image_path}",
+        )
+
+    try:
+        start_time = time.time()
+
+        # Capture provenance
+        sidecar = capture_provenance(
+            input_path=image_path,
+            cli_args=cli_args or [],
+            config_dict={"mode": "test_extraction", "phase": "3.7"},
+            preset=preset,
+        )
+
+        elapsed = time.time() - start_time
+
+        # Determine output path
+        if output_path is None:
+            output_path = image_path.with_name(f"{image_path.stem}_provenance.json")
+
+        # Write sidecar
+        write_sidecar(sidecar, output_path, fsync=fsync)
+
+        return ExtractResult(
+            success=True,
+            image_path=image_path,
+            output_path=output_path,
+            sidecar=sidecar,
+            elapsed_seconds=elapsed,
+        )
+
+    except Exception as e:
+        return ExtractResult(
+            success=False,
+            image_path=image_path,
+            error=str(e),
+        )
+
+
+def run_extract_batch(
+    input_dir: Path,
+    output_dir: Optional[Path] = None,
+    recursive: bool = True,
+    fsync: bool = False,
+    fail_fast: bool = False,
+    cli_args: Optional[List[str]] = None,
+) -> BatchExtractResult:
+    """Execute batch extraction and return structured result."""
+    from transformation_portal.ingest import capture_provenance, write_sidecar
+    from transformation_portal.ingest.provenance import ExiftoolNotFoundError
+
+    if not input_dir.exists():
+        return BatchExtractResult(
+            input_dir=input_dir,
+            output_dir=output_dir or input_dir / "provenance_sidecars",
+            total_images=0,
+            processed=0,
+            successful=0,
+            failed=1,
+            total_elapsed=0,
+            results={"<input_dir>": (False, f"Directory not found: {input_dir}", 0)},
+        )
+
+    if not input_dir.is_dir():
+        return BatchExtractResult(
+            input_dir=input_dir,
+            output_dir=output_dir or input_dir / "provenance_sidecars",
+            total_images=0,
+            processed=0,
+            successful=0,
+            failed=1,
+            total_elapsed=0,
+            results={"<input_dir>": (False, f"Not a directory: {input_dir}", 0)},
+        )
+
+    # Determine output directory
+    if output_dir is None:
+        output_dir = input_dir / "provenance_sidecars"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Find images
+    images = find_images(input_dir, recursive=recursive)
+
+    result = BatchExtractResult(
+        input_dir=input_dir,
+        output_dir=output_dir,
+        total_images=len(images),
+        processed=0,
+        successful=0,
+        failed=0,
+        total_elapsed=0,
+    )
+
+    if not images:
+        return result
+
+    # Process images
+    total_start = time.time()
+
+    for image_path in images:
+        relative_path = image_path.relative_to(input_dir)
+        relative_path_str = str(relative_path)
+
+        try:
+            start_time = time.time()
+
+            # Capture provenance
+            sidecar = capture_provenance(
+                input_path=image_path,
+                cli_args=cli_args or [],
+                config_dict={"mode": "batch_extraction", "phase": "3.7"},
+            )
+
+            # Create output path preserving directory structure
+            output_subdir = output_dir / relative_path.parent
+            output_subdir.mkdir(parents=True, exist_ok=True)
+            out_path = output_subdir / f"{image_path.stem}_provenance.json"
+
+            # Write sidecar
+            write_sidecar(sidecar, out_path, fsync=fsync)
+
+            elapsed = time.time() - start_time
+            result.results[relative_path_str] = (True, str(out_path), elapsed)
+            result.processed += 1
+            result.successful += 1
+
+        except ExiftoolNotFoundError as e:
+            result.results[relative_path_str] = (False, str(e), 0)
+            result.processed += 1
+            result.failed += 1
+            result.failure_types[EXIT_OTHER_FAILURE] = result.failure_types.get(EXIT_OTHER_FAILURE, 0) + 1
+            if fail_fast:
+                break
+
+        except Exception as e:
+            result.results[relative_path_str] = (False, str(e), 0)
+            result.processed += 1
+            result.failed += 1
+            exit_code = EXIT_OTHER_FAILURE
+            error_list = getattr(e, "errors", None)
+            if isinstance(error_list, list):
+                exit_code = classify_validation_errors(error_list)
+            result.failure_types[exit_code] = result.failure_types.get(exit_code, 0) + 1
+            if fail_fast:
+                break
+
+    result.total_elapsed = time.time() - total_start
+    return result
+
+
+def run_validate(sidecar_path: Path, strict: bool = True) -> ValidateResult:
+    """Execute sidecar validation and return structured result."""
+    from transformation_portal.ingest import validate_schema
+    from transformation_portal.ingest.validator import SchemaValidationError
+
+    if not sidecar_path.exists():
+        return ValidateResult(
+            success=False,
+            sidecar_path=sidecar_path,
+            errors=[f"Sidecar not found: {sidecar_path}"],
+            exit_code=EXIT_OTHER_FAILURE,
+        )
+
+    try:
+        errors = validate_schema(
+            sidecar_path,
+            schema_type="provenance",
+            strict_mode=strict,
+        )
+
+        if errors:
+            exit_code = classify_validation_errors(errors)
+            return ValidateResult(
+                success=False,
+                sidecar_path=sidecar_path,
+                errors=errors,
+                exit_code=exit_code,
+            )
+
+        # Load sidecar data for summary
+        with open(sidecar_path) as f:
+            data = json.load(f)
+
+        return ValidateResult(
+            success=True,
+            sidecar_path=sidecar_path,
+            exit_code=EXIT_SUCCESS,
+            sidecar_data=data,
+        )
+
+    except SchemaValidationError as e:
+        exit_code = classify_validation_errors(e.errors)
+        return ValidateResult(
+            success=False,
+            sidecar_path=sidecar_path,
+            errors=e.errors,
+            exit_code=exit_code,
+        )
+
+    except Exception as e:
+        return ValidateResult(
+            success=False,
+            sidecar_path=sidecar_path,
+            errors=[str(e)],
+            exit_code=EXIT_OTHER_FAILURE,
+        )
+
+
+def run_summarize(sidecar_dir: Path) -> SummarizeResult:
+    """Execute sidecar summarization and return structured result."""
+    if not sidecar_dir.exists():
+        return SummarizeResult(
+            sidecar_dir=sidecar_dir,
+            sidecar_count=0,
+            errors=[f"Directory not found: {sidecar_dir}"],
+        )
+
+    # Find sidecar files
+    sidecars = list(sidecar_dir.rglob("*_provenance.json"))
+
+    result = SummarizeResult(
+        sidecar_dir=sidecar_dir,
+        sidecar_count=len(sidecars),
+    )
+
+    if not sidecars:
+        return result
+
+    # Aggregate statistics
+    for sidecar_path in sidecars:
+        try:
+            with open(sidecar_path) as f:
+                data = json.load(f)
+
+            # File integrity
+            fi = data.get("file_integrity", {})
+            result.total_size_bytes += fi.get("size_bytes", 0)
+
+            # EXIF
+            exif = data.get("exif", {})
+            all_tags = exif.get("all_tags", {})
+            result.total_tags += len(all_tags)
+
+            # Camera
+            make = exif.get("camera_make", "Unknown")
+            model = exif.get("camera_model", "")
+            camera = f"{make} {model}".strip()
+            result.cameras[camera] = result.cameras.get(camera, 0) + 1
+
+            # Dimensions
+            width = exif.get("width")
+            height = exif.get("height")
+            if width and height:
+                result.dimensions.append((width, height))
+
+            # GPS
+            if exif.get("gps_latitude") and exif.get("gps_longitude"):
+                result.gps_count += 1
+
+        except Exception as e:
+            result.errors.append(f"Error reading {sidecar_path.name}: {e}")
+
+    return result
+
+
+# =============================================================================
+# Rendering Functions (Presentation - Decoupled from Logic)
+# =============================================================================
+
+
+def render_check_system(result: SystemCheckResult) -> None:
+    """Render system check result to stdout."""
+    print("=" * 70)
+    print("Phase 3.7 Metadata Extraction - System Check")
+    print("=" * 70)
+    print()
+
+    # exiftool
+    print("Checking exiftool...")
+    if result.exiftool_available:
+        print(f"  ✅ exiftool found: version {result.exiftool_version}")
+    else:
+        print("  ❌ exiftool not found")
+        print("     Install with: brew install exiftool (macOS)")
+        print("                   apt-get install libimage-exiftool-perl (Linux)")
+
+    # pydantic
+    print("\nChecking pydantic...")
+    if result.pydantic_available:
+        print(f"  ✅ pydantic found: version {result.pydantic_version}")
+    else:
+        print("  ❌ pydantic not found")
+        print("     Install with: pip install pydantic>=2.0")
+
+    # git
+    print("\nChecking git (optional)...")
+    if result.git_available:
+        print(f"  ✅ git found: {result.git_version}")
+    else:
+        print("  ⚠️  git not available (git commit SHA will not be captured)")
+
+    # rawpy
+    print("\nChecking rawpy (optional, for RAW file support)...")
+    if result.rawpy_available:
+        print(f"  ✅ rawpy found: version {result.rawpy_version}")
+        if result.libraw_version:
+            print(f"      libraw version: {result.libraw_version}")
+    else:
+        print("  ⚠️  rawpy not found (RAW file reading may be limited)")
+        print("     Install with: pip install rawpy")
+
+    # ingest module
+    print("\nChecking transformation_portal.ingest module...")
+    if result.ingest_module_available:
+        print("  ✅ ingest module available")
+    else:
+        print("  ❌ ingest module not available")
+
+    # Summary
+    print()
+    print("=" * 70)
+    if result.all_required_ok:
+        print("✅ System is ready for Phase 3.7 metadata extraction")
+    else:
+        print("❌ System has missing dependencies")
+
+
+def render_extract(result: ExtractResult) -> None:
+    """Render extraction result to stdout."""
+    if not result.success:
+        print(f"❌ Extraction failed: {result.error}")
+        return
+
+    sidecar = result.sidecar
+
+    print("✅ Metadata extraction complete")
+    print()
+    print("📊 Extraction Summary:")
+    print(f"   Schema version:    {sidecar.schema_version}")
+    print(f"   File SHA256:       {sidecar.file_integrity.sha256[:16]}...")
+    print(f"   File size:         {format_size(sidecar.file_integrity.size_bytes)}")
+    print(f"   MIME type:         {sidecar.file_integrity.mime_type or 'unknown'}")
+    print()
+    print("📸 EXIF Summary:")
+    exif = sidecar.exif
+    if exif.camera_make:
+        print(f"   Camera:            {exif.camera_make} {exif.camera_model or ''}")
+    if exif.lens_model:
+        print(f"   Lens:              {exif.lens_model}")
+    if exif.iso:
+        print(f"   ISO:               {exif.iso}")
+    if exif.aperture:
+        print(f"   Aperture:          f/{exif.aperture}")
+    if exif.shutter_speed:
+        print(f"   Shutter:           {exif.shutter_speed}")
+    if exif.focal_length:
+        print(f"   Focal length:      {exif.focal_length}mm")
+    if exif.width and exif.height:
+        print(f"   Dimensions:        {exif.width} x {exif.height}")
+    if exif.bit_depth:
+        print(f"   Bit depth:         {exif.bit_depth} bits")
+    if exif.datetime_original:
+        print(f"   Date taken:        {exif.datetime_original}")
+    if exif.gps_latitude and exif.gps_longitude:
+        print("   GPS present:       yes")
+    print(f"   Total EXIF tags:   {len(exif.all_tags)}")
+    print()
+    print("🔧 Toolchain:")
+    for tool in sidecar.toolchain:
+        print(f"   {tool.name}: {tool.version}")
+    print()
+    print("💻 Host Environment:")
+    print(f"   Hostname:          {sidecar.host.hostname}")
+    print(f"   OS:                {sidecar.host.os} {sidecar.host.os_version}")
+    print(f"   Architecture:      {sidecar.host.arch}")
+    print(f"   Python:            {sidecar.host.python_version}")
+    if sidecar.git_commit:
+        print(f"   Git commit:        {sidecar.git_commit[:12]}")
+    print()
+    print(f"⏱️  Extraction time:   {result.elapsed_seconds:.2f}s")
+    print(f"📄 Sidecar written:   {result.output_path}")
+
+
+def render_extract_batch(result: BatchExtractResult, verbose: bool = False) -> None:
+    """Render batch extraction result to stdout."""
+    print("=" * 70)
+    print("Phase 3.7 Metadata Extraction - Batch Mode")
+    print("=" * 70)
+    print()
+    print(f"📁 Input directory:  {result.input_dir}")
+    print(f"📄 Output directory: {result.output_dir}")
+    print(f"🖼️  Images found:     {result.total_images}")
+    print()
+
+    if verbose:
+        for path, (success, msg, elapsed) in result.results.items():
+            status = "✅" if success else "❌"
+            if success:
+                print(f"  {status} {path} ({elapsed:.2f}s)")
+            else:
+                print(f"  {status} {path}: {msg}")
+        print()
+
+    # Summary
+    print("=" * 70)
+    print("Batch Extraction Summary")
+    print("=" * 70)
+
+    print(f"Total images:     {result.total_images}")
+    print(f"Processed:        {result.processed}")
+    print(f"Successful:       {result.successful}")
+    print(f"Failed:           {result.failed}")
+    print(f"Total time:       {result.total_elapsed:.2f}s")
+
+    successful_timings = [t for success, _, t in result.results.values() if success and t > 0]
+    if successful_timings:
+        avg_time = sum(successful_timings) / len(successful_timings)
+        print(f"Average per image: {avg_time:.2f}s")
+
+    print(f"Output directory: {result.output_dir}")
+
+    if result.failed > 0:
+        print()
+        print("Failed images:")
+        for path, (success, error, _) in result.results.items():
+            if not success:
+                print(f"  ❌ {path}: {error}")
+
+
+def render_validate(result: ValidateResult, verbose: bool = False) -> None:
+    """Render validation result to stdout."""
+    print(f"🔍 Validating: {result.sidecar_path}")
+    print()
+
+    if not result.success:
+        print("❌ Validation failed:")
+        for error in result.errors:
+            print(f"   - {error}")
+        return
+
+    print("✅ Sidecar is valid")
+
+    if verbose and result.sidecar_data:
+        data = result.sidecar_data
+        print()
+        print("📊 Sidecar Summary:")
+        print(f"   Schema version: {data.get('schema_version')}")
+        print(f"   Run ID:         {data.get('run_id')}")
+        fi = data.get("file_integrity", {})
+        sha256 = fi.get("sha256", "N/A")
+        sha256_display = f"{sha256[:16]}..." if len(sha256) > 16 else sha256
+        print(f"   File SHA256:    {sha256_display}")
+        print(f"   File size:      {format_size(fi.get('size_bytes', 0))}")
+
+
+def render_summarize(result: SummarizeResult) -> None:
+    """Render summarization result to stdout."""
+    print("=" * 70)
+    print("Phase 3.7 Metadata Extraction - Summary")
+    print("=" * 70)
+    print()
+    print(f"📁 Directory: {result.sidecar_dir}")
+    print(f"📄 Sidecars found: {result.sidecar_count}")
+    print()
+
+    if result.sidecar_count == 0:
+        return
+
+    # Print summary
+    print("📊 Aggregate Statistics:")
+    print(f"   Total file size:    {format_size(result.total_size_bytes)}")
+    print(f"   Total EXIF tags:    {result.total_tags}")
+    average_tags = result.total_tags / result.sidecar_count if result.sidecar_count else 0
+    gps_percent = (result.gps_count / result.sidecar_count * 100) if result.sidecar_count else 0
+    print(f"   Average tags/image: {average_tags:.0f}")
+    print(f"   Images with GPS:    {result.gps_count} ({gps_percent:.1f}%)")
+    print()
+
+    print("📷 Cameras:")
+    for camera, count in sorted(result.cameras.items(), key=lambda x: -x[1]):
+        print(f"   {camera}: {count}")
+    print()
+
+    if result.dimensions:
+        print("📐 Dimensions:")
+        dim_counts = Counter(result.dimensions)
+        for (w, h), count in sorted(dim_counts.items(), key=lambda item: -(item[0][0] * item[0][1])):
+            mp = (w * h) / 1_000_000
+            print(f"   {w} x {h} ({mp:.1f} MP): {count}")
+
+    if result.errors:
+        print()
+        print("⚠️  Warnings:")
+        for error in result.errors:
+            print(f"   {error}")
+
+
+# =============================================================================
+# Command Functions (Thin Wrappers: Execute -> Render -> Exit)
+# =============================================================================
+
+
+def cmd_check_system(args: argparse.Namespace) -> int:
+    """Check system readiness for metadata extraction."""
+    try:
+        result = run_check_system()
+        render_check_system(result)
+        return EXIT_SUCCESS if result.all_required_ok else EXIT_OTHER_FAILURE
+    except Exception as e:
+        if args.debug:
+            traceback.print_exc()
+        print(f"❌ System check failed: {e}")
+        return EXIT_OTHER_FAILURE
+
+
+def cmd_extract(args: argparse.Namespace) -> int:
+    """Extract metadata from a single image file."""
+    image_path = Path(args.image_path)
+    output_path = Path(args.output) if args.output else None
+
+    print(f"📷 Extracting metadata from: {image_path.name}")
+    print(f"   Path: {image_path}")
+    if image_path.exists():
+        print(f"   Size: {format_size(image_path.stat().st_size)}")
+    print()
+
+    try:
+        result = run_extract(
+            image_path=image_path,
+            output_path=output_path,
+            preset=args.preset,
+            fsync=args.fsync,
+            cli_args=sys.argv[1:],
+        )
+        render_extract(result)
+        return EXIT_SUCCESS if result.success else EXIT_OTHER_FAILURE
+    except Exception as e:
+        if args.debug:
+            traceback.print_exc()
+        print(f"❌ Extraction failed: {e}")
+        return EXIT_OTHER_FAILURE
+
+
+def cmd_extract_batch(args: argparse.Namespace) -> int:
+    """Extract metadata from all images in a directory."""
+    input_dir = Path(args.input_dir)
+    output_dir = Path(args.output) if args.output else None
+
+    try:
+        result = run_extract_batch(
+            input_dir=input_dir,
+            output_dir=output_dir,
+            recursive=args.recursive,
+            fsync=args.fsync,
+            fail_fast=args.fail_fast,
+            cli_args=sys.argv[1:],
+        )
+        render_extract_batch(result, verbose=args.verbose)
+
+        batch_exit_code = aggregate_exit_codes(result.failure_types.keys())
+        if result.failed > 0 and batch_exit_code == EXIT_SUCCESS:
+            return EXIT_OTHER_FAILURE
+        return batch_exit_code
+
+    except Exception as e:
+        if args.debug:
+            traceback.print_exc()
+        print(f"❌ Batch extraction failed: {e}")
+        return EXIT_OTHER_FAILURE
+
+
+def cmd_validate(args: argparse.Namespace) -> int:
+    """Validate a provenance sidecar JSON file."""
+    sidecar_path = Path(args.sidecar_path)
+
+    try:
+        result = run_validate(sidecar_path, strict=args.strict)
+        render_validate(result, verbose=args.verbose)
+        return result.exit_code
+    except Exception as e:
+        if args.debug:
+            traceback.print_exc()
+        print(f"❌ Validation error: {e}")
+        return EXIT_OTHER_FAILURE
+
+
+def cmd_summarize(args: argparse.Namespace) -> int:
+    """Summarize metadata from multiple sidecar files."""
+    sidecar_dir = Path(args.sidecar_dir)
+
+    try:
+        result = run_summarize(sidecar_dir)
+        render_summarize(result)
+        return EXIT_SUCCESS if result.sidecar_count > 0 or not result.errors else EXIT_OTHER_FAILURE
+    except Exception as e:
+        if args.debug:
+            traceback.print_exc()
+        print(f"❌ Summarization failed: {e}")
+        return EXIT_OTHER_FAILURE
+
+
+# =============================================================================
+# Main Entry Point
+# =============================================================================
+
+
+def main() -> int:
+    """Main entry point."""
+    parser = argparse.ArgumentParser(
+        description="Test Phase 3.7 metadata extraction capabilities",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__,
+    )
+
+    # Global debug flag
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug mode (show full tracebacks on errors)",
+    )
+
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
+    # check-system command
+    parser_check = subparsers.add_parser(
+        "check-system",
+        help="Check system readiness for metadata extraction",
+    )
+    parser_check.set_defaults(func=cmd_check_system)
+
+    # extract command
+    parser_extract = subparsers.add_parser(
+        "extract",
+        help="Extract metadata from a single image",
+    )
+    parser_extract.add_argument(
+        "image_path",
+        help="Path to image file",
+    )
+    parser_extract.add_argument(
+        "-o",
+        "--output",
+        help="Output path for sidecar JSON (default: <image>_provenance.json)",
+    )
+    parser_extract.add_argument(
+        "--preset",
+        help="Preset name to record in provenance",
+    )
+    parser_extract.add_argument(
+        "--fsync",
+        action="store_true",
+        help="Use fsync for durable writes",
+    )
+    parser_extract.set_defaults(func=cmd_extract)
+
+    # extract-batch command
+    parser_batch = subparsers.add_parser(
+        "extract-batch",
+        help="Extract metadata from all images in a directory",
+    )
+    parser_batch.add_argument(
+        "input_dir",
+        help="Directory containing images",
+    )
+    parser_batch.add_argument(
+        "-o",
+        "--output",
+        help="Output directory for sidecars (default: <input_dir>/provenance_sidecars/)",
+    )
+    recursive_group = parser_batch.add_mutually_exclusive_group()
+    recursive_group.add_argument(
+        "--recursive",
+        action="store_true",
+        dest="recursive",
+        help="Recursively search subdirectories (default behavior)",
+    )
+    recursive_group.add_argument(
+        "--no-recursive",
+        action="store_false",
+        dest="recursive",
+        help="Only process images in the top-level directory",
+    )
+    parser_batch.add_argument(
+        "--fsync",
+        action="store_true",
+        help="Use fsync for durable writes",
+    )
+    parser_batch.add_argument(
+        "--fail-fast",
+        action="store_true",
+        help="Stop on first error",
+    )
+    parser_batch.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Show per-file processing status",
+    )
+    parser_batch.set_defaults(func=cmd_extract_batch, recursive=True)
+
+    # validate command
+    parser_validate = subparsers.add_parser(
+        "validate",
+        help="Validate a provenance sidecar file",
+    )
+    parser_validate.add_argument(
+        "sidecar_path",
+        help="Path to sidecar JSON file",
+    )
+    strict_group = parser_validate.add_mutually_exclusive_group()
+    strict_group.add_argument(
+        "--strict",
+        action="store_true",
+        dest="strict",
+        help="Enable strict mode (default, fail on unknown fields)",
+    )
+    strict_group.add_argument(
+        "--no-strict",
+        action="store_false",
+        dest="strict",
+        help="Disable strict mode (allow unknown fields)",
+    )
+    parser_validate.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Show sidecar summary after validation",
+    )
+    parser_validate.set_defaults(func=cmd_validate, strict=True)
+
+    # summarize command
+    parser_summary = subparsers.add_parser(
+        "summarize",
+        help="Summarize metadata from multiple sidecar files",
+    )
+    parser_summary.add_argument(
+        "sidecar_dir",
+        help="Directory containing sidecar JSON files",
+    )
+    parser_summary.set_defaults(func=cmd_summarize)
+
+    args = parser.parse_args()
+
+    if not args.command:
+        parser.print_help()
+        return EXIT_SUCCESS
+
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

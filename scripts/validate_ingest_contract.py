@@ -31,8 +31,14 @@ from typing import List
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from transformation_portal.ingest import validate_schema
-from transformation_portal.ingest.validator import SchemaValidationError, validate_ingest_contract
+from transformation_portal.ingest import (
+    EXIT_OTHER_FAILURE,
+    EXIT_SUCCESS,
+    aggregate_exit_codes,
+    classify_validation_errors,
+    validate_schema,
+)
+from transformation_portal.ingest.validator import SchemaValidationError
 
 
 def find_sidecar_files(test_dir: Path) -> List[Path]:
@@ -71,7 +77,7 @@ def validate_all_sidecars(
     if not sidecar_files:
         print(f"⚠️  No sidecar files found in {test_dir}")
         print("   This is expected if no ingest operations have been performed.")
-        return 0
+        return EXIT_SUCCESS
 
     print(f"🔍 Found {len(sidecar_files)} sidecar file(s) to validate")
 
@@ -92,7 +98,8 @@ def validate_all_sidecars(
                 print(f"❌ Schema validation failed:")
                 for error in errors:
                     print(f"   - {error}")
-                failures.append((sidecar_path, "schema_validation", errors))
+                failure_exit_code = classify_validation_errors(errors)
+                failures.append((sidecar_path, failure_exit_code, "schema_validation"))
                 continue
 
             print(f"✅ Schema validation passed")
@@ -104,35 +111,25 @@ def validate_all_sidecars(
             print(f"❌ Schema validation failed:")
             for error in e.errors:
                 print(f"   - {error}")
-            failures.append((sidecar_path, "schema_validation", e.errors))
+            failure_exit_code = classify_validation_errors(e.errors)
+            failures.append((sidecar_path, failure_exit_code, "schema_validation"))
 
         except Exception as e:
             print(f"❌ Unexpected error: {e}")
-            failures.append((sidecar_path, "unexpected", str(e)))
+            failures.append((sidecar_path, EXIT_OTHER_FAILURE, "unexpected"))
 
     # Summary
     print("\n" + "=" * 80)
     if failures:
         print(f"❌ Validation failed for {len(failures)}/{len(sidecar_files)} file(s)")
         print("\nFailed files:")
-        for sidecar_path, failure_type, details in failures:
+        for sidecar_path, _, failure_type in failures:
             print(f"  - {sidecar_path.relative_to(test_dir)}: {failure_type}")
 
-        # Determine exit code based on failure type
-        for _, failure_type, _ in failures:
-            if "schema_validation" in failure_type:
-                return 1
-            elif "8bit" in str(failure_type).lower():
-                return 2
-            elif "gamma" in str(failure_type).lower():
-                return 3
-            elif "drift" in str(failure_type).lower():
-                return 4
-
-        return 5  # Other failure
+        return aggregate_exit_codes(code for _, code, _ in failures)
     else:
         print(f"✅ All {len(sidecar_files)} sidecar file(s) validated successfully")
-        return 0
+        return EXIT_SUCCESS
 
 
 def main() -> int:
@@ -175,7 +172,7 @@ Exit codes:
         print(f"⚠️  Test directory not found: {args.test_dir}")
         print("   Creating directory (expected for first run)")
         args.test_dir.mkdir(parents=True, exist_ok=True)
-        return 0
+        return EXIT_SUCCESS
 
     return validate_all_sidecars(
         test_dir=args.test_dir,
