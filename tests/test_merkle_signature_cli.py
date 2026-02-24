@@ -171,6 +171,17 @@ def test_sign_fails_with_missing_roots_file(tmp_path: Path) -> None:
     assert "Signing failed" in sign_result.stdout
 
 
+def test_sign_fails_with_missing_private_key_file(tmp_path: Path) -> None:
+    roots_path = tmp_path / "merkle_roots.json"
+    missing_private_key_path = tmp_path / "missing_private_key.pem"
+    signature_path = tmp_path / "merkle_roots.sig.json"
+    _write_roots(roots_path)
+
+    sign_result = _sign(roots_path, missing_private_key_path, signature_path)
+    assert sign_result.returncode == 4
+    assert "Signing failed" in sign_result.stdout
+
+
 def test_sign_fails_with_non_ed25519_private_key(tmp_path: Path) -> None:
     roots_path = tmp_path / "merkle_roots.json"
     signature_path = tmp_path / "merkle_roots.sig.json"
