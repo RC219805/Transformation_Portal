@@ -134,5 +134,7 @@ This preserves deterministic integrity as core infrastructure while extending au
 The current state supports:
 
 - Dataset defensibility and external verification workflows
-- Regulatory and disclosure-oriented evidence production
-- Audit-ready provenance and litigation-resilient archive attestations
+- Production of structured, cryptographically verifiable integrity evidence
+  appropriate for regulatory or disclosure workflows
+- Cryptographically verifiable archive attestations suitable for audit,
+  disclosure, and adversarial review contexts
