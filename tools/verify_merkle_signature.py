@@ -11,7 +11,7 @@ import json
 import re
 from pathlib import Path
 
-from cryptography.exceptions import InvalidSignature
+from cryptography.exceptions import InvalidSignature, UnsupportedAlgorithm
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
 
@@ -22,17 +22,27 @@ SHA256_HEX_RE = re.compile(r"^[a-f0-9]{64}$")
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--roots", required=True)
-    parser.add_argument("--signature", required=True)
-    parser.add_argument("--public-key", required=True)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--roots",
+        required=True,
+        help="Path to merkle_roots.json to verify",
+    )
+    parser.add_argument(
+        "--signature",
+        required=True,
+        help="Path to detached signature JSON file",
+    )
+    parser.add_argument(
+        "--public-key",
+        required=True,
+        help="Path to Ed25519 public key in PEM format",
+    )
     args = parser.parse_args()
 
     roots_path = Path(args.roots)
     sig_path = Path(args.signature)
     pub_path = Path(args.public_key)
-
-    artifact_bytes = roots_path.read_bytes()
 
     try:
         envelope = json.loads(sig_path.read_text(encoding="utf-8"))
@@ -64,6 +74,7 @@ def main() -> int:
             print("Malformed signature file: signed_artifact_sha256 must be 64 lowercase hex characters")
             return EXIT_MALFORMED
 
+        artifact_bytes = roots_path.read_bytes()
         computed_digest = hashlib.sha256(artifact_bytes).hexdigest()
         if computed_digest != digest_hex:
             print("Artifact digest mismatch")
@@ -83,7 +94,7 @@ def main() -> int:
     except (KeyError, TypeError, binascii.Error) as exc:
         print(f"Malformed signature file: {exc}")
         return EXIT_MALFORMED
-    except (OSError, ValueError, InvalidSignature) as exc:
+    except (OSError, ValueError, InvalidSignature, UnsupportedAlgorithm) as exc:
         print(f"Verification failed: {exc}")
         return EXIT_INVALID_SIG
 

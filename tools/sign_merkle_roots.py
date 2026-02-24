@@ -8,7 +8,9 @@ import base64
 import hashlib
 import json
 from pathlib import Path
+from uuid import uuid4
 
+from cryptography.exceptions import UnsupportedAlgorithm
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 
@@ -16,16 +18,33 @@ EXIT_SIGN_FAILURE = 4
 
 
 def atomic_write(path: Path, data: bytes) -> None:
-    tmp = path.with_name(f"{path.name}.tmp")
-    tmp.write_bytes(data)
-    tmp.replace(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    try:
+        tmp.write_bytes(data)
+        tmp.replace(path)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--roots", required=True)
-    parser.add_argument("--private-key", required=True)
-    parser.add_argument("--out", required=True)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--roots",
+        required=True,
+        help="Path to merkle_roots.json to sign",
+    )
+    parser.add_argument(
+        "--private-key",
+        required=True,
+        help="Path to Ed25519 private key in PEM format",
+    )
+    parser.add_argument(
+        "--out",
+        required=True,
+        help="Output path for detached signature JSON",
+    )
     args = parser.parse_args()
 
     roots_path = Path(args.roots)
@@ -58,7 +77,7 @@ def main() -> int:
 
         print(f"Signature written to {out_path}")
         return 0
-    except Exception as exc:  # pragma: no cover - CLI failure path
+    except (OSError, TypeError, ValueError, UnsupportedAlgorithm) as exc:  # pragma: no cover - CLI failure path
         print(f"Signing failed: {exc}")
         return EXIT_SIGN_FAILURE
 

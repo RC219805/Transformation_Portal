@@ -66,10 +66,14 @@ Signing root-only is explicitly disallowed.
 The signature input MUST be the exact bytes of `merkle_roots.json`
 as written by Phase 3:
 
-- No reserialization
-- No whitespace normalization
-- No field reordering
-- No canonicalization transforms
+- No reserialization of `merkle_roots.json`
+- No whitespace normalization of `merkle_roots.json`
+- No field reordering within `merkle_roots.json`
+- No canonicalization transforms applied to `merkle_roots.json`
+
+These constraints apply only to the signed artifact (`merkle_roots.json`).
+The detached envelope (`merkle_roots.sig.json`) is a separate artifact and
+may use deterministic serialization for envelope stability.
 
 ---
 

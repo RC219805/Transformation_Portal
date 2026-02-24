@@ -9,6 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat, PublicFormat
@@ -16,6 +17,7 @@ from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption,
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SIGN_TOOL = PROJECT_ROOT / "tools" / "sign_merkle_roots.py"
 VERIFY_TOOL = PROJECT_ROOT / "tools" / "verify_merkle_signature.py"
+pytestmark = [pytest.mark.regression]
 
 
 def _run_cli(command: list[str]) -> subprocess.CompletedProcess[str]:
@@ -33,6 +35,10 @@ def _write_roots(path: Path) -> None:
         "{\n" '  "hash_algorithm": "sha256",\n' '  "tree_method_version": "v1",\n' '  "global_root": "6f32b71a"\n' "}\n",
         encoding="utf-8",
     )
+
+
+def _load_envelope(path: Path) -> dict[str, str]:
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _write_keypair(tmp_path: Path, stem: str) -> tuple[Path, Path]:
@@ -68,6 +74,19 @@ def _write_rsa_public_key(tmp_path: Path, stem: str) -> Path:
         )
     )
     return rsa_public_key_path
+
+
+def _write_rsa_private_key(tmp_path: Path, stem: str) -> Path:
+    rsa_private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    rsa_private_key_path = tmp_path / f"{stem}_rsa_private.pem"
+    rsa_private_key_path.write_bytes(
+        rsa_private_key.private_bytes(
+            encoding=Encoding.PEM,
+            format=PrivateFormat.PKCS8,
+            encryption_algorithm=NoEncryption(),
+        )
+    )
+    return rsa_private_key_path
 
 
 def _sign(roots_path: Path, private_key_path: Path, signature_path: Path) -> subprocess.CompletedProcess[str]:
@@ -111,7 +130,7 @@ def test_sign_and_verify_roundtrip_success(tmp_path: Path) -> None:
     assert sign_result.returncode == 0, sign_result.stderr
 
     envelope_text = signature_path.read_text(encoding="utf-8")
-    envelope = json.loads(envelope_text)
+    envelope = _load_envelope(signature_path)
     assert envelope["signature_algorithm"] == "ed25519"
     assert envelope["signed_artifact"] == "merkle_roots.json"
     assert envelope["signed_artifact_sha256"] == hashlib.sha256(roots_path.read_bytes()).hexdigest()
@@ -122,6 +141,56 @@ def test_sign_and_verify_roundtrip_success(tmp_path: Path) -> None:
     verify_result = _verify(roots_path, signature_path, public_key_path)
     assert verify_result.returncode == 0, verify_result.stderr
     assert "Signature valid" in verify_result.stdout
+
+
+def test_sign_is_deterministic_for_same_artifact_and_key(tmp_path: Path) -> None:
+    roots_path = tmp_path / "merkle_roots.json"
+    signature_a_path = tmp_path / "merkle_roots.a.sig.json"
+    signature_b_path = tmp_path / "merkle_roots.b.sig.json"
+    _write_roots(roots_path)
+
+    private_key_path, _ = _write_keypair(tmp_path, "primary")
+
+    first_result = _sign(roots_path, private_key_path, signature_a_path)
+    second_result = _sign(roots_path, private_key_path, signature_b_path)
+    assert first_result.returncode == 0, first_result.stderr
+    assert second_result.returncode == 0, second_result.stderr
+
+    envelope_a = _load_envelope(signature_a_path)
+    envelope_b = _load_envelope(signature_b_path)
+    assert envelope_a["signature_base64"] == envelope_b["signature_base64"]
+
+
+def test_sign_fails_with_missing_roots_file(tmp_path: Path) -> None:
+    missing_roots_path = tmp_path / "missing_merkle_roots.json"
+    signature_path = tmp_path / "merkle_roots.sig.json"
+    private_key_path, _ = _write_keypair(tmp_path, "primary")
+
+    sign_result = _sign(missing_roots_path, private_key_path, signature_path)
+    assert sign_result.returncode == 4
+    assert "Signing failed" in sign_result.stdout
+
+
+def test_sign_fails_with_non_ed25519_private_key(tmp_path: Path) -> None:
+    roots_path = tmp_path / "merkle_roots.json"
+    signature_path = tmp_path / "merkle_roots.sig.json"
+    _write_roots(roots_path)
+    rsa_private_key_path = _write_rsa_private_key(tmp_path, "primary")
+
+    sign_result = _sign(roots_path, rsa_private_key_path, signature_path)
+    assert sign_result.returncode == 4
+    assert "Private key must be Ed25519" in sign_result.stdout
+
+
+def test_sign_creates_output_parent_directory(tmp_path: Path) -> None:
+    roots_path = tmp_path / "merkle_roots.json"
+    signature_path = tmp_path / "nested" / "signatures" / "merkle_roots.sig.json"
+    _write_roots(roots_path)
+    private_key_path, _ = _write_keypair(tmp_path, "primary")
+
+    sign_result = _sign(roots_path, private_key_path, signature_path)
+    assert sign_result.returncode == 0, sign_result.stderr
+    assert signature_path.exists()
 
 
 def test_verify_fails_when_artifact_is_tampered(tmp_path: Path) -> None:
@@ -149,7 +218,7 @@ def test_verify_fails_when_signature_is_tampered(tmp_path: Path) -> None:
     sign_result = _sign(roots_path, private_key_path, signature_path)
     assert sign_result.returncode == 0, sign_result.stderr
 
-    envelope = json.loads(signature_path.read_text(encoding="utf-8"))
+    envelope = _load_envelope(signature_path)
     raw_signature = bytearray(base64.b64decode(envelope["signature_base64"], validate=True))
     raw_signature[0] ^= 0x01
     envelope["signature_base64"] = base64.b64encode(bytes(raw_signature)).decode("ascii")
@@ -185,7 +254,7 @@ def test_verify_fails_with_unsupported_algorithm_field(tmp_path: Path) -> None:
     sign_result = _sign(roots_path, private_key_path, signature_path)
     assert sign_result.returncode == 0, sign_result.stderr
 
-    envelope = json.loads(signature_path.read_text(encoding="utf-8"))
+    envelope = _load_envelope(signature_path)
     envelope["signature_algorithm"] = "ed448"
     signature_path.write_text(json.dumps(envelope, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
@@ -231,7 +300,7 @@ def test_verify_fails_with_invalid_digest_format(tmp_path: Path) -> None:
     sign_result = _sign(roots_path, private_key_path, signature_path)
     assert sign_result.returncode == 0, sign_result.stderr
 
-    envelope = json.loads(signature_path.read_text(encoding="utf-8"))
+    envelope = _load_envelope(signature_path)
     envelope["signed_artifact_sha256"] = "A" * 64
     signature_path.write_text(json.dumps(envelope, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
