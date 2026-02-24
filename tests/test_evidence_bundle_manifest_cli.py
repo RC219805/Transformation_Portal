@@ -372,3 +372,92 @@ def test_verify_fails_on_manifest_with_extra_field(tmp_path: Path) -> None:
     verify_result = _verify_manifest(artifacts["out"], tmp_path)
     assert verify_result.returncode == 12
     assert "unexpected field(s): extra" in verify_result.stdout
+
+
+def test_generate_fails_on_boolean_roots_leaf_count(tmp_path: Path) -> None:
+    artifacts = _write_bundle_artifacts(tmp_path, timestamp_target="signature")
+    roots_payload = json.loads(artifacts["roots"].read_text(encoding="utf-8"))
+    roots_payload["global"]["leaf_count"] = True
+    artifacts["roots"].write_text(json.dumps(roots_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    generate_result = _generate_manifest(
+        roots_path=artifacts["roots"],
+        hash_manifest_path=artifacts["hash_manifest"],
+        hash_summary_path=artifacts["hash_summary"],
+        signature_path=artifacts["signature"],
+        timestamp_path=artifacts["timestamp"],
+        timestamp_target="signature",
+        out_path=artifacts["out"],
+    )
+    assert generate_result.returncode == 10
+    assert "leaf_count must be a non-negative integer" in generate_result.stdout
+
+
+def test_verify_fails_on_boolean_roots_leaf_count(tmp_path: Path) -> None:
+    artifacts = _write_bundle_artifacts(tmp_path, timestamp_target="signature")
+    generate_result = _generate_manifest(
+        roots_path=artifacts["roots"],
+        hash_manifest_path=artifacts["hash_manifest"],
+        hash_summary_path=artifacts["hash_summary"],
+        signature_path=artifacts["signature"],
+        timestamp_path=artifacts["timestamp"],
+        timestamp_target="signature",
+        out_path=artifacts["out"],
+    )
+    assert generate_result.returncode == 0, generate_result.stderr
+
+    roots_payload = json.loads(artifacts["roots"].read_text(encoding="utf-8"))
+    roots_payload["global"]["leaf_count"] = True
+    artifacts["roots"].write_text(json.dumps(roots_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    manifest = _load_manifest(artifacts["out"])
+    manifest["roots_sha256"] = hashlib.sha256(artifacts["roots"].read_bytes()).hexdigest()
+    artifacts["out"].write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    verify_result = _verify_manifest(artifacts["out"], tmp_path)
+    assert verify_result.returncode == 11
+    assert "leaf_count must be a non-negative integer" in verify_result.stdout
+
+
+def test_verify_fails_on_boolean_manifest_merkle_leaf_count(tmp_path: Path) -> None:
+    artifacts = _write_bundle_artifacts(tmp_path, timestamp_target="signature")
+    generate_result = _generate_manifest(
+        roots_path=artifacts["roots"],
+        hash_manifest_path=artifacts["hash_manifest"],
+        hash_summary_path=artifacts["hash_summary"],
+        signature_path=artifacts["signature"],
+        timestamp_path=artifacts["timestamp"],
+        timestamp_target="signature",
+        out_path=artifacts["out"],
+    )
+    assert generate_result.returncode == 0, generate_result.stderr
+
+    manifest = _load_manifest(artifacts["out"])
+    manifest["merkle_leaf_count"] = True
+    artifacts["out"].write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    verify_result = _verify_manifest(artifacts["out"], tmp_path)
+    assert verify_result.returncode == 12
+    assert "merkle_leaf_count must be a non-negative integer" in verify_result.stdout
+
+
+def test_verify_fails_on_whitespace_only_phase_version(tmp_path: Path) -> None:
+    artifacts = _write_bundle_artifacts(tmp_path, timestamp_target="signature")
+    generate_result = _generate_manifest(
+        roots_path=artifacts["roots"],
+        hash_manifest_path=artifacts["hash_manifest"],
+        hash_summary_path=artifacts["hash_summary"],
+        signature_path=artifacts["signature"],
+        timestamp_path=artifacts["timestamp"],
+        timestamp_target="signature",
+        out_path=artifacts["out"],
+    )
+    assert generate_result.returncode == 0, generate_result.stderr
+
+    manifest = _load_manifest(artifacts["out"])
+    manifest["phase3_version"] = "   "
+    artifacts["out"].write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    verify_result = _verify_manifest(artifacts["out"], tmp_path)
+    assert verify_result.returncode == 12
+    assert "phase3_version must be a non-empty string" in verify_result.stdout

@@ -50,7 +50,11 @@ REQUIRED_FIELDS = {
 
 
 def _sha256_hexdigest(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    hasher = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
 
 
 def _load_merkle_leaf_count(roots_path: Path) -> int:
@@ -63,14 +67,14 @@ def _load_merkle_leaf_count(roots_path: Path) -> int:
         raise ValueError(f"{EXPECTED_ROOTS_FILENAME} missing object field: global")
 
     leaf_count = global_block.get("leaf_count")
-    if not isinstance(leaf_count, int) or leaf_count < 0:
+    if type(leaf_count) is not int or leaf_count < 0:
         raise ValueError(f"{EXPECTED_ROOTS_FILENAME}.global.leaf_count must be a non-negative integer")
     return leaf_count
 
 
 def _require_string_field(manifest: dict[str, object], field: str) -> str:
     value = manifest.get(field)
-    if not isinstance(value, str) or not value:
+    if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field} must be a non-empty string")
     return value
 
@@ -119,7 +123,7 @@ def _validate_manifest_structure(manifest: dict[str, object]) -> None:
     _require_hex_digest(manifest, "timestamp_sha256")
 
     merkle_leaf_count = manifest["merkle_leaf_count"]
-    if not isinstance(merkle_leaf_count, int) or merkle_leaf_count < 0:
+    if type(merkle_leaf_count) is not int or merkle_leaf_count < 0:
         raise ValueError("merkle_leaf_count must be a non-negative integer")
 
     _require_string_field(manifest, "phase3_version")

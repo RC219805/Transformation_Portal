@@ -37,7 +37,11 @@ def atomic_write(path: Path, data: bytes) -> None:
 
 
 def _sha256_hexdigest(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    hasher = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
 
 
 def _require_expected_filename(path: Path, expected: str, arg_name: str) -> None:
@@ -59,7 +63,7 @@ def _load_merkle_leaf_count(roots_path: Path) -> int:
         raise ValueError(f"{EXPECTED_ROOTS_FILENAME} missing object field: global")
 
     leaf_count = global_block.get("leaf_count")
-    if not isinstance(leaf_count, int) or leaf_count < 0:
+    if type(leaf_count) is not int or leaf_count < 0:
         raise ValueError(f"{EXPECTED_ROOTS_FILENAME}.global.leaf_count must be a non-negative integer")
     return leaf_count
 
