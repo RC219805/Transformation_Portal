@@ -612,7 +612,7 @@ def test_verify_governance_export_rejects_digest_mismatch(tmp_path: Path) -> Non
         risk_assessment_path,
         cybersecurity_audit_path,
     )
-    assert verified.returncode == 1
+    assert verified.returncode == 31
     assert "verification failed" in verified.stdout.lower()
 
 

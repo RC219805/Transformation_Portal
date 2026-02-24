@@ -17,8 +17,9 @@ from pathlib import Path
 
 from bundle_root_fixture import write_bundle_fixture_artifacts
 
-EXIT_RUNTIME_FAILURE = 41
-EXIT_GOVERNANCE_MISMATCH = 42
+# Reuse Phase 3.x cross-runtime tier exit codes for CI/tooling consistency.
+EXIT_RUNTIME_FAILURE = 31
+EXIT_GOVERNANCE_MISMATCH = 32
 
 
 def _run_checked(command: list[str], *, cwd: Path) -> str:

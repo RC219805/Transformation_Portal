@@ -28,7 +28,7 @@ from bundle_root_common import (
 
 EXIT_EXPORT_BUILD_FAILURE = 31
 EXIT_EXPORT_WRITE_FAILURE = 32
-EXIT_GOVERNANCE_VERIFY_FAILURE = 1
+EXIT_GOVERNANCE_VERIFY_FAILURE = EXIT_EXPORT_BUILD_FAILURE
 EXPORT_MODE_VERSION = "1"
 RISK_METADATA_SCHEMA_VERSION = "1"
 SOURCE_TAXONOMY_SCHEMA_VERSION = "1"
@@ -1280,7 +1280,7 @@ def _ensure_digest_matches(path: Path, *, expected_sha256: str, field_name: str)
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--bundle-manifest", default=None, help="Path to evidence_bundle_manifest.json")
+    parser.add_argument("--bundle-manifest", required=True, help="Path to evidence_bundle_manifest.json")
     parser.add_argument(
         "--bundle-dir",
         default=None,
