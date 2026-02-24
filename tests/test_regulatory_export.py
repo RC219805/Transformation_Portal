@@ -616,6 +616,60 @@ def test_verify_governance_export_rejects_digest_mismatch(tmp_path: Path) -> Non
     assert "verification failed" in verified.stdout.lower()
 
 
+def test_verify_governance_export_rejects_generation_args(tmp_path: Path) -> None:
+    bundle_manifest = _write_bundle_with_root(tmp_path / "bundle")
+    risk_path = tmp_path / "risk_metadata.json"
+    taxonomy_path = tmp_path / "source_taxonomy.json"
+    risk_assessment_path = tmp_path / "risk_assessment_report.json"
+    cybersecurity_audit_path = tmp_path / "cybersecurity_audit_record.json"
+    _write_risk_metadata(risk_path)
+    _write_source_taxonomy(taxonomy_path)
+    _write_risk_assessment_report(risk_assessment_path)
+    _write_cybersecurity_audit_record(cybersecurity_audit_path)
+
+    out_json = tmp_path / "regulatory_export.json"
+    out_md = tmp_path / "regulatory_export.md"
+    governance_export = tmp_path / "governance_export.json"
+    generated = _run_regulatory_export(
+        bundle_manifest,
+        risk_path,
+        taxonomy_path,
+        out_json,
+        out_md,
+        risk_assessment_path=risk_assessment_path,
+        cybersecurity_audit_path=cybersecurity_audit_path,
+        governance_export_path=governance_export,
+    )
+    assert generated.returncode == 0, generated.stdout + generated.stderr
+
+    mixed_mode = _run_cli(
+        [
+            sys.executable,
+            str(REG_EXPORT_TOOL),
+            "--bundle-manifest",
+            str(bundle_manifest),
+            "--risk-assessment-report",
+            str(risk_assessment_path),
+            "--cybersecurity-audit-record",
+            str(cybersecurity_audit_path),
+            "--verify-governance-export",
+            str(governance_export),
+            "--risk-metadata",
+            str(risk_path),
+            "--source-taxonomy",
+            str(taxonomy_path),
+            "--out-json",
+            str(tmp_path / "ignored.json"),
+        ]
+    )
+
+    assert mixed_mode.returncode == 31
+    assert "generation-only arguments are not allowed" in mixed_mode.stdout
+    assert "--risk-metadata" in mixed_mode.stdout
+    assert "--source-taxonomy" in mixed_mode.stdout
+    assert "--out-json" in mixed_mode.stdout
+
+
 def test_regulatory_export_rejects_governance_inputs_without_output(tmp_path: Path) -> None:
     bundle_manifest = _write_bundle_with_root(tmp_path / "bundle")
     risk_path = tmp_path / "risk_metadata.json"

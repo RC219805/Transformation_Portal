@@ -1369,6 +1369,19 @@ def _run_governance_export_verification(args: argparse.Namespace) -> int:
             "--risk-assessment-report and --cybersecurity-audit-record"
         )
         return EXIT_GOVERNANCE_VERIFY_FAILURE
+    mixed_mode_args: list[str] = []
+    if args.risk_metadata is not None:
+        mixed_mode_args.append("--risk-metadata")
+    if args.source_taxonomy is not None:
+        mixed_mode_args.append("--source-taxonomy")
+    if args.out_json is not None:
+        mixed_mode_args.append("--out-json")
+    if mixed_mode_args:
+        print(
+            "Governance verification failed: generation-only arguments are not allowed "
+            f"with --verify-governance-export: {', '.join(mixed_mode_args)}"
+        )
+        return EXIT_GOVERNANCE_VERIFY_FAILURE
 
     try:
         manifest_path = Path(args.bundle_manifest)
