@@ -92,16 +92,7 @@ Goal: add existence-at-time evidence without modifying Phase 3 or Phase 3.1 arti
 
 Outcome: integrity + identity + time, while preserving layering.
 
-### Phase 3.3 - Multi-signature envelope
-
-Evolve to an envelope with a signatures array and explicit `envelope_version` increment.
-
-Use cases:
-- Institutional co-signing
-- Vendor/internal dual attestation
-- Separation-of-duties workflows
-
-### Phase 3.4 - Evidence bundle format
+### Phase 3.3 - Evidence bundle canonicalization
 
 Define canonical compliance packet content:
 
@@ -109,9 +100,19 @@ Define canonical compliance packet content:
 - `hash_manifest.csv.gz` digest
 - `hash_summary.json`
 - Detached signature envelope(s)
+- Detached timestamp artifact(s)
 - Tool/version metadata
 
 Sign canonical manifest JSON for bundle members, not container bytes.
+
+### Phase 3.4 - Multi-signature envelope
+
+Evolve to an envelope with a signatures array and explicit `envelope_version` increment.
+
+Use cases:
+- Institutional co-signing
+- Vendor/internal dual attestation
+- Separation-of-duties workflows
 
 ### Phase 3.5 - Merkle method hardening (optional)
 
