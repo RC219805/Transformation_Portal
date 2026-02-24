@@ -91,6 +91,10 @@ class TestExitCodeAggregation:
 class TestTypedIngestErrors:
     """Tests for typed ingest-domain error hierarchy and aggregation."""
 
+    def test_ingest_error_populates_exception_args(self):
+        error = SchemaValidationFailure("schema issue")
+        assert error.args == ("schema issue",)
+
     def test_aggregate_errors_uses_priority_not_exit_code_magnitude(self):
         errors = [
             OtherIngestFailure("fallback failure"),  # exit code 5, lowest priority

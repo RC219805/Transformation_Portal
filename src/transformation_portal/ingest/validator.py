@@ -156,12 +156,10 @@ def aggregate_exit_codes(exit_codes: Iterable[int]) -> int:
     if not observed:
         return EXIT_SUCCESS
 
-    ranked = sorted(
+    return max(
         observed,
         key=lambda code: exit_code_priority(IngestExitCode(code)),
-        reverse=True,
     )
-    return ranked[0]
 
 
 def validate_schema(
