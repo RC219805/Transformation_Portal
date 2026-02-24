@@ -8,6 +8,7 @@ import csv
 import gzip
 import hashlib
 import json
+import stat
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -78,10 +79,26 @@ def _open_manifest_reader(path: Path) -> List[ExpectedRow]:
         handle = path.open("r", encoding="utf-8", newline="")
 
     with handle:
-        filtered_lines = (
-            line for line in handle if line.strip() and not line.lstrip().startswith(HASH_MANIFEST_COMMENT_PREFIX)
-        )
-        reader = csv.DictReader(filtered_lines)
+        header_line: str | None = None
+        for line in handle:
+            if not line.strip():
+                continue
+            if line.lstrip().startswith(HASH_MANIFEST_COMMENT_PREFIX):
+                continue
+            header_line = line
+            break
+
+        if header_line is None:
+            raise SystemExit(f"hash manifest has no header: {path}")
+
+        def _lines_with_header(first_line: str, remaining_handle: Any) -> Any:
+            yield first_line
+            for tail_line in remaining_handle:
+                if not tail_line.strip():
+                    continue
+                yield tail_line
+
+        reader = csv.DictReader(_lines_with_header(header_line, handle))
         if reader.fieldnames is None:
             raise SystemExit(f"hash manifest has no header: {path}")
 
@@ -155,6 +172,40 @@ def _sha256_for_path(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _check_symlink_components(archive_root: Path, rel_path_obj: Path) -> str:
+    """Detect symlink traversal under archive_root without following it."""
+    current = archive_root
+    for part in rel_path_obj.parts:
+        current = current / part
+        try:
+            mode = current.lstat().st_mode
+        except FileNotFoundError:
+            return ""
+        except PermissionError:
+            return "permission_denied"
+        except OSError:
+            return "stat_failed"
+
+        if stat.S_ISLNK(mode):
+            return "symlink_skipped"
+    return ""
+
+
+def _resolves_within_root(archive_root: Path, abs_path: Path) -> bool:
+    """Defensive boundary check: resolved target must remain under archive_root."""
+    try:
+        root_resolved = archive_root.resolve(strict=False)
+        target_resolved = abs_path.resolve(strict=False)
+    except OSError:
+        return True
+
+    try:
+        target_resolved.relative_to(root_resolved)
+    except ValueError:
+        return False
+    return True
+
+
 def observe_row(archive_root: Path, expected_row: ExpectedRow) -> ObservedRow:
     if "\x00" in expected_row.origin_drive or "\x00" in expected_row.partition:
         return ObservedRow(status=STATUS_SKIPPED, filesize_bytes=0, sha256="", error="invalid_identity_nul")
@@ -164,6 +215,17 @@ def observe_row(archive_root: Path, expected_row: ExpectedRow) -> ObservedRow:
         return ObservedRow(status=STATUS_SKIPPED, filesize_bytes=0, sha256="", error=relpath_error)
 
     abs_path = archive_root / rel_path_obj
+    symlink_component_error = _check_symlink_components(archive_root, rel_path_obj)
+    if symlink_component_error == "symlink_skipped":
+        return ObservedRow(status=STATUS_SKIPPED, filesize_bytes=0, sha256="", error="symlink_skipped")
+    if symlink_component_error == "permission_denied":
+        return ObservedRow(status=STATUS_UNREADABLE, filesize_bytes=0, sha256="", error="permission_denied")
+    if symlink_component_error == "stat_failed":
+        return ObservedRow(status=STATUS_UNREADABLE, filesize_bytes=0, sha256="", error="stat_failed")
+
+    if not _resolves_within_root(archive_root, abs_path):
+        return ObservedRow(status=STATUS_SKIPPED, filesize_bytes=0, sha256="", error="symlink_skipped")
+
     try:
         stat_result = abs_path.lstat()
     except FileNotFoundError:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import gzip
+import hashlib
 import importlib.util
 import json
 import os
@@ -217,6 +218,21 @@ def test_verify_reader_skips_comment_and_blank_preamble_lines(tmp_path: Path) ->
     assert rows[0].relpath == "DriveA/Part1/alpha.txt"
 
 
+def test_verify_reader_preserves_hash_prefixed_values_after_header(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "hash_manifest.csv.gz"
+    with gzip.open(manifest_path, "wt", encoding="utf-8", newline="") as handle:
+        handle.write("# hash_algorithm=sha256\n")
+        writer = csv.writer(handle, lineterminator="\n")
+        writer.writerow(["origin_drive", "partition", "relpath", "filesize_bytes", "sha256", "hash_status", "error"])
+        writer.writerow(["#DriveA", "Part1", "DriveA/Part1/alpha.txt", "26", "abc", "ok", ""])
+        writer.writerow(["DriveB", "Part2", "DriveB/Part2/sub/charlie.txt", "8", "def", "ok", ""])
+
+    rows = VERIFY_HASH_MODULE._open_manifest_reader(manifest_path)
+    assert len(rows) == 2
+    assert rows[0].origin_drive == "#DriveA"
+    assert rows[1].origin_drive == "DriveB"
+
+
 def test_verify_detects_single_byte_mutation() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         temp = Path(tmpdir)
@@ -331,3 +347,84 @@ def test_verify_detects_unreadable_file() -> None:
             assert mismatch["observed_status"] == "unreadable"
         finally:
             unreadable_path.chmod(original_mode)
+
+
+def test_hash_tool_skips_symlinked_directory_traversal() -> None:
+    if os.name == "nt":
+        pytest.skip("symlink behavior is not stable on Windows CI hosts")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        temp = Path(tmpdir)
+        archive_root = _copy_fixture_archive(temp)
+
+        outside_dir = temp / "outside"
+        outside_dir.mkdir(parents=True, exist_ok=True)
+        outside_target = outside_dir / "escape.txt"
+        outside_target.write_bytes(b"outside-data")
+
+        link_dir = archive_root / "DriveA" / "Part1" / "link_out"
+        link_dir.symlink_to(outside_dir, target_is_directory=True)
+
+        index_path = temp / "index_with_symlink_dir.csv"
+        with index_path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.writer(handle, lineterminator="\n")
+            writer.writerow(["origin_drive", "partition", "relpath"])
+            writer.writerow(["DriveA", "Part1", "DriveA/Part1/link_out/escape.txt"])
+
+        out_dir = temp / "out"
+        result = _run_hash_tool(index_path, archive_root, out_dir)
+        assert result.returncode == 0, result.stderr
+
+        with gzip.open(out_dir / "hash_manifest.csv.gz", "rt", encoding="utf-8", newline="") as handle:
+            lines = [line for line in handle if line.strip() and not line.startswith("#")]
+        rows = list(csv.DictReader(lines))
+        assert len(rows) == 1
+        assert rows[0]["hash_status"] == "skipped"
+        assert rows[0]["error"] == "symlink_skipped"
+        assert rows[0]["sha256"] == ""
+
+
+def test_verify_tool_skips_symlinked_directory_traversal() -> None:
+    if os.name == "nt":
+        pytest.skip("symlink behavior is not stable on Windows CI hosts")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        temp = Path(tmpdir)
+        archive_root = _copy_fixture_archive(temp)
+
+        outside_dir = temp / "outside"
+        outside_dir.mkdir(parents=True, exist_ok=True)
+        outside_target = outside_dir / "escape.txt"
+        outside_target.write_bytes(b"outside-data")
+        outside_sha = hashlib.sha256(outside_target.read_bytes()).hexdigest()
+        outside_size = outside_target.stat().st_size
+
+        link_dir = archive_root / "DriveA" / "Part1" / "link_out"
+        link_dir.symlink_to(outside_dir, target_is_directory=True)
+
+        manifest_path = temp / "hash_manifest.csv.gz"
+        with gzip.open(manifest_path, "wt", encoding="utf-8", newline="") as handle:
+            handle.write("# hash_algorithm=sha256\n")
+            writer = csv.writer(handle, lineterminator="\n")
+            writer.writerow(["origin_drive", "partition", "relpath", "filesize_bytes", "sha256", "hash_status", "error"])
+            writer.writerow(
+                [
+                    "DriveA",
+                    "Part1",
+                    "DriveA/Part1/link_out/escape.txt",
+                    str(outside_size),
+                    outside_sha,
+                    "ok",
+                    "",
+                ]
+            )
+
+        report_path = temp / "verification_report.json"
+        verify_result = _run_verify_tool(manifest_path, archive_root, report_path)
+        assert verify_result.returncode != 0
+
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        assert report["rows_mismatched"] == 1
+        mismatch = report["mismatches"][0]
+        assert mismatch["issue"] == "status_mismatch"
+        assert mismatch["observed_status"] == "skipped"

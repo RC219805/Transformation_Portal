@@ -9,6 +9,7 @@ import gzip
 import hashlib
 import io
 import json
+import stat
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -229,6 +230,40 @@ def _sha256_for_path(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _check_symlink_components(archive_root: Path, rel_path_obj: Path) -> str:
+    """Detect symlink traversal under archive_root without following it."""
+    current = archive_root
+    for part in rel_path_obj.parts:
+        current = current / part
+        try:
+            mode = current.lstat().st_mode
+        except FileNotFoundError:
+            return ""
+        except PermissionError:
+            return "permission_denied"
+        except OSError:
+            return "stat_failed"
+
+        if stat.S_ISLNK(mode):
+            return "symlink_skipped"
+    return ""
+
+
+def _resolves_within_root(archive_root: Path, abs_path: Path) -> bool:
+    """Defensive boundary check: resolved target must remain under archive_root."""
+    try:
+        root_resolved = archive_root.resolve(strict=False)
+        target_resolved = abs_path.resolve(strict=False)
+    except OSError:
+        return True
+
+    try:
+        target_resolved.relative_to(root_resolved)
+    except ValueError:
+        return False
+    return True
+
+
 def hash_one_row(archive_root: Path, row: ArchiveIndexRow) -> HashManifestRow:
     if "\x00" in row.origin_drive or "\x00" in row.partition:
         return HashManifestRow(
@@ -256,6 +291,53 @@ def hash_one_row(archive_root: Path, row: ArchiveIndexRow) -> HashManifestRow:
         )
 
     abs_path = archive_root / rel_path_obj
+    symlink_component_error = _check_symlink_components(archive_root, rel_path_obj)
+    if symlink_component_error == "symlink_skipped":
+        return HashManifestRow(
+            row_number=row.row_number,
+            origin_drive=row.origin_drive,
+            partition=row.partition,
+            relpath=row.relpath,
+            filesize_bytes=0,
+            sha256="",
+            hash_status=STATUS_SKIPPED,
+            error="symlink_skipped",
+        )
+    if symlink_component_error == "permission_denied":
+        return HashManifestRow(
+            row_number=row.row_number,
+            origin_drive=row.origin_drive,
+            partition=row.partition,
+            relpath=row.relpath,
+            filesize_bytes=0,
+            sha256="",
+            hash_status=STATUS_UNREADABLE,
+            error="permission_denied",
+        )
+    if symlink_component_error == "stat_failed":
+        return HashManifestRow(
+            row_number=row.row_number,
+            origin_drive=row.origin_drive,
+            partition=row.partition,
+            relpath=row.relpath,
+            filesize_bytes=0,
+            sha256="",
+            hash_status=STATUS_UNREADABLE,
+            error="stat_failed",
+        )
+
+    if not _resolves_within_root(archive_root, abs_path):
+        return HashManifestRow(
+            row_number=row.row_number,
+            origin_drive=row.origin_drive,
+            partition=row.partition,
+            relpath=row.relpath,
+            filesize_bytes=0,
+            sha256="",
+            hash_status=STATUS_SKIPPED,
+            error="symlink_skipped",
+        )
+
     try:
         stat_result = abs_path.lstat()
     except FileNotFoundError:

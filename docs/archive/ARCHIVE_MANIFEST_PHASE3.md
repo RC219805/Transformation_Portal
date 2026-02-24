@@ -39,6 +39,8 @@ Absolute host paths MUST NOT be used as identity keys.
   - `hash_status = "skipped"`
   - `sha256 = ""`
   - stable `error` reason (`"symlink_skipped"`)
+- Any relpath containing a symlink in any path component under `archive_root` is skipped with
+  `error = "symlink_skipped"`.
 
 ### Missing/unreadable policy
 
