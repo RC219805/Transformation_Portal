@@ -38,3 +38,7 @@ jobs:
       - name: FP-state invariance gate
         run: |
           pytest -v -m "not ml and not slow and not benchmark" tests/determinism/test_fpstate_invariance.py
+
+      - name: Bundle root determinism gate
+        run: |
+          pytest -v -m "not ml and not slow and not benchmark" tests/test_bundle_root.py
