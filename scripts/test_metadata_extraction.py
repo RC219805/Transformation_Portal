@@ -261,7 +261,7 @@ def run_extract(
 ) -> ExtractResult:
     """Execute single image extraction via MetadataExtractionService."""
     service = MetadataExtractionService()
-    requested_output = output_path or image_path.with_name(f"{image_path.stem}_provenance.json")
+    requested_output = output_path
     extracted = service.extract(
         ServiceExtractRequest(
             input_path=image_path,
@@ -877,7 +877,7 @@ def main() -> int:
     parser_extract.add_argument(
         "-o",
         "--output",
-        help="Output path for sidecar JSON (default: <image>_provenance.json)",
+        help="Output path for sidecar JSON (default: <image>.provenance.json)",
     )
     parser_extract.add_argument(
         "--preset",
