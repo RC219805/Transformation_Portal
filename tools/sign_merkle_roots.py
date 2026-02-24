@@ -48,7 +48,12 @@ def main() -> int:
             "signature_base64": base64.b64encode(signature).decode("ascii"),
         }
 
-        serialized = json.dumps(envelope, indent=2, sort_keys=True).encode("utf-8")
+        serialized = json.dumps(
+            envelope,
+            indent=2,
+            sort_keys=True,
+            separators=(",", ": "),
+        ).encode("utf-8")
         atomic_write(out_path, serialized + b"\n")
 
         print(f"Signature written to {out_path}")

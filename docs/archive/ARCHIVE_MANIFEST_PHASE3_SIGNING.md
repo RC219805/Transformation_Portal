@@ -96,6 +96,20 @@ The signature covers the raw bytes of the artifact.
 
 ---
 
+# Deterministic Envelope Serialization
+
+`merkle_roots.sig.json` MUST be serialized with:
+- UTF-8 encoding
+- sorted keys
+- two-space indentation
+- separators fixed to `(",", ": ")`
+- trailing newline
+
+This locks formatting behavior across Python versions and keeps emitted
+envelopes byte-stable for deterministic workflows.
+
+---
+
 # CLI Interface
 
 ## Sign
@@ -165,3 +179,7 @@ Phase 3.1 produces additional detached artifacts.
 
 Integrity != Attestation.
 They are layered.
+
+If `tree_method_version` changes in future phases, existing signatures
+remain cryptographically valid but are semantically bound to the method
+metadata embedded in the signed artifact.

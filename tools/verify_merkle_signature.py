@@ -8,6 +8,7 @@ import base64
 import binascii
 import hashlib
 import json
+import re
 from pathlib import Path
 
 from cryptography.exceptions import InvalidSignature
@@ -17,6 +18,7 @@ from cryptography.hazmat.primitives.serialization import load_pem_public_key
 EXIT_INVALID_SIG = 5
 EXIT_ARTIFACT_MISMATCH = 6
 EXIT_MALFORMED = 7
+SHA256_HEX_RE = re.compile(r"^[a-f0-9]{64}$")
 
 
 def main() -> int:
@@ -57,8 +59,13 @@ def main() -> int:
             print("Signed artifact name mismatch")
             return EXIT_ARTIFACT_MISMATCH
 
+        digest_hex = envelope["signed_artifact_sha256"]
+        if not isinstance(digest_hex, str) or SHA256_HEX_RE.fullmatch(digest_hex) is None:
+            print("Malformed signature file: signed_artifact_sha256 must be 64 lowercase hex characters")
+            return EXIT_MALFORMED
+
         computed_digest = hashlib.sha256(artifact_bytes).hexdigest()
-        if computed_digest != envelope["signed_artifact_sha256"]:
+        if computed_digest != digest_hex:
             print("Artifact digest mismatch")
             return EXIT_ARTIFACT_MISMATCH
 
