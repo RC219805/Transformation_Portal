@@ -201,3 +201,13 @@ They are layered.
 If `tree_method_version` changes in future phases, existing signatures
 remain cryptographically valid but are semantically bound to the method
 metadata embedded in the signed artifact.
+
+---
+
+# Trust Model
+
+- A valid signature proves possession of the corresponding Ed25519 private key.
+- Phase 3.1 signatures do NOT provide trusted timestamp semantics unless a detached timestamp layer is added.
+- Phase 3.1 signatures do NOT assert semantic correctness of artifact contents.
+- Phase 3.1 signatures do NOT modify or relax Phase 3 determinism guarantees.
+- Operational trust depends on external public-key distribution and rotation policy, which is out of scope for this repository.
