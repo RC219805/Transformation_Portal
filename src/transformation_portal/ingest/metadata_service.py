@@ -193,6 +193,7 @@ class MetadataExtractionService:
             input_root=effective_input_root,
         )
 
+        # Ordering of results is deterministic and matches input path order.
         for path, output_path in zip(paths, output_paths):
             result = self.extract(
                 ExtractRequest(

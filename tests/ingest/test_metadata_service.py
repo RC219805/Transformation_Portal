@@ -172,6 +172,52 @@ def test_batch_extract_preserves_relative_directory_structure(monkeypatch: pytes
     assert output_paths == [output_dir / "a" / "image.provenance.json", output_dir / "b" / "image.provenance.json"]
 
 
+def test_batch_extract_duplicate_stem_nested_dirs_do_not_overwrite(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    input_root = tmp_path / "inputs"
+    first_dir = input_root / "first"
+    second_dir = input_root / "second"
+    first_dir.mkdir(parents=True)
+    second_dir.mkdir(parents=True)
+    first = first_dir / "image.cr2"
+    second = second_dir / "image.cr2"
+    first.touch()
+    second.touch()
+
+    output_dir = tmp_path / "out"
+    service = MetadataExtractionService(clock_fn=_clock)
+    output_paths: list[Path] = []
+
+    def spy_extract(req: ExtractRequest) -> ExtractResult:
+        assert req.output_path is not None
+        output_paths.append(req.output_path)
+        return ExtractResult(
+            path=req.input_path,
+            success=True,
+            output_path=req.output_path,
+            elapsed_seconds=0.1,
+        )
+
+    monkeypatch.setattr(service, "extract", spy_extract)
+
+    result = service.batch_extract(
+        BatchExtractRequest(
+            input_paths=[first, second],
+            output_dir=output_dir,
+            input_root=input_root,
+            preserve_structure=True,
+            deterministic_order=False,
+        )
+    )
+
+    assert result.success
+    assert len(output_paths) == 2
+    assert len(set(output_paths)) == 2
+    assert output_paths == [
+        output_dir / "first" / "image.provenance.json",
+        output_dir / "second" / "image.provenance.json",
+    ]
+
+
 def test_batch_extract_infers_input_root_for_structure_preservation(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     input_root = tmp_path / "inputs"
     nested_a = input_root / "a"
@@ -379,6 +425,30 @@ def test_batch_extract_sorts_items_when_deterministic_order_enabled(monkeypatch:
     result = service.batch_extract(BatchExtractRequest(input_paths=input_paths, output_dir=tmp_path, deterministic_order=True))
 
     assert [item.path for item in result.items] == sorted(input_paths, key=lambda path: str(path))
+
+
+def test_batch_extract_result_items_order_is_stable(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    input_paths = [tmp_path / "z.cr2", tmp_path / "a.cr2", tmp_path / "m.cr2"]
+    for path in input_paths:
+        path.touch()
+
+    service = MetadataExtractionService(clock_fn=_clock)
+
+    def spy_extract(req: ExtractRequest) -> ExtractResult:
+        return ExtractResult(
+            path=req.input_path,
+            success=True,
+            output_path=req.output_path,
+            elapsed_seconds=0.0,
+        )
+
+    monkeypatch.setattr(service, "extract", spy_extract)
+
+    first = service.batch_extract(BatchExtractRequest(input_paths=input_paths, output_dir=tmp_path, deterministic_order=True))
+    second = service.batch_extract(BatchExtractRequest(input_paths=input_paths, output_dir=tmp_path, deterministic_order=True))
+
+    assert [item.path for item in first.items] == [item.path for item in second.items]
+    assert [item.path for item in first.items] == sorted(input_paths, key=lambda path: str(path))
 
 
 def test_validate_returns_typed_result_with_aggregated_dominance() -> None:
