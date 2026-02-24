@@ -46,8 +46,8 @@ Absolute host paths MUST NOT be used as identity keys.
 - Unreadable file: `hash_status = "unreadable"`, `sha256 = ""`.
 - Invalid path materialization (for example parent traversal): `hash_status = "skipped"`.
 - Non-strict mode emits rows for all files.
-- `--strict` exits non-zero if any row is not `ok`.
-- `--strict-identity` exits non-zero if duplicate `(origin_drive, partition, relpath)` keys are present.
+- `--strict` exits with code `2` if any row is not `ok`.
+- `--strict-identity` exits with code `3` if duplicate `(origin_drive, partition, relpath)` keys are present.
 
 ### Hash algorithm
 
