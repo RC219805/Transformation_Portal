@@ -145,7 +145,13 @@ def aggregate_exit_codes(exit_codes: Iterable[int]) -> int:
     """Aggregate multiple exit codes using ingest contract severity precedence."""
     observed = set()
     for code in exit_codes:
-        numeric_code = int(code)
+        try:
+            numeric_code = int(code)
+        except (TypeError, ValueError):
+            # Preserve backward-compatible behavior for callers that pass
+            # non-int-like values by collapsing them to OTHER_FAILURE.
+            observed.add(EXIT_OTHER_FAILURE)
+            continue
         try:
             IngestExitCode(numeric_code)
             observed.add(numeric_code)

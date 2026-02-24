@@ -88,6 +88,9 @@ class TestExitCodeAggregation:
     def test_aggregate_exit_codes_unknown_values_collapse_to_other_failure(self):
         assert aggregate_exit_codes([999]) == EXIT_OTHER_FAILURE
 
+    def test_aggregate_exit_codes_non_int_values_collapse_to_other_failure(self):
+        assert aggregate_exit_codes(["not-an-int", object()]) == EXIT_OTHER_FAILURE
+
 
 class TestTypedIngestErrors:
     """Tests for typed ingest-domain error hierarchy and aggregation."""
