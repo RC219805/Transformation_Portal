@@ -760,6 +760,7 @@ def _build_machine_envelope(
     data: Dict[str, Any],
     error: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    # Intentionally omit timestamps to keep machine-mode payloads deterministic.
     return {
         "schema": MACHINE_SCHEMA_VERSION,
         "command": command,
