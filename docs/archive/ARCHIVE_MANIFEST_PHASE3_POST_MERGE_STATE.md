@@ -13,6 +13,29 @@ Phase 3.1 -> Detached Attestation (sign + verify)
 
 Each layer is explicitly versioned, contract-bounded, and CI-gated.
 
+Phase 3 deterministic integrity and Phase 3.1 detached attestation are now
+operational production infrastructure.
+
+## What This Now Provides
+
+### 1. Deterministic archive integrity
+
+- Deterministic content hashing and Merkle aggregation are enforced by contract.
+- Schema-locked artifacts and golden regression checks protect output stability.
+- Cross-ISA determinism parity remains part of the integrity surface.
+
+### 2. Cryptographically attested integrity
+
+- Detached Ed25519 signatures bind exact artifact bytes.
+- Envelope metadata binds artifact filename and SHA-256 digest.
+- Trust semantics are explicit and separated from deterministic integrity logic.
+
+### 3. Governance-grade operational discipline
+
+- Determinism harness, schema guards, and dependency controls are active gates.
+- Artifact boundaries are maintained across integrity and attestation layers.
+- Enforcement posture is reproducible and reviewable.
+
 ## Confirmed Architectural State
 
 ### Deterministic archive integrity (Phase 3)
@@ -105,3 +128,13 @@ Future versioned method upgrade candidates:
 - Start Phase 3.2 on a clean branch with detached timestamp scope only.
 
 This preserves deterministic integrity as core infrastructure while extending auditability through detached layers.
+
+## Strategic Positioning
+
+The current state supports:
+
+- Dataset defensibility and external verification workflows
+- Production of structured, cryptographically verifiable integrity evidence
+  appropriate for regulatory or disclosure workflows
+- Cryptographically verifiable archive attestations suitable for audit,
+  disclosure, and adversarial review contexts
