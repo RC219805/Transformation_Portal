@@ -52,6 +52,8 @@ Absolute host paths MUST NOT be used as identity keys.
 
 - Default and required algorithm in Phase 3: `sha256`.
 - Algorithm name is explicit in JSON outputs.
+- `hash_manifest.csv.gz` embeds a deterministic metadata preamble line:
+  - `# hash_algorithm=sha256`
 
 ### Deterministic ordering
 
@@ -63,6 +65,9 @@ Absolute host paths MUST NOT be used as identity keys.
 ## Output Contracts
 
 ### `hash_manifest.csv.gz`
+
+Manifest files may start with leading metadata lines in `# key=value` format. Parsers MUST ignore
+those lines before reading the CSV header row.
 
 Column order is fixed and schema-governed:
 

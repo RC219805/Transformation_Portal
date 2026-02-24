@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import csv
+import gzip
 import importlib.util
 import json
 import os
@@ -44,6 +46,7 @@ RELPATH_REJECTION_CASES = [
     ("C:foo\\bar.txt", "invalid_relpath_drive_spec"),
     ("/tmp/escape.txt", "invalid_relpath_anchored"),
     ("\\\\server\\share\\file.txt", "invalid_relpath_anchored"),
+    ("DriveA/Part1/alpha\x00.txt", "invalid_relpath_nul"),
 ]
 
 
@@ -113,6 +116,9 @@ def test_phase3_fixture_outputs_match_golden_bytes() -> None:
         verify_result = _run_verify_tool(out_dir / "hash_manifest.csv.gz", FIXTURE_ARCHIVE_ROOT, report_path)
         assert verify_result.returncode == 0, verify_result.stderr
 
+        with gzip.open(out_dir / "hash_manifest.csv.gz", "rt", encoding="utf-8", newline="") as handle:
+            assert handle.readline().rstrip("\n") == "# hash_algorithm=sha256"
+
         for artifact_name in [
             "hash_manifest.csv.gz",
             "hash_summary.json",
@@ -151,6 +157,54 @@ def test_verify_tool_materialize_relpath_rejects_anchored_and_drive_inputs(raw_r
     relpath_obj, error = VERIFY_HASH_MODULE._materialize_relpath(raw_relpath)
     assert relpath_obj is None
     assert error == expected_error
+
+
+def test_hash_tool_rejects_nul_in_identity_fields(tmp_path: Path) -> None:
+    row = ARCHIVE_HASH_MODULE.ArchiveIndexRow(
+        row_number=1,
+        origin_drive="Drive\x00A",
+        partition="Part1",
+        relpath="DriveA/Part1/alpha.txt",
+    )
+    result = ARCHIVE_HASH_MODULE.hash_one_row(tmp_path, row)
+    assert result.hash_status == "skipped"
+    assert result.error == "invalid_identity_nul"
+    assert result.sha256 == ""
+    assert result.filesize_bytes == 0
+
+
+def test_verify_tool_rejects_nul_in_identity_fields(tmp_path: Path) -> None:
+    expected = VERIFY_HASH_MODULE.ExpectedRow(
+        row_number=1,
+        origin_drive="DriveA",
+        partition="Part\x001",
+        relpath="DriveA/Part1/alpha.txt",
+        filesize_bytes=0,
+        sha256="",
+        hash_status="skipped",
+        error="invalid_identity_nul",
+    )
+    observed = VERIFY_HASH_MODULE.observe_row(tmp_path, expected)
+    assert observed.status == "skipped"
+    assert observed.error == "invalid_identity_nul"
+    assert observed.sha256 == ""
+    assert observed.filesize_bytes == 0
+
+
+def test_verify_reader_skips_comment_and_blank_preamble_lines(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "hash_manifest.csv.gz"
+    with gzip.open(manifest_path, "wt", encoding="utf-8", newline="") as handle:
+        handle.write("# hash_algorithm=sha256\n")
+        handle.write("\n")
+        writer = csv.writer(handle, lineterminator="\n")
+        writer.writerow(["origin_drive", "partition", "relpath", "filesize_bytes", "sha256", "hash_status", "error"])
+        writer.writerow(["DriveA", "Part1", "DriveA/Part1/alpha.txt", "26", "abc", "ok", ""])
+
+    rows = VERIFY_HASH_MODULE._open_manifest_reader(manifest_path)
+    assert len(rows) == 1
+    assert rows[0].origin_drive == "DriveA"
+    assert rows[0].partition == "Part1"
+    assert rows[0].relpath == "DriveA/Part1/alpha.txt"
 
 
 def test_verify_detects_single_byte_mutation() -> None:

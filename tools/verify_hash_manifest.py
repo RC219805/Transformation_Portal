@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Sequence, Tuple
 from uuid import uuid4
 
 READ_CHUNK_BYTES = 1024 * 1024
+HASH_MANIFEST_COMMENT_PREFIX = "#"
 HASH_MANIFEST_COLUMNS = [
     "origin_drive",
     "partition",
@@ -77,7 +78,10 @@ def _open_manifest_reader(path: Path) -> List[ExpectedRow]:
         handle = path.open("r", encoding="utf-8", newline="")
 
     with handle:
-        reader = csv.DictReader(handle)
+        filtered_lines = (
+            line for line in handle if line.strip() and not line.lstrip().startswith(HASH_MANIFEST_COMMENT_PREFIX)
+        )
+        reader = csv.DictReader(filtered_lines)
         if reader.fieldnames is None:
             raise SystemExit(f"hash manifest has no header: {path}")
 
@@ -110,6 +114,9 @@ def _open_manifest_reader(path: Path) -> List[ExpectedRow]:
 
 
 def _materialize_relpath(relpath: str) -> Tuple[Path | None, str]:
+    if "\x00" in relpath:
+        return None, "invalid_relpath_nul"
+
     normalized_raw = relpath.replace("\\", "/")
     if not normalized_raw or normalized_raw == ".":
         return None, "invalid_relpath_empty"
@@ -149,6 +156,9 @@ def _sha256_for_path(path: Path) -> str:
 
 
 def observe_row(archive_root: Path, expected_row: ExpectedRow) -> ObservedRow:
+    if "\x00" in expected_row.origin_drive or "\x00" in expected_row.partition:
+        return ObservedRow(status=STATUS_SKIPPED, filesize_bytes=0, sha256="", error="invalid_identity_nul")
+
     rel_path_obj, relpath_error = _materialize_relpath(expected_row.relpath)
     if rel_path_obj is None:
         return ObservedRow(status=STATUS_SKIPPED, filesize_bytes=0, sha256="", error=relpath_error)

@@ -22,6 +22,7 @@ HASH_MANIFEST_SCHEMA_VERSION = "1.0"
 LEAF_FORMAT_VERSION = "1.0"
 TREE_METHOD_VERSION = "1.0"
 READ_CHUNK_BYTES = 1024 * 1024
+HASH_MANIFEST_PREAMBLE = f"# hash_algorithm={HASH_ALGORITHM}"
 
 HASH_MANIFEST_COLUMNS = [
     "origin_drive",
@@ -102,6 +103,8 @@ def write_hash_manifest_gzip(rows: Sequence[HashManifestRow], out_path: Path) ->
             ) as gz:
                 with io.TextIOWrapper(gz, encoding="utf-8", newline="\n") as text:
                     writer = csv.writer(text, lineterminator="\n")
+                    # Keep the custody artifact self-describing without changing CSV schema columns.
+                    text.write(f"{HASH_MANIFEST_PREAMBLE}\n")
                     writer.writerow(HASH_MANIFEST_COLUMNS)
                     for row in rows:
                         writer.writerow(row.as_csv_row())
@@ -157,6 +160,9 @@ def read_archive_index_rows(path: Path) -> List[ArchiveIndexRow]:
 
 
 def _materialize_relpath(relpath: str) -> Tuple[Path | None, str]:
+    if "\x00" in relpath:
+        return None, "invalid_relpath_nul"
+
     normalized_raw = relpath.replace("\\", "/")
     if not normalized_raw or normalized_raw == ".":
         return None, "invalid_relpath_empty"
@@ -196,6 +202,18 @@ def _sha256_for_path(path: Path) -> str:
 
 
 def hash_one_row(archive_root: Path, row: ArchiveIndexRow) -> HashManifestRow:
+    if "\x00" in row.origin_drive or "\x00" in row.partition:
+        return HashManifestRow(
+            row_number=row.row_number,
+            origin_drive=row.origin_drive,
+            partition=row.partition,
+            relpath=row.relpath,
+            filesize_bytes=0,
+            sha256="",
+            hash_status=STATUS_SKIPPED,
+            error="invalid_identity_nul",
+        )
+
     rel_path_obj, relpath_error = _materialize_relpath(row.relpath)
     if rel_path_obj is None:
         return HashManifestRow(
