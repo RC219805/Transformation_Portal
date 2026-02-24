@@ -38,6 +38,28 @@ This allows operators to anchor either:
 - deterministic integrity artifact bytes, or
 - detached attestation bytes from Phase 3.1.
 
+## Recommended Operational Target
+
+Default operational guidance is to timestamp the detached signature artifact
+(`merkle_roots.sig.json`) when available.
+
+Recommended chain:
+
+```text
+merkle_roots.json
+      ->
+merkle_roots.sig.json
+      ->
+merkle_roots.sig.tsr
+```
+
+Rationale:
+
+- Identity attestation and existence-at-time are bound to the same detached layer.
+- Deterministic roots remain immutable and unchanged.
+- Verification workflows can validate integrity, signer assertion, and time anchor
+  in a consistent detached sequence.
+
 ---
 
 # RFC 3161 Request Model
@@ -68,6 +90,25 @@ The CLI enforces:
 - media type must be `application/timestamp-reply` when present
 
 The raw response bytes are written directly to the detached output `.tsr` path.
+
+---
+
+# Trust Model and Limits
+
+Phase 3.2 timestamping proves that the timestamped byte payload existed at or
+before the TSA-issued time.
+
+Phase 3.2 timestamping does NOT, by itself, prove:
+
+- semantic correctness of artifact content
+- legal or regulatory compliance
+- identity of origin beyond detached signature assertions from Phase 3.1
+
+Operational trust in timestamp evidence depends on:
+
+- TSA certificate validity and trust anchor configuration
+- client-side certificate/path validation policy
+- long-term retention strategy for TSA material and verification context
 
 ---
 
