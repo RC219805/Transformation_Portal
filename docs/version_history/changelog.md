@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-02-24
+
+**Release: v3.5.0**
+**Type:** Documentation Milestone
+**Runtime Impact:** None
+**Integrity Contract Change:** None
+
+- Documented and named the existing deterministic Regulatory Export Mode as the compliance-layer capstone on top of frozen Phase 3.4.1 integrity contracts (no runtime changes).
+- Added formal release notes: `docs/version_history/RELEASE_NOTES_v3.5.0.md`.
+- Added regulator overview and Annex-level traceability matrix:
+  - `docs/compliance/REGULATOR_COMPLIANCE_OVERVIEW_ART53.md`
+  - `docs/compliance/ARTICLE53_TRACEABILITY_MATRIX.md`
+
 ## 2026-01-29
 
 **Security & Bug Fixes:**
@@ -25,12 +38,12 @@
   - Added Additional Resources section with links to internal documentation
   - Added Code Examples section with practical snippets for common tasks
 
-## 2025-07-02
-
-- Added integrated comprehensive dataset for Picacho Lane project under Client Deliverables.
+## 2025-07-04
+- Standardized README anchors and terminology for the tooling sections, including consistent tone-mapping language and nested table-of-contents links.
 
 ## 2025-07-03
 - Reconciled README guidance so the table of contents, section anchors, and terminology match the merged tooling pull requests.
 
-## 2025-07-04
-- Standardized README anchors and terminology for the tooling sections, including consistent tone-mapping language and nested table-of-contents links.
+## 2025-07-02
+
+- Added integrated comprehensive dataset for Picacho Lane project under Client Deliverables.
