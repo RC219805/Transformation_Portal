@@ -120,6 +120,26 @@ def _sign(roots_path: Path, private_key_path: Path, signature_path: Path) -> sub
     )
 
 
+def _sign_without_site_packages(
+    roots_path: Path,
+    private_key_path: Path,
+    signature_path: Path,
+) -> subprocess.CompletedProcess[str]:
+    return _run_cli(
+        [
+            sys.executable,
+            "-S",
+            str(SIGN_TOOL),
+            "--roots",
+            str(roots_path),
+            "--private-key",
+            str(private_key_path),
+            "--out",
+            str(signature_path),
+        ]
+    )
+
+
 def _verify(roots_path: Path, signature_path: Path, public_key_path: Path) -> subprocess.CompletedProcess[str]:
     return _run_cli(
         [
@@ -229,6 +249,18 @@ def test_sign_fails_with_missing_private_key_file(tmp_path: Path) -> None:
     sign_result = _sign(roots_path, missing_private_key_path, signature_path)
     assert sign_result.returncode == 4
     assert "Signing failed" in sign_result.stdout
+
+
+def test_sign_fails_with_missing_cryptography_dependency(tmp_path: Path) -> None:
+    roots_path = tmp_path / "merkle_roots.json"
+    signature_path = tmp_path / "merkle_roots.sig.json"
+    _write_roots(roots_path)
+    private_key_path, _ = _write_keypair(tmp_path, "primary")
+
+    sign_result = _sign_without_site_packages(roots_path, private_key_path, signature_path)
+    assert sign_result.returncode == 4
+    assert "missing optional dependency 'cryptography'" in sign_result.stdout
+    assert "requirements/tools-archive.txt" in sign_result.stdout
 
 
 def test_sign_fails_with_non_ed25519_private_key(tmp_path: Path) -> None:

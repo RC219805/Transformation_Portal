@@ -10,14 +10,14 @@ import json
 from pathlib import Path
 from uuid import uuid4
 
-from cryptography.exceptions import UnsupportedAlgorithm
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from cryptography.hazmat.primitives.serialization import load_pem_private_key
-
 EXIT_SIGN_FAILURE = 4
 EXPECTED_ROOTS_FILENAME = "merkle_roots.json"
 ENVELOPE_VERSION = "1"
 ARTIFACT_DIGEST_ALGORITHM = "sha256"
+CRYPTOGRAPHY_INSTALL_HINT = (
+    "Install dependencies with `pip install -r requirements/tools-archive.txt` "
+    "or `pip install transformation-portal[archive-signing]`."
+)
 
 
 def atomic_write(path: Path, data: bytes) -> None:
@@ -29,6 +29,16 @@ def atomic_write(path: Path, data: bytes) -> None:
     finally:
         if tmp.exists():
             tmp.unlink()
+
+
+def _load_crypto_primitives() -> tuple[object, object, object] | None:
+    try:
+        from cryptography.exceptions import UnsupportedAlgorithm
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+        from cryptography.hazmat.primitives.serialization import load_pem_private_key
+    except ImportError:
+        return None
+    return UnsupportedAlgorithm, Ed25519PrivateKey, load_pem_private_key
 
 
 def main() -> int:
@@ -53,6 +63,12 @@ def main() -> int:
     roots_path = Path(args.roots)
     key_path = Path(args.private_key)
     out_path = Path(args.out)
+
+    crypto_primitives = _load_crypto_primitives()
+    if crypto_primitives is None:
+        print("Signing failed: missing optional dependency 'cryptography'. " + CRYPTOGRAPHY_INSTALL_HINT)
+        return EXIT_SIGN_FAILURE
+    UnsupportedAlgorithm, Ed25519PrivateKey, load_pem_private_key = crypto_primitives
 
     try:
         if roots_path.name != EXPECTED_ROOTS_FILENAME:

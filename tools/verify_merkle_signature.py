@@ -81,10 +81,7 @@ def main() -> int:
 
     crypto_primitives = _load_crypto_primitives()
     if crypto_primitives is None:
-        print(
-            "Verification failed: missing optional dependency 'cryptography'.",
-            CRYPTOGRAPHY_INSTALL_HINT,
-        )
+        print("Verification failed: missing optional dependency 'cryptography'. " + CRYPTOGRAPHY_INSTALL_HINT)
         return EXIT_INVALID_SIG
     InvalidSignature, UnsupportedAlgorithm, Ed25519PublicKey, load_pem_public_key = crypto_primitives
 
