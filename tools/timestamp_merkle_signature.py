@@ -242,8 +242,9 @@ def main() -> int:
             return EXIT_TIMESTAMP_FAILURE
 
         target_bytes = target_path.read_bytes()
-        digest_hex = hashlib.sha256(target_bytes).hexdigest()
-        timestamp_request = _build_timestamp_request(bytes.fromhex(digest_hex), nonce, cert_req=args.cert_req)
+        digest_bytes = hashlib.sha256(target_bytes).digest()
+        digest_hex = digest_bytes.hex()
+        timestamp_request = _build_timestamp_request(digest_bytes, nonce, cert_req=args.cert_req)
 
         http_request = urllib.request.Request(
             args.tsa_url,
