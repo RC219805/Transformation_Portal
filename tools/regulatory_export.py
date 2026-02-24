@@ -32,6 +32,7 @@ EXIT_GOVERNANCE_VERIFY_FAILURE = EXIT_EXPORT_BUILD_FAILURE
 EXPORT_MODE_VERSION = "1"
 RISK_METADATA_SCHEMA_VERSION = "1"
 SOURCE_TAXONOMY_SCHEMA_VERSION = "1"
+# Bump when governance export structure or serialization invariants change.
 GOVERNANCE_EXPORT_MODE_VERSION = "1"
 RISK_ASSESSMENT_REPORT_SCHEMA_VERSION = "1"
 CYBERSECURITY_AUDIT_RECORD_SCHEMA_VERSION = "1"
@@ -89,6 +90,7 @@ def sha256_hexdigest(path: Path) -> str:
 
 
 def _canonical_json_bytes(payload: Mapping[str, object]) -> bytes:
+    # Serialization format is contract-frozen; changes require mode version bump.
     return (
         json.dumps(
             payload,
