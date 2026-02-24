@@ -241,6 +241,9 @@ def test_regulatory_export_generates_bound_outputs(tmp_path: Path) -> None:
     assert export_payload["bundle_binding"]["bundle_root_sha256"] == manifest_payload["bundle_root_sha256"]
     assert export_payload["training_data_summary"]["hash_manifest_summary"]["rows_total"] == 4
     assert export_payload["training_data_summary"]["source_taxonomy_summary"]["source_count_total"] == 3
+    commands = export_payload["verification_commands"]
+    assert "<BUNDLE_DIR>" in "\n".join(commands)
+    assert str(tmp_path) not in "\n".join(commands)
 
     markdown = out_md.read_text(encoding="utf-8")
     assert "# Regulatory Export Summary" in markdown
@@ -285,3 +288,38 @@ def test_regulatory_export_rejects_unknown_risk_metadata_fields(tmp_path: Path) 
 
     assert result.returncode == 31
     assert "unexpected field(s): unexpected" in result.stdout
+
+
+def test_regulatory_export_rejects_empty_web_scraped_top_domains(tmp_path: Path) -> None:
+    bundle_manifest = _write_bundle_with_root(tmp_path / "bundle")
+    risk_path = tmp_path / "risk_metadata.json"
+    taxonomy_path = tmp_path / "source_taxonomy.json"
+    _write_risk_metadata(risk_path)
+    _write_source_taxonomy(taxonomy_path)
+
+    taxonomy_payload = json.loads(taxonomy_path.read_text(encoding="utf-8"))
+    taxonomy_payload["sources"][0]["top_domains"] = []
+    taxonomy_path.write_text(json.dumps(taxonomy_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    out_json = tmp_path / "export_fail.json"
+    out_md = tmp_path / "export_fail.md"
+    result = _run_regulatory_export(bundle_manifest, risk_path, taxonomy_path, out_json, out_md)
+
+    assert result.returncode == 31
+    assert "top_domains must include at least one domain" in result.stdout
+
+
+def test_regulatory_export_returns_write_failure_exit_code(tmp_path: Path) -> None:
+    bundle_manifest = _write_bundle_with_root(tmp_path / "bundle")
+    risk_path = tmp_path / "risk_metadata.json"
+    taxonomy_path = tmp_path / "source_taxonomy.json"
+    _write_risk_metadata(risk_path)
+    _write_source_taxonomy(taxonomy_path)
+
+    out_json = tmp_path / "occupied_path"
+    out_json.mkdir()
+    out_md = tmp_path / "export_fail.md"
+    result = _run_regulatory_export(bundle_manifest, risk_path, taxonomy_path, out_json, out_md)
+
+    assert result.returncode == 32
+    assert "Regulatory export write failed" in result.stdout

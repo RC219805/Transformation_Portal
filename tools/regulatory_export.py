@@ -378,7 +378,9 @@ def validate_source_taxonomy(payload: dict[str, object]) -> dict[str, object]:
         if "crawler" in source:
             normalized_source["crawler"] = _require_string(source, "crawler", context)
         if "top_domains" in source:
-            normalized_source["top_domains"] = sorted(set(_validate_string_list(source, "top_domains", context)))
+            normalized_source["top_domains"] = sorted(
+                {domain.lower() for domain in _validate_string_list(source, "top_domains", context)}
+            )
         if "geographic_coverage" in source:
             normalized_source["geographic_coverage"] = sorted(
                 set(_validate_string_list(source, "geographic_coverage", context))
@@ -397,6 +399,9 @@ def validate_source_taxonomy(payload: dict[str, object]) -> dict[str, object]:
                     missing.append(required_field)
             if missing:
                 raise ValueError(f"{context} missing required field(s) for web_scraped category: {', '.join(missing)}")
+            top_domains = normalized_source.get("top_domains")
+            if not isinstance(top_domains, list) or not top_domains:
+                raise ValueError(f"{context}.top_domains must include at least one domain for web_scraped category")
 
         normalized_sources.append(normalized_source)
 
@@ -756,10 +761,12 @@ def build_export_payload(
             "source_taxonomy_summary": source_taxonomy_summary,
         },
         "verification_commands": [
-            f"python tools/verify_evidence_bundle_manifest.py --bundle-manifest {manifest_path} --bundle-dir {manifest_path.parent}",
-            f"python tools/regulatory_export.py --bundle-manifest {manifest_path} "
-            f"--risk-metadata {risk_metadata_path} --source-taxonomy {source_taxonomy_path} "
-            f"--out-json <path>/regulatory_export.json --out-markdown <path>/regulatory_export.md",
+            "python tools/verify_evidence_bundle_manifest.py "
+            f"--bundle-manifest <BUNDLE_DIR>/{EXPECTED_MANIFEST_FILENAME} --bundle-dir <BUNDLE_DIR>",
+            "python tools/regulatory_export.py "
+            f"--bundle-manifest <BUNDLE_DIR>/{EXPECTED_MANIFEST_FILENAME} "
+            "--risk-metadata <RISK_METADATA_JSON> --source-taxonomy <SOURCE_TAXONOMY_JSON> "
+            "--out-json <OUTPUT_DIR>/regulatory_export.json --out-markdown <OUTPUT_DIR>/regulatory_export.md",
         ],
         "verification_expected_exit_codes": {
             "verify_evidence_bundle_manifest": 0,
@@ -900,31 +907,36 @@ def main(argv: list[str] | None = None) -> int:
             top_n=args.top_n,
         )
 
-        json_bytes = (
-            json.dumps(
-                export_payload,
-                indent=2,
-                sort_keys=True,
-                separators=(",", ": "),
-            ).encode("utf-8")
-            + b"\n"
-        )
-        atomic_write(Path(args.out_json), json_bytes)
-
-        if args.out_markdown is not None:
-            markdown = render_markdown(export_payload, top_n=args.top_n)
-            atomic_write(Path(args.out_markdown), markdown.encode("utf-8") + b"\n")
-
-        print(f"Regulatory export written to {args.out_json}")
-        if args.out_markdown is not None:
-            print(f"Regulatory markdown written to {args.out_markdown}")
-        return 0
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
         print(f"Regulatory export failed: {exc}")
         return EXIT_EXPORT_BUILD_FAILURE
-    except Exception as exc:
+
+    json_bytes = (
+        json.dumps(
+            export_payload,
+            indent=2,
+            sort_keys=True,
+            separators=(",", ": "),
+        ).encode("utf-8")
+        + b"\n"
+    )
+    markdown_bytes: bytes | None = None
+    if args.out_markdown is not None:
+        markdown = render_markdown(export_payload, top_n=args.top_n)
+        markdown_bytes = markdown.encode("utf-8") + b"\n"
+
+    try:
+        atomic_write(Path(args.out_json), json_bytes)
+        if args.out_markdown is not None and markdown_bytes is not None:
+            atomic_write(Path(args.out_markdown), markdown_bytes)
+    except OSError as exc:
         print(f"Regulatory export write failed: {exc}")
         return EXIT_EXPORT_WRITE_FAILURE
+
+    print(f"Regulatory export written to {args.out_json}")
+    if args.out_markdown is not None:
+        print(f"Regulatory markdown written to {args.out_markdown}")
+    return 0
 
 
 if __name__ == "__main__":

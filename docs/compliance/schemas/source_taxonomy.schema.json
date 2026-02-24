@@ -129,6 +129,11 @@
               ]
             },
             "then": {
+              "properties": {
+                "top_domains": {
+                  "minItems": 1
+                }
+              },
               "required": [
                 "crawler",
                 "collection_period",
