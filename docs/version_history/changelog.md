@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-02-24
+
+**Release: v3.5.0**
+
+- Added deterministic Regulatory Export Mode as the compliance-layer capstone on top of frozen Phase 3.4.1 integrity contracts.
+- Added formal release notes: `docs/version_history/RELEASE_NOTES_v3.5.0.md`.
+- Added regulator overview and Annex-level traceability matrix:
+  - `docs/compliance/REGULATOR_COMPLIANCE_OVERVIEW_ART53.md`
+  - `docs/compliance/ARTICLE53_TRACEABILITY_MATRIX.md`
+
 ## 2026-01-29
 
 **Security & Bug Fixes:**
