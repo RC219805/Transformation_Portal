@@ -110,7 +110,13 @@ def _open_manifest_reader(path: Path) -> List[ExpectedRow]:
 
 
 def _materialize_relpath(relpath: str) -> Tuple[Path | None, str]:
-    normalized = relpath.replace("\\", "/").lstrip("/")
+    normalized_raw = relpath.replace("\\", "/")
+    if not normalized_raw or normalized_raw == ".":
+        return None, "invalid_relpath_empty"
+    if normalized_raw.startswith("/"):
+        return None, "invalid_relpath_anchored"
+
+    normalized = normalized_raw.lstrip("/")
     if not normalized or normalized == ".":
         return None, "invalid_relpath_empty"
 
@@ -120,7 +126,15 @@ def _materialize_relpath(relpath: str) -> Tuple[Path | None, str]:
     if any(part == ".." for part in parts):
         return None, "invalid_relpath_parent_ref"
 
-    return Path(*parts), ""
+    first = parts[0]
+    if len(first) >= 2 and first[0].isalpha() and first[1] == ":":
+        return None, "invalid_relpath_drive_spec"
+
+    candidate = Path(*parts)
+    if candidate.is_absolute() or getattr(candidate, "drive", ""):
+        return None, "invalid_relpath_anchored"
+
+    return candidate, ""
 
 
 def _sha256_for_path(path: Path) -> str:
@@ -218,25 +232,32 @@ def verify_rows(
     selected_rows: Sequence[ExpectedRow],
     archive_root: Path,
     workers: int,
-) -> List[Dict[str, Any]]:
+) -> Tuple[List[Dict[str, Any]], int]:
     if workers <= 1:
         mismatches: List[Dict[str, Any]] = []
+        mismatched_row_keys: set[tuple[str, str, str, int]] = set()
         for expected in selected_rows:
             observed = observe_row(archive_root, expected)
-            mismatches.extend(compare_rows(expected, observed))
-        return mismatches
+            row_mismatches = compare_rows(expected, observed)
+            if row_mismatches:
+                mismatched_row_keys.add((expected.origin_drive, expected.partition, expected.relpath, expected.row_number))
+            mismatches.extend(row_mismatches)
+        return mismatches, len(mismatched_row_keys)
 
-    def _observe_and_compare(expected: ExpectedRow) -> List[Dict[str, Any]]:
+    def _observe_and_compare(expected: ExpectedRow) -> Tuple[ExpectedRow, List[Dict[str, Any]]]:
         observed = observe_row(archive_root, expected)
-        return compare_rows(expected, observed)
+        return expected, compare_rows(expected, observed)
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
         nested = list(executor.map(_observe_and_compare, selected_rows))
 
-    mismatches = []
-    for item in nested:
-        mismatches.extend(item)
-    return mismatches
+    mismatches: List[Dict[str, Any]] = []
+    mismatched_row_keys: set[tuple[str, str, str, int]] = set()
+    for expected, row_mismatches in nested:
+        if row_mismatches:
+            mismatched_row_keys.add((expected.origin_drive, expected.partition, expected.relpath, expected.row_number))
+        mismatches.extend(row_mismatches)
+    return mismatches, len(mismatched_row_keys)
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -288,7 +309,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         selected_rows = all_rows
 
-    mismatches = verify_rows(selected_rows, archive_root=archive_root, workers=args.workers)
+    mismatches, rows_mismatched = verify_rows(selected_rows, archive_root=archive_root, workers=args.workers)
 
     rows_checked = len(selected_rows)
     report = {
@@ -296,8 +317,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "mismatches": mismatches,
         "rows_checked": rows_checked,
         "rows_in_manifest": len(all_rows),
-        "rows_matched": rows_checked - len(mismatches),
-        "rows_mismatched": len(mismatches),
+        "rows_matched": rows_checked - rows_mismatched,
+        "rows_mismatched": rows_mismatched,
         "verify_mode": verify_mode,
     }
     if verify_mode == "sample":

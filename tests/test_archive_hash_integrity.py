@@ -26,6 +26,27 @@ HAS_JSONSCHEMA = importlib.util.find_spec("jsonschema") is not None
 pytestmark = [pytest.mark.regression]
 
 
+def _load_tool_module(module_path: Path, module_name: str):
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Unable to load module from {module_path}")
+
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+ARCHIVE_HASH_MODULE = _load_tool_module(HASH_TOOL, "tests_archive_hash_manifest_tool")
+VERIFY_HASH_MODULE = _load_tool_module(VERIFY_TOOL, "tests_verify_hash_manifest_tool")
+RELPATH_REJECTION_CASES = [
+    ("C:\\foo\\bar.txt", "invalid_relpath_drive_spec"),
+    ("C:foo\\bar.txt", "invalid_relpath_drive_spec"),
+    ("/tmp/escape.txt", "invalid_relpath_anchored"),
+    ("\\\\server\\share\\file.txt", "invalid_relpath_anchored"),
+]
+
+
 def _run_cli(command: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         command,
@@ -118,6 +139,20 @@ def test_hash_outputs_are_deterministic_with_parallel_workers() -> None:
             assert (out_a / artifact_name).read_bytes() == (out_b / artifact_name).read_bytes()
 
 
+@pytest.mark.parametrize(("raw_relpath", "expected_error"), RELPATH_REJECTION_CASES)
+def test_hash_tool_materialize_relpath_rejects_anchored_and_drive_inputs(raw_relpath: str, expected_error: str) -> None:
+    relpath_obj, error = ARCHIVE_HASH_MODULE._materialize_relpath(raw_relpath)
+    assert relpath_obj is None
+    assert error == expected_error
+
+
+@pytest.mark.parametrize(("raw_relpath", "expected_error"), RELPATH_REJECTION_CASES)
+def test_verify_tool_materialize_relpath_rejects_anchored_and_drive_inputs(raw_relpath: str, expected_error: str) -> None:
+    relpath_obj, error = VERIFY_HASH_MODULE._materialize_relpath(raw_relpath)
+    assert relpath_obj is None
+    assert error == expected_error
+
+
 def test_verify_detects_single_byte_mutation() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         temp = Path(tmpdir)
@@ -136,7 +171,8 @@ def test_verify_detects_single_byte_mutation() -> None:
         assert verify_result.returncode != 0
 
         report = json.loads(report_path.read_text(encoding="utf-8"))
-        assert report["rows_mismatched"] >= 1
+        assert report["rows_mismatched"] == 1
+        assert report["rows_matched"] == report["rows_checked"] - 1
         issues = {entry["issue"] for entry in report["mismatches"]}
         assert "sha256_mismatch" in issues
 

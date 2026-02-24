@@ -157,7 +157,13 @@ def read_archive_index_rows(path: Path) -> List[ArchiveIndexRow]:
 
 
 def _materialize_relpath(relpath: str) -> Tuple[Path | None, str]:
-    normalized = relpath.replace("\\", "/").lstrip("/")
+    normalized_raw = relpath.replace("\\", "/")
+    if not normalized_raw or normalized_raw == ".":
+        return None, "invalid_relpath_empty"
+    if normalized_raw.startswith("/"):
+        return None, "invalid_relpath_anchored"
+
+    normalized = normalized_raw.lstrip("/")
     if not normalized or normalized == ".":
         return None, "invalid_relpath_empty"
 
@@ -167,7 +173,15 @@ def _materialize_relpath(relpath: str) -> Tuple[Path | None, str]:
     if any(part == ".." for part in parts):
         return None, "invalid_relpath_parent_ref"
 
-    return Path(*parts), ""
+    first = parts[0]
+    if len(first) >= 2 and first[0].isalpha() and first[1] == ":":
+        return None, "invalid_relpath_drive_spec"
+
+    candidate = Path(*parts)
+    if candidate.is_absolute() or getattr(candidate, "drive", ""):
+        return None, "invalid_relpath_anchored"
+
+    return candidate, ""
 
 
 def _sha256_for_path(path: Path) -> str:
