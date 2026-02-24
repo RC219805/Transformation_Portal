@@ -25,7 +25,7 @@ without modifying Phase 3 artifacts or altering their bytes.
 3. No Phase 3 artifact is rewritten or mutated.
 4. No network calls occur.
 5. No nondeterminism is introduced.
-6. Signing never runs automatically in CI.
+6. Signing is not part of the default Phase 3 artifact pipeline in CI (only explicit, isolated tests may invoke the signing CLI).
 7. Root-only signing is prohibited.
 
 ---

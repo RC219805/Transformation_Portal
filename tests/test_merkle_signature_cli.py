@@ -220,6 +220,20 @@ def test_verify_fails_when_artifact_is_tampered(tmp_path: Path) -> None:
     assert "Artifact digest mismatch" in verify_result.stdout
 
 
+def test_verify_fails_with_missing_roots_file(tmp_path: Path) -> None:
+    roots_path = tmp_path / "missing" / "merkle_roots.json"
+    signature_path = tmp_path / "merkle_roots.sig.json"
+    _write_roots(tmp_path / "merkle_roots.json")
+    private_key_path, public_key_path = _write_keypair(tmp_path, "primary")
+
+    sign_result = _sign(tmp_path / "merkle_roots.json", private_key_path, signature_path)
+    assert sign_result.returncode == 0, sign_result.stderr
+
+    verify_result = _verify(roots_path, signature_path, public_key_path)
+    assert verify_result.returncode == 5
+    assert "Verification failed" in verify_result.stdout
+
+
 def test_verify_fails_when_signature_is_tampered(tmp_path: Path) -> None:
     roots_path = tmp_path / "merkle_roots.json"
     signature_path = tmp_path / "merkle_roots.sig.json"

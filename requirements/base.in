@@ -16,9 +16,6 @@ tqdm>=4.66,<5              # progress bar utility
 # Schema validation (required for ingest contract)
 pydantic>=2.0,<3
 
-# Cryptographic signatures (Phase 3.1 detached signing)
-cryptography>=46.0,<47
-
 # TIFF image support (essential for batch processing)
 tifffile>=2023.7.18,<2027
 imagecodecs>=2023.9.18,<2027
