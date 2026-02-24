@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "admt_governance",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "governance_record_id",
+    "regulatory_regime",
+    "admt_significant_decision_use",
+    "pre_use_notice_template_version",
+    "opt_out_mechanism_url",
+    "human_review_available",
+    "appeal_process_documented",
+    "access_explanation_available",
+    "request_verification_rules",
+    "review_date",
+    "owner_role"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1"
+    },
+    "governance_record_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "regulatory_regime": {
+      "type": "string",
+      "enum": [
+        "CPPA_CCPA_2026"
+      ]
+    },
+    "admt_significant_decision_use": {
+      "type": "boolean"
+    },
+    "pre_use_notice_template_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "opt_out_mechanism_url": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^https?://"
+    },
+    "human_review_available": {
+      "type": "boolean"
+    },
+    "appeal_process_documented": {
+      "type": "boolean"
+    },
+    "access_explanation_available": {
+      "type": "boolean"
+    },
+    "request_verification_rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "opt_out_requires_verification",
+        "access_requires_verification",
+        "rule_reference"
+      ],
+      "properties": {
+        "opt_out_requires_verification": {
+          "const": false
+        },
+        "access_requires_verification": {
+          "type": "boolean"
+        },
+        "rule_reference": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "exception_paths": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "review_date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "owner_role": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

@@ -31,7 +31,12 @@ EXIT_EXPORT_WRITE_FAILURE = 32
 EXPORT_MODE_VERSION = "1"
 RISK_METADATA_SCHEMA_VERSION = "1"
 SOURCE_TAXONOMY_SCHEMA_VERSION = "1"
+GOVERNANCE_EXPORT_MODE_VERSION = "1"
+RISK_ASSESSMENT_REPORT_SCHEMA_VERSION = "1"
+CYBERSECURITY_AUDIT_RECORD_SCHEMA_VERSION = "1"
+ADMT_GOVERNANCE_SCHEMA_VERSION = "1"
 DEFAULT_COMPLIANCE_PROFILE_ID = "EU-AI-ACT-ART53-GPAI-V1"
+DEFAULT_GOVERNANCE_PROFILE_ID = "CA-CPPA-CCPA-2026-ACCOUNTABILITY-V1"
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 SIGNALS_SUPPORTED = {
     "robots_txt",
@@ -50,6 +55,8 @@ SOURCE_CATEGORIES = {
 }
 PROVENANCE_TYPES = {"first_party", "third_party", "mixed"}
 RISK_CONTROL_STATUSES = {"implemented", "planned", "not_applicable"}
+ASSESSMENT_APPROVAL_STATUSES = {"approved", "approved_with_conditions", "rejected"}
+CPPA_REGULATORY_REGIME = "CPPA_CCPA_2026"
 HASH_MANIFEST_COLUMNS = [
     "origin_drive",
     "partition",
@@ -98,6 +105,13 @@ def _require_non_negative_int(payload: Mapping[str, object], field: str, context
     value = payload.get(field)
     if type(value) is not int or value < 0:
         raise ValueError(f"{context}.{field} must be a non-negative integer")
+    return value
+
+
+def _require_date_string(payload: Mapping[str, object], field: str, context: str) -> str:
+    value = _require_string(payload, field, context)
+    if DATE_RE.fullmatch(value) is None:
+        raise ValueError(f"{context}.{field} must match YYYY-MM-DD")
     return value
 
 
@@ -412,6 +426,387 @@ def validate_source_taxonomy(payload: dict[str, object]) -> dict[str, object]:
     normalized_payload: dict[str, object] = {"schema_version": SOURCE_TAXONOMY_SCHEMA_VERSION, "sources": normalized_sources}
     if "catalog_id" in payload:
         normalized_payload["catalog_id"] = _require_string(payload, "catalog_id", "source-taxonomy")
+    return normalized_payload
+
+
+def validate_risk_assessment_report(payload: dict[str, object]) -> dict[str, object]:
+    _validate_exact_fields(
+        payload,
+        allowed={
+            "schema_version",
+            "assessment_id",
+            "regulatory_regime",
+            "assessment_version",
+            "purpose_specificity",
+            "categories_processed",
+            "sensitive_categories",
+            "operational_elements",
+            "benefits",
+            "negative_impacts",
+            "safeguards",
+            "pets_used",
+            "review_approval",
+            "next_review_due",
+        },
+        required={
+            "schema_version",
+            "assessment_id",
+            "regulatory_regime",
+            "assessment_version",
+            "purpose_specificity",
+            "categories_processed",
+            "sensitive_categories",
+            "operational_elements",
+            "benefits",
+            "negative_impacts",
+            "safeguards",
+            "review_approval",
+            "next_review_due",
+        },
+        context="risk-assessment-report",
+    )
+    if payload["schema_version"] != RISK_ASSESSMENT_REPORT_SCHEMA_VERSION:
+        raise ValueError("risk-assessment-report.schema_version must be " f"{RISK_ASSESSMENT_REPORT_SCHEMA_VERSION!r}")
+
+    regime = _require_string(payload, "regulatory_regime", "risk-assessment-report")
+    if regime != CPPA_REGULATORY_REGIME:
+        raise ValueError(f"risk-assessment-report.regulatory_regime must be {CPPA_REGULATORY_REGIME!r}")
+
+    categories_processed = sorted(set(_validate_string_list(payload, "categories_processed", "risk-assessment-report")))
+    if not categories_processed:
+        raise ValueError("risk-assessment-report.categories_processed must include at least one category")
+    sensitive_categories = sorted(set(_validate_string_list(payload, "sensitive_categories", "risk-assessment-report")))
+    negative_impacts = sorted(set(_validate_string_list(payload, "negative_impacts", "risk-assessment-report")))
+    if not negative_impacts:
+        raise ValueError("risk-assessment-report.negative_impacts must include at least one entry")
+    safeguards = sorted(set(_validate_string_list(payload, "safeguards", "risk-assessment-report")))
+    if not safeguards:
+        raise ValueError("risk-assessment-report.safeguards must include at least one entry")
+
+    operational_elements = _require_object(payload, "operational_elements", "risk-assessment-report")
+    _validate_exact_fields(
+        operational_elements,
+        allowed={"collection_methods", "retention_policy", "recipients", "population_scale_estimate", "geographic_scope"},
+        required={"collection_methods", "retention_policy", "recipients", "population_scale_estimate"},
+        context="risk-assessment-report.operational_elements",
+    )
+    collection_methods = sorted(
+        set(
+            _validate_string_list(
+                operational_elements,
+                "collection_methods",
+                "risk-assessment-report.operational_elements",
+            )
+        )
+    )
+    if not collection_methods:
+        raise ValueError("risk-assessment-report.operational_elements.collection_methods " "must include at least one entry")
+    recipients = sorted(
+        set(_validate_string_list(operational_elements, "recipients", "risk-assessment-report.operational_elements"))
+    )
+    if not recipients:
+        raise ValueError("risk-assessment-report.operational_elements.recipients must include at least one entry")
+
+    population_scale_estimate = _require_object(
+        operational_elements,
+        "population_scale_estimate",
+        "risk-assessment-report.operational_elements",
+    )
+    _validate_exact_fields(
+        population_scale_estimate,
+        allowed={"estimated_records", "estimated_data_subjects"},
+        required={"estimated_records", "estimated_data_subjects"},
+        context="risk-assessment-report.operational_elements.population_scale_estimate",
+    )
+
+    normalized_operational_elements: dict[str, object] = {
+        "collection_methods": collection_methods,
+        "retention_policy": _require_string(
+            operational_elements,
+            "retention_policy",
+            "risk-assessment-report.operational_elements",
+        ),
+        "recipients": recipients,
+        "population_scale_estimate": {
+            "estimated_records": _require_non_negative_int(
+                population_scale_estimate,
+                "estimated_records",
+                "risk-assessment-report.operational_elements.population_scale_estimate",
+            ),
+            "estimated_data_subjects": _require_non_negative_int(
+                population_scale_estimate,
+                "estimated_data_subjects",
+                "risk-assessment-report.operational_elements.population_scale_estimate",
+            ),
+        },
+    }
+    if "geographic_scope" in operational_elements:
+        normalized_operational_elements["geographic_scope"] = sorted(
+            set(
+                _validate_string_list(
+                    operational_elements,
+                    "geographic_scope",
+                    "risk-assessment-report.operational_elements",
+                )
+            )
+        )
+
+    review_approval = _require_object(payload, "review_approval", "risk-assessment-report")
+    _validate_exact_fields(
+        review_approval,
+        allowed={"reviewer", "role", "date", "approval_status"},
+        required={"reviewer", "role", "date", "approval_status"},
+        context="risk-assessment-report.review_approval",
+    )
+    approval_status = _require_string(review_approval, "approval_status", "risk-assessment-report.review_approval")
+    if approval_status not in ASSESSMENT_APPROVAL_STATUSES:
+        allowed = ", ".join(sorted(ASSESSMENT_APPROVAL_STATUSES))
+        raise ValueError(f"risk-assessment-report.review_approval.approval_status must be one of: {allowed}")
+    review_date = _require_date_string(review_approval, "date", "risk-assessment-report.review_approval")
+    next_review_due = _require_date_string(payload, "next_review_due", "risk-assessment-report")
+    if next_review_due < review_date:
+        raise ValueError("risk-assessment-report.next_review_due must be >= review_approval.date")
+
+    normalized_payload: dict[str, object] = {
+        "schema_version": RISK_ASSESSMENT_REPORT_SCHEMA_VERSION,
+        "assessment_id": _require_string(payload, "assessment_id", "risk-assessment-report"),
+        "regulatory_regime": regime,
+        "assessment_version": _require_string(payload, "assessment_version", "risk-assessment-report"),
+        "purpose_specificity": _require_string(payload, "purpose_specificity", "risk-assessment-report"),
+        "categories_processed": categories_processed,
+        "sensitive_categories": sensitive_categories,
+        "operational_elements": normalized_operational_elements,
+        "benefits": _require_string(payload, "benefits", "risk-assessment-report"),
+        "negative_impacts": negative_impacts,
+        "safeguards": safeguards,
+        "review_approval": {
+            "reviewer": _require_string(review_approval, "reviewer", "risk-assessment-report.review_approval"),
+            "role": _require_string(review_approval, "role", "risk-assessment-report.review_approval"),
+            "date": review_date,
+            "approval_status": approval_status,
+        },
+        "next_review_due": next_review_due,
+    }
+    if "pets_used" in payload:
+        normalized_payload["pets_used"] = sorted(set(_validate_string_list(payload, "pets_used", "risk-assessment-report")))
+    return normalized_payload
+
+
+def validate_cybersecurity_audit_record(payload: dict[str, object]) -> dict[str, object]:
+    _validate_exact_fields(
+        payload,
+        allowed={
+            "schema_version",
+            "audit_record_id",
+            "regulatory_regime",
+            "audit_standard",
+            "auditor_name",
+            "auditor_independence_attested",
+            "audit_period_start",
+            "audit_period_end",
+            "report_sha256",
+            "findings_summary",
+            "corrective_actions",
+            "threshold_tier",
+            "certification_attestation",
+            "retention",
+        },
+        required={
+            "schema_version",
+            "audit_record_id",
+            "regulatory_regime",
+            "audit_standard",
+            "auditor_name",
+            "auditor_independence_attested",
+            "audit_period_start",
+            "audit_period_end",
+            "report_sha256",
+            "certification_attestation",
+            "retention",
+        },
+        context="cybersecurity-audit-record",
+    )
+    if payload["schema_version"] != CYBERSECURITY_AUDIT_RECORD_SCHEMA_VERSION:
+        raise ValueError("cybersecurity-audit-record.schema_version must be " f"{CYBERSECURITY_AUDIT_RECORD_SCHEMA_VERSION!r}")
+
+    regime = _require_string(payload, "regulatory_regime", "cybersecurity-audit-record")
+    if regime != CPPA_REGULATORY_REGIME:
+        raise ValueError(f"cybersecurity-audit-record.regulatory_regime must be {CPPA_REGULATORY_REGIME!r}")
+
+    audit_period_start = _require_date_string(payload, "audit_period_start", "cybersecurity-audit-record")
+    audit_period_end = _require_date_string(payload, "audit_period_end", "cybersecurity-audit-record")
+    if audit_period_start > audit_period_end:
+        raise ValueError("cybersecurity-audit-record.audit_period_start must be <= audit_period_end")
+
+    report_sha256 = _require_string(payload, "report_sha256", "cybersecurity-audit-record")
+    if HEX64_RE.fullmatch(report_sha256) is None:
+        raise ValueError("cybersecurity-audit-record.report_sha256 must be a lowercase sha256 digest")
+
+    certification_attestation = _require_object(payload, "certification_attestation", "cybersecurity-audit-record")
+    _validate_exact_fields(
+        certification_attestation,
+        allowed={"signer", "date", "penalty_of_perjury"},
+        required={"signer", "date", "penalty_of_perjury"},
+        context="cybersecurity-audit-record.certification_attestation",
+    )
+
+    retention = _require_object(payload, "retention", "cybersecurity-audit-record")
+    _validate_exact_fields(
+        retention,
+        allowed={"retention_years", "retention_basis", "records_location"},
+        required={"retention_years", "retention_basis", "records_location"},
+        context="cybersecurity-audit-record.retention",
+    )
+    retention_years = _require_non_negative_int(retention, "retention_years", "cybersecurity-audit-record.retention")
+    if retention_years < 5:
+        raise ValueError("cybersecurity-audit-record.retention.retention_years must be >= 5")
+
+    threshold_tier = payload.get("threshold_tier")
+    if threshold_tier is not None:
+        allowed_tiers = {"tier_1", "tier_2", "tier_3", "not_applicable"}
+        threshold_tier = _require_string(payload, "threshold_tier", "cybersecurity-audit-record")
+        if threshold_tier not in allowed_tiers:
+            allowed = ", ".join(sorted(allowed_tiers))
+            raise ValueError(f"cybersecurity-audit-record.threshold_tier must be one of: {allowed}")
+
+    normalized_payload: dict[str, object] = {
+        "schema_version": CYBERSECURITY_AUDIT_RECORD_SCHEMA_VERSION,
+        "audit_record_id": _require_string(payload, "audit_record_id", "cybersecurity-audit-record"),
+        "regulatory_regime": regime,
+        "audit_standard": _require_string(payload, "audit_standard", "cybersecurity-audit-record"),
+        "auditor_name": _require_string(payload, "auditor_name", "cybersecurity-audit-record"),
+        "auditor_independence_attested": _require_bool(payload, "auditor_independence_attested", "cybersecurity-audit-record"),
+        "audit_period_start": audit_period_start,
+        "audit_period_end": audit_period_end,
+        "report_sha256": report_sha256,
+        "certification_attestation": {
+            "signer": _require_string(
+                certification_attestation,
+                "signer",
+                "cybersecurity-audit-record.certification_attestation",
+            ),
+            "date": _require_date_string(
+                certification_attestation,
+                "date",
+                "cybersecurity-audit-record.certification_attestation",
+            ),
+            "penalty_of_perjury": _require_bool(
+                certification_attestation,
+                "penalty_of_perjury",
+                "cybersecurity-audit-record.certification_attestation",
+            ),
+        },
+        "retention": {
+            "retention_years": retention_years,
+            "retention_basis": _require_string(retention, "retention_basis", "cybersecurity-audit-record.retention"),
+            "records_location": _require_string(retention, "records_location", "cybersecurity-audit-record.retention"),
+        },
+    }
+    if "findings_summary" in payload:
+        normalized_payload["findings_summary"] = _require_string(payload, "findings_summary", "cybersecurity-audit-record")
+    if "corrective_actions" in payload:
+        normalized_payload["corrective_actions"] = sorted(
+            set(_validate_string_list(payload, "corrective_actions", "cybersecurity-audit-record"))
+        )
+    if threshold_tier is not None:
+        normalized_payload["threshold_tier"] = threshold_tier
+    return normalized_payload
+
+
+def validate_admt_governance(payload: dict[str, object]) -> dict[str, object]:
+    _validate_exact_fields(
+        payload,
+        allowed={
+            "schema_version",
+            "governance_record_id",
+            "regulatory_regime",
+            "admt_significant_decision_use",
+            "pre_use_notice_template_version",
+            "opt_out_mechanism_url",
+            "human_review_available",
+            "appeal_process_documented",
+            "access_explanation_available",
+            "request_verification_rules",
+            "exception_paths",
+            "review_date",
+            "owner_role",
+        },
+        required={
+            "schema_version",
+            "governance_record_id",
+            "regulatory_regime",
+            "admt_significant_decision_use",
+            "pre_use_notice_template_version",
+            "opt_out_mechanism_url",
+            "human_review_available",
+            "appeal_process_documented",
+            "access_explanation_available",
+            "request_verification_rules",
+            "review_date",
+            "owner_role",
+        },
+        context="admt-governance",
+    )
+    if payload["schema_version"] != ADMT_GOVERNANCE_SCHEMA_VERSION:
+        raise ValueError(f"admt-governance.schema_version must be {ADMT_GOVERNANCE_SCHEMA_VERSION!r}")
+
+    regime = _require_string(payload, "regulatory_regime", "admt-governance")
+    if regime != CPPA_REGULATORY_REGIME:
+        raise ValueError(f"admt-governance.regulatory_regime must be {CPPA_REGULATORY_REGIME!r}")
+
+    request_verification_rules = _require_object(payload, "request_verification_rules", "admt-governance")
+    _validate_exact_fields(
+        request_verification_rules,
+        allowed={"opt_out_requires_verification", "access_requires_verification", "rule_reference"},
+        required={"opt_out_requires_verification", "access_requires_verification", "rule_reference"},
+        context="admt-governance.request_verification_rules",
+    )
+    opt_out_requires_verification = _require_bool(
+        request_verification_rules,
+        "opt_out_requires_verification",
+        "admt-governance.request_verification_rules",
+    )
+    if opt_out_requires_verification:
+        raise ValueError("admt-governance.request_verification_rules.opt_out_requires_verification must be false")
+
+    normalized_payload: dict[str, object] = {
+        "schema_version": ADMT_GOVERNANCE_SCHEMA_VERSION,
+        "governance_record_id": _require_string(payload, "governance_record_id", "admt-governance"),
+        "regulatory_regime": regime,
+        "admt_significant_decision_use": _require_bool(payload, "admt_significant_decision_use", "admt-governance"),
+        "pre_use_notice_template_version": _require_string(
+            payload,
+            "pre_use_notice_template_version",
+            "admt-governance",
+        ),
+        "opt_out_mechanism_url": _require_string(payload, "opt_out_mechanism_url", "admt-governance"),
+        "human_review_available": _require_bool(payload, "human_review_available", "admt-governance"),
+        "appeal_process_documented": _require_bool(payload, "appeal_process_documented", "admt-governance"),
+        "access_explanation_available": _require_bool(
+            payload,
+            "access_explanation_available",
+            "admt-governance",
+        ),
+        "request_verification_rules": {
+            "opt_out_requires_verification": opt_out_requires_verification,
+            "access_requires_verification": _require_bool(
+                request_verification_rules,
+                "access_requires_verification",
+                "admt-governance.request_verification_rules",
+            ),
+            "rule_reference": _require_string(
+                request_verification_rules,
+                "rule_reference",
+                "admt-governance.request_verification_rules",
+            ),
+        },
+        "review_date": _require_date_string(payload, "review_date", "admt-governance"),
+        "owner_role": _require_string(payload, "owner_role", "admt-governance"),
+    }
+    if "exception_paths" in payload:
+        normalized_payload["exception_paths"] = sorted(
+            set(_validate_string_list(payload, "exception_paths", "admt-governance"))
+        )
     return normalized_payload
 
 
@@ -782,6 +1177,63 @@ def build_export_payload(
     }
 
 
+def build_governance_export_payload(
+    *,
+    manifest: Mapping[str, object],
+    manifest_path: Path,
+    governance_profile_id: str,
+    risk_assessment_report: Mapping[str, object],
+    risk_assessment_report_path: Path,
+    cybersecurity_audit_record: Mapping[str, object],
+    cybersecurity_audit_record_path: Path,
+    admt_governance: Mapping[str, object] | None,
+    admt_governance_path: Path | None,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "governance_export_mode_version": GOVERNANCE_EXPORT_MODE_VERSION,
+        "governance_profile_id": governance_profile_id,
+        "bundle_binding": {
+            "bundle_manifest_sha256": sha256_hexdigest(manifest_path),
+            "bundle_root_algorithm": manifest["bundle_root_algorithm"],
+            "bundle_root_preimage_version": manifest["bundle_root_preimage_version"],
+            "bundle_root_sha256": manifest["bundle_root_sha256"],
+            "phase_versions": {
+                "phase3_version": manifest["phase3_version"],
+                "phase3_1_version": manifest["phase3_1_version"],
+                "phase3_2_version": manifest["phase3_2_version"],
+            },
+        },
+        "governance_artifact_digests": {
+            "risk_assessment_report_sha256": sha256_hexdigest(risk_assessment_report_path),
+            "cybersecurity_audit_record_sha256": sha256_hexdigest(cybersecurity_audit_record_path),
+        },
+        "risk_assessment_report": risk_assessment_report,
+        "cybersecurity_audit_record": cybersecurity_audit_record,
+        "verification_commands": [
+            "python tools/verify_evidence_bundle_manifest.py "
+            f"--bundle-manifest <BUNDLE_DIR>/{EXPECTED_MANIFEST_FILENAME} --bundle-dir <BUNDLE_DIR>",
+            "python tools/regulatory_export.py "
+            f"--bundle-manifest <BUNDLE_DIR>/{EXPECTED_MANIFEST_FILENAME} "
+            "--risk-metadata <RISK_METADATA_JSON> --source-taxonomy <SOURCE_TAXONOMY_JSON> "
+            "--out-json <OUTPUT_DIR>/regulatory_export.json --out-markdown <OUTPUT_DIR>/regulatory_export.md "
+            "--risk-assessment-report <RISK_ASSESSMENT_REPORT_JSON> "
+            "--cybersecurity-audit-record <CYBERSECURITY_AUDIT_RECORD_JSON> "
+            "--governance-export <OUTPUT_DIR>/governance_export.json",
+        ],
+        "verification_expected_exit_codes": {
+            "verify_evidence_bundle_manifest": 0,
+            "regulatory_export": 0,
+        },
+    }
+    if admt_governance is not None:
+        payload["admt_governance"] = admt_governance
+    if admt_governance_path is not None:
+        digests = payload["governance_artifact_digests"]
+        assert isinstance(digests, dict)
+        digests["admt_governance_sha256"] = sha256_hexdigest(admt_governance_path)
+    return payload
+
+
 def _resolve_artifact_path(
     *,
     provided_path: str | None,
@@ -826,6 +1278,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--risk-metadata", required=True, help="Path to risk metadata JSON")
     parser.add_argument("--source-taxonomy", required=True, help="Path to source taxonomy JSON")
+    parser.add_argument(
+        "--risk-assessment-report",
+        default=None,
+        help="Optional path to CPPA risk assessment governance record JSON",
+    )
+    parser.add_argument(
+        "--cybersecurity-audit-record",
+        default=None,
+        help="Optional path to CPPA cybersecurity audit governance record JSON",
+    )
+    parser.add_argument(
+        "--admt-governance",
+        default=None,
+        help="Optional path to CPPA ADMT governance declaration JSON",
+    )
     parser.add_argument("--out-json", required=True, help="Path to write regulatory export JSON")
     parser.add_argument(
         "--out-markdown",
@@ -833,9 +1300,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Optional path to write deterministic regulatory export markdown",
     )
     parser.add_argument(
+        "--governance-export",
+        default=None,
+        help="Optional path to write deterministic governance export JSON",
+    )
+    parser.add_argument(
         "--compliance-profile-id",
         default=DEFAULT_COMPLIANCE_PROFILE_ID,
         help=f"Compliance profile identifier (default: {DEFAULT_COMPLIANCE_PROFILE_ID})",
+    )
+    parser.add_argument(
+        "--governance-profile-id",
+        default=DEFAULT_GOVERNANCE_PROFILE_ID,
+        help=f"Governance profile identifier (default: {DEFAULT_GOVERNANCE_PROFILE_ID})",
     )
     parser.add_argument(
         "--top-n",
@@ -858,6 +1335,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.top_n <= 0:
         print("Regulatory export failed: --top-n must be positive")
         return EXIT_EXPORT_BUILD_FAILURE
+
+    governance_payload: dict[str, object] | None = None
 
     try:
         manifest_path = Path(args.bundle_manifest)
@@ -907,6 +1386,41 @@ def main(argv: list[str] | None = None) -> int:
             top_n=args.top_n,
         )
 
+        governance_export_requested = args.governance_export is not None
+        governance_inputs_present = any(
+            value is not None for value in (args.risk_assessment_report, args.cybersecurity_audit_record, args.admt_governance)
+        )
+        if governance_export_requested:
+            if args.risk_assessment_report is None or args.cybersecurity_audit_record is None:
+                raise ValueError("--governance-export requires --risk-assessment-report and --cybersecurity-audit-record")
+            risk_assessment_report_path = Path(args.risk_assessment_report)
+            cybersecurity_audit_record_path = Path(args.cybersecurity_audit_record)
+            admt_governance_path = Path(args.admt_governance) if args.admt_governance is not None else None
+
+            risk_assessment_report = validate_risk_assessment_report(
+                _load_json_object(risk_assessment_report_path, context="risk-assessment-report")
+            )
+            cybersecurity_audit_record = validate_cybersecurity_audit_record(
+                _load_json_object(cybersecurity_audit_record_path, context="cybersecurity-audit-record")
+            )
+            admt_governance: dict[str, object] | None = None
+            if admt_governance_path is not None:
+                admt_governance = validate_admt_governance(_load_json_object(admt_governance_path, context="admt-governance"))
+
+            governance_payload = build_governance_export_payload(
+                manifest=manifest,
+                manifest_path=manifest_path,
+                governance_profile_id=args.governance_profile_id.strip(),
+                risk_assessment_report=risk_assessment_report,
+                risk_assessment_report_path=risk_assessment_report_path,
+                cybersecurity_audit_record=cybersecurity_audit_record,
+                cybersecurity_audit_record_path=cybersecurity_audit_record_path,
+                admt_governance=admt_governance,
+                admt_governance_path=admt_governance_path,
+            )
+        elif governance_inputs_present:
+            raise ValueError("governance input files require --governance-export")
+
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
         print(f"Regulatory export failed: {exc}")
         return EXIT_EXPORT_BUILD_FAILURE
@@ -924,11 +1438,24 @@ def main(argv: list[str] | None = None) -> int:
     if args.out_markdown is not None:
         markdown = render_markdown(export_payload, top_n=args.top_n)
         markdown_bytes = markdown.encode("utf-8") + b"\n"
+    governance_bytes: bytes | None = None
+    if args.governance_export is not None and governance_payload is not None:
+        governance_bytes = (
+            json.dumps(
+                governance_payload,
+                indent=2,
+                sort_keys=True,
+                separators=(",", ": "),
+            ).encode("utf-8")
+            + b"\n"
+        )
 
     try:
         atomic_write(Path(args.out_json), json_bytes)
         if args.out_markdown is not None and markdown_bytes is not None:
             atomic_write(Path(args.out_markdown), markdown_bytes)
+        if args.governance_export is not None and governance_bytes is not None:
+            atomic_write(Path(args.governance_export), governance_bytes)
     except OSError as exc:
         print(f"Regulatory export write failed: {exc}")
         return EXIT_EXPORT_WRITE_FAILURE
@@ -936,6 +1463,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Regulatory export written to {args.out_json}")
     if args.out_markdown is not None:
         print(f"Regulatory markdown written to {args.out_markdown}")
+    if args.governance_export is not None:
+        print(f"Governance export written to {args.governance_export}")
     return 0
 
 

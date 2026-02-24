@@ -116,6 +116,13 @@ jobs:
           echo "Python available: $(python3 --version 2>&1 || echo 'no')"
           echo "✅ Lightweight checks passed"
 
+      - name: Validate compliance schemas
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install jsonschema==4.23.0
+          python scripts/validation/validate_compliance_schemas.py
+
   lint:
     needs: [preflight]
     if: needs.preflight.outputs.run_full == 'true'

@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-02-24
+
+- Added Phase 3.6 governance schemas for `risk_assessment_report`, `cybersecurity_audit_record`, and `admt_governance`.
+- Added ADR-036 accountability invariants for root-bound governance artifacts.
+- Extended `tools/regulatory_export.py` with optional `--governance-export` packaging for CPPA governance records.
+- Added lightweight CI compliance-schema validation gate for docs-only and full-code PR paths.
+
 ## 2026-01-29
 
 **Security & Bug Fixes:**
