@@ -145,9 +145,15 @@ def aggregate_exit_codes(exit_codes: Iterable[int]) -> int:
     """Aggregate multiple exit codes using ingest contract severity precedence."""
     observed = set()
     for code in exit_codes:
+        # Reject lossy coercion for non-integral numeric values
+        # (e.g. 0.9 -> 0 or 1.9 -> 1).
+        if isinstance(code, float) and not code.is_integer():
+            observed.add(EXIT_OTHER_FAILURE)
+            continue
+
         try:
             numeric_code = int(code)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             # Preserve backward-compatible behavior for callers that pass
             # non-int-like values by collapsing them to OTHER_FAILURE.
             observed.add(EXIT_OTHER_FAILURE)
