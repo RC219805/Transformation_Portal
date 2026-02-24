@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,13 @@ except ImportError as exc:  # pragma: no cover - exercised in CI
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_DIR = PROJECT_ROOT / "docs" / "compliance" / "schemas"
+SCHEMA_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
+GOVERNANCE_SCHEMA_VERSION = "1.0.0"
+GOVERNANCE_SCHEMAS = (
+    "risk_assessment_report.schema.json",
+    "cybersecurity_audit_record.schema.json",
+    "admt_governance.schema.json",
+)
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -29,6 +37,13 @@ def _load_json(path: Path) -> dict[str, Any]:
 def _make_validator(schema_name: str) -> jsonschema.Draft202012Validator:
     schema_path = SCHEMA_DIR / schema_name
     schema = _load_json(schema_path)
+    schema_version = schema.get("$schema_version")
+    if not isinstance(schema_version, str) or SCHEMA_VERSION_RE.fullmatch(schema_version) is None:
+        raise ValueError(f"{schema_name} must define $schema_version using semver format")
+    if schema_version != GOVERNANCE_SCHEMA_VERSION:
+        raise ValueError(f"{schema_name} must use $schema_version={GOVERNANCE_SCHEMA_VERSION}")
+    if schema.get("additionalProperties") is not False:
+        raise ValueError(f"{schema_name} must set additionalProperties=false at top level")
     jsonschema.Draft202012Validator.check_schema(schema)
     return jsonschema.Draft202012Validator(schema)
 
@@ -57,9 +72,10 @@ def _assert_invalid(
 
 
 def main() -> int:
-    risk_assessment_validator = _make_validator("risk_assessment_report.schema.json")
-    cybersecurity_validator = _make_validator("cybersecurity_audit_record.schema.json")
-    admt_validator = _make_validator("admt_governance.schema.json")
+    validators = {schema_name: _make_validator(schema_name) for schema_name in GOVERNANCE_SCHEMAS}
+    risk_assessment_validator = validators["risk_assessment_report.schema.json"]
+    cybersecurity_validator = validators["cybersecurity_audit_record.schema.json"]
+    admt_validator = validators["admt_governance.schema.json"]
 
     risk_assessment_payload = {
         "schema_version": "1",
