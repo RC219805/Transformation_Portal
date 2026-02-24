@@ -15,7 +15,7 @@ apt-get install libimage-exiftool-perl  # Linux
 python scripts/test_metadata_extraction.py check-system
 ```
 
-## Test Commands for `/Users/rc/Projects/Transformation_Portal/input_images`
+## Test Commands for `<project_root>/input_images`
 
 ### 1. Check System Readiness
 
@@ -34,13 +34,13 @@ Extract metadata from a single image:
 
 ```bash
 # Basic extraction (output to <image>_provenance.json)
-python scripts/test_metadata_extraction.py extract /Users/rc/Projects/Transformation_Portal/input_images/your_image.tif
+python scripts/test_metadata_extraction.py extract /path/to/input_images/your_image.tif
 
 # Custom output path
-python scripts/test_metadata_extraction.py extract /Users/rc/Projects/Transformation_Portal/input_images/your_image.tif -o /tmp/test_provenance.json
+python scripts/test_metadata_extraction.py extract /path/to/input_images/your_image.tif -o /tmp/test_provenance.json
 
 # With durable write (fsync)
-python scripts/test_metadata_extraction.py extract /Users/rc/Projects/Transformation_Portal/input_images/your_image.tif --fsync
+python scripts/test_metadata_extraction.py extract /path/to/input_images/your_image.tif --fsync
 ```
 
 ### 3. Batch Extraction (Entire Directory)
@@ -49,16 +49,16 @@ Extract metadata from all images in the input_images directory:
 
 ```bash
 # Default: sidecars saved to input_images/provenance_sidecars/
-python scripts/test_metadata_extraction.py extract-batch /Users/rc/Projects/Transformation_Portal/input_images/
+python scripts/test_metadata_extraction.py extract-batch /path/to/input_images/
 
 # Custom output directory
-python scripts/test_metadata_extraction.py extract-batch /Users/rc/Projects/Transformation_Portal/input_images/ -o /tmp/metadata_sidecars/
+python scripts/test_metadata_extraction.py extract-batch /path/to/input_images/ -o /tmp/metadata_sidecars/
 
 # Non-recursive (only top-level images)
-python scripts/test_metadata_extraction.py extract-batch /Users/rc/Projects/Transformation_Portal/input_images/ --no-recursive
+python scripts/test_metadata_extraction.py extract-batch /path/to/input_images/ --no-recursive
 
 # Stop on first error
-python scripts/test_metadata_extraction.py extract-batch /Users/rc/Projects/Transformation_Portal/input_images/ --fail-fast
+python scripts/test_metadata_extraction.py extract-batch /path/to/input_images/ --fail-fast
 ```
 
 ### 4. Validate Sidecar Files
@@ -67,13 +67,13 @@ Validate provenance sidecars for schema compliance:
 
 ```bash
 # Basic validation
-python scripts/test_metadata_extraction.py validate /Users/rc/Projects/Transformation_Portal/input_images/provenance_sidecars/your_image_provenance.json
+python scripts/test_metadata_extraction.py validate /path/to/input_images/provenance_sidecars/your_image_provenance.json
 
 # Verbose output (show sidecar summary)
-python scripts/test_metadata_extraction.py validate /Users/rc/Projects/Transformation_Portal/input_images/provenance_sidecars/your_image_provenance.json -v
+python scripts/test_metadata_extraction.py validate /path/to/input_images/provenance_sidecars/your_image_provenance.json -v
 
 # Non-strict mode (legacy compatibility)
-python scripts/test_metadata_extraction.py validate /Users/rc/Projects/Transformation_Portal/input_images/provenance_sidecars/your_image_provenance.json --no-strict
+python scripts/test_metadata_extraction.py validate /path/to/input_images/provenance_sidecars/your_image_provenance.json --no-strict
 ```
 
 ### 5. Summarize Extraction Results
@@ -81,7 +81,7 @@ python scripts/test_metadata_extraction.py validate /Users/rc/Projects/Transform
 Get aggregate statistics from extracted sidecars:
 
 ```bash
-python scripts/test_metadata_extraction.py summarize /Users/rc/Projects/Transformation_Portal/input_images/provenance_sidecars/
+python scripts/test_metadata_extraction.py summarize /path/to/input_images/provenance_sidecars/
 ```
 
 Output includes:
@@ -100,7 +100,7 @@ from pathlib import Path
 from transformation_portal.ingest import capture_provenance, write_sidecar, load_sidecar
 
 # Extract metadata from single image
-image_path = Path("/Users/rc/Projects/Transformation_Portal/input_images/your_image.tif")
+image_path = Path("/path/to/input_images/your_image.tif")
 
 sidecar = capture_provenance(
     input_path=image_path,
@@ -128,7 +128,7 @@ Run schema validation on existing provenance sidecars:
 
 ```bash
 # Validate test fixtures
-python scripts/validate_ingest_contract.py --test-dir /Users/rc/Projects/Transformation_Portal/input_images/provenance_sidecars/ --strict
+python scripts/validate_ingest_contract.py --test-dir /path/to/input_images/provenance_sidecars/ --strict
 ```
 
 ## Exit Codes
@@ -165,16 +165,18 @@ python scripts/validate_ingest_contract.py --test-dir /Users/rc/Projects/Transfo
 
 The provenance sidecar captures:
 
-| Section | Contents | Deterministic |
-|---------|----------|---------------|
-| `file_integrity` | SHA256, size, path, MIME type | ✅ Yes |
-| `exif` | Complete EXIF via exiftool | ✅ Yes |
-| `toolchain` | exiftool, rawpy, Python versions | ❌ No (env-dependent) |
-| `host` | Hostname, OS, architecture | ❌ No (env-dependent) |
-| `timestamps` | Ingest start/end times | ❌ No (time-dependent) |
-| `pipeline_config` | CLI args, preset, config SHA256 | ✅ Yes (if config same) |
-| `git_commit` | Git SHA at ingest time | ❌ No (repo-dependent) |
-| `run_id` | UUID v4 | ❌ No (unique per run) |
+| Section | Contents | Determinism Basis |
+|---------|----------|-------------------|
+| `file_integrity` | SHA256, size, path, MIME type | ✅ Byte-stable for identical file input |
+| `exif` | Complete EXIF via exiftool | ✅ Stable when source image metadata is unchanged |
+| `toolchain` | exiftool, rawpy, Python versions | ❌ Environment-dependent |
+| `host` | Hostname, OS, architecture | ❌ Environment-dependent |
+| `timestamps` | Ingest start/end times | ❌ Time-dependent |
+| `pipeline_config` | CLI args, preset, config SHA256 | ✅ Stable for identical args/config |
+| `git_commit` | Git SHA at ingest time | ❌ Repository-state-dependent |
+| `run_id` | UUID v4 | ❌ Unique per run |
+
+Determinism in this table means output values remain stable when inputs and execution context are held constant.
 
 ## Phase 3.7 Governance Verification
 

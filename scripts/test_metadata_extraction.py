@@ -43,6 +43,7 @@ import argparse
 import json
 import sys
 import time
+from collections import Counter
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -51,7 +52,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 
 # =============================================================================
-# Exit Codes (matching ingest contract)
+# Exit Codes (aligned with ingest contract categories for compatibility)
 # =============================================================================
 
 EXIT_SUCCESS = 0
@@ -68,29 +69,34 @@ EXIT_OTHER_FAILURE = 5
 
 SUPPORTED_EXTENSIONS = {
     # RAW formats
-    ".cr2", ".cr3",   # Canon
-    ".nef", ".nrw",   # Nikon
-    ".arw", ".srf",   # Sony
-    ".dng",           # Adobe DNG
-    ".raf",           # Fujifilm
-    ".orf",           # Olympus
-    ".rw2",           # Panasonic
-    ".pef",           # Pentax
-    ".srw",           # Samsung
-
+    ".cr2",
+    ".cr3",  # Canon
+    ".nef",
+    ".nrw",  # Nikon
+    ".arw",
+    ".srf",  # Sony
+    ".dng",  # Adobe DNG
+    ".raf",  # Fujifilm
+    ".orf",  # Olympus
+    ".rw2",  # Panasonic
+    ".pef",  # Pentax
+    ".srw",  # Samsung
     # TIFF formats
-    ".tif", ".tiff",
-
+    ".tif",
+    ".tiff",
     # Common formats
-    ".jpg", ".jpeg",
+    ".jpg",
+    ".jpeg",
     ".png",
-    ".heic", ".heif",
+    ".heic",
+    ".heif",
 }
 
 
 # =============================================================================
 # Helper Functions
 # =============================================================================
+
 
 def find_images(directory: Path, recursive: bool = True) -> List[Path]:
     """Find all supported image files in directory.
@@ -106,6 +112,7 @@ def find_images(directory: Path, recursive: bool = True) -> List[Path]:
     pattern = "**/*" if recursive else "*"
 
     for file_path in directory.glob(pattern):
+        # Normalize suffix to lowercase so extension matching is case-insensitive.
         if file_path.is_file() and file_path.suffix.lower() in SUPPORTED_EXTENSIONS:
             images.append(file_path)
 
@@ -124,6 +131,7 @@ def format_size(size_bytes: int) -> str:
 # =============================================================================
 # Command: check-system
 # =============================================================================
+
 
 def cmd_check_system(args: argparse.Namespace) -> int:
     """Check system readiness for metadata extraction.
@@ -144,10 +152,7 @@ def cmd_check_system(args: argparse.Namespace) -> int:
     # Check exiftool
     print("Checking exiftool...")
     try:
-        from transformation_portal.ingest.provenance import (
-            _check_exiftool_available,
-            _get_exiftool_version,
-        )
+        from transformation_portal.ingest.provenance import _check_exiftool_available, _get_exiftool_version
 
         if _check_exiftool_available():
             version = _get_exiftool_version()
@@ -165,6 +170,7 @@ def cmd_check_system(args: argparse.Namespace) -> int:
     print("\nChecking pydantic...")
     try:
         import pydantic
+
         print(f"  ✅ pydantic found: version {pydantic.__version__}")
     except ImportError:
         print("  ❌ pydantic not found")
@@ -175,11 +181,13 @@ def cmd_check_system(args: argparse.Namespace) -> int:
     print("\nChecking git (optional)...")
     try:
         import subprocess
+
         result = subprocess.run(
             ["git", "--version"],
             capture_output=True,
             text=True,
             timeout=5,
+            check=False,
         )
         if result.returncode == 0:
             version = result.stdout.strip()
@@ -193,6 +201,7 @@ def cmd_check_system(args: argparse.Namespace) -> int:
     print("\nChecking rawpy (optional, for RAW file support)...")
     try:
         import rawpy
+
         print(f"  ✅ rawpy found: version {rawpy.version.version}")
         if hasattr(rawpy, "libraw_version"):
             print(f"      libraw version: {rawpy.libraw_version}")
@@ -203,11 +212,8 @@ def cmd_check_system(args: argparse.Namespace) -> int:
     # Check ingest module
     print("\nChecking transformation_portal.ingest module...")
     try:
-        from transformation_portal.ingest import (  # noqa: F401
-            capture_provenance,
-            validate_schema,
-            write_sidecar,
-        )
+        from transformation_portal.ingest import capture_provenance, validate_schema, write_sidecar  # noqa: F401
+
         print("  ✅ ingest module available")
     except ImportError as e:
         print(f"  ❌ Import error: {e}")
@@ -227,6 +233,7 @@ def cmd_check_system(args: argparse.Namespace) -> int:
 # =============================================================================
 # Command: extract
 # =============================================================================
+
 
 def cmd_extract(args: argparse.Namespace) -> int:
     """Extract metadata from a single image file.
@@ -259,7 +266,7 @@ def cmd_extract(args: argparse.Namespace) -> int:
             input_path=image_path,
             cli_args=sys.argv[1:],
             config_dict={"mode": "test_extraction", "phase": "3.7"},
-            preset=args.preset if hasattr(args, "preset") else None,
+            preset=args.preset,
         )
 
         elapsed = time.time() - start_time
@@ -331,6 +338,7 @@ def cmd_extract(args: argparse.Namespace) -> int:
 # =============================================================================
 # Command: extract-batch
 # =============================================================================
+
 
 def cmd_extract_batch(args: argparse.Namespace) -> int:
     """Extract metadata from all images in a directory."""
@@ -426,8 +434,9 @@ def cmd_extract_batch(args: argparse.Namespace) -> int:
     print(f"Successful:       {success_count}")
     print(f"Failed:           {failure_count}")
     print(f"Total time:       {total_elapsed:.2f}s")
-    if success_count > 0:
-        avg_time = sum(t for _, _, t in results.values() if t > 0) / success_count
+    successful_timings = [t for success, _, t in results.values() if success and t > 0]
+    if successful_timings:
+        avg_time = sum(successful_timings) / len(successful_timings)
         print(f"Average per image: {avg_time:.2f}s")
     print(f"Output directory: {output_dir}")
 
@@ -446,6 +455,7 @@ def cmd_extract_batch(args: argparse.Namespace) -> int:
 # Command: validate
 # =============================================================================
 
+
 def cmd_validate(args: argparse.Namespace) -> int:
     """Validate a provenance sidecar JSON file."""
     from transformation_portal.ingest import validate_schema
@@ -460,6 +470,22 @@ def cmd_validate(args: argparse.Namespace) -> int:
     print(f"🔍 Validating: {sidecar_path}")
     print()
 
+    def classify_validation_error(error: object) -> int | None:
+        """Classify known validation failures into contract-aligned exit codes."""
+        error_type = getattr(error, "error_type", None)
+        error_code = getattr(error, "code", None)
+        if error_type == "schema_drift" or error_code == "schema_drift":
+            return EXIT_SCHEMA_DRIFT
+        if error_type == "schema_version_mismatch" or error_code == "schema_version_mismatch":
+            return EXIT_SCHEMA_VALIDATION_FAILED
+
+        error_msg = str(error).lower()
+        if "drift" in error_msg:
+            return EXIT_SCHEMA_DRIFT
+        if "schema version" in error_msg:
+            return EXIT_SCHEMA_VALIDATION_FAILED
+        return None
+
     try:
         errors = validate_schema(
             sidecar_path,
@@ -472,12 +498,11 @@ def cmd_validate(args: argparse.Namespace) -> int:
             for error in errors:
                 print(f"   - {error}")
 
-            # Determine exit code based on error type
+            # Prefer structured error metadata and fall back to message matching.
             for error in errors:
-                if "drift" in error.lower():
-                    return EXIT_SCHEMA_DRIFT
-                elif "schema version" in error.lower():
-                    return EXIT_SCHEMA_VALIDATION_FAILED
+                exit_code = classify_validation_error(error)
+                if exit_code is not None:
+                    return exit_code
 
             return EXIT_SCHEMA_VALIDATION_FAILED
         else:
@@ -512,6 +537,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
 # Command: summarize
 # =============================================================================
 
+
 def cmd_summarize(args: argparse.Namespace) -> int:
     """Summarize metadata from multiple sidecar files."""
     sidecar_dir = Path(args.sidecar_dir)
@@ -539,6 +565,7 @@ def cmd_summarize(args: argparse.Namespace) -> int:
     cameras: Dict[str, int] = {}
     total_size = 0
     total_tags = 0
+    total_sidecars = len(sidecars)
     dimensions: List[Tuple[int, int]] = []
     gps_count = 0
 
@@ -579,8 +606,10 @@ def cmd_summarize(args: argparse.Namespace) -> int:
     print("📊 Aggregate Statistics:")
     print(f"   Total file size:    {format_size(total_size)}")
     print(f"   Total EXIF tags:    {total_tags}")
-    print(f"   Average tags/image: {total_tags / len(sidecars):.0f}")
-    print(f"   Images with GPS:    {gps_count} ({gps_count/len(sidecars)*100:.1f}%)")
+    average_tags = total_tags / total_sidecars if total_sidecars else 0
+    gps_percent = (gps_count / total_sidecars * 100) if total_sidecars else 0
+    print(f"   Average tags/image: {average_tags:.0f}")
+    print(f"   Images with GPS:    {gps_count} ({gps_percent:.1f}%)")
     print()
 
     print("📷 Cameras:")
@@ -590,9 +619,8 @@ def cmd_summarize(args: argparse.Namespace) -> int:
 
     if dimensions:
         print("📐 Dimensions:")
-        unique_dims = set(dimensions)
-        for w, h in sorted(unique_dims, key=lambda x: -x[0]*x[1]):
-            count = dimensions.count((w, h))
+        dim_counts = Counter(dimensions)
+        for (w, h), count in sorted(dim_counts.items(), key=lambda item: -(item[0][0] * item[0][1])):
             mp = (w * h) / 1_000_000
             print(f"   {w} x {h} ({mp:.1f} MP): {count}")
 
@@ -602,6 +630,7 @@ def cmd_summarize(args: argparse.Namespace) -> int:
 # =============================================================================
 # Main Entry Point
 # =============================================================================
+
 
 def main() -> int:
     """Main entry point."""
@@ -630,7 +659,8 @@ def main() -> int:
         help="Path to image file",
     )
     parser_extract.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         help="Output path for sidecar JSON (default: <image>_provenance.json)",
     )
     parser_extract.add_argument(
@@ -654,16 +684,18 @@ def main() -> int:
         help="Directory containing images",
     )
     parser_batch.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         help="Output directory for sidecars (default: <input_dir>/provenance_sidecars/)",
     )
-    parser_batch.add_argument(
+    recursive_group = parser_batch.add_mutually_exclusive_group()
+    recursive_group.add_argument(
         "--recursive",
         action="store_true",
-        default=True,
-        help="Recursively search subdirectories (default: True)",
+        dest="recursive",
+        help="Recursively search subdirectories (default behavior)",
     )
-    parser_batch.add_argument(
+    recursive_group.add_argument(
         "--no-recursive",
         action="store_false",
         dest="recursive",
@@ -679,7 +711,7 @@ def main() -> int:
         action="store_true",
         help="Stop on first error",
     )
-    parser_batch.set_defaults(func=cmd_extract_batch)
+    parser_batch.set_defaults(func=cmd_extract_batch, recursive=True)
 
     # validate command
     parser_validate = subparsers.add_parser(
@@ -690,24 +722,26 @@ def main() -> int:
         "sidecar_path",
         help="Path to sidecar JSON file",
     )
-    parser_validate.add_argument(
+    strict_group = parser_validate.add_mutually_exclusive_group()
+    strict_group.add_argument(
         "--strict",
         action="store_true",
-        default=True,
-        help="Enable strict mode (fail on unknown fields)",
+        dest="strict",
+        help="Enable strict mode (default, fail on unknown fields)",
     )
-    parser_validate.add_argument(
+    strict_group.add_argument(
         "--no-strict",
         action="store_false",
         dest="strict",
-        help="Disable strict mode",
+        help="Disable strict mode (allow unknown fields)",
     )
     parser_validate.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Show sidecar summary after validation",
     )
-    parser_validate.set_defaults(func=cmd_validate)
+    parser_validate.set_defaults(func=cmd_validate, strict=True)
 
     # summarize command
     parser_summary = subparsers.add_parser(
