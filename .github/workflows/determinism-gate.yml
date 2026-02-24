@@ -20,7 +20,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup Python
+      - name: Setup Python 3.11
+        id: setup-python-311
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
@@ -42,3 +43,19 @@ jobs:
       - name: Bundle root determinism gate
         run: |
           pytest -v -m "not ml and not slow and not benchmark" tests/test_bundle_root.py
+
+      - name: Setup Python 3.12
+        id: setup-python-312
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Bundle root cross-runtime parity gate (3.11 vs 3.12)
+        env:
+          PY311: ${{ steps.setup-python-311.outputs.python-path }}
+          PY312: ${{ steps.setup-python-312.outputs.python-path }}
+        run: |
+          "$PY312" tools/check_bundle_root_cross_runtime.py \
+            --python-a "$PY311" \
+            --python-b "$PY312" \
+            --project-root "$GITHUB_WORKSPACE"

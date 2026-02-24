@@ -18,6 +18,7 @@ ADRs are **binding decisions** that define the repository's architecture, securi
 | [ADR-027](ADR-027-phase2-spatial-ai-extension.md) | Phase 2 Spatial AI Extension | Proposed | 2026-02-11 | Architect |
 | **[ADR-029](ADR-029-execution-graph-abstraction.md)** | **Execution Graph Abstraction** | **Proposed** | **2026-02-12** | **Architect** |
 | **[ADR-030](ADR-030-phase2-deterministic-raw-ingest.md)** | **Phase II Deterministic RAW Ingest** | **Proposed** | **2026-02-20** | **Architect** |
+| **[ADR-035](ADR-035-bundle-root-anchoring-invariants.md)** | **Bundle Root Anchoring Invariants** | **Proposed** | **2026-02-24** | **Architect** |
 
 ### Dependency & Security
 
@@ -161,4 +162,4 @@ These are repository-level rules enforced by ADRs. **Exceptions require an ADR.*
 
 ---
 
-*Last Updated: 2026-02-20*
+*Last Updated: 2026-02-24*
