@@ -167,7 +167,9 @@ def test_sign_and_verify_roundtrip_success(tmp_path: Path) -> None:
 
     envelope_text = signature_path.read_text(encoding="utf-8")
     envelope = _load_envelope(signature_path)
+    assert envelope["envelope_version"] == "1"
     assert envelope["signature_algorithm"] == "ed25519"
+    assert envelope["artifact_digest_algorithm"] == "sha256"
     assert envelope["signed_artifact"] == "merkle_roots.json"
     assert envelope["signed_artifact_sha256"] == hashlib.sha256(roots_path.read_bytes()).hexdigest()
 
@@ -348,6 +350,42 @@ def test_verify_fails_with_unsupported_algorithm_field(tmp_path: Path) -> None:
     verify_result = _verify(roots_path, signature_path, public_key_path)
     assert verify_result.returncode == 5
     assert "Unsupported signature algorithm" in verify_result.stdout
+
+
+def test_verify_fails_with_unsupported_envelope_version(tmp_path: Path) -> None:
+    roots_path = tmp_path / "merkle_roots.json"
+    signature_path = tmp_path / "merkle_roots.sig.json"
+    _write_roots(roots_path)
+    private_key_path, public_key_path = _write_keypair(tmp_path, "primary")
+
+    sign_result = _sign(roots_path, private_key_path, signature_path)
+    assert sign_result.returncode == 0, sign_result.stderr
+
+    envelope = _load_envelope(signature_path)
+    envelope["envelope_version"] = "2"
+    signature_path.write_text(json.dumps(envelope, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    verify_result = _verify(roots_path, signature_path, public_key_path)
+    assert verify_result.returncode == 7
+    assert "unsupported envelope_version" in verify_result.stdout
+
+
+def test_verify_fails_with_unsupported_digest_algorithm(tmp_path: Path) -> None:
+    roots_path = tmp_path / "merkle_roots.json"
+    signature_path = tmp_path / "merkle_roots.sig.json"
+    _write_roots(roots_path)
+    private_key_path, public_key_path = _write_keypair(tmp_path, "primary")
+
+    sign_result = _sign(roots_path, private_key_path, signature_path)
+    assert sign_result.returncode == 0, sign_result.stderr
+
+    envelope = _load_envelope(signature_path)
+    envelope["artifact_digest_algorithm"] = "sha512"
+    signature_path.write_text(json.dumps(envelope, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    verify_result = _verify(roots_path, signature_path, public_key_path)
+    assert verify_result.returncode == 5
+    assert "Unsupported artifact digest algorithm" in verify_result.stdout
 
 
 def test_verify_fails_with_non_ed25519_public_key(tmp_path: Path) -> None:

@@ -16,6 +16,8 @@ from cryptography.hazmat.primitives.serialization import load_pem_private_key
 
 EXIT_SIGN_FAILURE = 4
 EXPECTED_ROOTS_FILENAME = "merkle_roots.json"
+ENVELOPE_VERSION = "1"
+ARTIFACT_DIGEST_ALGORITHM = "sha256"
 
 
 def atomic_write(path: Path, data: bytes) -> None:
@@ -65,7 +67,9 @@ def main() -> int:
 
         signature = private_key.sign(artifact_bytes)
         envelope = {
+            "envelope_version": ENVELOPE_VERSION,
             "signature_algorithm": "ed25519",
+            "artifact_digest_algorithm": ARTIFACT_DIGEST_ALGORITHM,
             "signed_artifact": roots_path.name,
             "signed_artifact_sha256": artifact_digest,
             "signature_base64": base64.b64encode(signature).decode("ascii"),

@@ -15,6 +15,8 @@ EXIT_INVALID_SIG = 5
 EXIT_ARTIFACT_MISMATCH = 6
 EXIT_MALFORMED = 7
 EXPECTED_ROOTS_FILENAME = "merkle_roots.json"
+ENVELOPE_VERSION = "1"
+ARTIFACT_DIGEST_ALGORITHM = "sha256"
 CRYPTOGRAPHY_INSTALL_HINT = (
     "Install dependencies with `pip install -r requirements/tools-archive.txt` "
     "or `pip install transformation-portal[archive-signing]`."
@@ -66,7 +68,9 @@ def main() -> int:
         return EXIT_MALFORMED
 
     required_fields = {
+        "envelope_version",
         "signature_algorithm",
+        "artifact_digest_algorithm",
         "signed_artifact",
         "signed_artifact_sha256",
         "signature_base64",
@@ -85,8 +89,16 @@ def main() -> int:
     InvalidSignature, UnsupportedAlgorithm, Ed25519PublicKey, load_pem_public_key = crypto_primitives
 
     try:
+        if envelope["envelope_version"] != ENVELOPE_VERSION:
+            print(f"Malformed signature file: unsupported envelope_version {envelope['envelope_version']!r}")
+            return EXIT_MALFORMED
+
         if envelope["signature_algorithm"] != "ed25519":
             print("Unsupported signature algorithm")
+            return EXIT_INVALID_SIG
+
+        if envelope["artifact_digest_algorithm"] != ARTIFACT_DIGEST_ALGORITHM:
+            print(f"Unsupported artifact digest algorithm: {envelope['artifact_digest_algorithm']!r}")
             return EXIT_INVALID_SIG
 
         if envelope["signed_artifact"] != EXPECTED_ROOTS_FILENAME:

@@ -89,7 +89,9 @@ Example:
 
 ```json
 {
+  "envelope_version": "1",
   "signature_algorithm": "ed25519",
+  "artifact_digest_algorithm": "sha256",
   "signed_artifact": "merkle_roots.json",
   "signed_artifact_sha256": "<hex>",
   "signature_base64": "<base64>"
@@ -97,6 +99,18 @@ Example:
 ```
 
 The signature covers the raw bytes of the artifact.
+
+---
+
+# Normative Verification Rules
+
+- The signed payload MUST be the exact on-disk bytes of `merkle_roots.json`.
+- Any byte change to `merkle_roots.json` MUST invalidate verification.
+- Envelope JSON key ordering MUST NOT affect verification behavior.
+- The detached envelope itself is metadata and is not a signed payload.
+- Verification MUST recompute the artifact digest before signature verification.
+- Non-Ed25519 public keys MUST fail verification.
+- Unsupported `envelope_version` values MUST fail as malformed envelope input.
 
 ---
 
