@@ -44,6 +44,8 @@ OUTPUT_HASH_SUMMARY = "hash_summary.json"
 OUTPUT_MERKLE_ROOTS = "merkle_roots.json"
 
 DETERMINISTIC_GZIP_COMPRESSION = {"compresslevel": 9, "mtime": 0}
+STRICT_NON_OK_EXIT_CODE = 2
+STRICT_IDENTITY_EXIT_CODE = 3
 
 
 @dataclass(frozen=True)
@@ -157,6 +159,32 @@ def read_archive_index_rows(path: Path) -> List[ArchiveIndexRow]:
         )
 
     return sorted(rows, key=lambda r: (r.origin_drive, r.partition, r.relpath, r.row_number))
+
+
+def find_duplicate_identity_keys(rows: Sequence[ArchiveIndexRow]) -> List[Tuple[str, str, str, int]]:
+    """Return duplicate identity groups in deterministic canonical order."""
+    if not rows:
+        return []
+
+    duplicates: List[Tuple[str, str, str, int]] = []
+    current_key = (rows[0].origin_drive, rows[0].partition, rows[0].relpath)
+    current_count = 1
+
+    for row in rows[1:]:
+        key = (row.origin_drive, row.partition, row.relpath)
+        if key == current_key:
+            current_count += 1
+            continue
+
+        if current_count > 1:
+            duplicates.append((current_key[0], current_key[1], current_key[2], current_count))
+        current_key = key
+        current_count = 1
+
+    if current_count > 1:
+        duplicates.append((current_key[0], current_key[1], current_key[2], current_count))
+
+    return duplicates
 
 
 def _materialize_relpath(relpath: str) -> Tuple[Path | None, str]:
@@ -548,6 +576,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Exit non-zero if any manifest row has status != ok",
     )
     parser.add_argument(
+        "--strict-identity",
+        action="store_true",
+        help="Exit non-zero if duplicate (origin_drive, partition, relpath) keys are present",
+    )
+    parser.add_argument(
         "--validate-schemas",
         action="store_true",
         help="Validate JSON outputs against docs/archive/schemas contracts",
@@ -568,6 +601,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     archive_rows = read_archive_index_rows(archive_index_path)
+    duplicate_identity_keys = find_duplicate_identity_keys(archive_rows)
+    if args.strict_identity and duplicate_identity_keys:
+        print(f"Duplicate identity keys detected: {len(duplicate_identity_keys)}")
+        for origin_drive, partition, relpath, count in duplicate_identity_keys:
+            print(f"  {origin_drive}|{partition}|{relpath} count={count}")
+        return STRICT_IDENTITY_EXIT_CODE
+
     manifest_rows = build_hash_manifest(archive_rows, archive_root=archive_root, workers=args.workers)
 
     out_hash_manifest = out_dir / OUTPUT_HASH_MANIFEST
@@ -595,7 +635,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"Elapsed: {elapsed:.3f}s | Throughput: {mb_per_sec:.2f} MiB/s | Files/s: {files_per_sec:.2f}")
 
     if args.strict and non_ok:
-        return 2
+        return STRICT_NON_OK_EXIT_CODE
 
     return 0
 

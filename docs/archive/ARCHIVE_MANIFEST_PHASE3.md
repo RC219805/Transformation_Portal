@@ -47,6 +47,7 @@ Absolute host paths MUST NOT be used as identity keys.
 - Invalid path materialization (for example parent traversal): `hash_status = "skipped"`.
 - Non-strict mode emits rows for all files.
 - `--strict` exits non-zero if any row is not `ok`.
+- `--strict-identity` exits non-zero if duplicate `(origin_drive, partition, relpath)` keys are present.
 
 ### Hash algorithm
 
@@ -66,8 +67,14 @@ Absolute host paths MUST NOT be used as identity keys.
 
 ### `hash_manifest.csv.gz`
 
-Manifest files may start with leading metadata lines in `# key=value` format. Parsers MUST ignore
-those lines before reading the CSV header row.
+#### Manifest Metadata Preamble
+
+- `hash_manifest.csv.gz` MAY contain one or more leading metadata lines.
+- Metadata lines MUST:
+  - begin with `#`
+  - use ASCII `key=value` format
+  - precede the CSV header row
+- Parsers MUST ignore all leading lines beginning with `#`.
 
 Column order is fixed and schema-governed:
 

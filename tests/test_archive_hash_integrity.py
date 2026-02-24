@@ -60,7 +60,15 @@ def _run_cli(command: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
-def _run_hash_tool(index_path: Path, archive_root: Path, out_dir: Path, *, workers: int = 1, strict: bool = False):
+def _run_hash_tool(
+    index_path: Path,
+    archive_root: Path,
+    out_dir: Path,
+    *,
+    workers: int = 1,
+    strict: bool = False,
+    strict_identity: bool = False,
+):
     command = [
         sys.executable,
         str(HASH_TOOL),
@@ -77,6 +85,8 @@ def _run_hash_tool(index_path: Path, archive_root: Path, out_dir: Path, *, worke
         command.append("--validate-schemas")
     if strict:
         command.append("--strict")
+    if strict_identity:
+        command.append("--strict-identity")
     return _run_cli(command)
 
 
@@ -263,6 +273,35 @@ def test_hash_tool_strict_mode_fails_on_missing() -> None:
         out_dir = temp / "out"
         strict_result = _run_hash_tool(FIXTURE_INDEX, archive_root, out_dir, strict=True)
         assert strict_result.returncode == 2
+
+
+def test_hash_tool_strict_identity_fails_on_duplicate_identity_keys() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        temp = Path(tmpdir)
+        archive_root = _copy_fixture_archive(temp)
+        duplicate_index = temp / "archive_index_duplicates.csv"
+        with duplicate_index.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.writer(handle, lineterminator="\n")
+            writer.writerow(["origin_drive", "partition", "relpath"])
+            writer.writerow(["DriveA", "Part1", "DriveA/Part1/alpha.txt"])
+            writer.writerow(["DriveA", "Part1", "DriveA/Part1/alpha.txt"])
+            writer.writerow(["DriveB", "Part2", "DriveB/Part2/sub/charlie.txt"])
+
+        relaxed_out = temp / "out_relaxed"
+        relaxed_result = _run_hash_tool(duplicate_index, archive_root, relaxed_out)
+        assert relaxed_result.returncode == 0, relaxed_result.stderr
+        assert (relaxed_out / "hash_manifest.csv.gz").exists()
+
+        strict_out = temp / "out_strict_identity"
+        strict_identity_result = _run_hash_tool(
+            duplicate_index,
+            archive_root,
+            strict_out,
+            strict_identity=True,
+        )
+        assert strict_identity_result.returncode == 3
+        assert "Duplicate identity keys detected" in strict_identity_result.stdout
+        assert not (strict_out / "hash_manifest.csv.gz").exists()
 
 
 def test_verify_detects_unreadable_file() -> None:
