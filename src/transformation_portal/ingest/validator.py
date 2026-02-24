@@ -101,6 +101,11 @@ def classify_validation_exit_code(error: object) -> int:
     return EXIT_SCHEMA_VALIDATION_FAILED
 
 
+def classify_validation_error(error: object) -> int:
+    """Backward-compatible alias for classify_validation_exit_code."""
+    return classify_validation_exit_code(error)
+
+
 def classify_validation_errors(errors: List[Any]) -> int:
     """Classify a list of validation errors and return highest-severity exit code.
 
@@ -144,13 +149,6 @@ class SchemaValidationError(Exception):
         super().__init__(message)
 
 
-EXIT_SUCCESS = 0
-EXIT_SCHEMA_VALIDATION_FAILED = 1
-EXIT_8BIT_CONVERSION = 2
-EXIT_GAMMA_VIOLATION = 3
-EXIT_SCHEMA_DRIFT = 4
-EXIT_OTHER_FAILURE = 5
-
 _EXIT_CODE_PRECEDENCE = (
     EXIT_SCHEMA_DRIFT,
     EXIT_GAMMA_VIOLATION,
@@ -158,32 +156,6 @@ _EXIT_CODE_PRECEDENCE = (
     EXIT_SCHEMA_VALIDATION_FAILED,
     EXIT_OTHER_FAILURE,
 )
-
-
-def classify_validation_error(error: object) -> Optional[int]:
-    """Map a single schema validation error to the ingest contract exit code."""
-    error_type = getattr(error, "error_type", None)
-    error_code = getattr(error, "code", None)
-    if error_type == "schema_drift" or error_code == "schema_drift":
-        return EXIT_SCHEMA_DRIFT
-    if error_type == "schema_version_mismatch" or error_code == "schema_version_mismatch":
-        return EXIT_SCHEMA_VALIDATION_FAILED
-
-    error_msg = str(error).lower()
-    if "drift" in error_msg:
-        return EXIT_SCHEMA_DRIFT
-    if "schema version" in error_msg:
-        return EXIT_SCHEMA_VALIDATION_FAILED
-    return None
-
-
-def classify_validation_errors(errors: Iterable[object]) -> int:
-    """Classify validation errors into a single contract-aligned exit code."""
-    for error in errors:
-        exit_code = classify_validation_error(error)
-        if exit_code is not None:
-            return exit_code
-    return EXIT_SCHEMA_VALIDATION_FAILED
 
 
 def aggregate_exit_codes(exit_codes: Iterable[int]) -> int:
