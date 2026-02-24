@@ -273,12 +273,23 @@ class MetadataExtractionService:
             else:
                 candidate = base_path.with_name(f"{input_path.name}.provenance.json")
                 if candidate in seen:
-                    digest = hashlib.sha1(str(input_path).encode("utf-8")).hexdigest()[:8]
+                    digest = self._stable_path_digest(input_path)
                     candidate = base_path.with_name(f"{input_path.name}.{digest}.provenance.json")
+                    counter = 0
+                    while candidate in seen:
+                        counter += 1
+                        candidate = base_path.with_name(f"{input_path.name}.{digest}.{counter}.provenance.json")
             seen.add(candidate)
             chosen_paths.append(candidate)
 
         return chosen_paths
+
+    def _stable_path_digest(self, input_path: Path) -> str:
+        try:
+            canonical_path = input_path.resolve(strict=False).as_posix()
+        except (OSError, RuntimeError):
+            canonical_path = input_path.absolute().as_posix()
+        return hashlib.blake2s(canonical_path.encode("utf-8"), digest_size=4).hexdigest()
 
     def _common_input_root(self, paths: Sequence[Path]) -> Optional[Path]:
         if not paths:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -339,6 +340,83 @@ def test_batch_extract_disambiguates_collisions_without_structure(monkeypatch: p
     assert output_paths[1] != output_paths[0]
     assert output_paths[1].name.startswith("image.cr2.")
     assert output_paths[1].name.endswith(".provenance.json")
+
+
+def test_batch_extract_disambiguates_repeated_same_input_with_counter(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    input_path = tmp_path / "image.cr2"
+    input_path.touch()
+
+    output_dir = tmp_path / "out"
+    service = MetadataExtractionService(clock_fn=_clock)
+    output_paths: list[Path] = []
+
+    def spy_extract(req: ExtractRequest) -> ExtractResult:
+        assert req.output_path is not None
+        output_paths.append(req.output_path)
+        return ExtractResult(
+            path=req.input_path,
+            success=True,
+            output_path=req.output_path,
+            elapsed_seconds=0.1,
+        )
+
+    monkeypatch.setattr(service, "extract", spy_extract)
+
+    result = service.batch_extract(
+        BatchExtractRequest(
+            input_paths=[input_path, input_path, input_path],
+            output_dir=output_dir,
+            preserve_structure=False,
+            deterministic_order=False,
+        )
+    )
+
+    assert result.success
+    assert len(output_paths) == 3
+    assert len(set(output_paths)) == 3
+    assert output_paths[0] == output_dir / "image.cr2.provenance.json"
+    assert output_paths[1].name.startswith("image.cr2.")
+    assert output_paths[1].name.endswith(".provenance.json")
+    assert output_paths[2].name.endswith(".1.provenance.json")
+
+
+def test_batch_extract_hash_suffix_uses_canonical_path_representation(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    input_path = tmp_path / "image.cr2"
+    input_path.touch()
+
+    relative_input = Path(os.path.relpath(input_path, Path.cwd()))
+    output_dir = tmp_path / "out"
+
+    def run_with_inputs(input_paths: list[Path]) -> list[str]:
+        service = MetadataExtractionService(clock_fn=_clock)
+        output_paths: list[Path] = []
+
+        def spy_extract(req: ExtractRequest) -> ExtractResult:
+            assert req.output_path is not None
+            output_paths.append(req.output_path)
+            return ExtractResult(
+                path=req.input_path,
+                success=True,
+                output_path=req.output_path,
+                elapsed_seconds=0.1,
+            )
+
+        monkeypatch.setattr(service, "extract", spy_extract)
+        result = service.batch_extract(
+            BatchExtractRequest(
+                input_paths=input_paths,
+                output_dir=output_dir,
+                preserve_structure=False,
+                deterministic_order=False,
+            )
+        )
+        assert result.success
+        return [path.name for path in output_paths]
+
+    absolute_names = run_with_inputs([input_path, input_path])
+    relative_names = run_with_inputs([relative_input, relative_input])
+
+    assert absolute_names == relative_names
 
 
 def test_batch_extract_fail_fast_stops_after_first_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
