@@ -49,17 +49,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-# Import exit codes and classification from ingest module (core contract layer)
 from transformation_portal.ingest import (
-    EXIT_8BIT_CONVERSION,
-    EXIT_GAMMA_VIOLATION,
     EXIT_OTHER_FAILURE,
-    EXIT_SCHEMA_DRIFT,
-    EXIT_SCHEMA_VALIDATION_FAILED,
     EXIT_SUCCESS,
+    aggregate_exit_codes,
     classify_validation_errors,
 )
-
 
 # =============================================================================
 # Supported Image Extensions
@@ -425,7 +420,11 @@ def run_extract_batch(
             result.results[relative_path_str] = (False, str(e), 0)
             result.processed += 1
             result.failed += 1
-            result.failure_types[EXIT_OTHER_FAILURE] = result.failure_types.get(EXIT_OTHER_FAILURE, 0) + 1
+            exit_code = EXIT_OTHER_FAILURE
+            error_list = getattr(e, "errors", None)
+            if isinstance(error_list, list):
+                exit_code = classify_validation_errors(error_list)
+            result.failure_types[exit_code] = result.failure_types.get(exit_code, 0) + 1
             if fail_fast:
                 break
 
@@ -842,21 +841,10 @@ def cmd_extract_batch(args: argparse.Namespace) -> int:
         )
         render_extract_batch(result, verbose=args.verbose)
 
-        # Determine exit code based on failure types (highest severity)
-        if result.failed > 0:
-            if result.failure_types:
-                # Return highest-severity exit code
-                if EXIT_SCHEMA_DRIFT in result.failure_types:
-                    return EXIT_SCHEMA_DRIFT
-                if EXIT_GAMMA_VIOLATION in result.failure_types:
-                    return EXIT_GAMMA_VIOLATION
-                if EXIT_8BIT_CONVERSION in result.failure_types:
-                    return EXIT_8BIT_CONVERSION
-                if EXIT_SCHEMA_VALIDATION_FAILED in result.failure_types:
-                    return EXIT_SCHEMA_VALIDATION_FAILED
+        batch_exit_code = aggregate_exit_codes(result.failure_types.keys())
+        if result.failed > 0 and batch_exit_code == EXIT_SUCCESS:
             return EXIT_OTHER_FAILURE
-
-        return EXIT_SUCCESS
+        return batch_exit_code
 
     except Exception as e:
         if args.debug:

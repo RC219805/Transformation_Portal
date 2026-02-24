@@ -25,12 +25,53 @@ from transformation_portal.ingest.schemas import (
     ToolchainVersion,
 )
 from transformation_portal.ingest.validator import (
+    EXIT_8BIT_CONVERSION,
+    EXIT_GAMMA_VIOLATION,
+    EXIT_OTHER_FAILURE,
+    EXIT_SCHEMA_DRIFT,
+    EXIT_SCHEMA_VALIDATION_FAILED,
+    EXIT_SUCCESS,
     SchemaValidationError,
+    aggregate_exit_codes,
+    classify_validation_error,
+    classify_validation_errors,
     validate_ingest_contract,
     validate_linear_gamma,
     validate_no_8bit_conversion,
     validate_schema,
 )
+
+
+class TestExitCodeAggregation:
+    """Tests for centralized ingest exit-code classification and aggregation."""
+
+    def test_classify_validation_error_prefers_structured_schema_drift(self):
+        class StructuredError:
+            error_type = "schema_drift"
+
+            def __str__(self):
+                return "ignored due to structured metadata"
+
+        assert classify_validation_error(StructuredError()) == EXIT_SCHEMA_DRIFT
+
+    def test_classify_validation_errors_fallbacks_to_schema_validation(self):
+        errors = ["field foo is invalid", "missing required bar"]
+        assert classify_validation_errors(errors) == EXIT_SCHEMA_VALIDATION_FAILED
+
+    def test_aggregate_exit_codes_applies_contract_severity_precedence(self):
+        exit_codes = [
+            EXIT_SUCCESS,
+            EXIT_SCHEMA_VALIDATION_FAILED,
+            EXIT_8BIT_CONVERSION,
+            EXIT_GAMMA_VIOLATION,
+            EXIT_SCHEMA_DRIFT,
+            EXIT_OTHER_FAILURE,
+        ]
+        assert aggregate_exit_codes(exit_codes) == EXIT_SCHEMA_DRIFT
+
+    def test_aggregate_exit_codes_returns_success_for_empty_or_success_only(self):
+        assert aggregate_exit_codes([]) == EXIT_SUCCESS
+        assert aggregate_exit_codes([EXIT_SUCCESS, EXIT_SUCCESS]) == EXIT_SUCCESS
 
 
 class TestValidateSchema:

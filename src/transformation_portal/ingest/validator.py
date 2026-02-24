@@ -35,7 +35,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Iterable, List, Optional, Union
 
 from pydantic import ValidationError
 
@@ -142,6 +142,61 @@ class SchemaValidationError(Exception):
         self.errors = errors
         message = "Schema validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
         super().__init__(message)
+
+
+EXIT_SUCCESS = 0
+EXIT_SCHEMA_VALIDATION_FAILED = 1
+EXIT_8BIT_CONVERSION = 2
+EXIT_GAMMA_VIOLATION = 3
+EXIT_SCHEMA_DRIFT = 4
+EXIT_OTHER_FAILURE = 5
+
+_EXIT_CODE_PRECEDENCE = (
+    EXIT_SCHEMA_DRIFT,
+    EXIT_GAMMA_VIOLATION,
+    EXIT_8BIT_CONVERSION,
+    EXIT_SCHEMA_VALIDATION_FAILED,
+    EXIT_OTHER_FAILURE,
+)
+
+
+def classify_validation_error(error: object) -> Optional[int]:
+    """Map a single schema validation error to the ingest contract exit code."""
+    error_type = getattr(error, "error_type", None)
+    error_code = getattr(error, "code", None)
+    if error_type == "schema_drift" or error_code == "schema_drift":
+        return EXIT_SCHEMA_DRIFT
+    if error_type == "schema_version_mismatch" or error_code == "schema_version_mismatch":
+        return EXIT_SCHEMA_VALIDATION_FAILED
+
+    error_msg = str(error).lower()
+    if "drift" in error_msg:
+        return EXIT_SCHEMA_DRIFT
+    if "schema version" in error_msg:
+        return EXIT_SCHEMA_VALIDATION_FAILED
+    return None
+
+
+def classify_validation_errors(errors: Iterable[object]) -> int:
+    """Classify validation errors into a single contract-aligned exit code."""
+    for error in errors:
+        exit_code = classify_validation_error(error)
+        if exit_code is not None:
+            return exit_code
+    return EXIT_SCHEMA_VALIDATION_FAILED
+
+
+def aggregate_exit_codes(exit_codes: Iterable[int]) -> int:
+    """Aggregate multiple exit codes using ingest contract severity precedence."""
+    observed = set(exit_codes)
+    observed.discard(EXIT_SUCCESS)
+    if not observed:
+        return EXIT_SUCCESS
+
+    for code in _EXIT_CODE_PRECEDENCE:
+        if code in observed:
+            return code
+    return EXIT_OTHER_FAILURE
 
 
 def validate_schema(
