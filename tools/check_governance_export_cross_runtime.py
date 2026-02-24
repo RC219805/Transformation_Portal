@@ -221,7 +221,7 @@ def _prepare_bundle_fixture(
     python_executable: str,
     project_root: Path,
     workspace: Path,
-) -> tuple[Path, Path, Path, Path, Path]:
+) -> tuple[Path, Path, Path, Path, Path, Path]:
     tools_dir = project_root / "tools"
     generate_tool = tools_dir / "generate_evidence_bundle_manifest.py"
     compute_tool = tools_dir / "compute_bundle_root.py"
