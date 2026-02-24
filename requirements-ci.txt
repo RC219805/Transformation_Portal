@@ -16,3 +16,6 @@ PyYAML>=6.0,<7
 
 # Required for depth_writer (used in core pipeline tests)
 opencv-python>=4.8.0,<5
+
+# Required for detached Merkle signing/verification CLI tests
+cryptography>=46.0,<47

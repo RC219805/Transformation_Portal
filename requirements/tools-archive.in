@@ -5,3 +5,4 @@
 numpy>=2.2,<2.3
 pandas>=2.2,<2.3
 jsonschema>=4.23,<5
+cryptography>=46.0,<47

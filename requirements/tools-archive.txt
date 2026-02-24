@@ -4,6 +4,9 @@
 #
 #    pip-compile --constraint=all.txt --output-file=tools-archive.txt tools-archive.in
 #
+cffi==2.0.0
+cryptography==46.0.5
 jsonschema==4.23.0
 numpy==2.2.6
 pandas==2.2.3
+pycparser==3.0
