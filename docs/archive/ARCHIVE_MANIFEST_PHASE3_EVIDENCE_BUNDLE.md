@@ -54,7 +54,7 @@ evidence_bundle_manifest.json
 - `timestamp_target`
 - `timestamp_path`
 - `timestamp_sha256`
-- `global_leaf_count`
+- `merkle_leaf_count`
 - `phase3_version`
 - `phase3_1_version`
 - `phase3_2_version`
@@ -76,9 +76,10 @@ evidence_bundle_manifest.json
 - `timestamp_target`: whether timestamp was taken over `roots` or `signature`.
 - `timestamp_path`: relative path of detached RFC 3161 response artifact.
 - `timestamp_sha256`: digest of exact `.tsr` bytes.
-- `global_leaf_count`: global leaf count from deterministic roots artifact.
-- `phase3_version`, `phase3_1_version`, `phase3_2_version`: contract versions
-  used to produce and validate bundle members.
+- `merkle_leaf_count`: global leaf count from deterministic roots artifact
+  (`merkle_roots.json.global.leaf_count`).
+- `phase3_version`, `phase3_1_version`, `phase3_2_version`: non-empty contract
+  version strings used to produce and validate bundle members.
 - `bundle_tool_name`: identifier of bundle-manifest emitting tool.
 - `bundle_tool_version`: version of bundle-manifest emitting tool.
 
@@ -116,7 +117,7 @@ This keeps emitted manifests deterministic across hosts and Python versions.
   "phase3_version": "1",
   "bundle_tool_name": "phase3_bundle_builder",
   "bundle_tool_version": "1.0.0",
-  "global_leaf_count": 48291,
+  "merkle_leaf_count": 48291,
   "hash_manifest_path": "hash_manifest.csv.gz",
   "hash_manifest_sha256": "6cd77312a9ee3c11d73dbf17d02fd5f1e6e8cf70f92f9d0377ce4d79073e34ee",
   "hash_summary_path": "hash_summary.json",
@@ -148,9 +149,54 @@ Phase 3.3 bundle verification MUST:
 4. Verify timestamp target consistency:
    - `timestamp_target = "signature"` implies `timestamp_path = "merkle_roots.sig.tsr"`
    - `timestamp_target = "roots"` implies `timestamp_path = "merkle_roots.tsr"`
-5. Verify `global_leaf_count` matches `merkle_roots.json` global leaf count.
+5. Verify `merkle_leaf_count` matches `merkle_roots.json.global.leaf_count`.
 6. Verify `bundle_tool_name` and `bundle_tool_version` are present and non-empty.
 7. Fail non-zero on any mismatch.
+
+---
+
+# CLI Interface
+
+Generate canonical bundle manifest:
+
+```bash
+python tools/generate_evidence_bundle_manifest.py \
+  --roots /path/to/merkle_roots.json \
+  --hash-manifest /path/to/hash_manifest.csv.gz \
+  --hash-summary /path/to/hash_summary.json \
+  --signature /path/to/merkle_roots.sig.json \
+  --timestamp-target signature \
+  --timestamp /path/to/merkle_roots.sig.tsr \
+  --phase3-version 1 \
+  --phase3-1-version 1 \
+  --phase3-2-version 1 \
+  --bundle-tool-name phase3_bundle_builder \
+  --bundle-tool-version 1.0.0 \
+  --out /path/to/evidence_bundle_manifest.json
+```
+
+Verify canonical bundle manifest:
+
+```bash
+python tools/verify_evidence_bundle_manifest.py \
+  --bundle-manifest /path/to/evidence_bundle_manifest.json \
+  --bundle-dir /path/to/bundle_dir
+```
+
+---
+
+# Exit Codes
+
+Generate CLI (`generate_evidence_bundle_manifest.py`):
+
+- `0` = manifest generated successfully
+- `10` = bundle generation failure
+
+Verify CLI (`verify_evidence_bundle_manifest.py`):
+
+- `0` = bundle manifest and referenced artifacts verified
+- `11` = verification mismatch/failure
+- `12` = malformed manifest input
 
 ---
 

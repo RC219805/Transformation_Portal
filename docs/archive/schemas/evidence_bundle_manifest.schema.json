@@ -17,7 +17,7 @@
     "timestamp_target",
     "timestamp_path",
     "timestamp_sha256",
-    "global_leaf_count",
+    "merkle_leaf_count",
     "phase3_version",
     "phase3_1_version",
     "phase3_2_version",
@@ -79,18 +79,21 @@
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"
     },
-    "global_leaf_count": {
+    "merkle_leaf_count": {
       "type": "integer",
       "minimum": 0
     },
     "phase3_version": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "phase3_1_version": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "phase3_2_version": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "bundle_tool_name": {
       "type": "string",
