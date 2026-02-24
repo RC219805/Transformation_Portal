@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import time
 from collections import Counter
@@ -185,13 +186,14 @@ class MetadataExtractionService:
         if req.preserve_structure and effective_input_root is None and paths:
             effective_input_root = self._common_input_root(paths)
 
-        for path in paths:
-            output_path = self._derive_batch_output_path(
-                input_path=path,
-                output_dir=req.output_dir,
-                preserve_structure=req.preserve_structure,
-                input_root=effective_input_root,
-            )
+        output_paths = self._derive_batch_output_paths(
+            paths=paths,
+            output_dir=req.output_dir,
+            preserve_structure=req.preserve_structure,
+            input_root=effective_input_root,
+        )
+
+        for path, output_path in zip(paths, output_paths):
             result = self.extract(
                 ExtractRequest(
                     input_path=path,
@@ -241,6 +243,41 @@ class MetadataExtractionService:
             summary_counts=summary,
             dominant_error=dominant_error,
         )
+
+    def _derive_batch_output_paths(
+        self,
+        *,
+        paths: Sequence[Path],
+        output_dir: Path,
+        preserve_structure: bool,
+        input_root: Optional[Path],
+    ) -> List[Path]:
+        base_paths: List[Path] = []
+        for input_path in paths:
+            base_paths.append(
+                self._derive_batch_output_path(
+                    input_path=input_path,
+                    output_dir=output_dir,
+                    preserve_structure=preserve_structure,
+                    input_root=input_root,
+                )
+            )
+
+        counts = Counter(base_paths)
+        chosen_paths: List[Path] = []
+        seen: set[Path] = set()
+        for input_path, base_path in zip(paths, base_paths):
+            if counts[base_path] == 1:
+                candidate = base_path
+            else:
+                candidate = base_path.with_name(f"{input_path.name}.provenance.json")
+                if candidate in seen:
+                    digest = hashlib.sha1(str(input_path).encode("utf-8")).hexdigest()[:8]
+                    candidate = base_path.with_name(f"{input_path.name}.{digest}.provenance.json")
+            seen.add(candidate)
+            chosen_paths.append(candidate)
+
+        return chosen_paths
 
     def _common_input_root(self, paths: Sequence[Path]) -> Optional[Path]:
         if not paths:

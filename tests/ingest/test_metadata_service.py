@@ -211,6 +211,90 @@ def test_batch_extract_infers_input_root_for_structure_preservation(monkeypatch:
     assert output_paths == [output_dir / "a" / "image.provenance.json", output_dir / "b" / "image.provenance.json"]
 
 
+def test_batch_extract_disambiguates_same_stem_collisions(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    input_root = tmp_path / "inputs"
+    input_root.mkdir(parents=True)
+    first = input_root / "image.cr2"
+    second = input_root / "image.jpg"
+    first.touch()
+    second.touch()
+
+    output_dir = tmp_path / "out"
+    service = MetadataExtractionService(clock_fn=_clock)
+    output_paths: list[Path] = []
+
+    def spy_extract(req: ExtractRequest) -> ExtractResult:
+        assert req.output_path is not None
+        output_paths.append(req.output_path)
+        return ExtractResult(
+            path=req.input_path,
+            success=True,
+            output_path=req.output_path,
+            elapsed_seconds=0.1,
+        )
+
+    monkeypatch.setattr(service, "extract", spy_extract)
+
+    result = service.batch_extract(
+        BatchExtractRequest(
+            input_paths=[first, second],
+            output_dir=output_dir,
+            input_root=input_root,
+            preserve_structure=True,
+            deterministic_order=False,
+        )
+    )
+
+    assert result.success
+    assert output_paths == [
+        output_dir / "image.cr2.provenance.json",
+        output_dir / "image.jpg.provenance.json",
+    ]
+
+
+def test_batch_extract_disambiguates_collisions_without_structure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    input_root = tmp_path / "inputs"
+    nested_a = input_root / "a"
+    nested_b = input_root / "b"
+    nested_a.mkdir(parents=True)
+    nested_b.mkdir(parents=True)
+    first = nested_a / "image.cr2"
+    second = nested_b / "image.cr2"
+    first.touch()
+    second.touch()
+
+    output_dir = tmp_path / "out"
+    service = MetadataExtractionService(clock_fn=_clock)
+    output_paths: list[Path] = []
+
+    def spy_extract(req: ExtractRequest) -> ExtractResult:
+        assert req.output_path is not None
+        output_paths.append(req.output_path)
+        return ExtractResult(
+            path=req.input_path,
+            success=True,
+            output_path=req.output_path,
+            elapsed_seconds=0.1,
+        )
+
+    monkeypatch.setattr(service, "extract", spy_extract)
+
+    result = service.batch_extract(
+        BatchExtractRequest(
+            input_paths=[first, second],
+            output_dir=output_dir,
+            preserve_structure=False,
+            deterministic_order=False,
+        )
+    )
+
+    assert result.success
+    assert output_paths[0] == output_dir / "image.cr2.provenance.json"
+    assert output_paths[1] != output_paths[0]
+    assert output_paths[1].name.startswith("image.cr2.")
+    assert output_paths[1].name.endswith(".provenance.json")
+
+
 def test_batch_extract_fail_fast_stops_after_first_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     input_paths = [tmp_path / "one.cr2", tmp_path / "two.cr2", tmp_path / "three.cr2"]
     for path in input_paths:
