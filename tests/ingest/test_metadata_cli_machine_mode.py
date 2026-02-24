@@ -21,6 +21,34 @@ def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def test_check_system_json_contract_shape_is_stable() -> None:
+    result = _run_cli("--json", "check-system")
+
+    payload = json.loads(result.stdout)
+    assert payload["command"] == "check-system"
+    assert payload["schema"] == "tp.meta.machine.v1"
+    assert payload["exit_code"] == result.returncode
+    assert payload["success"] is (result.returncode == 0)
+
+    data = payload["data"]
+    assert list(data.keys()) == [
+        "all_required_ok",
+        "errors",
+        "exiftool_available",
+        "exiftool_version",
+        "git_available",
+        "git_version",
+        "ingest_module_available",
+        "libraw_version",
+        "pydantic_available",
+        "pydantic_version",
+        "rawpy_available",
+        "rawpy_version",
+    ]
+    assert isinstance(data["all_required_ok"], bool)
+    assert isinstance(data["errors"], list)
+
+
 def test_validate_json_envelope_is_versioned_and_stable(tmp_path: Path) -> None:
     sidecar_path = tmp_path / "missing.provenance.json"
 
@@ -59,6 +87,16 @@ def test_extract_batch_setup_failure_uses_data_not_command_error(tmp_path: Path)
     assert payload["error"] is None
 
     data = payload["data"]
+    assert list(data.keys()) == [
+        "dominant_error",
+        "fail_fast",
+        "input_root",
+        "items",
+        "output_dir",
+        "preserve_structure",
+        "success",
+        "summary_counts",
+    ]
     assert data["items"] == []
     assert data["summary_counts"]["total"] == 0
     assert data["summary_counts"]["success"] == 0

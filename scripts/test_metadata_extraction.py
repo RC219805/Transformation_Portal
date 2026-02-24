@@ -41,7 +41,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import tempfile
 import traceback
 from collections import Counter
 from dataclasses import dataclass, field
@@ -802,12 +804,49 @@ def _summarize_result_to_machine_data(result: SummarizeResult) -> Dict[str, Any]
     }
 
 
+def _check_system_result_to_machine_data(result: SystemCheckResult) -> Dict[str, Any]:
+    return {
+        "exiftool_available": result.exiftool_available,
+        "exiftool_version": result.exiftool_version,
+        "pydantic_available": result.pydantic_available,
+        "pydantic_version": result.pydantic_version,
+        "git_available": result.git_available,
+        "git_version": result.git_version,
+        "rawpy_available": result.rawpy_available,
+        "rawpy_version": result.rawpy_version,
+        "libraw_version": result.libraw_version,
+        "ingest_module_available": result.ingest_module_available,
+        "all_required_ok": result.all_required_ok,
+        "errors": list(result.errors),
+    }
+
+
 def _emit_machine(envelope: Dict[str, Any], args: argparse.Namespace) -> None:
     payload = dump_json(envelope, pretty=args.json_pretty)
     if args.json_output:
         destination = Path(args.json_output)
         destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_text(payload, encoding="utf-8")
+        tmp_path: Optional[Path] = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=destination.parent,
+                prefix=f".{destination.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+                tmp_path = Path(handle.name)
+            tmp_path.replace(destination)
+        finally:
+            if tmp_path is not None and tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except OSError:
+                    pass
         return
     print(payload)
 
@@ -823,25 +862,11 @@ def cmd_check_system(args: argparse.Namespace) -> int:
         result = run_check_system()
         exit_code = EXIT_SUCCESS if result.all_required_ok else EXIT_OTHER_FAILURE
         if args.json:
-            data = {
-                "exiftool_available": result.exiftool_available,
-                "exiftool_version": result.exiftool_version,
-                "pydantic_available": result.pydantic_available,
-                "pydantic_version": result.pydantic_version,
-                "git_available": result.git_available,
-                "git_version": result.git_version,
-                "rawpy_available": result.rawpy_available,
-                "rawpy_version": result.rawpy_version,
-                "libraw_version": result.libraw_version,
-                "ingest_module_available": result.ingest_module_available,
-                "all_required_ok": result.all_required_ok,
-                "errors": list(result.errors),
-            }
             _emit_machine(
                 _build_machine_envelope(
                     command="check-system",
                     exit_code=exit_code,
-                    data=data,
+                    data=_check_system_result_to_machine_data(result),
                 ),
                 args,
             )
@@ -857,7 +882,7 @@ def cmd_check_system(args: argparse.Namespace) -> int:
                 _build_machine_envelope(
                     command="check-system",
                     exit_code=EXIT_OTHER_FAILURE,
-                    data={},
+                    data=_check_system_result_to_machine_data(SystemCheckResult()),
                     error=_command_error_payload(e),
                 ),
                 args,
@@ -915,17 +940,18 @@ def cmd_extract(args: argparse.Namespace) -> int:
         if args.debug:
             traceback.print_exc()
         if args.json:
+            service_result = ServiceExtractResult(
+                path=image_path,
+                success=False,
+                output_path=output_path,
+                elapsed_seconds=0.0,
+                error=None,
+            )
             _emit_machine(
                 _build_machine_envelope(
                     command="extract",
                     exit_code=EXIT_OTHER_FAILURE,
-                    data={
-                        "input_path": str(image_path),
-                        "output_path": str(output_path) if output_path is not None else None,
-                        "elapsed_seconds": 0.0,
-                        "preset": args.preset,
-                        "error": None,
-                    },
+                    data=extract_result_to_dict(service_result, preset=args.preset),
                     error=_command_error_payload(e),
                 ),
                 args,
@@ -986,19 +1012,25 @@ def cmd_extract_batch(args: argparse.Namespace) -> int:
         if args.debug:
             traceback.print_exc()
         if args.json:
+            empty_batch_result = ServiceBatchExtractResult(
+                items=[],
+                total_elapsed=0.0,
+                summary_counts=_build_batch_summary(total=0, success=0, failure=0),
+                dominant_error=None,
+            )
+            data = batch_result_to_dict(
+                empty_batch_result,
+                input_root=input_dir,
+                output_dir=output_dir or input_dir / "provenance_sidecars",
+                fail_fast=args.fail_fast,
+                preserve_structure=True,
+            )
+            data["success"] = False
             _emit_machine(
                 _build_machine_envelope(
                     command="extract-batch",
                     exit_code=EXIT_OTHER_FAILURE,
-                    data={
-                        "input_root": str(input_dir),
-                        "output_dir": str(output_dir or input_dir / "provenance_sidecars"),
-                        "fail_fast": args.fail_fast,
-                        "preserve_structure": True,
-                        "items": [],
-                        "summary_counts": _build_batch_summary(total=0, success=0, failure=0),
-                        "dominant_error": None,
-                    },
+                    data=data,
                     error=_command_error_payload(e),
                 ),
                 args,
@@ -1040,16 +1072,16 @@ def cmd_validate(args: argparse.Namespace) -> int:
         if args.debug:
             traceback.print_exc()
         if args.json:
+            service_result = ServiceValidateResult(
+                success=False,
+                errors=[],
+                dominant_error=None,
+            )
             _emit_machine(
                 _build_machine_envelope(
                     command="validate",
                     exit_code=EXIT_OTHER_FAILURE,
-                    data={
-                        "sidecar_path": str(sidecar_path),
-                        "strict": args.strict,
-                        "errors": [],
-                        "dominant_error": None,
-                    },
+                    data=validate_result_to_dict(service_result, sidecar_path=sidecar_path, strict=args.strict),
                     error=_command_error_payload(e),
                 ),
                 args,
