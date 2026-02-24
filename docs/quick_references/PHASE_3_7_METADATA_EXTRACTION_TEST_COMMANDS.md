@@ -194,6 +194,6 @@ python tools/regulatory_export.py \
 
 ## See Also
 
-- [Ingest Contract v1.0.0](../docs/apex/ingest_contract.md) - Full contract documentation
-- [Schema Version Policy](../docs/compliance/SCHEMA_VERSION_POLICY.md) - Versioning rules
-- [ADR-036](../docs/architecture/ADR-036-accountability-governance-invariants.md) - Governance invariants
+- [Ingest Contract v1.0.0](../apex/ingest_contract.md) - Full contract documentation
+- [Schema Version Policy](../compliance/SCHEMA_VERSION_POLICY.md) - Versioning rules
+- [ADR-036](../architecture/ADR-036-accountability-governance-invariants.md) - Governance invariants
