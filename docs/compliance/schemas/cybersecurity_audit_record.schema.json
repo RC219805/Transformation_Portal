@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "cybersecurity_audit_record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "audit_record_id",
+    "regulatory_regime",
+    "audit_standard",
+    "auditor_name",
+    "auditor_independence_attested",
+    "audit_period_start",
+    "audit_period_end",
+    "report_sha256",
+    "certification_attestation",
+    "retention"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1"
+    },
+    "audit_record_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "regulatory_regime": {
+      "type": "string",
+      "enum": [
+        "CPPA_CCPA_2026"
+      ]
+    },
+    "audit_standard": {
+      "type": "string",
+      "minLength": 1
+    },
+    "auditor_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "auditor_independence_attested": {
+      "type": "boolean"
+    },
+    "audit_period_start": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "audit_period_end": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "report_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "findings_summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "corrective_actions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "threshold_tier": {
+      "type": "string",
+      "enum": [
+        "tier_1",
+        "tier_2",
+        "tier_3",
+        "not_applicable"
+      ]
+    },
+    "certification_attestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "signer",
+        "date",
+        "penalty_of_perjury"
+      ],
+      "properties": {
+        "signer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "date": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "penalty_of_perjury": {
+          "type": "boolean"
+        }
+      }
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "retention_years",
+        "retention_basis",
+        "records_location"
+      ],
+      "properties": {
+        "retention_years": {
+          "type": "integer",
+          "minimum": 5
+        },
+        "retention_basis": {
+          "type": "string",
+          "minLength": 1
+        },
+        "records_location": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

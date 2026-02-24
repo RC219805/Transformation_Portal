@@ -2,7 +2,7 @@
 
 ## 2026-02-24
 
-**Release: v3.5.0**
+### Release: v3.5.0
 **Type:** Documentation Milestone
 **Runtime Impact:** None
 **Integrity Contract Change:** None
@@ -12,6 +12,24 @@
 - Added regulator overview and Annex-level traceability matrix:
   - `docs/compliance/REGULATOR_COMPLIANCE_OVERVIEW_ART53.md`
   - `docs/compliance/ARTICLE53_TRACEABILITY_MATRIX.md`
+
+### Phase 3.6 — Accountability Governance Layer (CPPA)
+**Type:** Feature / Governance Layer
+**Runtime Impact:** Additive (optional export path + schema gate)
+**Integrity Contract Change:** None (root projection unchanged)
+
+- Added Phase 3.6 governance schemas:
+  - `docs/compliance/schemas/risk_assessment_report.schema.json`
+  - `docs/compliance/schemas/cybersecurity_audit_record.schema.json`
+  - `docs/compliance/schemas/admt_governance.schema.json`
+- Added ADR-036 accountability invariants:
+  - `docs/architecture/ADR-036-accountability-governance-invariants.md`
+- Added cross-regime traceability mapping (EU Article 53 + CPPA 2026):
+  - `docs/compliance/CROSS_REGIME_TRACEABILITY_ART53_CPPA.md`
+- Extended `tools/regulatory_export.py` with optional governance export:
+  - `--governance-export`
+- Added lightweight CI compliance-schema validation gate:
+  - `scripts/validation/validate_compliance_schemas.py`
 
 ## 2026-01-29
 
