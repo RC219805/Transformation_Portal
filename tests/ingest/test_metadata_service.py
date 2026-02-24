@@ -39,7 +39,7 @@ def test_batch_extract_delegates_per_file_to_extract(monkeypatch: pytest.MonkeyP
         return ExtractResult(
             path=req.input_path,
             success=True,
-            output_path=req.output_dir / f"{req.input_path.stem}.provenance.json" if req.output_dir else None,
+            output_path=req.output_path,
             elapsed_seconds=0.1,
         )
 
@@ -49,6 +49,7 @@ def test_batch_extract_delegates_per_file_to_extract(monkeypatch: pytest.MonkeyP
 
     assert len(calls) == len(input_paths)
     assert [call.input_path for call in calls] == sorted(input_paths, key=lambda path: str(path))
+    assert all(call.output_path is not None for call in calls)
     assert result.success
 
 
@@ -131,6 +132,128 @@ def test_batch_extract_summary_counts_are_stable(monkeypatch: pytest.MonkeyPatch
     assert result.summary_counts["by_exit_code"]["OTHER_FAILURE"] == 1
 
 
+def test_batch_extract_preserves_relative_directory_structure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    input_root = tmp_path / "inputs"
+    nested_a = input_root / "a"
+    nested_b = input_root / "b"
+    nested_a.mkdir(parents=True)
+    nested_b.mkdir(parents=True)
+    first = nested_a / "image.cr2"
+    second = nested_b / "image.cr2"
+    first.touch()
+    second.touch()
+
+    output_dir = tmp_path / "out"
+    service = MetadataExtractionService(clock_fn=_clock)
+    output_paths: list[Path] = []
+
+    def spy_extract(req: ExtractRequest) -> ExtractResult:
+        assert req.output_path is not None
+        output_paths.append(req.output_path)
+        return ExtractResult(
+            path=req.input_path,
+            success=True,
+            output_path=req.output_path,
+            elapsed_seconds=0.1,
+        )
+
+    monkeypatch.setattr(service, "extract", spy_extract)
+
+    result = service.batch_extract(
+        BatchExtractRequest(
+            input_paths=[first, second],
+            output_dir=output_dir,
+            input_root=input_root,
+            preserve_structure=True,
+        )
+    )
+
+    assert result.success
+    assert output_paths == [output_dir / "a" / "image.provenance.json", output_dir / "b" / "image.provenance.json"]
+
+
+def test_batch_extract_infers_input_root_for_structure_preservation(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    input_root = tmp_path / "inputs"
+    nested_a = input_root / "a"
+    nested_b = input_root / "b"
+    nested_a.mkdir(parents=True)
+    nested_b.mkdir(parents=True)
+    first = nested_a / "image.cr2"
+    second = nested_b / "image.cr2"
+    first.touch()
+    second.touch()
+
+    output_dir = tmp_path / "out"
+    service = MetadataExtractionService(clock_fn=_clock)
+    output_paths: list[Path] = []
+
+    def spy_extract(req: ExtractRequest) -> ExtractResult:
+        assert req.output_path is not None
+        output_paths.append(req.output_path)
+        return ExtractResult(
+            path=req.input_path,
+            success=True,
+            output_path=req.output_path,
+            elapsed_seconds=0.1,
+        )
+
+    monkeypatch.setattr(service, "extract", spy_extract)
+
+    result = service.batch_extract(
+        BatchExtractRequest(
+            input_paths=[first, second],
+            output_dir=output_dir,
+            preserve_structure=True,
+        )
+    )
+
+    assert result.success
+    assert output_paths == [output_dir / "a" / "image.provenance.json", output_dir / "b" / "image.provenance.json"]
+
+
+def test_batch_extract_fail_fast_stops_after_first_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    input_paths = [tmp_path / "one.cr2", tmp_path / "two.cr2", tmp_path / "three.cr2"]
+    for path in input_paths:
+        path.touch()
+
+    service = MetadataExtractionService(clock_fn=_clock)
+    calls: list[Path] = []
+
+    def spy_extract(req: ExtractRequest) -> ExtractResult:
+        calls.append(req.input_path)
+        if req.input_path.name == "two.cr2":
+            return ExtractResult(
+                path=req.input_path,
+                success=False,
+                output_path=req.output_path,
+                elapsed_seconds=0.1,
+                error=OtherIngestFailure("stop here"),
+            )
+        return ExtractResult(
+            path=req.input_path,
+            success=True,
+            output_path=req.output_path,
+            elapsed_seconds=0.1,
+        )
+
+    monkeypatch.setattr(service, "extract", spy_extract)
+
+    result = service.batch_extract(
+        BatchExtractRequest(
+            input_paths=input_paths,
+            output_dir=tmp_path,
+            deterministic_order=False,
+            fail_fast=True,
+        )
+    )
+
+    assert calls == [tmp_path / "one.cr2", tmp_path / "two.cr2"]
+    assert result.summary_counts["total"] == 2
+    assert result.summary_counts["success"] == 1
+    assert result.summary_counts["failure"] == 1
+    assert not result.success
+
+
 def test_extract_wraps_unknown_exception_as_other_ingest_failure(tmp_path: Path) -> None:
     input_path = tmp_path / "input.cr2"
     input_path.touch()
@@ -163,7 +286,7 @@ def test_batch_extract_sorts_items_when_deterministic_order_enabled(monkeypatch:
         return ExtractResult(
             path=req.input_path,
             success=True,
-            output_path=req.output_dir / f"{req.input_path.stem}.provenance.json" if req.output_dir else None,
+            output_path=req.output_path,
             elapsed_seconds=0.0,
         )
 

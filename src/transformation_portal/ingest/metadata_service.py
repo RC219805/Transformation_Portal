@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import time
 from collections import Counter
 from dataclasses import dataclass
@@ -57,6 +58,9 @@ class BatchExtractRequest:
     config_dict: Optional[Dict[str, Any]] = None
     fsync: bool = False
     deterministic_order: bool = True
+    fail_fast: bool = False
+    preserve_structure: bool = True
+    input_root: Optional[Path] = None
 
 
 @dataclass(frozen=True)
@@ -177,11 +181,21 @@ class MetadataExtractionService:
         default_batch_config = {"mode": "batch_extraction", "phase": "3.7"}
         config_dict = req.config_dict if req.config_dict is not None else default_batch_config
 
+        effective_input_root = req.input_root
+        if req.preserve_structure and effective_input_root is None and paths:
+            effective_input_root = self._common_input_root(paths)
+
         for path in paths:
+            output_path = self._derive_batch_output_path(
+                input_path=path,
+                output_dir=req.output_dir,
+                preserve_structure=req.preserve_structure,
+                input_root=effective_input_root,
+            )
             result = self.extract(
                 ExtractRequest(
                     input_path=path,
-                    output_dir=req.output_dir,
+                    output_path=output_path,
                     preset=req.preset,
                     cli_args=req.cli_args,
                     config_dict=config_dict,
@@ -207,6 +221,8 @@ class MetadataExtractionService:
                 by_exit[item.error.exit_code] += 1
             else:
                 by_exit[IngestExitCode.OTHER_FAILURE] += 1
+            if req.fail_fast:
+                break
 
         dominant_error = aggregate_errors(errors)
         summary = {
@@ -225,6 +241,37 @@ class MetadataExtractionService:
             summary_counts=summary,
             dominant_error=dominant_error,
         )
+
+    def _common_input_root(self, paths: Sequence[Path]) -> Optional[Path]:
+        if not paths:
+            return None
+        try:
+            common = os.path.commonpath([str(path) for path in paths])
+            return Path(common)
+        except ValueError:
+            return None
+
+    def _derive_batch_output_path(
+        self,
+        *,
+        input_path: Path,
+        output_dir: Path,
+        preserve_structure: bool,
+        input_root: Optional[Path],
+    ) -> Path:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        stem_name = f"{input_path.stem}.provenance.json"
+        if not preserve_structure or input_root is None:
+            return output_dir / stem_name
+
+        try:
+            relative = input_path.relative_to(input_root)
+        except ValueError:
+            return output_dir / stem_name
+
+        target_dir = output_dir / relative.parent
+        target_dir.mkdir(parents=True, exist_ok=True)
+        return target_dir / stem_name
 
     def _derive_output_path(self, req: ExtractRequest) -> Path:
         if req.output_path is not None:
