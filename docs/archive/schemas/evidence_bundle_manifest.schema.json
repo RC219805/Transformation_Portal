@@ -84,13 +84,16 @@
       "minimum": 0
     },
     "phase3_version": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "phase3_1_version": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "phase3_2_version": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "bundle_tool_name": {
       "type": "string",

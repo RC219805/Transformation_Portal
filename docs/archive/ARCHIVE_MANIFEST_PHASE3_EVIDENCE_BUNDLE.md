@@ -78,8 +78,8 @@ evidence_bundle_manifest.json
 - `timestamp_sha256`: digest of exact `.tsr` bytes.
 - `merkle_leaf_count`: global leaf count from deterministic roots artifact
   (`merkle_roots.json.global.leaf_count`).
-- `phase3_version`, `phase3_1_version`, `phase3_2_version`: contract versions
-  used to produce and validate bundle members.
+- `phase3_version`, `phase3_1_version`, `phase3_2_version`: non-empty contract
+  version strings used to produce and validate bundle members.
 - `bundle_tool_name`: identifier of bundle-manifest emitting tool.
 - `bundle_tool_version`: version of bundle-manifest emitting tool.
 
