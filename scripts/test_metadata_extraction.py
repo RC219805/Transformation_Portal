@@ -42,19 +42,18 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import time
 import traceback
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from transformation_portal.ingest import (
-    EXIT_OTHER_FAILURE,
-    EXIT_SUCCESS,
-    aggregate_exit_codes,
-    classify_validation_errors,
-)
+from transformation_portal.ingest import EXIT_OTHER_FAILURE, EXIT_SUCCESS, BatchExtractRequest
+from transformation_portal.ingest import BatchExtractResult as ServiceBatchExtractResult
+from transformation_portal.ingest import ExtractRequest as ServiceExtractRequest
+from transformation_portal.ingest import IngestExitCode, MetadataExtractionService, OtherIngestFailure
+from transformation_portal.ingest import ValidateRequest as ServiceValidateRequest
+from transformation_portal.ingest import load_sidecar
 
 # =============================================================================
 # Supported Image Extensions
@@ -123,21 +122,6 @@ class ExtractResult:
     sidecar: Optional[Any] = None  # ProvenanceSidecar
     elapsed_seconds: float = 0.0
     error: Optional[str] = None
-
-
-@dataclass
-class BatchExtractResult:
-    """Result of batch extraction."""
-
-    input_dir: Path
-    output_dir: Path
-    total_images: int
-    processed: int
-    successful: int
-    failed: int
-    total_elapsed: float
-    results: Dict[str, Tuple[bool, str, float]] = field(default_factory=dict)
-    failure_types: Dict[int, int] = field(default_factory=dict)  # exit_code -> count
 
 
 @dataclass
@@ -275,50 +259,64 @@ def run_extract(
     fsync: bool = False,
     cli_args: Optional[List[str]] = None,
 ) -> ExtractResult:
-    """Execute single image extraction and return structured result."""
-    from transformation_portal.ingest import capture_provenance, write_sidecar
-
-    if not image_path.exists():
-        return ExtractResult(
-            success=False,
-            image_path=image_path,
-            error=f"Image not found: {image_path}",
-        )
-
-    try:
-        start_time = time.time()
-
-        # Capture provenance
-        sidecar = capture_provenance(
+    """Execute single image extraction via MetadataExtractionService."""
+    service = MetadataExtractionService()
+    requested_output = output_path
+    extracted = service.extract(
+        ServiceExtractRequest(
             input_path=image_path,
+            output_path=requested_output,
+            preset=preset,
+            fsync=fsync,
             cli_args=cli_args or [],
             config_dict={"mode": "test_extraction", "phase": "3.7"},
-            preset=preset,
         )
+    )
 
-        elapsed = time.time() - start_time
-
-        # Determine output path
-        if output_path is None:
-            output_path = image_path.with_name(f"{image_path.stem}_provenance.json")
-
-        # Write sidecar
-        write_sidecar(sidecar, output_path, fsync=fsync)
-
-        return ExtractResult(
-            success=True,
-            image_path=image_path,
-            output_path=output_path,
-            sidecar=sidecar,
-            elapsed_seconds=elapsed,
-        )
-
-    except Exception as e:
+    if not extracted.success:
         return ExtractResult(
             success=False,
             image_path=image_path,
-            error=str(e),
+            output_path=extracted.output_path,
+            elapsed_seconds=extracted.elapsed_seconds,
+            error=str(extracted.error) if extracted.error else "Unknown extraction error",
         )
+
+    sidecar = None
+    if extracted.output_path is not None:
+        try:
+            sidecar = load_sidecar(extracted.output_path, schema_type="provenance")
+        except Exception:
+            sidecar = None
+
+    return ExtractResult(
+        success=True,
+        image_path=image_path,
+        output_path=extracted.output_path,
+        sidecar=sidecar,
+        elapsed_seconds=extracted.elapsed_seconds,
+    )
+
+
+def _build_batch_summary(
+    *,
+    total: int,
+    success: int,
+    failure: int,
+    by_exit: Optional[Counter] = None,
+) -> Dict[str, Any]:
+    """Build deterministic batch summary payload keyed by ingest exit-code names."""
+    by_exit = by_exit or Counter()
+    return {
+        "total": total,
+        "success": success,
+        "failure": failure,
+        "by_exit_code": {
+            code.name: by_exit.get(code, 0)
+            for code in sorted(IngestExitCode, key=lambda code: code.value)
+            if code != IngestExitCode.SUCCESS
+        },
+    }
 
 
 def run_extract_batch(
@@ -328,166 +326,85 @@ def run_extract_batch(
     fsync: bool = False,
     fail_fast: bool = False,
     cli_args: Optional[List[str]] = None,
-) -> BatchExtractResult:
-    """Execute batch extraction and return structured result."""
-    from transformation_portal.ingest import capture_provenance, write_sidecar
-    from transformation_portal.ingest.provenance import ExiftoolNotFoundError
+) -> ServiceBatchExtractResult:
+    """Execute batch extraction via MetadataExtractionService."""
+    service = MetadataExtractionService()
+    resolved_output_dir = output_dir or input_dir / "provenance_sidecars"
 
     if not input_dir.exists():
-        return BatchExtractResult(
-            input_dir=input_dir,
-            output_dir=output_dir or input_dir / "provenance_sidecars",
-            total_images=0,
-            processed=0,
-            successful=0,
-            failed=1,
-            total_elapsed=0,
-            results={"<input_dir>": (False, f"Directory not found: {input_dir}", 0)},
+        error = OtherIngestFailure(f"Directory not found: {input_dir}")
+        return ServiceBatchExtractResult(
+            items=[],
+            total_elapsed=0.0,
+            summary_counts=_build_batch_summary(total=0, success=0, failure=0),
+            dominant_error=error,
         )
 
     if not input_dir.is_dir():
-        return BatchExtractResult(
-            input_dir=input_dir,
-            output_dir=output_dir or input_dir / "provenance_sidecars",
-            total_images=0,
-            processed=0,
-            successful=0,
-            failed=1,
-            total_elapsed=0,
-            results={"<input_dir>": (False, f"Not a directory: {input_dir}", 0)},
+        error = OtherIngestFailure(f"Not a directory: {input_dir}")
+        return ServiceBatchExtractResult(
+            items=[],
+            total_elapsed=0.0,
+            summary_counts=_build_batch_summary(total=0, success=0, failure=0),
+            dominant_error=error,
         )
 
-    # Determine output directory
-    if output_dir is None:
-        output_dir = input_dir / "provenance_sidecars"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    resolved_output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Find images
     images = find_images(input_dir, recursive=recursive)
-
-    result = BatchExtractResult(
-        input_dir=input_dir,
-        output_dir=output_dir,
-        total_images=len(images),
-        processed=0,
-        successful=0,
-        failed=0,
-        total_elapsed=0,
+    return service.batch_extract(
+        BatchExtractRequest(
+            input_paths=images,
+            output_dir=resolved_output_dir,
+            cli_args=cli_args or [],
+            config_dict={"mode": "batch_extraction", "phase": "3.7"},
+            fsync=fsync,
+            deterministic_order=True,
+            fail_fast=fail_fast,
+            preserve_structure=True,
+            input_root=input_dir,
+        ),
     )
-
-    if not images:
-        return result
-
-    # Process images
-    total_start = time.time()
-
-    for image_path in images:
-        relative_path = image_path.relative_to(input_dir)
-        relative_path_str = str(relative_path)
-
-        try:
-            start_time = time.time()
-
-            # Capture provenance
-            sidecar = capture_provenance(
-                input_path=image_path,
-                cli_args=cli_args or [],
-                config_dict={"mode": "batch_extraction", "phase": "3.7"},
-            )
-
-            # Create output path preserving directory structure
-            output_subdir = output_dir / relative_path.parent
-            output_subdir.mkdir(parents=True, exist_ok=True)
-            out_path = output_subdir / f"{image_path.stem}_provenance.json"
-
-            # Write sidecar
-            write_sidecar(sidecar, out_path, fsync=fsync)
-
-            elapsed = time.time() - start_time
-            result.results[relative_path_str] = (True, str(out_path), elapsed)
-            result.processed += 1
-            result.successful += 1
-
-        except ExiftoolNotFoundError as e:
-            result.results[relative_path_str] = (False, str(e), 0)
-            result.processed += 1
-            result.failed += 1
-            result.failure_types[EXIT_OTHER_FAILURE] = result.failure_types.get(EXIT_OTHER_FAILURE, 0) + 1
-            if fail_fast:
-                break
-
-        except Exception as e:
-            result.results[relative_path_str] = (False, str(e), 0)
-            result.processed += 1
-            result.failed += 1
-            exit_code = EXIT_OTHER_FAILURE
-            error_list = getattr(e, "errors", None)
-            if isinstance(error_list, list):
-                exit_code = classify_validation_errors(error_list)
-            result.failure_types[exit_code] = result.failure_types.get(exit_code, 0) + 1
-            if fail_fast:
-                break
-
-    result.total_elapsed = time.time() - total_start
-    return result
 
 
 def run_validate(sidecar_path: Path, strict: bool = True) -> ValidateResult:
-    """Execute sidecar validation and return structured result."""
-    from transformation_portal.ingest import validate_schema
-    from transformation_portal.ingest.validator import SchemaValidationError
-
-    if not sidecar_path.exists():
-        return ValidateResult(
-            success=False,
+    """Execute sidecar validation via MetadataExtractionService."""
+    service = MetadataExtractionService()
+    validated = service.validate(
+        ServiceValidateRequest(
             sidecar_path=sidecar_path,
-            errors=[f"Sidecar not found: {sidecar_path}"],
-            exit_code=EXIT_OTHER_FAILURE,
-        )
-
-    try:
-        errors = validate_schema(
-            sidecar_path,
             schema_type="provenance",
-            strict_mode=strict,
+            strict=strict,
         )
+    )
 
-        if errors:
-            exit_code = classify_validation_errors(errors)
-            return ValidateResult(
-                success=False,
-                sidecar_path=sidecar_path,
-                errors=errors,
-                exit_code=exit_code,
-            )
-
-        # Load sidecar data for summary
-        with open(sidecar_path) as f:
-            data = json.load(f)
-
-        return ValidateResult(
-            success=True,
-            sidecar_path=sidecar_path,
-            exit_code=EXIT_SUCCESS,
-            sidecar_data=data,
-        )
-
-    except SchemaValidationError as e:
-        exit_code = classify_validation_errors(e.errors)
+    if not validated.success:
+        dominant_error = validated.dominant_error
+        exit_code = int(dominant_error.exit_code) if dominant_error is not None else EXIT_OTHER_FAILURE
         return ValidateResult(
             success=False,
             sidecar_path=sidecar_path,
-            errors=e.errors,
+            errors=[error.message for error in validated.errors],
             exit_code=exit_code,
         )
 
-    except Exception as e:
+    try:
+        with open(sidecar_path) as handle:
+            data = json.load(handle)
+    except Exception as exc:
         return ValidateResult(
             success=False,
             sidecar_path=sidecar_path,
-            errors=[str(e)],
+            errors=[str(exc)],
             exit_code=EXIT_OTHER_FAILURE,
         )
+
+    return ValidateResult(
+        success=True,
+        sidecar_path=sidecar_path,
+        exit_code=EXIT_SUCCESS,
+        sidecar_data=data,
+    )
 
 
 def run_summarize(sidecar_dir: Path) -> SummarizeResult:
@@ -499,8 +416,10 @@ def run_summarize(sidecar_dir: Path) -> SummarizeResult:
             errors=[f"Directory not found: {sidecar_dir}"],
         )
 
-    # Find sidecar files
+    # Find sidecar files produced by both legacy and service-backed naming.
     sidecars = list(sidecar_dir.rglob("*_provenance.json"))
+    sidecars.extend(sidecar_dir.rglob("*.provenance.json"))
+    sidecars = sorted(set(sidecars))
 
     result = SummarizeResult(
         sidecar_dir=sidecar_dir,
@@ -618,6 +537,12 @@ def render_extract(result: ExtractResult) -> None:
     sidecar = result.sidecar
 
     print("✅ Metadata extraction complete")
+    if sidecar is None:
+        print()
+        print(f"⏱️  Extraction time:   {result.elapsed_seconds:.2f}s")
+        print(f"📄 Sidecar written:   {result.output_path}")
+        return
+
     print()
     print("📊 Extraction Summary:")
     print(f"   Schema version:    {sidecar.schema_version}")
@@ -665,24 +590,41 @@ def render_extract(result: ExtractResult) -> None:
     print(f"📄 Sidecar written:   {result.output_path}")
 
 
-def render_extract_batch(result: BatchExtractResult, verbose: bool = False) -> None:
+def render_extract_batch(
+    result: ServiceBatchExtractResult,
+    *,
+    input_dir: Path,
+    output_dir: Path,
+    verbose: bool = False,
+) -> None:
     """Render batch extraction result to stdout."""
+
+    def display_path(path: Path) -> str:
+        if path == input_dir:
+            return "<input_dir>"
+        try:
+            return str(path.relative_to(input_dir))
+        except ValueError:
+            return str(path)
+
     print("=" * 70)
     print("Phase 3.7 Metadata Extraction - Batch Mode")
     print("=" * 70)
     print()
-    print(f"📁 Input directory:  {result.input_dir}")
-    print(f"📄 Output directory: {result.output_dir}")
-    print(f"🖼️  Images found:     {result.total_images}")
+    summary = result.summary_counts
+    print(f"📁 Input directory:  {input_dir}")
+    print(f"📄 Output directory: {output_dir}")
+    print(f"🖼️  Images found:     {summary['total']}")
     print()
 
     if verbose:
-        for path, (success, msg, elapsed) in result.results.items():
-            status = "✅" if success else "❌"
-            if success:
-                print(f"  {status} {path} ({elapsed:.2f}s)")
+        for item in result.items:
+            item_path = display_path(item.path)
+            status = "✅" if item.success else "❌"
+            if item.success:
+                print(f"  {status} {item_path} ({item.elapsed_seconds:.2f}s)")
             else:
-                print(f"  {status} {path}: {msg}")
+                print(f"  {status} {item_path}: {item.error or 'Unknown error'}")
         print()
 
     # Summary
@@ -690,25 +632,29 @@ def render_extract_batch(result: BatchExtractResult, verbose: bool = False) -> N
     print("Batch Extraction Summary")
     print("=" * 70)
 
-    print(f"Total images:     {result.total_images}")
-    print(f"Processed:        {result.processed}")
-    print(f"Successful:       {result.successful}")
-    print(f"Failed:           {result.failed}")
+    print(f"Total images:     {summary['total']}")
+    print(f"Processed:        {len(result.items)}")
+    print(f"Successful:       {summary['success']}")
+    print(f"Failed:           {summary['failure']}")
     print(f"Total time:       {result.total_elapsed:.2f}s")
 
-    successful_timings = [t for success, _, t in result.results.values() if success and t > 0]
+    successful_timings = [item.elapsed_seconds for item in result.items if item.success and item.elapsed_seconds > 0]
     if successful_timings:
         avg_time = sum(successful_timings) / len(successful_timings)
         print(f"Average per image: {avg_time:.2f}s")
 
-    print(f"Output directory: {result.output_dir}")
+    print(f"Output directory: {output_dir}")
 
-    if result.failed > 0:
+    if summary["failure"] > 0:
         print()
         print("Failed images:")
-        for path, (success, error, _) in result.results.items():
-            if not success:
-                print(f"  ❌ {path}: {error}")
+        for item in result.items:
+            if item.success:
+                continue
+            print(f"  ❌ {display_path(item.path)}: {item.error or 'Unknown error'}")
+    elif result.dominant_error is not None:
+        print()
+        print(f"❌ Batch setup failed: {result.dominant_error}")
 
 
 def render_validate(result: ValidateResult, verbose: bool = False) -> None:
@@ -839,12 +785,19 @@ def cmd_extract_batch(args: argparse.Namespace) -> int:
             fail_fast=args.fail_fast,
             cli_args=sys.argv[1:],
         )
-        render_extract_batch(result, verbose=args.verbose)
+        resolved_output_dir = output_dir or input_dir / "provenance_sidecars"
+        render_extract_batch(
+            result,
+            input_dir=input_dir,
+            output_dir=resolved_output_dir,
+            verbose=args.verbose,
+        )
 
-        batch_exit_code = aggregate_exit_codes(result.failure_types.keys())
-        if result.failed > 0 and batch_exit_code == EXIT_SUCCESS:
-            return EXIT_OTHER_FAILURE
-        return batch_exit_code
+        if result.dominant_error is None:
+            if result.summary_counts.get("failure", 0) > 0:
+                return EXIT_OTHER_FAILURE
+            return EXIT_SUCCESS
+        return int(result.dominant_error.exit_code)
 
     except Exception as e:
         if args.debug:
@@ -924,7 +877,7 @@ def main() -> int:
     parser_extract.add_argument(
         "-o",
         "--output",
-        help="Output path for sidecar JSON (default: <image>_provenance.json)",
+        help="Output path for sidecar JSON (default: <image>.provenance.json)",
     )
     parser_extract.add_argument(
         "--preset",
