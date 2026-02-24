@@ -60,6 +60,14 @@ This release completes the transformation from engineering-grade integrity tooli
 
 ---
 
+## Determinism Statement
+
+All regulatory export artifacts produced in v3.5.0 remain byte-for-byte stable
+under identical inputs across supported Python versions (3.11 and 3.12).
+No nondeterministic timestamps or environment-derived fields are introduced.
+
+---
+
 ## Compliance Capabilities
 
 v3.5.0 enables:
@@ -87,3 +95,16 @@ v3.5.0 enables:
 This release establishes:
 
 > Cryptographically anchored, runtime-stable, schema-governed compliance infrastructure.
+
+Compliance Maturity Position:
+
+- Cryptographic binding of compliance artifacts
+- Obligation-to-control traceability
+- Export-layer reproducibility
+- Structured regulator-readable documentation
+
+This release does not constitute:
+
+- Legal certification
+- Third-party audit attestation
+- Notified body approval

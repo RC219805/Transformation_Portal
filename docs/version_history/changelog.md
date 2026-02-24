@@ -3,6 +3,9 @@
 ## 2026-02-24
 
 **Release: v3.5.0**
+**Type:** Documentation Milestone
+**Runtime Impact:** None
+**Integrity Contract Change:** None
 
 - Added deterministic Regulatory Export Mode as the compliance-layer capstone on top of frozen Phase 3.4.1 integrity contracts.
 - Added formal release notes: `docs/version_history/RELEASE_NOTES_v3.5.0.md`.

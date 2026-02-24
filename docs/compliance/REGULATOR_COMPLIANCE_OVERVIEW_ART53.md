@@ -66,6 +66,35 @@ The export artifact:
 
 ---
 
+## Control Taxonomy
+
+Integrity Controls:
+
+- SHA-256 artifact hashing
+- Merkle bundle root construction
+- Detached signature verification
+- RFC 3161 timestamp anchoring
+
+Traceability Controls:
+
+- Phase version embedding in bundle metadata
+- Contract version binding in manifests/specs
+- Hash manifest totals and digest cross-checking
+
+Transparency Controls:
+
+- Deterministic training-data summary exports
+- Structured source taxonomy disclosures
+- Risk and copyright metadata declarations
+
+Governance Controls:
+
+- ADR-035 invariant freeze for bundle-root projection
+- LOCKED export rendering contract in `SPEC-REGEXPORT-001`
+- Strict schema controls (`additionalProperties: false`)
+
+---
+
 ## Copyright & TDM Disclosure
 
 Export includes explicit declarations of:
