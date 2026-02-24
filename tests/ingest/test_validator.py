@@ -15,6 +15,17 @@ from pathlib import Path
 
 import pytest
 
+from transformation_portal.ingest.errors import (
+    BitDepthViolation,
+    GammaViolation,
+    IngestExitCode,
+    OtherIngestFailure,
+    SchemaDriftFailure,
+    SchemaValidationFailure,
+    aggregate_errors,
+    aggregate_exit_code,
+    exit_code_priority,
+)
 from transformation_portal.ingest.schemas import (
     ExifMetadata,
     FileIntegrity,
@@ -39,6 +50,7 @@ from transformation_portal.ingest.validator import (
     validate_linear_gamma,
     validate_no_8bit_conversion,
     validate_schema,
+    validate_schema_errors,
 )
 
 
@@ -72,6 +84,91 @@ class TestExitCodeAggregation:
     def test_aggregate_exit_codes_returns_success_for_empty_or_success_only(self):
         assert aggregate_exit_codes([]) == EXIT_SUCCESS
         assert aggregate_exit_codes([EXIT_SUCCESS, EXIT_SUCCESS]) == EXIT_SUCCESS
+
+    def test_aggregate_exit_codes_unknown_values_collapse_to_other_failure(self):
+        assert aggregate_exit_codes([999]) == EXIT_OTHER_FAILURE
+
+    def test_aggregate_exit_codes_non_int_values_collapse_to_other_failure(self):
+        assert aggregate_exit_codes(["not-an-int", object()]) == EXIT_OTHER_FAILURE
+
+    def test_aggregate_exit_codes_non_integral_numeric_values_collapse_to_other_failure(self):
+        assert aggregate_exit_codes([0.9, 1.9]) == EXIT_OTHER_FAILURE
+
+
+class TestTypedIngestErrors:
+    """Tests for typed ingest-domain error hierarchy and aggregation."""
+
+    def test_ingest_error_populates_exception_args(self):
+        error = SchemaValidationFailure("schema issue")
+        assert error.args == ("schema issue",)
+
+    def test_ingest_error_uses_identity_equality(self):
+        first_error = SchemaValidationFailure("schema issue")
+        second_error = SchemaValidationFailure("schema issue")
+        assert first_error != second_error
+
+    def test_ingest_error_repr_is_stable_and_compact(self):
+        error = SchemaDriftFailure("drift issue")
+        assert repr(error) == "SchemaDriftFailure(exit_code=4, priority=40, message='drift issue')"
+
+    def test_aggregate_errors_uses_priority_not_exit_code_magnitude(self):
+        errors = [
+            OtherIngestFailure("fallback failure"),  # exit code 5, lowest priority
+            SchemaValidationFailure("schema issue"),  # exit code 1, mid priority
+            SchemaDriftFailure("drift issue"),  # exit code 4, highest priority
+        ]
+        dominant_error = aggregate_errors(errors)
+        assert isinstance(dominant_error, SchemaDriftFailure)
+        assert dominant_error is not None
+        assert dominant_error.exit_code == IngestExitCode.SCHEMA_DRIFT
+
+    def test_aggregate_exit_code_empty_returns_success(self):
+        assert aggregate_errors([]) is None
+        assert aggregate_exit_code([]) == IngestExitCode.SUCCESS
+
+    def test_exit_code_priority_includes_success(self):
+        assert exit_code_priority(IngestExitCode.SUCCESS) < exit_code_priority(IngestExitCode.OTHER_FAILURE)
+
+    def test_validate_schema_errors_returns_typed_errors(self):
+        sidecar = ProvenanceSidecar(
+            file_integrity=FileIntegrity(
+                sha256="a" * 64,
+                size_bytes=1024,
+                path="/input/test.cr2",
+            ),
+            exif=ExifMetadata(all_tags={}),
+            toolchain=[],
+            host=HostEnvironment(
+                hostname="test",
+                os="Linux",
+                os_version="5.10.0",
+                python_version="3.11.0",
+                arch="x86_64",
+            ),
+            timestamps=IngestTimestamps(
+                ingest_start="2026-02-10T12:00:00+00:00",
+                ingest_end="2026-02-10T12:05:00+00:00",
+            ),
+            pipeline_config=PipelineConfig(config_sha256="b" * 64),
+            run_id="test-run",
+        )
+        payload = sidecar.model_dump()
+        payload["unknown_field"] = "drift"
+
+        typed_errors = validate_schema_errors(payload, schema_type="provenance")
+        assert typed_errors
+        assert all(hasattr(error, "exit_code") for error in typed_errors)
+        assert any(isinstance(error, SchemaDriftFailure) for error in typed_errors)
+
+    def test_compatibility_wrapper_matches_typed_aggregation(self):
+        typed_errors = [
+            GammaViolation("gamma"),
+            BitDepthViolation("8-bit"),
+            SchemaValidationFailure("schema"),
+        ]
+        typed_exit_code = int(aggregate_exit_code(typed_errors))
+        compat_exit_code = classify_validation_errors([error.message for error in typed_errors])
+        assert compat_exit_code == typed_exit_code
 
 
 class TestValidateSchema:
