@@ -10,13 +10,13 @@ Tighten Phase 4 into a deterministic, schema-governed, versioned rollout that pr
 - contract drift
 - backward-compatibility breakage
 
-`schemas/phase4/metadata.schema.json` (new path to be created in Phase 4A) is the source of truth for capture metadata shape. Everything else is engineered around it.
+`docs/schemas/phase4/metadata.schema.json` (new path to be created in Phase 4A) is the source of truth for capture metadata shape. Everything else is engineered around it.
 
 ## Terminology and Authority
 
 Contract authority and versioning rules for Phase 4:
 
-- **Schema**: `schemas/phase4/metadata.schema.json` is the authoritative shape contract (created in 4A.1).
+- **Schema**: `docs/schemas/phase4/metadata.schema.json` is the authoritative shape contract (created in 4A.1).
 - **Canonicalization Spec**: `docs/contracts/metadata_canonicalization.md` is **normative** for byte stability.
 - **Canonicalization Spec Version**: treated as part of the contract surface. If canonicalization rules change in any way that can affect emitted bytes or hashes, a **contract version bump is required** (e.g., `tp.meta.capture.v2`), unless an explicit, documented compatibility rule exists and is enforced by tests.
 
@@ -27,7 +27,7 @@ Rule of thumb:
 
 1. Deterministic bytes for all Phase 4 artifacts given identical inputs (file bytes + relative paths + pinned toolchain).
 2. No runtime timestamps (or any host-dependent fields) inside deterministic artifacts.
-3. Schema-governed output: every metadata object validates against `schemas/phase4/metadata.schema.json`.
+3. Schema-governed output: every metadata object validates against `docs/schemas/phase4/metadata.schema.json`.
 4. Toolchain determinism: extractor + runtime pinned (recommended: containerized).
 5. Explicit versioning when any contract surface changes (no silent extension of v1 artifacts).
 6. Stable ordering everywhere: discovery -> extraction -> serialization -> hashing -> merkle.
@@ -37,7 +37,7 @@ Rule of thumb:
 ### 4A.1 Land schema as authoritative contract
 
 Deliverable:
-- `schemas/phase4/metadata.schema.json` exactly as drafted (Draft 2020-12, strict required fields, `additionalProperties: false`).
+- `docs/schemas/phase4/metadata.schema.json` exactly as drafted (Draft 2020-12, strict required fields, `additionalProperties: false`).
 
 Acceptance criteria:
 - CI validates schema parse correctness and schema meta-validation.
@@ -45,7 +45,7 @@ Acceptance criteria:
 ### 4A.2 Add schema governance
 
 Deliverables:
-- `CODEOWNERS` entry for `schemas/phase4/metadata.schema.json`.
+- `CODEOWNERS` entry for `docs/schemas/phase4/metadata.schema.json`.
 - ADR for capture metadata contract immutability and versioning policy.
 
 ADR requirements:
@@ -172,7 +172,7 @@ Deliverable:
 
 Rules:
 - JSON array sorted by `relative_path`
-- every object validates against `schemas/phase4/metadata.schema.json`
+- every object validates against `docs/schemas/phase4/metadata.schema.json`
 - canonical serialization
 
 ### 4D.2 Deterministic metadata manifest (recommended)
@@ -220,11 +220,11 @@ Deliverable:
 ### 4E.2 Provenance entry hash
 
 Definition:
-- `provenance_entry_sha256 = SHA256(file_sha256_bytes || metadata_sha256_bytes || UTF8(metadata_contract_version))`
+- `provenance_entry_sha256 = SHA256(file_sha256 || metadata_sha256 || UTF8(metadata_contract_version))`, where concatenation and byte/text representation must match Phase 3 exactly.
 
 Byte semantics (MUST be explicit and consistent):
-- `file_sha256_bytes` and `metadata_sha256_bytes` MUST be the **raw 32-byte binary digest** values (not hex strings).
-- If Phase 3 uses a different convention (e.g., concatenating lowercase hex bytes), Phase 4 MUST mirror Phase 3 exactly and the convention MUST be locked in an ADR and validated by golden fixtures.
+- `file_sha256` and `metadata_sha256` MUST use the same representation and concatenation convention as Phase 3 (for example, raw 32-byte digests as binary or lowercase hex strings as text).
+- The chosen convention MUST be locked in an ADR, validated by golden fixtures, and treated as part of the contract surface.
 
 Note:
 - if Phase 3 uses a different concatenation convention, mirror Phase 3 exactly and lock it in ADR.
