@@ -3,7 +3,7 @@
 ## Pre-Merge Verification
 
 ### ✅ Code Changes
-- [x] No code changes required (workflows already compliant)
+- [x] Workflow YAMLs updated to align with AI advisory pattern (`ai-code-review.yml`, `summary.yml`, `smart-issue-management.yml`)
 - [x] All three workflows validated with `make validate-ci`
 - [x] Pattern compliance: 100% (24/24 checks passing)
 
@@ -19,13 +19,13 @@
 - [x] Python warning emission: `::warning::` in exception handlers
 - [x] Shell warning emission: `if: failure()` steps present
 - [x] Non-blocking behavior: `continue-on-error: true` + `exit 0`
-- [x] Retry logic: 6 attempts with exponential backoff
+- [x] Retry logic coverage validated (`ai-code-review.yml` + `smart-issue-management.yml` use 6-attempt backoff; `summary.yml` uses single-attempt fallback path)
 - [x] Concurrency control: `cancel-in-progress: true`
 - [x] Terminal steps: `if: always()` present
 
 ### ✅ Architect Approval
 - [x] Security posture reviewed (no credentials leaked)
-- [x] Dependency governance assessed (only OpenAI SDK)
+- [x] Dependency governance assessed (`openai` and `requests` usage reviewed)
 - [x] CI/CD policy compliance confirmed
 - [x] Failure modes analyzed
 - [x] Production readiness verified
@@ -76,7 +76,6 @@ PR opened → AI Code Review triggered
 ├─ All retries fail
 ├─ Python emits ::warning:: (visible in UI)
 ├─ Script exits 0 (non-blocking)
-├─ if: failure() step emits ::warning::
 ├─ if: always() step runs
 └─ Job succeeds with warnings ⚠️
 ```
@@ -120,12 +119,12 @@ If issues discovered post-merge:
 
 ## Architect Sign-Off
 
-**Status**: ✅ READY FOR MERGE  
-**Confidence**: HIGH  
-**Risk**: LOW  
+**Status**: ✅ READY FOR MERGE
+**Confidence**: HIGH
+**Risk**: LOW
 
 ---
 
-*Prepared by: Transformation Portal Architect*  
-*Date: 2024*  
+*Prepared by: Transformation Portal Architect*
+*Date: 2024*
 *PR: #1028*

@@ -1,8 +1,8 @@
 # AI Workflows Hardening Status - PR #1028
 
-**Status**: ✅ **PRODUCTION READY**  
-**Architect Assessment**: APPROVED  
-**Date**: 2024  
+**Status**: ✅ **PRODUCTION READY**
+**Architect Assessment**: APPROVED
+**Date**: 2024
 **Reviewer**: Transformation Portal Architect
 
 ---
@@ -57,16 +57,16 @@ All three AI advisory workflows have been hardened according to the technical re
 **Design Principles:**
 1. **Step-level timeout (4 min)** is the primary defense
    - Bounds AI API calls to prevent runaway execution
-   - Allows `if: failure()` and `if: always()` steps to run
-   - Provides buffer for exponential backoff retry logic
+   - Allows terminal `if: always()` steps to run in normal timeout paths
+   - Provides buffer for exponential backoff retry logic where implemented
 
 2. **Job-level timeout (10 min)** is the hard ceiling
    - Prevents pathological cases (API hangs, infinite loops)
    - Sufficient headroom for setup + AI + teardown
    - Rarely reached in practice
 
-3. **Non-blocking exit (exit 0 in Python)** preserves CI flow
-   - AI failures don't block PRs
+3. **Non-blocking exits for expected AI/service failures** preserve CI flow
+   - Expected AI-service failures don't block PRs
    - Warnings provide visibility without enforcement
 
 ### Warning Visibility Strategy
@@ -80,8 +80,8 @@ AI API Failure Path:
 │       └─ Exception caught in Python        │
 │          └─ print("::warning::...")        │  ← Visible in UI
 │          └─ exit(0)                        │  ← Non-blocking
-│             └─ if: failure() step          │  ← Also emits warning
-│                └─ if: always() step        │  ← Always runs
+│             └─ if: always() step           │  ← Always runs
+│             └─ if: failure() step          │  ← Runs only on real step failure
 └────────────────────────────────────────────┘
 ```
 
@@ -106,12 +106,13 @@ $ make validate-ci
 ```
 
 ### Consistency Check
-All three workflows implement identical patterns:
+All three workflows implement a shared hardening baseline:
 - ✅ Job-level: `timeout-minutes: 10`
 - ✅ Step-level: `timeout-minutes: 4`
 - ✅ Python: `print("::warning::...(non-blocking)...")`
 - ✅ Shell: `echo "::warning::...failed (non-blocking)..."`
 - ✅ Terminal: `if: always()` summary step
+- ℹ️ Retry/backoff is currently implemented in `ai-code-review.yml` and `smart-issue-management.yml` only
 
 ---
 
@@ -119,13 +120,13 @@ All three workflows implement identical patterns:
 
 | Criterion | Status | Evidence |
 |-----------|--------|----------|
-| Non-blocking behavior | ✅ | `continue-on-error: true` + Python `exit(0)` |
+| Non-blocking behavior | ✅ | `continue-on-error: true` + expected AI/service failures handled without blocking |
 | Timeout-bounded | ✅ | Job: 10 min, Step: 4 min |
 | Advisory-labeled | ✅ | Job names: "AI Advisory / ..." |
 | Failure visibility | ✅ | `::warning::` in Python + Shell |
 | Syntax validation | ✅ | `make validate-ci` passes |
-| Consistent implementation | ✅ | All three workflows identical pattern |
-| Retry logic present | ✅ | 6 attempts with exponential backoff |
+| Consistent implementation | ✅ | Shared advisory hardening baseline across all three workflows |
+| Retry logic coverage | ✅ | Backoff retries in code review + triage; summary uses single-attempt fallback path |
 | Error messages clear | ✅ | Indicate non-blocking nature |
 
 ---
@@ -137,9 +138,8 @@ All three workflows implement identical patterns:
 1. Retry logic attempts 6 times with backoff
 2. If all fail, Python emits `::warning::`
 3. Script exits 0 (non-blocking)
-4. `if: failure()` step runs (redundant warning)
-5. `if: always()` summary step runs
-6. Job succeeds with warnings visible in UI
+4. `if: always()` summary step runs
+5. Job succeeds with warnings visible in UI
 
 **Status:** ✅ HANDLED
 
@@ -157,9 +157,8 @@ All three workflows implement identical patterns:
 1. Exception caught in Python `except` block
 2. Python emits `::warning::`
 3. Script exits 0 (non-blocking)
-4. `if: failure()` step runs (redundant warning)
-5. `if: always()` summary step runs
-6. Job succeeds with warnings visible in UI
+4. `if: always()` summary step runs
+5. Job succeeds with warnings visible in UI
 
 **Status:** ✅ HANDLED
 
@@ -169,7 +168,7 @@ All three workflows implement identical patterns:
 2. `if: always()` steps are NOT run (GitHub limitation)
 3. Job fails (timeout), visible in UI
 
-**Likelihood:** VERY LOW (requires 4-min step timeout to fail + 6-min overhead)  
+**Likelihood:** VERY LOW (requires 4-min step timeout to fail + 6-min overhead)
 **Status:** ✅ ACCEPTABLE EDGE CASE
 
 ---
@@ -182,7 +181,7 @@ All three workflows implement identical patterns:
 - ✅ Minimal permissions (`issues: write`, `pull-requests: write`)
 
 ### Dependency Governance
-- ✅ Single external dependency: `openai` package (pinned in requirements)
+- ✅ External workflow dependencies reviewed: `openai` and `requests` installed at runtime in advisory jobs
 - ✅ No banned dependencies introduced
 - ✅ CI validation enforces workflow syntax
 
@@ -193,7 +192,7 @@ All three workflows implement identical patterns:
 - ✅ Failure visibility (warnings, not silent)
 
 ### Maintainability
-- ✅ Consistent pattern across all three workflows
+- ✅ Shared hardening baseline across all three workflows
 - ✅ Clear separation: setup → AI step → terminal steps
 - ✅ Self-documenting (`# comments`, descriptive names)
 - ✅ Easy to audit (inline Python, no external scripts)
@@ -213,8 +212,8 @@ All three workflows implement identical patterns:
 ### No Changes Required
 - Timeout values (10 min job, 4 min step) are well-calibrated
 - Warning messages are clear and actionable
-- Retry logic (6 attempts) is reasonable for rate limits
-- Exit code strategy (exit 0) is correct for advisory workflows
+- Retry logic coverage is intentional (code review + triage use backoff retries; summary stays single-attempt with fallback)
+- Exit behavior is aligned with advisory semantics for expected AI/service failures
 
 ---
 
@@ -225,19 +224,19 @@ All three workflows implement identical patterns:
 **Decision**: ✅ **APPROVED FOR MERGE**
 
 **Rationale**:
-1. All three workflows implement identical, validated patterns
+1. All three workflows implement a validated advisory hardening baseline
 2. Timeout strategy provides layered defense (step + job level)
 3. Warning emission ensures AI failures are visible, not silent
 4. Non-blocking behavior preserves CI flow
 5. `make validate-ci` confirms syntax validity
 6. Failure modes comprehensively analyzed and handled
 
-**Confidence**: HIGH  
-**Risk**: LOW  
+**Confidence**: HIGH
+**Risk**: LOW
 **Maintenance Burden**: LOW
 
 ---
 
-*Architectural Review by: Transformation Portal Architect*  
-*Governance Policy: docs/architecture/agent_governance.md*  
+*Architectural Review by: Transformation Portal Architect*
+*Governance Policy: docs/architecture/agent_governance.md*
 *Status: FINAL*

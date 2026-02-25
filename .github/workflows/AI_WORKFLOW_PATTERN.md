@@ -40,10 +40,12 @@ try:
     # AI API call with retries
     response = call_openai_with_retries(...)
 except Exception as e:
-    print(f"⚠️ AI processing failed: {str(e)}")
-    # ↓ REQUIRED: Emit warning for UI visibility
+    # Emit a fixed, non-sensitive warning annotation
     print("::warning::<Job Name> OpenAI request failed (non-blocking). See job logs for details.")
-    # ↓ REQUIRED: Exit 0 (non-blocking)
+    # Optional: log redacted diagnostics to stderr (avoid raw exception strings in shared output)
+    print("AI processing failed due to an internal advisory workflow error.", file=sys.stderr)
+    # ↓ REQUIRED: Emit warning for UI visibility
+    # ↓ REQUIRED: Preserve non-blocking behavior for expected AI/service failures
     sys.exit(0)
 ```
 
@@ -112,7 +114,7 @@ def call_openai_with_retries(client, messages, model="gpt-4o-mini", max_retries=
             status = getattr(e, "status_code", None) or getattr(e, "http_status", None)
             if status == 429 or "429" in str(e) or "Rate limit" in str(e):
                 status_is_429 = True
-            
+
             # Retry with exponential backoff
             if status_is_429 and attempt < max_retries:
                 base_wait = min(60, 2 ** attempt)
@@ -121,7 +123,7 @@ def call_openai_with_retries(client, messages, model="gpt-4o-mini", max_retries=
                 print(f"⚠️ Rate limited (attempt {attempt}/{max_retries}). Waiting {wait:.1f}s...")
                 time.sleep(wait)
                 continue
-            
+
             # Last attempt or non-retryable error
             raise
 ```
@@ -136,12 +138,20 @@ def call_openai_with_retries(client, messages, model="gpt-4o-mini", max_retries=
 ## Concurrency Control
 
 ```yaml
+# Pull-request code-review style workflows
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true       # ← REQUIRED: Cancel outdated runs
 ```
 
-**Rationale**: Reduces CI minutes and API costs by only processing latest code.
+```yaml
+# Issue/PR event workflows (issues, issue_comment, pull_request_target)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+```
+
+**Rationale**: Reduces CI minutes and API costs by only processing latest relevant state while avoiding unrelated event cancellation.
 
 ---
 
@@ -173,7 +183,7 @@ print("::warning::...")          # ← Warning visible in UI
 sys.exit(0)                      # ← Non-blocking (still success)
 ```
 
-**Critical**: Always exit 0 to preserve non-blocking behavior.
+**Critical**: Expected AI/service failures should not block advisory workflows; use warning + non-blocking exit behavior for those paths.
 
 ---
 
@@ -190,7 +200,7 @@ Before merging AI advisory workflows, verify:
 - [ ] `if: always()` terminal step present
 - [ ] Concurrency control configured
 - [ ] Minimal permissions
-- [ ] Retry logic with exponential backoff
+- [ ] Retry logic with exponential backoff (required when workflow includes retry semantics)
 - [ ] No secrets in output/warnings
 - [ ] `make validate-ci` passes
 
@@ -280,6 +290,6 @@ Changes to this pattern require Architect approval (see `docs/architecture/agent
 
 ---
 
-*Canonical Pattern Version: 1.0*  
-*Last Updated: PR #1028*  
+*Canonical Pattern Version: 1.0*
+*Last Updated: PR #1028*
 *Authority: Transformation Portal Architect*

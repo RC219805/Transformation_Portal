@@ -105,10 +105,10 @@ The repository includes three AI-powered advisory workflows that provide intelli
 
 **AI Workflows Architecture:**
 All three workflows implement a hardened pattern with:
-- **Non-blocking behavior**: `continue-on-error: true`, Python scripts exit 0 on failure
+- **Non-blocking behavior**: `continue-on-error: true`; expected AI/service failures emit warnings and typically exit 0, while hard infrastructure errors may still exit non-zero
 - **Timeout bounds**: 4-minute step timeout for AI calls, 10-minute job timeout
 - **Failure visibility**: `::warning::` emission in Python exception handlers and shell failure steps
-- **Retry logic**: 6 attempts with exponential backoff for rate-limit handling
+- **Retry logic (where implemented)**: up to 6 attempts with exponential backoff in `ai-code-review.yml` and `smart-issue-management.yml`; `summary.yml` currently uses a single-attempt call with graceful fallback
 - **Concurrency control**: Cancel outdated runs to reduce CI costs
 
 ---
