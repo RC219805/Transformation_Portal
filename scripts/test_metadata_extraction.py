@@ -41,7 +41,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import tempfile
 import traceback
 from collections import Counter
 from dataclasses import dataclass, field
@@ -51,9 +53,19 @@ from typing import Any, Dict, List, Optional, Tuple
 from transformation_portal.ingest import EXIT_OTHER_FAILURE, EXIT_SUCCESS, BatchExtractRequest
 from transformation_portal.ingest import BatchExtractResult as ServiceBatchExtractResult
 from transformation_portal.ingest import ExtractRequest as ServiceExtractRequest
-from transformation_portal.ingest import IngestExitCode, MetadataExtractionService, OtherIngestFailure
+from transformation_portal.ingest import ExtractResult as ServiceExtractResult
+from transformation_portal.ingest import IngestError, IngestExitCode, MetadataExtractionService, OtherIngestFailure
 from transformation_portal.ingest import ValidateRequest as ServiceValidateRequest
+from transformation_portal.ingest import ValidateResult as ServiceValidateResult
 from transformation_portal.ingest import load_sidecar
+from transformation_portal.ingest.machine_output import (
+    MACHINE_SCHEMA_VERSION,
+    batch_result_to_dict,
+    dump_json,
+    error_to_dict,
+    extract_result_to_dict,
+    validate_result_to_dict,
+)
 
 # =============================================================================
 # Supported Image Extensions
@@ -122,6 +134,7 @@ class ExtractResult:
     sidecar: Optional[Any] = None  # ProvenanceSidecar
     elapsed_seconds: float = 0.0
     error: Optional[str] = None
+    ingest_error: Optional[IngestError] = None
 
 
 @dataclass
@@ -133,6 +146,9 @@ class ValidateResult:
     errors: List[str] = field(default_factory=list)
     exit_code: int = EXIT_SUCCESS
     sidecar_data: Optional[Dict[str, Any]] = None
+    typed_errors: List[IngestError] = field(default_factory=list)
+    dominant_error: Optional[IngestError] = None
+    strict: bool = True
 
 
 @dataclass
@@ -280,6 +296,7 @@ def run_extract(
             output_path=extracted.output_path,
             elapsed_seconds=extracted.elapsed_seconds,
             error=str(extracted.error) if extracted.error else "Unknown extraction error",
+            ingest_error=extracted.error,
         )
 
     sidecar = None
@@ -386,17 +403,24 @@ def run_validate(sidecar_path: Path, strict: bool = True) -> ValidateResult:
             sidecar_path=sidecar_path,
             errors=[error.message for error in validated.errors],
             exit_code=exit_code,
+            typed_errors=validated.errors,
+            dominant_error=dominant_error,
+            strict=strict,
         )
 
     try:
         with open(sidecar_path) as handle:
             data = json.load(handle)
     except Exception as exc:
+        fallback_error = OtherIngestFailure(str(exc))
         return ValidateResult(
             success=False,
             sidecar_path=sidecar_path,
             errors=[str(exc)],
             exit_code=EXIT_OTHER_FAILURE,
+            typed_errors=[fallback_error],
+            dominant_error=fallback_error,
+            strict=strict,
         )
 
     return ValidateResult(
@@ -404,6 +428,7 @@ def run_validate(sidecar_path: Path, strict: bool = True) -> ValidateResult:
         sidecar_path=sidecar_path,
         exit_code=EXIT_SUCCESS,
         sidecar_data=data,
+        strict=strict,
     )
 
 
@@ -726,6 +751,107 @@ def render_summarize(result: SummarizeResult) -> None:
 
 
 # =============================================================================
+# Machine Output Helpers
+# =============================================================================
+
+
+def _build_machine_envelope(
+    *,
+    command: str,
+    exit_code: int,
+    data: Dict[str, Any],
+    error: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    # Intentionally omit timestamps to keep machine-mode payloads deterministic.
+    return {
+        "schema": MACHINE_SCHEMA_VERSION,
+        "command": command,
+        "success": exit_code == EXIT_SUCCESS,
+        "exit_code": exit_code,
+        "data": data,
+        "error": error,
+    }
+
+
+def _command_error_payload(exc: Exception) -> Dict[str, Any]:
+    if isinstance(exc, IngestError):
+        return error_to_dict(exc)
+    return {"type": exc.__class__.__name__, "message": str(exc)}
+
+
+def _summarize_result_to_machine_data(result: SummarizeResult) -> Dict[str, Any]:
+    parsed_errors: List[Dict[str, Optional[str]]] = []
+    for message in result.errors:
+        if message.startswith("Error reading ") and ": " in message:
+            prefix, detail = message.split(": ", 1)
+            parsed_errors.append(
+                {
+                    "path": prefix.removeprefix("Error reading "),
+                    "message": detail,
+                }
+            )
+            continue
+        parsed_errors.append({"path": None, "message": message})
+
+    invalid = len(parsed_errors)
+    valid = max(result.sidecar_count - invalid, 0)
+    return {
+        "sidecar_dir": str(result.sidecar_dir),
+        "total_sidecars": result.sidecar_count,
+        "valid": valid,
+        "invalid": invalid,
+        "errors": parsed_errors,
+    }
+
+
+def _check_system_result_to_machine_data(result: SystemCheckResult) -> Dict[str, Any]:
+    return {
+        "exiftool_available": result.exiftool_available,
+        "exiftool_version": result.exiftool_version,
+        "pydantic_available": result.pydantic_available,
+        "pydantic_version": result.pydantic_version,
+        "git_available": result.git_available,
+        "git_version": result.git_version,
+        "rawpy_available": result.rawpy_available,
+        "rawpy_version": result.rawpy_version,
+        "libraw_version": result.libraw_version,
+        "ingest_module_available": result.ingest_module_available,
+        "all_required_ok": result.all_required_ok,
+        "errors": list(result.errors),
+    }
+
+
+def _emit_machine(envelope: Dict[str, Any], args: argparse.Namespace) -> None:
+    payload = dump_json(envelope, pretty=args.json_pretty)
+    if args.json_output:
+        destination = Path(args.json_output)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path: Optional[Path] = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=destination.parent,
+                prefix=f".{destination.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+                tmp_path = Path(handle.name)
+            tmp_path.replace(destination)
+        finally:
+            if tmp_path is not None and tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except OSError:
+                    pass
+        return
+    print(payload)
+
+
+# =============================================================================
 # Command Functions (Thin Wrappers: Execute -> Render -> Exit)
 # =============================================================================
 
@@ -734,11 +860,34 @@ def cmd_check_system(args: argparse.Namespace) -> int:
     """Check system readiness for metadata extraction."""
     try:
         result = run_check_system()
+        exit_code = EXIT_SUCCESS if result.all_required_ok else EXIT_OTHER_FAILURE
+        if args.json:
+            _emit_machine(
+                _build_machine_envelope(
+                    command="check-system",
+                    exit_code=exit_code,
+                    data=_check_system_result_to_machine_data(result),
+                ),
+                args,
+            )
+            return exit_code
+
         render_check_system(result)
-        return EXIT_SUCCESS if result.all_required_ok else EXIT_OTHER_FAILURE
+        return exit_code
     except Exception as e:
         if args.debug:
             traceback.print_exc()
+        if args.json:
+            _emit_machine(
+                _build_machine_envelope(
+                    command="check-system",
+                    exit_code=EXIT_OTHER_FAILURE,
+                    data=_check_system_result_to_machine_data(SystemCheckResult()),
+                    error=_command_error_payload(e),
+                ),
+                args,
+            )
+            return EXIT_OTHER_FAILURE
         print(f"❌ System check failed: {e}")
         return EXIT_OTHER_FAILURE
 
@@ -748,11 +897,12 @@ def cmd_extract(args: argparse.Namespace) -> int:
     image_path = Path(args.image_path)
     output_path = Path(args.output) if args.output else None
 
-    print(f"📷 Extracting metadata from: {image_path.name}")
-    print(f"   Path: {image_path}")
-    if image_path.exists():
-        print(f"   Size: {format_size(image_path.stat().st_size)}")
-    print()
+    if not args.json:
+        print(f"📷 Extracting metadata from: {image_path.name}")
+        print(f"   Path: {image_path}")
+        if image_path.exists():
+            print(f"   Size: {format_size(image_path.stat().st_size)}")
+        print()
 
     try:
         result = run_extract(
@@ -762,11 +912,51 @@ def cmd_extract(args: argparse.Namespace) -> int:
             fsync=args.fsync,
             cli_args=sys.argv[1:],
         )
+        exit_code = EXIT_SUCCESS
+        if not result.success:
+            exit_code = int(result.ingest_error.exit_code) if result.ingest_error is not None else EXIT_OTHER_FAILURE
+
+        if args.json:
+            service_result = ServiceExtractResult(
+                path=result.image_path,
+                success=result.success,
+                output_path=result.output_path,
+                elapsed_seconds=result.elapsed_seconds,
+                error=result.ingest_error,
+            )
+            _emit_machine(
+                _build_machine_envelope(
+                    command="extract",
+                    exit_code=exit_code,
+                    data=extract_result_to_dict(service_result, preset=args.preset),
+                ),
+                args,
+            )
+            return exit_code
+
         render_extract(result)
-        return EXIT_SUCCESS if result.success else EXIT_OTHER_FAILURE
+        return exit_code
     except Exception as e:
         if args.debug:
             traceback.print_exc()
+        if args.json:
+            service_result = ServiceExtractResult(
+                path=image_path,
+                success=False,
+                output_path=output_path,
+                elapsed_seconds=0.0,
+                error=None,
+            )
+            _emit_machine(
+                _build_machine_envelope(
+                    command="extract",
+                    exit_code=EXIT_OTHER_FAILURE,
+                    data=extract_result_to_dict(service_result, preset=args.preset),
+                    error=_command_error_payload(e),
+                ),
+                args,
+            )
+            return EXIT_OTHER_FAILURE
         print(f"❌ Extraction failed: {e}")
         return EXIT_OTHER_FAILURE
 
@@ -786,22 +976,66 @@ def cmd_extract_batch(args: argparse.Namespace) -> int:
             cli_args=sys.argv[1:],
         )
         resolved_output_dir = output_dir or input_dir / "provenance_sidecars"
+        exit_code = EXIT_SUCCESS
+        if result.dominant_error is None:
+            if result.summary_counts.get("failure", 0) > 0:
+                exit_code = EXIT_OTHER_FAILURE
+        else:
+            exit_code = int(result.dominant_error.exit_code)
+
+        if args.json:
+            _emit_machine(
+                _build_machine_envelope(
+                    command="extract-batch",
+                    exit_code=exit_code,
+                    data=batch_result_to_dict(
+                        result,
+                        input_root=input_dir,
+                        output_dir=resolved_output_dir,
+                        fail_fast=args.fail_fast,
+                        preserve_structure=True,
+                    ),
+                ),
+                args,
+            )
+            return exit_code
+
         render_extract_batch(
             result,
             input_dir=input_dir,
             output_dir=resolved_output_dir,
             verbose=args.verbose,
         )
-
-        if result.dominant_error is None:
-            if result.summary_counts.get("failure", 0) > 0:
-                return EXIT_OTHER_FAILURE
-            return EXIT_SUCCESS
-        return int(result.dominant_error.exit_code)
+        return exit_code
 
     except Exception as e:
         if args.debug:
             traceback.print_exc()
+        if args.json:
+            empty_batch_result = ServiceBatchExtractResult(
+                items=[],
+                total_elapsed=0.0,
+                summary_counts=_build_batch_summary(total=0, success=0, failure=0),
+                dominant_error=None,
+            )
+            data = batch_result_to_dict(
+                empty_batch_result,
+                input_root=input_dir,
+                output_dir=output_dir or input_dir / "provenance_sidecars",
+                fail_fast=args.fail_fast,
+                preserve_structure=True,
+            )
+            data["success"] = False
+            _emit_machine(
+                _build_machine_envelope(
+                    command="extract-batch",
+                    exit_code=EXIT_OTHER_FAILURE,
+                    data=data,
+                    error=_command_error_payload(e),
+                ),
+                args,
+            )
+            return EXIT_OTHER_FAILURE
         print(f"❌ Batch extraction failed: {e}")
         return EXIT_OTHER_FAILURE
 
@@ -812,11 +1046,47 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
     try:
         result = run_validate(sidecar_path, strict=args.strict)
+        if args.json:
+            service_result = ServiceValidateResult(
+                success=result.success,
+                errors=result.typed_errors,
+                dominant_error=result.dominant_error,
+            )
+            _emit_machine(
+                _build_machine_envelope(
+                    command="validate",
+                    exit_code=result.exit_code,
+                    data=validate_result_to_dict(
+                        service_result,
+                        sidecar_path=result.sidecar_path,
+                        strict=result.strict,
+                    ),
+                ),
+                args,
+            )
+            return result.exit_code
+
         render_validate(result, verbose=args.verbose)
         return result.exit_code
     except Exception as e:
         if args.debug:
             traceback.print_exc()
+        if args.json:
+            service_result = ServiceValidateResult(
+                success=False,
+                errors=[],
+                dominant_error=None,
+            )
+            _emit_machine(
+                _build_machine_envelope(
+                    command="validate",
+                    exit_code=EXIT_OTHER_FAILURE,
+                    data=validate_result_to_dict(service_result, sidecar_path=sidecar_path, strict=args.strict),
+                    error=_command_error_payload(e),
+                ),
+                args,
+            )
+            return EXIT_OTHER_FAILURE
         print(f"❌ Validation error: {e}")
         return EXIT_OTHER_FAILURE
 
@@ -827,11 +1097,40 @@ def cmd_summarize(args: argparse.Namespace) -> int:
 
     try:
         result = run_summarize(sidecar_dir)
+        exit_code = EXIT_SUCCESS if result.sidecar_count > 0 or not result.errors else EXIT_OTHER_FAILURE
+        if args.json:
+            _emit_machine(
+                _build_machine_envelope(
+                    command="summarize",
+                    exit_code=exit_code,
+                    data=_summarize_result_to_machine_data(result),
+                ),
+                args,
+            )
+            return exit_code
+
         render_summarize(result)
-        return EXIT_SUCCESS if result.sidecar_count > 0 or not result.errors else EXIT_OTHER_FAILURE
+        return exit_code
     except Exception as e:
         if args.debug:
             traceback.print_exc()
+        if args.json:
+            _emit_machine(
+                _build_machine_envelope(
+                    command="summarize",
+                    exit_code=EXIT_OTHER_FAILURE,
+                    data={
+                        "sidecar_dir": str(sidecar_dir),
+                        "total_sidecars": 0,
+                        "valid": 0,
+                        "invalid": 0,
+                        "errors": [],
+                    },
+                    error=_command_error_payload(e),
+                ),
+                args,
+            )
+            return EXIT_OTHER_FAILURE
         print(f"❌ Summarization failed: {e}")
         return EXIT_OTHER_FAILURE
 
@@ -854,6 +1153,20 @@ def main() -> int:
         "--debug",
         action="store_true",
         help="Enable debug mode (show full tracebacks on errors)",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-readable JSON output",
+    )
+    parser.add_argument(
+        "--json-pretty",
+        action="store_true",
+        help="Pretty-print machine JSON output (requires --json)",
+    )
+    parser.add_argument(
+        "--json-output",
+        help="Write machine JSON to a file path (requires --json)",
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -977,6 +1290,9 @@ def main() -> int:
     parser_summary.set_defaults(func=cmd_summarize)
 
     args = parser.parse_args()
+
+    if (args.json_pretty or args.json_output) and not args.json:
+        parser.error("--json-pretty and --json-output require --json")
 
     if not args.command:
         parser.print_help()

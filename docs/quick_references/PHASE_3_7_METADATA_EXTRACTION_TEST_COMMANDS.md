@@ -20,10 +20,65 @@ python scripts/test_metadata_extraction.py check-system
 
 ## Test Commands for `<project_root>/input_images`
 
+### Global machine-mode flags
+
+Use these flags before the subcommand when you need deterministic machine output:
+
+```bash
+# Emit machine JSON to stdout
+python scripts/test_metadata_extraction.py --json <command> ...
+
+# Pretty-print machine JSON
+python scripts/test_metadata_extraction.py --json --json-pretty <command> ...
+
+# Write machine JSON to file (stdout remains clean)
+python scripts/test_metadata_extraction.py --json --json-output /tmp/metadata_result.json <command> ...
+```
+
+### Machine JSON Envelope Structure
+
+All machine-mode commands emit a stable JSON envelope with the following contract (`tp.meta.machine.v1`):
+
+```json
+{
+  "schema": "tp.meta.machine.v1",
+  "command": "<command-name>",
+  "success": true,
+  "exit_code": 0,
+  "data": {
+    ...command-specific payload...
+  },
+  "error": null
+}
+```
+
+**Envelope fields (always present):**
+
+- `schema` (string): Versioned contract identifier. Current: `"tp.meta.machine.v1"`
+- `command` (string): The CLI command that was executed (`"check-system"`, `"extract"`, `"extract-batch"`, `"validate"`, `"summarize"`)
+- `success` (boolean): Overall command success status (`exit_code == 0`)
+- `exit_code` (integer): Numeric exit code from `IngestExitCode` enum
+- `data` (object): Command-specific result payload (shape varies by command)
+- `error` (object|null): Command-level exception details, if raised during execution (typically `null` for typed domain errors)
+
+**Determinism guarantees:**
+
+- JSON keys are sorted alphabetically (`sort_keys=True`)
+- Compact separators for machine mode (`","`, `":"`)
+- No timestamps or nondeterministic fields
+- Identical inputs produce byte-identical outputs
+
+**Contract stability:**
+
+This envelope structure is versioned and stable. Any breaking change to the envelope or `data` payload schema requires bumping the schema version identifier. Tests enforce byte-level contract stability to prevent unintentional drift.
+
 ### 1. Check System Readiness
 
 ```bash
 python scripts/test_metadata_extraction.py check-system
+
+# Machine JSON output
+python scripts/test_metadata_extraction.py --json check-system
 ```
 
 Expected output includes:
@@ -36,7 +91,7 @@ Expected output includes:
 Extract metadata from a single image:
 
 ```bash
-# Basic extraction (output to <image>_provenance.json)
+# Basic extraction (output to <image>.provenance.json)
 python scripts/test_metadata_extraction.py extract /path/to/input_images/your_image.tif
 
 # Custom output path
@@ -47,6 +102,9 @@ python scripts/test_metadata_extraction.py extract /path/to/input_images/your_im
 
 # Debug mode (full tracebacks on errors)
 python scripts/test_metadata_extraction.py --debug extract /path/to/input_images/your_image.tif
+
+# Machine JSON output
+python scripts/test_metadata_extraction.py --json extract /path/to/input_images/your_image.tif
 ```
 
 ### 3. Batch Extraction (Entire Directory)
@@ -68,6 +126,9 @@ python scripts/test_metadata_extraction.py extract-batch /path/to/input_images/ 
 
 # Verbose output (show per-file status)
 python scripts/test_metadata_extraction.py extract-batch /path/to/input_images/ -v
+
+# Machine JSON output
+python scripts/test_metadata_extraction.py --json extract-batch /path/to/input_images/
 ```
 
 ### 4. Validate Sidecar Files
@@ -83,6 +144,9 @@ python scripts/test_metadata_extraction.py validate /path/to/input_images/proven
 
 # Non-strict mode (legacy compatibility)
 python scripts/test_metadata_extraction.py validate /path/to/input_images/provenance_sidecars/your_image_provenance.json --no-strict
+
+# Machine JSON output
+python scripts/test_metadata_extraction.py --json validate /path/to/input_images/provenance_sidecars/your_image_provenance.json
 ```
 
 ### 5. Summarize Extraction Results
@@ -91,6 +155,9 @@ Get aggregate statistics from extracted sidecars:
 
 ```bash
 python scripts/test_metadata_extraction.py summarize /path/to/input_images/provenance_sidecars/
+
+# Machine JSON output
+python scripts/test_metadata_extraction.py --json summarize /path/to/input_images/provenance_sidecars/
 ```
 
 Output includes:
