@@ -55,11 +55,20 @@ jobs:
           from openai import OpenAI
 
           # Initialize
-          client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
-          github_token = os.environ['GITHUB_TOKEN']
-          issue_number = os.environ['ISSUE_NUMBER']
-          is_pr = os.environ['IS_PR'] == 'true'
-          repo = os.environ['REPO_FULL_NAME']
+          openai_api_key = os.getenv('OPENAI_API_KEY', '').strip()
+          github_token = os.getenv('GITHUB_TOKEN', '').strip()
+          issue_number = os.getenv('ISSUE_NUMBER', '').strip()
+          is_pr = os.getenv('IS_PR', 'false').lower() == 'true'
+          repo = os.getenv('REPO_FULL_NAME', '').strip()
+
+          if not openai_api_key or not github_token:
+              print("::warning::Smart Issue Triage skipped: missing OPENAI_API_KEY or GITHUB_TOKEN (non-blocking).")
+              sys.exit(0)
+          if not issue_number or not repo:
+              print("::warning::Smart Issue Triage skipped: missing ISSUE_NUMBER or REPO_FULL_NAME (non-blocking).")
+              sys.exit(0)
+
+          client = OpenAI(api_key=openai_api_key)
 
           headers = {
               'Authorization': f'token {github_token}',
@@ -254,10 +263,30 @@ jobs:
                       print(f"⚠️ Duplicate search failed: {str(search_err)}")
 
           except Exception as e:
-              print("::warning::Smart Issue Triage OpenAI request failed (non-blocking). See job logs for details.")
+              print("::warning::Smart Issue Triage OpenAI request failed (non-blocking). See job logs for diagnostic details.")
               print("⚠️ Smart triage encountered a non-blocking error. See diagnostics in job logs.")
-              print("Detailed error classification (exception type only):", file=sys.stderr)
+              print("Detailed error classification (exception type and basic status/code):", file=sys.stderr)
               print(f"Exception type: {type(e).__name__}", file=sys.stderr)
+              status = None
+              error_code = None
+              try:
+                  status = getattr(e, "status_code", None) or getattr(e, "status", None)
+                  if status is None:
+                      response = getattr(e, "response", None)
+                      status = getattr(response, "status_code", None) if response is not None else None
+              except Exception:
+                  status = None
+              try:
+                  error_code = getattr(e, "code", None)
+                  error_payload = getattr(e, "error", None)
+                  if error_code is None and isinstance(error_payload, dict):
+                      error_code = error_payload.get("code")
+              except Exception:
+                  error_code = None
+              if status is not None:
+                  print(f"HTTP status: {status}", file=sys.stderr)
+              if error_code is not None:
+                  print(f"Error code: {error_code}", file=sys.stderr)
               # Post error comment (non-blocking)
               error_comment = f"""## ⚠️ AI Triage Error
 

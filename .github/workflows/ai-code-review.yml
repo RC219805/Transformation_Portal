@@ -194,11 +194,28 @@ jobs:
                   print("⚠️ OpenAI returned an unexpected response structure.")
           except Exception as e:
               # If retries exhausted or a non-retryable error occurred, provide a clear fallback review_text
-              print("::warning::AI Code Review OpenAI request failed (non-blocking). See job logs for details.")
-              print("Detailed error classification (exception type only):", file=sys.stderr)
+              print("::warning::AI Code Review OpenAI request failed (non-blocking). See job logs for diagnostic details.")
+              print("Detailed error classification (exception type and basic status/code):", file=sys.stderr)
               print(f"Exception type: {type(e).__name__}", file=sys.stderr)
+              status = None
+              error_code = None
+              try:
+                  status = getattr(e, "status_code", None) or getattr(e, "status", None)
+              except Exception:
+                  status = None
+              try:
+                  error_code = getattr(e, "code", None)
+                  error_payload = getattr(e, "error", None)
+                  if error_code is None and isinstance(error_payload, dict):
+                      error_code = error_payload.get("code")
+              except Exception:
+                  error_code = None
+              if status is not None:
+                  print(f"HTTP status: {status}", file=sys.stderr)
+              if error_code is not None:
+                  print(f"Error code: {error_code}", file=sys.stderr)
               review_text = ("⚠️ AI review unavailable: the AI service returned errors (rate limits or other). "
-                             "Please retry or review manually. See CI logs for details.")
+                             "Please retry or review manually. See CI logs for diagnostic details (error type/status/code).")
 
           # Post comment on PR (attempt even if fallback review_text used)
           if review_text:

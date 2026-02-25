@@ -36,6 +36,8 @@ jobs:
 
 ### Python Exception Handler
 ```python
+import sys
+
 try:
     # AI API call with retries
     response = call_openai_with_retries(...)

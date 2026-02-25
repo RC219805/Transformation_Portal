@@ -16,24 +16,24 @@ All three AI advisory workflows have been hardened according to the technical re
 ## Implementation Status
 
 ### ✅ 1. `.github/workflows/ai-code-review.yml`
-- **Job timeout**: 10 minutes (line 26)
-- **Step timeout**: 4 minutes (line 68)
-- **Python warning**: Line 198 in exception handler
-- **Shell warning**: Line 241 in failure step
+- **Job timeout**: 10 minutes (configured at job level)
+- **Step timeout**: 4 minutes (configured on AI advisory step)
+- **Python warning**: Present in exception handler step
+- **Shell warning**: Present in failure notification step
 - **Status**: COMPLIANT
 
 ### ✅ 2. `.github/workflows/summary.yml`
-- **Job timeout**: 10 minutes (line 23)
-- **Step timeout**: 4 minutes (line 54)
-- **Python warning**: Line 132 in exception handler
-- **Shell warning**: Line 185 in failure step
+- **Job timeout**: 10 minutes (configured at job level)
+- **Step timeout**: 4 minutes (configured on AI advisory step)
+- **Python warning**: Present in exception handler step
+- **Shell warning**: Present in failure notification step
 - **Status**: COMPLIANT
 
 ### ✅ 3. `.github/workflows/smart-issue-management.yml`
-- **Job timeout**: 10 minutes (line 24)
-- **Step timeout**: 4 minutes (line 40)
-- **Python warning**: Line 253 in exception handler
-- **Shell warning**: Line 283 in failure step
+- **Job timeout**: 10 minutes (configured at job level)
+- **Step timeout**: 4 minutes (configured on AI advisory step)
+- **Python warning**: Present in exception handler step
+- **Shell warning**: Present in failure notification step
 - **Status**: COMPLIANT
 
 ---
