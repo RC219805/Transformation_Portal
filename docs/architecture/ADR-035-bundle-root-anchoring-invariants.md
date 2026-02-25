@@ -154,6 +154,27 @@ rules, warning taxonomy, or path normalization policy) requires all of:
 Phase 4C extractor implementations MUST embed
 `capture_metadata_config_fingerprint_sha256` in emitted metadata objects.
 
+### D10. Phase 4C Deterministic Extraction Surface Is Isolated
+
+Phase 4C introduces one new deterministic artifact surface only:
+
+- `artifacts/capture_metadata.tp.meta.capture.v1.json`
+
+Phase 4C implementations MUST:
+
+- consume `tools/capture_metadata_config.json`,
+- embed `capture_metadata_config_fingerprint_sha256` in each output record,
+- validate each record against `schemas/phase4/metadata.schema.json` before write,
+- serialize output canonically (`sort_keys=True`, compact separators,
+  `ensure_ascii=False`, `allow_nan=False`, UTF-8).
+
+Phase 4C implementations MUST NOT introduce:
+
+- metadata/provenance binding or Merkle roots,
+- evidence bundle schema mutations,
+- machine-contract mutations,
+- changes to Phase 2/3 integrity surfaces.
+
 ## Alternatives Considered
 
 - Implicit preimage definition via current implementation only:
@@ -223,8 +244,11 @@ Trade-off:
 - `schemas/phase4/provenance_merkle.schema.json`
 - `tools/capture_metadata_config.json`
 - `tools/capture_metadata_fingerprint.py`
+- `tools/extract_capture_metadata.py`
 - `tests/test_capture_metadata_fingerprint.py`
+- `tests/test_extract_capture_metadata.py`
 - `tests/golden/phase4/config_fingerprint.txt`
+- `tests/golden/phase4/expected_capture_metadata.tp.meta.capture.v1.json`
 - `tools/bundle_root_common.py`
 - `tools/compute_bundle_root.py`
 - `tools/verify_evidence_bundle_manifest.py`
