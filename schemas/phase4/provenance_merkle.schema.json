@@ -22,6 +22,7 @@
     },
     "leaf_count": {
       "type": "integer",
+      "description": "Leaf count for sorted provenance entries. v1 assumes non-empty manifests and therefore requires at least one leaf.",
       "minimum": 1
     },
     "provenance_merkle_root": {

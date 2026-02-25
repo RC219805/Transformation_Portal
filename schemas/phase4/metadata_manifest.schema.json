@@ -22,6 +22,7 @@
     "entries": {
       "type": "array",
       "description": "Sorted by relative_path (generator responsibility).",
+      "minItems": 1,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -34,7 +35,9 @@
           "relative_path": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 4096
+            "maxLength": 4096,
+            "description": "Normalized, forward-slash-only relative path (no leading '/', no drive prefix, no backslashes, no '..' segments, no leading './').",
+            "pattern": "^(?!/)(?![A-Za-z]:[\\\\/])(?!\\./)(?!.*\\\\)(?!.*(^|/)\\.\\.(?:/|$)).+$"
           },
           "file_sha256": {
             "type": "string",

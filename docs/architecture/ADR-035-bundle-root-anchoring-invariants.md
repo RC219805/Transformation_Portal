@@ -114,6 +114,10 @@ Phase 4 introduces additive, versioned contracts for capture provenance:
 - `tp.meta.provenance.v1` at `schemas/phase4/provenance_manifest.schema.json`
 - `tp.meta.provenance_merkle.v1` at `schemas/phase4/provenance_merkle.schema.json`
 
+The authoritative machine-readable Phase 4 contract location is
+`schemas/phase4/`. Documentation references under `docs/` are informative and
+must not be treated as canonical schema sources.
+
 These additions MUST NOT mutate Phase 3 artifact schemas or silently extend
 Evidence Bundle v1. Any incompatible contract change requires an explicit
 version bump and corresponding ADR update.

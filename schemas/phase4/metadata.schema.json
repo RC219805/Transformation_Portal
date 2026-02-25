@@ -32,8 +32,14 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 4096,
-      "description": "Normalized relative path. Must use forward slashes, must not contain '..' segments, and must not begin with './'.",
+      "description": "Normalized relative path. Must be relative (not absolute or drive-qualified), must use forward slashes, must not contain '..' segments, and must not begin with './'.",
       "allOf": [
+        {
+          "pattern": "^(?!/).+"
+        },
+        {
+          "pattern": "^(?![A-Za-z]:[\\\\/]).+"
+        },
         {
           "pattern": "^(?!\\./).+"
         },
