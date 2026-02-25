@@ -94,6 +94,22 @@ class TestExitCodeAggregation:
     def test_aggregate_exit_codes_non_integral_numeric_values_collapse_to_other_failure(self):
         assert aggregate_exit_codes([0.9, 1.9]) == EXIT_OTHER_FAILURE
 
+    def test_ingest_exit_code_values_are_unique_and_monotonic(self):
+        values = [int(code) for code in IngestExitCode]
+        assert values == sorted(values)
+        assert len(values) == len(set(values))
+        assert IngestExitCode.SUCCESS == 0
+
+    def test_ingest_exit_code_wire_mapping_is_frozen(self):
+        assert {code.name: int(code) for code in IngestExitCode} == {
+            "SUCCESS": 0,
+            "SCHEMA_VALIDATION_FAILED": 1,
+            "BIT_DEPTH_VIOLATION": 2,
+            "GAMMA_VIOLATION": 3,
+            "SCHEMA_DRIFT": 4,
+            "OTHER_FAILURE": 5,
+        }
+
 
 class TestTypedIngestErrors:
     """Tests for typed ingest-domain error hierarchy and aggregation."""

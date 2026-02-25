@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.transformation-portal.dev/machine_mode/tp.meta.machine.v1/data.validate.schema.json",
+  "title": "validate data payload",
+  "type": "object",
+  "required": [
+    "sidecar_path",
+    "strict",
+    "success",
+    "errors",
+    "dominant_error"
+  ],
+  "properties": {
+    "sidecar_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "strict": {
+      "type": "boolean"
+    },
+    "success": {
+      "type": "boolean"
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.meta.machine.v1/error.schema.json"
+      }
+    },
+    "dominant_error": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.meta.machine.v1/error.schema.json"
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

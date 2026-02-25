@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.transformation-portal.dev/machine_mode/tp.meta.machine.v1/machine_mode.schema.json",
+  "title": "Machine Mode JSON Contract (tp.meta.machine.v1)",
+  "description": "Canonical schema entrypoint for machine-mode envelopes emitted by test_metadata_extraction.py.",
+  "allOf": [
+    {
+      "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.meta.machine.v1/envelope.schema.json"
+    },
+    {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "command",
+            "data"
+          ],
+          "properties": {
+            "command": {
+              "const": "check-system"
+            },
+            "data": {
+              "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.meta.machine.v1/data.check-system.schema.json"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "command",
+            "data"
+          ],
+          "properties": {
+            "command": {
+              "const": "extract"
+            },
+            "data": {
+              "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.meta.machine.v1/data.extract.schema.json"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "command",
+            "data"
+          ],
+          "properties": {
+            "command": {
+              "const": "validate"
+            },
+            "data": {
+              "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.meta.machine.v1/data.validate.schema.json"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "command",
+            "data"
+          ],
+          "properties": {
+            "command": {
+              "const": "extract-batch"
+            },
+            "data": {
+              "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.meta.machine.v1/data.extract-batch.schema.json"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "command",
+            "data"
+          ],
+          "properties": {
+            "command": {
+              "const": "summarize"
+            },
+            "data": {
+              "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.meta.machine.v1/data.summarize.schema.json"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.transformation-portal.dev/machine_mode/tp.meta.machine.v1/data.extract-batch.schema.json",
+  "title": "extract-batch data payload",
+  "type": "object",
+  "required": [
+    "input_root",
+    "output_dir",
+    "fail_fast",
+    "preserve_structure",
+    "success",
+    "items",
+    "summary_counts",
+    "dominant_error"
+  ],
+  "properties": {
+    "input_root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "output_dir": {
+      "type": "string",
+      "minLength": 1
+    },
+    "fail_fast": {
+      "type": "boolean"
+    },
+    "preserve_structure": {
+      "type": "boolean"
+    },
+    "success": {
+      "type": "boolean"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/batch_item"
+      }
+    },
+    "summary_counts": {
+      "$ref": "#/$defs/summary_counts"
+    },
+    "dominant_error": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.meta.machine.v1/error.schema.json"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "batch_item": {
+      "type": "object",
+      "required": [
+        "path",
+        "success",
+        "output_path",
+        "elapsed_seconds",
+        "error"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "success": {
+          "type": "boolean"
+        },
+        "output_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "elapsed_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "error": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.meta.machine.v1/error.schema.json"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "summary_counts": {
+      "type": "object",
+      "required": [
+        "total",
+        "success",
+        "failure",
+        "by_exit_code"
+      ],
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "success": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failure": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "by_exit_code": {
+          "type": "object",
+          "required": [
+            "SCHEMA_VALIDATION_FAILED",
+            "BIT_DEPTH_VIOLATION",
+            "GAMMA_VIOLATION",
+            "SCHEMA_DRIFT",
+            "OTHER_FAILURE"
+          ],
+          "properties": {
+            "SCHEMA_VALIDATION_FAILED": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "BIT_DEPTH_VIOLATION": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "GAMMA_VIOLATION": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "SCHEMA_DRIFT": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "OTHER_FAILURE": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "patternProperties": {
+            "^[A-Z][A-Z0-9_]*$": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

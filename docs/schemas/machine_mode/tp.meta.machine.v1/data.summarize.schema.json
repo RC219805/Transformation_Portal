@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.transformation-portal.dev/machine_mode/tp.meta.machine.v1/data.summarize.schema.json",
+  "title": "summarize data payload",
+  "type": "object",
+  "required": [
+    "sidecar_dir",
+    "total_sidecars",
+    "valid",
+    "invalid",
+    "errors"
+  ],
+  "properties": {
+    "sidecar_dir": {
+      "type": "string",
+      "minLength": 1
+    },
+    "total_sidecars": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "valid": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "invalid": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/summary_error"
+      }
+    }
+  },
+  "$defs": {
+    "summary_error": {
+      "type": "object",
+      "required": [
+        "path",
+        "message"
+      ],
+      "properties": {
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

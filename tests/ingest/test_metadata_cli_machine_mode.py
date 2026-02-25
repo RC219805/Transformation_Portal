@@ -6,6 +6,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = PROJECT_ROOT / "scripts" / "test_metadata_extraction.py"
@@ -19,6 +20,33 @@ def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
         text=True,
         check=False,
     )
+
+
+def _normalize_machine_contract_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Normalize known volatile fields before golden comparisons."""
+    normalized = json.loads(json.dumps(payload))
+    data = normalized.get("data")
+    if not isinstance(data, dict):
+        return normalized
+
+    if "elapsed_seconds" in data:
+        data["elapsed_seconds"] = "__normalized_elapsed_seconds__"
+
+    items = data.get("items")
+    if isinstance(items, list):
+        for item in items:
+            if isinstance(item, dict) and "elapsed_seconds" in item:
+                item["elapsed_seconds"] = "__normalized_elapsed_seconds__"
+
+    for key in ("exiftool_version", "pydantic_version", "git_version", "rawpy_version", "libraw_version"):
+        if key in data and data[key] is not None:
+            data[key] = "__normalized_environment_version__"
+
+    return normalized
+
+
+def _canonical_machine_json(payload: dict[str, Any]) -> str:
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
 
 def test_check_system_json_contract_shape_is_stable() -> None:
@@ -47,6 +75,16 @@ def test_check_system_json_contract_shape_is_stable() -> None:
     ]
     assert isinstance(data["all_required_ok"], bool)
     assert isinstance(data["errors"], list)
+
+
+def test_check_system_json_contract_stable_after_normalization() -> None:
+    first = _run_cli("--json", "check-system")
+    second = _run_cli("--json", "check-system")
+
+    assert first.returncode == second.returncode
+    first_payload = _normalize_machine_contract_payload(json.loads(first.stdout))
+    second_payload = _normalize_machine_contract_payload(json.loads(second.stdout))
+    assert _canonical_machine_json(first_payload) == _canonical_machine_json(second_payload)
 
 
 def test_validate_json_envelope_is_versioned_and_stable(tmp_path: Path) -> None:
@@ -104,6 +142,20 @@ def test_extract_batch_setup_failure_uses_data_not_command_error(tmp_path: Path)
     assert data["success"] is False
     assert data["dominant_error"]["type"] == "OtherIngestFailure"
     assert data["dominant_error"]["exit_code"]["value"] == payload["exit_code"]
+
+
+def test_extract_json_contract_is_stable_after_normalizing_volatile_fields(tmp_path: Path) -> None:
+    missing_input = tmp_path / "missing.cr2"
+
+    first = _run_cli("--json", "extract", str(missing_input))
+    second = _run_cli("--json", "extract", str(missing_input))
+
+    assert first.returncode == second.returncode == 5
+    first_payload = _normalize_machine_contract_payload(json.loads(first.stdout))
+    second_payload = _normalize_machine_contract_payload(json.loads(second.stdout))
+
+    assert first_payload == second_payload
+    assert first_payload["data"]["elapsed_seconds"] == "__normalized_elapsed_seconds__"
 
 
 def test_json_output_with_pretty_writes_file_and_keeps_stdout_clean(tmp_path: Path) -> None:

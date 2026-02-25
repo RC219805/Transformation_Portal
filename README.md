@@ -349,6 +349,36 @@ python verify_core.py
 
 ---
 
+## Machine-Readable JSON Output for Automation
+
+The metadata extraction CLI supports a machine-mode JSON output for CI/CD and automation workflows.
+
+**Quick Start:**
+```bash
+# Emit structured JSON
+python scripts/test_metadata_extraction.py --json extract /input/image.CR2
+
+# Write JSON to file
+python scripts/test_metadata_extraction.py --json --json-output result.json extract /input/image.CR2
+
+# Parse with reference parser
+python tools/parse_machine_json.py result.json
+```
+
+**Key Features:**
+- **Deterministic structure:** Stable keys, ordering, and types across runs
+- **Exit code semantics:** Clear success/failure signaling (0=success, 1-5=specific failures)
+- **Typed errors:** Structured error objects for programmatic parsing
+- **Schema versioning:** `tp.meta.machine.v1` contract with explicit version bumps
+
+**Documentation:**
+- **Quick Reference:** [docs/quick_references/MACHINE_MODE_JSON.md](docs/quick_references/MACHINE_MODE_JSON.md)
+- **Full Contract:** [docs/api/MACHINE_MODE_CONTRACT.md](docs/api/MACHINE_MODE_CONTRACT.md)
+- **Reference Parser:** [tools/parse_machine_json.py](tools/parse_machine_json.py)
+- **Bash Examples:** [tools/parse_machine_json_examples.sh](tools/parse_machine_json_examples.sh)
+
+---
+
 ## Dependency Management
 
 This repo uses two layers:
