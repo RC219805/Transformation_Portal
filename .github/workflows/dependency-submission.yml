@@ -124,7 +124,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-metadata-
 
-      - name: Submit dependencies to GitHub
+      - name: Submit dependencies to GitHub (attempt 1)
+        id: dependency_submission_attempt_1
         uses: advanced-security/component-detection-dependency-submission-action@630165e704495fb272a86d2d034830acfa071e92 # v2
         env:
           # Critical: Disable pip caching to save disk space
@@ -139,12 +140,42 @@ jobs:
           PIP_NO_BUILD_ISOLATION: '1'
         with:
           # Process from repository root
-          path: '.'
+          filePath: '.'
           # Scan for Python dependencies
-          detectorCategories: 'Pip'
+          detectorsCategories: 'Pip'
           # Exclude directories that don't contain dependencies
           directoryExclusionList: '.git,node_modules,deprecated,archive,tests,docs,examples,.pytest_cache,__pycache__,.tox,.mypy_cache'
-        continue-on-error: false
+        continue-on-error: true
+
+      - name: Submit dependencies to GitHub (attempt 2)
+        id: dependency_submission_attempt_2
+        if: steps.dependency_submission_attempt_1.outcome == 'failure'
+        uses: advanced-security/component-detection-dependency-submission-action@630165e704495fb272a86d2d034830acfa071e92 # v2
+        env:
+          # Critical: Disable pip caching to save disk space
+          PIP_NO_CACHE_DIR: '1'
+          # Skip downloading full packages when possible
+          GH_DEPENDENCY_SUBMISSION_SKIP_CACHE: 'true'
+          # Set temporary directory with more space
+          TMPDIR: '/tmp'
+          # Limit pip's download retries to fail faster
+          PIP_RETRIES: '2'
+          # Don't build wheels from source (saves space)
+          PIP_NO_BUILD_ISOLATION: '1'
+        with:
+          # Process from repository root
+          filePath: '.'
+          # Scan for Python dependencies
+          detectorsCategories: 'Pip'
+          # Exclude directories that don't contain dependencies
+          directoryExclusionList: '.git,node_modules,deprecated,archive,tests,docs,examples,.pytest_cache,__pycache__,.tox,.mypy_cache'
+        continue-on-error: true
+
+      - name: Enforce dependency submission success
+        if: steps.dependency_submission_attempt_1.outcome == 'failure' && steps.dependency_submission_attempt_2.outcome == 'failure'
+        run: |
+          echo "Dependency submission failed after two attempts."
+          exit 1
 
       - name: Cleanup after submission
         if: always()

@@ -8,6 +8,7 @@ import json
 import sys
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -35,6 +36,17 @@ EXIT_MANIFEST_WRITE_FAILURE = 5
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "tools" / "capture_metadata_config.json"
 DEFAULT_METADATA_SCHEMA_PATH = PROJECT_ROOT / "schemas" / "phase4" / "metadata.schema.json"
 DEFAULT_MANIFEST_SCHEMA_PATH = PROJECT_ROOT / "schemas" / "phase4" / "metadata_manifest.schema.json"
+
+
+def _atomic_write_bytes(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    try:
+        tmp_path.write_bytes(data)
+        tmp_path.replace(path)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink()
 
 
 def parse_args() -> argparse.Namespace:
@@ -125,8 +137,7 @@ def main() -> int:
         return EXIT_SCHEMA_VALIDATION_FAILURE
 
     try:
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_bytes(serialize_metadata_manifest(manifest_payload))
+        _atomic_write_bytes(out_path, serialize_metadata_manifest(manifest_payload))
     except OSError as exc:
         print(f"Manifest write failure: {exc}", file=sys.stderr)
         return EXIT_MANIFEST_WRITE_FAILURE

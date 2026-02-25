@@ -151,14 +151,14 @@ def build_metadata_manifest_payload(
 
     sorted_records = sorted(records, key=lambda record: record["relative_path"])
     entries: list[dict[str, str]] = []
-    for index, record in enumerate(sorted_records):
+    for record in sorted_records:
         relative_path = record["relative_path"]
         file_sha256 = record["file_sha256"]
         try:
             metadata_sha256 = compute_metadata_sha256(record)
         except (TypeError, ValueError) as exc:
             raise MetadataSchemaValidationError(
-                f"record[{index}] canonical serialization failed for {relative_path}: {exc}"
+                f"canonical serialization failed for record with relative_path={relative_path!r}: {exc}"
             ) from exc
         entries.append(
             {
