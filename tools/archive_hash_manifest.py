@@ -18,6 +18,8 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
 from uuid import uuid4
 
+from tp.merkle import merkle_root_sha256
+
 HASH_ALGORITHM = "sha256"
 HASH_MANIFEST_SCHEMA_VERSION = "1.0"
 LEAF_FORMAT_VERSION = "1.0"
@@ -481,23 +483,6 @@ def _leaf_preimage(row: HashManifestRow) -> bytes:
     ).encode("utf-8")
 
 
-def _merkle_root(leaf_hashes: Sequence[bytes]) -> str:
-    if not leaf_hashes:
-        return hashlib.sha256(b"").hexdigest()
-
-    layer = list(leaf_hashes)
-    while len(layer) > 1:
-        if len(layer) % 2 == 1:
-            layer.append(layer[-1])
-
-        next_layer: List[bytes] = []
-        for index in range(0, len(layer), 2):
-            next_layer.append(hashlib.sha256(layer[index] + layer[index + 1]).digest())
-        layer = next_layer
-
-    return layer[0].hex()
-
-
 def build_merkle_roots(rows: Sequence[HashManifestRow]) -> Dict[str, Any]:
     sorted_rows = sorted(rows, key=lambda r: (r.origin_drive, r.partition, r.relpath, r.row_number))
 
@@ -514,7 +499,7 @@ def build_merkle_roots(rows: Sequence[HashManifestRow]) -> Dict[str, Any]:
                 "origin_drive": origin_drive,
                 "partition": partition,
                 "leaf_count": len(partition_leaf_hashes),
-                "root_sha256": _merkle_root(partition_leaf_hashes),
+                "root_sha256": merkle_root_sha256(partition_leaf_hashes),
             }
         )
 
@@ -523,7 +508,7 @@ def build_merkle_roots(rows: Sequence[HashManifestRow]) -> Dict[str, Any]:
     return {
         "global": {
             "leaf_count": len(global_leaf_hashes),
-            "root_sha256": _merkle_root(global_leaf_hashes),
+            "root_sha256": merkle_root_sha256(global_leaf_hashes),
         },
         "hash_algorithm": HASH_ALGORITHM,
         "leaf_format": "sha256(origin_drive\\0partition\\0relpath\\0hash_status\\0sha256_hex)",

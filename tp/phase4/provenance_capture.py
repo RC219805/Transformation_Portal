@@ -6,7 +6,7 @@ import hashlib
 import re
 from typing import Any
 
-from tools.archive_hash_manifest import _merkle_root as _phase3_merkle_root
+from tp.merkle import merkle_root_sha256
 
 from .hash_capture_metadata import (
     METADATA_CONTRACT_VERSION,
@@ -352,7 +352,7 @@ def build_provenance_merkle_payload(
         "provenance_merkle_contract_version": PROVENANCE_MERKLE_CONTRACT_VERSION,
         "provenance_contract_version": PROVENANCE_CONTRACT_VERSION,
         "leaf_count": len(leaf_hashes),
-        "provenance_merkle_root": _phase3_merkle_root(leaf_hashes),
+        "provenance_merkle_root": merkle_root_sha256(leaf_hashes),
     }
     _validate_provenance_merkle(payload, provenance_merkle_schema=provenance_merkle_schema)
     return payload
