@@ -79,6 +79,7 @@ _IMPLEMENTATION_REQUIRED_WARNING_CODES = {
     "WARN_GPS_PARSE_FAIL",
     "WARN_INVALID_ORIENTATION",
 }
+EXIFTOOL_TIMEOUT_SECONDS = 120
 
 
 class ConfigValidationError(ValueError):
@@ -472,7 +473,15 @@ def _run_exiftool(file_paths: list[Path], tag_whitelist: list[str]) -> dict[str,
     command.extend(str(path) for path in file_paths)
 
     try:
-        result = subprocess.run(command, capture_output=True, text=True, check=False)
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=EXIFTOOL_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise ExtractionFailure(f"exiftool timed out after {EXIFTOOL_TIMEOUT_SECONDS}s") from exc
     except OSError as exc:
         raise ExtractionFailure(f"failed to execute exiftool: {exc}") from exc
 

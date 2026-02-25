@@ -11,7 +11,10 @@ from pathlib import Path
 import pytest
 
 from tp.phase4.canonicalize_capture_metadata import (
+    EXIFTOOL_TIMEOUT_SECONDS,
+    ExtractionFailure,
     PathNormalizationError,
+    _run_exiftool,
     normalize_relative_path,
     write_capture_metadata_artifact,
 )
@@ -303,3 +306,12 @@ def test_phase4c_cli_returns_exit_code_4_when_exiftool_missing(tmp_path: Path) -
     )
     assert result.returncode == 4
     assert "Extraction failure:" in result.stderr
+
+
+def test_phase4c_run_exiftool_times_out_deterministically(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _timeout(*args: object, **kwargs: object) -> None:
+        raise subprocess.TimeoutExpired(cmd=["exiftool"], timeout=EXIFTOOL_TIMEOUT_SECONDS)
+
+    monkeypatch.setattr(subprocess, "run", _timeout)
+    with pytest.raises(ExtractionFailure, match=f"exiftool timed out after {EXIFTOOL_TIMEOUT_SECONDS}s"):
+        _run_exiftool([Path("/tmp/sample_01.dng")], ["Make"])
