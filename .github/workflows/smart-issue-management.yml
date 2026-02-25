@@ -157,9 +157,11 @@ jobs:
                   try:
                       analysis = json.loads(response.choices[0].message.content)
                   except (json.JSONDecodeError, AttributeError) as parse_err:
+                      print("::warning::AI Advisory / Smart Triage response parsing failed (non-blocking).")
                       print(f"⚠️ Failed to parse OpenAI response: {parse_err}")
                       analysis = None
               else:
+                  print("::warning::AI Advisory / Smart Triage returned an unexpected response shape (non-blocking).")
                   print("⚠️ OpenAI returned an unexpected response structure.")
                   analysis = None
 
@@ -249,6 +251,7 @@ jobs:
                       print(f"⚠️ Duplicate search failed: {str(search_err)}")
 
           except Exception as e:
+              print("::warning::AI Advisory / Smart Triage OpenAI request failed (non-blocking).")
               print(f"⚠️ Error during triage: {str(e)}")
               print("::warning::Smart Issue Triage OpenAI request failed (non-blocking). See job logs for details.")
               # Post error comment (non-blocking)
