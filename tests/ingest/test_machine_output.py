@@ -185,3 +185,75 @@ def test_dump_json_is_deterministic() -> None:
     first = dump_json({"b": 1, "a": 2}, pretty=False)
     second = dump_json({"a": 2, "b": 1}, pretty=False)
     assert first == second
+
+
+def test_golden_contract_extract_result_canonical_output() -> None:
+    """Golden master test: validate exact byte-level output for extract result.
+
+    This test ensures the machine contract remains stable across Python versions,
+    platforms, and future refactorings. Any change to this output is a breaking
+    change to the tp.meta.machine.v1 contract.
+    """
+    result = ExtractResult(
+        path=Path("/tmp/test.cr2"),
+        success=False,
+        output_path=None,
+        elapsed_seconds=1.5,
+        error=SchemaValidationFailure("golden test error"),
+    )
+
+    payload = extract_result_to_dict(result, preset="stable")
+    canonical_json = dump_json(payload, pretty=False)
+
+    # Golden reference: this exact byte sequence is the contract.
+    # If this assertion fails, you are changing the machine contract.
+    # You MUST bump the schema version if you need to change this.
+    expected = (
+        '{"elapsed_seconds":1.5,'
+        '"error":{"exit_code":{"name":"SCHEMA_VALIDATION_FAILED","value":1},'
+        '"message":"golden test error",'
+        '"priority":10,'
+        '"type":"SchemaValidationFailure"},'
+        '"input_path":"/tmp/test.cr2",'
+        '"output_path":null,'
+        '"preset":"stable",'
+        '"success":false}'
+    )
+    assert canonical_json == expected, (
+        "Machine contract violation: extract_result_to_dict output has changed. "
+        "This breaks tp.meta.machine.v1 contract. If intentional, bump MACHINE_SCHEMA_VERSION."
+    )
+
+
+def test_golden_contract_validate_result_canonical_output() -> None:
+    """Golden master test: validate exact byte-level output for validate result."""
+    result = ValidateResult(
+        success=False,
+        errors=[SchemaDriftFailure("drift error")],
+        dominant_error=SchemaDriftFailure("drift error"),
+    )
+
+    payload = validate_result_to_dict(
+        result,
+        sidecar_path=Path("/tmp/sidecar.json"),
+        strict=True,
+    )
+    canonical_json = dump_json(payload, pretty=False)
+
+    expected = (
+        '{"dominant_error":{"exit_code":{"name":"SCHEMA_DRIFT","value":4},'
+        '"message":"drift error",'
+        '"priority":40,'
+        '"type":"SchemaDriftFailure"},'
+        '"errors":[{"exit_code":{"name":"SCHEMA_DRIFT","value":4},'
+        '"message":"drift error",'
+        '"priority":40,'
+        '"type":"SchemaDriftFailure"}],'
+        '"sidecar_path":"/tmp/sidecar.json",'
+        '"strict":true,'
+        '"success":false}'
+    )
+    assert canonical_json == expected, (
+        "Machine contract violation: validate_result_to_dict output has changed. "
+        "This breaks tp.meta.machine.v1 contract. If intentional, bump MACHINE_SCHEMA_VERSION."
+    )
