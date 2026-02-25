@@ -52,6 +52,10 @@ jobs:
         run: |
           pytest -v -m "not ml and not slow and not benchmark" tests/test_extract_capture_metadata.py
 
+      - name: Phase 4 metadata manifest hashing gate
+        run: |
+          pytest -v -m "not ml and not slow and not benchmark" tests/test_build_metadata_manifest.py
+
       - name: Setup Python 3.12
         id: setup-python-312
         uses: actions/setup-python@v6
