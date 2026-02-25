@@ -56,16 +56,60 @@ The repository includes multiple CI/CD and automation workflows to ensure code q
 - Automated analysis for security vulnerabilities.
 - Runs on pushes to main and pull requests.
 
-### 5. `summary.yml` (AI Issue and PR Review Summarization)
-**Purpose:** Automatically generates a summary of newly opened GitHub issues, pull requests, and pull request reviews.
-**Status:** Fully functional with OpenAI API integration.
+### 5. AI Advisory Workflows
+
+The repository includes three AI-powered advisory workflows that provide intelligent suggestions without blocking PR merges. All workflows follow a hardened pattern with timeout bounds and failure visibility.
+
+**Pattern Documentation:** See `AI_WORKFLOW_PATTERN.md` for the canonical implementation pattern.
+**Status Report:** See `AI_WORKFLOWS_HARDENING_STATUS.md` for architectural assessment.
+
+#### 5.1 `ai-code-review.yml` (AI Code Review)
+**Purpose:** Automatically reviews code changes in pull requests and provides actionable feedback.
+**Status:** Production-ready, non-blocking advisory.
 
 **Features:**
-- Triggered on `issues.opened`, `issues.edited`, `pull_request`, `pull_request_review`, and `issue_comment`.
-- Uses OpenAI `gpt-4o-mini` model to summarize issue/PR/review content.
-- Posts the summary as a comment on the issue or pull request.
-- Includes graceful fallback if API call fails.
+- Triggered on pull request opened/synchronize/reopened events.
+- Reviews relevant code files (`.py`, `.js`, `.ts`, `.jsx`, `.tsx`, `.yml`, `.yaml`, `.json`, `.md`).
+- Uses OpenAI `gpt-4o-mini` model with retry logic for rate-limit handling.
+- Posts review comments with code quality assessment, bug detection, security concerns, and best practices.
+- Non-blocking: continues even if AI service fails.
+- Timeout-bounded: 4-minute step timeout, 10-minute job timeout.
 - Requires `OPENAI_API_KEY` in repository secrets.
+
+#### 5.2 `summary.yml` (AI Issue and PR Summarization)
+**Purpose:** Automatically generates concise summaries of GitHub issues, pull requests, and comments.
+**Status:** Production-ready, non-blocking advisory.
+
+**Features:**
+- Triggered on `issues`, `pull_request`, and `issue_comment` events.
+- Uses OpenAI `gpt-4o-mini` model to generate neutral, concise summaries.
+- Posts the summary as a comment on the issue or pull request.
+- Graceful handling when API key is missing (posts diagnostic message once).
+- Non-blocking: continues even if AI service fails.
+- Timeout-bounded: 4-minute step timeout, 10-minute job timeout.
+- Requires `OPENAI_API_KEY` in repository secrets.
+
+#### 5.3 `smart-issue-management.yml` (AI Issue Triage)
+**Purpose:** Automatically classifies and labels issues and pull requests for intelligent triage.
+**Status:** Production-ready, non-blocking advisory.
+
+**Features:**
+- Triggered on issue/PR opened/reopened/labeled/unlabeled events.
+- Uses OpenAI `gpt-4o-mini` model to analyze and classify items.
+- Automatically applies labels based on category, priority, and content analysis.
+- Posts AI analysis comment with suggested classification.
+- Performs duplicate detection for issues.
+- Non-blocking: continues even if AI service fails.
+- Timeout-bounded: 4-minute step timeout, 10-minute job timeout.
+- Requires `OPENAI_API_KEY` in repository secrets.
+
+**AI Workflows Architecture:**
+All three workflows implement a hardened pattern with:
+- **Non-blocking behavior**: `continue-on-error: true`; expected AI/service failures emit warnings and typically exit 0, while hard infrastructure errors may still exit non-zero
+- **Timeout bounds**: 4-minute step timeout for AI calls, 10-minute job timeout
+- **Failure visibility**: `::warning::` emission in Python exception handlers and shell failure steps
+- **Retry logic (where implemented)**: up to 6 attempts with exponential backoff in `ai-code-review.yml` and `smart-issue-management.yml`; `summary.yml` currently uses a single-attempt call with graceful fallback
+- **Concurrency control**: Cancel outdated runs to reduce CI costs
 
 ---
 

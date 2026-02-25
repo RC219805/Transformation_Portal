@@ -15,9 +15,12 @@ concurrency:
 
 jobs:
   summarize:
+    name: AI Advisory / Summary
     # Avoid blocked/required PR checks for bot-authored PR events.
     if: ${{ !(github.event_name == 'pull_request' && (github.actor == 'Copilot' || github.actor == 'copilot-swe-agent[bot]')) }}
     runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 10
     permissions:
       issues: write
       pull-requests: write
@@ -34,10 +37,10 @@ jobs:
         <!-- ai-summarizer-missing-key -->
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
 
@@ -48,6 +51,7 @@ jobs:
 
       - name: Run summarizer (safe Option B)
         id: summarizer
+        timeout-minutes: 4
         env:
           RESPONSE_FILE: ${{ runner.temp }}/issue_summary.txt
           ISSUE_TITLE: ${{ github.event.issue.title || github.event.pull_request.title || github.event.head_commit.message || '' }}
@@ -123,10 +127,11 @@ jobs:
               )
               summary = (completion.choices[0].message.content or "").strip()
           except Exception as e:
-              # Write a short friendly failure message (no secrets) and log detailed error to stderr
+              # Write a short friendly failure message (no secrets) and log only minimal error classification.
               summary = "AI summarization failed: an internal error occurred. See CI logs for details."
-              print("Detailed error (redacted for posting):", file=sys.stderr)
-              print(repr(e), file=sys.stderr)
+              print("::warning::Issue Summarizer OpenAI request failed (non-blocking). See job logs for details.")
+              print("Detailed error classification (exception type only):", file=sys.stderr)
+              print(f"Exception type: {type(e).__name__}", file=sys.stderr)
 
           with open(RESPONSE_FILE, "w", encoding="utf-8") as f:
               f.write(summary)
@@ -173,3 +178,13 @@ jobs:
           # NOTE: use GH_TOKEN with minimal scope (issues:write)
           echo "Posting comment to issue/PR #$ISSUE_NUMBER"
           gh issue comment "$ISSUE_NUMBER" --body-file "$RESPONSE_FILE"
+
+      - name: Report non-blocking AI failure
+        if: failure()
+        run: |
+          echo "::warning::Issue Summarizer failed (non-blocking). See job logs."
+
+      - name: AI Summary Status
+        if: always()
+        run: |
+          echo "AI summarizer job completed (non-blocking)."
