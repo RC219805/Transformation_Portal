@@ -6,6 +6,11 @@ on:
   pull_request_target:
     types: [opened, reopened, labeled, unlabeled]
 
+# Concurrency control: cancel stale triage runs for the same item.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   issues: write
@@ -16,6 +21,7 @@ jobs:
     name: AI-Powered Issue Triage
     runs-on: ubuntu-latest
     continue-on-error: true
+    timeout-minutes: 5
 
     steps:
       - name: Checkout code
@@ -268,3 +274,13 @@ jobs:
           print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
           PYTHON_SCRIPT
+
+      - name: Report non-blocking AI failure
+        if: failure()
+        run: |
+          echo "::warning::Smart Issue Triage failed (non-blocking). See job logs."
+
+      - name: AI Triage Status
+        if: always()
+        run: |
+          echo "Smart Issue Triage completed (non-blocking)."

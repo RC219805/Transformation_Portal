@@ -19,6 +19,7 @@ jobs:
     if: ${{ !(github.event_name == 'pull_request' && (github.actor == 'Copilot' || github.actor == 'copilot-swe-agent[bot]')) }}
     runs-on: ubuntu-latest
     continue-on-error: true
+    timeout-minutes: 5
     permissions:
       issues: write
       pull-requests: write
@@ -174,3 +175,13 @@ jobs:
           # NOTE: use GH_TOKEN with minimal scope (issues:write)
           echo "Posting comment to issue/PR #$ISSUE_NUMBER"
           gh issue comment "$ISSUE_NUMBER" --body-file "$RESPONSE_FILE"
+
+      - name: Report non-blocking AI failure
+        if: failure()
+        run: |
+          echo "::warning::Issue Summarizer failed (non-blocking). See job logs."
+
+      - name: AI Summary Status
+        if: always()
+        run: |
+          echo "AI summarizer job completed (non-blocking)."
