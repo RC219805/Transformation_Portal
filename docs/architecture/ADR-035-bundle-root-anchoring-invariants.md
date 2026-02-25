@@ -130,6 +130,30 @@ Phase 3 convention exactly. Changing digest representation (binary vs hex
 text), concatenation rules, or odd-leaf handling semantics requires a version
 bump and ADR update.
 
+### D9. Phase 4B Canonicalization Governance Is Frozen
+
+Phase 4B introduces canonicalization semantics governance before extractor
+implementation:
+
+- canonicalization config file: `tools/capture_metadata_config.json`
+- config fingerprint surface:
+  `capture_metadata_config_fingerprint_sha256`
+- deterministic fingerprint tool: `tools/capture_metadata_fingerprint.py`
+- golden fingerprint fixture:
+  `tests/golden/phase4/config_fingerprint.txt`
+
+The canonicalization config is version-bound to `tp.meta.capture.v1`.
+Any semantic change (for example tag whitelist, datetime precedence, rounding
+rules, warning taxonomy, or path normalization policy) requires all of:
+
+1. config file update,
+2. fingerprint change,
+3. golden fixture update,
+4. explicit PR note documenting the semantic change.
+
+Phase 4C extractor implementations MUST embed
+`capture_metadata_config_fingerprint_sha256` in emitted metadata objects.
+
 ## Alternatives Considered
 
 - Implicit preimage definition via current implementation only:
@@ -150,6 +174,7 @@ bump and ADR update.
   schema and verifier logic.
 - Validate Phase 4 contract schemas and enforce ownership governance through
   CODEOWNERS and CI schema checks.
+- Enforce Phase 4B fingerprint stability via deterministic test gates.
 - Maintain CI determinism checks, including cross-runtime parity validation.
 - Preserve verifier compatibility for both Phase 3.3 (no root fields) and
   Phase 3.4 (with optional root/notarization).
@@ -196,6 +221,10 @@ Trade-off:
 - `schemas/phase4/metadata_manifest.schema.json`
 - `schemas/phase4/provenance_manifest.schema.json`
 - `schemas/phase4/provenance_merkle.schema.json`
+- `tools/capture_metadata_config.json`
+- `tools/capture_metadata_fingerprint.py`
+- `tests/test_capture_metadata_fingerprint.py`
+- `tests/golden/phase4/config_fingerprint.txt`
 - `tools/bundle_root_common.py`
 - `tools/compute_bundle_root.py`
 - `tools/verify_evidence_bundle_manifest.py`
