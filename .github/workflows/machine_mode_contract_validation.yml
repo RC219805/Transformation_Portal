@@ -1,0 +1,148 @@
+name: Machine Mode Contract Validation
+
+# This workflow enforces the tp.meta.machine.v1 contract stability
+# by running golden master tests that validate exact JSON output structure.
+#
+# Contract violations are blocking - any unintended change to the machine
+# output structure must be accompanied by a schema version bump.
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/transformation_portal/ingest/machine_output.py'
+      - 'src/transformation_portal/ingest/metadata_service.py'
+      - 'src/transformation_portal/ingest/errors.py'
+      - 'scripts/test_metadata_extraction.py'
+      - 'tests/ingest/test_machine_output.py'
+      - 'tests/ingest/test_metadata_cli_machine_mode.py'
+      - '.github/workflows/machine_mode_contract_validation.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/transformation_portal/ingest/machine_output.py'
+      - 'src/transformation_portal/ingest/metadata_service.py'
+      - 'src/transformation_portal/ingest/errors.py'
+      - 'scripts/test_metadata_extraction.py'
+      - 'tests/ingest/test_machine_output.py'
+      - 'tests/ingest/test_metadata_cli_machine_mode.py'
+      - '.github/workflows/machine_mode_contract_validation.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUNBUFFERED: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  contract-validation:
+    name: Machine Mode Contract Tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements-ci.txt
+            pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+          pip install -e .
+
+      - name: Run machine output unit tests
+        run: |
+          set -euo pipefail
+          echo "Running machine output serializer tests..."
+          pytest -xvs tests/ingest/test_machine_output.py \
+            --tb=short \
+            -ra
+
+      - name: Run CLI contract tests
+        run: |
+          set -euo pipefail
+          echo "Running CLI machine mode contract tests..."
+          pytest -xvs tests/ingest/test_metadata_cli_machine_mode.py \
+            --tb=short \
+            -ra
+
+      - name: Verify golden master stability
+        run: |
+          set -euo pipefail
+          echo "Verifying golden master contract tests..."
+          
+          # Run tests that validate byte-exact output stability
+          pytest -xvs tests/ingest/test_machine_output.py \
+            -k "golden" \
+            --tb=short \
+            -ra || {
+              echo ""
+              echo "❌ GOLDEN MASTER CONTRACT VIOLATION"
+              echo ""
+              echo "The machine-mode JSON contract has been violated."
+              echo "Golden master tests ensure byte-exact output stability."
+              echo ""
+              echo "If this change is intentional, you must:"
+              echo "  1. Bump MACHINE_SCHEMA_VERSION in machine_output.py"
+              echo "  2. Update the golden master fixtures"
+              echo "  3. Document the change in docs/api/MACHINE_MODE_CONTRACT.md"
+              echo ""
+              echo "If this change is unintentional, revert it."
+              exit 1
+            }
+
+      - name: Verify determinism across runs
+        run: |
+          set -euo pipefail
+          echo "Verifying output determinism..."
+          
+          # Run tests that validate deterministic output
+          pytest -xvs tests/ingest/test_metadata_cli_machine_mode.py \
+            -k "determinism or stable" \
+            --tb=short \
+            -ra
+
+      - name: Contract validation summary
+        if: always()
+        run: |
+          set -euo pipefail
+          echo ""
+          echo "================================================"
+          echo "Machine Mode Contract Validation Summary"
+          echo "================================================"
+          echo ""
+          echo "Contract: tp.meta.machine.v1"
+          echo "Documentation: docs/api/MACHINE_MODE_CONTRACT.md"
+          echo ""
+          if [[ "${{ job.status }}" == "success" ]]; then
+            echo "✅ All contract tests passed"
+            echo ""
+            echo "The machine-mode JSON contract is stable."
+          else
+            echo "❌ Contract validation failed"
+            echo ""
+            echo "See job logs above for details."
+            echo ""
+            echo "Contract violations are blocking - any change to the"
+            echo "machine output structure requires explicit versioning."
+          fi

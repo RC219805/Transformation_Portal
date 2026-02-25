@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Machine-Readable JSON Output Mode (tp.meta.machine.v1):** Deterministic JSON API for metadata CLI automation
+  - **`--json` Flag:** Emit structured JSON with stable envelope (schema, command, success, exit_code, data, error)
+  - **Deterministic Serialization:** `sort_keys=True` ensures consistent key ordering across runs and platforms
+  - **Typed Error Handling:** Structured error objects with exit code enums for programmatic parsing
+  - **Exit Code Semantics:** Clear success/failure signaling (0=success, 1-5=specific failure modes)
+  - **Per-Command Payloads:** Stable data schemas for `extract`, `validate`, `extract-batch`, `check-system`
+  - **Golden Master Tests:** Contract enforcement via byte-exact output validation
+  - **CI Contract Gate:** `.github/workflows/machine_mode_contract_validation.yml` blocks schema drift
+  - **Reference Parser:** `tools/parse_machine_json.py` (Python) and `tools/parse_machine_json_examples.sh` (bash/jq)
+  - **Contract Documentation:** `docs/api/MACHINE_MODE_CONTRACT.md` defines binding guarantees and versioning policy
+  - **Optional Pretty-Print:** `--json-pretty` for human-readable JSON (2-space indent)
+  - **File Output:** `--json-output <path>` writes JSON to file, keeps stdout clean
+  - See: [Machine Mode Contract](docs/api/MACHINE_MODE_CONTRACT.md), PR #1024
+
+### Added
 - **FP Probe Version Governance (ADR-030):** Production-grade probe versioning for cross-ISA determinism
   - **Governance Contract:** `probe_version` is now a semantic contract with explicit bump criteria
   - **Locking Test:** `test_probe_version_locked()` enforces conscious version increments
