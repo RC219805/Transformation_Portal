@@ -194,9 +194,9 @@ jobs:
                   print("⚠️ OpenAI returned an unexpected response structure.")
           except Exception as e:
               # If retries exhausted or a non-retryable error occurred, provide a clear fallback review_text
-              print("::warning::AI Advisory / Code Review OpenAI request failed (non-blocking).")
-              print(f"⚠️ OpenAI request failed after retries: {str(e)}")
               print("::warning::AI Code Review OpenAI request failed (non-blocking). See job logs for details.")
+              print("Detailed error classification (exception type only):", file=sys.stderr)
+              print(f"Exception type: {type(e).__name__}", file=sys.stderr)
               review_text = ("⚠️ AI review unavailable: the AI service returned errors (rate limits or other). "
                              "Please retry or review manually. See CI logs for details.")
 

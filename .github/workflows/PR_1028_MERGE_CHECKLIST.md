@@ -3,9 +3,9 @@
 ## Pre-Merge Verification
 
 ### ✅ Code Changes
-- [x] Workflow YAMLs updated to align with AI advisory pattern (`ai-code-review.yml`, `summary.yml`, `smart-issue-management.yml`)
-- [x] All three workflows validated with `make validate-ci`
-- [x] Pattern compliance: 100% (24/24 checks passing)
+- [ ] Workflow YAMLs updated to align with AI advisory pattern (`ai-code-review.yml`, `summary.yml`, `smart-issue-management.yml`)
+- [ ] Validate latest PR head with `make validate-ci`
+- [ ] Review pattern compliance against current workflow files (avoid fixed score snapshots)
 
 ### ✅ Documentation
 - [x] Architectural assessment created: `AI_WORKFLOWS_HARDENING_STATUS.md`
@@ -24,11 +24,11 @@
 - [x] Terminal steps: `if: always()` present
 
 ### ✅ Architect Approval
-- [x] Security posture reviewed (no credentials leaked)
-- [x] Dependency governance assessed (`openai` and `requests` usage reviewed)
-- [x] CI/CD policy compliance confirmed
-- [x] Failure modes analyzed
-- [x] Production readiness verified
+- [ ] Security posture reviewed (no credentials leaked)
+- [ ] Dependency governance assessed (`openai` and `requests` usage reviewed)
+- [ ] CI/CD policy compliance confirmed
+- [ ] Failure modes analyzed
+- [ ] Production readiness verified against latest PR head
 
 ## Merge Actions
 

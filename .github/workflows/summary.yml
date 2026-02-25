@@ -127,12 +127,11 @@ jobs:
               )
               summary = (completion.choices[0].message.content or "").strip()
           except Exception as e:
-              # Write a short friendly failure message (no secrets) and log detailed error to stderr
-              print("::warning::AI Advisory / Summary OpenAI request failed (non-blocking).")
+              # Write a short friendly failure message (no secrets) and log only minimal error classification.
               summary = "AI summarization failed: an internal error occurred. See CI logs for details."
               print("::warning::Issue Summarizer OpenAI request failed (non-blocking). See job logs for details.")
-              print("Detailed error (redacted for posting):", file=sys.stderr)
-              print(repr(e), file=sys.stderr)
+              print("Detailed error classification (exception type only):", file=sys.stderr)
+              print(f"Exception type: {type(e).__name__}", file=sys.stderr)
 
           with open(RESPONSE_FILE, "w", encoding="utf-8") as f:
               f.write(summary)
