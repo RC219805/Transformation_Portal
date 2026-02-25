@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   summarize:
+    name: AI Advisory / Summary
     # Avoid blocked/required PR checks for bot-authored PR events.
     if: ${{ !(github.event_name == 'pull_request' && (github.actor == 'Copilot' || github.actor == 'copilot-swe-agent[bot]')) }}
     runs-on: ubuntu-latest

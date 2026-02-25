@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   ai-review:
-    name: AI-Powered Code Review
+    name: AI Advisory / Code Review
     runs-on: ubuntu-latest
     continue-on-error: true
     timeout-minutes: 5
