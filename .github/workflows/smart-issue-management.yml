@@ -160,11 +160,13 @@ jobs:
                   except (json.JSONDecodeError, AttributeError):
                       print("::warning::AI Advisory / Smart Triage response parsing failed (non-blocking).")
                       print("⚠️ Failed to parse OpenAI response (JSON parse error; non-blocking).")
-                      raise RuntimeError("ai_response_parse_failure")
+                      print("Skipping automated triage updates for this run (non-blocking).")
+                      sys.exit(0)
               else:
                   print("::warning::AI Advisory / Smart Triage returned an unexpected response shape (non-blocking).")
                   print("⚠️ OpenAI returned an unexpected response structure (non-blocking).")
-                  raise RuntimeError("ai_response_shape_invalid")
+                  print("Skipping automated triage updates for this run (non-blocking).")
+                  sys.exit(0)
 
 
               print(f"✅ Analysis complete:")
