@@ -86,6 +86,7 @@ def _run_cli(
     env_overrides: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     env = dict(os.environ)
+    env.pop("PYTHONPATH", None)
     if fake_exiftool is not None:
         env["PATH"] = f"{fake_exiftool.parent}:{env.get('PATH', '')}"
     if env_overrides:
@@ -111,6 +112,19 @@ def _run_cli(
         check=False,
         env=env,
     )
+
+
+def test_phase4c_cli_help_works_without_pythonpath() -> None:
+    result = subprocess.run(
+        [sys.executable, str(CLI_PATH), "--help"],
+        cwd=str(PROJECT_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+        env={"PATH": os.environ.get("PATH", ""), "PYTHONPATH": ""},
+    )
+    assert result.returncode == 0, result.stderr
+    assert "usage:" in result.stdout
 
 
 def test_phase4c_golden_output_matches_expected(tmp_path: Path) -> None:

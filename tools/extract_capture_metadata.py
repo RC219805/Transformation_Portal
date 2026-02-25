@@ -7,6 +7,10 @@ import argparse
 import sys
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from tp.phase4.canonicalize_capture_metadata import (
     ConfigValidationError,
     ExtractionFailure,
@@ -26,7 +30,7 @@ EXIT_SCHEMA_VALIDATION_FAILURE = 5
 EXIT_STRICT_WARNING_FAILURE = 6
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "capture_metadata_config.json"
-DEFAULT_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "schemas" / "phase4" / "metadata.schema.json"
+DEFAULT_SCHEMA_PATH = PROJECT_ROOT / "schemas" / "phase4" / "metadata.schema.json"
 
 
 def parse_args() -> argparse.Namespace:
