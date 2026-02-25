@@ -19,7 +19,13 @@ pytestmark = [pytest.mark.regression, pytest.mark.golden]
 
 
 def _canonical_fingerprint(config_payload: dict[str, object]) -> str:
-    canonical = json.dumps(config_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    canonical = json.dumps(
+        config_payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
     return hashlib.sha256(canonical).hexdigest()
 
 
@@ -64,3 +70,21 @@ def test_capture_metadata_config_structure_is_complete() -> None:
     assert payload["datetime_precedence"] == ["GPSDateStamp+GPSTimeStamp", "DateTimeOriginal+OffsetTimeOriginal"]
     assert payload["rounding_rules"]["rounding_mode"] == "bankers"
     assert len(payload["warning_codes"]) >= 4
+
+
+def test_capture_metadata_config_fingerprint_ignores_key_order_and_whitespace(tmp_path: Path) -> None:
+    payload = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+
+    compact_path = tmp_path / "config_compact.json"
+    compact_path.write_text(json.dumps(payload, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
+
+    reversed_top_level = {key: payload[key] for key in reversed(list(payload.keys()))}
+    pretty_path = tmp_path / "config_pretty_reordered.json"
+    pretty_path.write_text(json.dumps(reversed_top_level, indent=4, ensure_ascii=False), encoding="utf-8")
+
+    compact_result = _run_tool(compact_path)
+    pretty_result = _run_tool(pretty_path)
+
+    assert compact_result.returncode == 0, compact_result.stderr
+    assert pretty_result.returncode == 0, pretty_result.stderr
+    assert compact_result.stdout.strip() == pretty_result.stdout.strip()

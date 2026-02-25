@@ -22,7 +22,13 @@ def load_config(path: Path) -> dict[str, object]:
 
 def compute_fingerprint(config: dict[str, object]) -> str:
     """Compute deterministic SHA256 over canonical JSON serialization."""
-    canonical = json.dumps(config, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    canonical = json.dumps(
+        config,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
     return hashlib.sha256(canonical).hexdigest()
 
 
