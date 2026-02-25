@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rc219805.github.io/Transformation_Portal/schemas/phase4/provenance_manifest.schema.json",
+  "title": "tp.meta.provenance.v1 — Provenance Manifest",
+  "description": "Cryptographically binds file hash and metadata hash into provenance entries. Entries must be lexicographically sorted by relative_path.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "provenance_contract_version",
+    "metadata_contract_version",
+    "entries"
+  ],
+  "properties": {
+    "provenance_contract_version": {
+      "type": "string",
+      "const": "tp.meta.provenance.v1"
+    },
+    "metadata_contract_version": {
+      "type": "string",
+      "const": "tp.meta.capture.v1"
+    },
+    "entries": {
+      "type": "array",
+      "description": "Sorted by relative_path (generator responsibility).",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "relative_path",
+          "file_sha256",
+          "metadata_sha256",
+          "provenance_entry_sha256"
+        ],
+        "properties": {
+          "relative_path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "description": "Normalized, forward-slash-only relative path (no leading '/', no drive prefix, no backslashes, no '..' segments, no leading './').",
+            "pattern": "^(?!/)(?![A-Za-z]:[\\\\/])(?!\\./)(?!.*\\\\)(?!.*(^|/)\\.\\.(?:/|$)).+$"
+          },
+          "file_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "metadata_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "provenance_entry_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "description": "SHA256(file_sha256 || metadata_sha256 || metadata_contract_version) as defined in ADR-035."
+          }
+        }
+      }
+    }
+  }
+}

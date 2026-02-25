@@ -105,6 +105,31 @@ Verifiers must accept:
 - `11`: verification mismatch / failure
 - `12`: malformed input
 
+### D7. Phase 4 Contract Surfaces Are Versioned and Additive
+
+Phase 4 introduces additive, versioned contracts for capture provenance:
+
+- `tp.meta.capture.v1` at `schemas/phase4/metadata.schema.json`
+- `tp.meta.capture_manifest.v1` at `schemas/phase4/metadata_manifest.schema.json`
+- `tp.meta.provenance.v1` at `schemas/phase4/provenance_manifest.schema.json`
+- `tp.meta.provenance_merkle.v1` at `schemas/phase4/provenance_merkle.schema.json`
+
+The authoritative machine-readable Phase 4 contract location is
+`schemas/phase4/`. Documentation references under `docs/` are informative and
+must not be treated as canonical schema sources.
+
+These additions MUST NOT mutate Phase 3 artifact schemas or silently extend
+Evidence Bundle v1. Any incompatible contract change requires an explicit
+version bump and corresponding ADR update.
+
+### D8. Provenance Entry Hash Semantics Must Mirror Phase 3
+
+`provenance_entry_sha256` representation and concatenation conventions are part
+of the contract surface. Phase 4 implementations MUST mirror the established
+Phase 3 convention exactly. Changing digest representation (binary vs hex
+text), concatenation rules, or odd-leaf handling semantics requires a version
+bump and ADR update.
+
 ## Alternatives Considered
 
 - Implicit preimage definition via current implementation only:
@@ -123,6 +148,8 @@ Verifiers must accept:
   `tools/bundle_root_common.py`.
 - Enforce optional root-field co-presence and notarization shape constraints in
   schema and verifier logic.
+- Validate Phase 4 contract schemas and enforce ownership governance through
+  CODEOWNERS and CI schema checks.
 - Maintain CI determinism checks, including cross-runtime parity validation.
 - Preserve verifier compatibility for both Phase 3.3 (no root fields) and
   Phase 3.4 (with optional root/notarization).
@@ -165,6 +192,10 @@ Trade-off:
 
 - `docs/archive/ARCHIVE_MANIFEST_PHASE3_EVIDENCE_BUNDLE.md`
 - `docs/archive/schemas/evidence_bundle_manifest.schema.json`
+- `schemas/phase4/metadata.schema.json`
+- `schemas/phase4/metadata_manifest.schema.json`
+- `schemas/phase4/provenance_manifest.schema.json`
+- `schemas/phase4/provenance_merkle.schema.json`
 - `tools/bundle_root_common.py`
 - `tools/compute_bundle_root.py`
 - `tools/verify_evidence_bundle_manifest.py`

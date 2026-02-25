@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rc219805.github.io/Transformation_Portal/schemas/phase4/provenance_merkle.schema.json",
+  "title": "tp.meta.provenance_merkle.v1 — Provenance Merkle Root",
+  "description": "Merkle root computed over sorted provenance_entry_sha256 leaves using the Phase 3 Merkle algorithm (identical concatenation and odd-leaf handling rules).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "provenance_merkle_contract_version",
+    "provenance_contract_version",
+    "leaf_count",
+    "provenance_merkle_root"
+  ],
+  "properties": {
+    "provenance_merkle_contract_version": {
+      "type": "string",
+      "const": "tp.meta.provenance_merkle.v1"
+    },
+    "provenance_contract_version": {
+      "type": "string",
+      "const": "tp.meta.provenance.v1"
+    },
+    "leaf_count": {
+      "type": "integer",
+      "description": "Leaf count for sorted provenance entries. v1 assumes non-empty manifests and therefore requires at least one leaf.",
+      "minimum": 1
+    },
+    "provenance_merkle_root": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  }
+}
