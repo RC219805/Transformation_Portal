@@ -21,7 +21,7 @@ jobs:
     name: AI Advisory / Smart Triage
     runs-on: ubuntu-latest
     continue-on-error: true
-    timeout-minutes: 5
+    timeout-minutes: 10
 
     steps:
       - name: Checkout code
@@ -37,6 +37,7 @@ jobs:
           pip install openai requests
 
       - name: Smart Issue/PR Triage
+        timeout-minutes: 4
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -249,6 +250,7 @@ jobs:
 
           except Exception as e:
               print(f"⚠️ Error during triage: {str(e)}")
+              print("::warning::Smart Issue Triage OpenAI request failed (non-blocking). See job logs for details.")
               # Post error comment (non-blocking)
               error_comment = f"""## ⚠️ AI Triage Error
 
