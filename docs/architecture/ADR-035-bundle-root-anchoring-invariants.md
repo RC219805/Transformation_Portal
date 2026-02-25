@@ -221,6 +221,61 @@ Phase 4D determinism verification is fixed:
 Phase 4D implementations MUST NOT introduce provenance binding, Merkle roots,
 evidence bundle mutations, or machine-contract mutations.
 
+### D12. Phase 4E Provenance Binding and Merkle Semantics Are Frozen
+
+Phase 4E introduces two deterministic artifact surfaces only:
+
+- `artifacts/provenance_manifest.tp.meta.provenance.v1.json`
+- `artifacts/provenance_merkle.tp.meta.provenance_merkle.v1.json`
+
+Normative references:
+
+- schema: `schemas/phase4/provenance_manifest.schema.json`
+- schema: `schemas/phase4/provenance_merkle.schema.json`
+- exit-code contract: `docs/contracts/exit_codes.md`
+
+Phase 4E provenance entry hash semantics are fixed:
+
+- `F = bytes.fromhex(file_sha256)` (32 bytes)
+- `M = bytes.fromhex(metadata_sha256)` (32 bytes)
+- `V = b"tp.meta.capture.v1"`
+- `provenance_entry_sha256 = SHA256(F || M || V).hexdigest()`
+
+No delimiters, no hex-string concatenation, no JSON serialization, no runtime
+metadata, and no host/environment inputs are permitted in this preimage.
+
+Phase 4E builder invariants are fixed:
+
+- capture metadata and metadata manifest inputs must each validate against their
+  Phase 4 schemas,
+- each input must have unique `relative_path` values,
+- strict mode requires each input already sorted by `relative_path`,
+- path sets must match 1:1 across capture metadata and metadata manifest,
+- `file_sha256` must match for each aligned path,
+- `metadata_sha256` must be recomputed from canonical object bytes and match the
+  metadata manifest value,
+- optional fingerprint enforcement requires each capture record extractor
+  fingerprint to match the current canonicalization config fingerprint.
+
+Phase 4E manifest/merkle serialization is fixed:
+
+- canonical JSON (`sort_keys=True`, compact separators, `ensure_ascii=False`,
+  `allow_nan=False`, UTF-8),
+- single trailing LF required for each artifact.
+
+Phase 4E Merkle semantics are fixed:
+
+- leaves are `bytes.fromhex(provenance_entry_sha256)` in sorted
+  `relative_path` order,
+- internal hashing, pair concatenation, and odd-leaf handling MUST reuse the
+  existing Phase 3 `_merkle_root` implementation unchanged,
+- empty-set policy for `tp.meta.provenance_merkle.v1` is strict non-empty
+  (`leaf_count >= 1`).
+
+Phase 4E implementations MUST NOT modify Phase 4C object format, Phase 4D
+object-hash semantics, Evidence Bundle contracts, Machine contracts, or Phase 3
+Merkle algorithms.
+
 ## Alternatives Considered
 
 - Implicit preimage definition via current implementation only:
