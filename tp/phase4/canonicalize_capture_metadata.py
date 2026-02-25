@@ -647,12 +647,15 @@ def extract_capture_metadata_records(
 
 def write_capture_metadata_artifact(records: list[dict[str, Any]], out_path: Path) -> None:
     """Write canonical JSON artifact for capture metadata records."""
-    payload = json.dumps(
-        records,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-        allow_nan=False,
-    ).encode("utf-8")
+    payload = (
+        json.dumps(
+            records,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+        + b"\n"
+    )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_bytes(payload)

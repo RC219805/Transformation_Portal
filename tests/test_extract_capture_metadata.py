@@ -10,7 +10,11 @@ from pathlib import Path
 
 import pytest
 
-from tp.phase4.canonicalize_capture_metadata import PathNormalizationError, normalize_relative_path
+from tp.phase4.canonicalize_capture_metadata import (
+    PathNormalizationError,
+    normalize_relative_path,
+    write_capture_metadata_artifact,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CLI_PATH = PROJECT_ROOT / "tools" / "extract_capture_metadata.py"
@@ -135,6 +139,14 @@ def test_phase4c_cli_help_works_without_pythonpath() -> None:
     )
     assert result.returncode == 0, result.stderr
     assert "usage:" in result.stdout
+
+
+def test_phase4c_writer_emits_single_trailing_newline(tmp_path: Path) -> None:
+    out_path = tmp_path / "capture_metadata.tp.meta.capture.v1.json"
+    write_capture_metadata_artifact([{"relative_path": "sample_01.dng"}], out_path=out_path)
+    payload = out_path.read_bytes()
+    assert payload.endswith(b"\n")
+    assert not payload.endswith(b"\n\n")
 
 
 def test_phase4c_golden_output_matches_expected(tmp_path: Path) -> None:
