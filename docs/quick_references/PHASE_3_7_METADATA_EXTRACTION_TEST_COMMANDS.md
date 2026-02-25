@@ -41,14 +41,14 @@ All machine-mode commands emit a stable JSON envelope with the following contrac
 
 ```json
 {
+  "schema": "tp.meta.machine.v1",
   "command": "<command-name>",
+  "success": true,
+  "exit_code": 0,
   "data": {
     ...command-specific payload...
   },
-  "error": null,
-  "exit_code": 0,
-  "schema": "tp.meta.machine.v1",
-  "success": true
+  "error": null
 }
 ```
 
@@ -63,12 +63,10 @@ All machine-mode commands emit a stable JSON envelope with the following contrac
 
 **Determinism guarantees:**
 
-- JSON uses `json.dumps(..., sort_keys=True, separators=(",", ":"))`
-- Envelope key ordering is lexicographic; consumers must match by key name and must not rely on positional ordering
+- JSON keys are sorted alphabetically (`sort_keys=True`)
 - Compact separators for machine mode (`","`, `":"`)
-- Machine output intentionally excludes wall-clock timestamp fields
-- Known command-specific volatile fields include `elapsed_seconds` and environment/tool version fields under `check-system`
-- For cross-run or cross-runner golden tests, normalize volatile fields before byte-exact comparison
+- No timestamps or nondeterministic fields
+- Identical inputs produce byte-identical outputs
 
 **Contract stability:**
 
