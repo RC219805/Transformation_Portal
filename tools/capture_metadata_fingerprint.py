@@ -6,9 +6,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 from pathlib import Path
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "capture_metadata_config.json"
+EXIT_CONFIG_MALFORMED = 31
 
 
 def load_config(path: Path) -> dict[str, object]:
@@ -45,9 +47,13 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    config = load_config(args.config)
-    print(compute_fingerprint(config))
-    return 0
+    try:
+        config = load_config(args.config)
+        print(compute_fingerprint(config))
+        return 0
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError) as exc:
+        print(f"Malformed capture metadata config: {exc}", file=sys.stderr)
+        return EXIT_CONFIG_MALFORMED
 
 
 if __name__ == "__main__":

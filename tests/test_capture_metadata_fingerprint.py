@@ -88,3 +88,18 @@ def test_capture_metadata_config_fingerprint_ignores_key_order_and_whitespace(tm
     assert compact_result.returncode == 0, compact_result.stderr
     assert pretty_result.returncode == 0, pretty_result.stderr
     assert compact_result.stdout.strip() == pretty_result.stdout.strip()
+
+
+def test_capture_metadata_config_fingerprint_fails_for_missing_config() -> None:
+    missing = PROJECT_ROOT / "tools" / "missing_capture_metadata_config.json"
+    result = _run_tool(missing)
+    assert result.returncode == 31
+    assert "Malformed capture metadata config:" in result.stderr
+
+
+def test_capture_metadata_config_fingerprint_fails_for_invalid_json(tmp_path: Path) -> None:
+    invalid_json = tmp_path / "invalid_config.json"
+    invalid_json.write_text('{"metadata_contract_version": "tp.meta.capture.v1",}', encoding="utf-8")
+    result = _run_tool(invalid_json)
+    assert result.returncode == 31
+    assert "Malformed capture metadata config:" in result.stderr
