@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rc219805.github.io/Transformation_Portal/schemas/phase4/metadata_manifest.schema.json",
+  "title": "tp.meta.capture_manifest.v1 — Metadata Index Manifest",
+  "description": "Deterministic index mapping RAW file hashes to metadata hashes. Entries must be lexicographically sorted by relative_path prior to hashing or Merkle binding.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "metadata_manifest_contract_version",
+    "metadata_contract_version",
+    "entries"
+  ],
+  "properties": {
+    "metadata_manifest_contract_version": {
+      "type": "string",
+      "const": "tp.meta.capture_manifest.v1"
+    },
+    "metadata_contract_version": {
+      "type": "string",
+      "const": "tp.meta.capture.v1"
+    },
+    "entries": {
+      "type": "array",
+      "description": "Sorted by relative_path (generator responsibility).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "relative_path",
+          "file_sha256",
+          "metadata_sha256"
+        ],
+        "properties": {
+          "relative_path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "file_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "metadata_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    }
+  }
+}
