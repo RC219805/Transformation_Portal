@@ -68,6 +68,21 @@
               "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.meta.machine.v1/data.extract-batch.schema.json"
             }
           }
+        },
+        {
+          "type": "object",
+          "required": [
+            "command",
+            "data"
+          ],
+          "properties": {
+            "command": {
+              "const": "summarize"
+            },
+            "data": {
+              "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.meta.machine.v1/data.summarize.schema.json"
+            }
+          }
         }
       ]
     }

@@ -22,7 +22,8 @@
         "check-system",
         "extract",
         "validate",
-        "extract-batch"
+        "extract-batch",
+        "summarize"
       ]
     },
     "success": {

@@ -75,7 +75,7 @@ All machine-mode JSON outputs use a **common envelope** with these top-level fie
 | Field | Type | Required | Semantics |
 |-------|------|----------|-----------|
 | `schema` | string | Yes | Always `"tp.meta.machine.v1"` for this version |
-| `command` | string | Yes | Command name (e.g., `"extract"`, `"validate"`, `"check-system"`) |
+| `command` | string | Yes | Command name (e.g., `"extract"`, `"validate"`, `"check-system"`, `"summarize"`) |
 | `success` | boolean | Yes | `true` if operation succeeded, `false` otherwise |
 | `exit_code` | integer | Yes | Process exit code (0 = success, 1-255 = failure) |
 | `data` | object | Yes | Command-specific result payload (see per-command schemas) |
@@ -418,6 +418,43 @@ Batch metadata extraction for multiple images.
 
 ---
 
+### `summarize`
+
+Aggregate summary of sidecar validation results in a directory.
+
+**Example (success):**
+
+```json
+{
+  "schema": "tp.meta.machine.v1",
+  "command": "summarize",
+  "success": true,
+  "exit_code": 0,
+  "data": {
+    "sidecar_dir": "/output/provenance_sidecars",
+    "total_sidecars": 12,
+    "valid": 12,
+    "invalid": 0,
+    "errors": []
+  },
+  "error": null
+}
+```
+
+**Data Field Ordering (guaranteed):**
+
+1. `errors`
+2. `invalid`
+3. `sidecar_dir`
+4. `total_sidecars`
+5. `valid`
+
+**Variable Fields:**
+- `total_sidecars`: Depends on files present in the directory
+- `errors`: Contains parse/load failures for unreadable sidecars
+
+---
+
 ## Determinism Semantics
 
 ### What IS Deterministic
@@ -571,6 +608,11 @@ def route_by_command(payload: Dict[str, Any]) -> None:
             dominant = data["dominant_error"]
             print(f"   Dominant error: {dominant['type']}")
             print(f"   Failed by exit code: {counts['by_exit_code']}")
+
+    elif command == "summarize":
+        print(f"Sidecars: {data['valid']}/{data['total_sidecars']} valid")
+        if not success:
+            print(f"   Errors: {data['errors']}")
 
     else:
         print(f"Unknown command: {command}")
@@ -816,7 +858,7 @@ If you find a case where the implementation violates this contract:
 **Initial release** (PR #1024)
 
 - Envelope structure with `schema`, `command`, `success`, `exit_code`, `data`, `error`
-- Per-command data payloads: `check-system`, `extract`, `validate`, `extract-batch`
+- Per-command data payloads: `check-system`, `extract`, `validate`, `extract-batch`, `summarize`
 - Typed error structure with exit code objects
 - Deterministic JSON serialization (`sort_keys=True`)
 - Exit code semantics from `IngestExitCode` enum

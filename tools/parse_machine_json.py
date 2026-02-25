@@ -78,6 +78,9 @@ def route_by_command(payload: Dict[str, Any]) -> NoReturn:
     elif command == "extract-batch":
         handle_extract_batch(success, data)
 
+    elif command == "summarize":
+        handle_summarize(success, data)
+
     else:
         print(f"❓ Unknown command: {command}", file=sys.stderr)
 
@@ -175,6 +178,27 @@ def handle_extract_batch(success: bool, data: Dict[str, Any]) -> None:
         for item in failed_items[:3]:
             error = item.get("error", {})
             print(f"     - {item['path']}: {error.get('type', 'unknown')}", file=sys.stderr)
+
+
+def handle_summarize(success: bool, data: Dict[str, Any]) -> None:
+    """Handle summarize command result."""
+    total = data["total_sidecars"]
+    valid = data["valid"]
+    invalid = data["invalid"]
+
+    print(f"📊 Summary result: {valid}/{total} valid, {invalid} invalid")
+    print(f"   Sidecar dir: {data['sidecar_dir']}")
+
+    errors = data.get("errors", [])
+    if not success and errors:
+        print("\n   Errors:", file=sys.stderr)
+        for error in errors:
+            path = error.get("path")
+            message = error.get("message", "")
+            if path:
+                print(f"     - {path}: {message}", file=sys.stderr)
+            else:
+                print(f"     - {message}", file=sys.stderr)
 
 
 def main() -> NoReturn:

@@ -10,17 +10,20 @@ set -euo pipefail
 
 extract_with_routing() {
     local input_path="$1"
-    
-    result=$(python scripts/test_metadata_extraction.py --json extract "$input_path")
-    exit_code=$?
-    
+
+    if result=$(python scripts/test_metadata_extraction.py --json extract "$input_path"); then
+        exit_code=0
+    else
+        exit_code=$?
+    fi
+
     # Validate schema
     schema=$(echo "$result" | jq -r '.schema')
     if [[ "$schema" != "tp.meta.machine.v1" ]]; then
         echo "ERROR: Unsupported schema: $schema" >&2
         return 99
     fi
-    
+
     # Route by exit code
     if [[ $exit_code -eq 0 ]]; then
         input_path=$(echo "$result" | jq -r '.data.input_path')
@@ -42,13 +45,16 @@ extract_with_routing() {
 
 validate_with_error_handling() {
     local sidecar_path="$1"
-    
-    result=$(python scripts/test_metadata_extraction.py --json validate "$sidecar_path")
-    exit_code=$?
-    
+
+    if result=$(python scripts/test_metadata_extraction.py --json validate "$sidecar_path"); then
+        exit_code=0
+    else
+        exit_code=$?
+    fi
+
     success=$(echo "$result" | jq -r '.success')
     sidecar=$(echo "$result" | jq -r '.data.sidecar_path')
-    
+
     if [[ "$success" == "true" ]]; then
         echo "✅ Validation passed: $sidecar"
         return 0
@@ -56,15 +62,15 @@ validate_with_error_handling() {
         dominant_type=$(echo "$result" | jq -r '.data.dominant_error.type')
         dominant_name=$(echo "$result" | jq -r '.data.dominant_error.exit_code.name')
         error_count=$(echo "$result" | jq '.data.errors | length')
-        
+
         echo "❌ Validation failed: $sidecar" >&2
         echo "   Dominant error: $dominant_type ($dominant_name)" >&2
         echo "   Total errors: $error_count" >&2
-        
+
         # Detailed error breakdown
         echo "   Error breakdown:" >&2
         echo "$result" | jq -r '.data.errors[] | "     - \(.type): \(.message)"' >&2
-        
+
         return $exit_code
     fi
 }
@@ -76,25 +82,28 @@ validate_with_error_handling() {
 batch_extract_with_summary() {
     local input_root="$1"
     local output_dir="$2"
-    
-    result=$(python scripts/test_metadata_extraction.py --json extract-batch "$input_root" --output "$output_dir")
-    exit_code=$?
-    
+
+    if result=$(python scripts/test_metadata_extraction.py --json extract-batch "$input_root" --output "$output_dir"); then
+        exit_code=0
+    else
+        exit_code=$?
+    fi
+
     total=$(echo "$result" | jq '.data.summary_counts.total')
     success=$(echo "$result" | jq '.data.summary_counts.success')
     failure=$(echo "$result" | jq '.data.summary_counts.failure')
-    
+
     echo "📦 Batch result: $success/$total succeeded, $failure failed"
-    
+
     if [[ $exit_code -ne 0 ]]; then
         echo "Exit code breakdown:" >&2
         echo "$result" | jq -r '.data.summary_counts.by_exit_code | to_entries[] | "  \(.key): \(.value)"' >&2
-        
+
         # Show first few failures
         echo "First 3 failures:" >&2
         echo "$result" | jq -r '.data.items[] | select(.success == false) | "  - \(.path): \(.error.type)"' | head -3 >&2
     fi
-    
+
     return $exit_code
 }
 
@@ -103,14 +112,17 @@ batch_extract_with_summary() {
 # ==============================================================================
 
 check_system_readiness() {
-    result=$(python scripts/test_metadata_extraction.py --json check-system)
-    exit_code=$?
-    
+    if result=$(python scripts/test_metadata_extraction.py --json check-system); then
+        exit_code=0
+    else
+        exit_code=$?
+    fi
+
     all_ok=$(echo "$result" | jq -r '.data.all_required_ok')
-    
+
     if [[ "$all_ok" == "true" ]]; then
         echo "✅ System check passed"
-        
+
         # Show available tools
         echo "Tool versions:"
         echo "$result" | jq -r '
@@ -134,10 +146,13 @@ check_system_readiness() {
 
 ci_safe_validate() {
     local sidecar_path="$1"
-    
-    result=$(python scripts/test_metadata_extraction.py --json validate "$sidecar_path")
-    exit_code=$?
-    
+
+    if result=$(python scripts/test_metadata_extraction.py --json validate "$sidecar_path"); then
+        exit_code=0
+    else
+        exit_code=$?
+    fi
+
     case $exit_code in
         0)
             echo "✅ Validation passed"
@@ -180,7 +195,7 @@ ci_safe_validate() {
 
 compact_status_check() {
     local sidecar_path="$1"
-    
+
     python scripts/test_metadata_extraction.py --json validate "$sidecar_path" | \
         jq -r 'if .success then "✅ \(.data.sidecar_path)" else "❌ \(.data.sidecar_path): \(.data.dominant_error.type)" end'
 }
@@ -193,14 +208,17 @@ extract_multiple_with_error_collection() {
     local output_dir="$1"
     shift
     local files=("$@")
-    
+
     local errors=()
     local successes=0
-    
+
     for file in "${files[@]}"; do
-        result=$(python scripts/test_metadata_extraction.py --json extract "$file" --output "$output_dir")
-        exit_code=$?
-        
+        if result=$(python scripts/test_metadata_extraction.py --json extract "$file" --output "$output_dir"); then
+            exit_code=0
+        else
+            exit_code=$?
+        fi
+
         if [[ $exit_code -eq 0 ]]; then
             ((successes++))
         else
@@ -208,15 +226,15 @@ extract_multiple_with_error_collection() {
             errors+=("$file: $error_type")
         fi
     done
-    
+
     echo "Results: $successes/${#files[@]} succeeded"
-    
+
     if [[ ${#errors[@]} -gt 0 ]]; then
         echo "Errors:" >&2
         printf '  - %s\n' "${errors[@]}" >&2
         return 1
     fi
-    
+
     return 0
 }
 

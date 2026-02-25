@@ -114,6 +114,26 @@ def test_extract_batch_empty_directory_success_matches_json_schema(tmp_path: Pat
     assert payload["success"] is True
 
 
+def test_summarize_missing_directory_failure_matches_json_schema(tmp_path: Path) -> None:
+    payload = _load_payload(_run_cli("--json", "summarize", str(tmp_path / "missing-sidecars")))
+    validate_machine_payload(payload)
+    assert payload["command"] == "summarize"
+    assert payload["success"] is False
+
+
+def test_summarize_empty_directory_success_matches_json_schema(tmp_path: Path) -> None:
+    sidecar_dir = tmp_path / "sidecars"
+    sidecar_dir.mkdir()
+
+    result = _run_cli("--json", "summarize", str(sidecar_dir))
+    payload = _load_payload(result)
+
+    assert result.returncode == 0
+    validate_machine_payload(payload)
+    assert payload["success"] is True
+    assert payload["data"]["total_sidecars"] == 0
+
+
 def test_schema_rejects_unknown_top_level_field(tmp_path: Path) -> None:
     payload = _load_payload(_run_cli("--json", "validate", str(tmp_path / "missing.provenance.json")))
     payload["unexpected_contract_field"] = True
