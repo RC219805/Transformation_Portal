@@ -35,6 +35,43 @@ python scripts/test_metadata_extraction.py --json --json-pretty <command> ...
 python scripts/test_metadata_extraction.py --json --json-output /tmp/metadata_result.json <command> ...
 ```
 
+### Machine JSON Envelope Structure
+
+All machine-mode commands emit a stable JSON envelope with the following contract (`tp.meta.machine.v1`):
+
+```json
+{
+  "schema": "tp.meta.machine.v1",
+  "command": "<command-name>",
+  "success": true,
+  "exit_code": 0,
+  "data": {
+    ...command-specific payload...
+  },
+  "error": null
+}
+```
+
+**Envelope fields (always present):**
+
+- `schema` (string): Versioned contract identifier. Current: `"tp.meta.machine.v1"`
+- `command` (string): The CLI command that was executed (`"check-system"`, `"extract"`, `"extract-batch"`, `"validate"`, `"summarize"`)
+- `success` (boolean): Overall command success status (`exit_code == 0`)
+- `exit_code` (integer): Numeric exit code from `IngestExitCode` enum
+- `data` (object): Command-specific result payload (shape varies by command)
+- `error` (object|null): Command-level exception details, if raised during execution (typically `null` for typed domain errors)
+
+**Determinism guarantees:**
+
+- JSON keys are sorted alphabetically (`sort_keys=True`)
+- Compact separators for machine mode (`","`, `":"`)
+- No timestamps or nondeterministic fields
+- Identical inputs produce byte-identical outputs
+
+**Contract stability:**
+
+This envelope structure is versioned and stable. Any breaking change to the envelope or `data` payload schema requires bumping the schema version identifier. Tests enforce byte-level contract stability to prevent unintentional drift.
+
 ### 1. Check System Readiness
 
 ```bash
