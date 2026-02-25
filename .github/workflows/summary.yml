@@ -20,7 +20,7 @@ jobs:
     if: ${{ !(github.event_name == 'pull_request' && (github.actor == 'Copilot' || github.actor == 'copilot-swe-agent[bot]')) }}
     runs-on: ubuntu-latest
     continue-on-error: true
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       issues: write
       pull-requests: write
@@ -51,6 +51,7 @@ jobs:
 
       - name: Run summarizer (safe Option B)
         id: summarizer
+        timeout-minutes: 4
         env:
           RESPONSE_FILE: ${{ runner.temp }}/issue_summary.txt
           ISSUE_TITLE: ${{ github.event.issue.title || github.event.pull_request.title || github.event.head_commit.message || '' }}
@@ -128,6 +129,7 @@ jobs:
           except Exception as e:
               # Write a short friendly failure message (no secrets) and log detailed error to stderr
               summary = "AI summarization failed: an internal error occurred. See CI logs for details."
+              print("::warning::Issue Summarizer OpenAI request failed (non-blocking). See job logs for details.")
               print("Detailed error (redacted for posting):", file=sys.stderr)
               print(repr(e), file=sys.stderr)
 
