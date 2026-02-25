@@ -10,6 +10,7 @@ from .errors import IngestError, IngestExitCode
 from .metadata_service import BatchExtractResult, BatchItemResult, ExtractResult, ValidateResult
 
 MACHINE_SCHEMA_VERSION = "tp.meta.machine.v1"
+_CANONICAL_JSON_KWARGS: Dict[str, Any] = {"sort_keys": True, "ensure_ascii": True}
 
 
 def exit_code_to_dict(code: IngestExitCode) -> Dict[str, Any]:
@@ -112,5 +113,5 @@ def batch_result_to_dict(
 def dump_json(payload: Dict[str, Any], *, pretty: bool) -> str:
     """Dump payload with lexicographic key ordering (`sort_keys=True`)."""
     if pretty:
-        return json.dumps(payload, sort_keys=True, indent=2)
-    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        return json.dumps(payload, indent=2, **_CANONICAL_JSON_KWARGS)
+    return json.dumps(payload, separators=(",", ":"), **_CANONICAL_JSON_KWARGS)

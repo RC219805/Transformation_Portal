@@ -45,6 +45,10 @@ def _normalize_machine_contract_payload(payload: dict[str, Any]) -> dict[str, An
     return normalized
 
 
+def _canonical_machine_json(payload: dict[str, Any]) -> str:
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+
 def test_check_system_json_contract_shape_is_stable() -> None:
     result = _run_cli("--json", "check-system")
 
@@ -71,6 +75,16 @@ def test_check_system_json_contract_shape_is_stable() -> None:
     ]
     assert isinstance(data["all_required_ok"], bool)
     assert isinstance(data["errors"], list)
+
+
+def test_check_system_json_contract_stable_after_normalization() -> None:
+    first = _run_cli("--json", "check-system")
+    second = _run_cli("--json", "check-system")
+
+    assert first.returncode == second.returncode
+    first_payload = _normalize_machine_contract_payload(json.loads(first.stdout))
+    second_payload = _normalize_machine_contract_payload(json.loads(second.stdout))
+    assert _canonical_machine_json(first_payload) == _canonical_machine_json(second_payload)
 
 
 def test_validate_json_envelope_is_versioned_and_stable(tmp_path: Path) -> None:

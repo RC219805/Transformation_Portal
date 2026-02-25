@@ -64,7 +64,8 @@ All machine-mode commands emit a stable JSON envelope with the following contrac
 **Determinism guarantees:**
 
 - JSON uses `json.dumps(..., sort_keys=True, separators=(",", ":"))`
-- Envelope key ordering is lexicographic; consumers must match by key name and must not rely on positional ordering
+- Envelope ordering is lexicographic because `sort_keys=True`; adding new keys can change relative field positions
+- Consumers must treat machine envelopes as key-addressed objects and must not rely on positional ordering
 - Compact separators for machine mode (`","`, `":"`)
 - Machine output intentionally excludes wall-clock timestamp fields
 - Known command-specific volatile fields include `elapsed_seconds` and environment/tool version fields under `check-system`

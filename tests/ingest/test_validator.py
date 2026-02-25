@@ -100,6 +100,16 @@ class TestExitCodeAggregation:
         assert len(values) == len(set(values))
         assert IngestExitCode.SUCCESS == 0
 
+    def test_ingest_exit_code_wire_mapping_is_frozen(self):
+        assert {code.name: int(code) for code in IngestExitCode} == {
+            "SUCCESS": 0,
+            "SCHEMA_VALIDATION_FAILED": 1,
+            "BIT_DEPTH_VIOLATION": 2,
+            "GAMMA_VIOLATION": 3,
+            "SCHEMA_DRIFT": 4,
+            "OTHER_FAILURE": 5,
+        }
+
 
 class TestTypedIngestErrors:
     """Tests for typed ingest-domain error hierarchy and aggregation."""
