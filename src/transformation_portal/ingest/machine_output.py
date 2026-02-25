@@ -28,7 +28,7 @@ def error_to_dict(error: IngestError) -> Dict[str, Any]:
 
 
 def extract_result_to_dict(result: ExtractResult, *, preset: Optional[str] = None) -> Dict[str, Any]:
-    """Serialize single-item extract result."""
+    """Serialize single-item extract result (includes volatile elapsed_seconds telemetry)."""
     return {
         "input_path": str(result.path),
         "success": result.success,
@@ -56,7 +56,7 @@ def validate_result_to_dict(
 
 
 def batch_item_to_dict(item: BatchItemResult) -> Dict[str, Any]:
-    """Serialize a single batch item result."""
+    """Serialize a single batch item result (includes volatile elapsed_seconds telemetry)."""
     return {
         "path": str(item.path),
         "success": item.success,
@@ -110,7 +110,7 @@ def batch_result_to_dict(
 
 
 def dump_json(payload: Dict[str, Any], *, pretty: bool) -> str:
-    """Dump payload with deterministic key ordering."""
+    """Dump payload with lexicographic key ordering (`sort_keys=True`)."""
     if pretty:
         return json.dumps(payload, sort_keys=True, indent=2)
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))

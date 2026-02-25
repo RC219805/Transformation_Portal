@@ -13,7 +13,12 @@ from typing import Iterable, Optional
 
 
 class IngestExitCode(IntEnum):
-    """Stable ingest contract exit codes."""
+    """Stable ingest contract exit codes.
+
+    Expansion policy:
+    - Numeric values are wire-level contract and must not be renumbered or reused.
+    - Add new codes with strictly increasing integer values.
+    """
 
     SUCCESS = 0
     SCHEMA_VALIDATION_FAILED = 1
