@@ -10,13 +10,13 @@ Tighten Phase 4 into a deterministic, schema-governed, versioned rollout that pr
 - contract drift
 - backward-compatibility breakage
 
-`schemas/phase4/metadata.schema.json` is the source of truth for capture metadata shape. Everything else is engineered around it.
+`schemas/phase4/metadata.schema.json` (new path to be created in Phase 4A) is the source of truth for capture metadata shape. Everything else is engineered around it.
 
 ## Terminology and Authority
 
 Contract authority and versioning rules for Phase 4:
 
-- **Schema**: `schemas/phase4/metadata.schema.json` is the authoritative shape contract.
+- **Schema**: `schemas/phase4/metadata.schema.json` is the authoritative shape contract (created in 4A.1).
 - **Canonicalization Spec**: `docs/contracts/metadata_canonicalization.md` is **normative** for byte stability.
 - **Canonicalization Spec Version**: treated as part of the contract surface. If canonicalization rules change in any way that can affect emitted bytes or hashes, a **contract version bump is required** (e.g., `tp.meta.capture.v2`), unless an explicit, documented compatibility rule exists and is enforced by tests.
 
@@ -172,7 +172,7 @@ Deliverable:
 
 Rules:
 - JSON array sorted by `relative_path`
-- every object validates against `metadata.schema.json`
+- every object validates against `schemas/phase4/metadata.schema.json`
 - canonical serialization
 
 ### 4D.2 Deterministic metadata manifest (recommended)
