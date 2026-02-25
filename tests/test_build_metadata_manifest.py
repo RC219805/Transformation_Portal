@@ -11,7 +11,8 @@ from typing import Any
 
 import pytest
 
-from tp.phase4.hash_capture_metadata import compute_metadata_sha256
+import tp.phase4.hash_capture_metadata as hash_capture_metadata
+from tp.phase4.hash_capture_metadata import MetadataSchemaValidationError, compute_metadata_sha256
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 EXTRACT_TOOL = PROJECT_ROOT / "tools" / "extract_capture_metadata.py"
@@ -131,6 +132,20 @@ def test_phase4d_metadata_hash_is_whitespace_and_key_order_independent() -> None
     first = compute_metadata_sha256(record)
     second = compute_metadata_sha256(parsed)
     assert first == second
+
+
+def test_phase4d_metadata_validation_normalizes_validator_runtime_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _ExplodingValidator:
+        def iter_errors(self, _record: dict[str, Any]) -> list[Any]:
+            raise ValueError("cannot convert float NaN to integer")
+
+    def _fake_build_validator(schema: dict[str, Any], *, error_cls: type[Exception], label: str) -> _ExplodingValidator:
+        del schema, error_cls, label
+        return _ExplodingValidator()
+
+    monkeypatch.setattr(hash_capture_metadata, "_build_validator", _fake_build_validator)
+    with pytest.raises(MetadataSchemaValidationError, match="validator runtime error"):
+        hash_capture_metadata._validate_metadata_records([{}], metadata_schema={})
 
 
 def test_phase4d_golden_manifest_matches_expected(tmp_path: Path) -> None:

@@ -62,7 +62,12 @@ def _validate_metadata_records(records: list[dict[str, Any]], metadata_schema: d
         label="metadata",
     )
     for index, record in enumerate(records):
-        errors = sorted(validator.iter_errors(record), key=lambda error: list(error.path))
+        try:
+            errors = sorted(validator.iter_errors(record), key=lambda error: list(error.path))
+        except (TypeError, ValueError) as exc:
+            raise MetadataSchemaValidationError(
+                f"record[{index}] schema validation failed due to validator runtime error ({type(exc).__name__})"
+            ) from exc
         if errors:
             first = errors[0]
             path = ".".join(str(part) for part in first.path) or "<root>"
