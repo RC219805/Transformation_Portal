@@ -13,22 +13,22 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/transformation_portal/ingest/machine_output.py'
-      - 'src/transformation_portal/ingest/metadata_service.py'
-      - 'src/transformation_portal/ingest/errors.py'
+      - 'src/transformation_portal/ingest/**'
       - 'scripts/test_metadata_extraction.py'
-      - 'tests/ingest/test_machine_output.py'
-      - 'tests/ingest/test_metadata_cli_machine_mode.py'
+      - 'tests/ingest/**'
+      - 'docs/schemas/machine_mode/**'
+      - 'docs/api/MACHINE_MODE_CONTRACT.md'
+      - 'tools/parse_machine_json.py'
       - '.github/workflows/machine_mode_contract_validation.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'src/transformation_portal/ingest/machine_output.py'
-      - 'src/transformation_portal/ingest/metadata_service.py'
-      - 'src/transformation_portal/ingest/errors.py'
+      - 'src/transformation_portal/ingest/**'
       - 'scripts/test_metadata_extraction.py'
-      - 'tests/ingest/test_machine_output.py'
-      - 'tests/ingest/test_metadata_cli_machine_mode.py'
+      - 'tests/ingest/**'
+      - 'docs/schemas/machine_mode/**'
+      - 'docs/api/MACHINE_MODE_CONTRACT.md'
+      - 'tools/parse_machine_json.py'
       - '.github/workflows/machine_mode_contract_validation.yml'
   workflow_dispatch:
 
@@ -86,11 +86,19 @@ jobs:
             --tb=short \
             -ra
 
+      - name: Run JSON Schema contract tests
+        run: |
+          set -euo pipefail
+          echo "Running machine-mode JSON Schema tests..."
+          pytest -xvs tests/ingest/test_machine_mode_jsonschema.py \
+            --tb=short \
+            -ra
+
       - name: Verify golden master stability
         run: |
           set -euo pipefail
           echo "Verifying golden master contract tests..."
-          
+
           # Run tests that validate byte-exact output stability
           pytest -xvs tests/ingest/test_machine_output.py \
             -k "golden" \
@@ -115,7 +123,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "Verifying output determinism..."
-          
+
           # Run tests that validate deterministic output
           pytest -xvs tests/ingest/test_metadata_cli_machine_mode.py \
             -k "determinism or stable" \
@@ -133,6 +141,7 @@ jobs:
           echo ""
           echo "Contract: tp.meta.machine.v1"
           echo "Documentation: docs/api/MACHINE_MODE_CONTRACT.md"
+          echo "JSON Schema: docs/schemas/machine_mode/tp.meta.machine.v1/machine_mode.schema.json"
           echo ""
           if [[ "${{ job.status }}" == "success" ]]; then
             echo "✅ All contract tests passed"

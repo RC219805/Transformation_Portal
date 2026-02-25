@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.transformation-portal.dev/machine_mode/tp.meta.machine.v1/exit_code.schema.json",
+  "title": "Machine Mode Exit Code",
+  "description": "Wire-level exit code object for tp.meta.machine.v1 envelopes and typed errors.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/success"
+    },
+    {
+      "$ref": "#/$defs/schema_validation_failed"
+    },
+    {
+      "$ref": "#/$defs/bit_depth_violation"
+    },
+    {
+      "$ref": "#/$defs/gamma_violation"
+    },
+    {
+      "$ref": "#/$defs/schema_drift"
+    },
+    {
+      "$ref": "#/$defs/other_failure"
+    }
+  ],
+  "$defs": {
+    "success": {
+      "type": "object",
+      "required": [
+        "name",
+        "value"
+      ],
+      "properties": {
+        "name": {
+          "const": "SUCCESS"
+        },
+        "value": {
+          "const": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "schema_validation_failed": {
+      "type": "object",
+      "required": [
+        "name",
+        "value"
+      ],
+      "properties": {
+        "name": {
+          "const": "SCHEMA_VALIDATION_FAILED"
+        },
+        "value": {
+          "const": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "bit_depth_violation": {
+      "type": "object",
+      "required": [
+        "name",
+        "value"
+      ],
+      "properties": {
+        "name": {
+          "const": "BIT_DEPTH_VIOLATION"
+        },
+        "value": {
+          "const": 2
+        }
+      },
+      "additionalProperties": false
+    },
+    "gamma_violation": {
+      "type": "object",
+      "required": [
+        "name",
+        "value"
+      ],
+      "properties": {
+        "name": {
+          "const": "GAMMA_VIOLATION"
+        },
+        "value": {
+          "const": 3
+        }
+      },
+      "additionalProperties": false
+    },
+    "schema_drift": {
+      "type": "object",
+      "required": [
+        "name",
+        "value"
+      ],
+      "properties": {
+        "name": {
+          "const": "SCHEMA_DRIFT"
+        },
+        "value": {
+          "const": 4
+        }
+      },
+      "additionalProperties": false
+    },
+    "other_failure": {
+      "type": "object",
+      "required": [
+        "name",
+        "value"
+      ],
+      "properties": {
+        "name": {
+          "const": "OTHER_FAILURE"
+        },
+        "value": {
+          "const": 5
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

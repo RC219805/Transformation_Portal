@@ -1,8 +1,8 @@
 # Machine-Mode JSON Contract (tp.meta.machine.v1)
 
-**Status:** Official Contract  
-**Effective Date:** 2026-02-25  
-**Schema Version:** tp.meta.machine.v1  
+**Status:** Official Contract
+**Effective Date:** 2026-02-25
+**Schema Version:** tp.meta.machine.v1
 **Supersedes:** Human-readable text output for automation workflows
 
 ---
@@ -16,6 +16,20 @@ The machine-mode contract ensures:
 - **Typed error handling**: Structured error information for automation
 - **Exit code semantics**: Clear success/failure signaling for CI/CD pipelines
 - **Version stability**: Schema changes require explicit version bumps
+
+---
+
+## Canonical JSON Schemas
+
+The authoritative schema artifacts for this contract are versioned in-repo at:
+
+- `docs/schemas/machine_mode/tp.meta.machine.v1/`
+
+Canonical entrypoint:
+
+- `docs/schemas/machine_mode/tp.meta.machine.v1/machine_mode.schema.json`
+
+The schema entrypoint is enforced in CI and tests. Payloads that do not match this schema are contract violations.
 
 ---
 
@@ -69,7 +83,7 @@ All machine-mode JSON outputs use a **common envelope** with these top-level fie
 
 ### Envelope Field Ordering
 
-The envelope fields are **guaranteed to appear in this order** (sorted keys):
+Envelope keys are serialized with `json.dumps(..., sort_keys=True)`, so ordering is lexicographic:
 
 1. `command`
 2. `data`
@@ -78,7 +92,7 @@ The envelope fields are **guaranteed to appear in this order** (sorted keys):
 5. `schema`
 6. `success`
 
-This ordering is enforced by `dump_json(sort_keys=True)` in `machine_output.py`.
+Consumers must parse by key name, not positional order. Additive keys may change relative key positions in future versions.
 
 ---
 
@@ -91,7 +105,7 @@ Exit codes follow the ingest layer's `IngestExitCode` enum:
 | 0 | SUCCESS | Operation completed successfully | All required checks passed |
 | 1 | SCHEMA_VALIDATION_FAILED | Schema validation failed | Required fields missing, type mismatch, etc. |
 | 2 | BIT_DEPTH_VIOLATION | 8-bit conversion detected | Quality firewall: image is 8-bit when 16-bit expected |
-| 3 | GAMMA_CORRECTION_DETECTED | Gamma correction detected | Quality firewall: gamma curve applied when linear expected |
+| 3 | GAMMA_VIOLATION | Gamma correction detected | Quality firewall: gamma curve applied when linear expected |
 | 4 | SCHEMA_DRIFT | Schema drift detected | Unknown fields or structure changes detected |
 | 5 | OTHER_FAILURE | Other failure | File not found, tool missing, I/O error, etc. |
 
@@ -509,12 +523,12 @@ from typing import Any, Dict
 def parse_machine_json(json_str: str) -> Dict[str, Any]:
     """Parse and validate machine JSON envelope."""
     payload = json.loads(json_str)
-    
+
     # Validate schema version
     schema = payload.get("schema")
     if schema != "tp.meta.machine.v1":
         raise ValueError(f"Unsupported schema: {schema}")
-    
+
     return payload
 
 
@@ -524,13 +538,13 @@ def route_by_command(payload: Dict[str, Any]) -> None:
     exit_code = payload["exit_code"]
     success = payload["success"]
     data = payload["data"]
-    
+
     if command == "check-system":
         if success:
             print(f"✅ System check passed (all_required_ok={data['all_required_ok']})")
         else:
             print(f"❌ System check failed: {data['errors']}")
-    
+
     elif command == "extract":
         if success:
             print(f"✅ Extracted: {data['input_path']} → {data['output_path']}")
@@ -540,7 +554,7 @@ def route_by_command(payload: Dict[str, Any]) -> None:
             print(f"❌ Extract failed: {data['input_path']}")
             print(f"   Error type: {error['type']}")
             print(f"   Exit code: {error['exit_code']['name']} ({error['exit_code']['value']})")
-    
+
     elif command == "validate":
         if success:
             print(f"✅ Validation passed: {data['sidecar_path']}")
@@ -549,7 +563,7 @@ def route_by_command(payload: Dict[str, Any]) -> None:
             dominant = data["dominant_error"]
             print(f"   Dominant error: {dominant['type']} ({dominant['exit_code']['name']})")
             print(f"   Total errors: {len(data['errors'])}")
-    
+
     elif command == "extract-batch":
         counts = data["summary_counts"]
         print(f"Batch result: {counts['success']}/{counts['total']} succeeded")
@@ -557,10 +571,10 @@ def route_by_command(payload: Dict[str, Any]) -> None:
             dominant = data["dominant_error"]
             print(f"   Dominant error: {dominant['type']}")
             print(f"   Failed by exit code: {counts['by_exit_code']}")
-    
+
     else:
         print(f"Unknown command: {command}")
-    
+
     sys.exit(exit_code)
 
 
@@ -571,7 +585,7 @@ def main() -> None:
         json_str = json_path.read_text(encoding="utf-8")
     else:
         json_str = sys.stdin.read()
-    
+
     payload = parse_machine_json(json_str)
     route_by_command(payload)
 
@@ -787,9 +801,11 @@ If you find a case where the implementation violates this contract:
 ## Related Documentation
 
 - **Ingest Contract:** [docs/apex/ingest_contract.md](../apex/ingest_contract.md) - Provenance sidecar schema
+- **Machine JSON Schemas:** [docs/schemas/machine_mode/tp.meta.machine.v1/machine_mode.schema.json](../schemas/machine_mode/tp.meta.machine.v1/machine_mode.schema.json) - Canonical schema entrypoint
 - **Exit Codes:** [src/transformation_portal/ingest/errors.py](../../src/transformation_portal/ingest/errors.py) - Exit code enum definitions
 - **Machine Output Implementation:** [src/transformation_portal/ingest/machine_output.py](../../src/transformation_portal/ingest/machine_output.py) - Serializer source code
 - **Contract Tests:** [tests/ingest/test_metadata_cli_machine_mode.py](../../tests/ingest/test_metadata_cli_machine_mode.py) - Enforcement tests
+- **JSON Schema Tests:** [tests/ingest/test_machine_mode_jsonschema.py](../../tests/ingest/test_machine_mode_jsonschema.py) - Schema contract validation
 
 ---
 

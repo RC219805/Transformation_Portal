@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.transformation-portal.dev/machine_mode/tp.meta.machine.v1/data.extract.schema.json",
+  "title": "extract data payload",
+  "type": "object",
+  "required": [
+    "input_path",
+    "success",
+    "output_path",
+    "elapsed_seconds",
+    "preset",
+    "error"
+  ],
+  "properties": {
+    "input_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "success": {
+      "type": "boolean"
+    },
+    "output_path": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "elapsed_seconds": {
+      "type": "number",
+      "minimum": 0
+    },
+    "preset": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "error": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.meta.machine.v1/error.schema.json"
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

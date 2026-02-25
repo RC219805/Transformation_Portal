@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.transformation-portal.dev/machine_mode/tp.meta.machine.v1/data.check-system.schema.json",
+  "title": "check-system data payload",
+  "type": "object",
+  "required": [
+    "all_required_ok",
+    "errors",
+    "exiftool_available",
+    "exiftool_version",
+    "git_available",
+    "git_version",
+    "ingest_module_available",
+    "libraw_version",
+    "pydantic_available",
+    "pydantic_version",
+    "rawpy_available",
+    "rawpy_version"
+  ],
+  "properties": {
+    "all_required_ok": {
+      "type": "boolean"
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "exiftool_available": {
+      "type": "boolean"
+    },
+    "exiftool_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "git_available": {
+      "type": "boolean"
+    },
+    "git_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "ingest_module_available": {
+      "type": "boolean"
+    },
+    "libraw_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "pydantic_available": {
+      "type": "boolean"
+    },
+    "pydantic_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "rawpy_available": {
+      "type": "boolean"
+    },
+    "rawpy_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

@@ -4,6 +4,9 @@
 This is a minimal reference implementation showing how to consume
 machine-mode JSON output from the metadata extraction CLI.
 
+This parser is illustrative only. The stable API surface is the JSON
+contract itself (schema + field semantics), not this parser's stdout text.
+
 Usage:
     # Parse from file
     python tools/parse_machine_json.py result.json
@@ -28,36 +31,33 @@ from typing import Any, Dict, NoReturn
 
 def parse_machine_json(json_str: str) -> Dict[str, Any]:
     """Parse and validate machine JSON envelope.
-    
+
     Args:
         json_str: JSON string to parse
-    
+
     Returns:
         Parsed payload dictionary
-    
+
     Raises:
         ValueError: If schema version is unsupported
         json.JSONDecodeError: If JSON is invalid
     """
     payload = json.loads(json_str)
-    
+
     # Validate schema version
     schema = payload.get("schema")
     if schema != "tp.meta.machine.v1":
-        raise ValueError(
-            f"Unsupported schema: {schema} "
-            f"(this parser only supports tp.meta.machine.v1)"
-        )
-    
+        raise ValueError(f"Unsupported schema: {schema} " f"(this parser only supports tp.meta.machine.v1)")
+
     return payload
 
 
 def route_by_command(payload: Dict[str, Any]) -> NoReturn:
     """Route by command and handle typed results.
-    
+
     Args:
         payload: Parsed machine JSON payload
-    
+
     Exits:
         With the exit code from the payload
     """
@@ -65,22 +65,22 @@ def route_by_command(payload: Dict[str, Any]) -> NoReturn:
     exit_code = payload["exit_code"]
     success = payload["success"]
     data = payload["data"]
-    
+
     if command == "check-system":
         handle_check_system(success, data)
-    
+
     elif command == "extract":
         handle_extract(success, data)
-    
+
     elif command == "validate":
         handle_validate(success, data)
-    
+
     elif command == "extract-batch":
         handle_extract_batch(success, data)
-    
+
     else:
         print(f"❓ Unknown command: {command}", file=sys.stderr)
-    
+
     sys.exit(exit_code)
 
 
@@ -106,7 +106,7 @@ def handle_check_system(success: bool, data: Dict[str, Any]) -> None:
 def handle_extract(success: bool, data: Dict[str, Any]) -> None:
     """Handle extract command result."""
     input_path = data["input_path"]
-    
+
     if success:
         output_path = data["output_path"]
         elapsed = data["elapsed_seconds"]
@@ -126,18 +126,18 @@ def handle_extract(success: bool, data: Dict[str, Any]) -> None:
 def handle_validate(success: bool, data: Dict[str, Any]) -> None:
     """Handle validate command result."""
     sidecar_path = data["sidecar_path"]
-    
+
     if success:
         print(f"✅ Validation passed: {sidecar_path}")
         if data.get("strict"):
             print("   Mode: strict")
     else:
         print(f"❌ Validation failed: {sidecar_path}", file=sys.stderr)
-        
+
         dominant = data.get("dominant_error")
         if dominant:
             print(f"   Dominant error: {dominant['type']} ({dominant['exit_code']['name']})", file=sys.stderr)
-        
+
         errors = data.get("errors", [])
         if errors:
             print(f"   Total errors: {len(errors)}", file=sys.stderr)
@@ -152,22 +152,22 @@ def handle_extract_batch(success: bool, data: Dict[str, Any]) -> None:
     total = counts["total"]
     succeeded = counts["success"]
     failed = counts["failure"]
-    
+
     print(f"📦 Batch result: {succeeded}/{total} succeeded, {failed} failed")
     print(f"   Input root: {data['input_root']}")
     print(f"   Output dir: {data['output_dir']}")
-    
+
     if not success:
         dominant = data.get("dominant_error")
         if dominant:
             print(f"\n   Dominant error: {dominant['type']}", file=sys.stderr)
-        
+
         by_exit_code = counts.get("by_exit_code", {})
         if by_exit_code:
             print("\n   Failed by exit code:", file=sys.stderr)
             for code_name, count in by_exit_code.items():
                 print(f"     {code_name}: {count}", file=sys.stderr)
-    
+
     # Show first few failures for debugging
     if failed > 0 and data.get("items"):
         failed_items = [item for item in data["items"] if not item["success"]]
@@ -188,29 +188,30 @@ def main() -> NoReturn:
             json_str = json_path.read_text(encoding="utf-8")
         else:
             json_str = sys.stdin.read()
-        
+
         if not json_str.strip():
             print("ERROR: No input provided", file=sys.stderr)
             sys.exit(99)
-        
+
         payload = parse_machine_json(json_str)
         route_by_command(payload)
-    
+
     except json.JSONDecodeError as e:
         print(f"ERROR: Invalid JSON: {e}", file=sys.stderr)
         sys.exit(99)
-    
+
     except ValueError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(99)
-    
+
     except KeyError as e:
         print(f"ERROR: Missing required field in JSON: {e}", file=sys.stderr)
         sys.exit(99)
-    
+
     except Exception as e:
         print(f"ERROR: Unexpected error: {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc(file=sys.stderr)
         sys.exit(99)
 
