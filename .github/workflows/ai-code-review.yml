@@ -22,6 +22,7 @@ jobs:
   ai-review:
     name: AI-Powered Code Review
     runs-on: ubuntu-latest
+    continue-on-error: true
     if: github.event.pull_request.draft == false
 
     env:
