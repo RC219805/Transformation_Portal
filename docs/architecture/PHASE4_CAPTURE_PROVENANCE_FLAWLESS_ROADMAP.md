@@ -220,10 +220,11 @@ Deliverable:
 ### 4E.2 Provenance entry hash
 
 Definition:
-- `provenance_entry_sha256 = SHA256(file_sha256 || metadata_sha256 || UTF8(metadata_contract_version))`, where concatenation and byte/text representation must match Phase 3 exactly.
+- `provenance_entry_sha256 = SHA256(file_sha256 || metadata_sha256 || UTF8(capture_contract_version) || UTF8(metadata_contract_version) || UTF8(provenance_contract_version))`, where concatenation and byte/text representation must match Phase 3 exactly.
 
 Byte semantics (MUST be explicit and consistent):
 - `file_sha256` and `metadata_sha256` MUST use the same representation and concatenation convention as Phase 3 (for example, raw 32-byte digests as binary or lowercase hex strings as text).
+- Version tokens (`capture_contract_version`, `metadata_contract_version`, `provenance_contract_version`) MUST be UTF-8 encoded bytes appended in fixed order.
 - The chosen convention MUST be locked in an ADR, validated by golden fixtures, and treated as part of the contract surface.
 
 Note:

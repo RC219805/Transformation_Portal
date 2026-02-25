@@ -16,6 +16,7 @@ from tp.phase4.hash_capture_metadata import (
     METADATA_MANIFEST_CONTRACT_VERSION,
     compute_metadata_sha256,
 )
+from tp.phase4.provenance_capture import PROVENANCE_CONTRACT_VERSION, ProvenanceInputError, compute_provenance_entry_sha256
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PROVENANCE_MANIFEST_TOOL = PROJECT_ROOT / "tools" / "build_provenance_manifest.py"
@@ -133,6 +134,29 @@ def test_phase4e_provenance_manifest_generation_is_deterministic(tmp_path: Path)
     assert second.returncode == 0, second.stderr
 
     assert out_a.read_bytes() == out_b.read_bytes()
+
+
+def test_phase4e_provenance_entry_hash_binds_contract_versions() -> None:
+    manifest_entry = _load_json(GOLDEN_METADATA_MANIFEST)["entries"][0]
+    expected_entry = _load_json(GOLDEN_PROVENANCE_MANIFEST)["entries"][0]
+    digest = compute_provenance_entry_sha256(
+        file_sha256=manifest_entry["file_sha256"],
+        metadata_sha256=manifest_entry["metadata_sha256"],
+        capture_contract_version=METADATA_CONTRACT_VERSION,
+        metadata_contract_version=METADATA_CONTRACT_VERSION,
+        provenance_contract_version=PROVENANCE_CONTRACT_VERSION,
+    )
+    assert digest == expected_entry["provenance_entry_sha256"]
+
+
+def test_phase4e_provenance_entry_hash_rejects_contract_version_mismatch() -> None:
+    manifest_entry = _load_json(GOLDEN_METADATA_MANIFEST)["entries"][0]
+    with pytest.raises(ProvenanceInputError, match="provenance_contract_version mismatch"):
+        compute_provenance_entry_sha256(
+            file_sha256=manifest_entry["file_sha256"],
+            metadata_sha256=manifest_entry["metadata_sha256"],
+            provenance_contract_version="tp.meta.provenance.v2",
+        )
 
 
 def test_phase4e_cli_fails_on_unsorted_capture_when_strict(tmp_path: Path) -> None:

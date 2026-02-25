@@ -12,6 +12,11 @@ annotated-types==0.7.0
     # via
     #   -c all.txt
     #   pydantic
+attrs==25.4.0
+    # via
+    #   -c all.txt
+    #   jsonschema
+    #   referencing
 click==8.3.1
     # via
     #   -c all.txt
@@ -24,6 +29,14 @@ joblib==1.5.3
     # via
     #   -c all.txt
     #   scikit-learn
+jsonschema==4.26.0
+    # via
+    #   -c all.txt
+    #   -r base.in
+jsonschema-specifications==2025.9.1
+    # via
+    #   -c all.txt
+    #   jsonschema
 markdown-it-py==4.0.0
     # via
     #   -c all.txt
@@ -65,6 +78,16 @@ rich==14.3.2
     # via
     #   -c all.txt
     #   typer
+referencing==0.37.0
+    # via
+    #   -c all.txt
+    #   jsonschema
+    #   jsonschema-specifications
+rpds-py==0.30.0
+    # via
+    #   -c all.txt
+    #   jsonschema
+    #   referencing
 scikit-learn==1.8.0
     # via
     #   -c all.txt

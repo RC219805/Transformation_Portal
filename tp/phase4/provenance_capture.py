@@ -6,7 +6,7 @@ import hashlib
 import re
 from typing import Any
 
-from tp.merkle import merkle_root_sha256
+from tp.crypto.merkle import merkle_root_sha256
 
 from .hash_capture_metadata import (
     METADATA_CONTRACT_VERSION,
@@ -58,7 +58,7 @@ def _validate_capture_records(records: list[dict[str, Any]], metadata_schema: di
             errors = sorted(validator.iter_errors(record), key=lambda error: list(error.path))
         except (TypeError, ValueError) as exc:
             raise ProvenanceSchemaValidationError(
-                f"capture record[{index}] schema validation failed due to validator runtime error " f"({type(exc).__name__})"
+                f"capture record[{index}] schema validation failed due to validator runtime error ({type(exc).__name__})"
             ) from exc
         if errors:
             first = errors[0]
@@ -130,8 +130,7 @@ def _require_capture_contract_version(records: list[dict[str, Any]]) -> None:
         if contract_version != METADATA_CONTRACT_VERSION:
             relative_path = record.get("relative_path", "<unknown>")
             raise ProvenanceInputError(
-                f"capture record[{index}] contract mismatch for {relative_path}: "
-                f"expected {METADATA_CONTRACT_VERSION}, got {contract_version!r}"
+                f"capture record[{index}] contract mismatch for {relative_path}: expected {METADATA_CONTRACT_VERSION}, got {contract_version!r}"
             )
 
 
@@ -139,15 +138,13 @@ def _require_metadata_manifest_contract_version(payload: dict[str, Any]) -> list
     manifest_contract_version = payload.get("metadata_manifest_contract_version")
     if manifest_contract_version != METADATA_MANIFEST_CONTRACT_VERSION:
         raise ProvenanceInputError(
-            "metadata manifest contract mismatch: "
-            f"expected {METADATA_MANIFEST_CONTRACT_VERSION}, got {manifest_contract_version!r}"
+            f"metadata manifest contract mismatch: expected {METADATA_MANIFEST_CONTRACT_VERSION}, got {manifest_contract_version!r}"
         )
 
     metadata_contract_version = payload.get("metadata_contract_version")
     if metadata_contract_version != METADATA_CONTRACT_VERSION:
         raise ProvenanceInputError(
-            "metadata manifest metadata_contract_version mismatch: "
-            f"expected {METADATA_CONTRACT_VERSION}, got {metadata_contract_version!r}"
+            f"metadata manifest metadata_contract_version mismatch: expected {METADATA_CONTRACT_VERSION}, got {metadata_contract_version!r}"
         )
 
     entries = payload.get("entries")
@@ -160,15 +157,13 @@ def _require_provenance_manifest_contract_version(payload: dict[str, Any]) -> li
     provenance_contract_version = payload.get("provenance_contract_version")
     if provenance_contract_version != PROVENANCE_CONTRACT_VERSION:
         raise ProvenanceInputError(
-            "provenance manifest contract mismatch: "
-            f"expected {PROVENANCE_CONTRACT_VERSION}, got {provenance_contract_version!r}"
+            f"provenance manifest contract mismatch: expected {PROVENANCE_CONTRACT_VERSION}, got {provenance_contract_version!r}"
         )
 
     metadata_contract_version = payload.get("metadata_contract_version")
     if metadata_contract_version != METADATA_CONTRACT_VERSION:
         raise ProvenanceInputError(
-            "provenance manifest metadata_contract_version mismatch: "
-            f"expected {METADATA_CONTRACT_VERSION}, got {metadata_contract_version!r}"
+            f"provenance manifest metadata_contract_version mismatch: expected {METADATA_CONTRACT_VERSION}, got {metadata_contract_version!r}"
         )
 
     entries = payload.get("entries")
@@ -186,8 +181,7 @@ def _require_fingerprint_match(records: list[dict[str, Any]], expected_fingerpri
         if fingerprint != expected_fingerprint:
             relative_path = record.get("relative_path", "<unknown>")
             raise ProvenanceInputError(
-                f"capture record[{index}] fingerprint mismatch for {relative_path}: "
-                f"expected {expected_fingerprint}, got {fingerprint!r}"
+                f"capture record[{index}] fingerprint mismatch for {relative_path}: expected {expected_fingerprint}, got {fingerprint!r}"
             )
 
 
@@ -201,23 +195,45 @@ def _ensure_sha256_hex(value: Any, *, label: str) -> str:
     return value
 
 
+def _ensure_contract_version(value: str, *, expected: str, label: str) -> str:
+    if value != expected:
+        raise ProvenanceInputError(f"{label} mismatch: expected {expected}, got {value!r}")
+    return value
+
+
 def compute_provenance_entry_sha256(
     *,
     file_sha256: str,
     metadata_sha256: str,
+    capture_contract_version: str = METADATA_CONTRACT_VERSION,
     metadata_contract_version: str = METADATA_CONTRACT_VERSION,
+    provenance_contract_version: str = PROVENANCE_CONTRACT_VERSION,
 ) -> str:
-    """Compute SHA256(file_sha256_bytes || metadata_sha256_bytes || UTF8(metadata_contract_version))."""
-    if metadata_contract_version != METADATA_CONTRACT_VERSION:
-        raise ProvenanceInputError(
-            "metadata_contract_version mismatch for provenance entry hash: "
-            f"expected {METADATA_CONTRACT_VERSION}, got {metadata_contract_version!r}"
-        )
+    """Compute SHA256(F || M || C || Mv || Pv) over binary digests + UTF-8 version strings."""
+    capture_version = _ensure_contract_version(
+        capture_contract_version,
+        expected=METADATA_CONTRACT_VERSION,
+        label="capture_contract_version",
+    )
+    metadata_version = _ensure_contract_version(
+        metadata_contract_version,
+        expected=METADATA_CONTRACT_VERSION,
+        label="metadata_contract_version",
+    )
+    provenance_version = _ensure_contract_version(
+        provenance_contract_version,
+        expected=PROVENANCE_CONTRACT_VERSION,
+        label="provenance_contract_version",
+    )
 
     file_digest = bytes.fromhex(_ensure_sha256_hex(file_sha256, label="file_sha256"))
     metadata_digest = bytes.fromhex(_ensure_sha256_hex(metadata_sha256, label="metadata_sha256"))
-    contract_bytes = metadata_contract_version.encode("utf-8")
-    return hashlib.sha256(file_digest + metadata_digest + contract_bytes).hexdigest()
+    capture_version_bytes = capture_version.encode("utf-8")
+    metadata_version_bytes = metadata_version.encode("utf-8")
+    provenance_version_bytes = provenance_version.encode("utf-8")
+    return hashlib.sha256(
+        file_digest + metadata_digest + capture_version_bytes + metadata_version_bytes + provenance_version_bytes
+    ).hexdigest()
 
 
 def build_provenance_manifest_payload(
@@ -259,8 +275,8 @@ def build_provenance_manifest_payload(
     missing_in_capture = sorted(manifest_paths - capture_paths)
     if missing_in_manifest or missing_in_capture:
         raise ProvenanceInputError(
-            "relative_path alignment mismatch between capture metadata and metadata manifest: "
-            f"missing_in_manifest={missing_in_manifest}, missing_in_capture={missing_in_capture}"
+            f"relative_path alignment mismatch between capture metadata and metadata manifest: missing_in_manifest={missing_in_manifest}, "
+            f"missing_in_capture={missing_in_capture}"
         )
 
     entries: list[dict[str, str]] = []
@@ -274,7 +290,7 @@ def build_provenance_manifest_payload(
         )
         if capture_file_sha256 != manifest_file_sha256:
             raise ProvenanceInputError(
-                f"file_sha256 mismatch for {relative_path}: " f"capture={capture_file_sha256}, manifest={manifest_file_sha256}"
+                f"file_sha256 mismatch for {relative_path}: capture={capture_file_sha256}, manifest={manifest_file_sha256}"
             )
 
         try:
@@ -289,14 +305,15 @@ def build_provenance_manifest_payload(
         )
         if recomputed_metadata_sha256 != manifest_metadata_sha256:
             raise ProvenanceInputError(
-                f"metadata_sha256 mismatch for {relative_path}: "
-                f"recomputed={recomputed_metadata_sha256}, manifest={manifest_metadata_sha256}"
+                f"metadata_sha256 mismatch for {relative_path}: recomputed={recomputed_metadata_sha256}, manifest={manifest_metadata_sha256}"
             )
 
         provenance_entry_sha256 = compute_provenance_entry_sha256(
             file_sha256=manifest_file_sha256,
             metadata_sha256=manifest_metadata_sha256,
-            metadata_contract_version=METADATA_CONTRACT_VERSION,
+            capture_contract_version=capture_record["metadata_contract_version"],
+            metadata_contract_version=metadata_manifest_payload["metadata_contract_version"],
+            provenance_contract_version=PROVENANCE_CONTRACT_VERSION,
         )
         entries.append(
             {

@@ -238,8 +238,10 @@ Phase 4E provenance entry hash semantics are fixed:
 
 - `F = bytes.fromhex(file_sha256)` (32 bytes)
 - `M = bytes.fromhex(metadata_sha256)` (32 bytes)
-- `V = b"tp.meta.capture.v1"`
-- `provenance_entry_sha256 = SHA256(F || M || V).hexdigest()`
+- `C = UTF8(capture_contract_version)` (`tp.meta.capture.v1`)
+- `Mv = UTF8(metadata_contract_version)` (`tp.meta.capture.v1`)
+- `Pv = UTF8(provenance_contract_version)` (`tp.meta.provenance.v1`)
+- `provenance_entry_sha256 = SHA256(F || M || C || Mv || Pv).hexdigest()`
 
 No delimiters, no hex-string concatenation, no JSON serialization, no runtime
 metadata, and no host/environment inputs are permitted in this preimage.
