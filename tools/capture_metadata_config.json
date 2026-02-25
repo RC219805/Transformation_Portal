@@ -1,0 +1,59 @@
+{
+  "metadata_contract_version": "tp.meta.capture.v1",
+  "tag_whitelist": [
+    "Make",
+    "Model",
+    "LensModel",
+    "DateTimeOriginal",
+    "OffsetTimeOriginal",
+    "GPSDateStamp",
+    "GPSTimeStamp",
+    "GPSLatitude",
+    "GPSLongitude",
+    "ISO",
+    "FocalLength",
+    "FNumber",
+    "ExposureTime",
+    "ExposureCompensation",
+    "ImageWidth",
+    "ImageHeight",
+    "Orientation",
+    "Software",
+    "XMP:DocumentID",
+    "XMP:InstanceID"
+  ],
+  "datetime_precedence": [
+    "GPSDateStamp+GPSTimeStamp",
+    "DateTimeOriginal+OffsetTimeOriginal"
+  ],
+  "rounding_rules": {
+    "gps_decimal_places": 8,
+    "focal_length_decimal_places": 3,
+    "aperture_decimal_places": 3,
+    "shutter_speed_decimal_places": 6,
+    "exposure_ev_decimal_places": 3,
+    "rounding_mode": "bankers"
+  },
+  "orientation_mapping": {
+    "1": "Horizontal",
+    "2": "MirrorHorizontal",
+    "3": "Rotate180",
+    "4": "MirrorVertical",
+    "5": "MirrorHorizontalRotate270CW",
+    "6": "Rotate90CW",
+    "7": "MirrorHorizontalRotate90CW",
+    "8": "Rotate270CW"
+  },
+  "warning_codes": [
+    "WARN_DATETIME_NO_TZ",
+    "WARN_GPS_PARSE_FAIL",
+    "WARN_TAG_CONFLICT",
+    "WARN_INVALID_ORIENTATION"
+  ],
+  "path_normalization": {
+    "forbid_absolute": true,
+    "forbid_backslash": true,
+    "forbid_dotdot": true,
+    "forbid_leading_dot_slash": true
+  }
+}
