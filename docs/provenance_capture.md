@@ -4,6 +4,10 @@
 
 The Transformation Portal implements **audit-grade provenance capture** for all RAW and TIFF inputs. This ensures complete traceability, reproducibility, and dataset governance for luxury real estate rendering workflows.
 
+## Phase 4 Hardening Roadmap
+
+For the **forward-looking**, spec-first deterministic rollout plan (schema governance, canonicalization, contract versioning, provenance binding, and CI determinism gates), see `docs/architecture/PHASE4_CAPTURE_PROVENANCE_FLAWLESS_ROADMAP.md`. That roadmap describes planned behavior (including potential shifts to warnings-first defaults with `--strict` for hard failures) and may not match the current hard failure policy documented below.
+
 ## Scope
 
 Provenance capture provides:
