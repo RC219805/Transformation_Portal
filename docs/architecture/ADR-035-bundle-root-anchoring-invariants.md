@@ -181,6 +181,13 @@ Phase 4D introduces one new deterministic artifact surface only:
 
 - `artifacts/metadata_manifest.tp.meta.capture_manifest.v1.json`
 
+Normative references:
+
+- Canonicalization spec:
+  `docs/contracts/phase4d_metadata_hash_canonicalization.md`
+- Exit-code contract:
+  `docs/contracts/exit_codes.md`
+
 Phase 4D object-level hash semantics are fixed:
 
 - `metadata_sha256` is computed over the canonical JSON bytes of each single
@@ -204,6 +211,12 @@ Phase 4D manifest serialization is fixed:
 - canonical JSON (`sort_keys=True`, compact separators, `ensure_ascii=False`,
   `allow_nan=False`, UTF-8),
 - single trailing LF required.
+
+Phase 4D determinism verification is fixed:
+
+- cross-runtime parity MUST hold across supported interpreters for both
+  `metadata_sha256` lists and serialized manifest bytes (CI gate:
+  `tools/check_phase4d_manifest_cross_runtime.py`).
 
 Phase 4D implementations MUST NOT introduce provenance binding, Merkle roots,
 evidence bundle mutations, or machine-contract mutations.
