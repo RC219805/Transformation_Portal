@@ -357,15 +357,19 @@ def _derive_capture_datetime_utc(
             date_parts = _parse_gps_date(date_value)
             time_parts = _parse_gps_time(time_value)
             if date_parts and time_parts:
-                dt = datetime(
-                    date_parts[0],
-                    date_parts[1],
-                    date_parts[2],
-                    time_parts[0],
-                    time_parts[1],
-                    time_parts[2],
-                    tzinfo=timezone.utc,
-                )
+                try:
+                    dt = datetime(
+                        date_parts[0],
+                        date_parts[1],
+                        date_parts[2],
+                        time_parts[0],
+                        time_parts[1],
+                        time_parts[2],
+                        tzinfo=timezone.utc,
+                    )
+                except ValueError:
+                    warnings.add("WARN_GPS_PARSE_FAIL")
+                    continue
                 return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
         if source == "DateTimeOriginal+OffsetTimeOriginal":

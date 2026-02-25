@@ -53,6 +53,16 @@ for source_file in files:
             "DateTimeOriginal": "2024:06:30 05:34:56",
             "OffsetTimeOriginal": "-07:00"
         }})
+    elif mode == "gps-invalid-datetime":
+        record.update({{
+            "Make": "Canon",
+            "Model": "EOS R5",
+            "LensModel": "RF24-70mm F2.8 L IS USM",
+            "GPSDateStamp": "2024:02:30",
+            "GPSTimeStamp": "25:00:00",
+            "DateTimeOriginal": "2024:06:30 05:34:56",
+            "OffsetTimeOriginal": "-07:00"
+        }})
     else:
         record.update({{
             "Make": "Canon",
@@ -184,6 +194,7 @@ def test_phase4c_path_normalization_rejects_unsafe_inputs() -> None:
         normalize_relative_path("C:\\capture\\sample_01.dng")
 
 
+@pytest.mark.skipif(os.name == "nt", reason="backslash filename semantics differ on Windows")
 def test_phase4c_cli_fails_deterministically_on_backslash_relative_path(tmp_path: Path) -> None:
     fake_exiftool = _build_fake_exiftool(tmp_path, mode="valid")
     input_root = tmp_path / "input"
@@ -214,6 +225,18 @@ def test_phase4c_warning_codes_are_stable_sorted_and_unique(tmp_path: Path) -> N
     assert "WARN_DATETIME_NO_TZ" in warnings_a
     assert "WARN_GPS_PARSE_FAIL" in warnings_a
     assert "WARN_INVALID_ORIENTATION" in warnings_a
+
+
+def test_phase4c_invalid_gps_datetime_warns_and_uses_fallback(tmp_path: Path) -> None:
+    pytest.importorskip("jsonschema")
+    fake_exiftool = _build_fake_exiftool(tmp_path, mode="gps-invalid-datetime")
+    out_path = tmp_path / "capture_metadata.tp.meta.capture.v1.json"
+    result = _run_cli(input_root=FIXTURE_ROOT, out_path=out_path, fake_exiftool=fake_exiftool)
+    assert result.returncode == 0, result.stderr
+
+    record = json.loads(out_path.read_text(encoding="utf-8"))[0]
+    assert record["capture_datetime_utc"] == "2024-06-30T12:34:56Z"
+    assert "WARN_GPS_PARSE_FAIL" in record["extraction_warnings"]
 
 
 def test_phase4c_strict_mode_fails_on_warnings(tmp_path: Path) -> None:
