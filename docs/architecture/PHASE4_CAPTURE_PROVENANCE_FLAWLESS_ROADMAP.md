@@ -12,6 +12,17 @@ Tighten Phase 4 into a deterministic, schema-governed, versioned rollout that pr
 
 `schemas/phase4/metadata.schema.json` is the source of truth for capture metadata shape. Everything else is engineered around it.
 
+## Terminology and Authority
+
+Contract authority and versioning rules for Phase 4:
+
+- **Schema**: `schemas/phase4/metadata.schema.json` is the authoritative shape contract.
+- **Canonicalization Spec**: `docs/contracts/metadata_canonicalization.md` is **normative** for byte stability.
+- **Canonicalization Spec Version**: treated as part of the contract surface. If canonicalization rules change in any way that can affect emitted bytes or hashes, a **contract version bump is required** (e.g., `tp.meta.capture.v2`), unless an explicit, documented compatibility rule exists and is enforced by tests.
+
+Rule of thumb:
+- If it can change a hash, it is a contract change.
+
 ## Non-Negotiable Invariants
 
 1. Deterministic bytes for all Phase 4 artifacts given identical inputs (file bytes + relative paths + pinned toolchain).
@@ -47,6 +58,15 @@ ADR requirements:
 
 Deliverable:
 - `docs/contracts/metadata_canonicalization.md`
+
+Normativity / versioning requirements:
+- This document is **normative** for Phase 4 outputs and hashing.
+- The canonicalization spec MUST declare an explicit `canonicalization_spec_version` and MUST state which `tp.meta.capture.vN` contract versions it applies to.
+- Any canonicalization change that can affect:
+  - emitted JSON bytes,
+  - derived per-object hashes,
+  - Merkle leaves/roots,
+  requires an explicit contract version bump (recommended: `tp.meta.capture.v2` / `tp.meta.provenance.v2`) or an explicitly documented, test-enforced compatibility rule.
 
 Required deterministic rules:
 
@@ -87,12 +107,18 @@ Orientation mapping:
 - 7 -> `MirrorHorizontalRotate90CW`
 - 8 -> `Rotate270CW`
 - missing or unparseable -> `null`
+- out-of-range values -> `null` and warning code `WARN_ORIENTATION_INVALID`
 
 Warnings policy (`extraction_warnings`):
 - warnings are stable machine codes, not free-form prose
 - example codes: `WARN_DATETIME_NO_TZ`, `WARN_GPS_PARSE_FAIL`, `WARN_TAG_CONFLICT`
 - warnings are unique
 - warnings are lexicographically sorted
+
+Warning code governance (normative):
+- Warning codes MUST come from a centrally documented registry: `docs/contracts/warning_codes.md` (to be added).
+- Adding a new warning code is allowed without a contract bump only if it is strictly additive and does not change emitted bytes for existing inputs (i.e., it must not be retroactively emitted for previously clean inputs without a version bump).
+- Removing, renaming, or changing semantics of a warning code requires a contract version bump.
 
 ## 4C - Extractor Implementation
 
@@ -168,6 +194,18 @@ Canonical encoding rules:
 - `ensure_ascii=false`
 - `allow_nan=false`
 
+Byte-level requirements (normative):
+- UTF-8 **without BOM**
+- no trailing whitespace introduced by the serializer
+- no trailing newline required (and if present, MUST be consistently present in all emitters)
+- floats MUST serialize deterministically:
+  - no NaN/Infinity (already forbidden via `allow_nan=false`)
+  - prefer plain decimal representation (avoid scientific notation) where feasible
+  - rounding MUST follow the canonicalization precision rules defined above
+
+Interoperability note:
+- If any non-Python emitter is introduced, it MUST be proven byte-identical via golden fixtures and hash checks.
+
 Acceptance criteria:
 - metadata object hash is computed over canonical bytes of the object only
 - object hash is independent of array indentation or pretty-print style
@@ -183,6 +221,10 @@ Deliverable:
 
 Definition:
 - `provenance_entry_sha256 = SHA256(file_sha256_bytes || metadata_sha256_bytes || UTF8(metadata_contract_version))`
+
+Byte semantics (MUST be explicit and consistent):
+- `file_sha256_bytes` and `metadata_sha256_bytes` MUST be the **raw 32-byte binary digest** values (not hex strings).
+- If Phase 3 uses a different convention (e.g., concatenating lowercase hex bytes), Phase 4 MUST mirror Phase 3 exactly and the convention MUST be locked in an ADR and validated by golden fixtures.
 
 Note:
 - if Phase 3 uses a different concatenation convention, mirror Phase 3 exactly and lock it in ADR.
@@ -317,3 +359,12 @@ Phase 4 is complete only when all are true:
 6. CI enforces pinned toolchain and golden fixtures.
 7. Verification CLI recomputes outputs and fails fast on drift.
 8. ADRs exist for canonicalization rules, merkle rules (or exact Phase 3 reuse), and versioning policy.
+
+## Appendix: Explicit Ambiguity Eliminations (Checklist)
+
+This section exists to prevent common spec drift bugs:
+
+- Hash concatenation uses binary digests vs hex strings: **locked** (see 4E.2).
+- Float serialization (scientific notation, locale, precision): **locked** (see 4D.3).
+- Canonicalization spec versioning is part of contract surface: **locked** (see Terminology and 4B.1).
+- Warning codes are governed by a registry and versioning policy: **locked** (see 4B warnings policy).
