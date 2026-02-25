@@ -175,6 +175,52 @@ Phase 4C implementations MUST NOT introduce:
 - machine-contract mutations,
 - changes to Phase 2/3 integrity surfaces.
 
+### D11. Phase 4D Object-Hash and Metadata-Manifest Semantics Are Frozen
+
+Phase 4D introduces one new deterministic artifact surface only:
+
+- `artifacts/metadata_manifest.tp.meta.capture_manifest.v1.json`
+
+Normative references:
+
+- Canonicalization spec:
+  `docs/contracts/phase4d_metadata_hash_canonicalization.md`
+- Exit-code contract:
+  `docs/contracts/exit_codes.md`
+
+Phase 4D object-level hash semantics are fixed:
+
+- `metadata_sha256` is computed over the canonical JSON bytes of each single
+  metadata object (`sort_keys=True`, compact separators, `ensure_ascii=False`,
+  `allow_nan=False`, UTF-8, no trailing newline in object preimage).
+- Hashing is object-scoped only; array-level formatting does not affect
+  `metadata_sha256`.
+
+Phase 4D builder invariants are fixed:
+
+- input must be an array of `tp.meta.capture.v1` objects,
+- each object must validate against `schemas/phase4/metadata.schema.json`,
+- `relative_path` values must be unique,
+- strict mode requires input already sorted by `relative_path`,
+- output manifest entries are sorted by `relative_path`,
+- optional fingerprint enforcement requires each record extractor fingerprint to
+  match the current `tools/capture_metadata_config.json` fingerprint.
+
+Phase 4D manifest serialization is fixed:
+
+- canonical JSON (`sort_keys=True`, compact separators, `ensure_ascii=False`,
+  `allow_nan=False`, UTF-8),
+- single trailing LF required.
+
+Phase 4D determinism verification is fixed:
+
+- cross-runtime parity MUST hold across supported interpreters for both
+  `metadata_sha256` lists and serialized manifest bytes (CI gate:
+  `tools/check_phase4d_manifest_cross_runtime.py`).
+
+Phase 4D implementations MUST NOT introduce provenance binding, Merkle roots,
+evidence bundle mutations, or machine-contract mutations.
+
 ## Alternatives Considered
 
 - Implicit preimage definition via current implementation only:
@@ -245,10 +291,14 @@ Trade-off:
 - `tools/capture_metadata_config.json`
 - `tools/capture_metadata_fingerprint.py`
 - `tools/extract_capture_metadata.py`
+- `tools/build_metadata_manifest.py`
+- `tp/phase4/hash_capture_metadata.py`
 - `tests/test_capture_metadata_fingerprint.py`
 - `tests/test_extract_capture_metadata.py`
+- `tests/test_build_metadata_manifest.py`
 - `tests/golden/phase4/config_fingerprint.txt`
 - `tests/golden/phase4/expected_capture_metadata.tp.meta.capture.v1.json`
+- `tests/golden/phase4/expected_metadata_manifest.tp.meta.capture_manifest.v1.json`
 - `tools/bundle_root_common.py`
 - `tools/compute_bundle_root.py`
 - `tools/verify_evidence_bundle_manifest.py`
