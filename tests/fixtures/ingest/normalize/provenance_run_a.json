@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0.1",
+  "file_integrity": {
+    "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "size_bytes": 2048,
+    "path": "/ingest/DJI_0018.DNG",
+    "mime_type": "image/x-adobe-dng"
+  },
+  "exif": {
+    "all_tags": {
+      "EXIF:Make": "DJI",
+      "EXIF:Model": "Mavic 3"
+    },
+    "camera_make": "DJI",
+    "camera_model": "Mavic 3"
+  },
+  "pipeline_config": {
+    "config_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "cli_args": [
+      "--preset",
+      "apex"
+    ],
+    "preset": "apex",
+    "custom_params": {
+      "mode": "determinism-check"
+    }
+  },
+  "toolchain": [
+    {
+      "name": "exiftool",
+      "version": "12.70"
+    },
+    {
+      "name": "python",
+      "version": "3.11.9"
+    }
+  ],
+  "host": {
+    "hostname": "linux-builder-a",
+    "os": "Linux",
+    "os_version": "6.8.0",
+    "python_version": "3.11.9",
+    "arch": "x86_64"
+  },
+  "timestamps": {
+    "ingest_start": "2026-02-12T10:00:00+00:00",
+    "ingest_end": "2026-02-12T10:00:01+00:00",
+    "exiftool_extract_duration_sec": 0.42
+  },
+  "git_commit": "1111111111111111111111111111111111111111",
+  "run_id": "11111111-1111-4111-8111-111111111111"
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0.1",
+  "file_integrity": {
+    "sha256": "2ae7682c7304ecc78e5d1f1817db51f7adc5e551b08039dc52ba3000cde7410e",
+    "size_bytes": 20,
+    "path": "/fixtures/DJI_0018.DNG",
+    "mime_type": "image/x-adobe-dng"
+  },
+  "exif": {
+    "all_tags": {
+      "File:FileType": "DNG",
+      "SourceFile": "DJI_0018.DNG"
+    },
+    "camera_make": "DJI",
+    "camera_model": "Mavic 3"
+  },
+  "pipeline_config": {
+    "config_sha256": "15c78e1ee5d6197ad7b51c4cf9165a3aa1844bdd07633413d546a8db6d8d4a7e",
+    "preset": "linux-baseline"
+  }
+}

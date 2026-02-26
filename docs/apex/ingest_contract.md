@@ -121,6 +121,8 @@ Complete, lossless provenance record for every ingested file.
 - `toolchain`: Versions of exiftool, ImageMagick, etc. (environment-dependent)
 - `git_commit`: Git SHA at ingest time (repo state)
 
+Determinism assertions in CI and contract validation are evaluated as **post-normalization** comparisons using the governed normalization profile `ingest_v1`. This profile removes run-metadata volatility while preserving file-derived contract fields.
+
 This split enables:
 - **Content verification**: Use file_integrity SHA256 to validate input
 - **Provenance audit**: Full run context captured for compliance
