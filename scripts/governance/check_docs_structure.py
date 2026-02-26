@@ -6,14 +6,71 @@ from __future__ import annotations
 import argparse
 import os
 import pathlib
-import re
 import subprocess
 import sys
 from dataclasses import dataclass
 
-KEYWORD_RE = re.compile(r"(SUMMARY|REPORT|COMPLETE|STATUS)", re.IGNORECASE)
-ALLOWED_PREFIXES = ("docs/historical/", "docs/pr_archive/")
 ALLOWED_DOCS_ROOT_FILES = {"README.md"}
+ALLOWED_DOCS_TOP_LEVEL_DIRS = {
+    "750_picacho",
+    "_archive",
+    "analysis",
+    "apex",
+    "api",
+    "architecture",
+    "archive",
+    "brand",
+    "ci",
+    "ci_cd",
+    "cli",
+    "compliance",
+    "contracts",
+    "decisions",
+    "deliverables",
+    "deployment",
+    "deprecation",
+    "depth_model",
+    "depth_pipeline",
+    "development",
+    "examples",
+    "fixes",
+    "governance",
+    "guides",
+    "historical",
+    "implementation",
+    "implementation_notes",
+    "incidents",
+    "investigations",
+    "materials",
+    "migration",
+    "operations",
+    "optimization",
+    "performance",
+    "pipeline",
+    "pipeline_docs",
+    "pr_archive",
+    "pr_reports",
+    "pr_summaries",
+    "processing",
+    "project-status",
+    "projects",
+    "quality_analysis",
+    "quick_references",
+    "reference",
+    "reports",
+    "schemas",
+    "session_summaries",
+    "sessions",
+    "spatial_ai",
+    "status",
+    "summaries",
+    "validation",
+    "verification",
+    "version_history",
+    "visual_review",
+    "workflow",
+    "workflows",
+}
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
@@ -102,21 +159,13 @@ def _all_docs_changes() -> list[DocChange]:
 def _root_violation(change: DocChange) -> bool:
     normalized = change.path.replace("\\", "/")
     parts = pathlib.PurePosixPath(normalized).parts
-    if len(parts) != 2 or parts[0] != "docs":
+    if len(parts) < 2 or parts[0] != "docs":
         return False
 
-    if parts[1] in ALLOWED_DOCS_ROOT_FILES:
-        return False
+    if len(parts) == 2:
+        return parts[1] not in ALLOWED_DOCS_ROOT_FILES
 
-    return change.status in {"A", "C", "R"}
-
-
-def _keyword_violation(path_str: str) -> bool:
-    normalized = path_str.replace("\\", "/")
-    name = pathlib.PurePosixPath(normalized).name
-    if not KEYWORD_RE.search(name):
-        return False
-    return not normalized.startswith(ALLOWED_PREFIXES)
+    return parts[1] not in ALLOWED_DOCS_TOP_LEVEL_DIRS
 
 
 def main() -> int:
@@ -147,20 +196,19 @@ def main() -> int:
         print("No documentation files to validate.")
         return 0
 
-    root_violations = [change for change in candidates if _root_violation(change)]
-    keyword_violations = [change.path for change in candidates if _keyword_violation(change.path)]
+    topology_violations = [change for change in candidates if _root_violation(change)]
 
-    if root_violations or keyword_violations:
+    if topology_violations:
         print("Documentation structure violations detected:")
-        if root_violations:
-            print("New docs root files are restricted to docs/README.md:")
-            for change in root_violations:
-                print(f"  - [{change.status}] {change.path}")
-        if keyword_violations:
-            print("Files with SUMMARY/REPORT/COMPLETE/STATUS must be archived:")
-            for path in keyword_violations:
-                print(f"  - {path}")
-            print("Allowed prefixes: docs/historical/ and docs/pr_archive/.")
+        print("Allowed docs topology:")
+        print("  - docs/README.md")
+        print("  - docs/<approved-top-level-dir>/...")
+        print("Approved top-level dirs under docs/:")
+        for directory in sorted(ALLOWED_DOCS_TOP_LEVEL_DIRS):
+            print(f"  - {directory}")
+        print("Violations:")
+        for change in topology_violations:
+            print(f"  - [{change.status}] {change.path}")
         return 1
 
     print(f"Documentation structure check passed ({len(candidates)} file(s) scanned).")
