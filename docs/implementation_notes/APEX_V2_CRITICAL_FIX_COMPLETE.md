@@ -72,16 +72,16 @@ Output: BitsPerSample: (8, 8, 8)  # ❌ 50% QUALITY LOSS
 - Depth-aware features skipped (only 75% of luxury_estate preset applied)
 
 **Root Cause:**
-Depth generation section in `process_source_tiffs_apex.sh` (lines 112-142) is commented out.
+Depth generation section in `scripts/pipelines/process_source_tiffs_apex.sh` (lines 112-142) is commented out.
 
 **Solution:**
 Provided comprehensive instructions in `docs/DEPTH_GENERATION_INSTRUCTIONS.md`:
 
 **Option 1: Enable in batch script (recommended)**
 ```bash
-# Edit process_source_tiffs_apex.sh, uncomment lines 124-137
+# Edit scripts/pipelines/process_source_tiffs_apex.sh, uncomment lines 124-137
 # Then run:
-./process_source_tiffs_apex.sh
+./scripts/pipelines/process_source_tiffs_apex.sh
 ```
 
 **Option 2: Generate manually**
@@ -376,7 +376,7 @@ Enhancement completed successfully in 1.01s ✅
 
 2. **Generate depth maps for APEX V2 batch:**
    ```bash
-   # Option 1: Uncomment depth generation in process_source_tiffs_apex.sh
+   # Option 1: Uncomment depth generation in scripts/pipelines/process_source_tiffs_apex.sh
    # Option 2: Run manual batch generation (see DEPTH_GENERATION_INSTRUCTIONS.md)
    ```
 
@@ -475,7 +475,7 @@ Re-run APEX V2 batch processing with the fixed pipeline to produce proper 16-bit
 cd /Users/rc/Projects/Transformation_Portal
 
 # Run batch processing with 16-bit preservation
-./process_source_tiffs_apex.sh
+./scripts/pipelines/process_source_tiffs_apex.sh
 
 # Verify outputs are 16-bit
 for tiff in output_apex_v2_luxury/*.tiff; do
@@ -494,7 +494,7 @@ echo "✅ All outputs verified as 16-bit"
 ### Enable Depth Generation
 
 ```bash
-# Option 1: Edit process_source_tiffs_apex.sh
+# Option 1: Edit scripts/pipelines/process_source_tiffs_apex.sh
 # Uncomment lines 124-137, then run batch script
 
 # Option 2: Generate depth maps manually

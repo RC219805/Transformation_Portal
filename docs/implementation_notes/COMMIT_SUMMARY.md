@@ -25,7 +25,7 @@
   - Quality Firewall integration
 
 ### New Files (18 files added)
-- ✅ Scripts: `process_source_tiffs_apex.sh`, `scripts/run_depth_estimation.py`, `verify_ml_deps.py`
+- ✅ Scripts: `scripts/pipelines/process_source_tiffs_apex.sh`, `scripts/run_depth_estimation.py`, `scripts/verification/verify_ml_deps.py`
 - ✅ Diagnostic tools: `diagnose_sky_issue.py`, `create_sky_comparison.py`
 - ✅ Documentation: 6 comprehensive docs in `docs/` + 6 root-level summaries
 - ✅ Architecture: `docs/architecture/decisions/ADR-007-bit-depth-preservation.md`

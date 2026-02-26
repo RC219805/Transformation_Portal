@@ -304,7 +304,7 @@ assert report['bit_depth']['bit_depth_preserved'] == True, 'Bit-depth regression
    - Property-based testing for all presets
 
 3. **Depth Map Processing** (Issue #YYY)
-   - Enable depth generation in `process_source_tiffs_apex.sh`
+   - Enable depth generation in `scripts/pipelines/process_source_tiffs_apex.sh`
    - Add depth-aware tone mapping validation
 
 4. **Performance Optimization** (Low Priority)

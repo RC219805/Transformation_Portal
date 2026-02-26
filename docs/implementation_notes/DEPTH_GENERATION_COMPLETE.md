@@ -69,7 +69,7 @@ python scripts/run_depth_estimation.py \
 
 ### 2. Batch Script Integration
 
-**File**: `process_source_tiffs_apex.sh` (lines 124-137)
+**File**: `scripts/pipelines/process_source_tiffs_apex.sh` (lines 124-137)
 
 **Workflow**:
 1. Check for existing depth maps in `depth_maps_apex/`
@@ -237,7 +237,7 @@ logs/apex_batch_20260210_021356/ # Processing logs
 ## Files Modified
 
 1. **Created**: `scripts/run_depth_estimation.py` (CLI wrapper, 77 lines)
-2. **Modified**: `process_source_tiffs_apex.sh` (path fix, line 131)
+2. **Modified**: `scripts/pipelines/process_source_tiffs_apex.sh` (path fix, line 131)
 
 **Note**: The wrapper script may be git-ignored due to `.git/info/exclude`. It is production-ready and required for APEX V2 depth generation.
 

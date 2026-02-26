@@ -70,6 +70,7 @@ jobs:
             // Patterns that trigger full CI suite
             const fullSuiteMatchers = [
               /^src\//,
+              /^apps\//,
               /^tests\//,
               /^scripts\//,
               /^tools\//,              // execution risk: montecito_manifest.py
@@ -115,6 +116,45 @@ jobs:
           set -euo pipefail
           echo "Python available: $(python3 --version 2>&1 || echo 'no')"
           echo "✅ Lightweight checks passed"
+
+      - name: Assert tp import surface intent
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python3 scripts/verification/assert_tp_import_surface.py --module tp --expect importable
+
+      - name: Assert tp import path parity under src/
+        run: |
+          set -euo pipefail
+          TP_FILE="$(PYTHONPATH=src python3 -c "import pathlib, tp; print(pathlib.Path(tp.__file__).resolve())")"
+          EXPECTED_PREFIX="${GITHUB_WORKSPACE}/src/tp/"
+          if [[ "${TP_FILE}" != "${EXPECTED_PREFIX}"* ]]; then
+            echo "tp import path parity failed: expected prefix ${EXPECTED_PREFIX}, got ${TP_FILE}" >&2
+            exit 1
+          fi
+          echo "tp import path parity passed: ${TP_FILE}"
+
+      - name: Wheel install smoke (tp import)
+        run: |
+          set -euo pipefail
+          python3 -m pip install --upgrade pip build
+          rm -rf /tmp/tp-wheel-smoke /tmp/tp-dist
+          python3 -m build --wheel --outdir /tmp/tp-dist
+          python3 -m venv /tmp/tp-wheel-smoke
+          source /tmp/tp-wheel-smoke/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install /tmp/tp-dist/*.whl
+          TP_FILE="$(python -c "import pathlib, tp; print(pathlib.Path(tp.__file__).resolve())")"
+          echo "tp wheel import path: ${TP_FILE}"
+          python -c "import tp; from tp.phase4.hash_capture_metadata import compute_metadata_sha256; print('tp wheel smoke passed')"
+
+      - name: Relocatability smoke test (verification scripts)
+        run: |
+          set -euo pipefail
+          REPO_ROOT="$(pwd)"
+          cd /tmp
+          python3 "${REPO_ROOT}/scripts/verification/verify_ml_deps.py" --help
+          python3 "${REPO_ROOT}/scripts/verification/verify_core.py" --help
+          python3 "${REPO_ROOT}/scripts/verification/verify_rag_install.py" --help
 
       - name: Validate compliance schemas
         run: |
@@ -218,8 +258,8 @@ jobs:
           PYLINT_EXIT=$?
           set -e
 
-          # Fail only on critical pylint bits: 1 (fatal), 2 (error), 32 (usage)
-          if [ $((PYLINT_EXIT & 1)) -ne 0 ] || [ $((PYLINT_EXIT & 2)) -ne 0 ] || [ $((PYLINT_EXIT & 32)) -ne 0 ]; then
+          # Fail on pylint bits: 1 (fatal), 2 (error), 4 (warning), 32 (usage)
+          if [ $((PYLINT_EXIT & 1)) -ne 0 ] || [ $((PYLINT_EXIT & 2)) -ne 0 ] || [ $((PYLINT_EXIT & 4)) -ne 0 ] || [ $((PYLINT_EXIT & 32)) -ne 0 ]; then
             echo "Pylint found critical issues (exit code: $PYLINT_EXIT)"
             exit 1
           fi

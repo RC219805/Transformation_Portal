@@ -1,10 +1,44 @@
-import numpy as np
+import argparse
+import sys
+from pathlib import Path
 
-from transformation_portal.atmosphere import LocationPresets, SkyBlender, SkyGANGenerator
-from transformation_portal.core.storage import ExportManager
+
+def _seed_repo_root_for_imports() -> None:
+    current = Path(__file__).resolve()
+    for candidate in (current.parent, *current.parents):
+        if (candidate / "pyproject.toml").is_file() and (candidate / ".github" / "workflows").is_dir():
+            candidate_str = str(candidate)
+            if candidate_str not in sys.path:
+                sys.path.insert(0, candidate_str)
+            return
+
+
+_seed_repo_root_for_imports()
+
+from scripts.lib.repo_root import RepoRootError, resolve_repo_root
+
+
+def _bootstrap_paths(repo_override: str | None = None) -> Path:
+    repo_path = Path(repo_override).expanduser() if repo_override else None
+    repo_root = resolve_repo_root(start=Path(__file__), repo=repo_path)
+    for path in (repo_root, repo_root / "src"):
+        path_str = str(path)
+        if path_str not in sys.path:
+            sys.path.insert(0, path_str)
+    return repo_root
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run core systems verification.")
+    parser.add_argument("--repo", help="Explicit repository root path override.")
+    return parser.parse_args()
 
 
 def run_golden_test():
+    import numpy as np
+
+    from transformation_portal.atmosphere import LocationPresets, SkyBlender, SkyGANGenerator
+
     print("🔮 Starting Core Systems Verification...")
 
     # 1. Create a "Digital Twin" of a flat wall (Gray 50%)
@@ -61,4 +95,11 @@ def run_golden_test():
 
 
 if __name__ == "__main__":
+    args = _parse_args()
+    try:
+        _bootstrap_paths(repo_override=args.repo)
+    except RepoRootError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
+
     run_golden_test()

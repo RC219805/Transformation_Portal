@@ -323,13 +323,13 @@ Saved 16-bit TIFF: test_16bit_fix/V2_750Picacho_Kitchen.tiff ✅
 - Depth-aware features were skipped
 
 ### Root Cause
-In `process_source_tiffs_apex.sh`, depth generation section (lines 112-142) is **commented out**.
+In `scripts/pipelines/process_source_tiffs_apex.sh`, depth generation section (lines 112-142) is **commented out**.
 
 ### Solution: Enable Depth Generation
 
 **Option 1: Uncomment depth generation in script**
 
-Edit `process_source_tiffs_apex.sh` (lines 124-137):
+Edit `scripts/pipelines/process_source_tiffs_apex.sh` (lines 124-137):
 
 ```bash
 # BEFORE (commented out):
@@ -422,7 +422,7 @@ Implement ICC/EXIF preservation for 16-bit output:
 1. ✅ **Fix verified and committed**
 2. ✅ **ADR-007 created** (`docs/architecture/decisions/ADR-007-bit-depth-preservation.md`)
 3. ⏳ **Re-run APEX V2 batch** with 16-bit preservation enabled
-4. ⏳ **Enable depth generation** in `process_source_tiffs_apex.sh`
+4. ⏳ **Enable depth generation** in `scripts/pipelines/process_source_tiffs_apex.sh`
 5. ⏳ **Create regression test** for bit-depth preservation
 
 ### CI/CD Integration

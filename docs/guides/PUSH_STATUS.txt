@@ -121,7 +121,7 @@ Other:
   - docs/IMPLEMENTATION_TEST_REPORT.md
   - docs/QUALITY_SYSTEM_SUMMARY.md
   - install_and_run_rag.py
-  - verify_rag_install.py.txt
+  - scripts/verification/verify_rag_install.py.txt
 
 Note: These files can be included in a future commit if needed.
 

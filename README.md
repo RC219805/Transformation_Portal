@@ -344,7 +344,7 @@ pip install -e .
 3) Verify installation
 
 ```bash
-python verify_core.py
+python scripts/verification/verify_core.py
 ```
 
 ---

@@ -271,7 +271,7 @@ The following files remain untracked (intentionally excluded):
 - `github` (symlink)
 - `install_and_run_rag.py`
 - `projects/750_picacho_lane/Final_Production_UltraQuality/ultra_quality_report.json`
-- `verify_rag_install.py.txt`
+- `scripts/verification/verify_rag_install.py.txt`
 
 **Recommendation**: Review these files for potential inclusion in next commit batch.
 

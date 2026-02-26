@@ -74,6 +74,7 @@ jobs:
         env:
           PY311: ${{ steps.setup-python-311.outputs.python-path }}
           PY312: ${{ steps.setup-python-312.outputs.python-path }}
+          PYTHONPATH: ${{ github.workspace }}/src:${{ github.workspace }}
         run: |
           "$PY312" tools/check_phase4d_manifest_cross_runtime.py \
             --python-a "$PY311" \
@@ -84,6 +85,7 @@ jobs:
         env:
           PY311: ${{ steps.setup-python-311.outputs.python-path }}
           PY312: ${{ steps.setup-python-312.outputs.python-path }}
+          PYTHONPATH: ${{ github.workspace }}/src:${{ github.workspace }}
         run: |
           "$PY312" tools/check_bundle_root_cross_runtime.py \
             --python-a "$PY311" \
@@ -94,6 +96,7 @@ jobs:
         env:
           PY311: ${{ steps.setup-python-311.outputs.python-path }}
           PY312: ${{ steps.setup-python-312.outputs.python-path }}
+          PYTHONPATH: ${{ github.workspace }}/src:${{ github.workspace }}
         run: |
           "$PY312" tools/check_governance_export_cross_runtime.py \
             --python-a "$PY311" \

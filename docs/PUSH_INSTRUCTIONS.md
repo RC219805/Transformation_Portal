@@ -78,7 +78,7 @@ e599188 docs: add comprehensive quality assessment and analysis documentation
 - docs/QUALITY_SYSTEM_SUMMARY.md (summary file)
 - github symlink
 - install_and_run_rag.py (RAG installation script)
-- verify_rag_install.py.txt (verification script)
+- scripts/verification/verify_rag_install.py.txt (verification script)
 - **Reason**: Session files, summaries, or RAG system files (optional)
 
 ---

@@ -28,6 +28,8 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+!scripts/lib/
+!scripts/lib/*.py
 
 # Caches
 .hypothesis/
