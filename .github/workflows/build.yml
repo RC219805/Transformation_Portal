@@ -122,6 +122,15 @@ jobs:
           set -euo pipefail
           PYTHONPATH=src python3 scripts/verification/assert_tp_import_surface.py --module tp --expect importable
 
+      - name: Relocatability smoke test (verification scripts)
+        run: |
+          set -euo pipefail
+          REPO_ROOT="$(pwd)"
+          cd /tmp
+          python3 "${REPO_ROOT}/scripts/verification/verify_ml_deps.py" --help
+          python3 "${REPO_ROOT}/scripts/verification/verify_core.py" --help
+          python3 "${REPO_ROOT}/scripts/verification/verify_rag_install.py" --help
+
       - name: Validate compliance schemas
         run: |
           set -euo pipefail
