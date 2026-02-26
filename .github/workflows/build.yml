@@ -122,6 +122,17 @@ jobs:
           set -euo pipefail
           PYTHONPATH=src python3 scripts/verification/assert_tp_import_surface.py --module tp --expect importable
 
+      - name: Assert tp import path parity under src/
+        run: |
+          set -euo pipefail
+          TP_FILE="$(PYTHONPATH=src python3 -c "import pathlib, tp; print(pathlib.Path(tp.__file__).resolve())")"
+          EXPECTED_PREFIX="${GITHUB_WORKSPACE}/src/tp/"
+          if [[ "${TP_FILE}" != "${EXPECTED_PREFIX}"* ]]; then
+            echo "tp import path parity failed: expected prefix ${EXPECTED_PREFIX}, got ${TP_FILE}" >&2
+            exit 1
+          fi
+          echo "tp import path parity passed: ${TP_FILE}"
+
       - name: Relocatability smoke test (verification scripts)
         run: |
           set -euo pipefail

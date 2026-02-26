@@ -38,3 +38,20 @@ def test_resolve_repo_root_fails_when_anchors_missing(tmp_path: Path) -> None:
     deep.mkdir(parents=True)
     with pytest.raises(RepoRootError, match="Unable to locate repository root"):
         resolve_repo_root(start=deep)
+
+
+def test_resolve_repo_root_through_symlinked_repo_path(tmp_path: Path) -> None:
+    repo_real = tmp_path / "repo_real"
+    (repo_real / ".github" / "workflows").mkdir(parents=True)
+    (repo_real / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+    (repo_real / "scripts").mkdir(parents=True)
+    (repo_real / "scripts" / "tool.py").write_text("print('ok')\n", encoding="utf-8")
+
+    repo_link = tmp_path / "repo_link"
+    try:
+        repo_link.symlink_to(repo_real, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"Symlink creation unsupported in test environment: {exc}")
+
+    root = resolve_repo_root(start=repo_link / "scripts" / "tool.py")
+    assert root == repo_real.resolve()
