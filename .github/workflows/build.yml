@@ -218,8 +218,8 @@ jobs:
           PYLINT_EXIT=$?
           set -e
 
-          # Fail only on critical pylint bits: 1 (fatal), 2 (error), 32 (usage)
-          if [ $((PYLINT_EXIT & 1)) -ne 0 ] || [ $((PYLINT_EXIT & 2)) -ne 0 ] || [ $((PYLINT_EXIT & 32)) -ne 0 ]; then
+          # Fail on pylint bits: 1 (fatal), 2 (error), 4 (warning), 32 (usage)
+          if [ $((PYLINT_EXIT & 1)) -ne 0 ] || [ $((PYLINT_EXIT & 2)) -ne 0 ] || [ $((PYLINT_EXIT & 4)) -ne 0 ] || [ $((PYLINT_EXIT & 32)) -ne 0 ]; then
             echo "Pylint found critical issues (exit code: $PYLINT_EXIT)"
             exit 1
           fi
