@@ -4,11 +4,23 @@ APEX ML Dependencies Verification Script
 Checks all required ML dependencies and backends are properly installed.
 """
 
+import argparse
 import sys
 from pathlib import Path
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+from scripts.lib.repo_root import RepoRootError, resolve_repo_root
+
+
+def _bootstrap_paths(repo_override: str | None = None) -> Path:
+    """Resolve repository root and ensure local imports use repo + src paths."""
+    repo_path = Path(repo_override).expanduser() if repo_override else None
+    repo_root = resolve_repo_root(start=Path(__file__), repo=repo_path)
+
+    for path in (repo_root, repo_root / "src"):
+        path_str = str(path)
+        if path_str not in sys.path:
+            sys.path.insert(0, path_str)
+    return repo_root
 
 
 def check_dependencies():
@@ -120,5 +132,18 @@ def check_dependencies():
         return 1
 
 
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Verify APEX ML dependencies and backends.")
+    parser.add_argument("--repo", help="Explicit repository root path override.")
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
+    args = _parse_args()
+    try:
+        _bootstrap_paths(repo_override=args.repo)
+    except RepoRootError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
+
     sys.exit(check_dependencies())
