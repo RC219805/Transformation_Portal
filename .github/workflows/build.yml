@@ -192,6 +192,30 @@ jobs:
           python3 scripts/verification/verify_core.py --help
           python3 scripts/verification/verify_rag_install.py --help
 
+          texture_state() {
+            local file_path="${1}"
+            python3 - "${file_path}" <<'PY'
+          import hashlib
+          import os
+          import sys
+
+          path = sys.argv[1]
+          if not os.path.exists(path):
+              print("__ABSENT__")
+              raise SystemExit(0)
+
+          digest = hashlib.sha256()
+          with open(path, "rb") as handle:
+              for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                  digest.update(chunk)
+          st = os.stat(path)
+          print(f"{digest.hexdigest()}::{st.st_mtime_ns}")
+          PY
+          }
+
+          DEFAULT_TEXTURE_FILE="${COPY_ROOT}/textures/board_materials/plaster_marmorino_westwood_beige.png"
+          DEFAULT_TEXTURE_STATE_BEFORE="$(texture_state "${DEFAULT_TEXTURE_FILE}")"
+
           python3 scripts/create_board_textures.py \
             --output-dir "${OUT_DIR}" \
             --size 256 \
@@ -200,6 +224,12 @@ jobs:
             --noise 1
 
           test -f "${OUT_DIR}/plaster_marmorino_westwood_beige.png"
+
+          DEFAULT_TEXTURE_STATE_AFTER="$(texture_state "${DEFAULT_TEXTURE_FILE}")"
+          if [ "${DEFAULT_TEXTURE_STATE_BEFORE}" != "${DEFAULT_TEXTURE_STATE_AFTER}" ]; then
+            echo "relocatability proof failed: default texture path changed in copied repo" >&2
+            exit 1
+          fi
 
           # Guard against scripts silently ignoring --output-dir and writing under repo root.
           if [ -d "${COPY_ROOT}/trial_runs" ]; then
