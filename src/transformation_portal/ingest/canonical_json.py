@@ -1,7 +1,9 @@
-"""Canonical JSON serialization helpers for ingest evidence workflows.
+"""Canonical JSON serialization helpers for ingest deterministic artifacts.
 
-This module defines a single canonicalization profile for evidence hashing.
-The profile is intentionally explicit and separate from machine-mode rendering.
+This profile is used by evidence hashing and normalization outputs. It is not
+the machine-mode wire serializer: machine-mode rendering intentionally uses
+``ensure_ascii=True`` while this profile keeps unicode code points
+(``ensure_ascii=False``) under ``tp.canonical.json.v1``.
 """
 
 from __future__ import annotations

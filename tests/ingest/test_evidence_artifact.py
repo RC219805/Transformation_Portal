@@ -172,3 +172,27 @@ def test_canonical_evidence_bytes_are_deterministic() -> None:
     }
 
     assert canonical_evidence_bytes(payload_a) == canonical_evidence_bytes(payload_b)
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    [
+        (lambda payload: payload.update({"command": "not-a-command"}), "machine payload command must be one of"),
+        (lambda payload: payload.update({"success": "yes"}), "machine payload success must be a boolean"),
+        (lambda payload: payload.update({"exit_code": 999}), r"machine payload exit_code must be an integer in \[0,255\]"),
+        (
+            lambda payload: payload.update({"success": False, "exit_code": 0}),
+            "machine payload exit_code must be non-zero when success is false",
+        ),
+        (lambda payload: payload.update({"data": []}), "machine payload data must be an object"),
+    ],
+)
+def test_build_evidence_payload_rejects_invalid_machine_contract_surface(
+    mutate: Any,
+    message: str,
+) -> None:
+    payload = _extract_payload(elapsed_seconds=1.23)
+    mutate(payload)
+
+    with pytest.raises(ValueError, match=message):
+        build_evidence_payload(payload, projection_profile=load_projection_profile())

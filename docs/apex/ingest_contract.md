@@ -142,6 +142,7 @@ For cryptographic attestations, use the separate evidence artifact flow:
 - evidence schema: `tp.meta.evidence.v1`
 
 The evidence flow hashes a projected envelope that removes volatile telemetry fields (for example `elapsed_seconds` and tool version strings), enabling reproducible third-party verification without changing the machine-mode contract.
+Serialization intentionally differs by layer: machine wire output uses `ensure_ascii=True` for transport-facing payloads, while evidence canonicalization uses `ensure_ascii=False` under `tp.canonical.json.v1`.
 
 **Immutability:**
 

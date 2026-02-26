@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import traceback
 from pathlib import Path
 
 from transformation_portal.ingest.evidence import build_evidence_payload, canonical_evidence_bytes, load_projection_profile
@@ -71,14 +72,24 @@ def main() -> int:
 
     try:
         machine_payload = json.loads(raw_input.decode("utf-8"))
-        if not isinstance(machine_payload, dict):
-            raise ValueError("Input JSON must be an object")
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        print(f"Input JSON parse failed: {exc}", file=sys.stderr)
+        return EXIT_INPUT_ERROR
 
+    if not isinstance(machine_payload, dict):
+        print("Input JSON must be an object", file=sys.stderr)
+        return EXIT_INPUT_ERROR
+
+    try:
         profile = load_projection_profile(Path(args.profile) if args.profile else None)
         evidence_payload = build_evidence_payload(machine_payload, projection_profile=profile)
         evidence_bytes = canonical_evidence_bytes(evidence_payload)
-    except Exception as exc:  # noqa: BLE001 - CLI maps build failures to deterministic exit code.
+    except (TypeError, ValueError) as exc:
         print(f"Evidence build failed: {exc}", file=sys.stderr)
+        return EXIT_BUILD_ERROR
+    except Exception:  # noqa: BLE001 - deterministic exit code with traceback for debugging unexpected failures.
+        print("Evidence build failed with unexpected error:", file=sys.stderr)
+        print(traceback.format_exc(), file=sys.stderr)
         return EXIT_BUILD_ERROR
 
     try:

@@ -14,6 +14,7 @@ from .canonical_json import TP_CANONICAL_JSON_PROFILE, canonicalize_json
 EVIDENCE_SCHEMA_VERSION = "tp.meta.evidence.v1"
 MACHINE_SCHEMA_VERSION = "tp.meta.machine.v1"
 DEFAULT_PROJECTION_PROFILE = "tp.projection.machine_to_evidence.v1"
+_ALLOWED_MACHINE_COMMANDS = frozenset({"check-system", "extract", "validate", "extract-batch", "summarize"})
 DEFAULT_PROJECTION_PROFILE_PATH = (
     Path(__file__).resolve().parents[3] / "schemas" / "profiles" / f"{DEFAULT_PROJECTION_PROFILE}.json"
 )
@@ -143,7 +144,7 @@ def project_machine_envelope(
         found = machine_payload.get("schema")
         raise ValueError(f"machine payload schema must be {MACHINE_SCHEMA_VERSION}, got {found!r}")
 
-    profile = dict(projection_profile or load_projection_profile())
+    profile = copy.deepcopy(dict(projection_profile or load_projection_profile()))
     drop_paths = profile.get("drop_paths")
     if not isinstance(drop_paths, list):
         raise ValueError("projection profile drop_paths must be a list")
@@ -173,6 +174,35 @@ def _extract_file_sha256(projected_envelope: Mapping[str, Any]) -> str | None:
     return None
 
 
+def _validate_machine_contract_surface(machine_payload: Mapping[str, Any]) -> tuple[str, bool, int]:
+    command = machine_payload.get("command")
+    if not isinstance(command, str) or command not in _ALLOWED_MACHINE_COMMANDS:
+        allowed = ", ".join(sorted(_ALLOWED_MACHINE_COMMANDS))
+        raise ValueError(f"machine payload command must be one of: {allowed}")
+
+    success = machine_payload.get("success")
+    if type(success) is not bool:
+        raise ValueError("machine payload success must be a boolean")
+
+    exit_code = machine_payload.get("exit_code")
+    if type(exit_code) is not int or not (0 <= exit_code <= 255):
+        raise ValueError("machine payload exit_code must be an integer in [0,255]")
+    if success and exit_code != 0:
+        raise ValueError("machine payload exit_code must be 0 when success is true")
+    if not success and exit_code == 0:
+        raise ValueError("machine payload exit_code must be non-zero when success is false")
+
+    data = machine_payload.get("data")
+    if not isinstance(data, Mapping):
+        raise ValueError("machine payload data must be an object")
+
+    error = machine_payload.get("error")
+    if error is not None and not isinstance(error, Mapping):
+        raise ValueError("machine payload error must be an object or null")
+
+    return command, success, exit_code
+
+
 def build_evidence_payload(
     machine_payload: Mapping[str, Any],
     *,
@@ -182,8 +212,9 @@ def build_evidence_payload(
     bundle_root_sha256: str | None = None,
 ) -> dict[str, Any]:
     """Build a ``tp.meta.evidence.v1`` object from a machine envelope."""
-    profile = dict(projection_profile or load_projection_profile())
+    profile = copy.deepcopy(dict(projection_profile or load_projection_profile()))
     projected_envelope = project_machine_envelope(machine_payload, projection_profile=profile)
+    command, success, exit_code = _validate_machine_contract_surface(projected_envelope)
     evidence_sha256 = hashlib.sha256(canonicalize_json(projected_envelope)).hexdigest()
 
     if bundle_root_sha256 is not None:
@@ -192,9 +223,9 @@ def build_evidence_payload(
     return {
         "schema": EVIDENCE_SCHEMA_VERSION,
         "source_schema": MACHINE_SCHEMA_VERSION,
-        "command": projected_envelope.get("command"),
-        "success": projected_envelope.get("success"),
-        "exit_code": projected_envelope.get("exit_code"),
+        "command": command,
+        "success": success,
+        "exit_code": exit_code,
         "envelope_projection_profile": profile["schema"],
         "canonicalization": TP_CANONICAL_JSON_PROFILE,
         "evidence_sha256": evidence_sha256,

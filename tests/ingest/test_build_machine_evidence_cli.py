@@ -67,5 +67,30 @@ def test_build_machine_evidence_cli_rejects_non_object_input(tmp_path: Path) -> 
 
     result = _run_tool("--in", str(input_path), "--out", str(tmp_path / "out.json"))
 
+    assert result.returncode == 2
+    assert "Input JSON must be an object" in result.stderr
+
+
+def test_build_machine_evidence_cli_rejects_invalid_machine_contract_surface(tmp_path: Path) -> None:
+    machine_payload = {
+        "schema": "tp.meta.machine.v1",
+        "command": "extract",
+        "success": False,
+        "exit_code": 0,
+        "error": None,
+        "data": {
+            "input_path": "/tmp/source.cr2",
+            "success": False,
+            "output_path": None,
+            "elapsed_seconds": 0.42,
+            "preset": None,
+            "error": None,
+        },
+    }
+    input_path = tmp_path / "invalid-machine.json"
+    input_path.write_text(json.dumps(machine_payload), encoding="utf-8")
+
+    result = _run_tool("--in", str(input_path), "--out", str(tmp_path / "out.json"))
+
     assert result.returncode == 4
-    assert "Evidence build failed: Input JSON must be an object" in result.stderr
+    assert "machine payload exit_code must be non-zero when success is false" in result.stderr
