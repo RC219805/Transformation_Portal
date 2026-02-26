@@ -17,10 +17,32 @@ def test_keyword_rule_rejects_non_archived_paths() -> None:
     assert check_docs_structure._keyword_violation("docs/cli/FINAL_REPORT.md")
 
 
-def test_root_topology_rule() -> None:
-    assert not check_docs_structure._root_violation("docs/README.md")
-    assert check_docs_structure._root_violation("docs/random.md")
-    assert not check_docs_structure._root_violation("docs/cli/README.md")
+def test_root_topology_rule_for_added_files() -> None:
+    assert not check_docs_structure._root_violation(check_docs_structure.DocChange(status="A", path="docs/README.md"))
+    assert check_docs_structure._root_violation(check_docs_structure.DocChange(status="A", path="docs/random.md"))
+    assert not check_docs_structure._root_violation(check_docs_structure.DocChange(status="A", path="docs/cli/README.md"))
+
+
+def test_root_topology_rule_allows_modifying_existing_legacy_root_docs() -> None:
+    assert not check_docs_structure._root_violation(
+        check_docs_structure.DocChange(status="M", path="docs/ARCHITECTURAL_WORKFLOW.md")
+    )
+
+
+def test_root_topology_rule_blocks_rename_or_copy_into_root() -> None:
+    assert check_docs_structure._root_violation(check_docs_structure.DocChange(status="R", path="docs/new_doc.md"))
+    assert check_docs_structure._root_violation(check_docs_structure.DocChange(status="C", path="docs/new_doc.md"))
+
+
+def test_parse_name_status_uses_rename_destination_path() -> None:
+    changes = check_docs_structure._parse_name_status_output(
+        "M\tdocs/ARCHITECTURAL_WORKFLOW.md\nR100\tdocs/cli/guide.md\tdocs/guide.md\nA\tdocs/new.md\n"
+    )
+    assert changes == [
+        check_docs_structure.DocChange(status="M", path="docs/ARCHITECTURAL_WORKFLOW.md"),
+        check_docs_structure.DocChange(status="R", path="docs/guide.md"),
+        check_docs_structure.DocChange(status="A", path="docs/new.md"),
+    ]
 
 
 def test_changed_docs_files_returns_none_when_git_diff_unavailable(monkeypatch) -> None:
