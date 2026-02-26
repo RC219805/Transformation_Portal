@@ -19,6 +19,7 @@ ADRs are **binding decisions** that define the repository's architecture, securi
 | **[ADR-029](ADR-029-execution-graph-abstraction.md)** | **Execution Graph Abstraction** | **Proposed** | **2026-02-12** | **Architect** |
 | **[ADR-030](ADR-030-phase2-deterministic-raw-ingest.md)** | **Phase II Deterministic RAW Ingest** | **Proposed** | **2026-02-20** | **Architect** |
 | **[ADR-035](ADR-035-bundle-root-anchoring-invariants.md)** | **Bundle Root Anchoring Invariants** | **Proposed** | **2026-02-24** | **Architect** |
+| **[ADR-038](ADR-038-operational-determinism-enforcement-layer.md)** | **Operational Determinism Enforcement Layer** | **Accepted** | **2026-02-26** | **Architect** |
 
 ### Dependency & Security
 
@@ -85,11 +86,12 @@ These are repository-level rules enforced by ADRs. **Exceptions require an ADR.*
 - ❌ No pipeline imports another pipeline's internal modules
 - ✅ Shared utilities belong in `core/` with clear ownership
 
-### Determinism and Reproducibility (ADR-021, ADR-027, ADR-029, ADR-030)
+### Determinism and Reproducibility (ADR-021, ADR-027, ADR-029, ADR-030, ADR-038)
 
 - ✅ HuggingFace models pinned to commit SHAs (not `main`)
 - ✅ Same inputs → same outputs (deterministic execution)
 - ✅ Provenance tracking for all ML artifacts
+- ✅ Full-chain Phase 4 operational replay gate in CI
 
 ### Security and Supply Chain (ADR-021, ADR-024)
 
@@ -162,4 +164,4 @@ These are repository-level rules enforced by ADRs. **Exceptions require an ADR.*
 
 ---
 
-*Last Updated: 2026-02-24*
+*Last Updated: 2026-02-26*
