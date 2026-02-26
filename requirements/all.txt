@@ -5,7 +5,7 @@
 #    pip-compile --output-file=all.txt all.in
 #
 accelerate==1.12.0
-    # via -r ml.in
+    # via -r requirements/ml.in
 annotated-doc==0.0.4
     # via typer
 annotated-types==0.7.0
@@ -21,13 +21,15 @@ attrs==25.4.0
     #   jsonschema
     #   referencing
 autopep8==2.3.2
-    # via -r dev.in
+    # via -r requirements/dev.in
+backports-tarfile==1.2.0
+    # via jaraco-context
 bandit==1.9.3
-    # via -r ci.in
+    # via -r requirements/ci.in
 black==26.1.0
-    # via -r dev.in
+    # via -r requirements/dev.in
 build==1.4.0
-    # via -r ci.in
+    # via -r requirements/ci.in
 cachetools==7.0.1
     # via tox
 cattrs==25.3.0
@@ -51,23 +53,23 @@ click==8.3.1
 colorama==0.4.6
     # via tox
 colour-science==0.4.7
-    # via -r ml.in
+    # via -r requirements/ml.in
 controlnet-aux==0.0.10
-    # via -r ml.in
+    # via -r requirements/ml.in
 coremltools==9.0
-    # via -r ml.in
+    # via -r requirements/ml.in
 coverage[toml]==7.13.2
     # via pytest-cov
 cryptography==46.0.5
     # via
-    #   -r dev.in
+    #   -r requirements/dev.in
     #   secretstorage
 cuda-bindings==12.9.4
     # via torch
 cuda-pathfinder==1.3.4
     # via cuda-bindings
 diffusers==0.36.0
-    # via -r ml.in
+    # via -r requirements/ml.in
 dill==0.4.1
     # via pylint
 distlib==0.4.0
@@ -77,7 +79,7 @@ docutils==0.22.4
 dparse==0.6.4
     # via safety
 efficientsam==1.0.0
-    # via -r ml.in
+    # via -r requirements/ml.in
 einops==0.8.2
     # via controlnet-aux
 filelock==3.24.2
@@ -90,7 +92,7 @@ filelock==3.24.2
     #   transformers
     #   virtualenv
 flake8==7.3.0
-    # via -r dev.in
+    # via -r requirements/dev.in
 fsspec==2026.1.0
     # via
     #   huggingface-hub
@@ -107,7 +109,7 @@ httpx==0.28.1
     # via diffusers
 huggingface-hub==0.36.1
     # via
-    #   -r ml.in
+    #   -r requirements/ml.in
     #   accelerate
     #   controlnet-aux
     #   diffusers
@@ -117,26 +119,27 @@ huggingface-hub==0.36.1
     #   tokenizers
     #   transformers
 hypothesis==6.151.5
-    # via -r dev.in
+    # via -r requirements/dev.in
 idna==3.11
     # via
     #   anyio
     #   httpx
     #   requests
 imagecodecs==2024.12.30
-    # via -r base.in
+    # via -r requirements/base.in
 imageio==2.37.2
     # via scikit-image
 importlib-metadata==8.7.1
     # via
     #   controlnet-aux
     #   diffusers
+    #   keyring
     #   twine
 iniconfig==2.3.0
     # via pytest
 isort==7.0.0
     # via
-    #   -r dev.in
+    #   -r requirements/dev.in
     #   pylint
 jaraco-classes==3.4.0
     # via keyring
@@ -153,7 +156,7 @@ jinja2==3.1.6
 joblib==1.5.3
     # via scikit-learn
 jsonschema==4.26.0
-    # via -r dev.in
+    # via -r requirements/dev.in
 jsonschema-specifications==2025.9.1
     # via jsonschema
 keyring==25.7.0
@@ -161,7 +164,7 @@ keyring==25.7.0
 lazy-loader==0.4
     # via scikit-image
 libcst==1.8.6
-    # via -r dev.in
+    # via -r requirements/dev.in
 librt==0.7.8
     # via mypy
 markdown-it-py==4.0.0
@@ -175,7 +178,7 @@ mccabe==0.7.0
 mdurl==0.1.2
     # via markdown-it-py
 memory-profiler==0.61.0
-    # via -r ml.in
+    # via -r requirements/ml.in
 more-itertools==10.8.0
     # via
     #   jaraco-classes
@@ -183,7 +186,7 @@ more-itertools==10.8.0
 mpmath==1.3.0
     # via sympy
 mypy==1.19.1
-    # via -r dev.in
+    # via -r requirements/dev.in
 mypy-extensions==1.1.0
     # via
     #   black
@@ -196,7 +199,7 @@ nh3==0.3.2
     # via readme-renderer
 numpy==2.2.6
     # via
-    #   -r base.in
+    #   -r requirements/base.in
     #   accelerate
     #   colour-science
     #   controlnet-aux
@@ -256,9 +259,9 @@ nvidia-nvshmem-cu12==3.4.5
 nvidia-nvtx-cu12==12.8.90
     # via torch
 open-clip-torch==3.2.0
-    # via -r ml.in
+    # via -r requirements/ml.in
 opencv-python==4.13.0.92
-    # via -r base.in
+    # via -r requirements/base.in
 opencv-python-headless==4.13.0.90
     # via controlnet-aux
 packaging==26.0
@@ -283,7 +286,7 @@ pathspec==1.0.4
     #   mypy
 pillow==12.1.1
     # via
-    #   -r base.in
+    #   -r requirements/base.in
     #   controlnet-aux
     #   diffusers
     #   imageio
@@ -303,12 +306,12 @@ pluggy==1.6.0
     #   pytest-cov
     #   tox
 plyfile==1.1.3
-    # via -r ml.in
+    # via -r requirements/ml.in
 protobuf==6.33.5
     # via coremltools
 psutil==7.2.2
     # via
-    #   -r ml.in
+    #   -r requirements/ml.in
     #   accelerate
     #   memory-profiler
 pyaml==25.7.0
@@ -320,7 +323,7 @@ pycodestyle==2.14.0
 pycparser==3.0
     # via cffi
 pydantic==2.12.5
-    # via -r base.in
+    # via -r requirements/base.in
 pydantic-core==2.41.5
     # via pydantic
 pyflakes==3.4.0
@@ -331,35 +334,35 @@ pygments==2.19.2
     #   readme-renderer
     #   rich
 pylint==4.0.4
-    # via -r dev.in
+    # via -r requirements/dev.in
 pypdf==6.7.2
-    # via -r ci.in
+    # via -r requirements/ci.in
 pyproject-api==1.10.0
     # via tox
 pyproject-hooks==1.2.0
     # via build
 pytest==9.0.2
     # via
-    #   -r dev.in
+    #   -r requirements/dev.in
     #   pytest-cov
     #   pytest-json-report
     #   pytest-metadata
     #   pytest-rerunfailures
 pytest-cov==7.0.0
-    # via -r dev.in
+    # via -r requirements/dev.in
 pytest-json-report==1.5.0
     # via
-    #   -r ci.in
-    #   -r dev.in
+    #   -r requirements/ci.in
+    #   -r requirements/dev.in
 pytest-metadata==3.1.1
     # via pytest-json-report
 pytest-rerunfailures==16.1
-    # via -r dev.in
+    # via -r requirements/dev.in
 pytokens==0.4.1
     # via black
 pyyaml==6.0.3
     # via
-    #   -r ml.in
+    #   -r requirements/ml.in
     #   accelerate
     #   bandit
     #   huggingface-hub
@@ -367,8 +370,8 @@ pyyaml==6.0.3
     #   pyaml
     #   timm
     #   transformers
-rawpy==0.26.0
-    # via -r ml.in
+rawpy==0.26.1
+    # via -r requirements/ml.in
 readme-renderer==44.0
     # via twine
 referencing==0.37.0
@@ -411,18 +414,18 @@ safetensors==0.7.0
     #   timm
     #   transformers
 safety==2.3.4
-    # via -r ci.in
+    # via -r requirements/ci.in
 scikit-image==0.26.0
     # via
-    #   -r ml.in
+    #   -r requirements/ml.in
     #   controlnet-aux
 scikit-learn==1.8.0
     # via
-    #   -r base.in
+    #   -r requirements/base.in
     #   sentence-transformers
 scipy==1.17.0
     # via
-    #   -r base.in
+    #   -r requirements/base.in
     #   controlnet-aux
     #   scikit-image
     #   scikit-learn
@@ -430,7 +433,7 @@ scipy==1.17.0
 secretstorage==3.5.0
     # via keyring
 sentence-transformers==5.2.2
-    # via -r ml.in
+    # via -r requirements/ml.in
 shellingham==1.5.4
     # via typer
 sortedcontainers==2.4.0
@@ -445,7 +448,7 @@ threadpoolctl==3.6.0
     # via scikit-learn
 tifffile==2024.12.12
     # via
-    #   -r base.in
+    #   -r requirements/base.in
     #   scikit-image
 timm==1.0.24
     # via
@@ -457,7 +460,7 @@ tomlkit==0.14.0
     # via pylint
 torch==2.10.0
     # via
-    #   -r ml.in
+    #   -r requirements/ml.in
     #   accelerate
     #   controlnet-aux
     #   efficientsam
@@ -467,16 +470,16 @@ torch==2.10.0
     #   torchvision
 torchvision==0.25.0
     # via
-    #   -r ml.in
+    #   -r requirements/ml.in
     #   controlnet-aux
     #   efficientsam
     #   open-clip-torch
     #   timm
 tox==4.39.0
-    # via -r ci.in
+    # via -r requirements/ci.in
 tqdm==4.67.3
     # via
-    #   -r base.in
+    #   -r requirements/base.in
     #   coremltools
     #   huggingface-hub
     #   open-clip-torch
@@ -484,16 +487,16 @@ tqdm==4.67.3
     #   transformers
 transformers==4.57.6
     # via
-    #   -r ml.in
+    #   -r requirements/ml.in
     #   sentence-transformers
 triton==3.6.0
     # via torch
 twine==4.0.2
-    # via -r ci.in
+    # via -r requirements/ci.in
 typer==0.24.0
-    # via -r base.in
+    # via -r requirements/base.in
 types-pyyaml==6.0.12.20250915
-    # via -r dev.in
+    # via -r requirements/dev.in
 typing-extensions==4.15.0
     # via
     #   anyio
