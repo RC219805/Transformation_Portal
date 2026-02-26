@@ -161,6 +161,12 @@ jobs:
           TEMP_ROOT="$(mktemp -d /tmp/tp-reloc-proof-XXXXXX)"
           COPY_ROOT="${TEMP_ROOT}/repo"
           OUT_DIR="${TEMP_ROOT}/trial_runs/reloc-proof"
+          cleanup() {
+            if [ -n "${TEMP_ROOT:-}" ] && [ -d "${TEMP_ROOT}" ]; then
+              rm -rf "${TEMP_ROOT}"
+            fi
+          }
+          trap cleanup EXIT INT TERM
 
           cp -R "${REPO_ROOT}" "${COPY_ROOT}"
           cd "${COPY_ROOT}"
