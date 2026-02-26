@@ -12,6 +12,10 @@ def test_keyword_rule_allows_archived_paths() -> None:
     assert not check_docs_structure._keyword_violation("docs/pr_archive/PR_123/REPORT.md")
 
 
+def test_keyword_rule_allows_nested_historical_subfolder() -> None:
+    assert not check_docs_structure._keyword_violation("docs/historical/subfolder/STATUS.md")
+
+
 def test_keyword_rule_rejects_non_archived_paths() -> None:
     assert check_docs_structure._keyword_violation("docs/STATUS.md")
     assert check_docs_structure._keyword_violation("docs/cli/FINAL_REPORT.md")
