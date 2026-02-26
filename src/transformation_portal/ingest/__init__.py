@@ -9,7 +9,7 @@ Components:
 - validator: Schema validation with drift detection
 - sidecar: Deterministic sidecar JSON writing
 
-Contract version: 1.0.0
+Contract version: 1.0.1
 """
 
 from __future__ import annotations

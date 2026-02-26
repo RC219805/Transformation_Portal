@@ -1,4 +1,4 @@
-"""Versioned JSON schemas for ingest contract (v1.0.0).
+"""Versioned JSON schemas for ingest contract (v1.0.1).
 
 Defines immutable, audit-grade schemas for:
 - IngestManifest: Ingest output contract
@@ -11,8 +11,8 @@ Schema guarantees:
 - Deterministic serialization (sorted keys, normalized types)
 - No silent fallbacks or inference
 
-Contract version: 1.0.0
-Schema version: 1.0.0
+Contract version: 1.0.1
+Schema version: 1.0.1
 """
 
 from __future__ import annotations
@@ -267,7 +267,7 @@ class PipelineConfig(BaseModel):
 
 
 class ProvenanceSidecar(BaseModel):
-    """Provenance sidecar schema (v1.0.0).
+    """Provenance sidecar schema (v1.0.1).
 
     Complete, lossless provenance record for audit-grade traceability.
     Emitted deterministically for every ingested RAW/TIFF file.
@@ -284,7 +284,7 @@ class ProvenanceSidecar(BaseModel):
         run_id: Unique run identifier (UUID v4) - non-deterministic by design
     """
 
-    schema_version: Literal["1.0.0"] = "1.0.0"
+    schema_version: Literal["1.0.1"] = "1.0.1"
 
     file_integrity: FileIntegrity
     exif: ExifMetadata
@@ -298,8 +298,8 @@ class ProvenanceSidecar(BaseModel):
     @validator("schema_version")
     def validate_schema_version(cls, v):
         """Ensure schema version is supported."""
-        if v != "1.0.0":
-            raise ValueError(f"Unsupported ProvenanceSidecar schema version: {v}. " f"This code supports version 1.0.0 only.")
+        if v != "1.0.1":
+            raise ValueError(f"Unsupported ProvenanceSidecar schema version: {v}. " f"This code supports version 1.0.1 only.")
         return v
 
     @validator("git_commit")
@@ -339,7 +339,7 @@ class ProvenanceSidecar(BaseModel):
 
 
 class IngestManifest(BaseModel):
-    """Ingest manifest schema (v1.0.0).
+    """Ingest manifest schema (v1.0.1).
 
     Output contract for the ingest stage.
     Lighter-weight than ProvenanceSidecar (summary only).
@@ -354,7 +354,7 @@ class IngestManifest(BaseModel):
         ingest_duration_sec: Total ingest duration in seconds
     """
 
-    schema_version: Literal["1.0.0"] = "1.0.0"
+    schema_version: Literal["1.0.1"] = "1.0.1"
 
     input_file: FileIntegrity
     output_file: Optional[FileIntegrity] = None
@@ -366,8 +366,8 @@ class IngestManifest(BaseModel):
     @validator("schema_version")
     def validate_schema_version(cls, v):
         """Ensure schema version is supported."""
-        if v != "1.0.0":
-            raise ValueError(f"Unsupported IngestManifest schema version: {v}. " f"This code supports version 1.0.0 only.")
+        if v != "1.0.1":
+            raise ValueError(f"Unsupported IngestManifest schema version: {v}. " f"This code supports version 1.0.1 only.")
         return v
 
     @validator("status")

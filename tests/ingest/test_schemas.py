@@ -222,13 +222,13 @@ class TestProvenanceSidecar:
             run_id="550e8400-e29b-41d4-a716-446655440000",
         )
 
-        assert sidecar.schema_version == "1.0.0"
+        assert sidecar.schema_version == "1.0.1"
         assert sidecar.file_integrity.sha256 == "a" * 64
         assert sidecar.run_id == "550e8400-e29b-41d4-a716-446655440000"
 
     def test_invalid_schema_version(self):
         """Test invalid schema version."""
-        with pytest.raises(ValueError, match="Input should be '1.0.0'"):
+        with pytest.raises(ValueError, match="Input should be '1.0.1'"):
             ProvenanceSidecar(
                 schema_version="2.0.0",  # Unsupported
                 file_integrity=FileIntegrity(
@@ -367,7 +367,7 @@ class TestIngestManifest:
             ingest_duration_sec=5.5,
         )
 
-        assert manifest.schema_version == "1.0.0"
+        assert manifest.schema_version == "1.0.1"
         assert manifest.status == "success"
         assert manifest.ingest_duration_sec == 5.5
 

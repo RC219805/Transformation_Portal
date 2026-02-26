@@ -44,7 +44,7 @@
     "preset": "luxury"
   },
   "run_id": "550e8400-e29b-41d4-a716-446655440000",
-  "schema_version": "1.0.0",
+  "schema_version": "1.0.1",
   "timestamps": {
     "exiftool_extract_duration_sec": 2.3,
     "ingest_end": "2026-02-10T12:05:00+00:00",
