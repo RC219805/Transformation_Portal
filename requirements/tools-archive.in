@@ -2,7 +2,7 @@
 # This file contains abstract requirements for tools/archive_manifest_reports.py.
 # Run `make tools-archive.txt` in this directory to generate pinned tools-archive.txt.
 
-numpy>=2.2,<2.3
+numpy>=2.2,<2.5
 pandas>=2.2,<3.1
 jsonschema>=4.23,<5
 cryptography>=46.0,<47

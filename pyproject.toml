@@ -13,7 +13,7 @@ authors = [{ name = "RC219805" }]
 dependencies = [
     # Keep broad runtime ranges in pyproject and enforce tested combos via lockfiles/CI.
     # This project metadata currently keeps NumPy constrained below 2.
-    "numpy>=1.24,<2",
+    "numpy>=1.24,<3",
     "Pillow>=10.0.0,<12",
     "scipy>=1.15,<2",
     "scikit-learn>=1.0,<2",
