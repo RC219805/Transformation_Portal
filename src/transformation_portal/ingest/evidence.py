@@ -100,7 +100,7 @@ def _validate_sha256(value: Any, *, field: str) -> str:
         raise ValueError(f"{field} must be a 64-character sha256 digest")
     lowered = value.lower()
     if any(char not in "0123456789abcdef" for char in lowered):
-        raise ValueError(f"{field} must be lowercase hex")
+        raise ValueError(f"{field} must be hex (0-9a-f)")
     return lowered
 
 

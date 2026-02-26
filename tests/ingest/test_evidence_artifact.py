@@ -18,6 +18,7 @@ from transformation_portal.ingest.evidence import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 EVIDENCE_SCHEMA_PATH = PROJECT_ROOT / "docs" / "schemas" / "evidence" / "tp.meta.evidence.v1" / "evidence.schema.json"
+MACHINE_SCHEMA_PATH = PROJECT_ROOT / "docs" / "schemas" / "machine_mode" / "tp.meta.machine.v1" / "machine_mode.schema.json"
 
 
 def _check_system_payload(*, exiftool_version: str, git_version: str) -> dict[str, Any]:
@@ -151,6 +152,25 @@ def test_evidence_payload_validates_against_schema() -> None:
 
     assert payload["schema"] == EVIDENCE_SCHEMA_VERSION
     assert payload["canonicalization"] == "tp.canonical.json.v1"
+
+
+def test_evidence_command_enum_matches_machine_mode_schema() -> None:
+    evidence_schema = json.loads(EVIDENCE_SCHEMA_PATH.read_text(encoding="utf-8"))
+    machine_schema = json.loads(MACHINE_SCHEMA_PATH.read_text(encoding="utf-8"))
+
+    evidence_commands = evidence_schema["properties"]["command"]["enum"]
+    assert isinstance(evidence_commands, list)
+
+    machine_commands: set[str] = set()
+    all_of = machine_schema.get("allOf")
+    assert isinstance(all_of, list) and len(all_of) >= 2
+    machine_variants = all_of[1].get("oneOf", [])
+    for variant in machine_variants:
+        command_const = variant.get("properties", {}).get("command", {}).get("const")
+        if isinstance(command_const, str):
+            machine_commands.add(command_const)
+
+    assert set(evidence_commands) == machine_commands
 
 
 def test_canonical_evidence_bytes_are_deterministic() -> None:
