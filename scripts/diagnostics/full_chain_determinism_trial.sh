@@ -1,22 +1,20 @@
 #!/usr/bin/env bash
-# Full-chain determinism trial on real files:
+# Full-chain determinism trial:
 #   Phase 4C: extract_capture_metadata
 #   Phase 4D: build_metadata_manifest
 #   Phase 4E: build_provenance_manifest
 #   Phase 4E: build_provenance_merkle
 #
-# Runs N times, compares byte-level artifact hashes across runs, then optionally
-# repeats from /tmp to validate relocatability/CWD-independence.
+# Modes:
+#   RAW mode:      --input-root <dir> (runs 4C -> 4D -> 4E -> merkle)
+#   Artifact mode: --capture-metadata <json> (skips 4C extraction, seeds capture artifact)
 #
 # Exit codes:
-#   0  success (all deterministic)
+#   0  success (all configured comparisons passed)
 #   2  usage / missing dependency
 #   3  preflight failure (paths/tools missing)
 #   4  pipeline run failure
 #   5  determinism mismatch detected
-#
-# Recommended lint check during development:
-#   shellcheck scripts/diagnostics/full_chain_determinism_trial.sh
 
 set -euo pipefail
 IFS=$'\n\t'
@@ -26,19 +24,28 @@ RUNS=2
 STRICT=1
 DO_TMP=1
 CLEAN=0
-INPUT_DIR=""
+VERBOSE=0
+HASH_INPUT=1
+COMPARE_MODE="raw"
+STRIP_JSON_KEYS=""
+INPUT_ROOT=""
+CAPTURE_METADATA_IN=""
 OUT_DIR=""
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 TMP_CWD=""
-VERBOSE=0
-HASH_INPUT=0
+INPUT_MODE=""
+INPUT_COUNT="0"
+TOOL_4C=""
+TOOL_4D=""
+TOOL_4E_P=""
+TOOL_4E_M=""
+
 
 die() { echo "ERROR: $*" >&2; exit "${2:-1}"; }
 log() { echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] $*" >&2; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
 cleanup() {
-  # Centralized cleanup for temporary work directories.
   if [[ -n "${TMP_CWD:-}" && -d "${TMP_CWD:-}" ]]; then
     rm -rf "$TMP_CWD" >/dev/null 2>&1 || true
   fi
@@ -54,6 +61,47 @@ sha256_file() {
   else
     die "Need sha256sum or shasum installed." 2
   fi
+}
+
+filesize() {
+  local file_path="$1"
+  if stat -c %s "$file_path" >/dev/null 2>&1; then
+    stat -c %s "$file_path"
+  else
+    stat -f %z "$file_path"
+  fi
+}
+
+canonical_json_sha256_file() {
+  local file_path="$1"
+  local strip_csv="${STRIP_JSON_KEYS}"
+  "$PYTHON_BIN" - "$file_path" "$strip_csv" <<'PY'
+import hashlib
+import json
+import sys
+
+path = sys.argv[1]
+strip_csv = sys.argv[2] if len(sys.argv) > 2 else ""
+strip = {k.strip() for k in strip_csv.split(",") if k.strip()}
+
+def cleanse(value):
+    if isinstance(value, dict):
+        return {k: cleanse(v) for k, v in value.items() if k not in strip}
+    if isinstance(value, list):
+        return [cleanse(v) for v in value]
+    return value
+
+with open(path, "rb") as fh:
+    data = json.load(fh)
+
+canonical = json.dumps(
+    cleanse(data),
+    sort_keys=True,
+    separators=(",", ":"),
+    ensure_ascii=True,
+)
+print(hashlib.sha256(canonical.encode("utf-8")).hexdigest())
+PY
 }
 
 resolve_repo_root() {
@@ -74,35 +122,117 @@ resolve_repo_root() {
   return 1
 }
 
+maybe_require_tool() {
+  local tool="$1"
+  local env_gate="${2:-}"
+  if have "$tool"; then
+    return 0
+  fi
+  if [[ -n "$env_gate" && "${!env_gate:-0}" == "1" ]]; then
+    die "Missing required runtime tool: $tool (set by $env_gate=1)" 2
+  fi
+  log "WARN: optional runtime tool not found: $tool (set ${env_gate:-<no gate>}=1 to require)"
+}
+
+run_with_log() {
+  local log_path="$1"
+  shift
+  if [[ "$VERBOSE" == "1" ]]; then
+    "$@" 2>&1 | tee "$log_path"
+  else
+    "$@" >"$log_path" 2>&1
+  fi
+}
+
+compare_ledgers() {
+  local first="$1"
+  shift
+  local ok=1
+  local other
+  for other in "$@"; do
+    if ! diff -u "$first" "$other" >/dev/null 2>&1; then
+      log "LEDGER MISMATCH: $first vs $other"
+      diff -u "$first" "$other" >&2 || true
+      ok=0
+    fi
+  done
+  [[ "$ok" == "1" ]]
+}
+
+comparison_passes() {
+  local raw_ok="$1"
+  local canonical_ok="$2"
+  case "$COMPARE_MODE" in
+    raw)
+      [[ "$raw_ok" == "1" ]]
+      ;;
+    canonical)
+      [[ "$canonical_ok" == "1" ]]
+      ;;
+    both)
+      [[ "$raw_ok" == "1" && "$canonical_ok" == "1" ]]
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+log_classification() {
+  local scope="$1"
+  local raw_ok="$2"
+  local canonical_ok="$3"
+  if [[ "$raw_ok" != "1" && "$canonical_ok" == "1" ]]; then
+    log "$scope classification: RAW mismatch with canonical match (likely serialization drift)."
+  elif [[ "$canonical_ok" != "1" ]]; then
+    log "$scope classification: canonical mismatch (likely semantic drift)."
+  fi
+}
+
 usage() {
   cat >&2 <<'USAGE'
 Usage:
-  scripts/diagnostics/full_chain_determinism_trial.sh --input <raw_dir> [options]
+  scripts/diagnostics/full_chain_determinism_trial.sh (--input-root <raw_dir> | --capture-metadata <json>) [options]
 
-Required:
-  --input <dir>         Directory containing trial RAW files (CR2/DNG/NEF/ARW/TIF/etc)
+Required (choose one):
+  --input-root <dir>        RAW mode: directory containing trial files for 4C extraction
+  --capture-metadata <file> Artifact mode: existing Phase 4C artifact JSON (skip 4C extraction)
 
 Options:
-  --out <dir>           Output directory for trial artifacts (default: <repo>/trial_runs/<timestamp>)
-  --runs <N>            Number of runs to compare (default: 2)
-  --no-strict           Disable --strict for extraction (default: strict enabled)
-  --no-tmp              Skip /tmp relocatability run (default: enabled)
-  --clean               Remove output directory before running
-  --verbose             Stream per-step command output while also writing logs
-  --hash-input          Also record input SHA-256 ledger (can be expensive)
-  --python <path>       Python executable (default: python3; override via $PYTHON_BIN env)
-  -h, --help            Show help
+  --out <dir>               Output directory (default: <repo>/trial_runs/full_chain_determinism_<timestamp>)
+  --runs <N>                Number of runs (default: 2). If N=1, skips comparison.
+  --no-strict               Disable --strict for 4C extraction (RAW mode only)
+  --no-tmp                  Skip /tmp relocatability run (default: enabled)
+  --clean                   Remove output directory before running
+  --verbose                 Stream per-step command output while also writing logs
+  --no-input-hash           Do not record input SHA-256 ledger
+  --hash-input              Record input SHA-256 ledger (default: enabled)
+  --compare <mode>          Comparison gate mode: raw | canonical | both (default: raw)
+  --strip-json-keys <csv>   CSV keys removed before canonical JSON hash (default: none)
+  --tool-4c <path>          Override path to extract_capture_metadata.py
+  --tool-4d <path>          Override path to build_metadata_manifest.py
+  --tool-4e-prov <path>     Override path to build_provenance_manifest.py
+  --tool-4e-merkle <path>   Override path to build_provenance_merkle.py
+  --python <path>           Python executable (default: python3; override via $PYTHON_BIN env)
+  -h, --help                Show help
+
+Compatibility alias:
+  --input <dir>             Alias for --input-root
 
 Examples:
-  scripts/diagnostics/full_chain_determinism_trial.sh --input ./trial_dataset/input_raw
-  scripts/diagnostics/full_chain_determinism_trial.sh --input /Volumes/RAW_TRIAL --runs 3 --no-tmp
+  scripts/diagnostics/full_chain_determinism_trial.sh --input-root ./trial_dataset/input_raw --runs 3
+  scripts/diagnostics/full_chain_determinism_trial.sh --capture-metadata tests/golden/phase4/expected_capture_metadata.tp.meta.capture.v1.json --runs 2 --no-tmp --compare both
 USAGE
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --input)
-      INPUT_DIR="${2:-}"
+    --input-root|--input)
+      INPUT_ROOT="${2:-}"
+      shift 2
+      ;;
+    --capture-metadata)
+      CAPTURE_METADATA_IN="${2:-}"
       shift 2
       ;;
     --out)
@@ -129,9 +259,37 @@ while [[ $# -gt 0 ]]; do
       VERBOSE=1
       shift 1
       ;;
+    --no-input-hash)
+      HASH_INPUT=0
+      shift 1
+      ;;
     --hash-input)
       HASH_INPUT=1
       shift 1
+      ;;
+    --compare)
+      COMPARE_MODE="${2:-}"
+      shift 2
+      ;;
+    --strip-json-keys)
+      STRIP_JSON_KEYS="${2:-}"
+      shift 2
+      ;;
+    --tool-4c)
+      TOOL_4C="${2:-}"
+      shift 2
+      ;;
+    --tool-4d)
+      TOOL_4D="${2:-}"
+      shift 2
+      ;;
+    --tool-4e-prov)
+      TOOL_4E_P="${2:-}"
+      shift 2
+      ;;
+    --tool-4e-merkle)
+      TOOL_4E_M="${2:-}"
+      shift 2
       ;;
     --python)
       PYTHON_BIN="${2:-}"
@@ -147,12 +305,35 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ -n "$INPUT_DIR" ]] || { usage; exit 2; }
-[[ -d "$INPUT_DIR" ]] || die "--input dir not found: $INPUT_DIR" 3
-INPUT_DIR="$(cd "$INPUT_DIR" && pwd -P)"
+if [[ -n "$INPUT_ROOT" && -n "$CAPTURE_METADATA_IN" ]]; then
+  die "Provide exactly one of --input-root or --capture-metadata." 2
+fi
+if [[ -z "$INPUT_ROOT" && -z "$CAPTURE_METADATA_IN" ]]; then
+  usage
+  die "Missing required input. Provide --input-root or --capture-metadata." 2
+fi
+
 [[ "$RUNS" =~ ^[0-9]+$ ]] || die "--runs must be an integer" 2
-(( RUNS >= 2 )) || die "--runs must be >= 2 to compare determinism" 2
+(( RUNS >= 1 )) || die "--runs must be >= 1" 2
+
+case "$COMPARE_MODE" in
+  raw|canonical|both) ;;
+  *)
+    die "--compare must be one of: raw, canonical, both" 2
+    ;;
+esac
+
 have "$PYTHON_BIN" || die "Python not found: $PYTHON_BIN" 2
+
+if [[ -n "$INPUT_ROOT" ]]; then
+  [[ -d "$INPUT_ROOT" ]] || die "--input-root dir not found: $INPUT_ROOT" 3
+  INPUT_ROOT="$(cd "$INPUT_ROOT" && pwd -P)"
+  INPUT_MODE="raw"
+else
+  [[ -f "$CAPTURE_METADATA_IN" ]] || die "--capture-metadata file not found: $CAPTURE_METADATA_IN" 3
+  CAPTURE_METADATA_IN="$(cd "$(dirname "$CAPTURE_METADATA_IN")" && pwd -P)/$(basename "$CAPTURE_METADATA_IN")"
+  INPUT_MODE="artifact"
+fi
 
 # Determinism-friendly process environment.
 export PYTHONHASHSEED="${PYTHONHASHSEED:-0}"
@@ -166,38 +347,24 @@ export NUMEXPR_NUM_THREADS="${NUMEXPR_NUM_THREADS:-1}"
 
 REPO_ROOT="$(resolve_repo_root)" || die "Could not resolve repo root from script location." 3
 
-TOOL_4C="$REPO_ROOT/tools/extract_capture_metadata.py"
-TOOL_4D="$REPO_ROOT/tools/build_metadata_manifest.py"
-TOOL_4E_P="$REPO_ROOT/tools/build_provenance_manifest.py"
-TOOL_4E_M="$REPO_ROOT/tools/build_provenance_merkle.py"
+: "${TOOL_4C:=$REPO_ROOT/tools/extract_capture_metadata.py}"
+: "${TOOL_4D:=$REPO_ROOT/tools/build_metadata_manifest.py}"
+: "${TOOL_4E_P:=$REPO_ROOT/tools/build_provenance_manifest.py}"
+: "${TOOL_4E_M:=$REPO_ROOT/tools/build_provenance_merkle.py}"
 
 [[ -f "$TOOL_4C" ]] || die "Missing tool: $TOOL_4C" 3
 [[ -f "$TOOL_4D" ]] || die "Missing tool: $TOOL_4D" 3
 [[ -f "$TOOL_4E_P" ]] || die "Missing tool: $TOOL_4E_P" 3
 [[ -f "$TOOL_4E_M" ]] || die "Missing tool: $TOOL_4E_M" 3
 
-# Optional runtime dependency clarity.
-# Some Phase 4 implementations may shell out to system tools (for example exiftool).
-# These are warnings by default; make them hard requirements via env gates.
-maybe_require_tool() {
-  local tool="$1"
-  local env_gate="${2:-}"
-  if have "$tool"; then
-    return 0
-  fi
-  if [[ -n "$env_gate" && "${!env_gate:-0}" == "1" ]]; then
-    die "Missing required runtime tool: $tool (set by $env_gate=1)" 2
-  fi
-  log "WARN: optional runtime tool not found: $tool (set ${env_gate:-<no gate>}=1 to require)"
-}
-
-maybe_require_tool "exiftool" "TP_TRIAL_REQUIRE_EXIFTOOL"
+if [[ "$INPUT_MODE" == "raw" ]]; then
+  maybe_require_tool "exiftool" "TP_TRIAL_REQUIRE_EXIFTOOL"
+fi
 
 STAMP="$(date -u +"%Y%m%dT%H%M%SZ")"
 if [[ -z "$OUT_DIR" ]]; then
   OUT_DIR="$REPO_ROOT/trial_runs/full_chain_determinism_$STAMP"
 elif [[ "$OUT_DIR" != /* ]]; then
-  # Resolve relative --out against repo root, not invoker cwd.
   OUT_DIR="$REPO_ROOT/$OUT_DIR"
 fi
 
@@ -228,13 +395,17 @@ mkdir -p "$OUT_DIR"
 {
   echo "trial_utc=$STAMP"
   echo "repo_root=$REPO_ROOT"
-  echo "input_dir=$INPUT_DIR"
+  echo "input_mode=$INPUT_MODE"
+  echo "input_root=${INPUT_ROOT:-}"
+  echo "capture_metadata_seed=${CAPTURE_METADATA_IN:-}"
   echo "out_dir=$OUT_DIR"
   echo "runs=$RUNS"
   echo "strict=$STRICT"
   echo "do_tmp=$DO_TMP"
   echo "verbose=$VERBOSE"
   echo "hash_input=$HASH_INPUT"
+  echo "compare_mode=$COMPARE_MODE"
+  echo "strip_json_keys=$STRIP_JSON_KEYS"
   echo "python=$($PYTHON_BIN --version 2>&1 | tr -d '\r')"
   echo "pythonhashseed=$PYTHONHASHSEED"
   echo "lc_all=$LC_ALL"
@@ -243,64 +414,84 @@ mkdir -p "$OUT_DIR"
   echo "mkl_num_threads=$MKL_NUM_THREADS"
   echo "openblas_num_threads=$OPENBLAS_NUM_THREADS"
   echo "numexpr_num_threads=$NUMEXPR_NUM_THREADS"
+  if have git; then
+    echo "git_head=$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo NA)"
+    echo "git_dirty_count=$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+  fi
+  if have exiftool; then
+    echo "exiftool_version=$(exiftool -ver 2>/dev/null || echo NA)"
+  else
+    echo "exiftool_version=NOT_FOUND"
+  fi
+  echo "tool_4c_path=$TOOL_4C"
+  echo "tool_4d_path=$TOOL_4D"
+  echo "tool_4e_prov_path=$TOOL_4E_P"
+  echo "tool_4e_merkle_path=$TOOL_4E_M"
+  echo "tool_4c_sha256=$(sha256_file "$TOOL_4C")"
+  echo "tool_4d_sha256=$(sha256_file "$TOOL_4D")"
+  echo "tool_4e_prov_sha256=$(sha256_file "$TOOL_4E_P")"
+  echo "tool_4e_merkle_sha256=$(sha256_file "$TOOL_4E_M")"
 } > "$OUT_DIR/trial_meta.txt"
 
-log "Repo root: $REPO_ROOT"
-log "Input dir:  $INPUT_DIR"
-log "Out dir:    $OUT_DIR"
-log "Runs:       $RUNS"
-log "Strict:     $STRICT"
-log "Tmp run:    $DO_TMP"
-log "Verbose:    $VERBOSE"
-log "Hash input: $HASH_INPUT"
-
-canonical_json_sha256_file() {
-  local file_path="$1"
-  "$PYTHON_BIN" -c 'import hashlib, json, sys; obj=json.load(open(sys.argv[1], "rb")); canonical=json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8"); print(hashlib.sha256(canonical).hexdigest())' "$file_path"
-}
-
-run_with_log() {
-  local log_path="$1"
-  shift
-  if [[ "$VERBOSE" == "1" ]]; then
-    "$@" 2>&1 | tee "$log_path"
-  else
-    "$@" >"$log_path" 2>&1
-  fi
-}
+log "Repo root:    $REPO_ROOT"
+log "Input mode:   $INPUT_MODE"
+log "Input root:   ${INPUT_ROOT:-<n/a>}"
+log "Capture seed: ${CAPTURE_METADATA_IN:-<n/a>}"
+log "Out dir:      $OUT_DIR"
+log "Runs:         $RUNS"
+log "Strict:       $STRICT"
+log "Tmp run:      $DO_TMP"
+log "Verbose:      $VERBOSE"
+log "Hash input:   $HASH_INPUT"
+log "Compare mode: $COMPARE_MODE"
 
 capture_input_manifests() {
   local files_out="$OUT_DIR/input.files.txt"
   local sizes_out="$OUT_DIR/input.sizes.txt"
   local hashes_out="$OUT_DIR/input.sha256.txt"
   local tmp_sorted="$OUT_DIR/.input_files_abs.txt"
-  local file_path rel_path file_size
+  local file_path rel_path
 
-  find "$INPUT_DIR" -type f | LC_ALL=C sort > "$tmp_sorted"
   : > "$files_out"
   : > "$sizes_out"
   if [[ "$HASH_INPUT" == "1" ]]; then
     : > "$hashes_out"
   fi
 
-  while IFS= read -r file_path; do
-    rel_path="${file_path#"$INPUT_DIR"/}"
+  if [[ "$INPUT_MODE" == "raw" ]]; then
+    find "$INPUT_ROOT" -type f | LC_ALL=C sort > "$tmp_sorted"
+    while IFS= read -r file_path; do
+      rel_path="${file_path#"$INPUT_ROOT"/}"
+      printf "%s\n" "$rel_path" >> "$files_out"
+      printf "%s  %s\n" "$(filesize "$file_path")" "$rel_path" >> "$sizes_out"
+      if [[ "$HASH_INPUT" == "1" ]]; then
+        printf "%s  %s\n" "$(sha256_file "$file_path")" "$rel_path" >> "$hashes_out"
+      fi
+    done < "$tmp_sorted"
+    rm -f "$tmp_sorted"
+  else
+    rel_path="$(basename "$CAPTURE_METADATA_IN")"
     printf "%s\n" "$rel_path" >> "$files_out"
-    if stat -c %s "$file_path" >/dev/null 2>&1; then
-      file_size="$(stat -c %s "$file_path")"
-    else
-      file_size="$(stat -f %z "$file_path")"
-    fi
-    printf "%s  %s\n" "$file_size" "$rel_path" >> "$sizes_out"
+    printf "%s  %s\n" "$(filesize "$CAPTURE_METADATA_IN")" "$rel_path" >> "$sizes_out"
     if [[ "$HASH_INPUT" == "1" ]]; then
-      printf "%s  %s\n" "$(sha256_file "$file_path")" "$rel_path" >> "$hashes_out"
+      printf "%s  %s\n" "$(sha256_file "$CAPTURE_METADATA_IN")" "$rel_path" >> "$hashes_out"
     fi
-  done < "$tmp_sorted"
+  fi
 
-  rm -f "$tmp_sorted"
+  INPUT_COUNT="$(wc -l < "$files_out" | tr -d ' ')"
+  [[ "$INPUT_COUNT" != "0" ]] || die "No input files discovered for mode=$INPUT_MODE." 3
 }
 
 capture_input_manifests
+echo "input_count=$INPUT_COUNT" >> "$OUT_DIR/trial_meta.txt"
+echo "input_manifest=$OUT_DIR/input.files.txt" >> "$OUT_DIR/trial_meta.txt"
+echo "input_sizes_manifest=$OUT_DIR/input.sizes.txt" >> "$OUT_DIR/trial_meta.txt"
+if [[ "$HASH_INPUT" == "1" ]]; then
+  echo "input_hash_manifest=$OUT_DIR/input.sha256.txt" >> "$OUT_DIR/trial_meta.txt"
+fi
+
+log "Input files:  $INPUT_COUNT"
+log "Strip keys:   ${STRIP_JSON_KEYS:-<none>}"
 
 run_pipeline_once() {
   local run_label="$1"
@@ -316,23 +507,31 @@ run_pipeline_once() {
   local logs_dir="$out_run_dir/logs"
   local log_4c="$logs_dir/4C.log"
   local log_4d="$logs_dir/4D.log"
-  local log_4e_provenance="$logs_dir/4E_prov.log"
+  local log_4e_prov="$logs_dir/4E_prov.log"
   local log_4e_merkle="$logs_dir/4E_merkle.log"
   local commandline_file="$out_run_dir/commandline.txt"
   local env_file="$out_run_dir/env.txt"
-  local -a cmd_4c=("$PYTHON_BIN" "$TOOL_4C" --input-root "$INPUT_DIR" --out "$capture")
+
+  local -a cmd_4c=()
   local -a cmd_4d=("$PYTHON_BIN" "$TOOL_4D" --input "$capture" --out "$manifest" --require-fingerprint-match)
   local -a cmd_4e_provenance=("$PYTHON_BIN" "$TOOL_4E_P" --capture-metadata "$capture" --metadata-manifest "$manifest" --out "$provenance")
   local -a cmd_4e_merkle=("$PYTHON_BIN" "$TOOL_4E_M" --input "$provenance" --out "$merkle")
 
+  if [[ "$INPUT_MODE" == "raw" ]]; then
+    cmd_4c=("$PYTHON_BIN" "$TOOL_4C" --input-root "$INPUT_ROOT" --out "$capture")
+    if [[ "$STRICT" == "1" ]]; then
+      cmd_4c+=(--strict)
+    fi
+  else
+    cmd_4c=(cp "$CAPTURE_METADATA_IN" "$capture")
+  fi
+
   log "=== ${run_label}: executing from CWD=$work_cwd ==="
   mkdir -p "$logs_dir"
 
-  if [[ "$STRICT" == "1" ]]; then
-    cmd_4c+=(--strict)
-  fi
-
   {
+    printf "mode=%s\n" "$INPUT_MODE"
+    printf "compare_mode=%s\n" "$COMPARE_MODE"
     printf "cwd=%s\n" "$work_cwd"
     printf "cmd_4c="
     printf '%q ' "${cmd_4c[@]}"
@@ -361,28 +560,26 @@ run_pipeline_once() {
 
   (
     cd "$work_cwd"
-    run_with_log "$log_4c" "${cmd_4c[@]}"
-    run_with_log "$log_4d" "${cmd_4d[@]}"
-    run_with_log "$log_4e_provenance" "${cmd_4e_provenance[@]}"
-    run_with_log "$log_4e_merkle" "${cmd_4e_merkle[@]}"
+    run_with_log "$log_4c" "${cmd_4c[@]}" || exit 1
+    run_with_log "$log_4d" "${cmd_4d[@]}" || exit 1
+    run_with_log "$log_4e_prov" "${cmd_4e_provenance[@]}" || exit 1
+    run_with_log "$log_4e_merkle" "${cmd_4e_merkle[@]}" || exit 1
   ) || return 1
 
   local ledger="$out_run_dir/artifacts.sha256"
-  local canonical_ledger="$out_run_dir/artifacts.canonical.sha256"
+  local canon_ledger="$out_run_dir/artifacts.canon.sha256"
+  local sizes="$out_run_dir/artifacts.sizes"
+  local artifact canonical_hash
+
   : > "$ledger"
-  : > "$canonical_ledger"
-  local artifact
-  local canonical_hash
+  : > "$canon_ledger"
+  : > "$sizes"
+
   for artifact in "$capture" "$manifest" "$provenance" "$merkle"; do
     [[ -f "$artifact" ]] || die "Expected artifact missing after ${run_label}: $artifact" 4
     printf "%s  %s\n" "$(sha256_file "$artifact")" "$(basename "$artifact")" >> "$ledger"
     canonical_hash="$(canonical_json_sha256_file "$artifact")" || die "Failed canonical JSON hash for $artifact" 4
-    printf "%s  %s\n" "$canonical_hash" "$(basename "$artifact")" >> "$canonical_ledger"
-  done
-
-  local sizes="$out_run_dir/artifacts.sizes"
-  : > "$sizes"
-  for artifact in "$capture" "$manifest" "$provenance" "$merkle"; do
+    printf "%s  %s\n" "$canonical_hash" "$(basename "$artifact")" >> "$canon_ledger"
     if stat -c %s "$artifact" >/dev/null 2>&1; then
       printf "%s  %s\n" "$(stat -c %s "$artifact")" "$(basename "$artifact")" >> "$sizes"
     else
@@ -393,72 +590,56 @@ run_pipeline_once() {
   log "=== ${run_label}: completed ==="
 }
 
-compare_ledgers() {
-  local first="$1"
-  shift
-  local ok=1
-  local other
-  for other in "$@"; do
-    if ! diff -u "$first" "$other" >/dev/null 2>&1; then
-      log "LEDGER MISMATCH: $first vs $other"
-      diff -u "$first" "$other" >&2 || true
-      ok=0
-    fi
-  done
-  [[ "$ok" == "1" ]]
-}
-
 log "Starting primary runs from repo root..."
 for i in $(seq 1 "$RUNS"); do
   run_label="$(printf "run_%02d" "$i")"
   if ! run_pipeline_once "$run_label" "$REPO_ROOT"; then
+    log "Pipeline failed during ${run_label}. Tail of step logs:"
+    tail -200 "$OUT_DIR/$run_label/logs/"*.log 2>/dev/null || true
     die "Pipeline failed during ${run_label}" 4
   fi
 done
 
-PRIMARY_FIRST="$OUT_DIR/run_01/artifacts.sha256"
-PRIMARY_OTHERS=()
-for i in $(seq 2 "$RUNS"); do
-  PRIMARY_OTHERS+=("$OUT_DIR/$(printf "run_%02d" "$i")/artifacts.sha256")
-done
+if (( RUNS < 2 )); then
+  log "RUNS=1, skipping determinism comparisons by request."
+  log "Artifacts + ledgers captured under: $OUT_DIR"
+  exit 0
+fi
+
+PRIMARY_RAW_FIRST="$OUT_DIR/run_01/artifacts.sha256"
+PRIMARY_RAW_OTHERS=()
+PRIMARY_CANON_FIRST="$OUT_DIR/run_01/artifacts.canon.sha256"
+PRIMARY_CANON_OTHERS=()
 PRIMARY_SIZES_FIRST="$OUT_DIR/run_01/artifacts.sizes"
 PRIMARY_SIZES_OTHERS=()
 for i in $(seq 2 "$RUNS"); do
+  PRIMARY_RAW_OTHERS+=("$OUT_DIR/$(printf "run_%02d" "$i")/artifacts.sha256")
+  PRIMARY_CANON_OTHERS+=("$OUT_DIR/$(printf "run_%02d" "$i")/artifacts.canon.sha256")
   PRIMARY_SIZES_OTHERS+=("$OUT_DIR/$(printf "run_%02d" "$i")/artifacts.sizes")
 done
-PRIMARY_CANONICAL_FIRST="$OUT_DIR/run_01/artifacts.canonical.sha256"
-PRIMARY_CANONICAL_OTHERS=()
-for i in $(seq 2 "$RUNS"); do
-  PRIMARY_CANONICAL_OTHERS+=("$OUT_DIR/$(printf "run_%02d" "$i")/artifacts.canonical.sha256")
-done
 
-log "Comparing primary run ledgers..."
+log "Comparing primary raw ledgers..."
 primary_raw_ok=1
-if ! compare_ledgers "$PRIMARY_FIRST" "${PRIMARY_OTHERS[@]}"; then
+if ! compare_ledgers "$PRIMARY_RAW_FIRST" "${PRIMARY_RAW_OTHERS[@]}"; then
   primary_raw_ok=0
 fi
-log "Comparing primary canonical JSON ledgers (classification only)..."
+log "Comparing primary canonical ledgers..."
 primary_canonical_ok=1
-if ! compare_ledgers "$PRIMARY_CANONICAL_FIRST" "${PRIMARY_CANONICAL_OTHERS[@]}"; then
+if ! compare_ledgers "$PRIMARY_CANON_FIRST" "${PRIMARY_CANON_OTHERS[@]}"; then
   primary_canonical_ok=0
 fi
-if [[ "$primary_raw_ok" != "1" ]]; then
-  if [[ "$primary_canonical_ok" == "1" ]]; then
-    log "Primary classification: RAW mismatch with canonical match (likely serialization drift)."
-  else
-    log "Primary classification: RAW mismatch with canonical mismatch (likely semantic drift)."
-  fi
-  die "Primary determinism failure detected. See diffs above and $OUT_DIR." 5
+if ! comparison_passes "$primary_raw_ok" "$primary_canonical_ok"; then
+  log_classification "Primary" "$primary_raw_ok" "$primary_canonical_ok"
+  die "Primary determinism failure detected (compare=$COMPARE_MODE). See $OUT_DIR." 5
 fi
-log "Primary determinism: PASS"
-if [[ "$primary_canonical_ok" == "1" ]]; then
-  log "Primary canonical JSON: PASS"
-else
-  log "WARN: Primary canonical JSON ledgers differ while raw ledgers match."
+if [[ "$COMPARE_MODE" == "canonical" && "$primary_raw_ok" != "1" && "$primary_canonical_ok" == "1" ]]; then
+  log "WARN: Primary raw mismatch tolerated because --compare=canonical."
 fi
-log "Comparing primary run size ledgers..."
+log "Primary comparison gate: PASS"
+
+log "Comparing primary size ledgers..."
 if ! compare_ledgers "$PRIMARY_SIZES_FIRST" "${PRIMARY_SIZES_OTHERS[@]}"; then
-  die "Primary artifact-size mismatch detected. See diffs above and $OUT_DIR." 5
+  die "Primary artifact-size mismatch detected. See $OUT_DIR." 5
 fi
 log "Primary artifact sizes: PASS"
 
@@ -471,79 +652,70 @@ if [[ "$DO_TMP" == "1" ]]; then
   for i in $(seq 1 "$RUNS"); do
     run_label="$(printf "tmp_run_%02d" "$i")"
     if ! run_pipeline_once "$run_label" "$TMP_CWD"; then
+      log "Pipeline failed during ${run_label} (/tmp). Tail of step logs:"
+      tail -200 "$OUT_DIR/$run_label/logs/"*.log 2>/dev/null || true
       die "Pipeline failed during ${run_label} (/tmp)" 4
     fi
   done
 
-  TMP_FIRST="$OUT_DIR/tmp_run_01/artifacts.sha256"
-  TMP_OTHERS=()
-  for i in $(seq 2 "$RUNS"); do
-    TMP_OTHERS+=("$OUT_DIR/$(printf "tmp_run_%02d" "$i")/artifacts.sha256")
-  done
+  TMP_RAW_FIRST="$OUT_DIR/tmp_run_01/artifacts.sha256"
+  TMP_RAW_OTHERS=()
+  TMP_CANON_FIRST="$OUT_DIR/tmp_run_01/artifacts.canon.sha256"
+  TMP_CANON_OTHERS=()
   TMP_SIZES_FIRST="$OUT_DIR/tmp_run_01/artifacts.sizes"
   TMP_SIZES_OTHERS=()
   for i in $(seq 2 "$RUNS"); do
+    TMP_RAW_OTHERS+=("$OUT_DIR/$(printf "tmp_run_%02d" "$i")/artifacts.sha256")
+    TMP_CANON_OTHERS+=("$OUT_DIR/$(printf "tmp_run_%02d" "$i")/artifacts.canon.sha256")
     TMP_SIZES_OTHERS+=("$OUT_DIR/$(printf "tmp_run_%02d" "$i")/artifacts.sizes")
   done
-  TMP_CANONICAL_FIRST="$OUT_DIR/tmp_run_01/artifacts.canonical.sha256"
-  TMP_CANONICAL_OTHERS=()
-  for i in $(seq 2 "$RUNS"); do
-    TMP_CANONICAL_OTHERS+=("$OUT_DIR/$(printf "tmp_run_%02d" "$i")/artifacts.canonical.sha256")
-  done
 
-  log "Comparing /tmp run ledgers..."
+  log "Comparing /tmp raw ledgers..."
   tmp_raw_ok=1
-  if ! compare_ledgers "$TMP_FIRST" "${TMP_OTHERS[@]}"; then
+  if ! compare_ledgers "$TMP_RAW_FIRST" "${TMP_RAW_OTHERS[@]}"; then
     tmp_raw_ok=0
   fi
-  log "Comparing /tmp canonical JSON ledgers (classification only)..."
+  log "Comparing /tmp canonical ledgers..."
   tmp_canonical_ok=1
-  if ! compare_ledgers "$TMP_CANONICAL_FIRST" "${TMP_CANONICAL_OTHERS[@]}"; then
+  if ! compare_ledgers "$TMP_CANON_FIRST" "${TMP_CANON_OTHERS[@]}"; then
     tmp_canonical_ok=0
   fi
-  if [[ "$tmp_raw_ok" != "1" ]]; then
-    if [[ "$tmp_canonical_ok" == "1" ]]; then
-      log "/tmp classification: RAW mismatch with canonical match (likely serialization drift)."
-    else
-      log "/tmp classification: RAW mismatch with canonical mismatch (likely semantic drift)."
-    fi
-    die "/tmp determinism failure detected. See diffs above and $OUT_DIR." 5
+  if ! comparison_passes "$tmp_raw_ok" "$tmp_canonical_ok"; then
+    log_classification "/tmp" "$tmp_raw_ok" "$tmp_canonical_ok"
+    die "/tmp determinism failure detected (compare=$COMPARE_MODE). See $OUT_DIR." 5
   fi
-  log "/tmp determinism: PASS"
-  if [[ "$tmp_canonical_ok" == "1" ]]; then
-    log "/tmp canonical JSON: PASS"
-  else
-    log "WARN: /tmp canonical JSON ledgers differ while raw ledgers match."
+  if [[ "$COMPARE_MODE" == "canonical" && "$tmp_raw_ok" != "1" && "$tmp_canonical_ok" == "1" ]]; then
+    log "WARN: /tmp raw mismatch tolerated because --compare=canonical."
   fi
-  log "Comparing /tmp run size ledgers..."
+  log "/tmp comparison gate: PASS"
+
+  log "Comparing /tmp size ledgers..."
   if ! compare_ledgers "$TMP_SIZES_FIRST" "${TMP_SIZES_OTHERS[@]}"; then
-    die "/tmp artifact-size mismatch detected. See diffs above and $OUT_DIR." 5
+    die "/tmp artifact-size mismatch detected. See $OUT_DIR." 5
   fi
   log "/tmp artifact sizes: PASS"
 
-  log "Comparing primary vs /tmp ledgers (CWD-independence)..."
-  if ! diff -u "$PRIMARY_FIRST" "$TMP_FIRST" >/dev/null 2>&1; then
-    if diff -u "$PRIMARY_CANONICAL_FIRST" "$TMP_CANONICAL_FIRST" >/dev/null 2>&1; then
-      log "Primary vs /tmp classification: RAW mismatch with canonical match (likely serialization drift)."
-    else
-      log "Primary vs /tmp classification: RAW mismatch with canonical mismatch (likely semantic drift)."
-    fi
-    log "PRIMARY vs /tmp mismatch (CWD-independence failure)"
-    diff -u "$PRIMARY_FIRST" "$TMP_FIRST" >&2 || true
-    die "Relocatability/CWD-independence failure detected. See $OUT_DIR." 5
+  log "Comparing primary vs /tmp raw/canonical ledgers..."
+  primary_vs_tmp_raw_ok=1
+  if ! compare_ledgers "$PRIMARY_RAW_FIRST" "$TMP_RAW_FIRST"; then
+    primary_vs_tmp_raw_ok=0
   fi
-  log "Primary vs /tmp: PASS"
-  log "Comparing primary vs /tmp canonical JSON ledgers (classification only)..."
-  if ! diff -u "$PRIMARY_CANONICAL_FIRST" "$TMP_CANONICAL_FIRST" >/dev/null 2>&1; then
-    log "WARN: Primary vs /tmp canonical JSON mismatch."
-    diff -u "$PRIMARY_CANONICAL_FIRST" "$TMP_CANONICAL_FIRST" >&2 || true
-  else
-    log "Primary vs /tmp canonical JSON: PASS"
+  primary_vs_tmp_canonical_ok=1
+  if ! compare_ledgers "$PRIMARY_CANON_FIRST" "$TMP_CANON_FIRST"; then
+    primary_vs_tmp_canonical_ok=0
   fi
-  log "Comparing primary vs /tmp size ledgers (CWD-independence)..."
-  if ! diff -u "$PRIMARY_SIZES_FIRST" "$TMP_SIZES_FIRST" >/dev/null 2>&1; then
-    log "PRIMARY vs /tmp size mismatch (CWD-independence failure)"
-    diff -u "$PRIMARY_SIZES_FIRST" "$TMP_SIZES_FIRST" >&2 || true
+
+  if ! comparison_passes "$primary_vs_tmp_raw_ok" "$primary_vs_tmp_canonical_ok"; then
+    log_classification "Primary vs /tmp" "$primary_vs_tmp_raw_ok" "$primary_vs_tmp_canonical_ok"
+    die "Relocatability/CWD-independence mismatch detected (compare=$COMPARE_MODE). See $OUT_DIR." 5
+  fi
+  if [[ "$COMPARE_MODE" == "canonical" && "$primary_vs_tmp_raw_ok" != "1" && "$primary_vs_tmp_canonical_ok" == "1" ]]; then
+    log "WARN: Primary vs /tmp raw mismatch tolerated because --compare=canonical."
+  fi
+  log "Primary vs /tmp comparison gate: PASS"
+
+  log "Comparing primary vs /tmp size ledgers..."
+  if ! compare_ledgers "$PRIMARY_SIZES_FIRST" "$TMP_SIZES_FIRST"; then
     die "Relocatability/CWD-independence size mismatch detected. See $OUT_DIR." 5
   fi
   log "Primary vs /tmp sizes: PASS"
