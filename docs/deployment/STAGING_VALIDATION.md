@@ -43,7 +43,7 @@ python -c "import transformation_portal; print(transformation_portal.__version__
 # Expected output: 2.0.0
 
 # Verify environment
-python verify_core.py
+python scripts/verification/verify_core.py
 ```
 
 ---
@@ -461,7 +461,7 @@ except KeyError:
 # Example: Quick Start
 pip install -r requirements.txt
 pip install -e .
-python verify_core.py
+python scripts/verification/verify_core.py
 
 # Expected: All commands execute successfully
 ```

@@ -86,7 +86,7 @@ pip install -e ".[all]"
 
 ```bash
 # Run verification script
-python verify_core.py
+python scripts/verification/verify_core.py
 
 # Expected output:
 # ✅ Input Tensor Created (1024x1024)

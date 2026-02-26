@@ -16,7 +16,7 @@
 - Only 75% of luxury_estate preset features were applied
 
 **Root Cause:**
-Depth generation section in `process_source_tiffs_apex.sh` (lines 112-142) is **commented out**.
+Depth generation section in `scripts/pipelines/process_source_tiffs_apex.sh` (lines 112-142) is **commented out**.
 
 ---
 
@@ -56,7 +56,7 @@ python scripts/run_depth_estimation.py \
 
 ## Option 1: Enable in Batch Script (Recommended)
 
-### Edit `process_source_tiffs_apex.sh`
+### Edit `scripts/pipelines/process_source_tiffs_apex.sh`
 
 **Uncomment lines 124-137:**
 
@@ -95,7 +95,7 @@ fi
 ### Run Batch Script
 
 ```bash
-./process_source_tiffs_apex.sh
+./scripts/pipelines/process_source_tiffs_apex.sh
 ```
 
 **Expected behavior:**

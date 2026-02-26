@@ -100,7 +100,7 @@ docker-compose down
 docker-compose up -d
 
 # Verify service is healthy
-curl http://localhost:8000/health || python verify_core.py
+curl http://localhost:8000/health || python scripts/verification/verify_core.py
 ```
 
 **Step 6: Monitor and communicate**

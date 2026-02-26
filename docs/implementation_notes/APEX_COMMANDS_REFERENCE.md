@@ -20,7 +20,7 @@ Total input size: ~1.1 GB (6 files)
 
 ## Option 1: Automated Batch Processing (Recommended)
 
-**Script:** `process_source_tiffs_apex.sh`
+**Script:** `scripts/pipelines/process_source_tiffs_apex.sh`
 
 **Features:**
 - Processes all 6 files automatically
@@ -32,7 +32,7 @@ Total input size: ~1.1 GB (6 files)
 **Run:**
 ```bash
 cd /Users/rc/Projects/Transformation_Portal
-./process_source_tiffs_apex.sh
+./scripts/pipelines/process_source_tiffs_apex.sh
 ```
 
 **Output:**
@@ -49,7 +49,7 @@ output_apex_v2_luxury/
 
 ## Option 2: Individual Commands
 
-**Script:** `process_source_tiffs_individual.sh`
+**Script:** `scripts/pipelines/process_source_tiffs_individual.sh`
 
 Or run commands individually:
 
@@ -244,7 +244,7 @@ If ML dependencies are missing, system falls back to synthetic depth:
 
 1. **Run batch processing:**
    ```bash
-   ./process_source_tiffs_apex.sh
+   ./scripts/pipelines/process_source_tiffs_apex.sh
    ```
 
 2. **Review outputs:**

@@ -166,7 +166,7 @@ def _apply_tone_mapping(self, image: np.ndarray, depth_map: np.ndarray | None) -
 
 ## Non-Blocking Issues Fixed
 
-### A) Hardcoded Paths in process_source_tiffs_individual.sh ✅
+### A) Hardcoded Paths in scripts/pipelines/process_source_tiffs_individual.sh ✅
 
 **Change**:
 ```bash
@@ -183,7 +183,7 @@ DEPTH_DIR="${DEPTH_DIR:-depth_maps_apex}"
 
 ---
 
-### B) verify_ml_deps.py Version Comparisons ✅
+### B) scripts/verification/verify_ml_deps.py Version Comparisons ✅
 
 **Change**:
 ```python
@@ -262,8 +262,8 @@ All passed without modification
 - `src/transformation_portal/stage_graph/stages/enhancement.py` - Depth semantics docstring
 
 ### Utilities
-- `process_source_tiffs_individual.sh` - Repo-relative paths
-- `verify_ml_deps.py` - Proper version comparisons
+- `scripts/pipelines/process_source_tiffs_individual.sh` - Repo-relative paths
+- `scripts/verification/verify_ml_deps.py` - Proper version comparisons
 - `create_sky_comparison.py` - Bare except fix
 
 ### Tests
