@@ -11,7 +11,7 @@ Checks:
   5) RAG modules importability from .github/agents/rag_system
 
 Usage:
-  python verify_rag_install.py [--repo /Users/rc/Transformation_Portal] [--fix-imports] [--verbose]
+  python verify_rag_install.py [--repo /path/to/repo] [--verbose]
 
 Exit codes:
   0 = all good
@@ -27,7 +27,7 @@ import sys
 from pathlib import Path
 from typing import List, Tuple
 
-REPO_DEFAULT = "/Users/rc/Transformation_Portal"
+from scripts.lib.repo_root import RepoRootError, resolve_repo_root
 
 
 # --- UI helpers ---
@@ -141,93 +141,36 @@ def check_sentence_transformers(args) -> Tuple[bool, str]:
 
 
 def ensure_repo_on_path(repo_root: Path) -> None:
-    # Ensure the repo root is on sys.path so imports resolve without global config
-    repo_str = str(repo_root)
-    if repo_str not in sys.path:
-        sys.path.insert(0, repo_str)
-
-
-def maybe_fix_hidden_github(repo_root: Path, verbose: bool = False) -> Tuple[bool, str]:
-    """
-    Make hidden .github importable as 'github' by ensuring:
-      - __init__.py files exist
-      - a symlink 'github' -> '.github' exists
-    """
-    msgs: List[str] = []
-    gh = repo_root / ".github"
-    if not gh.exists():
-        return False, f"Missing {gh} directory."
-
-    # __init__.py files
-    for p in [gh, gh / "agents", gh / "agents" / "rag_system"]:
-        if p.exists():
-            init = p / "__init__.py"
-            if not init.exists():
-                try:
-                    init.touch()
-                    msgs.append(f"Created: {init}")
-                except Exception as e:
-                    return False, f"Failed to create {init}: {e}"
-
-    # Symlink github -> .github
-    link = repo_root / "github"
-    if not link.exists():
-        try:
-            link.symlink_to(".github")
-            msgs.append(f"Created symlink: {link} -> .github")
-        except FileExistsError:
-            pass
-        except Exception as e:
-            return False, f"Failed to create symlink {link}: {e}"
-    else:
-        if verbose:
-            msgs.append(f"Symlink already present: {link} -> .github")
-
-    return True, "\n".join(msgs) if msgs else "Import alias already configured."
+    # Keep imports local to the checked-out repository and src layout.
+    for path in (repo_root, repo_root / "src", repo_root / ".github" / "agents"):
+        path_str = str(path)
+        if path_str not in sys.path:
+            sys.path.insert(0, path_str)
 
 
 def check_rag_imports(args, repo_root: Path) -> Tuple[bool, str]:
     ensure_repo_on_path(repo_root)
     try:
-        # Try canonical path first
-        from github.agents.rag_system.citation import CitationGenerator  # type: ignore
-        from github.agents.rag_system.indexer import RepositoryIndexer  # type: ignore
-        from github.agents.rag_system.retriever import HybridRetriever  # type: ignore
+        from rag_system.citation import CitationGenerator  # type: ignore
+        from rag_system.indexer import RepositoryIndexer  # type: ignore
+        from rag_system.retriever import HybridRetriever  # type: ignore
 
-        return True, "RAG modules import OK (github.agents.rag_system.*)"
-    except ModuleNotFoundError as e:
-        if args.fix_imports:
-            ok, msg = maybe_fix_hidden_github(repo_root, verbose=args.verbose)
-            if not ok:
-                return False, f"RAG import fix failed: {msg}"
-            # Retry after fix
-            try:
-                from github.agents.rag_system.citation import CitationGenerator  # type: ignore
-                from github.agents.rag_system.indexer import RepositoryIndexer  # type: ignore
-                from github.agents.rag_system.retriever import HybridRetriever  # type: ignore
-
-                return True, f"RAG modules import OK after fix.\n{msg}"
-            except Exception as e2:
-                return False, f"RAG modules still not importable after fix: {e2}"
-        return False, f"RAG import failed: {e}"
+        return True, "RAG modules import OK (rag_system.* via .github/agents)"
     except Exception as e:
         return False, f"RAG import failed: {e}"
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--repo", default=REPO_DEFAULT, help="Repository root path")
-    parser.add_argument(
-        "--fix-imports",
-        action="store_true",
-        help="Create 'github'->'.github' symlink and missing __init__.py files if needed",
-    )
+    parser.add_argument("--repo", help="Repository root path override")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
-    repo_root = Path(args.repo).resolve()
-    if not repo_root.exists():
-        UI.err(f"Repository path does not exist: {repo_root}")
+    try:
+        repo_path = Path(args.repo).expanduser() if args.repo else None
+        repo_root = resolve_repo_root(start=Path(__file__), repo=repo_path)
+    except RepoRootError as exc:
+        UI.err(str(exc))
         sys.exit(2)
 
     UI.info(f"Verifying environment for repo: {repo_root}")
