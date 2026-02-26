@@ -119,7 +119,7 @@ jobs:
       - name: Assert tp import surface intent
         run: |
           set -euo pipefail
-          python3 scripts/verification/assert_tp_import_surface.py --module tp --expect importable
+          PYTHONPATH=src python3 scripts/verification/assert_tp_import_surface.py --module tp --expect importable
 
       - name: Validate compliance schemas
         run: |
