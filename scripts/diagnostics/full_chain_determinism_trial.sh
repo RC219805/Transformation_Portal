@@ -14,6 +14,9 @@
 #   3  preflight failure (paths/tools missing)
 #   4  pipeline run failure
 #   5  determinism mismatch detected
+#
+# Recommended lint check during development:
+#   shellcheck scripts/diagnostics/full_chain_determinism_trial.sh
 
 set -euo pipefail
 IFS=$'\n\t'
@@ -125,6 +128,7 @@ done
 
 [[ -n "$INPUT_DIR" ]] || { usage; exit 2; }
 [[ -d "$INPUT_DIR" ]] || die "--input dir not found: $INPUT_DIR" 3
+INPUT_DIR="$(cd "$INPUT_DIR" && pwd -P)"
 [[ "$RUNS" =~ ^[0-9]+$ ]] || die "--runs must be an integer" 2
 (( RUNS >= 2 )) || die "--runs must be >= 2 to compare determinism" 2
 have "$PYTHON_BIN" || die "Python not found: $PYTHON_BIN" 2
@@ -134,6 +138,10 @@ export PYTHONHASHSEED="${PYTHONHASHSEED:-0}"
 export LC_ALL="${LC_ALL:-C}"
 export LANG="${LANG:-C}"
 export TZ="${TZ:-UTC}"
+export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
+export MKL_NUM_THREADS="${MKL_NUM_THREADS:-1}"
+export OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS:-1}"
+export NUMEXPR_NUM_THREADS="${NUMEXPR_NUM_THREADS:-1}"
 
 REPO_ROOT="$(resolve_repo_root)" || die "Could not resolve repo root from script location." 3
 
@@ -150,7 +158,14 @@ TOOL_4E_M="$REPO_ROOT/tools/build_provenance_merkle.py"
 STAMP="$(date -u +"%Y%m%dT%H%M%SZ")"
 if [[ -z "$OUT_DIR" ]]; then
   OUT_DIR="$REPO_ROOT/trial_runs/full_chain_determinism_$STAMP"
+elif [[ "$OUT_DIR" != /* ]]; then
+  OUT_DIR="$PWD/$OUT_DIR"
 fi
+
+OUT_PARENT="$(dirname "$OUT_DIR")"
+[[ -d "$OUT_PARENT" ]] || mkdir -p "$OUT_PARENT"
+OUT_PARENT="$(cd "$OUT_PARENT" && pwd -P)"
+OUT_DIR="$OUT_PARENT/$(basename "$OUT_DIR")"
 
 if [[ "$CLEAN" == "1" && -e "$OUT_DIR" ]]; then
   log "--clean set; removing existing OUT_DIR: $OUT_DIR"
@@ -162,7 +177,7 @@ mkdir -p "$OUT_DIR"
 {
   echo "trial_utc=$STAMP"
   echo "repo_root=$REPO_ROOT"
-  echo "input_dir=$(cd "$INPUT_DIR" && pwd)"
+  echo "input_dir=$INPUT_DIR"
   echo "out_dir=$OUT_DIR"
   echo "runs=$RUNS"
   echo "strict=$STRICT"
@@ -171,6 +186,10 @@ mkdir -p "$OUT_DIR"
   echo "pythonhashseed=$PYTHONHASHSEED"
   echo "lc_all=$LC_ALL"
   echo "tz=$TZ"
+  echo "omp_num_threads=$OMP_NUM_THREADS"
+  echo "mkl_num_threads=$MKL_NUM_THREADS"
+  echo "openblas_num_threads=$OPENBLAS_NUM_THREADS"
+  echo "numexpr_num_threads=$NUMEXPR_NUM_THREADS"
 } > "$OUT_DIR/trial_meta.txt"
 
 log "Repo root: $REPO_ROOT"
@@ -191,21 +210,52 @@ run_pipeline_once() {
   local manifest="$out_run_dir/artifacts/metadata_manifest.tp.meta.capture_manifest.v1.json"
   local provenance="$out_run_dir/artifacts/provenance_manifest.tp.meta.provenance.v1.json"
   local merkle="$out_run_dir/artifacts/provenance_merkle.tp.meta.provenance_merkle.v1.json"
+  local commandline_file="$out_run_dir/commandline.txt"
+  local env_file="$out_run_dir/env.txt"
+  local -a cmd_4c=("$PYTHON_BIN" "$TOOL_4C" --input "$INPUT_DIR" --output "$capture")
+  local -a cmd_4d=("$PYTHON_BIN" "$TOOL_4D" --capture "$capture" --output "$manifest" --enforce-fingerprint)
+  local -a cmd_4e_provenance=("$PYTHON_BIN" "$TOOL_4E_P" --capture "$capture" --manifest "$manifest" --output "$provenance")
+  local -a cmd_4e_merkle=("$PYTHON_BIN" "$TOOL_4E_M" --provenance "$provenance" --output "$merkle")
 
   log "=== ${run_label}: executing from CWD=$work_cwd ==="
 
+  if [[ "$STRICT" == "1" ]]; then
+    cmd_4c+=(--strict)
+  fi
+
+  {
+    printf "cwd=%s\n" "$work_cwd"
+    printf "cmd_4c="
+    printf '%q ' "${cmd_4c[@]}"
+    printf "\n"
+    printf "cmd_4d="
+    printf '%q ' "${cmd_4d[@]}"
+    printf "\n"
+    printf "cmd_4e_provenance="
+    printf '%q ' "${cmd_4e_provenance[@]}"
+    printf "\n"
+    printf "cmd_4e_merkle="
+    printf '%q ' "${cmd_4e_merkle[@]}"
+    printf "\n"
+  } > "$commandline_file"
+
+  {
+    printf "PYTHONHASHSEED=%s\n" "$PYTHONHASHSEED"
+    printf "LC_ALL=%s\n" "$LC_ALL"
+    printf "LANG=%s\n" "$LANG"
+    printf "TZ=%s\n" "$TZ"
+    printf "OMP_NUM_THREADS=%s\n" "$OMP_NUM_THREADS"
+    printf "MKL_NUM_THREADS=%s\n" "$MKL_NUM_THREADS"
+    printf "OPENBLAS_NUM_THREADS=%s\n" "$OPENBLAS_NUM_THREADS"
+    printf "NUMEXPR_NUM_THREADS=%s\n" "$NUMEXPR_NUM_THREADS"
+  } > "$env_file"
+
   (
     cd "$work_cwd"
-
-    if [[ "$STRICT" == "1" ]]; then
-      "$PYTHON_BIN" "$TOOL_4C" --input "$INPUT_DIR" --output "$capture" --strict
-    else
-      "$PYTHON_BIN" "$TOOL_4C" --input "$INPUT_DIR" --output "$capture"
-    fi
-
-    "$PYTHON_BIN" "$TOOL_4D" --capture "$capture" --output "$manifest" --enforce-fingerprint
-    "$PYTHON_BIN" "$TOOL_4E_P" --capture "$capture" --manifest "$manifest" --output "$provenance"
-    "$PYTHON_BIN" "$TOOL_4E_M" --provenance "$provenance" --output "$merkle"
+    "${cmd_4c[@]}"
+    "${cmd_4d[@]}"
+    "${cmd_4e_provenance[@]}"
+    "${cmd_4e_merkle[@]}"
   ) || return 1
 
   local ledger="$out_run_dir/artifacts.sha256"
@@ -236,7 +286,7 @@ compare_ledgers() {
   local other
   for other in "$@"; do
     if ! diff -u "$first" "$other" >/dev/null 2>&1; then
-      log "DETERMINISM MISMATCH: $first vs $other"
+      log "LEDGER MISMATCH: $first vs $other"
       diff -u "$first" "$other" >&2 || true
       ok=0
     fi
@@ -257,12 +307,22 @@ PRIMARY_OTHERS=()
 for i in $(seq 2 "$RUNS"); do
   PRIMARY_OTHERS+=("$OUT_DIR/$(printf "run_%02d" "$i")/artifacts.sha256")
 done
+PRIMARY_SIZES_FIRST="$OUT_DIR/run_01/artifacts.sizes"
+PRIMARY_SIZES_OTHERS=()
+for i in $(seq 2 "$RUNS"); do
+  PRIMARY_SIZES_OTHERS+=("$OUT_DIR/$(printf "run_%02d" "$i")/artifacts.sizes")
+done
 
 log "Comparing primary run ledgers..."
 if ! compare_ledgers "$PRIMARY_FIRST" "${PRIMARY_OTHERS[@]}"; then
   die "Primary determinism failure detected. See diffs above and $OUT_DIR." 5
 fi
 log "Primary determinism: PASS"
+log "Comparing primary run size ledgers..."
+if ! compare_ledgers "$PRIMARY_SIZES_FIRST" "${PRIMARY_SIZES_OTHERS[@]}"; then
+  die "Primary artifact-size mismatch detected. See diffs above and $OUT_DIR." 5
+fi
+log "Primary artifact sizes: PASS"
 
 if [[ "$DO_TMP" == "1" ]]; then
   TMPDIR_BASE="${TMPDIR:-/tmp}"
@@ -283,12 +343,22 @@ if [[ "$DO_TMP" == "1" ]]; then
   for i in $(seq 2 "$RUNS"); do
     TMP_OTHERS+=("$OUT_DIR/$(printf "tmp_run_%02d" "$i")/artifacts.sha256")
   done
+  TMP_SIZES_FIRST="$OUT_DIR/tmp_run_01/artifacts.sizes"
+  TMP_SIZES_OTHERS=()
+  for i in $(seq 2 "$RUNS"); do
+    TMP_SIZES_OTHERS+=("$OUT_DIR/$(printf "tmp_run_%02d" "$i")/artifacts.sizes")
+  done
 
   log "Comparing /tmp run ledgers..."
   if ! compare_ledgers "$TMP_FIRST" "${TMP_OTHERS[@]}"; then
     die "/tmp determinism failure detected. See diffs above and $OUT_DIR." 5
   fi
   log "/tmp determinism: PASS"
+  log "Comparing /tmp run size ledgers..."
+  if ! compare_ledgers "$TMP_SIZES_FIRST" "${TMP_SIZES_OTHERS[@]}"; then
+    die "/tmp artifact-size mismatch detected. See diffs above and $OUT_DIR." 5
+  fi
+  log "/tmp artifact sizes: PASS"
 
   log "Comparing primary vs /tmp ledgers (CWD-independence)..."
   if ! diff -u "$PRIMARY_FIRST" "$TMP_FIRST" >/dev/null 2>&1; then
@@ -297,6 +367,13 @@ if [[ "$DO_TMP" == "1" ]]; then
     die "Relocatability/CWD-independence failure detected. See $OUT_DIR." 5
   fi
   log "Primary vs /tmp: PASS"
+  log "Comparing primary vs /tmp size ledgers (CWD-independence)..."
+  if ! diff -u "$PRIMARY_SIZES_FIRST" "$TMP_SIZES_FIRST" >/dev/null 2>&1; then
+    log "PRIMARY vs /tmp size mismatch (CWD-independence failure)"
+    diff -u "$PRIMARY_SIZES_FIRST" "$TMP_SIZES_FIRST" >&2 || true
+    die "Relocatability/CWD-independence size mismatch detected. See $OUT_DIR." 5
+  fi
+  log "Primary vs /tmp sizes: PASS"
 fi
 
 log "ALL CHECKS PASSED"
