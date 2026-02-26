@@ -15,9 +15,8 @@ from typing import Any
 EXIT_RUNTIME_FAILURE = 31
 EXIT_PARITY_MISMATCH = 32
 
-DEFAULT_CAPTURE_JSON = (
-    Path(__file__).resolve().parents[1] / "tests" / "golden" / "phase4" / "expected_capture_metadata.tp.meta.capture.v1.json"
-)
+DEFAULT_CAPTURE_JSON_FILENAME = "expected_capture_metadata.tp.meta.capture.v1.json"
+DEFAULT_CAPTURE_JSON = Path(__file__).resolve().parents[1] / "tests" / "golden" / "phase4" / DEFAULT_CAPTURE_JSON_FILENAME
 DEFAULT_EXPECTED_MANIFEST = (
     Path(__file__).resolve().parents[1]
     / "tests"
