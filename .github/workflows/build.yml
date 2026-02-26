@@ -165,6 +165,9 @@ jobs:
           cp -R "${REPO_ROOT}" "${COPY_ROOT}"
           cd "${COPY_ROOT}"
 
+          python3 -m pip install --upgrade pip setuptools wheel
+          python3 -m pip install -e .
+
           python3 scripts/verification/verify_ml_deps.py --help
           python3 scripts/verification/verify_core.py --help
           python3 scripts/verification/verify_rag_install.py --help
@@ -184,9 +187,6 @@ jobs:
             git -C "${REPO_ROOT}" status --porcelain >&2
             exit 1
           fi
-
-          python3 -m pip install --upgrade pip setuptools wheel
-          python3 -m pip install -e .
 
           COPY_ROOT_ENV="${COPY_ROOT}" python3 - <<'PY'
           import os
