@@ -124,6 +124,52 @@ def test_run_extract_preserves_core_default_config_and_normalizes_paths(tmp_path
     assert delegated.config_dict is None
 
 
+def test_run_extract_cli_args_none_normalizes_to_empty_sequence(tmp_path: Path) -> None:
+    input_path = tmp_path / "sample.cr2"
+    input_path.touch()
+    stub = _StubCoreService()
+    stub.extract_result = CoreExtractResult(
+        path=input_path,
+        success=True,
+        output_path=tmp_path / "sample.provenance.json",
+        elapsed_seconds=0.1,
+    )
+    service = MetadataExtractionService(metadata_service=stub)  # type: ignore[arg-type]
+
+    result = service.run(
+        ServiceRunRequest(
+            command="extract",
+            input_path=input_path,
+            args={"cli_args": None},
+        )
+    )
+
+    assert result.success is True
+    delegated = stub.extract_requests[0]
+    assert delegated.cli_args == []
+
+
+def test_run_extract_with_invalid_cli_args_type_returns_other_failure(tmp_path: Path) -> None:
+    input_path = tmp_path / "sample.cr2"
+    input_path.touch()
+    service = MetadataExtractionService()
+
+    result = service.run(
+        ServiceRunRequest(
+            command="extract",
+            input_path=input_path,
+            args={"cli_args": 123},
+        )
+    )
+
+    assert result.success is False
+    assert result.exit_code == int(IngestExitCode.OTHER_FAILURE)
+    payload = result.payload or {}
+    assert payload.get("extract_result") is None
+    assert payload.get("sidecar") is None
+    assert "cli_args for extract command must be a sequence or None, got int" in str(payload.get("error", ""))
+
+
 def test_run_extract_with_invalid_input_type_returns_other_failure() -> None:
     service = MetadataExtractionService()
 
@@ -215,6 +261,50 @@ def test_run_extract_batch_preserves_core_default_config_and_normalizes_paths(tm
     assert delegated.input_root == input_dir
     assert list(delegated.input_paths) == [image_path]
     assert delegated.config_dict is None
+
+
+def test_run_extract_batch_with_invalid_input_paths_fails_without_silent_drop(tmp_path: Path) -> None:
+    input_dir = tmp_path / "inputs"
+    input_dir.mkdir(parents=True)
+    service = MetadataExtractionService()
+
+    result = service.run(
+        ServiceRunRequest(
+            command="extract-batch",
+            input_path=input_dir,
+            input_paths=[input_dir / "valid.cr2", 7],  # type: ignore[list-item]
+        )
+    )
+
+    assert result.success is False
+    assert result.exit_code == int(IngestExitCode.OTHER_FAILURE)
+    payload = result.payload or {}
+    batch_result = payload.get("batch_result")
+    assert batch_result is not None
+    assert "input_paths must contain only str or Path values" in str(batch_result.dominant_error)
+
+
+def test_run_extract_batch_with_invalid_cli_args_type_returns_other_failure(tmp_path: Path) -> None:
+    input_dir = tmp_path / "inputs"
+    input_dir.mkdir(parents=True)
+    image_path = input_dir / "a.cr2"
+    image_path.touch()
+    service = MetadataExtractionService()
+
+    result = service.run(
+        ServiceRunRequest(
+            command="extract-batch",
+            input_path=input_dir,
+            input_paths=[image_path],
+            args={"cli_args": 123},
+        )
+    )
+
+    assert result.success is False
+    assert result.exit_code == int(IngestExitCode.OTHER_FAILURE)
+    payload = result.payload or {}
+    assert payload.get("batch_result") is None
+    assert "cli_args for extract-batch command must be a sequence or None, got int" in str(payload.get("error", ""))
 
 
 def test_run_extract_batch_with_invalid_input_type_returns_other_failure() -> None:

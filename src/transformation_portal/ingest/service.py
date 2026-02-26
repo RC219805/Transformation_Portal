@@ -117,6 +117,14 @@ class MetadataExtractionService:
 
         output_path = self._as_path(request.args.get("output_path"))
         output_dir = self._as_path(request.output_dir)
+        cli_args, cli_args_error = self._normalize_cli_args(
+            request.args.get("cli_args"),
+            command_name="extract",
+            payload_key="extract_result",
+            sidecar_key="sidecar",
+        )
+        if cli_args_error is not None:
+            return cli_args_error
 
         extracted = self._metadata_service.extract(
             CoreExtractRequest(
@@ -124,7 +132,7 @@ class MetadataExtractionService:
                 output_path=output_path,
                 output_dir=output_dir,
                 preset=request.args.get("preset"),
-                cli_args=list(request.args.get("cli_args", ())),
+                cli_args=cli_args,
                 config_dict=config_dict,
                 fsync=bool(request.args.get("fsync", False)),
             )
@@ -164,9 +172,14 @@ class MetadataExtractionService:
             return self._batch_setup_failure(f"Not a directory: {input_dir}")
 
         recursive = bool(request.args.get("recursive", True))
-        images = (
-            self._as_paths(request.input_paths) if request.input_paths else self._find_images(input_dir, recursive=recursive)
-        )
+        if request.input_paths:
+            images, invalid_input_paths = self._as_paths(request.input_paths)
+            if invalid_input_paths:
+                return self._batch_setup_failure(
+                    "input_paths must contain only str or Path values; " f"invalid entries: {invalid_input_paths!r}"
+                )
+        else:
+            images = self._find_images(input_dir, recursive=recursive)
 
         resolved_output_dir = self._as_path(request.output_dir) or input_dir / "provenance_sidecars"
         resolved_output_dir.mkdir(parents=True, exist_ok=True)
@@ -174,13 +187,21 @@ class MetadataExtractionService:
         config_dict = request.args.get("config_dict")
         if not isinstance(config_dict, dict):
             config_dict = None
+        cli_args, cli_args_error = self._normalize_cli_args(
+            request.args.get("cli_args"),
+            command_name="extract-batch",
+            payload_key="batch_result",
+            sidecar_key=None,
+        )
+        if cli_args_error is not None:
+            return cli_args_error
 
         result = self._metadata_service.batch_extract(
             BatchExtractRequest(
                 input_paths=images,
                 output_dir=resolved_output_dir,
                 preset=request.args.get("preset"),
-                cli_args=list(request.args.get("cli_args", ())),
+                cli_args=cli_args,
                 config_dict=config_dict,
                 fsync=bool(request.args.get("fsync", False)),
                 deterministic_order=True,
@@ -309,13 +330,36 @@ class MetadataExtractionService:
             return Path(value)
         return None
 
-    def _as_paths(self, values: Sequence[Any]) -> list[Path]:
+    def _as_paths(self, values: Sequence[Any]) -> tuple[list[Path], list[Any]]:
         normalized: list[Path] = []
+        invalid: list[Any] = []
         for value in values:
             path = self._as_path(value)
             if path is not None:
                 normalized.append(path)
-        return normalized
+            else:
+                invalid.append(value)
+        return normalized, invalid
+
+    def _normalize_cli_args(
+        self,
+        raw_cli_args: Any,
+        *,
+        command_name: str,
+        payload_key: str,
+        sidecar_key: str | None,
+    ) -> tuple[list[Any], ServiceRunResult | None]:
+        if raw_cli_args is None:
+            return [], None
+        if isinstance(raw_cli_args, Sequence) and not isinstance(raw_cli_args, (str, bytes, bytearray)):
+            return list(raw_cli_args), None
+        error = OtherIngestFailure(
+            f"cli_args for {command_name} command must be a sequence or None, got {type(raw_cli_args).__name__}"
+        )
+        payload: dict[str, Any] = {payload_key: None, "error": str(error)}
+        if sidecar_key is not None:
+            payload[sidecar_key] = None
+        return [], ServiceRunResult(success=False, exit_code=int(error.exit_code), payload=payload)
 
 
 # Backward-compatible alias while this layer is rolling in.
