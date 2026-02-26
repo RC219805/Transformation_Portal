@@ -30,6 +30,8 @@ INPUT_DIR=""
 OUT_DIR=""
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 TMP_CWD=""
+VERBOSE=0
+HASH_INPUT=0
 
 die() { echo "ERROR: $*" >&2; exit "${2:-1}"; }
 log() { echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] $*" >&2; }
@@ -86,6 +88,8 @@ Options:
   --no-strict           Disable --strict for extraction (default: strict enabled)
   --no-tmp              Skip /tmp relocatability run (default: enabled)
   --clean               Remove output directory before running
+  --verbose             Stream per-step command output while also writing logs
+  --hash-input          Also record input SHA-256 ledger (can be expensive)
   --python <path>       Python executable (default: $PYTHON_BIN)
   -h, --help            Show help
 
@@ -119,6 +123,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --clean)
       CLEAN=1
+      shift 1
+      ;;
+    --verbose)
+      VERBOSE=1
+      shift 1
+      ;;
+    --hash-input)
+      HASH_INPUT=1
       shift 1
       ;;
     --python)
@@ -209,6 +221,8 @@ mkdir -p "$OUT_DIR"
   echo "runs=$RUNS"
   echo "strict=$STRICT"
   echo "do_tmp=$DO_TMP"
+  echo "verbose=$VERBOSE"
+  echo "hash_input=$HASH_INPUT"
   echo "python=$($PYTHON_BIN --version 2>&1 | tr -d '\r')"
   echo "pythonhashseed=$PYTHONHASHSEED"
   echo "lc_all=$LC_ALL"
@@ -225,6 +239,56 @@ log "Out dir:    $OUT_DIR"
 log "Runs:       $RUNS"
 log "Strict:     $STRICT"
 log "Tmp run:    $DO_TMP"
+log "Verbose:    $VERBOSE"
+log "Hash input: $HASH_INPUT"
+
+canonical_json_sha256_file() {
+  local file_path="$1"
+  "$PYTHON_BIN" -c 'import hashlib, json, sys; obj=json.load(open(sys.argv[1], "rb")); canonical=json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8"); print(hashlib.sha256(canonical).hexdigest())' "$file_path"
+}
+
+run_with_log() {
+  local log_path="$1"
+  shift
+  if [[ "$VERBOSE" == "1" ]]; then
+    "$@" 2>&1 | tee "$log_path"
+  else
+    "$@" >"$log_path" 2>&1
+  fi
+}
+
+capture_input_manifests() {
+  local files_out="$OUT_DIR/input.files.txt"
+  local sizes_out="$OUT_DIR/input.sizes.txt"
+  local hashes_out="$OUT_DIR/input.sha256.txt"
+  local tmp_sorted="$OUT_DIR/.input_files_abs.txt"
+  local file_path rel_path file_size
+
+  find "$INPUT_DIR" -type f | LC_ALL=C sort > "$tmp_sorted"
+  : > "$files_out"
+  : > "$sizes_out"
+  if [[ "$HASH_INPUT" == "1" ]]; then
+    : > "$hashes_out"
+  fi
+
+  while IFS= read -r file_path; do
+    rel_path="${file_path#"$INPUT_DIR"/}"
+    printf "%s\n" "$rel_path" >> "$files_out"
+    if stat -c %s "$file_path" >/dev/null 2>&1; then
+      file_size="$(stat -c %s "$file_path")"
+    else
+      file_size="$(stat -f %z "$file_path")"
+    fi
+    printf "%s  %s\n" "$file_size" "$rel_path" >> "$sizes_out"
+    if [[ "$HASH_INPUT" == "1" ]]; then
+      printf "%s  %s\n" "$(sha256_file "$file_path")" "$rel_path" >> "$hashes_out"
+    fi
+  done < "$tmp_sorted"
+
+  rm -f "$tmp_sorted"
+}
+
+capture_input_manifests
 
 run_pipeline_once() {
   local run_label="$1"
@@ -237,6 +301,11 @@ run_pipeline_once() {
   local manifest="$out_run_dir/artifacts/metadata_manifest.tp.meta.capture_manifest.v1.json"
   local provenance="$out_run_dir/artifacts/provenance_manifest.tp.meta.provenance.v1.json"
   local merkle="$out_run_dir/artifacts/provenance_merkle.tp.meta.provenance_merkle.v1.json"
+  local logs_dir="$out_run_dir/logs"
+  local log_4c="$logs_dir/4C.log"
+  local log_4d="$logs_dir/4D.log"
+  local log_4e_provenance="$logs_dir/4E_prov.log"
+  local log_4e_merkle="$logs_dir/4E_merkle.log"
   local commandline_file="$out_run_dir/commandline.txt"
   local env_file="$out_run_dir/env.txt"
   local -a cmd_4c=("$PYTHON_BIN" "$TOOL_4C" --input "$INPUT_DIR" --output "$capture")
@@ -245,6 +314,7 @@ run_pipeline_once() {
   local -a cmd_4e_merkle=("$PYTHON_BIN" "$TOOL_4E_M" --provenance "$provenance" --output "$merkle")
 
   log "=== ${run_label}: executing from CWD=$work_cwd ==="
+  mkdir -p "$logs_dir"
 
   if [[ "$STRICT" == "1" ]]; then
     cmd_4c+=(--strict)
@@ -279,18 +349,23 @@ run_pipeline_once() {
 
   (
     cd "$work_cwd"
-    "${cmd_4c[@]}"
-    "${cmd_4d[@]}"
-    "${cmd_4e_provenance[@]}"
-    "${cmd_4e_merkle[@]}"
+    run_with_log "$log_4c" "${cmd_4c[@]}"
+    run_with_log "$log_4d" "${cmd_4d[@]}"
+    run_with_log "$log_4e_provenance" "${cmd_4e_provenance[@]}"
+    run_with_log "$log_4e_merkle" "${cmd_4e_merkle[@]}"
   ) || return 1
 
   local ledger="$out_run_dir/artifacts.sha256"
+  local canonical_ledger="$out_run_dir/artifacts.canonical.sha256"
   : > "$ledger"
+  : > "$canonical_ledger"
   local artifact
+  local canonical_hash
   for artifact in "$capture" "$manifest" "$provenance" "$merkle"; do
     [[ -f "$artifact" ]] || die "Expected artifact missing after ${run_label}: $artifact" 4
     printf "%s  %s\n" "$(sha256_file "$artifact")" "$(basename "$artifact")" >> "$ledger"
+    canonical_hash="$(canonical_json_sha256_file "$artifact")" || die "Failed canonical JSON hash for $artifact" 4
+    printf "%s  %s\n" "$canonical_hash" "$(basename "$artifact")" >> "$canonical_ledger"
   done
 
   local sizes="$out_run_dir/artifacts.sizes"
@@ -339,12 +414,36 @@ PRIMARY_SIZES_OTHERS=()
 for i in $(seq 2 "$RUNS"); do
   PRIMARY_SIZES_OTHERS+=("$OUT_DIR/$(printf "run_%02d" "$i")/artifacts.sizes")
 done
+PRIMARY_CANONICAL_FIRST="$OUT_DIR/run_01/artifacts.canonical.sha256"
+PRIMARY_CANONICAL_OTHERS=()
+for i in $(seq 2 "$RUNS"); do
+  PRIMARY_CANONICAL_OTHERS+=("$OUT_DIR/$(printf "run_%02d" "$i")/artifacts.canonical.sha256")
+done
 
 log "Comparing primary run ledgers..."
+primary_raw_ok=1
 if ! compare_ledgers "$PRIMARY_FIRST" "${PRIMARY_OTHERS[@]}"; then
+  primary_raw_ok=0
+fi
+log "Comparing primary canonical JSON ledgers (classification only)..."
+primary_canonical_ok=1
+if ! compare_ledgers "$PRIMARY_CANONICAL_FIRST" "${PRIMARY_CANONICAL_OTHERS[@]}"; then
+  primary_canonical_ok=0
+fi
+if [[ "$primary_raw_ok" != "1" ]]; then
+  if [[ "$primary_canonical_ok" == "1" ]]; then
+    log "Primary classification: RAW mismatch with canonical match (likely serialization drift)."
+  else
+    log "Primary classification: RAW mismatch with canonical mismatch (likely semantic drift)."
+  fi
   die "Primary determinism failure detected. See diffs above and $OUT_DIR." 5
 fi
 log "Primary determinism: PASS"
+if [[ "$primary_canonical_ok" == "1" ]]; then
+  log "Primary canonical JSON: PASS"
+else
+  log "WARN: Primary canonical JSON ledgers differ while raw ledgers match."
+fi
 log "Comparing primary run size ledgers..."
 if ! compare_ledgers "$PRIMARY_SIZES_FIRST" "${PRIMARY_SIZES_OTHERS[@]}"; then
   die "Primary artifact-size mismatch detected. See diffs above and $OUT_DIR." 5
@@ -374,12 +473,36 @@ if [[ "$DO_TMP" == "1" ]]; then
   for i in $(seq 2 "$RUNS"); do
     TMP_SIZES_OTHERS+=("$OUT_DIR/$(printf "tmp_run_%02d" "$i")/artifacts.sizes")
   done
+  TMP_CANONICAL_FIRST="$OUT_DIR/tmp_run_01/artifacts.canonical.sha256"
+  TMP_CANONICAL_OTHERS=()
+  for i in $(seq 2 "$RUNS"); do
+    TMP_CANONICAL_OTHERS+=("$OUT_DIR/$(printf "tmp_run_%02d" "$i")/artifacts.canonical.sha256")
+  done
 
   log "Comparing /tmp run ledgers..."
+  tmp_raw_ok=1
   if ! compare_ledgers "$TMP_FIRST" "${TMP_OTHERS[@]}"; then
+    tmp_raw_ok=0
+  fi
+  log "Comparing /tmp canonical JSON ledgers (classification only)..."
+  tmp_canonical_ok=1
+  if ! compare_ledgers "$TMP_CANONICAL_FIRST" "${TMP_CANONICAL_OTHERS[@]}"; then
+    tmp_canonical_ok=0
+  fi
+  if [[ "$tmp_raw_ok" != "1" ]]; then
+    if [[ "$tmp_canonical_ok" == "1" ]]; then
+      log "/tmp classification: RAW mismatch with canonical match (likely serialization drift)."
+    else
+      log "/tmp classification: RAW mismatch with canonical mismatch (likely semantic drift)."
+    fi
     die "/tmp determinism failure detected. See diffs above and $OUT_DIR." 5
   fi
   log "/tmp determinism: PASS"
+  if [[ "$tmp_canonical_ok" == "1" ]]; then
+    log "/tmp canonical JSON: PASS"
+  else
+    log "WARN: /tmp canonical JSON ledgers differ while raw ledgers match."
+  fi
   log "Comparing /tmp run size ledgers..."
   if ! compare_ledgers "$TMP_SIZES_FIRST" "${TMP_SIZES_OTHERS[@]}"; then
     die "/tmp artifact-size mismatch detected. See diffs above and $OUT_DIR." 5
@@ -388,11 +511,23 @@ if [[ "$DO_TMP" == "1" ]]; then
 
   log "Comparing primary vs /tmp ledgers (CWD-independence)..."
   if ! diff -u "$PRIMARY_FIRST" "$TMP_FIRST" >/dev/null 2>&1; then
+    if diff -u "$PRIMARY_CANONICAL_FIRST" "$TMP_CANONICAL_FIRST" >/dev/null 2>&1; then
+      log "Primary vs /tmp classification: RAW mismatch with canonical match (likely serialization drift)."
+    else
+      log "Primary vs /tmp classification: RAW mismatch with canonical mismatch (likely semantic drift)."
+    fi
     log "PRIMARY vs /tmp mismatch (CWD-independence failure)"
     diff -u "$PRIMARY_FIRST" "$TMP_FIRST" >&2 || true
     die "Relocatability/CWD-independence failure detected. See $OUT_DIR." 5
   fi
   log "Primary vs /tmp: PASS"
+  log "Comparing primary vs /tmp canonical JSON ledgers (classification only)..."
+  if ! diff -u "$PRIMARY_CANONICAL_FIRST" "$TMP_CANONICAL_FIRST" >/dev/null 2>&1; then
+    log "WARN: Primary vs /tmp canonical JSON mismatch."
+    diff -u "$PRIMARY_CANONICAL_FIRST" "$TMP_CANONICAL_FIRST" >&2 || true
+  else
+    log "Primary vs /tmp canonical JSON: PASS"
+  fi
   log "Comparing primary vs /tmp size ledgers (CWD-independence)..."
   if ! diff -u "$PRIMARY_SIZES_FIRST" "$TMP_SIZES_FIRST" >/dev/null 2>&1; then
     log "PRIMARY vs /tmp size mismatch (CWD-independence failure)"
