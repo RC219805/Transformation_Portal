@@ -32,7 +32,7 @@ The repository uses an automated file organization system to maintain a clean st
 ./.auto-organize.sh
 ```
 
-For detailed documentation, see [REPO_ORGANIZATION.md](../REPO_ORGANIZATION.md) and [setup/README.md](setup/README.md).
+For detailed documentation, see [REPO_ORGANIZATION.md](../docs/governance/REPO_ORGANIZATION.md) and [setup/README.md](setup/README.md).
 
 ## Usage
 
@@ -56,4 +56,4 @@ When adding new scripts:
 4. Update this README if adding a new category
 5. Test with `./.auto-organize.sh --dry-run` to verify organization
 
-See [REPO_ORGANIZATION.md](../REPO_ORGANIZATION.md) for complete guidelines.
+See [REPO_ORGANIZATION.md](../docs/governance/REPO_ORGANIZATION.md) for complete guidelines.

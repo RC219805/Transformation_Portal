@@ -115,28 +115,19 @@ The `.auto-organize.sh` script automatically organizes files based on their type
 
 Only these files should remain in the repository root:
 
-- **Core documentation**: `README.md`, `LICENSE`, `CONTRIBUTING.md`
+- **Core documentation**: `README.md`, `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`
 - **Build configuration**: `Makefile`, `pyproject.toml`, `setup.py`
 - **Dependency management**: `requirements*.txt`, `Pipfile`, `poetry.lock`
 - **Testing configuration**: `pytest.ini`, `tox.ini`, `.coveragerc`
 - **Linting configuration**: `.pylintrc`, `.flake8`, `mypy.ini`
 - **Docker**: `Dockerfile`, `docker-compose.yml`
 - **Git**: `.gitignore`, `.gitattributes`
-- **CI/CD**: `.travis.yml`, `.circleci/` (prefer `.github/workflows/`)
-- **Organization system**: `.auto-organize.sh`, `REPO_ORGANIZATION.md`
+- **Governance metadata**: `.architect_directive_status.yml`, `AGENTS.md`
+- **Organization system**: `.auto-organize.sh` (policy doc now lives under `docs/governance/`)
 
 ### Root Directory Limits
 
-The repository enforces a maximum of **10 markdown files** in the root directory (currently 6):
-1. `README.md`
-2. `SECURITY.md`
-3. `REPO_ORGANIZATION.md`
-4. `CACHE_VALIDATION_IMPLEMENTATION.md`
-5. `DA3_IMPLEMENTATION_SUMMARY.md`
-6. `PR_SUMMARY_LUX_DEPTH_V3.md`
-7. `DOCUMENTATION_REVIEW_REPORT.md`
-
-This limit is enforced by the `quality-gate.yml` workflow. Additional documentation should be placed in `docs/` subdirectories to maintain repository cleanliness and navigability.
+The repository root should remain minimal and operational. Documentation files that are not canonical root documents must live under `docs/` in approved subdirectories.
 
 ## Helper Scripts
 

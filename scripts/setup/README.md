@@ -213,7 +213,7 @@ echo "✓ Script completed successfully"
 
 ## Related Documentation
 
-- [Repository Organization System](../../REPO_ORGANIZATION.md)
+- [Repository Organization System](../../docs/governance/REPO_ORGANIZATION.md)
 - [Main README](../../README.md)
 - [Contributing Guide](../../CONTRIBUTING.md) (if exists)
 

@@ -4,7 +4,7 @@
 # Pre-commit hook to prevent committing misplaced files
 #
 # This hook checks for files in the repository root that should be
-# organized into subdirectories according to REPO_ORGANIZATION.md
+# organized into subdirectories according to docs/governance/REPO_ORGANIZATION.md
 #
 
 set -euo pipefail
@@ -21,8 +21,9 @@ ALLOWED_ROOT_FILES=(
     "README.md"
     "LICENSE"
     "CONTRIBUTING.md"
+    "SECURITY.md"
     "CHANGELOG.md"
-    "REPO_ORGANIZATION.md"
+    "AGENTS.md"
 
     # Build configuration
     "Makefile"
@@ -61,6 +62,7 @@ ALLOWED_ROOT_FILES=(
 
     # Organization system
     ".auto-organize.sh"
+    ".architect_directive_status.yml"
 
     # Package metadata
     "PKG-INFO"
@@ -217,7 +219,7 @@ main() {
         echo "To bypass this check (not recommended):"
         echo "  git commit --no-verify"
         echo ""
-        echo "For more information, see: REPO_ORGANIZATION.md"
+        echo "For more information, see: docs/governance/REPO_ORGANIZATION.md"
         echo ""
 
         exit_code=1

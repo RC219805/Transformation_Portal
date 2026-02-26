@@ -426,8 +426,8 @@ commit_and_pr() {
     success "Committed diagnostic tools"
 
     # Commit 4: Documentation map update (if exists)
-    if [ -f "DOCUMENTATION_MAP.md" ]; then
-        git add DOCUMENTATION_MAP.md 2>/dev/null || true
+    if [ -f "docs/governance/DOCUMENTATION_MAP.md" ]; then
+        git add docs/governance/DOCUMENTATION_MAP.md 2>/dev/null || true
         git commit -m "docs: update documentation map with Phase 2 investigations" || true
     fi
 

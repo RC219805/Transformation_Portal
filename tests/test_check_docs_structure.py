@@ -7,18 +7,26 @@ import sys
 from scripts.governance import check_docs_structure
 
 
-def test_keyword_rule_allows_archived_paths() -> None:
-    assert not check_docs_structure._keyword_violation("docs/historical/SUMMARY.md")
-    assert not check_docs_structure._keyword_violation("docs/pr_archive/PR_123/REPORT.md")
+def test_topology_rule_allows_docs_readme_and_whitelisted_subdirs() -> None:
+    assert not check_docs_structure._root_violation(check_docs_structure.DocChange(status="A", path="docs/README.md"))
+    assert not check_docs_structure._root_violation(
+        check_docs_structure.DocChange(status="A", path="docs/governance/DOCUMENTATION_POLICY.md")
+    )
+    assert not check_docs_structure._root_violation(
+        check_docs_structure.DocChange(status="M", path="docs/historical/DELIVERABLES.md")
+    )
 
 
-def test_keyword_rule_allows_nested_historical_subfolder() -> None:
-    assert not check_docs_structure._keyword_violation("docs/historical/subfolder/STATUS.md")
+def test_topology_rule_rejects_any_root_docs_file_other_than_readme() -> None:
+    assert check_docs_structure._root_violation(check_docs_structure.DocChange(status="A", path="docs/random.md"))
+    assert check_docs_structure._root_violation(
+        check_docs_structure.DocChange(status="M", path="docs/ARCHITECTURAL_WORKFLOW.md")
+    )
+    assert check_docs_structure._root_violation(check_docs_structure.DocChange(status="R", path="docs/new_doc.md"))
 
 
-def test_keyword_rule_rejects_non_archived_paths() -> None:
-    assert check_docs_structure._keyword_violation("docs/STATUS.md")
-    assert check_docs_structure._keyword_violation("docs/cli/FINAL_REPORT.md")
+def test_topology_rule_rejects_non_whitelisted_top_level_dir() -> None:
+    assert check_docs_structure._root_violation(check_docs_structure.DocChange(status="A", path="docs/unapproved/new_doc.md"))
 
 
 def test_root_topology_rule_for_added_files() -> None:
@@ -27,8 +35,8 @@ def test_root_topology_rule_for_added_files() -> None:
     assert not check_docs_structure._root_violation(check_docs_structure.DocChange(status="A", path="docs/cli/README.md"))
 
 
-def test_root_topology_rule_allows_modifying_existing_legacy_root_docs() -> None:
-    assert not check_docs_structure._root_violation(
+def test_root_topology_rule_blocks_modifying_existing_legacy_root_docs() -> None:
+    assert check_docs_structure._root_violation(
         check_docs_structure.DocChange(status="M", path="docs/ARCHITECTURAL_WORKFLOW.md")
     )
 
@@ -105,3 +113,14 @@ def test_main_all_mode_uses_all_docs_scan(monkeypatch) -> None:
     monkeypatch.setattr(sys, "argv", ["check_docs_structure.py", "--all"])
 
     assert check_docs_structure.main() == 0
+
+
+def test_main_all_mode_fails_for_root_docs_violation(monkeypatch) -> None:
+    monkeypatch.setattr(
+        check_docs_structure,
+        "_all_docs_files",
+        lambda: ["docs/README.md", "docs/ILLEGAL.md"],
+    )
+    monkeypatch.setattr(sys, "argv", ["check_docs_structure.py", "--all"])
+
+    assert check_docs_structure.main() == 1
