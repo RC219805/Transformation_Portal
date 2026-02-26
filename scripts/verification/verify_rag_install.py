@@ -27,6 +27,19 @@ import sys
 from pathlib import Path
 from typing import List, Tuple
 
+
+def _seed_repo_root_for_imports() -> None:
+    current = Path(__file__).resolve()
+    for candidate in (current.parent, *current.parents):
+        if (candidate / "pyproject.toml").is_file() and (candidate / ".github" / "workflows").is_dir():
+            candidate_str = str(candidate)
+            if candidate_str not in sys.path:
+                sys.path.insert(0, candidate_str)
+            return
+
+
+_seed_repo_root_for_imports()
+
 from scripts.lib.repo_root import RepoRootError, resolve_repo_root
 
 
