@@ -178,7 +178,7 @@ jobs:
       - name: Download Results
         id: download_results
         continue-on-error: true
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v7.0.0
         with:
           path: apex_downloaded_results
           pattern: apex-results-*
@@ -355,7 +355,7 @@ jobs:
           pip install -e .
 
       - name: Download Ledger
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v7.0.0
         with:
           name: apex-ledger
 
