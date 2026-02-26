@@ -116,3 +116,16 @@ def test_resolver_cli_module_and_script_agree_from_different_cwds() -> None:
     assert script_run.returncode == 0, script_run.stderr
     assert Path(module_run.stdout.strip()) == repo_root
     assert Path(script_run.stdout.strip()) == repo_root
+
+
+def test_resolver_cli_is_silent_without_print_flag() -> None:
+    repo_root = _expected_repo_root(Path(__file__))
+    result = subprocess.run(
+        [sys.executable, "-m", "scripts.lib.repo_root"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == ""

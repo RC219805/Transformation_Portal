@@ -1,4 +1,4 @@
-# verify_rag_install.py
+# scripts/verification/verify_rag_install.py
 #!/usr/bin/env python3
 """
 Transformation Portal — RAG Environment Verifier
@@ -11,7 +11,7 @@ Checks:
   5) RAG modules importability from .github/agents/rag_system
 
 Usage:
-  python verify_rag_install.py [--repo /path/to/repo] [--verbose]
+  python -m scripts.verification.verify_rag_install [--repo /path/to/repo] [--verbose]
 
 Exit codes:
   0 = all good

@@ -55,7 +55,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default=Path(__file__),
         help="Start path for upward search when --repo is not provided.",
     )
-    parser.add_argument("--print", action="store_true", help="Print resolved root path.")
+    parser.add_argument("--print", action="store_true", help="Print resolved root path (default is silent).")
     return parser
 
 
@@ -70,8 +70,6 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.print:
-        print(root)
-    else:
         print(root)
     return 0
 

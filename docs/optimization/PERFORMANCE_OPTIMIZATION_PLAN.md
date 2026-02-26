@@ -468,6 +468,13 @@ print(f"Time per image: {monitor.elapsed/monitor.item_count:.2f}s")
 
 ### Regression Detection
 ```python
+import sys
+from pathlib import Path
+
+# Run from repository root; add RAG agent path explicitly for local imports.
+repo_root = Path.cwd()
+sys.path.insert(0, str(repo_root / ".github" / "agents"))
+
 from rag_system.advanced_features import PerformanceRegressionDetector
 
 detector = PerformanceRegressionDetector()
