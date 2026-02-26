@@ -26,6 +26,10 @@ class VerificationError(RuntimeError):
     """Raised when a bundle verification check fails."""
 
 
+class BundleBuildError(RuntimeError):
+    """Raised when bundle build fails after successful input validation."""
+
+
 def _sha256_bytes(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
@@ -54,9 +58,23 @@ def _require_string(value: Any, *, field: str) -> str:
     return value
 
 
-def _validate_batch_manifest(manifest: dict[str, Any]) -> list[dict[str, str]]:
+def _require_sha256_hex(value: Any, *, field: str) -> str:
+    text = _require_string(value, field=field)
+    try:
+        digest = bytes.fromhex(text)
+    except ValueError as exc:
+        raise ValueError(f"{field} must be valid hex") from exc
+    if len(digest) != 32:
+        raise ValueError(f"{field} must be a 64-character sha256 hex digest")
+    return text
+
+
+def _validate_batch_manifest(manifest: dict[str, Any]) -> tuple[list[dict[str, str]], str, str]:
     if manifest.get("schema") != BATCH_MANIFEST_SCHEMA:
         raise ValueError(f"batch manifest schema must be {BATCH_MANIFEST_SCHEMA}")
+
+    normalization_profile = _require_string(manifest.get("normalization_profile"), field="normalization_profile")
+    batch_root_sha256 = _require_sha256_hex(manifest.get("batch_root_sha256"), field="batch_root_sha256")
 
     items = manifest.get("items")
     if not isinstance(items, list):
@@ -81,7 +99,7 @@ def _validate_batch_manifest(manifest: dict[str, Any]) -> list[dict[str, str]]:
     if manifest.get("item_count") != len(normalized_items):
         raise ValueError("batch manifest item_count does not match items length")
 
-    return normalized_items
+    return normalized_items, normalization_profile, batch_root_sha256
 
 
 def _leaf_hash(relative_path: str, normalized_sha256: str) -> str:
@@ -150,8 +168,11 @@ def _verify_inclusion_proof(leaf_hash: str, proof: list[dict[str, str]], expecte
     return digest.hex() == expected_root
 
 
-def _compute_manifest_state(manifest_path: Path, manifest: dict[str, Any]) -> tuple[list[dict[str, str]], str, str]:
-    items = _validate_batch_manifest(manifest)
+def _compute_manifest_state(
+    manifest_path: Path,
+    manifest: dict[str, Any],
+) -> tuple[list[dict[str, str]], str, str, str, str]:
+    items, normalization_profile, batch_root_sha256 = _validate_batch_manifest(manifest)
     verified_items: list[dict[str, str]] = []
 
     for item in items:
@@ -177,20 +198,23 @@ def _compute_manifest_state(manifest_path: Path, manifest: dict[str, Any]) -> tu
         _hex_to_digest(item["leaf_sha256"], field=f"items[{index}].leaf_sha256") for index, item in enumerate(verified_items)
     ]
     merkle_root = merkle_root_sha256(leaf_digests)
-    return verified_items, merkle_root, _sha256_file(manifest_path)
+    return verified_items, merkle_root, _sha256_file(manifest_path), normalization_profile, batch_root_sha256
 
 
 def build_bundle(*, batch_manifest_path: Path, output_path: Path, proof_target: str | None) -> dict[str, Any]:
     manifest = _load_json_object(batch_manifest_path, label="batch manifest")
-    items, merkle_root, manifest_sha256 = _compute_manifest_state(batch_manifest_path, manifest)
+    items, merkle_root, manifest_sha256, normalization_profile, batch_root_sha256 = _compute_manifest_state(
+        batch_manifest_path,
+        manifest,
+    )
 
     bundle: dict[str, Any] = {
         "schema": EVIDENCE_BUNDLE_SCHEMA,
-        "batch_manifest_schema": manifest["schema"],
-        "normalization_profile": manifest["normalization_profile"],
+        "batch_manifest_schema": BATCH_MANIFEST_SCHEMA,
+        "normalization_profile": normalization_profile,
         "item_count": manifest["item_count"],
         "batch_manifest_sha256": manifest_sha256,
-        "batch_root_sha256": manifest["batch_root_sha256"],
+        "batch_root_sha256": batch_root_sha256,
         "merkle_root_sha256": merkle_root,
         "items": [
             {
@@ -214,8 +238,11 @@ def build_bundle(*, batch_manifest_path: Path, output_path: Path, proof_target: 
             "proof": proof,
         }
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_bytes(canonical_json_bytes(bundle))
+    try:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(canonical_json_bytes(bundle))
+    except OSError as exc:
+        raise BundleBuildError(f"unable to write evidence bundle {output_path}: {exc}") from exc
     return bundle
 
 
@@ -226,15 +253,35 @@ def verify_bundle(*, batch_manifest_path: Path, bundle_path: Path) -> None:
     if bundle.get("schema") != EVIDENCE_BUNDLE_SCHEMA:
         raise VerificationError(f"bundle schema must be {EVIDENCE_BUNDLE_SCHEMA}")
 
-    items, merkle_root, manifest_sha256 = _compute_manifest_state(batch_manifest_path, manifest)
+    items, merkle_root, manifest_sha256, normalization_profile, batch_root_sha256 = _compute_manifest_state(
+        batch_manifest_path,
+        manifest,
+    )
+    if bundle.get("batch_manifest_schema") != BATCH_MANIFEST_SCHEMA:
+        raise VerificationError("batch_manifest_schema mismatch")
+    if bundle.get("normalization_profile") != normalization_profile:
+        raise VerificationError("normalization_profile mismatch")
     if bundle.get("batch_manifest_sha256") != manifest_sha256:
         raise VerificationError("batch manifest sha256 mismatch")
-    if bundle.get("batch_root_sha256") != manifest.get("batch_root_sha256"):
+    if bundle.get("batch_root_sha256") != batch_root_sha256:
         raise VerificationError("batch_root_sha256 mismatch")
     if bundle.get("merkle_root_sha256") != merkle_root:
         raise VerificationError("merkle_root_sha256 mismatch")
     if bundle.get("item_count") != len(items):
         raise VerificationError("bundle item_count mismatch")
+    bundle_items = bundle.get("items")
+    if not isinstance(bundle_items, list):
+        raise VerificationError("bundle items must be a list")
+    expected_items = [
+        {
+            "relative_path": item["relative_path"],
+            "normalized_json_sha256": item["normalized_json_sha256"],
+            "leaf_sha256": item["leaf_sha256"],
+        }
+        for item in items
+    ]
+    if bundle_items != expected_items:
+        raise VerificationError("bundle items mismatch")
 
     inclusion = bundle.get("inclusion_proof")
     if inclusion is not None:
@@ -247,6 +294,12 @@ def verify_bundle(*, batch_manifest_path: Path, bundle_path: Path) -> None:
         indexed_items = {item["relative_path"]: item["leaf_sha256"] for item in items}
         if relative_path not in indexed_items:
             raise VerificationError(f"inclusion proof target missing from manifest: {relative_path}")
+        leaf_sha256 = _require_string(
+            inclusion.get("leaf_sha256"),
+            field="inclusion_proof.leaf_sha256",
+        )
+        if leaf_sha256 != indexed_items[relative_path]:
+            raise VerificationError("inclusion proof leaf hash mismatch")
         typed_proof = []
         for index, step in enumerate(proof):
             if not isinstance(step, dict):
@@ -257,7 +310,7 @@ def verify_bundle(*, batch_manifest_path: Path, bundle_path: Path) -> None:
                     "hash": _require_string(step.get("hash"), field=f"inclusion_proof.proof[{index}].hash"),
                 }
             )
-        if not _verify_inclusion_proof(indexed_items[relative_path], typed_proof, merkle_root):
+        if not _verify_inclusion_proof(leaf_sha256, typed_proof, merkle_root):
             raise VerificationError("inclusion proof does not validate against merkle root")
 
 
@@ -294,6 +347,9 @@ def main() -> int:
                 proof_target=args.proof_target,
             )
         except VerificationError as exc:
+            print(f"Build failed: {exc}", file=sys.stderr)
+            return EXIT_BUILD_FAILURE
+        except BundleBuildError as exc:
             print(f"Build failed: {exc}", file=sys.stderr)
             return EXIT_BUILD_FAILURE
         except ValueError as exc:

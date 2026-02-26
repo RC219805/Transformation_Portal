@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -66,7 +67,19 @@ def _run_bundle_tool(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_ingest_evidence_bundle_verification_detects_tampering(tmp_path: Path) -> None:
+def _load_json(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _prepare_bundle(
+    tmp_path: Path,
+    *,
+    include_proof: bool = True,
+) -> tuple[dict[str, Any], Path, Path]:
     output_dir = tmp_path / "batch_run"
     manifest = run_ingest_batch(
         input_dir=FIXTURE_INPUT_DIR,
@@ -76,18 +89,25 @@ def test_ingest_evidence_bundle_verification_detects_tampering(tmp_path: Path) -
     )
     manifest_path = output_dir / BATCH_MANIFEST_FILENAME
     bundle_path = output_dir / "ingest_evidence_bundle.json"
-    proof_target = manifest["items"][0]["relative_path"]
-
-    build = _run_bundle_tool(
+    args = [
         "build",
         "--batch-manifest",
         str(manifest_path),
         "--out",
         str(bundle_path),
-        "--proof-target",
-        proof_target,
-    )
+    ]
+    if include_proof:
+        args.extend(["--proof-target", manifest["items"][0]["relative_path"]])
+
+    build = _run_bundle_tool(*args)
     assert build.returncode == 0, build.stderr
+
+    return manifest, manifest_path, bundle_path
+
+
+def test_ingest_evidence_bundle_verification_detects_tampering(tmp_path: Path) -> None:
+    manifest, manifest_path, bundle_path = _prepare_bundle(tmp_path, include_proof=True)
+    output_dir = manifest_path.parent
 
     verify_ok = _run_bundle_tool(
         "verify",
@@ -112,3 +132,117 @@ def test_ingest_evidence_bundle_verification_detects_tampering(tmp_path: Path) -
     )
     assert verify_tampered.returncode == 6
     assert "Verification failed: digest mismatch for normalized artifact" in verify_tampered.stderr
+
+
+def test_build_fails_for_missing_manifest_required_fields(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema": "tp.ingest.batch_manifest.v1",
+                "item_count": 0,
+                "items": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    bundle_path = tmp_path / "bundle.json"
+
+    result = _run_bundle_tool(
+        "build",
+        "--batch-manifest",
+        str(manifest_path),
+        "--out",
+        str(bundle_path),
+    )
+
+    assert result.returncode == 2
+    assert "Input error: normalization_profile must be a non-empty string" in result.stderr
+
+
+def test_build_fails_with_deterministic_exit_on_write_error(tmp_path: Path) -> None:
+    _, manifest_path, _ = _prepare_bundle(tmp_path, include_proof=False)
+    output_dir_path = tmp_path / "existing_dir"
+    output_dir_path.mkdir(parents=True)
+
+    result = _run_bundle_tool(
+        "build",
+        "--batch-manifest",
+        str(manifest_path),
+        "--out",
+        str(output_dir_path),
+    )
+
+    assert result.returncode == 5
+    assert "Build failed: unable to write evidence bundle" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_verify_fails_when_bundle_items_tampered(tmp_path: Path) -> None:
+    _, manifest_path, bundle_path = _prepare_bundle(tmp_path, include_proof=False)
+    bundle = _load_json(bundle_path)
+    bundle["items"][0]["normalized_json_sha256"] = "f" * 64
+    _write_json(bundle_path, bundle)
+
+    verify = _run_bundle_tool(
+        "verify",
+        "--batch-manifest",
+        str(manifest_path),
+        "--bundle",
+        str(bundle_path),
+    )
+
+    assert verify.returncode == 6
+    assert "Verification failed: bundle items mismatch" in verify.stderr
+
+
+def test_verify_fails_when_inclusion_leaf_hash_tampered(tmp_path: Path) -> None:
+    _, manifest_path, bundle_path = _prepare_bundle(tmp_path, include_proof=True)
+    bundle = _load_json(bundle_path)
+    inclusion = bundle.get("inclusion_proof")
+    assert isinstance(inclusion, dict)
+    inclusion["leaf_sha256"] = "f" * 64
+    _write_json(bundle_path, bundle)
+
+    verify = _run_bundle_tool(
+        "verify",
+        "--batch-manifest",
+        str(manifest_path),
+        "--bundle",
+        str(bundle_path),
+    )
+
+    assert verify.returncode == 6
+    assert "Verification failed: inclusion proof leaf hash mismatch" in verify.stderr
+
+
+def test_verify_fails_when_bundle_metadata_fields_mismatch(tmp_path: Path) -> None:
+    _, manifest_path, bundle_path = _prepare_bundle(tmp_path, include_proof=False)
+    bundle = _load_json(bundle_path)
+    bundle["normalization_profile"] = "ingest_v999"
+    _write_json(bundle_path, bundle)
+
+    verify_profile = _run_bundle_tool(
+        "verify",
+        "--batch-manifest",
+        str(manifest_path),
+        "--bundle",
+        str(bundle_path),
+    )
+    assert verify_profile.returncode == 6
+    assert "Verification failed: normalization_profile mismatch" in verify_profile.stderr
+
+    bundle = _load_json(bundle_path)
+    bundle["normalization_profile"] = "ingest_v1"
+    bundle["batch_manifest_schema"] = "tp.ingest.batch_manifest.v999"
+    _write_json(bundle_path, bundle)
+
+    verify_schema = _run_bundle_tool(
+        "verify",
+        "--batch-manifest",
+        str(manifest_path),
+        "--bundle",
+        str(bundle_path),
+    )
+    assert verify_schema.returncode == 6
+    assert "Verification failed: batch_manifest_schema mismatch" in verify_schema.stderr

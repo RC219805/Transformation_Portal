@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from transformation_portal.ingest.batch import BATCH_MANIFEST_FILENAME, run_ingest_batch
+from transformation_portal.ingest.batch import BATCH_MANIFEST_FILENAME, compute_batch_root_sha256, run_ingest_batch
 from transformation_portal.ingest.normalize_machine_json import canonical_json_bytes
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -94,3 +94,16 @@ def test_mixed_media_batch_determinism_run_twice_identical(tmp_path: Path) -> No
         assert item["normalized_json_sha256"] == hashlib.sha256(output_a.read_bytes()).hexdigest()
 
     assert canonical_json_bytes(persisted_manifest_a) == canonical_json_bytes(persisted_manifest_b)
+
+
+def test_compute_batch_root_sha256_is_order_independent() -> None:
+    items_a = [
+        {"relative_path": "b/file.mov", "normalized_json_sha256": "2" * 64},
+        {"relative_path": "a/file.dng", "normalized_json_sha256": "1" * 64},
+    ]
+    items_b = list(reversed(items_a))
+
+    assert compute_batch_root_sha256(items_a, profile="ingest_v1") == compute_batch_root_sha256(
+        items_b,
+        profile="ingest_v1",
+    )

@@ -84,8 +84,17 @@ def _batch_root_projection(items: Sequence[Mapping[str, str]], profile: str) -> 
 
 
 def compute_batch_root_sha256(items: Sequence[Mapping[str, str]], *, profile: str) -> str:
-    """Compute deterministic pre-Merkle batch root from normalized-item digests."""
-    projection = _batch_root_projection(items, profile)
+    """Compute deterministic pre-Merkle batch root from normalized-item digests.
+
+    The helper enforces deterministic ordering by sorting on
+    ``relative_path`` (with ``normalized_json_sha256`` as a stable
+    tiebreaker) so callers do not need to pre-sort inputs.
+    """
+    ordered_items = sorted(
+        items,
+        key=lambda item: (item["relative_path"], item["normalized_json_sha256"]),
+    )
+    projection = _batch_root_projection(ordered_items, profile)
     return hashlib.sha256(canonical_json_bytes(projection)).hexdigest()
 
 
