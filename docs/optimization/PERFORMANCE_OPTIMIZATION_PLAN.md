@@ -468,7 +468,7 @@ print(f"Time per image: {monitor.elapsed/monitor.item_count:.2f}s")
 
 ### Regression Detection
 ```python
-from .github.agents.rag_system.advanced_features import PerformanceRegressionDetector
+from rag_system.advanced_features import PerformanceRegressionDetector
 
 detector = PerformanceRegressionDetector()
 
