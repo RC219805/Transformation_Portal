@@ -368,13 +368,19 @@ elif [[ "$OUT_DIR" != /* ]]; then
   OUT_DIR="$REPO_ROOT/$OUT_DIR"
 fi
 
+OUT_BASE="$(basename "$OUT_DIR")"
+if [[ "$OUT_BASE" == "." || "$OUT_BASE" == ".." ]]; then
+  die "Refusing unsafe OUT_DIR leaf: $OUT_BASE (from $OUT_DIR)" 3
+fi
 OUT_PARENT="$(dirname "$OUT_DIR")"
 [[ -d "$OUT_PARENT" ]] || mkdir -p "$OUT_PARENT"
 OUT_PARENT="$(cd "$OUT_PARENT" && pwd -P)"
-OUT_DIR="$OUT_PARENT/$(basename "$OUT_DIR")"
+OUT_DIR="$OUT_PARENT/$OUT_BASE"
 
 if [[ "$CLEAN" == "1" ]]; then
   CLEAN_ROOT="$REPO_ROOT/trial_runs"
+  [[ -d "$CLEAN_ROOT" ]] || mkdir -p "$CLEAN_ROOT"
+  CLEAN_ROOT="$(cd "$CLEAN_ROOT" && pwd -P)"
   case "$OUT_DIR" in
     "/"|"$REPO_ROOT"|"$CLEAN_ROOT")
       die "--clean refuses dangerous OUT_DIR: $OUT_DIR" 3
