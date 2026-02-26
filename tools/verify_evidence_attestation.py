@@ -9,7 +9,11 @@ import sys
 import traceback
 from pathlib import Path
 
-from transformation_portal.attestation.verify import bind_attestation_to_evidence, validate_detached_attestation_surface
+from transformation_portal.attestation.verify import (
+    bind_attestation_to_evidence,
+    validate_detached_attestation_surface,
+    verify_attestation_self_hash,
+)
 
 EXIT_SUCCESS = 0
 EXIT_INPUT_ERROR = 2
@@ -23,6 +27,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--evidence", required=True, help="Path to tp.meta.evidence.v1 JSON.")
     parser.add_argument("--attestation", required=True, help="Path to tp.attestation.detached.v1 JSON.")
     parser.add_argument("--gpg", action="store_true", help="Verify with gpg clearsign backend.")
+    parser.add_argument(
+        "--allow-missing-attestation-sha",
+        action="store_true",
+        help="Allow missing/null attestation_sha256 (self-hash check is skipped when absent).",
+    )
     return parser.parse_args()
 
 
@@ -50,6 +59,7 @@ def main() -> int:
     try:
         validate_detached_attestation_surface(attestation)
         bind_attestation_to_evidence(attestation, evidence)
+        verify_attestation_self_hash(attestation, require_digest=(not args.allow_missing_attestation_sha))
     except (TypeError, ValueError) as exc:
         print(f"Attestation validation failed: {exc}", file=sys.stderr)
         return EXIT_VERIFY_FAILED

@@ -8,7 +8,7 @@ from typing import Any
 from transformation_portal.ingest.canonical_json import TP_CANONICAL_JSON_PROFILE
 from transformation_portal.ingest.evidence import EVIDENCE_SCHEMA_VERSION
 
-from .detached import ATTESTATION_SCHEMA_VERSION, _validate_sha256
+from .detached import ATTESTATION_SCHEMA_VERSION, _validate_sha256, compute_attestation_sha256
 
 
 def validate_detached_attestation_surface(attestation: Mapping[str, Any]) -> None:
@@ -63,3 +63,17 @@ def bind_attestation_to_evidence(attestation: Mapping[str, Any], evidence: Mappi
 
     if att_sha != ev_sha:
         raise ValueError("attestation does not bind to this evidence payload: evidence_sha256 mismatch")
+
+
+def verify_attestation_self_hash(attestation: Mapping[str, Any], *, require_digest: bool = True) -> None:
+    """Verify `attestation_sha256` matches the canonicalized attestation payload."""
+    stored_digest = attestation.get("attestation_sha256")
+    if stored_digest is None:
+        if require_digest:
+            raise ValueError("attestation_sha256 must be set for integrity verification")
+        return
+
+    normalized_stored_digest = _validate_sha256(stored_digest, field="attestation_sha256")
+    recomputed_digest = compute_attestation_sha256(attestation)
+    if recomputed_digest != normalized_stored_digest:
+        raise ValueError("attestation_sha256 mismatch: payload does not match canonical digest")

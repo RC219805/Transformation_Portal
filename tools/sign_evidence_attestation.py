@@ -44,6 +44,7 @@ def _read_json_object(path: Path, *, name: str) -> dict[str, object]:
 
 
 def _build_signature_preimage(evidence: dict[str, object]) -> bytes:
+    """Build canonical preimage bytes for detached signature binding."""
     preimage = {
         "schema": "tp.attestation.detached.v1.preimage",
         "subject": {
@@ -53,6 +54,7 @@ def _build_signature_preimage(evidence: dict[str, object]) -> bytes:
             "bundle_root_sha256": evidence.get("bundle_root_sha256"),
         },
     }
+    # Preimages are serialized using tp.canonical.json.v1 semantics.
     return canonicalize_json(preimage)
 
 
