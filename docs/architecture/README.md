@@ -20,6 +20,7 @@ ADRs are **binding decisions** that define the repository's architecture, securi
 | **[ADR-030](ADR-030-phase2-deterministic-raw-ingest.md)** | **Phase II Deterministic RAW Ingest** | **Proposed** | **2026-02-20** | **Architect** |
 | **[ADR-035](ADR-035-bundle-root-anchoring-invariants.md)** | **Bundle Root Anchoring Invariants** | **Proposed** | **2026-02-24** | **Architect** |
 | **[ADR-038](ADR-038-operational-determinism-enforcement-layer.md)** | **Operational Determinism Enforcement Layer** | **Accepted** | **2026-02-26** | **Architect** |
+| **[ADR-039](ADR-039-branch-staleness-and-selective-integration-policy.md)** | **Branch Staleness and Selective Integration Policy** | **Proposed** | **2026-02-26** | **Architect** |
 
 ### Dependency & Security
 
