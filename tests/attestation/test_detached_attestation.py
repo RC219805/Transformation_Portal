@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 
 from transformation_portal.attestation.detached import build_detached_attestation_payload, canonical_attestation_bytes
+from transformation_portal.attestation.verify import bind_attestation_to_evidence, validate_detached_attestation_surface
 from transformation_portal.ingest.evidence import build_evidence_payload, load_projection_profile
 
 
@@ -59,3 +60,56 @@ def test_attestation_recompute_check_detects_tamper() -> None:
 
     with pytest.raises(ValueError, match="does not reproduce stored evidence_sha256"):
         build_detached_attestation_payload(evidence, signature=signature, enforce_recompute_match=True)
+
+
+def test_validate_detached_attestation_surface_rejects_invalid_schema() -> None:
+    evidence = build_evidence_payload(
+        _machine_extract_payload(elapsed_seconds=1.0), projection_profile=load_projection_profile()
+    )
+    signature = {"algorithm": "unit-test", "key_id": "test", "signature": "deadbeef"}
+    attestation = build_detached_attestation_payload(evidence, signature=signature)
+    attestation["schema"] = "tp.attestation.detached.v0"
+
+    with pytest.raises(ValueError, match="attestation schema must be"):
+        validate_detached_attestation_surface(attestation)
+
+
+def test_validate_detached_attestation_surface_rejects_invalid_optional_sha_fields() -> None:
+    evidence = build_evidence_payload(
+        _machine_extract_payload(elapsed_seconds=1.0), projection_profile=load_projection_profile()
+    )
+    signature = {"algorithm": "unit-test", "key_id": "test", "signature": "deadbeef"}
+    attestation = build_detached_attestation_payload(evidence, signature=signature)
+    attestation["subject"]["file_sha256"] = "invalid"
+
+    with pytest.raises(ValueError, match="subject.file_sha256 must be a 64-character sha256 digest"):
+        validate_detached_attestation_surface(attestation)
+
+
+def test_validate_detached_attestation_surface_rejects_missing_signature_fields() -> None:
+    evidence = build_evidence_payload(
+        _machine_extract_payload(elapsed_seconds=1.0), projection_profile=load_projection_profile()
+    )
+    signature = {"algorithm": "unit-test", "key_id": "test", "signature": "deadbeef"}
+    attestation = build_detached_attestation_payload(evidence, signature=signature)
+    attestation["signature"].pop("key_id")
+
+    with pytest.raises(ValueError, match="signature.key_id must be a non-empty string"):
+        validate_detached_attestation_surface(attestation)
+
+
+def test_bind_attestation_to_evidence_rejects_mismatched_hash() -> None:
+    evidence_a = build_evidence_payload(
+        _machine_extract_payload(elapsed_seconds=1.0), projection_profile=load_projection_profile()
+    )
+    payload_b = _machine_extract_payload(elapsed_seconds=2.0)
+    payload_b["data"]["preset"] = "cinematic"
+    evidence_b = build_evidence_payload(
+        payload_b,
+        projection_profile=load_projection_profile(),
+    )
+    signature = {"algorithm": "unit-test", "key_id": "test", "signature": "deadbeef"}
+    attestation = build_detached_attestation_payload(evidence_a, signature=signature)
+
+    with pytest.raises(ValueError, match="attestation does not bind to this evidence payload"):
+        bind_attestation_to_evidence(attestation, evidence_b)

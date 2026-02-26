@@ -8,6 +8,7 @@ import json
 import sys
 import traceback
 from pathlib import Path
+from uuid import uuid4
 
 from transformation_portal.attestation.detached import build_detached_attestation_payload, canonical_attestation_bytes
 from transformation_portal.attestation.gpg import gpg_clearsign_bytes
@@ -17,6 +18,17 @@ EXIT_SUCCESS = 0
 EXIT_INPUT_ERROR = 2
 EXIT_OUTPUT_ERROR = 3
 EXIT_BUILD_ERROR = 4
+
+
+def _atomic_write_bytes(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    try:
+        tmp_path.write_bytes(data)
+        tmp_path.replace(path)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink()
 
 
 def _parse_args() -> argparse.Namespace:
@@ -97,8 +109,7 @@ def main() -> int:
 
     try:
         output_path = Path(args.out)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_bytes(output_bytes)
+        _atomic_write_bytes(output_path, output_bytes)
     except OSError as exc:
         print(f"Unable to write output: {exc}", file=sys.stderr)
         return EXIT_OUTPUT_ERROR
