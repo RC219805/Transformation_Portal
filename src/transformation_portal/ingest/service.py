@@ -1,16 +1,46 @@
 """Phase 3.7 ingest orchestration surface.
 
-This module intentionally adds a contract skeleton only. Runtime behavior
-remains unchanged until later commits wire CLI and orchestration flows.
+This module centralizes command-level orchestration while preserving existing
+contracts. CLI wiring is handled in later commits.
 """
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from .metadata_service import MetadataExtractionService
+from .errors import IngestExitCode, OtherIngestFailure
+from .metadata_service import BatchExtractRequest, BatchExtractResult
+from .metadata_service import ExtractRequest as CoreExtractRequest
+from .metadata_service import ExtractResult as CoreExtractResult
+from .metadata_service import MetadataExtractionService as CoreMetadataExtractionService
+from .metadata_service import ValidateRequest as CoreValidateRequest
+from .metadata_service import ValidateResult as CoreValidateResult
+from .sidecar import load_sidecar
+
+SUPPORTED_EXTENSIONS = {
+    ".cr2",
+    ".cr3",
+    ".nef",
+    ".nrw",
+    ".arw",
+    ".srf",
+    ".dng",
+    ".raf",
+    ".orf",
+    ".rw2",
+    ".pef",
+    ".srw",
+    ".tif",
+    ".tiff",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".heic",
+    ".heif",
+}
 
 
 @dataclass(frozen=True)
@@ -35,23 +65,209 @@ class ServiceRunResult:
     payload: dict[str, Any] | None = None
 
 
-class MetadataExtractionOrchestrationService:
-    """Skeleton orchestration layer for future Phase 3.7 integration."""
+class MetadataExtractionService:
+    """Orchestration layer for command-level ingest flows."""
 
-    def __init__(self, *, metadata_service: MetadataExtractionService | None = None) -> None:
-        self._metadata_service = metadata_service or MetadataExtractionService()
+    def __init__(self, *, metadata_service: CoreMetadataExtractionService | None = None) -> None:
+        self._metadata_service = metadata_service or CoreMetadataExtractionService()
 
     @property
-    def metadata_service(self) -> MetadataExtractionService:
+    def metadata_service(self) -> CoreMetadataExtractionService:
         """Expose delegated metadata service dependency."""
         return self._metadata_service
 
     def run(self, request: ServiceRunRequest) -> ServiceRunResult:
-        """Execute orchestration flow.
+        """Execute orchestration flow for supported ingest commands."""
+        if request.command == "extract":
+            return self._run_extract(request)
+        if request.command == "extract-batch":
+            return self._run_extract_batch(request)
+        if request.command == "validate":
+            return self._run_validate(request)
 
-        Placeholder only for commit 1. Later commits will implement command
-        dispatch and machine-mode output composition.
-        """
-        raise NotImplementedError(
-            "Phase 3.7 orchestration skeleton: run() is not implemented yet " f"for command '{request.command}'."
+        return ServiceRunResult(
+            success=False,
+            exit_code=int(IngestExitCode.OTHER_FAILURE),
+            payload={"error": f"Unsupported command: {request.command}"},
         )
+
+    def _run_extract(self, request: ServiceRunRequest) -> ServiceRunResult:
+        if request.input_path is None:
+            error = OtherIngestFailure("Input path required for extract command")
+            return ServiceRunResult(
+                success=False,
+                exit_code=int(error.exit_code),
+                payload={"extract_result": None, "sidecar": None, "error": str(error)},
+            )
+
+        config_dict = request.args.get("config_dict")
+        if not isinstance(config_dict, dict):
+            config_dict = {"mode": "test_extraction", "phase": "3.7"}
+
+        extracted = self._metadata_service.extract(
+            CoreExtractRequest(
+                input_path=request.input_path,
+                output_path=request.args.get("output_path"),
+                output_dir=request.output_dir,
+                preset=request.args.get("preset"),
+                cli_args=list(request.args.get("cli_args", ())),
+                config_dict=config_dict,
+                fsync=bool(request.args.get("fsync", False)),
+            )
+        )
+
+        sidecar = None
+        if extracted.output_path is not None:
+            try:
+                sidecar = load_sidecar(extracted.output_path, schema_type="provenance")
+            except Exception:  # noqa: BLE001 - optional payload enrichment
+                sidecar = None
+
+        if extracted.success:
+            exit_code = int(IngestExitCode.SUCCESS)
+        else:
+            exit_code = int(extracted.error.exit_code) if extracted.error is not None else int(IngestExitCode.OTHER_FAILURE)
+
+        return ServiceRunResult(
+            success=extracted.success,
+            exit_code=exit_code,
+            payload={"extract_result": extracted, "sidecar": sidecar},
+        )
+
+    def _run_extract_batch(self, request: ServiceRunRequest) -> ServiceRunResult:
+        if request.input_path is None:
+            return self._batch_setup_failure("Input directory required for extract-batch command")
+
+        input_dir = request.input_path
+        if not input_dir.exists():
+            return self._batch_setup_failure(f"Directory not found: {input_dir}")
+        if not input_dir.is_dir():
+            return self._batch_setup_failure(f"Not a directory: {input_dir}")
+
+        recursive = bool(request.args.get("recursive", True))
+        images = list(request.input_paths) if request.input_paths else self._find_images(input_dir, recursive=recursive)
+
+        resolved_output_dir = request.output_dir or input_dir / "provenance_sidecars"
+        resolved_output_dir.mkdir(parents=True, exist_ok=True)
+
+        config_dict = request.args.get("config_dict")
+        if not isinstance(config_dict, dict):
+            config_dict = {"mode": "batch_extraction", "phase": "3.7"}
+
+        result = self._metadata_service.batch_extract(
+            BatchExtractRequest(
+                input_paths=images,
+                output_dir=resolved_output_dir,
+                preset=request.args.get("preset"),
+                cli_args=list(request.args.get("cli_args", ())),
+                config_dict=config_dict,
+                fsync=bool(request.args.get("fsync", False)),
+                deterministic_order=True,
+                fail_fast=bool(request.args.get("fail_fast", False)),
+                preserve_structure=True,
+                input_root=input_dir,
+            )
+        )
+
+        exit_code = int(IngestExitCode.SUCCESS)
+        if result.dominant_error is not None:
+            exit_code = int(result.dominant_error.exit_code)
+
+        return ServiceRunResult(
+            success=result.dominant_error is None,
+            exit_code=exit_code,
+            payload={
+                "batch_result": result,
+                "input_dir": input_dir,
+                "output_dir": resolved_output_dir,
+            },
+        )
+
+    def _run_validate(self, request: ServiceRunRequest) -> ServiceRunResult:
+        if request.input_path is None:
+            error = OtherIngestFailure("Sidecar path required for validate command")
+            return ServiceRunResult(
+                success=False,
+                exit_code=int(error.exit_code),
+                payload={"validate_result": None, "sidecar_data": None, "error": str(error)},
+            )
+
+        validated = self._metadata_service.validate(
+            CoreValidateRequest(
+                sidecar_path=request.input_path,
+                schema_type=str(request.args.get("schema_type", "provenance")),
+                strict=request.strict,
+            )
+        )
+
+        if not validated.success:
+            exit_code = (
+                int(validated.dominant_error.exit_code)
+                if validated.dominant_error is not None
+                else int(IngestExitCode.OTHER_FAILURE)
+            )
+            return ServiceRunResult(
+                success=False,
+                exit_code=exit_code,
+                payload={"validate_result": validated, "sidecar_data": None},
+            )
+
+        sidecar_data: dict[str, Any] | None = None
+        try:
+            with open(request.input_path, encoding="utf-8") as handle:
+                sidecar_data = json.load(handle)
+        except Exception as exc:  # noqa: BLE001 - preserve existing fallback semantics
+            fallback_error = OtherIngestFailure(str(exc))
+            fallback_validate = CoreValidateResult(
+                success=False,
+                errors=[fallback_error],
+                dominant_error=fallback_error,
+            )
+            return ServiceRunResult(
+                success=False,
+                exit_code=int(fallback_error.exit_code),
+                payload={"validate_result": fallback_validate, "sidecar_data": None},
+            )
+
+        return ServiceRunResult(
+            success=True,
+            exit_code=int(IngestExitCode.SUCCESS),
+            payload={"validate_result": validated, "sidecar_data": sidecar_data},
+        )
+
+    def _batch_setup_failure(self, message: str) -> ServiceRunResult:
+        error = OtherIngestFailure(message)
+        batch_result = BatchExtractResult(
+            items=[],
+            total_elapsed=0.0,
+            summary_counts=self._empty_batch_summary(),
+            dominant_error=error,
+        )
+        return ServiceRunResult(
+            success=False,
+            exit_code=int(error.exit_code),
+            payload={"batch_result": batch_result, "input_dir": None, "output_dir": None},
+        )
+
+    def _empty_batch_summary(self) -> dict[str, Any]:
+        return {
+            "total": 0,
+            "success": 0,
+            "failure": 0,
+            "by_exit_code": {
+                code.name: 0 for code in sorted(IngestExitCode, key=lambda code: code.value) if code != IngestExitCode.SUCCESS
+            },
+        }
+
+    def _find_images(self, directory: Path, *, recursive: bool) -> list[Path]:
+        pattern = "**/*" if recursive else "*"
+        images = [
+            candidate
+            for candidate in directory.glob(pattern)
+            if candidate.is_file() and candidate.suffix.lower() in SUPPORTED_EXTENSIONS
+        ]
+        return sorted(images)
+
+
+# Backward-compatible alias while this layer is rolling in.
+MetadataExtractionOrchestrationService = MetadataExtractionService
