@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 
 from transformation_portal.ingest.evidence import (
+    _ALLOWED_MACHINE_COMMANDS,
     EVIDENCE_SCHEMA_VERSION,
     build_evidence_payload,
     canonical_evidence_bytes,
@@ -19,6 +20,7 @@ from transformation_portal.ingest.evidence import (
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 EVIDENCE_SCHEMA_PATH = PROJECT_ROOT / "docs" / "schemas" / "evidence" / "tp.meta.evidence.v1" / "evidence.schema.json"
 MACHINE_SCHEMA_PATH = PROJECT_ROOT / "docs" / "schemas" / "machine_mode" / "tp.meta.machine.v1" / "machine_mode.schema.json"
+PROJECTION_PROFILE_PATH = PROJECT_ROOT / "schemas" / "profiles" / "tp.projection.machine_to_evidence.v1.json"
 
 
 def _check_system_payload(*, exiftool_version: str, git_version: str) -> dict[str, Any]:
@@ -102,6 +104,20 @@ def _extract_batch_payload(*, item_elapsed_seconds: float) -> dict[str, Any]:
     }
 
 
+def _machine_commands_from_schema() -> set[str]:
+    machine_schema = json.loads(MACHINE_SCHEMA_PATH.read_text(encoding="utf-8"))
+
+    commands: set[str] = set()
+    all_of = machine_schema.get("allOf")
+    assert isinstance(all_of, list) and len(all_of) >= 2
+    machine_variants = all_of[1].get("oneOf", [])
+    for variant in machine_variants:
+        command_const = variant.get("properties", {}).get("command", {}).get("const")
+        if isinstance(command_const, str):
+            commands.add(command_const)
+    return commands
+
+
 def test_projection_profile_drops_declared_volatile_fields() -> None:
     profile = load_projection_profile()
     payload = _check_system_payload(exiftool_version="12.70", git_version="git version 2.50.0")
@@ -156,21 +172,36 @@ def test_evidence_payload_validates_against_schema() -> None:
 
 def test_evidence_command_enum_matches_machine_mode_schema() -> None:
     evidence_schema = json.loads(EVIDENCE_SCHEMA_PATH.read_text(encoding="utf-8"))
-    machine_schema = json.loads(MACHINE_SCHEMA_PATH.read_text(encoding="utf-8"))
 
     evidence_commands = evidence_schema["properties"]["command"]["enum"]
     assert isinstance(evidence_commands, list)
+    assert set(evidence_commands) == _machine_commands_from_schema()
 
-    machine_commands: set[str] = set()
-    all_of = machine_schema.get("allOf")
-    assert isinstance(all_of, list) and len(all_of) >= 2
-    machine_variants = all_of[1].get("oneOf", [])
-    for variant in machine_variants:
-        command_const = variant.get("properties", {}).get("command", {}).get("const")
-        if isinstance(command_const, str):
-            machine_commands.add(command_const)
 
-    assert set(evidence_commands) == machine_commands
+def test_runtime_allowed_machine_commands_match_machine_mode_schema() -> None:
+    assert set(_ALLOWED_MACHINE_COMMANDS) == _machine_commands_from_schema()
+
+
+def test_default_embedded_projection_matches_repo_profile_contract_fields() -> None:
+    embedded = load_projection_profile()
+    repo_profile = load_projection_profile(PROJECTION_PROFILE_PATH)
+
+    assert embedded["schema"] == repo_profile["schema"]
+    assert embedded["source_schema"] == repo_profile["source_schema"]
+    assert embedded["drop_paths"] == repo_profile["drop_paths"]
+
+
+def test_projection_profile_v1_rejects_drop_path_drift(tmp_path: Path) -> None:
+    drifted = {
+        "schema": "tp.projection.machine_to_evidence.v1",
+        "source_schema": "tp.meta.machine.v1",
+        "drop_paths": ["/data/elapsed_seconds"],
+    }
+    profile_path = tmp_path / "drifted-profile.json"
+    profile_path.write_text(json.dumps(drifted), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="drop_paths are immutable"):
+        load_projection_profile(profile_path)
 
 
 def test_canonical_evidence_bytes_are_deterministic() -> None:

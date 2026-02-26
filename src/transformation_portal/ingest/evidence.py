@@ -18,18 +18,19 @@ _ALLOWED_MACHINE_COMMANDS = frozenset({"check-system", "extract", "validate", "e
 DEFAULT_PROJECTION_PROFILE_PATH = (
     Path(__file__).resolve().parents[3] / "schemas" / "profiles" / f"{DEFAULT_PROJECTION_PROFILE}.json"
 )
+_DEFAULT_DROP_PATHS = (
+    "/data/elapsed_seconds",
+    "/data/items/*/elapsed_seconds",
+    "/data/exiftool_version",
+    "/data/pydantic_version",
+    "/data/git_version",
+    "/data/rawpy_version",
+    "/data/libraw_version",
+)
 _DEFAULT_PROJECTION_PROFILE_PAYLOAD: dict[str, Any] = {
     "schema": DEFAULT_PROJECTION_PROFILE,
     "source_schema": MACHINE_SCHEMA_VERSION,
-    "drop_paths": [
-        "/data/elapsed_seconds",
-        "/data/items/*/elapsed_seconds",
-        "/data/exiftool_version",
-        "/data/pydantic_version",
-        "/data/git_version",
-        "/data/rawpy_version",
-        "/data/libraw_version",
-    ],
+    "drop_paths": list(_DEFAULT_DROP_PATHS),
 }
 
 
@@ -106,16 +107,16 @@ def _validate_sha256(value: Any, *, field: str) -> str:
 
 def load_projection_profile(profile_path: Path | None = None) -> dict[str, Any]:
     """Load and minimally validate a machine-to-evidence projection profile."""
-    path = profile_path or DEFAULT_PROJECTION_PROFILE_PATH
-    if path.exists():
+    path = profile_path
+    if path is None:
+        raw_profile = copy.deepcopy(_DEFAULT_PROJECTION_PROFILE_PAYLOAD)
+    else:
+        if not path.exists():
+            raise ValueError(f"projection profile path not found: {path}")
         try:
             raw_profile = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ValueError(f"unable to load projection profile {path}: {exc}") from exc
-    elif profile_path is None:
-        raw_profile = copy.deepcopy(_DEFAULT_PROJECTION_PROFILE_PAYLOAD)
-    else:
-        raise ValueError(f"projection profile path not found: {path}")
 
     if not isinstance(raw_profile, dict):
         raise ValueError("projection profile must be a JSON object")
@@ -130,6 +131,11 @@ def load_projection_profile(profile_path: Path | None = None) -> dict[str, Any]:
 
     for drop_path in drop_paths:
         _split_json_pointer(drop_path)
+    if drop_paths != list(_DEFAULT_DROP_PATHS):
+        raise ValueError(
+            f"{DEFAULT_PROJECTION_PROFILE} drop_paths are immutable; "
+            "bump projection profile schema version before changing semantics"
+        )
 
     return raw_profile
 
