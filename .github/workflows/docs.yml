@@ -134,12 +134,13 @@ jobs:
 
       - name: Check DOCUMENTATION_MAP
         run: |
-          if [ -f DOCUMENTATION_MAP.md ]; then
-            if grep -q "api" DOCUMENTATION_MAP.md; then
-              echo "✓ DOCUMENTATION_MAP.md contains API docs reference"
+          DOC_MAP="docs/governance/DOCUMENTATION_MAP.md"
+          if [ -f "${DOC_MAP}" ]; then
+            if grep -q "api" "${DOC_MAP}"; then
+              echo "✓ ${DOC_MAP} contains API docs reference"
             else
-              echo "::warning::DOCUMENTATION_MAP.md missing API docs reference"
+              echo "::warning::${DOC_MAP} missing API docs reference"
             fi
           else
-            echo "::warning::DOCUMENTATION_MAP.md not found"
+            echo "::warning::${DOC_MAP} not found"
           fi

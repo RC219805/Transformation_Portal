@@ -297,7 +297,7 @@ If a PR introduces non-commercial models without `license_restriction` marker:
 - [Transformation Portal Security Policy](SECURITY.md)
 
 ### Internal
-- [Repository Organization](../../REPO_ORGANIZATION.md)
+- [Repository Organization](../governance/REPO_ORGANIZATION.md)
 - [v2.0.0 Implementation Plan](V2_0_0_IMPLEMENTATION_PLAN.md)
 - [Quality Firewall Quick Reference](../../QUALITY_FIREWALL_QUICK_REF.md)
 

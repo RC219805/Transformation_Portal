@@ -568,12 +568,12 @@ See [Performance Monitoring Guide](docs/performance/README.md) and [ADR-024](doc
 
 ## Documentation
 
-**📖 Start with:** [DOCUMENTATION_MAP.md](DOCUMENTATION_MAP.md)
+**📖 Start with:** [DOCUMENTATION_MAP.md](docs/governance/DOCUMENTATION_MAP.md)
 
 The Documentation Map is your single source of truth for finding guides, references, and technical documentation.
 
 ### Essential Docs
-- **[DOCUMENTATION_MAP.md](DOCUMENTATION_MAP.md)** - Complete documentation index
+- **[DOCUMENTATION_MAP.md](docs/governance/DOCUMENTATION_MAP.md)** - Complete documentation index
 - **[API Documentation](docs/api/)** - Full API reference (Sphinx)
 - **[SETUP_GUIDE.md](docs/SETUP_GUIDE.md)** - Detailed installation
 - **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture
