@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.transformation-portal.dev/evidence/tp.meta.evidence.v1/evidence.schema.json",
+  "title": "Evidence Artifact (tp.meta.evidence.v1)",
+  "description": "Cryptographic evidence artifact derived from projected machine-mode envelopes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "source_schema",
+    "command",
+    "success",
+    "exit_code",
+    "envelope_projection_profile",
+    "canonicalization",
+    "evidence_sha256",
+    "projected_envelope"
+  ],
+  "properties": {
+    "schema": {
+      "const": "tp.meta.evidence.v1"
+    },
+    "source_schema": {
+      "const": "tp.meta.machine.v1"
+    },
+    "command": {
+      "type": "string",
+      "enum": [
+        "check-system",
+        "extract",
+        "validate",
+        "extract-batch",
+        "summarize"
+      ]
+    },
+    "success": {
+      "type": "boolean"
+    },
+    "exit_code": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255
+    },
+    "envelope_projection_profile": {
+      "const": "tp.projection.machine_to_evidence.v1"
+    },
+    "canonicalization": {
+      "const": "tp.canonical.json.v1"
+    },
+    "evidence_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "file_sha256": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "bundle_root_sha256": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "signature": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "algorithm",
+            "key_id",
+            "signature"
+          ],
+          "properties": {
+            "algorithm": {
+              "type": "string",
+              "minLength": 1
+            },
+            "key_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "signature": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    },
+    "timestamp": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "provider",
+            "token"
+          ],
+          "properties": {
+            "provider": {
+              "type": "string",
+              "minLength": 1
+            },
+            "token": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    },
+    "projected_envelope": {
+      "type": "object"
+    }
+  }
+}

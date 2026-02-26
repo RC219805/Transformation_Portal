@@ -128,6 +128,21 @@ This split enables:
 - **Provenance audit**: Full run context captured for compliance
 - **Diff-friendly**: File-derived fields stable; run metadata expected to vary
 
+### Machine Contract vs Evidence Artifact
+
+`tp.meta.machine.v1` remains the automation wire contract for routing and orchestration:
+- route by `exit_code` and typed `error` payloads
+- validate shape via JSON Schema
+- do not depend on message text
+
+Machine-mode contract validation does **not** guarantee byte-identical serialization across all runtimes.
+For cryptographic attestations, use the separate evidence artifact flow:
+- projection profile: `tp.projection.machine_to_evidence.v1`
+- canonicalization profile: `tp.canonical.json.v1`
+- evidence schema: `tp.meta.evidence.v1`
+
+The evidence flow hashes a projected envelope that removes volatile telemetry fields (for example `elapsed_seconds` and tool version strings), enabling reproducible third-party verification without changing the machine-mode contract.
+
 **Immutability:**
 
 All Pydantic models are frozen (`frozen=True`). Once created, sidecar objects cannot be modified.

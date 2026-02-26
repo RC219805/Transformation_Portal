@@ -8,6 +8,8 @@ import json
 from collections.abc import Mapping, MutableMapping
 from typing import Any
 
+from .canonical_json import canonicalize_json
+
 DEFAULT_NORMALIZATION_PROFILE = "ingest_v1"
 
 _SUPPORTED_PROFILES = frozenset({DEFAULT_NORMALIZATION_PROFILE})
@@ -22,17 +24,11 @@ _VOLATILE_MACHINE_DATA_FIELDS = frozenset(
         "libraw_version",
     }
 )
-_CANONICAL_JSON_KWARGS: dict[str, Any] = {
-    "sort_keys": True,
-    "ensure_ascii": False,
-    "separators": (",", ":"),
-    "allow_nan": False,
-}
 
 
 def canonical_json_bytes(payload: Any) -> bytes:
     """Serialize JSON-compatible payload with deterministic key/whitespace rules."""
-    return json.dumps(payload, **_CANONICAL_JSON_KWARGS).encode("utf-8")
+    return canonicalize_json(payload)
 
 
 def _validate_profile(profile: str) -> None:
