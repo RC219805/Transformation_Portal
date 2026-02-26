@@ -1,0 +1,177 @@
+name: diagnostic-trial
+
+on:
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic:
+    name: Diagnostic Trial Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade "pip==24.0" "setuptools==69.0.3" "wheel==0.42.0"
+          pip install -r requirements/base.txt -r requirements/dev.txt
+          pip install -e . --no-deps
+
+      - name: Full-chain determinism trial (artifact mode; Phase 4D/4E/merkle)
+        env:
+          PYTHONHASHSEED: "0"
+          TZ: "UTC"
+          LC_ALL: "C"
+          LANG: "C"
+        run: |
+          set -euo pipefail
+          chmod +x scripts/diagnostics/full_chain_determinism_trial.sh
+
+          CAPTURE="tests/golden/phase4/expected_capture_metadata.tp.meta.capture.v1.json"
+
+          scripts/diagnostics/full_chain_determinism_trial.sh \
+            --capture-metadata "$CAPTURE" \
+            --runs 2 \
+            --no-tmp \
+            --compare both \
+            --verbose
+
+      - name: Bundle root + evidence bundle manifest (generate + write root + verify)
+        env:
+          PYTHONHASHSEED: "0"
+          TZ: "UTC"
+          LC_ALL: "C"
+          LANG: "C"
+        run: |
+          set -euo pipefail
+          BUNDLE_DIR="$(mktemp -d)"
+          export BUNDLE_DIR
+          echo "Bundle dir: $BUNDLE_DIR"
+
+          python - <<'PY'
+          import gzip
+          import hashlib
+          import json
+          import os
+          import pathlib
+
+          bundle_dir = pathlib.Path(os.environ["BUNDLE_DIR"])
+
+          roots_path = bundle_dir / "merkle_roots.json"
+          roots_path.write_text(
+              json.dumps(
+                  {
+                      "hash_algorithm": "sha256",
+                      "leaf_hash_algorithm": "sha256",
+                      "leaf_format_version": "1",
+                      "leaf_format": "v1",
+                      "tree_method_version": "1",
+                      "tree_method": "duplicate_last",
+                      "partitions": [],
+                      "global": {"leaf_count": 1, "root_sha256": "0" * 64},
+                  },
+                  indent=2,
+                  sort_keys=True,
+              )
+              + "\n",
+              encoding="utf-8",
+          )
+
+          archive_root = bundle_dir / "archive_root"
+          archive_root.mkdir()
+          payload_path = archive_root / "a.jpg"
+          payload = b"hello\n"
+          payload_path.write_bytes(payload)
+          payload_sha = hashlib.sha256(payload).hexdigest()
+
+          hm_path = bundle_dir / "hash_manifest.csv.gz"
+          csv_bytes = (
+              b"# hash_algorithm=sha256\n"
+              b"origin_drive,partition,relpath,filesize_bytes,sha256,hash_status,error\n"
+              + f"driveA,partA,a.jpg,{len(payload)},{payload_sha},ok,\n".encode("utf-8")
+          )
+          with gzip.open(hm_path, "wb") as gz:
+              gz.write(csv_bytes)
+
+          hs_path = bundle_dir / "hash_summary.json"
+          hs_path.write_text(
+              json.dumps(
+                  {
+                      "hash_algorithm": "sha256",
+                      "hash_manifest_schema_version": "1",
+                      "rows_total": 1,
+                      "hashed_ok": 1,
+                      "missing": 0,
+                      "unreadable": 0,
+                      "skipped": 0,
+                      "total_bytes_hashed": len(payload),
+                  },
+                  indent=2,
+                  sort_keys=True,
+              )
+              + "\n",
+              encoding="utf-8",
+          )
+
+          sig_path = bundle_dir / "merkle_roots.sig.json"
+          sig_path.write_text(
+              json.dumps(
+                  {
+                      "envelope_version": "1",
+                      "signature_algorithm": "ed25519",
+                      "artifact_digest_algorithm": "sha256",
+                      "signed_artifact": "merkle_roots.json",
+                      "signed_artifact_sha256": hashlib.sha256(roots_path.read_bytes()).hexdigest(),
+                      "signature_base64": "c2ln",
+                  },
+                  indent=2,
+                  sort_keys=True,
+              )
+              + "\n",
+              encoding="utf-8",
+          )
+
+          ts_path = bundle_dir / "merkle_roots.sig.tsr"
+          ts_path.write_bytes(b"\x30\x03\x30\x01\x00")
+          PY
+
+          python tools/generate_evidence_bundle_manifest.py \
+            --roots "$BUNDLE_DIR/merkle_roots.json" \
+            --hash-manifest "$BUNDLE_DIR/hash_manifest.csv.gz" \
+            --hash-summary "$BUNDLE_DIR/hash_summary.json" \
+            --signature "$BUNDLE_DIR/merkle_roots.sig.json" \
+            --timestamp-target "signature" \
+            --timestamp "$BUNDLE_DIR/merkle_roots.sig.tsr" \
+            --out "$BUNDLE_DIR/evidence_bundle_manifest.json"
+
+          python tools/compute_bundle_root.py \
+            --bundle-manifest "$BUNDLE_DIR/evidence_bundle_manifest.json" \
+            --write
+
+          python tools/verify_evidence_bundle_manifest.py \
+            --bundle-manifest "$BUNDLE_DIR/evidence_bundle_manifest.json" \
+            --bundle-dir "$BUNDLE_DIR"
+
+      - name: Upload trial outputs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostic-trial-outputs
+          path: |
+            trial_runs/
+            **/logs/*.log
