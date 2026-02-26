@@ -1,3 +1,5 @@
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -91,3 +93,26 @@ def test_resolve_repo_root_prefers_nearest_dual_anchor(tmp_path: Path) -> None:
     start.write_text("print('ok')\n", encoding="utf-8")
 
     assert resolve_repo_root(start=start) == inner.resolve()
+
+
+def test_resolver_cli_module_and_script_agree_from_different_cwds() -> None:
+    repo_root = _expected_repo_root(Path(__file__))
+    module_run = subprocess.run(
+        [sys.executable, "-m", "scripts.lib.repo_root", "--print"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert module_run.returncode == 0, module_run.stderr
+
+    script_run = subprocess.run(
+        [sys.executable, str(repo_root / "scripts" / "lib" / "repo_root.py"), "--print"],
+        cwd="/tmp",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert script_run.returncode == 0, script_run.stderr
+    assert Path(module_run.stdout.strip()) == repo_root
+    assert Path(script_run.stdout.strip()) == repo_root
