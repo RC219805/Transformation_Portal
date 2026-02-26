@@ -184,7 +184,9 @@ jobs:
           cd "${COPY_ROOT}"
 
           python3 -m pip install --upgrade pip setuptools wheel
-          python3 -m pip install -e .
+          # Keep lightweight job runtime bounded while still proving editable install semantics.
+          python3 -m pip install numpy pillow
+          python3 -m pip install -e . --no-deps
 
           python3 scripts/verification/verify_ml_deps.py --help
           python3 scripts/verification/verify_core.py --help
