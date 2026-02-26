@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema": "tp.projection.machine_to_evidence.v1",
+  "description": "Projection profile for deriving reproducible evidence hashes from tp.meta.machine.v1 envelopes.",
+  "source_schema": "tp.meta.machine.v1",
+  "drop_paths": [
+    "/data/elapsed_seconds",
+    "/data/items/*/elapsed_seconds",
+    "/data/exiftool_version",
+    "/data/pydantic_version",
+    "/data/git_version",
+    "/data/rawpy_version",
+    "/data/libraw_version"
+  ]
+}
