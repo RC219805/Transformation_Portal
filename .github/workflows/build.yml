@@ -228,28 +228,52 @@ jobs:
           echo "Running flake8..."
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 
-          # Ensure origin/main exists for PR diffs (safe no-op on pushes)
-          git fetch origin main --depth=1 || true
-
           echo "Running pylint..."
-          # Prefer linting changed files; fall back to filtered full repo.
+          event_name="${{ github.event_name }}"
+          diff_range=""
+
+          if [ "${event_name}" = "pull_request" ]; then
+            # Ensure origin/main exists for PR diffs.
+            git fetch --depth=1 origin main || true
+            diff_range="origin/main...HEAD"
+          elif [ "${event_name}" = "push" ]; then
+            before_sha="${{ github.event.before }}"
+            current_sha="${{ github.sha }}"
+
+            if [ -n "${before_sha}" ] && [ "${before_sha}" != "0000000000000000000000000000000000000000" ]; then
+              # Ensure the previous commit is available in shallow checkouts.
+              git fetch --depth=1 origin "${before_sha}" || true
+
+              if git cat-file -e "${before_sha}^{commit}" 2>/dev/null; then
+                diff_range="${before_sha}..${current_sha}"
+              else
+                echo "Push before SHA not available (${before_sha}); skipping pylint to avoid full-repo scope."
+              fi
+            else
+              echo "Push event has no usable before SHA; skipping pylint to avoid full-repo scope."
+            fi
+          else
+            echo "Event '${event_name}' is not configured for scoped pylint; skipping."
+          fi
+
+          echo "Pylint event: ${event_name}"
+          echo "Pylint diff range: ${diff_range:-<none>}"
+
+          if [ -z "${diff_range}" ]; then
+            echo "No diff range resolved; skipping pylint."
+            exit 0
+          fi
+
           mapfile -t pyfiles < <(
-            git diff --diff-filter=d --name-only origin/main...HEAD \
+            git diff --diff-filter=d --name-only "${diff_range}" \
               | grep -E '\.py$' \
               | grep -v -E '(/deprecated/|^src/transformation_portal/|^src/luxury_tiff_batch_processor/|^scripts/|^\.backup_local/|^\.github/|^examples/|^projects/)' \
               || true
           )
 
+          echo "Pylint selected Python files: ${#pyfiles[@]}"
           if [ "${#pyfiles[@]}" -eq 0 ]; then
-            mapfile -t pyfiles < <(
-              git ls-files '*.py' \
-                | grep -v -E '(/deprecated/|^src/transformation_portal/|^src/luxury_tiff_batch_processor/|^scripts/|^\.backup_local/|^\.github/|^examples/|^projects/)' \
-                || true
-            )
-          fi
-
-          if [ "${#pyfiles[@]}" -eq 0 ]; then
-            echo "No Python files matched pylint filters; skipping pylint."
+            echo "No changed Python files matched pylint filters; skipping pylint."
             exit 0
           fi
 
