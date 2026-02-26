@@ -40,6 +40,26 @@ def test_resolve_repo_root_fails_when_anchors_missing(tmp_path: Path) -> None:
         resolve_repo_root(start=deep)
 
 
+def test_resolve_repo_root_fails_with_only_pyproject_anchor(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+    deep = repo / "scripts"
+    deep.mkdir(parents=True)
+    with pytest.raises(RepoRootError, match="Unable to locate repository root"):
+        resolve_repo_root(start=deep)
+
+
+def test_resolve_repo_root_fails_with_only_workflows_anchor(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".github" / "workflows").mkdir(parents=True)
+    deep = repo / "scripts"
+    deep.mkdir(parents=True)
+    with pytest.raises(RepoRootError, match="Unable to locate repository root"):
+        resolve_repo_root(start=deep)
+
+
 def test_resolve_repo_root_through_symlinked_repo_path(tmp_path: Path) -> None:
     repo_real = tmp_path / "repo_real"
     (repo_real / ".github" / "workflows").mkdir(parents=True)
@@ -55,3 +75,19 @@ def test_resolve_repo_root_through_symlinked_repo_path(tmp_path: Path) -> None:
 
     root = resolve_repo_root(start=repo_link / "scripts" / "tool.py")
     assert root == repo_real.resolve()
+
+
+def test_resolve_repo_root_prefers_nearest_dual_anchor(tmp_path: Path) -> None:
+    outer = tmp_path / "outer_repo"
+    (outer / ".github" / "workflows").mkdir(parents=True)
+    (outer / "pyproject.toml").write_text("[project]\nname='outer'\n", encoding="utf-8")
+
+    inner = outer / "nested" / "inner_repo"
+    (inner / ".github" / "workflows").mkdir(parents=True)
+    (inner / "pyproject.toml").write_text("[project]\nname='inner'\n", encoding="utf-8")
+
+    start = inner / "scripts" / "tool.py"
+    start.parent.mkdir(parents=True)
+    start.write_text("print('ok')\n", encoding="utf-8")
+
+    assert resolve_repo_root(start=start) == inner.resolve()

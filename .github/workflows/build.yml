@@ -133,6 +133,20 @@ jobs:
           fi
           echo "tp import path parity passed: ${TP_FILE}"
 
+      - name: Wheel install smoke (tp import)
+        run: |
+          set -euo pipefail
+          python3 -m pip install --upgrade pip build
+          rm -rf /tmp/tp-wheel-smoke /tmp/tp-dist
+          python3 -m build --wheel --outdir /tmp/tp-dist
+          python3 -m venv /tmp/tp-wheel-smoke
+          source /tmp/tp-wheel-smoke/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install /tmp/tp-dist/*.whl
+          TP_FILE="$(python -c "import pathlib, tp; print(pathlib.Path(tp.__file__).resolve())")"
+          echo "tp wheel import path: ${TP_FILE}"
+          python -c "import tp; from tp.phase4.hash_capture_metadata import compute_metadata_sha256; print('tp wheel smoke passed')"
+
       - name: Relocatability smoke test (verification scripts)
         run: |
           set -euo pipefail
