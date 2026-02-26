@@ -98,7 +98,7 @@ canonical = json.dumps(
     cleanse(data),
     sort_keys=True,
     separators=(",", ":"),
-    ensure_ascii=True,
+    ensure_ascii=False,
 )
 print(hashlib.sha256(canonical.encode("utf-8")).hexdigest())
 PY
