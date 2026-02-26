@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from tp.crypto.merkle import merkle_root_sha256
 from transformation_portal.ingest.batch import BATCH_MANIFEST_SCHEMA
 from transformation_portal.ingest.normalize_machine_json import canonical_json_bytes
 
@@ -87,20 +88,31 @@ def _leaf_hash(relative_path: str, normalized_sha256: str) -> str:
     return _sha256_bytes(f"{relative_path}\n{normalized_sha256}\n".encode("utf-8"))
 
 
+def _hex_to_digest(value: str, *, field: str) -> bytes:
+    try:
+        digest = bytes.fromhex(value)
+    except ValueError as exc:
+        raise ValueError(f"{field} must be valid hex") from exc
+    if len(digest) != 32:
+        raise ValueError(f"{field} must decode to 32 bytes")
+    return digest
+
+
 def _build_merkle_levels(leaves: list[str]) -> list[list[str]]:
     if not leaves:
         return [[_sha256_bytes(b"")]]
 
-    levels = [leaves]
-    current = leaves
+    current = [_hex_to_digest(leaf, field="leaf_hash") for leaf in leaves]
+    levels: list[list[str]] = [[digest.hex() for digest in current]]
     while len(current) > 1:
-        next_level: list[str] = []
+        if len(current) % 2 == 1:
+            current.append(current[-1])
+
+        next_layer: list[bytes] = []
         for index in range(0, len(current), 2):
-            left = current[index]
-            right = current[index + 1] if index + 1 < len(current) else left
-            next_level.append(_sha256_bytes(f"{left}{right}".encode("utf-8")))
-        levels.append(next_level)
-        current = next_level
+            next_layer.append(hashlib.sha256(current[index] + current[index + 1]).digest())
+        current = next_layer
+        levels.append([digest.hex() for digest in current])
     return levels
 
 
@@ -122,17 +134,20 @@ def _build_inclusion_proof(levels: list[list[str]], index: int) -> list[dict[str
 
 
 def _verify_inclusion_proof(leaf_hash: str, proof: list[dict[str, str]], expected_root: str) -> bool:
-    digest = leaf_hash
+    digest = _hex_to_digest(leaf_hash, field="inclusion_proof.leaf_sha256")
     for step in proof:
-        sibling_hash = _require_string(step.get("hash"), field="inclusion_proof.hash")
+        sibling_hash = _hex_to_digest(
+            _require_string(step.get("hash"), field="inclusion_proof.hash"),
+            field="inclusion_proof.hash",
+        )
         position = _require_string(step.get("position"), field="inclusion_proof.position")
         if position == "left":
-            digest = _sha256_bytes(f"{sibling_hash}{digest}".encode("utf-8"))
+            digest = hashlib.sha256(sibling_hash + digest).digest()
         elif position == "right":
-            digest = _sha256_bytes(f"{digest}{sibling_hash}".encode("utf-8"))
+            digest = hashlib.sha256(digest + sibling_hash).digest()
         else:
             raise ValueError(f"inclusion proof position must be left/right, got {position}")
-    return digest == expected_root
+    return digest.hex() == expected_root
 
 
 def _compute_manifest_state(manifest_path: Path, manifest: dict[str, Any]) -> tuple[list[dict[str, str]], str, str]:
@@ -158,8 +173,10 @@ def _compute_manifest_state(manifest_path: Path, manifest: dict[str, Any]) -> tu
             }
         )
 
-    leaves = [item["leaf_sha256"] for item in verified_items]
-    merkle_root = _build_merkle_levels(leaves)[-1][0]
+    leaf_digests = [
+        _hex_to_digest(item["leaf_sha256"], field=f"items[{index}].leaf_sha256") for index, item in enumerate(verified_items)
+    ]
+    merkle_root = merkle_root_sha256(leaf_digests)
     return verified_items, merkle_root, _sha256_file(manifest_path)
 
 

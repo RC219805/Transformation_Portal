@@ -66,10 +66,7 @@ def _default_ingest_payload_factory(profile: str) -> IngestPayloadFactory:
 
 
 def _normalized_relpath(input_relative_path: Path) -> Path:
-    if input_relative_path.suffix:
-        filename = f"{input_relative_path.name}.normalized.json"
-    else:
-        filename = f"{input_relative_path.name}.normalized.json"
+    filename = f"{input_relative_path.name}.normalized.json"
     return input_relative_path.with_name(filename)
 
 

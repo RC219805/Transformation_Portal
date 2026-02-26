@@ -24,8 +24,9 @@ _VOLATILE_MACHINE_DATA_FIELDS = frozenset(
 )
 _CANONICAL_JSON_KWARGS: dict[str, Any] = {
     "sort_keys": True,
-    "ensure_ascii": True,
+    "ensure_ascii": False,
     "separators": (",", ":"),
+    "allow_nan": False,
 }
 
 
