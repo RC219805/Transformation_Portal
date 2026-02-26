@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import pathlib
 import re
 import subprocess
@@ -15,7 +16,7 @@ ALLOWED_DOCS_ROOT_FILES = {"README.md"}
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
-def _run_git(args: list[str]) -> tuple[int, str]:
+def _run_git(args: list[str]) -> tuple[int, str, str]:
     proc = subprocess.run(
         ["git", *args],
         cwd=REPO_ROOT,
@@ -23,26 +24,35 @@ def _run_git(args: list[str]) -> tuple[int, str]:
         capture_output=True,
         text=True,
     )
-    return proc.returncode, proc.stdout
+    return proc.returncode, proc.stdout, proc.stderr
 
 
-def _changed_docs_files() -> list[str]:
+def _changed_docs_files() -> tuple[list[str] | None, list[str]]:
     commands = [
         ["diff", "--name-only", "--diff-filter=ACMR", "--cached", "--", "docs"],
         ["diff", "--name-only", "--diff-filter=ACMR", "--", "docs"],
         ["diff", "--name-only", "--diff-filter=ACMR", "HEAD^..HEAD", "--", "docs"],
         ["show", "--name-only", "--diff-filter=ACMR", "--pretty=format:", "HEAD", "--", "docs"],
     ]
+    errors: list[str] = []
+    had_success = False
 
     for cmd in commands:
-        code, output = _run_git(cmd)
+        code, output, stderr = _run_git(cmd)
         if code != 0:
+            cmd_text = "git " + " ".join(cmd)
+            detail = stderr.strip() or f"exit {code}"
+            errors.append(f"{cmd_text}: {detail}")
             continue
+        had_success = True
         paths = sorted({line.strip() for line in output.splitlines() if line.strip()})
         if paths:
-            return paths
+            return paths, []
 
-    return []
+    if had_success:
+        return [], []
+
+    return None, errors
 
 
 def _all_docs_files() -> list[str]:
@@ -79,7 +89,21 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    candidates = _all_docs_files() if args.all else _changed_docs_files()
+    if args.all:
+        candidates = _all_docs_files()
+    else:
+        candidates, errors = _changed_docs_files()
+        if candidates is None:
+            if os.getenv("CI", "").strip().lower() == "true":
+                print("Unable to determine changed docs files in CI; failing closed.")
+                for error in errors:
+                    print(f"  - {error}")
+                return 2
+            print("Unable to determine changed docs files; falling back to full docs scan.")
+            for error in errors:
+                print(f"  - {error}")
+            candidates = _all_docs_files()
+
     if not candidates:
         print("No documentation files to validate.")
         return 0
