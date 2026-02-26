@@ -24,10 +24,35 @@ set -euo pipefail
 # ============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-INPUT_DIR="${SCRIPT_DIR}/input_images/source_tiffs"
-OUTPUT_DIR="${SCRIPT_DIR}/output_apex_v2_luxury"
-DEPTH_DIR="${SCRIPT_DIR}/depth_maps_apex"
-LOG_DIR="${SCRIPT_DIR}/logs/apex_batch_$(date +%Y%m%d_%H%M%S)"
+
+discover_repo_root() {
+    local root
+    if root="$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel 2>/dev/null)"; then
+        printf '%s\n' "${root}"
+        return 0
+    fi
+
+    local current="${SCRIPT_DIR}"
+    while [[ "${current}" != "/" ]]; do
+        if [[ -f "${current}/pyproject.toml" && -d "${current}/.github/workflows" ]]; then
+            printf '%s\n' "${current}"
+            return 0
+        fi
+        current="$(dirname "${current}")"
+    done
+    return 1
+}
+
+REPO_ROOT="$(discover_repo_root)" || {
+    echo "[ERROR] Unable to determine repository root from ${SCRIPT_DIR}" >&2
+    exit 1
+}
+cd "${REPO_ROOT}"
+
+INPUT_DIR="${REPO_ROOT}/input_images/source_tiffs"
+OUTPUT_DIR="${REPO_ROOT}/output_apex_v2_luxury"
+DEPTH_DIR="${REPO_ROOT}/depth_maps_apex"
+LOG_DIR="${REPO_ROOT}/logs/apex_batch_$(date +%Y%m%d_%H%M%S)"
 
 # Processing parameters
 PRESET="luxury_estate"       # Premium marketing aesthetic (enhancement=0.8, clarity=0.6, material=0.7)
@@ -128,7 +153,7 @@ if [[ "${EXISTING_DEPTH_COUNT}" -lt "${INPUT_COUNT}" ]]; then
 
         if [[ ! -f "${depth_output}" ]]; then
             log_info "Generating depth: ${filename}"
-            python scripts/run_depth_estimation.py \
+            python3 "${REPO_ROOT}/scripts/run_depth_estimation.py" \
                 --input "${input_file}" \
                 --output "${depth_output}" \
                 --backend depth_pro \
@@ -164,7 +189,7 @@ for input_file in "${INPUT_DIR}"/*.{tif,tiff}; do
 
     # Build enhancement command
     cmd_args=(
-        "python3" "scripts/enhance_image.py"
+        "python3" "${REPO_ROOT}/scripts/enhance_image.py"
         "${input_file}"
         "--output-dir" "${OUTPUT_DIR}"
         "--preset" "${PRESET}"
