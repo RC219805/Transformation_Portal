@@ -106,6 +106,36 @@ preserving history:
 - remove legacy remote branch ref when present,
 - push archived ref to origin.
 
+## Alternatives Considered
+
+- Direct merge of stale branches after a quick CI pass.
+  Rejected: allows rollback/deletion risk to hide inside large branch deltas.
+- Blind cherry-picking stale commits into current `main`.
+  Rejected: commit-level selection without file-scope stop checks can still
+  import contract-surface regressions.
+- Preserve status quo (case-by-case ad hoc decisions).
+  Rejected: inconsistent outcomes and no durable policy signal for future work.
+
+## Implementation Plan
+
+1. Baseline-tag `main` before each phase-boundary branch audit.
+2. Run mandatory file-level diff classification and stop-condition checks.
+3. For rejected stale branches: archive under `archive/*` and remove legacy
+   merge-target refs.
+4. Rebuild or selectively extract forward-safe deltas on a fresh branch from
+   current `main`.
+5. Require standard CI governance gates before merge.
+
+## Success Metrics
+
+- Zero accepted integrations that delete or weaken protected Phase 4/machine
+  schema surfaces.
+- Zero accepted integrations that remove determinism/contract enforcement
+  workflows.
+- All selective-rebuild branches pass determinism, ingest contract, artifact
+  boundary, and regression gates before merge.
+- Stale branch audits are reproducible from annotated baseline tags.
+
 ## Enforcement
 
 Policy enforcement is procedural plus CI-backed:

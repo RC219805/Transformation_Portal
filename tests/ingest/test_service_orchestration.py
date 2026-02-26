@@ -135,6 +135,19 @@ def test_run_extract_with_invalid_input_type_returns_other_failure() -> None:
     assert "must be str or Path, got int" in str(payload.get("error", ""))
 
 
+def test_run_extract_missing_input_returns_other_failure() -> None:
+    service = MetadataExtractionService()
+
+    result = service.run(ServiceRunRequest(command="extract", input_path=None))
+
+    assert result.success is False
+    assert result.exit_code == int(IngestExitCode.OTHER_FAILURE)
+    payload = result.payload or {}
+    assert payload.get("extract_result") is None
+    assert payload.get("sidecar") is None
+    assert "Input path required for extract command" in str(payload.get("error", ""))
+
+
 def test_run_extract_batch_missing_directory_returns_setup_failure(tmp_path: Path) -> None:
     service = MetadataExtractionService()
     missing_dir = tmp_path / "missing"
@@ -148,6 +161,19 @@ def test_run_extract_batch_missing_directory_returns_setup_failure(tmp_path: Pat
     assert batch_result is not None
     assert batch_result.summary_counts["total"] == 0
     assert batch_result.summary_counts["failure"] == 0
+
+
+def test_run_extract_batch_missing_input_returns_other_failure() -> None:
+    service = MetadataExtractionService()
+
+    result = service.run(ServiceRunRequest(command="extract-batch", input_path=None))
+
+    assert result.success is False
+    assert result.exit_code == int(IngestExitCode.OTHER_FAILURE)
+    payload = result.payload or {}
+    batch_result = payload.get("batch_result")
+    assert batch_result is not None
+    assert "Input directory required for extract-batch command" in str(batch_result.dominant_error)
 
 
 def test_run_extract_batch_preserves_core_default_config_and_normalizes_paths(tmp_path: Path) -> None:
@@ -259,6 +285,19 @@ def test_run_validate_with_invalid_input_type_returns_other_failure() -> None:
     assert result.exit_code == int(IngestExitCode.OTHER_FAILURE)
     payload = result.payload or {}
     assert "must be str or Path, got int" in str(payload.get("error", ""))
+
+
+def test_run_validate_missing_input_returns_other_failure() -> None:
+    service = MetadataExtractionService()
+
+    result = service.run(ServiceRunRequest(command="validate", input_path=None))
+
+    assert result.success is False
+    assert result.exit_code == int(IngestExitCode.OTHER_FAILURE)
+    payload = result.payload or {}
+    assert payload.get("validate_result") is None
+    assert payload.get("sidecar_data") is None
+    assert "Sidecar path required for validate command" in str(payload.get("error", ""))
 
 
 def test_run_unsupported_command_returns_other_failure() -> None:
