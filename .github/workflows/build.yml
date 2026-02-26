@@ -154,14 +154,113 @@ jobs:
           echo "tp wheel import path: ${TP_FILE}"
           python -c "import tp; from tp.phase4.hash_capture_metadata import compute_metadata_sha256; print('tp wheel smoke passed')"
 
-      - name: Relocatability smoke test (verification scripts)
+      - name: Relocatability proof (temp checkout + contained outputs)
         run: |
           set -euo pipefail
           REPO_ROOT="$(pwd)"
-          cd /tmp
-          python3 "${REPO_ROOT}/scripts/verification/verify_ml_deps.py" --help
-          python3 "${REPO_ROOT}/scripts/verification/verify_core.py" --help
-          python3 "${REPO_ROOT}/scripts/verification/verify_rag_install.py" --help
+          TEMP_ROOT="$(mktemp -d /tmp/tp-reloc-proof-XXXXXX)"
+          COPY_ROOT="${TEMP_ROOT}/repo"
+          OUT_DIR="${TEMP_ROOT}/trial_runs/reloc-proof"
+          cleanup() {
+            if [ -n "${TEMP_ROOT:-}" ] && [ -d "${TEMP_ROOT}" ]; then
+              rm -rf "${TEMP_ROOT}"
+            fi
+          }
+          trap cleanup EXIT INT TERM
+
+          mkdir -p "${COPY_ROOT}"
+          if command -v rsync >/dev/null 2>&1; then
+            rsync -a \
+              --exclude='.git' \
+              --exclude='__pycache__' \
+              --exclude='.pytest_cache' \
+              --exclude='.mypy_cache' \
+              --exclude='.venv' \
+              "${REPO_ROOT}/" "${COPY_ROOT}/"
+          else
+            cp -R "${REPO_ROOT}/." "${COPY_ROOT}/"
+            rm -rf "${COPY_ROOT}/.git"
+          fi
+          cd "${COPY_ROOT}"
+
+          python3 -m pip install --upgrade pip setuptools wheel
+          # Keep lightweight job runtime bounded while still proving editable install semantics.
+          python3 -m pip install numpy pillow
+          python3 -m pip install -e . --no-deps
+
+          python3 scripts/verification/verify_ml_deps.py --help
+          python3 scripts/verification/verify_core.py --help
+          python3 scripts/verification/verify_rag_install.py --help
+
+          texture_state() {
+            local file_path="${1}"
+            python3 - "${file_path}" <<'PY'
+          import hashlib
+          import os
+          import sys
+
+          path = sys.argv[1]
+          if not os.path.exists(path):
+              print("__ABSENT__")
+              raise SystemExit(0)
+
+          digest = hashlib.sha256()
+          with open(path, "rb") as handle:
+              for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                  digest.update(chunk)
+          st = os.stat(path)
+          print(f"{digest.hexdigest()}::{st.st_mtime_ns}")
+          PY
+          }
+
+          DEFAULT_TEXTURE_FILE="${COPY_ROOT}/textures/board_materials/plaster_marmorino_westwood_beige.png"
+          DEFAULT_TEXTURE_STATE_BEFORE="$(texture_state "${DEFAULT_TEXTURE_FILE}")"
+
+          python3 scripts/create_board_textures.py \
+            --output-dir "${OUT_DIR}" \
+            --size 256 \
+            --materials plaster_marmorino_westwood_beige \
+            --seed 42 \
+            --noise 1
+
+          test -f "${OUT_DIR}/plaster_marmorino_westwood_beige.png"
+
+          DEFAULT_TEXTURE_STATE_AFTER="$(texture_state "${DEFAULT_TEXTURE_FILE}")"
+          if [ "${DEFAULT_TEXTURE_STATE_BEFORE}" != "${DEFAULT_TEXTURE_STATE_AFTER}" ]; then
+            echo "relocatability proof failed: default texture path changed in copied repo" >&2
+            exit 1
+          fi
+
+          # Guard against scripts silently ignoring --output-dir and writing under repo root.
+          if [ -d "${COPY_ROOT}/trial_runs" ]; then
+            echo "relocatability proof failed: outputs escaped to copied repo root" >&2
+            exit 1
+          fi
+
+          # Guard against hardcoded absolute writes back into the original checkout.
+          if [ -n "$(git -C "${REPO_ROOT}" status --porcelain)" ]; then
+            echo "relocatability proof failed: original workspace was mutated" >&2
+            git -C "${REPO_ROOT}" status --porcelain >&2
+            exit 1
+          fi
+
+          COPY_ROOT="${COPY_ROOT}" python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          import tp
+          import transformation_portal
+
+          copy_root = Path(os.environ["COPY_ROOT"]).resolve()
+          tp_file = Path(tp.__file__).resolve()
+          expected_prefix = copy_root / "src" / "tp"
+          if not str(tp_file).startswith(str(expected_prefix)):
+              raise SystemExit(
+                  f"tp import path outside temp copy: expected prefix {expected_prefix}, got {tp_file}"
+              )
+          print(f"relocatability proof passed: tp loaded from {tp_file}")
+          print(f"transformation_portal import OK: {transformation_portal.__name__}")
+          PY
 
       - name: Validate compliance schemas
         run: |
