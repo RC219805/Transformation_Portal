@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0.1",
+  "file_integrity": {
+    "sha256": "b1a80536bef07ae6e656550a0915e1ccc874236196f913b9919466f3092f184f",
+    "size_bytes": 20,
+    "path": "/fixtures/DJI_0361.MOV",
+    "mime_type": "video/quicktime"
+  },
+  "exif": {
+    "all_tags": {
+      "File:FileType": "MOV",
+      "SourceFile": "DJI_0361.MOV"
+    },
+    "camera_make": "DJI",
+    "camera_model": "Mavic 3"
+  },
+  "pipeline_config": {
+    "config_sha256": "2f87e87970ef05f51793ac43e2eca421efe0b15f2c12f135de0ecbffd33f7a34",
+    "preset": "linux-baseline"
+  }
+}
