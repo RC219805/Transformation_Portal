@@ -154,14 +154,57 @@ jobs:
           echo "tp wheel import path: ${TP_FILE}"
           python -c "import tp; from tp.phase4.hash_capture_metadata import compute_metadata_sha256; print('tp wheel smoke passed')"
 
-      - name: Relocatability smoke test (verification scripts)
+      - name: Relocatability proof (temp checkout + contained outputs)
         run: |
           set -euo pipefail
           REPO_ROOT="$(pwd)"
-          cd /tmp
-          python3 "${REPO_ROOT}/scripts/verification/verify_ml_deps.py" --help
-          python3 "${REPO_ROOT}/scripts/verification/verify_core.py" --help
-          python3 "${REPO_ROOT}/scripts/verification/verify_rag_install.py" --help
+          TEMP_ROOT="$(mktemp -d /tmp/tp-reloc-proof-XXXXXX)"
+          COPY_ROOT="${TEMP_ROOT}/repo"
+          OUT_DIR="${TEMP_ROOT}/trial_runs/reloc-proof"
+
+          cp -R "${REPO_ROOT}" "${COPY_ROOT}"
+          cd "${COPY_ROOT}"
+
+          python3 scripts/verification/verify_ml_deps.py --help
+          python3 scripts/verification/verify_core.py --help
+          python3 scripts/verification/verify_rag_install.py --help
+
+          python3 scripts/create_board_textures.py \
+            --output-dir "${OUT_DIR}" \
+            --size 256 \
+            --materials plaster_marmorino_westwood_beige \
+            --seed 42 \
+            --noise 1
+
+          test -f "${OUT_DIR}/plaster_marmorino_westwood_beige.png"
+
+          # Running tools from a temp copy must not mutate the checked-out workspace.
+          if [ -n "$(git -C "${REPO_ROOT}" status --porcelain)" ]; then
+            echo "relocatability proof failed: original workspace was mutated" >&2
+            git -C "${REPO_ROOT}" status --porcelain >&2
+            exit 1
+          fi
+
+          python3 -m pip install --upgrade pip setuptools wheel
+          python3 -m pip install -e .
+
+          COPY_ROOT_ENV="${COPY_ROOT}" python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          import tp
+          import transformation_portal
+
+          copy_root = Path(os.environ["COPY_ROOT_ENV"]).resolve()
+          tp_file = Path(tp.__file__).resolve()
+          expected_prefix = copy_root / "src" / "tp"
+          if not str(tp_file).startswith(str(expected_prefix)):
+              raise SystemExit(
+                  f"tp import path outside temp copy: expected prefix {expected_prefix}, got {tp_file}"
+              )
+          print(f"relocatability proof passed: tp loaded from {tp_file}")
+          print(f"transformation_portal import OK: {transformation_portal.__name__}")
+          PY
 
       - name: Validate compliance schemas
         run: |
