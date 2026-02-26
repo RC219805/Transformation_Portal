@@ -116,6 +116,11 @@ jobs:
           echo "Python available: $(python3 --version 2>&1 || echo 'no')"
           echo "✅ Lightweight checks passed"
 
+      - name: Assert tp import surface intent
+        run: |
+          set -euo pipefail
+          python3 scripts/verification/assert_tp_import_surface.py --module tp --expect importable
+
       - name: Validate compliance schemas
         run: |
           set -euo pipefail
