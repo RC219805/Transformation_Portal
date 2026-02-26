@@ -136,6 +136,7 @@ def test_evidence_hash_is_stable_across_volatile_machine_fields() -> None:
     batch_a = build_evidence_payload(_extract_batch_payload(item_elapsed_seconds=0.1), projection_profile=profile)
     batch_b = build_evidence_payload(_extract_batch_payload(item_elapsed_seconds=6.5), projection_profile=profile)
     assert batch_a["evidence_sha256"] == batch_b["evidence_sha256"]
+    assert batch_a["projected_envelope"]["data"]["items"][0].get("elapsed_seconds") is None
 
 
 def test_evidence_payload_validates_against_schema() -> None:

@@ -38,7 +38,8 @@ def canonical_evidence_bytes(payload: Mapping[str, Any]) -> bytes:
 
 
 def _decode_pointer_token(token: str) -> str:
-    return token.replace("~1", "/").replace("~0", "~")
+    # RFC 6901 requires "~0" -> "~" before "~1" -> "/" to avoid double-unescaping.
+    return token.replace("~0", "~").replace("~1", "/")
 
 
 def _split_json_pointer(pointer: str) -> tuple[str, ...]:
