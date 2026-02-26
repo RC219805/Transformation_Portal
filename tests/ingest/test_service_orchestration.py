@@ -93,6 +93,48 @@ def test_run_extract_delegates_to_core_service(tmp_path: Path) -> None:
     assert stub.extract_requests[0].input_path == input_path
 
 
+def test_run_extract_preserves_core_default_config_and_normalizes_paths(tmp_path: Path) -> None:
+    input_path = tmp_path / "sample.cr2"
+    input_path.touch()
+    output_path = tmp_path / "sample.provenance.json"
+    output_dir = tmp_path / "sidecars"
+    stub = _StubCoreService()
+    stub.extract_result = CoreExtractResult(
+        path=input_path,
+        success=True,
+        output_path=output_path,
+        elapsed_seconds=0.1,
+    )
+    service = MetadataExtractionService(metadata_service=stub)  # type: ignore[arg-type]
+
+    result = service.run(
+        ServiceRunRequest(
+            command="extract",
+            input_path=str(input_path),
+            output_dir=str(output_dir),
+            args={"output_path": str(output_path)},
+        )
+    )
+
+    assert result.success is True
+    delegated = stub.extract_requests[0]
+    assert delegated.input_path == input_path
+    assert delegated.output_path == output_path
+    assert delegated.output_dir == output_dir
+    assert delegated.config_dict is None
+
+
+def test_run_extract_with_invalid_input_type_returns_other_failure() -> None:
+    service = MetadataExtractionService()
+
+    result = service.run(ServiceRunRequest(command="extract", input_path=123))  # type: ignore[arg-type]
+
+    assert result.success is False
+    assert result.exit_code == int(IngestExitCode.OTHER_FAILURE)
+    payload = result.payload or {}
+    assert "must be str or Path, got int" in str(payload.get("error", ""))
+
+
 def test_run_extract_batch_missing_directory_returns_setup_failure(tmp_path: Path) -> None:
     service = MetadataExtractionService()
     missing_dir = tmp_path / "missing"
@@ -106,6 +148,60 @@ def test_run_extract_batch_missing_directory_returns_setup_failure(tmp_path: Pat
     assert batch_result is not None
     assert batch_result.summary_counts["total"] == 0
     assert batch_result.summary_counts["failure"] == 0
+
+
+def test_run_extract_batch_preserves_core_default_config_and_normalizes_paths(tmp_path: Path) -> None:
+    input_dir = tmp_path / "inputs"
+    input_dir.mkdir(parents=True)
+    image_path = input_dir / "a.cr2"
+    image_path.touch()
+    output_dir = tmp_path / "sidecars"
+
+    summary = {
+        "total": 1,
+        "success": 1,
+        "failure": 0,
+        "by_exit_code": {
+            code.name: 0 for code in sorted(IngestExitCode, key=lambda code: code.value) if code != IngestExitCode.SUCCESS
+        },
+    }
+    stub = _StubCoreService()
+    stub.batch_result = BatchExtractResult(
+        items=[],
+        total_elapsed=0.01,
+        summary_counts=summary,
+        dominant_error=None,
+    )
+    service = MetadataExtractionService(metadata_service=stub)  # type: ignore[arg-type]
+
+    result = service.run(
+        ServiceRunRequest(
+            command="extract-batch",
+            input_path=str(input_dir),
+            input_paths=[str(image_path)],
+            output_dir=str(output_dir),
+        )
+    )
+
+    assert result.success is True
+    delegated = stub.batch_requests[0]
+    assert delegated.output_dir == output_dir
+    assert delegated.input_root == input_dir
+    assert list(delegated.input_paths) == [image_path]
+    assert delegated.config_dict is None
+
+
+def test_run_extract_batch_with_invalid_input_type_returns_other_failure() -> None:
+    service = MetadataExtractionService()
+
+    result = service.run(ServiceRunRequest(command="extract-batch", input_path=123))  # type: ignore[arg-type]
+
+    assert result.success is False
+    assert result.exit_code == int(IngestExitCode.OTHER_FAILURE)
+    payload = result.payload or {}
+    batch_result = payload.get("batch_result")
+    assert batch_result is not None
+    assert "must be str or Path, got int" in str(batch_result.dominant_error)
 
 
 def test_run_validate_propagates_dominant_error_exit_code(tmp_path: Path) -> None:
@@ -130,3 +226,45 @@ def test_run_validate_propagates_dominant_error_exit_code(tmp_path: Path) -> Non
     assert result.success is False
     assert result.exit_code == int(error.exit_code)
     assert len(stub.validate_requests) == 1
+
+
+def test_run_validate_sidecar_read_failure_preserves_failure_semantics(tmp_path: Path) -> None:
+    sidecar_path = tmp_path / "missing.provenance.json"
+    stub = _StubCoreService()
+    stub.validate_result = CoreValidateResult(
+        success=True,
+        errors=[],
+        dominant_error=None,
+    )
+    service = MetadataExtractionService(metadata_service=stub)  # type: ignore[arg-type]
+
+    result = service.run(
+        ServiceRunRequest(
+            command="validate",
+            input_path=sidecar_path,
+            strict=True,
+        )
+    )
+
+    assert result.success is False
+    assert result.exit_code == int(IngestExitCode.OTHER_FAILURE)
+
+
+def test_run_validate_with_invalid_input_type_returns_other_failure() -> None:
+    service = MetadataExtractionService()
+
+    result = service.run(ServiceRunRequest(command="validate", input_path=123))  # type: ignore[arg-type]
+
+    assert result.success is False
+    assert result.exit_code == int(IngestExitCode.OTHER_FAILURE)
+    payload = result.payload or {}
+    assert "must be str or Path, got int" in str(payload.get("error", ""))
+
+
+def test_run_unsupported_command_returns_other_failure() -> None:
+    service = MetadataExtractionService()
+
+    result = service.run(ServiceRunRequest(command="not-a-real-command"))
+
+    assert result.success is False
+    assert result.exit_code == int(IngestExitCode.OTHER_FAILURE)

@@ -100,15 +100,29 @@ class MetadataExtractionService:
                 payload={"extract_result": None, "sidecar": None, "error": str(error)},
             )
 
+        input_path = self._as_path(request.input_path)
+        if input_path is None:
+            error = OtherIngestFailure(
+                f"Input path for extract command must be str or Path, got {type(request.input_path).__name__}"
+            )
+            return ServiceRunResult(
+                success=False,
+                exit_code=int(error.exit_code),
+                payload={"extract_result": None, "sidecar": None, "error": str(error)},
+            )
+
         config_dict = request.args.get("config_dict")
         if not isinstance(config_dict, dict):
-            config_dict = {"mode": "test_extraction", "phase": "3.7"}
+            config_dict = None
+
+        output_path = self._as_path(request.args.get("output_path"))
+        output_dir = self._as_path(request.output_dir)
 
         extracted = self._metadata_service.extract(
             CoreExtractRequest(
-                input_path=request.input_path,
-                output_path=request.args.get("output_path"),
-                output_dir=request.output_dir,
+                input_path=input_path,
+                output_path=output_path,
+                output_dir=output_dir,
                 preset=request.args.get("preset"),
                 cli_args=list(request.args.get("cli_args", ())),
                 config_dict=config_dict,
@@ -138,21 +152,28 @@ class MetadataExtractionService:
         if request.input_path is None:
             return self._batch_setup_failure("Input directory required for extract-batch command")
 
-        input_dir = request.input_path
+        input_dir = self._as_path(request.input_path)
+        if input_dir is None:
+            return self._batch_setup_failure(
+                f"Input directory for extract-batch command must be str or Path, got {type(request.input_path).__name__}"
+            )
+
         if not input_dir.exists():
             return self._batch_setup_failure(f"Directory not found: {input_dir}")
         if not input_dir.is_dir():
             return self._batch_setup_failure(f"Not a directory: {input_dir}")
 
         recursive = bool(request.args.get("recursive", True))
-        images = list(request.input_paths) if request.input_paths else self._find_images(input_dir, recursive=recursive)
+        images = (
+            self._as_paths(request.input_paths) if request.input_paths else self._find_images(input_dir, recursive=recursive)
+        )
 
-        resolved_output_dir = request.output_dir or input_dir / "provenance_sidecars"
+        resolved_output_dir = self._as_path(request.output_dir) or input_dir / "provenance_sidecars"
         resolved_output_dir.mkdir(parents=True, exist_ok=True)
 
         config_dict = request.args.get("config_dict")
         if not isinstance(config_dict, dict):
-            config_dict = {"mode": "batch_extraction", "phase": "3.7"}
+            config_dict = None
 
         result = self._metadata_service.batch_extract(
             BatchExtractRequest(
@@ -192,9 +213,20 @@ class MetadataExtractionService:
                 payload={"validate_result": None, "sidecar_data": None, "error": str(error)},
             )
 
+        sidecar_path = self._as_path(request.input_path)
+        if sidecar_path is None:
+            error = OtherIngestFailure(
+                f"Sidecar path for validate command must be str or Path, got {type(request.input_path).__name__}"
+            )
+            return ServiceRunResult(
+                success=False,
+                exit_code=int(error.exit_code),
+                payload={"validate_result": None, "sidecar_data": None, "error": str(error)},
+            )
+
         validated = self._metadata_service.validate(
             CoreValidateRequest(
-                sidecar_path=request.input_path,
+                sidecar_path=sidecar_path,
                 schema_type=str(request.args.get("schema_type", "provenance")),
                 strict=request.strict,
             )
@@ -214,7 +246,7 @@ class MetadataExtractionService:
 
         sidecar_data: dict[str, Any] | None = None
         try:
-            with open(request.input_path, encoding="utf-8") as handle:
+            with open(sidecar_path, encoding="utf-8") as handle:
                 sidecar_data = json.load(handle)
         except Exception as exc:  # noqa: BLE001 - preserve existing fallback semantics
             fallback_error = OtherIngestFailure(str(exc))
@@ -267,6 +299,23 @@ class MetadataExtractionService:
             if candidate.is_file() and candidate.suffix.lower() in SUPPORTED_EXTENSIONS
         ]
         return sorted(images)
+
+    def _as_path(self, value: Any) -> Path | None:
+        if value is None:
+            return None
+        if isinstance(value, Path):
+            return value
+        if isinstance(value, str):
+            return Path(value)
+        return None
+
+    def _as_paths(self, values: Sequence[Any]) -> list[Path]:
+        normalized: list[Path] = []
+        for value in values:
+            path = self._as_path(value)
+            if path is not None:
+                normalized.append(path)
+        return normalized
 
 
 # Backward-compatible alias while this layer is rolling in.
