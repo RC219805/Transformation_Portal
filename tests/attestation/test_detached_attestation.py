@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 import pytest
 
-from transformation_portal.attestation.detached import build_detached_attestation_payload, canonical_attestation_bytes
+from transformation_portal.attestation.detached import (
+    build_detached_attestation_payload,
+    canonical_attestation_bytes,
+    canonical_attestation_preimage_bytes,
+)
 from transformation_portal.attestation.verify import bind_attestation_to_evidence, validate_detached_attestation_surface
 from transformation_portal.ingest.evidence import build_evidence_payload, load_projection_profile
 
@@ -60,6 +65,25 @@ def test_attestation_recompute_check_detects_tamper() -> None:
 
     with pytest.raises(ValueError, match="does not reproduce stored evidence_sha256"):
         build_detached_attestation_payload(evidence, signature=signature, enforce_recompute_match=True)
+
+
+def test_attestation_preimage_canonical_bytes_are_deterministic_across_field_order() -> None:
+    evidence = build_evidence_payload(
+        _machine_extract_payload(elapsed_seconds=1.0), projection_profile=load_projection_profile()
+    )
+    reordered_evidence = {
+        "projected_envelope": evidence["projected_envelope"],
+        "bundle_root_sha256": evidence["bundle_root_sha256"],
+        "file_sha256": evidence["file_sha256"],
+        "evidence_sha256": evidence["evidence_sha256"],
+        "schema": evidence["schema"],
+    }
+
+    preimage_a = canonical_attestation_preimage_bytes(evidence)
+    preimage_b = canonical_attestation_preimage_bytes(reordered_evidence)
+
+    assert preimage_a == preimage_b
+    assert hashlib.sha256(preimage_a).hexdigest() == "3c21ece20c3120fb54ac616eb6ee616a754e37eba0a694274a4e6d729673be39"
 
 
 def test_validate_detached_attestation_surface_rejects_invalid_schema() -> None:

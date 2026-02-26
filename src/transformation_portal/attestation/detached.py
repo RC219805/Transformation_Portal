@@ -10,6 +10,7 @@ from transformation_portal.ingest.canonical_json import TP_CANONICAL_JSON_PROFIL
 from transformation_portal.ingest.evidence import EVIDENCE_SCHEMA_VERSION
 
 ATTESTATION_SCHEMA_VERSION = "tp.attestation.detached.v1"
+PREIMAGE_SCHEMA_VERSION = "tp.attestation.detached.v1.preimage"
 _HEX_CHARS = frozenset("0123456789abcdef")
 
 
@@ -45,6 +46,34 @@ def _recompute_evidence_sha256_from_projected_envelope(evidence_payload: Mapping
 def canonical_attestation_bytes(attestation_payload: Mapping[str, Any]) -> bytes:
     """Serialize detached attestation payload with canonical JSON profile."""
     return canonicalize_json(dict(attestation_payload))
+
+
+def build_detached_attestation_preimage(evidence_payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Build the signing preimage for detached evidence attestation."""
+    _validate_evidence_payload_surface(evidence_payload)
+
+    evidence_sha256 = _validate_sha256(evidence_payload.get("evidence_sha256"), field="evidence_sha256")
+    file_sha256 = evidence_payload.get("file_sha256")
+    if file_sha256 is not None:
+        file_sha256 = _validate_sha256(file_sha256, field="file_sha256")
+    bundle_root_sha256 = evidence_payload.get("bundle_root_sha256")
+    if bundle_root_sha256 is not None:
+        bundle_root_sha256 = _validate_sha256(bundle_root_sha256, field="bundle_root_sha256")
+
+    return {
+        "schema": PREIMAGE_SCHEMA_VERSION,
+        "subject": {
+            "schema": EVIDENCE_SCHEMA_VERSION,
+            "evidence_sha256": evidence_sha256,
+            "file_sha256": file_sha256,
+            "bundle_root_sha256": bundle_root_sha256,
+        },
+    }
+
+
+def canonical_attestation_preimage_bytes(evidence_payload: Mapping[str, Any]) -> bytes:
+    """Serialize detached attestation preimage with canonical JSON profile."""
+    return canonicalize_json(build_detached_attestation_preimage(evidence_payload))
 
 
 def compute_attestation_sha256(attestation_payload: Mapping[str, Any]) -> str:

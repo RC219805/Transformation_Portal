@@ -10,9 +10,12 @@ import traceback
 from pathlib import Path
 from uuid import uuid4
 
-from transformation_portal.attestation.detached import build_detached_attestation_payload, canonical_attestation_bytes
+from transformation_portal.attestation.detached import (
+    build_detached_attestation_payload,
+    canonical_attestation_bytes,
+    canonical_attestation_preimage_bytes,
+)
 from transformation_portal.attestation.gpg import gpg_clearsign_bytes
-from transformation_portal.ingest.canonical_json import canonicalize_json
 
 EXIT_SUCCESS = 0
 EXIT_INPUT_ERROR = 2
@@ -55,21 +58,6 @@ def _read_json_object(path: Path, *, name: str) -> dict[str, object]:
     return payload
 
 
-def _build_signature_preimage(evidence: dict[str, object]) -> bytes:
-    """Build canonical preimage bytes for detached signature binding."""
-    preimage = {
-        "schema": "tp.attestation.detached.v1.preimage",
-        "subject": {
-            "schema": "tp.meta.evidence.v1",
-            "evidence_sha256": evidence.get("evidence_sha256"),
-            "file_sha256": evidence.get("file_sha256"),
-            "bundle_root_sha256": evidence.get("bundle_root_sha256"),
-        },
-    }
-    # Preimages are serialized using tp.canonical.json.v1 semantics.
-    return canonicalize_json(preimage)
-
-
 def main() -> int:
     args = _parse_args()
 
@@ -80,7 +68,7 @@ def main() -> int:
         return EXIT_INPUT_ERROR
 
     try:
-        preimage_bytes = _build_signature_preimage(evidence)
+        preimage_bytes = canonical_attestation_preimage_bytes(evidence)
 
         if not args.gpg:
             raise ValueError("No signing backend selected (use --gpg)")
