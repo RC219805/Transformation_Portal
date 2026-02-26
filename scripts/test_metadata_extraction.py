@@ -50,14 +50,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from transformation_portal.ingest import EXIT_OTHER_FAILURE, EXIT_SUCCESS, BatchExtractRequest
+from transformation_portal.ingest import EXIT_OTHER_FAILURE, EXIT_SUCCESS
 from transformation_portal.ingest import BatchExtractResult as ServiceBatchExtractResult
-from transformation_portal.ingest import ExtractRequest as ServiceExtractRequest
 from transformation_portal.ingest import ExtractResult as ServiceExtractResult
-from transformation_portal.ingest import IngestError, IngestExitCode, MetadataExtractionService, OtherIngestFailure
-from transformation_portal.ingest import ValidateRequest as ServiceValidateRequest
+from transformation_portal.ingest import IngestError, IngestExitCode, OtherIngestFailure
 from transformation_portal.ingest import ValidateResult as ServiceValidateResult
-from transformation_portal.ingest import load_sidecar
 from transformation_portal.ingest.machine_output import (
     MACHINE_SCHEMA_VERSION,
     batch_result_to_dict,
@@ -66,6 +63,8 @@ from transformation_portal.ingest.machine_output import (
     extract_result_to_dict,
     validate_result_to_dict,
 )
+from transformation_portal.ingest.service import MetadataExtractionService as OrchestrationMetadataExtractionService
+from transformation_portal.ingest.service import ServiceRunRequest
 
 # =============================================================================
 # Supported Image Extensions
@@ -275,19 +274,38 @@ def run_extract(
     fsync: bool = False,
     cli_args: Optional[List[str]] = None,
 ) -> ExtractResult:
-    """Execute single image extraction via MetadataExtractionService."""
-    service = MetadataExtractionService()
+    """Execute single image extraction via orchestration service."""
+    service = OrchestrationMetadataExtractionService()
     requested_output = output_path
-    extracted = service.extract(
-        ServiceExtractRequest(
+    service_result = service.run(
+        ServiceRunRequest(
+            command="extract",
             input_path=image_path,
-            output_path=requested_output,
-            preset=preset,
-            fsync=fsync,
-            cli_args=cli_args or [],
-            config_dict={"mode": "test_extraction", "phase": "3.7"},
+            args={
+                "output_path": requested_output,
+                "preset": preset,
+                "fsync": fsync,
+                "cli_args": cli_args or [],
+                "config_dict": {"mode": "test_extraction", "phase": "3.7"},
+            },
         )
     )
+
+    payload = service_result.payload or {}
+    extracted = payload.get("extract_result")
+    # Extract command enrichment payload uses "sidecar" in the service contract.
+    sidecar = payload.get("sidecar")
+    if not isinstance(extracted, ServiceExtractResult):
+        error_message = str(payload.get("error") or "Unknown extraction error")
+        fallback_error = OtherIngestFailure(error_message)
+        return ExtractResult(
+            success=False,
+            image_path=image_path,
+            output_path=requested_output,
+            elapsed_seconds=0.0,
+            error=error_message,
+            ingest_error=fallback_error,
+        )
 
     if not extracted.success:
         return ExtractResult(
@@ -298,13 +316,6 @@ def run_extract(
             error=str(extracted.error) if extracted.error else "Unknown extraction error",
             ingest_error=extracted.error,
         )
-
-    sidecar = None
-    if extracted.output_path is not None:
-        try:
-            sidecar = load_sidecar(extracted.output_path, schema_type="provenance")
-        except Exception:
-            sidecar = None
 
     return ExtractResult(
         success=True,
@@ -344,56 +355,62 @@ def run_extract_batch(
     fail_fast: bool = False,
     cli_args: Optional[List[str]] = None,
 ) -> ServiceBatchExtractResult:
-    """Execute batch extraction via MetadataExtractionService."""
-    service = MetadataExtractionService()
-    resolved_output_dir = output_dir or input_dir / "provenance_sidecars"
-
-    if not input_dir.exists():
-        error = OtherIngestFailure(f"Directory not found: {input_dir}")
-        return ServiceBatchExtractResult(
-            items=[],
-            total_elapsed=0.0,
-            summary_counts=_build_batch_summary(total=0, success=0, failure=0),
-            dominant_error=error,
+    """Execute batch extraction via orchestration service."""
+    service = OrchestrationMetadataExtractionService()
+    service_result = service.run(
+        ServiceRunRequest(
+            command="extract-batch",
+            input_path=input_dir,
+            output_dir=output_dir,
+            args={
+                "recursive": recursive,
+                "fsync": fsync,
+                "fail_fast": fail_fast,
+                "cli_args": cli_args or [],
+                "config_dict": {"mode": "batch_extraction", "phase": "3.7"},
+            },
         )
+    )
+    payload = service_result.payload or {}
+    batch_result = payload.get("batch_result")
+    if isinstance(batch_result, ServiceBatchExtractResult):
+        return batch_result
 
-    if not input_dir.is_dir():
-        error = OtherIngestFailure(f"Not a directory: {input_dir}")
-        return ServiceBatchExtractResult(
-            items=[],
-            total_elapsed=0.0,
-            summary_counts=_build_batch_summary(total=0, success=0, failure=0),
-            dominant_error=error,
-        )
-
-    resolved_output_dir.mkdir(parents=True, exist_ok=True)
-
-    images = find_images(input_dir, recursive=recursive)
-    return service.batch_extract(
-        BatchExtractRequest(
-            input_paths=images,
-            output_dir=resolved_output_dir,
-            cli_args=cli_args or [],
-            config_dict={"mode": "batch_extraction", "phase": "3.7"},
-            fsync=fsync,
-            deterministic_order=True,
-            fail_fast=fail_fast,
-            preserve_structure=True,
-            input_root=input_dir,
-        ),
+    fallback_error = OtherIngestFailure(str(payload.get("error") or "Unknown batch extraction error"))
+    return ServiceBatchExtractResult(
+        items=[],
+        total_elapsed=0.0,
+        summary_counts=_build_batch_summary(total=0, success=0, failure=0),
+        dominant_error=fallback_error,
     )
 
 
 def run_validate(sidecar_path: Path, strict: bool = True) -> ValidateResult:
-    """Execute sidecar validation via MetadataExtractionService."""
-    service = MetadataExtractionService()
-    validated = service.validate(
-        ServiceValidateRequest(
-            sidecar_path=sidecar_path,
-            schema_type="provenance",
+    """Execute sidecar validation via orchestration service."""
+    service = OrchestrationMetadataExtractionService()
+    service_result = service.run(
+        ServiceRunRequest(
+            command="validate",
+            input_path=sidecar_path,
             strict=strict,
+            args={"schema_type": "provenance"},
         )
     )
+
+    payload = service_result.payload or {}
+    validated = payload.get("validate_result")
+    if not isinstance(validated, ServiceValidateResult):
+        error_message = str(payload.get("error") or "Unknown validation error")
+        fallback_error = OtherIngestFailure(error_message)
+        return ValidateResult(
+            success=False,
+            sidecar_path=sidecar_path,
+            errors=[error_message],
+            exit_code=EXIT_OTHER_FAILURE,
+            typed_errors=[fallback_error],
+            dominant_error=fallback_error,
+            strict=strict,
+        )
 
     if not validated.success:
         dominant_error = validated.dominant_error
@@ -408,20 +425,8 @@ def run_validate(sidecar_path: Path, strict: bool = True) -> ValidateResult:
             strict=strict,
         )
 
-    try:
-        with open(sidecar_path) as handle:
-            data = json.load(handle)
-    except Exception as exc:
-        fallback_error = OtherIngestFailure(str(exc))
-        return ValidateResult(
-            success=False,
-            sidecar_path=sidecar_path,
-            errors=[str(exc)],
-            exit_code=EXIT_OTHER_FAILURE,
-            typed_errors=[fallback_error],
-            dominant_error=fallback_error,
-            strict=strict,
-        )
+    # Validate command enrichment payload uses "sidecar_data" in the service contract.
+    data = payload.get("sidecar_data")
 
     return ValidateResult(
         success=True,
