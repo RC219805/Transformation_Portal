@@ -139,6 +139,34 @@ class TestIngestTimestamps:
             )
 
 
+class TestExifMetadata:
+    """Tests for ExifMetadata schema."""
+
+    def test_normalizes_focal_length_with_mm_suffix(self):
+        """Test focal length string values are normalized before validation."""
+        metadata = ExifMetadata(
+            all_tags={"EXIF:FocalLength": "4.5 mm"},
+            focal_length="4.5 mm",
+        )
+        assert metadata.focal_length == pytest.approx(4.5)
+
+    def test_normalizes_bit_depth_triplet_string(self):
+        """Test bit depth string triplets normalize to a single integer."""
+        metadata = ExifMetadata(
+            all_tags={"EXIF:BitsPerSample": "8 8 8"},
+            bit_depth="8 8 8",
+        )
+        assert metadata.bit_depth == 8
+
+    def test_invalid_focal_length_string_still_rejected(self):
+        """Test malformed focal length strings fail validation."""
+        with pytest.raises(ValueError, match="Invalid focal_length"):
+            ExifMetadata(
+                all_tags={"EXIF:FocalLength": "mm"},
+                focal_length="mm",
+            )
+
+
 class TestPipelineConfig:
     """Tests for PipelineConfig schema."""
 

@@ -18,9 +18,10 @@ Schema version: 1.0.0
 from __future__ import annotations
 
 import datetime
+import re
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, validator
 
 
 class ToolchainVersion(BaseModel):
@@ -176,6 +177,60 @@ class ExifMetadata(BaseModel):
     datetime_original: Optional[str] = None
     gps_latitude: Optional[float] = None
     gps_longitude: Optional[float] = None
+
+    @field_validator("focal_length", mode="before")
+    @classmethod
+    def normalize_focal_length(cls, value: Any) -> Any:
+        """Normalize exiftool focal length strings (e.g. '24.0 mm')."""
+        if value is None or isinstance(value, (int, float)):
+            return value
+        if not isinstance(value, str):
+            return value
+
+        text = value.strip()
+        if not text:
+            return None
+
+        if text.lower().endswith("mm"):
+            text = text[:-2].strip()
+
+        # Some EXIF payloads can be emitted as simple fractions.
+        fraction = re.fullmatch(r"([-+]?\d+)\s*/\s*(\d+)", text)
+        if fraction:
+            numerator, denominator = fraction.groups()
+            if int(denominator) == 0:
+                raise ValueError(f"Invalid focal_length: {value!r}")
+            return float(numerator) / float(denominator)
+
+        number = re.search(r"[-+]?(?:\d+(?:\.\d+)?|\.\d+)", text)
+        if number is None:
+            raise ValueError(f"Invalid focal_length: {value!r}")
+        return float(number.group(0))
+
+    @field_validator("bit_depth", mode="before")
+    @classmethod
+    def normalize_bit_depth(cls, value: Any) -> Any:
+        """Normalize exiftool bit depth strings (e.g. '8 8 8')."""
+        if value is None or isinstance(value, int):
+            return value
+
+        if isinstance(value, (list, tuple)):
+            if not value:
+                return None
+            return value[0]
+
+        if not isinstance(value, str):
+            return value
+
+        text = value.strip()
+        if not text:
+            return None
+
+        token = re.split(r"[\s,]+", text)[0]
+        try:
+            return int(token)
+        except ValueError as exc:
+            raise ValueError(f"Invalid bit_depth: {value!r}") from exc
 
     model_config = ConfigDict(
         frozen=True,

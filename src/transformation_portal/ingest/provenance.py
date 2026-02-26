@@ -205,6 +205,16 @@ def _capture_toolchain_versions() -> List[ToolchainVersion]:
     Returns:
         List of ToolchainVersion objects
     """
+
+    def _normalize_version(value: Any) -> Optional[str]:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return value
+        if isinstance(value, (tuple, list)):
+            return ".".join(str(part) for part in value)
+        return str(value)
+
     versions = []
 
     # exiftool (required)
@@ -248,19 +258,28 @@ def _capture_toolchain_versions() -> List[ToolchainVersion]:
     try:
         import rawpy
 
+        rawpy_version = None
+        rawpy_version_obj = getattr(rawpy, "version", None)
+        if rawpy_version_obj is not None:
+            rawpy_version = getattr(rawpy_version_obj, "version", None)
+        if rawpy_version is None:
+            rawpy_version = getattr(rawpy, "__version__", None)
+        rawpy_version = _normalize_version(rawpy_version)
+
         versions.append(
             ToolchainVersion(
                 name="rawpy",
-                version=rawpy.version.version,
+                version=rawpy_version or "unknown",
                 path=None,
             )
         )
         # Also capture libraw version if available
-        if hasattr(rawpy, "libraw_version"):
+        libraw_version = _normalize_version(getattr(rawpy, "libraw_version", None))
+        if libraw_version:
             versions.append(
                 ToolchainVersion(
                     name="libraw",
-                    version=rawpy.libraw_version,
+                    version=libraw_version,
                     path=None,
                 )
             )
