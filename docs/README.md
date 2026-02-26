@@ -56,12 +56,10 @@ Depth Anything V2/V3 and Depth Pro evaluation and implementation.
 - `PHASE1_REPORT.md` - Technical report
 - `PHASE2_STRATEGY.md` - Next phase plan
 
-### Root-Level Documentation Files
-- `COMMIT_SUMMARY.md` - Git commit documentation
-- `PUSH_COMPLETION_REPORT.md` - Push execution report
-- `PUSH_SUMMARY.md` - Push summary
-- `FILES_COMMITTED.md` - File listing
-- `FILES_CHANGED_SUMMARY.txt` - Change summary
+### Governance and Archives
+- `governance/DOCUMENTATION_POLICY.md` - Documentation classification and retention policy
+- `historical/` - Session/execution/push artifacts retained for historical audit context
+- `pr_archive/` - PR-specific summaries and resolution documentation
 
 ---
 

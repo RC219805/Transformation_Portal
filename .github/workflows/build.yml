@@ -103,6 +103,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Preflight summary
         run: |
@@ -110,6 +112,11 @@ jobs:
           echo "Preflight decision:"
           echo "  run_full: ${{ needs.preflight.outputs.run_full }}"
           echo "  reason:   ${{ needs.preflight.outputs.reason }}"
+
+      - name: Enforce documentation structure
+        run: |
+          set -euo pipefail
+          python3 scripts/governance/check_docs_structure.py
 
       - name: Basic sanity
         run: |

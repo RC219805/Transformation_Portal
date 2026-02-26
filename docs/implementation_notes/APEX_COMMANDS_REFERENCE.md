@@ -267,4 +267,4 @@ If ML dependencies are missing, system falls back to synthetic depth:
 **Documentation:**
 - V2 Enhancement Quickstart: `docs/V2_ENHANCEMENT_QUICKSTART.md`
 - Architectural Guidance: `docs/architecture/decisions/V2_ENHANCEMENT_ARCHITECTURAL_GUIDANCE.md`
-- CLI Reference: `docs/CLI_REFERENCE.md`
+- CLI Reference: `docs/cli/CLI_REFERENCE.md`
