@@ -55,6 +55,22 @@ log_skip() {
     fi
 }
 
+is_git_tracked() {
+    local path="$1"
+    command -v git >/dev/null 2>&1 || return 1
+    git ls-files --error-unmatch "$path" >/dev/null 2>&1
+}
+
+move_preserving_tracking() {
+    local src="$1"
+    local dest="$2"
+    if is_git_tracked "$src"; then
+        git mv "$src" "$dest"
+    else
+        mv "$src" "$dest"
+    fi
+}
+
 # Move file function
 move_file() {
     local src="$1"
@@ -81,7 +97,7 @@ move_file() {
     # Move the file
     log_move "$src" "$dest"
     if [[ "$DRY_RUN" == "false" ]]; then
-        mv "$src" "$dest"
+        move_preserving_tracking "$src" "$dest"
     fi
 }
 
@@ -210,7 +226,7 @@ organize_repository() {
             local new_name="${file#.}"
             if [[ "$DRY_RUN" == "false" ]]; then
                 mkdir -p "scripts/utilities"
-                mv "$file" "scripts/utilities/$new_name"
+                move_preserving_tracking "$file" "scripts/utilities/$new_name"
                 log_move "$file" "scripts/utilities/$new_name"
             else
                 log_move "$file" "scripts/utilities/$new_name"
