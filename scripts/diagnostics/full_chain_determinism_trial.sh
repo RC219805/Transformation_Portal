@@ -90,7 +90,7 @@ Options:
   --clean               Remove output directory before running
   --verbose             Stream per-step command output while also writing logs
   --hash-input          Also record input SHA-256 ledger (can be expensive)
-  --python <path>       Python executable (default: $PYTHON_BIN)
+  --python <path>       Python executable (default: python3; override via $PYTHON_BIN env)
   -h, --help            Show help
 
 Examples:
@@ -206,6 +206,18 @@ OUT_PARENT="$(dirname "$OUT_DIR")"
 OUT_PARENT="$(cd "$OUT_PARENT" && pwd -P)"
 OUT_DIR="$OUT_PARENT/$(basename "$OUT_DIR")"
 
+if [[ "$CLEAN" == "1" ]]; then
+  CLEAN_ROOT="$REPO_ROOT/trial_runs"
+  case "$OUT_DIR" in
+    "/"|"$REPO_ROOT"|"$CLEAN_ROOT")
+      die "--clean refuses dangerous OUT_DIR: $OUT_DIR" 3
+      ;;
+  esac
+  if [[ "$OUT_DIR" != "$CLEAN_ROOT/"* ]]; then
+    die "--clean requires OUT_DIR under $CLEAN_ROOT: $OUT_DIR" 3
+  fi
+fi
+
 if [[ "$CLEAN" == "1" && -e "$OUT_DIR" ]]; then
   log "--clean set; removing existing OUT_DIR: $OUT_DIR"
   rm -rf "$OUT_DIR"
@@ -308,10 +320,10 @@ run_pipeline_once() {
   local log_4e_merkle="$logs_dir/4E_merkle.log"
   local commandline_file="$out_run_dir/commandline.txt"
   local env_file="$out_run_dir/env.txt"
-  local -a cmd_4c=("$PYTHON_BIN" "$TOOL_4C" --input "$INPUT_DIR" --output "$capture")
-  local -a cmd_4d=("$PYTHON_BIN" "$TOOL_4D" --capture "$capture" --output "$manifest" --enforce-fingerprint)
-  local -a cmd_4e_provenance=("$PYTHON_BIN" "$TOOL_4E_P" --capture "$capture" --manifest "$manifest" --output "$provenance")
-  local -a cmd_4e_merkle=("$PYTHON_BIN" "$TOOL_4E_M" --provenance "$provenance" --output "$merkle")
+  local -a cmd_4c=("$PYTHON_BIN" "$TOOL_4C" --input-root "$INPUT_DIR" --out "$capture")
+  local -a cmd_4d=("$PYTHON_BIN" "$TOOL_4D" --input "$capture" --out "$manifest" --require-fingerprint-match)
+  local -a cmd_4e_provenance=("$PYTHON_BIN" "$TOOL_4E_P" --capture-metadata "$capture" --metadata-manifest "$manifest" --out "$provenance")
+  local -a cmd_4e_merkle=("$PYTHON_BIN" "$TOOL_4E_M" --input "$provenance" --out "$merkle")
 
   log "=== ${run_label}: executing from CWD=$work_cwd ==="
   mkdir -p "$logs_dir"
