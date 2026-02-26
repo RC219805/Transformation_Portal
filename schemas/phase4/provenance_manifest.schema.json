@@ -51,7 +51,7 @@
           "provenance_entry_sha256": {
             "type": "string",
             "pattern": "^[a-f0-9]{64}$",
-            "description": "SHA256(file_sha256 || metadata_sha256 || metadata_contract_version) as defined in ADR-035."
+            "description": "SHA256(file_sha256 || metadata_sha256 || capture_contract_version || metadata_contract_version || provenance_contract_version) as defined in ADR-035."
           }
         }
       }

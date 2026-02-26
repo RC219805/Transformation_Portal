@@ -38,6 +38,22 @@ consumers MUST NOT interpret a bare integer without tool context.
 - `4`: schema validation failure
 - `5`: manifest write failure
 
+### `tools/build_provenance_manifest.py` (`tp.meta.provenance.v1` build)
+
+- `0`: success
+- `2`: input read/parse error
+- `3`: input invariant failure
+- `4`: schema validation failure
+- `5`: manifest write failure
+
+### `tools/build_provenance_merkle.py` (`tp.meta.provenance_merkle.v1` build)
+
+- `0`: success
+- `2`: input read/parse error
+- `3`: input invariant failure
+- `4`: schema validation failure
+- `5`: merkle write failure
+
 ### Cross-runtime parity gates
 
 - `tools/check_phase4d_manifest_cross_runtime.py`

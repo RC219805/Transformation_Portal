@@ -24,6 +24,7 @@ dependencies = [
     "imagecodecs>=2023.9.18,<2027",
     "PyYAML>=6.0,<7",  # required for APEX pipeline config parsing
     "pydantic>=2.0,<3",  # required for ingest contract schema validation
+    "jsonschema>=4.21.0,<5",  # required for deterministic contract surface validation
 ]
 classifiers = [
     "Programming Language :: Python :: 3",

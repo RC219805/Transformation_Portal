@@ -1,4 +1,4 @@
-"""Phase 4 deterministic metadata extraction helpers."""
+"""Phase 4 deterministic capture metadata and provenance helpers."""
 
 from .canonicalize_capture_metadata import (
     ConfigValidationError,
@@ -23,6 +23,18 @@ from .hash_capture_metadata import (
     compute_metadata_sha256,
     serialize_metadata_manifest,
 )
+from .provenance_capture import (
+    PROVENANCE_CONTRACT_VERSION,
+    PROVENANCE_MERKLE_CONTRACT_VERSION,
+    ProvenanceInputError,
+    ProvenanceMerkleSchemaValidationError,
+    ProvenanceSchemaValidationError,
+    build_provenance_manifest_payload,
+    build_provenance_merkle_payload,
+    compute_provenance_entry_sha256,
+    serialize_provenance_manifest,
+    serialize_provenance_merkle,
+)
 
 __all__ = [
     "ConfigValidationError",
@@ -44,4 +56,14 @@ __all__ = [
     "MetadataManifestInputError",
     "MetadataSchemaValidationError",
     "MetadataManifestSchemaValidationError",
+    "PROVENANCE_CONTRACT_VERSION",
+    "PROVENANCE_MERKLE_CONTRACT_VERSION",
+    "ProvenanceInputError",
+    "ProvenanceSchemaValidationError",
+    "ProvenanceMerkleSchemaValidationError",
+    "build_provenance_manifest_payload",
+    "build_provenance_merkle_payload",
+    "compute_provenance_entry_sha256",
+    "serialize_provenance_manifest",
+    "serialize_provenance_merkle",
 ]

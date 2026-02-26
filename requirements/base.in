@@ -15,6 +15,7 @@ tqdm>=4.66,<5              # progress bar utility
 
 # Schema validation (required for ingest contract)
 pydantic>=2.0,<3
+jsonschema>=4.21.0,<5
 
 # TIFF image support (essential for batch processing)
 tifffile>=2023.7.18,<2027

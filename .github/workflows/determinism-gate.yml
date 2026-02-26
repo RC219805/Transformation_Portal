@@ -56,6 +56,14 @@ jobs:
         run: |
           pytest -v -m "not ml and not slow and not benchmark" tests/test_build_metadata_manifest.py
 
+      - name: Phase 4 provenance manifest binding gate
+        run: |
+          pytest -v -m "not ml and not slow and not benchmark" tests/test_build_provenance_manifest.py
+
+      - name: Phase 4 provenance merkle gate
+        run: |
+          pytest -v -m "not ml and not slow and not benchmark" tests/test_build_provenance_merkle.py
+
       - name: Setup Python 3.12
         id: setup-python-312
         uses: actions/setup-python@v6
