@@ -838,7 +838,7 @@ export TRANSFORMERS_DEVICE=cpu
 - ✅ Use batch processing for efficiency
 
 **Next Steps**:
-- Review CLI Reference: `docs/CLI_REFERENCE.md`
+- Review CLI Reference: `docs/cli/CLI_REFERENCE.md`
 - Explore SkyGAN Guide: `docs/SKYGAN_ATMOSPHERIC_RENDERING.md`
 - Try examples: `examples/montecito_workflow/`
 
