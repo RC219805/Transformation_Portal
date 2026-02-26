@@ -106,7 +106,7 @@ PY
 
 resolve_repo_root() {
   local here d
-  here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
   d="$here"
   while [[ "$d" != "/" ]]; do
     if [[ -d "$d/.git" ]]; then

@@ -1,6 +1,6 @@
 # Full-Chain Determinism Trial
 
-The determinism harness is [`scripts/diagnostics/full_chain_determinism_trial.sh`](/Users/rc/Projects/Transformation_Portal/scripts/diagnostics/full_chain_determinism_trial.sh).
+The determinism harness is [`scripts/diagnostics/full_chain_determinism_trial.sh`](/scripts/diagnostics/full_chain_determinism_trial.sh).
 
 It validates the full Phase 4 chain:
 

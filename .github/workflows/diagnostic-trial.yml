@@ -61,6 +61,15 @@ jobs:
           set -euo pipefail
           BUNDLE_DIR="$(mktemp -d)"
           export BUNDLE_DIR
+          BUNDLE_EXPORT_DIR="$GITHUB_WORKSPACE/ci_bundle"
+          mkdir -p "$BUNDLE_EXPORT_DIR"
+          echo "$BUNDLE_DIR" > "$GITHUB_WORKSPACE/bundle_dir_path.txt"
+          cleanup_bundle() {
+            if [[ -d "${BUNDLE_DIR:-}" ]]; then
+              cp -R "$BUNDLE_DIR"/. "$BUNDLE_EXPORT_DIR"/ 2>/dev/null || true
+            fi
+          }
+          trap cleanup_bundle EXIT
           echo "Bundle dir: $BUNDLE_DIR"
 
           python - <<'PY'
@@ -175,3 +184,5 @@ jobs:
           path: |
             trial_runs/
             **/logs/*.log
+            ci_bundle/
+            bundle_dir_path.txt
