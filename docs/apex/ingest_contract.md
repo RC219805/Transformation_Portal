@@ -1,8 +1,8 @@
-# Ingest Contract Documentation (v1.0.0)
+# Ingest Contract Documentation (v1.0.1)
 
 **Status:** Official Contract
 **Effective Date:** 2026-02-10
-**Schema Version:** 1.0.0
+**Schema Version:** 1.0.1
 
 ---
 
@@ -33,15 +33,15 @@ The ingest contract ensures:
 
 | Output | Format | Consumer | Binding Contract |
 |--------|--------|----------|------------------|
-| **ProvenanceSidecar** | JSON (v1.0.0) | Audit trail | Complete EXIF + toolchain + env metadata |
-| **IngestManifest** | JSON (v1.0.0) | Pipeline orchestrator | Summary status + sidecar pointer |
+| **ProvenanceSidecar** | JSON (v1.0.1) | Audit trail | Complete EXIF + toolchain + env metadata |
+| **IngestManifest** | JSON (v1.0.1) | Pipeline orchestrator | Summary status + sidecar pointer |
 | **Validation Report** | Exit code | CI/CD | 0=pass, 1-5=specific failure modes |
 
 ---
 
 ## Schema Definitions
 
-### ProvenanceSidecar (v1.0.0)
+### ProvenanceSidecar (v1.0.1)
 
 Complete, lossless provenance record for every ingested file.
 
@@ -49,7 +49,7 @@ Complete, lossless provenance record for every ingested file.
 
 ```json
 {
-  "schema_version": "1.0.0",  // Literal type (only "1.0.0" accepted)
+  "schema_version": "1.0.1",  // Literal type (only "1.0.1" accepted)
   "file_integrity": {
     "sha256": "...",            // 64 hex chars (lowercase)
     "size_bytes": 1024000,      // Integer
@@ -132,7 +132,7 @@ All Pydantic models are frozen (`frozen=True`). Once created, sidecar objects ca
 
 ---
 
-### IngestManifest (v1.0.0)
+### IngestManifest (v1.0.1)
 
 Lighter-weight summary for pipeline orchestration.
 
@@ -140,7 +140,7 @@ Lighter-weight summary for pipeline orchestration.
 
 ```json
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.0.1",
   "input_file": {
     "sha256": "...",
     "size_bytes": 1024000,
@@ -166,10 +166,10 @@ Lighter-weight summary for pipeline orchestration.
 
 ### Schema Version Enforcement
 
-**Contract:** Schema version must be exactly `"1.0.0"`.
+**Contract:** Schema version must be exactly `"1.0.1"`.
 
 **Enforcement:**
-- Literal type in Pydantic model (`Literal["1.0.0"]`)
+- Literal type in Pydantic model (`Literal["1.0.1"]`)
 - CI validation script checks all sidecar files
 - Hard-fail on version mismatch
 
@@ -222,6 +222,11 @@ Unknown fields detected (schema drift): unknown_field
 - `timestamps`: ISO 8601 with timezone
 - `size_bytes`: Positive integer
 - `status`: One of {"success", "error", "skipped"}
+
+**EXIF normalization semantics (v1.0.1):**
+- `exif.focal_length` accepts canonical numeric input and EXIF-style strings such as `"4.5 mm"` (normalized to `4.5`).
+- `exif.bit_depth` accepts canonical integer input and EXIF-style triplet strings such as `"8 8 8"` (normalized to `8`).
+- Normalization happens before strict typing in the schema model; malformed values are still rejected.
 
 **Example error:**
 ```
@@ -488,13 +493,13 @@ Ingest contract **must never**:
 
 ## Migration Guide
 
-This is the initial release (v1.0.0). No migration required.
+This is the initial release (v1.0.1). No migration required.
 
 **Future schema changes:**
 
 When updating schema to v2.0.0:
 1. Create new models with Literal["2.0.0"]
-2. Keep v1.0.0 models for backward compat
+2. Keep v1.0.1 models for backward compat
 3. Add migration function: `migrate_v1_to_v2()`
 4. Update validation to support both versions
 5. Document breaking changes in CHANGELOG

@@ -187,7 +187,7 @@ def validate_schema(
     3. Type validation
     4. Unknown fields detection (via Pydantic extra="forbid")
 
-    Note: As of schema v1.0.0, all models use ConfigDict(extra="forbid"),
+    Note: As of schema v1.0.1, all models use ConfigDict(extra="forbid"),
     so unknown fields are ALWAYS rejected by Pydantic during validation.
     The strict_mode parameter is kept for API compatibility but has no effect
     on drift detection (which is now always strict).
@@ -231,8 +231,8 @@ def validate_schema(
     schema_version = data_dict.get("schema_version")
     if not schema_version:
         errors.append("Missing required field: schema_version")
-    elif schema_version != "1.0.0":
-        errors.append(f"Unsupported schema version: {schema_version}. " f"This validator supports version 1.0.0 only.")
+    elif schema_version != "1.0.1":
+        errors.append(f"Unsupported schema version: {schema_version}. " f"This validator supports version 1.0.1 only.")
 
     # Validate with Pydantic (includes drift detection via extra="forbid")
     try:

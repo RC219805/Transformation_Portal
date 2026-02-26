@@ -221,7 +221,7 @@ class TestValidateSchema:
     def test_missing_required_field(self):
         """Test validation with missing required field."""
         data = {
-            "schema_version": "1.0.0",
+            "schema_version": "1.0.1",
             "file_integrity": {
                 "sha256": "a" * 64,
                 "size_bytes": 1024,
@@ -281,7 +281,7 @@ class TestValidateSchema:
     def test_unknown_fields_strict_mode(self):
         """Test detection of unknown fields (schema drift).
 
-        As of v1.0.0, all schemas use ConfigDict(extra="forbid"),
+        As of v1.0.1, all schemas use ConfigDict(extra="forbid"),
         so unknown fields are ALWAYS rejected by Pydantic.
         """
         sidecar = ProvenanceSidecar(
@@ -324,7 +324,7 @@ class TestValidateSchema:
     def test_type_mismatch(self):
         """Test validation with type mismatch."""
         data = {
-            "schema_version": "1.0.0",
+            "schema_version": "1.0.1",
             "file_integrity": {
                 "sha256": "a" * 64,
                 "size_bytes": "not-an-integer",  # Type mismatch

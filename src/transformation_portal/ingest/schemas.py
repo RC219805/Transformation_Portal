@@ -1,4 +1,4 @@
-"""Versioned JSON schemas for ingest contract (v1.0.0).
+"""Versioned JSON schemas for ingest contract (v1.0.1).
 
 Defines immutable, audit-grade schemas for:
 - IngestManifest: Ingest output contract
@@ -11,16 +11,17 @@ Schema guarantees:
 - Deterministic serialization (sorted keys, normalized types)
 - No silent fallbacks or inference
 
-Contract version: 1.0.0
-Schema version: 1.0.0
+Contract version: 1.0.1
+Schema version: 1.0.1
 """
 
 from __future__ import annotations
 
 import datetime
+import re
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, validator
 
 
 class ToolchainVersion(BaseModel):
@@ -177,6 +178,60 @@ class ExifMetadata(BaseModel):
     gps_latitude: Optional[float] = None
     gps_longitude: Optional[float] = None
 
+    @field_validator("focal_length", mode="before")
+    @classmethod
+    def normalize_focal_length(cls, value: Any) -> Any:
+        """Normalize exiftool focal length strings (e.g. '24.0 mm')."""
+        if value is None or isinstance(value, (int, float)):
+            return value
+        if not isinstance(value, str):
+            return value
+
+        text = value.strip()
+        if not text:
+            return None
+
+        if text.lower().endswith("mm"):
+            text = text[:-2].strip()
+
+        # Some EXIF payloads can be emitted as simple fractions.
+        fraction = re.fullmatch(r"([-+]?\d+)\s*/\s*(\d+)", text)
+        if fraction:
+            numerator, denominator = fraction.groups()
+            if int(denominator) == 0:
+                raise ValueError(f"Invalid focal_length: {value!r}")
+            return float(numerator) / float(denominator)
+
+        number = re.search(r"[-+]?(?:\d+(?:\.\d+)?|\.\d+)", text)
+        if number is None:
+            raise ValueError(f"Invalid focal_length: {value!r}")
+        return float(number.group(0))
+
+    @field_validator("bit_depth", mode="before")
+    @classmethod
+    def normalize_bit_depth(cls, value: Any) -> Any:
+        """Normalize exiftool bit depth strings (e.g. '8 8 8')."""
+        if value is None or isinstance(value, int):
+            return value
+
+        if isinstance(value, (list, tuple)):
+            if not value:
+                return None
+            return value[0]
+
+        if not isinstance(value, str):
+            return value
+
+        text = value.strip()
+        if not text:
+            return None
+
+        token = re.split(r"[\s,]+", text)[0]
+        try:
+            return int(token)
+        except ValueError as exc:
+            raise ValueError(f"Invalid bit_depth: {value!r}") from exc
+
     model_config = ConfigDict(
         frozen=True,
         extra="forbid",
@@ -212,7 +267,7 @@ class PipelineConfig(BaseModel):
 
 
 class ProvenanceSidecar(BaseModel):
-    """Provenance sidecar schema (v1.0.0).
+    """Provenance sidecar schema (v1.0.1).
 
     Complete, lossless provenance record for audit-grade traceability.
     Emitted deterministically for every ingested RAW/TIFF file.
@@ -229,7 +284,7 @@ class ProvenanceSidecar(BaseModel):
         run_id: Unique run identifier (UUID v4) - non-deterministic by design
     """
 
-    schema_version: Literal["1.0.0"] = "1.0.0"
+    schema_version: Literal["1.0.1"] = "1.0.1"
 
     file_integrity: FileIntegrity
     exif: ExifMetadata
@@ -243,8 +298,8 @@ class ProvenanceSidecar(BaseModel):
     @validator("schema_version")
     def validate_schema_version(cls, v):
         """Ensure schema version is supported."""
-        if v != "1.0.0":
-            raise ValueError(f"Unsupported ProvenanceSidecar schema version: {v}. " f"This code supports version 1.0.0 only.")
+        if v != "1.0.1":
+            raise ValueError(f"Unsupported ProvenanceSidecar schema version: {v}. " f"This code supports version 1.0.1 only.")
         return v
 
     @validator("git_commit")
@@ -284,7 +339,7 @@ class ProvenanceSidecar(BaseModel):
 
 
 class IngestManifest(BaseModel):
-    """Ingest manifest schema (v1.0.0).
+    """Ingest manifest schema (v1.0.1).
 
     Output contract for the ingest stage.
     Lighter-weight than ProvenanceSidecar (summary only).
@@ -299,7 +354,7 @@ class IngestManifest(BaseModel):
         ingest_duration_sec: Total ingest duration in seconds
     """
 
-    schema_version: Literal["1.0.0"] = "1.0.0"
+    schema_version: Literal["1.0.1"] = "1.0.1"
 
     input_file: FileIntegrity
     output_file: Optional[FileIntegrity] = None
@@ -311,8 +366,8 @@ class IngestManifest(BaseModel):
     @validator("schema_version")
     def validate_schema_version(cls, v):
         """Ensure schema version is supported."""
-        if v != "1.0.0":
-            raise ValueError(f"Unsupported IngestManifest schema version: {v}. " f"This code supports version 1.0.0 only.")
+        if v != "1.0.1":
+            raise ValueError(f"Unsupported IngestManifest schema version: {v}. " f"This code supports version 1.0.1 only.")
         return v
 
     @validator("status")

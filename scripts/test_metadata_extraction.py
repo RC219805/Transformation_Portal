@@ -250,9 +250,21 @@ def run_check_system() -> SystemCheckResult:
         import rawpy
 
         result.rawpy_available = True
-        result.rawpy_version = rawpy.version.version
-        if hasattr(rawpy, "libraw_version"):
-            result.libraw_version = rawpy.libraw_version
+        rawpy_version = None
+        rawpy_version_obj = getattr(rawpy, "version", None)
+        if rawpy_version_obj is not None:
+            rawpy_version = getattr(rawpy_version_obj, "version", None)
+        if rawpy_version is None:
+            rawpy_version = getattr(rawpy, "__version__", None)
+        if rawpy_version is not None:
+            result.rawpy_version = str(rawpy_version)
+
+        libraw_version = getattr(rawpy, "libraw_version", None)
+        if libraw_version is not None:
+            if isinstance(libraw_version, (tuple, list)):
+                result.libraw_version = ".".join(str(part) for part in libraw_version)
+            else:
+                result.libraw_version = str(libraw_version)
     except ImportError:
         pass  # Optional dependency
 
