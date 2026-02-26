@@ -28,6 +28,7 @@ This policy defines where documentation belongs and how long it should be retain
 
 - Any document tied to a specific PR, commit hash, merge event, or fix rollout belongs in `docs/pr_archive/`.
 - Any point-in-time execution output (for example push summaries, completion reports, session reports) belongs in `docs/historical/`.
+- The `docs/` root is reserved for `README.md` only. All other docs must live in an approved subdirectory.
 - Filenames containing `SUMMARY`, `REPORT`, `COMPLETE`, or `STATUS` are not allowed outside `docs/historical/` and `docs/pr_archive/`.
 
 ## Enforcement

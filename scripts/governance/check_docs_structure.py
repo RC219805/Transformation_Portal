@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Enforce documentation placement rules for summary/report/status artifacts."""
+"""Enforce documentation placement and retention structure under docs/."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import sys
 
 KEYWORD_RE = re.compile(r"(SUMMARY|REPORT|COMPLETE|STATUS)", re.IGNORECASE)
 ALLOWED_PREFIXES = ("docs/historical/", "docs/pr_archive/")
+ALLOWED_DOCS_ROOT_FILES = {"README.md"}
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
@@ -52,7 +53,16 @@ def _all_docs_files() -> list[str]:
     return sorted(str(path.relative_to(REPO_ROOT)).replace("\\", "/") for path in docs_root.rglob("*") if path.is_file())
 
 
-def _is_violation(path_str: str) -> bool:
+def _root_violation(path_str: str) -> bool:
+    normalized = path_str.replace("\\", "/")
+    parts = pathlib.PurePosixPath(normalized).parts
+    if len(parts) != 2 or parts[0] != "docs":
+        return False
+
+    return parts[1] not in ALLOWED_DOCS_ROOT_FILES
+
+
+def _keyword_violation(path_str: str) -> bool:
     normalized = path_str.replace("\\", "/")
     name = pathlib.PurePosixPath(normalized).name
     if not KEYWORD_RE.search(name):
@@ -61,7 +71,7 @@ def _is_violation(path_str: str) -> bool:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Validate documentation placement for summary/report/status artifacts.")
+    parser = argparse.ArgumentParser(description="Validate documentation placement rules.")
     parser.add_argument(
         "--all",
         action="store_true",
@@ -74,16 +84,20 @@ def main() -> int:
         print("No documentation files to validate.")
         return 0
 
-    violations = [path for path in candidates if _is_violation(path)]
+    root_violations = [path for path in candidates if _root_violation(path)]
+    keyword_violations = [path for path in candidates if _keyword_violation(path)]
 
-    if violations:
+    if root_violations or keyword_violations:
         print("Documentation structure violations detected:")
-        for path in violations:
-            print(f"  - {path}")
-        print(
-            "\nFiles with SUMMARY/REPORT/COMPLETE/STATUS in the filename must be under "
-            "docs/historical/ or docs/pr_archive/."
-        )
+        if root_violations:
+            print("Root docs files are restricted to docs/README.md:")
+            for path in root_violations:
+                print(f"  - {path}")
+        if keyword_violations:
+            print("Files with SUMMARY/REPORT/COMPLETE/STATUS must be archived:")
+            for path in keyword_violations:
+                print(f"  - {path}")
+            print("Allowed prefixes: docs/historical/ and docs/pr_archive/.")
         return 1
 
     print(f"Documentation structure check passed ({len(candidates)} file(s) scanned).")
