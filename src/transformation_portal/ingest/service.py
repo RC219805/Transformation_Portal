@@ -45,7 +45,11 @@ SUPPORTED_EXTENSIONS = {
 
 @dataclass(frozen=True)
 class ServiceRunRequest:
-    """Input contract for orchestration entrypoints."""
+    """Input contract for orchestration entrypoints.
+
+    Path-typed fields remain strict for internal/static call sites. Runtime
+    coercion of `str` values is handled defensively inside orchestration.
+    """
 
     command: str
     input_path: Path | None = None

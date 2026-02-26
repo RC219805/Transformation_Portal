@@ -108,7 +108,7 @@ def test_run_extract_preserves_core_default_config_and_normalizes_paths(tmp_path
     service = MetadataExtractionService(metadata_service=stub)  # type: ignore[arg-type]
 
     result = service.run(
-        ServiceRunRequest(
+        ServiceRunRequest(  # type: ignore[arg-type] - runtime coercion is intentionally defensive
             command="extract",
             input_path=str(input_path),
             output_dir=str(output_dir),
@@ -247,7 +247,7 @@ def test_run_extract_batch_preserves_core_default_config_and_normalizes_paths(tm
     service = MetadataExtractionService(metadata_service=stub)  # type: ignore[arg-type]
 
     result = service.run(
-        ServiceRunRequest(
+        ServiceRunRequest(  # type: ignore[arg-type] - runtime coercion is intentionally defensive
             command="extract-batch",
             input_path=str(input_dir),
             input_paths=[str(image_path)],
