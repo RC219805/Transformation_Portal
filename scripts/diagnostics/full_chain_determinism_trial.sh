@@ -29,10 +29,19 @@ CLEAN=0
 INPUT_DIR=""
 OUT_DIR=""
 PYTHON_BIN="${PYTHON_BIN:-python3}"
+TMP_CWD=""
 
 die() { echo "ERROR: $*" >&2; exit "${2:-1}"; }
 log() { echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] $*" >&2; }
 have() { command -v "$1" >/dev/null 2>&1; }
+
+cleanup() {
+  # Centralized cleanup for temporary work directories.
+  if [[ -n "${TMP_CWD:-}" && -d "${TMP_CWD:-}" ]]; then
+    rm -rf "$TMP_CWD" >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT
 
 sha256_file() {
   local file_path="$1"
@@ -155,11 +164,29 @@ TOOL_4E_M="$REPO_ROOT/tools/build_provenance_merkle.py"
 [[ -f "$TOOL_4E_P" ]] || die "Missing tool: $TOOL_4E_P" 3
 [[ -f "$TOOL_4E_M" ]] || die "Missing tool: $TOOL_4E_M" 3
 
+# Optional runtime dependency clarity.
+# Some Phase 4 implementations may shell out to system tools (for example exiftool).
+# These are warnings by default; make them hard requirements via env gates.
+maybe_require_tool() {
+  local tool="$1"
+  local env_gate="${2:-}"
+  if have "$tool"; then
+    return 0
+  fi
+  if [[ -n "$env_gate" && "${!env_gate:-0}" == "1" ]]; then
+    die "Missing required runtime tool: $tool (set by $env_gate=1)" 2
+  fi
+  log "WARN: optional runtime tool not found: $tool (set ${env_gate:-<no gate>}=1 to require)"
+}
+
+maybe_require_tool "exiftool" "TP_TRIAL_REQUIRE_EXIFTOOL"
+
 STAMP="$(date -u +"%Y%m%dT%H%M%SZ")"
 if [[ -z "$OUT_DIR" ]]; then
   OUT_DIR="$REPO_ROOT/trial_runs/full_chain_determinism_$STAMP"
 elif [[ "$OUT_DIR" != /* ]]; then
-  OUT_DIR="$PWD/$OUT_DIR"
+  # Resolve relative --out against repo root, not invoker cwd.
+  OUT_DIR="$REPO_ROOT/$OUT_DIR"
 fi
 
 OUT_PARENT="$(dirname "$OUT_DIR")"
@@ -328,7 +355,6 @@ if [[ "$DO_TMP" == "1" ]]; then
   TMPDIR_BASE="${TMPDIR:-/tmp}"
   TMP_CWD="$TMPDIR_BASE/tp_full_chain_trial_${STAMP}_$$"
   mkdir -p "$TMP_CWD"
-  trap 'rm -rf "$TMP_CWD" >/dev/null 2>&1 || true' EXIT
 
   log "Starting /tmp runs from: $TMP_CWD"
   for i in $(seq 1 "$RUNS"); do
