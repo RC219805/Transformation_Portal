@@ -168,7 +168,19 @@ jobs:
           }
           trap cleanup EXIT INT TERM
 
-          cp -R "${REPO_ROOT}" "${COPY_ROOT}"
+          mkdir -p "${COPY_ROOT}"
+          if command -v rsync >/dev/null 2>&1; then
+            rsync -a \
+              --exclude='.git' \
+              --exclude='__pycache__' \
+              --exclude='.pytest_cache' \
+              --exclude='.mypy_cache' \
+              --exclude='.venv' \
+              "${REPO_ROOT}/" "${COPY_ROOT}/"
+          else
+            cp -R "${REPO_ROOT}/." "${COPY_ROOT}/"
+            rm -rf "${COPY_ROOT}/.git"
+          fi
           cd "${COPY_ROOT}"
 
           python3 -m pip install --upgrade pip setuptools wheel
@@ -187,21 +199,27 @@ jobs:
 
           test -f "${OUT_DIR}/plaster_marmorino_westwood_beige.png"
 
-          # Running tools from a temp copy must not mutate the checked-out workspace.
+          # Guard against scripts silently ignoring --output-dir and writing under repo root.
+          if [ -d "${COPY_ROOT}/trial_runs" ]; then
+            echo "relocatability proof failed: outputs escaped to copied repo root" >&2
+            exit 1
+          fi
+
+          # Guard against hardcoded absolute writes back into the original checkout.
           if [ -n "$(git -C "${REPO_ROOT}" status --porcelain)" ]; then
             echo "relocatability proof failed: original workspace was mutated" >&2
             git -C "${REPO_ROOT}" status --porcelain >&2
             exit 1
           fi
 
-          COPY_ROOT_ENV="${COPY_ROOT}" python3 - <<'PY'
+          COPY_ROOT="${COPY_ROOT}" python3 - <<'PY'
           import os
           from pathlib import Path
 
           import tp
           import transformation_portal
 
-          copy_root = Path(os.environ["COPY_ROOT_ENV"]).resolve()
+          copy_root = Path(os.environ["COPY_ROOT"]).resolve()
           tp_file = Path(tp.__file__).resolve()
           expected_prefix = copy_root / "src" / "tp"
           if not str(tp_file).startswith(str(expected_prefix)):
