@@ -1,5 +1,7 @@
 """Tests for GaussianBackend (Phase 2.3)."""
 
+import os
+
 import numpy as np
 import pytest
 
@@ -12,6 +14,16 @@ from transformation_portal.spatial_ai.reconstruction import (
     LicenseRestrictionError,
     ReconstructionInput,
 )
+
+
+def _multiview_iters() -> int:
+    """Return a CI-safe iteration budget for multiview reconstruction tests."""
+    long_tests = os.getenv("TP_LONG_TESTS", "").strip().lower()
+    if long_tests in {"1", "true", "yes"}:
+        return 1000
+    if os.getenv("CI", "").strip():
+        return 50
+    return 100
 
 
 @pytest.mark.slow
@@ -124,7 +136,7 @@ class TestGaussianBackend:
         reconstruction_input = ReconstructionInput(images=images, gamma=1.0, cameras=cameras, tier="apex_research")
 
         # Reconstruct
-        scene = backend.reconstruct(reconstruction_input, iterations=1000)
+        scene = backend.reconstruct(reconstruction_input, iterations=_multiview_iters())
 
         # Validate scene
         assert scene is not None
