@@ -111,6 +111,9 @@ coverage.json
 htmlcov/
 .coverage.*
 
+# Spatial AI benchmark telemetry (mutable local test artifact)
+tests/spatial_ai/performance_ledger.json
+
 # -----------------------------------------------------------------------------
 # Depth Pipeline
 # -----------------------------------------------------------------------------
