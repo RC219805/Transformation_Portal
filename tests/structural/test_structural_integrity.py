@@ -7,6 +7,7 @@ Enforces:
 4) Semantic version gating tied to API changes
 5) CLI argument surface freeze (subprocess parser introspection)
 6) Import boundary enforcement (AST-based static import analysis)
+7) Console script entrypoint freeze ([project.scripts] in pyproject.toml)
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ TESTS_ROOT = REPO_ROOT / "tests"
 
 API_SNAPSHOT_FILE = STRUCTURAL_ROOT / "api_surface_snapshot.json"
 CLI_SNAPSHOT_FILE = STRUCTURAL_ROOT / "cli_surface_snapshot.json"
+CONSOLE_SCRIPTS_SNAPSHOT_FILE = STRUCTURAL_ROOT / "console_scripts_snapshot.json"
 
 PUBLIC_API_POLICY_FILE = STRUCTURAL_ROOT / "public_api_policy.json"
 VERSION_POLICY_FILE = STRUCTURAL_ROOT / "version_policy.json"
@@ -444,6 +446,126 @@ def test_cli_argument_surface_is_frozen():
         "If intentional, regenerate snapshot with:\n"
         "  UPDATE_CLI_SNAPSHOT=1 pytest -q tests/structural\n"
     )
+
+
+def _pyproject_path() -> Path:
+    """Resolve the canonical pyproject.toml path from version policy settings."""
+    policy = _load_json(VERSION_POLICY_FILE)
+    if policy.get("version_source") == "pyproject":
+        return REPO_ROOT / policy.get("pyproject_file", "pyproject.toml")
+    return REPO_ROOT / "pyproject.toml"
+
+
+def _collect_console_scripts() -> dict[str, Any]:
+    """Collect deterministic [project.scripts] mapping from pyproject.toml."""
+    import tomllib
+
+    pyproject_file = _pyproject_path()
+    data = tomllib.loads(pyproject_file.read_text(encoding="utf-8"))
+    scripts = (data.get("project", {}) or {}).get("scripts", {}) or {}
+    if not isinstance(scripts, dict):
+        raise AssertionError(f"[project.scripts] must be a table/dict in {pyproject_file}")
+
+    return {
+        "snapshot_version": 1,
+        "scripts": {key: scripts[key] for key in sorted(scripts)},
+    }
+
+
+def _classify_console_scripts_change(old: dict[str, str], new: dict[str, str]) -> str:
+    """Return one of NONE, MINOR, MAJOR for [project.scripts] changes."""
+    if old == new:
+        return "NONE"
+
+    old_keys = set(old)
+    new_keys = set(new)
+    if old_keys - new_keys:
+        return "MAJOR"
+
+    for key in old_keys & new_keys:
+        if old[key] != new[key]:
+            return "MAJOR"
+
+    if new_keys - old_keys:
+        return "MINOR"
+
+    return "MAJOR"
+
+
+def _validate_console_script_targets_resolve_to_src_modules(scripts: dict[str, str]) -> None:
+    """Statically validate entrypoint target shape and module existence under src/."""
+    module_re = re.compile(r"^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$")
+    callable_re = re.compile(r"^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$")
+
+    for name, target in scripts.items():
+        if ":" not in target:
+            raise AssertionError(f"Console script '{name}' target must be 'module:callable' (got {target!r})")
+        module, callable_name = target.split(":", 1)
+        module = module.strip()
+        callable_name = callable_name.strip()
+
+        if not module or not callable_name:
+            raise AssertionError(f"Console script '{name}' target malformed: {target!r}")
+        if not module_re.fullmatch(module):
+            raise AssertionError(f"Console script '{name}' module is not a valid dotted identifier: {module!r}")
+        if not callable_re.fullmatch(callable_name):
+            raise AssertionError(f"Console script '{name}' callable is not a valid dotted identifier: {callable_name!r}")
+
+        module_rel = Path(*module.split("."))
+        module_file = SRC_ROOT / (str(module_rel) + ".py")
+        module_init = SRC_ROOT / module_rel / "__init__.py"
+        if not module_file.exists() and not module_init.exists():
+            raise AssertionError(
+                f"Console script '{name}' points to missing module '{module}'. "
+                f"Expected one of: {module_file.relative_to(REPO_ROOT)}, {module_init.relative_to(REPO_ROOT)}"
+            )
+
+
+def test_console_scripts_are_frozen_and_version_gated():
+    """Freeze [project.scripts] and enforce SemVer bump requirements for contract changes."""
+    current = _collect_console_scripts()
+    _validate_console_script_targets_resolve_to_src_modules(current["scripts"])
+    current_version = _extract_version()
+
+    if os.getenv("UPDATE_CONSOLE_SCRIPTS_SNAPSHOT") == "1":
+        payload = dict(current)
+        payload["_version_marker"] = current_version
+        CONSOLE_SCRIPTS_SNAPSHOT_FILE.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+        return
+
+    if not CONSOLE_SCRIPTS_SNAPSHOT_FILE.exists():
+        raise AssertionError(
+            "Console scripts snapshot missing. Generate with:\n"
+            "  UPDATE_CONSOLE_SCRIPTS_SNAPSHOT=1 pytest -q tests/structural\n"
+        )
+
+    expected = _load_json(CONSOLE_SCRIPTS_SNAPSHOT_FILE)
+    old_version = expected.get("_version_marker")
+    expected_norm = dict(expected)
+    expected_norm.pop("_version_marker", None)
+
+    if current != expected_norm:
+        if not old_version:
+            raise AssertionError(
+                "Console scripts snapshot missing _version_marker. Regenerate with:\n"
+                "  UPDATE_CONSOLE_SCRIPTS_SNAPSHOT=1 pytest -q tests/structural\n"
+            )
+
+        change_level = _classify_console_scripts_change(
+            expected_norm.get("scripts", {}),
+            current.get("scripts", {}),
+        )
+        if change_level != "NONE":
+            _require_bump(old_version, current_version, change_level)
+
+        raise AssertionError(
+            "Console script entrypoints changed ([project.scripts]).\n\n"
+            f"Classified change level: {change_level}\n"
+            f"Old version: {old_version}\n"
+            f"New version: {current_version}\n\n"
+            "If intentional, regenerate snapshot with:\n"
+            "  UPDATE_CONSOLE_SCRIPTS_SNAPSHOT=1 pytest -q tests/structural\n"
+        )
 
 
 # ---------------------------------------------------------------------

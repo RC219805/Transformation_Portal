@@ -1,0 +1,13 @@
+{
+  "_version_marker": "0.1.0",
+  "scripts": {
+    "lux-depth-v3": "transformation_portal.lux_depth_v3.__main__:app",
+    "lux_render": "transformation_portal.pipelines.lux_render_pipeline:main",
+    "luxury-tiff-batch": "luxury_tiff_batch_processor.cli:main",
+    "luxury_video_grader": "transformation_portal.processors.luxury_video_master_grader:main",
+    "transform-analyze": "transformation_portal.cli:analyze_cli",
+    "transform-process": "transformation_portal.cli:process_cli",
+    "transform-render": "transformation_portal.cli:render_cli"
+  },
+  "snapshot_version": 1
+}
