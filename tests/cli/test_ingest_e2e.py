@@ -296,6 +296,43 @@ class TestInputValidation:
         assert result.success is False
         assert "No supported images found" in result.error
 
+    def test_directory_with_only_unsupported_files(self, tmp_path: Path):
+        """Test handling of directory with only unsupported file types."""
+        from transformation_portal.cli.ingest_e2e import run_e2e_ingest
+
+        input_dir = tmp_path / "unsupported"
+        input_dir.mkdir()
+        (input_dir / "readme.txt").write_bytes(b"readme")
+        (input_dir / "script.py").write_bytes(b"code")
+        (input_dir / "data.csv").write_bytes(b"data")
+
+        result = run_e2e_ingest(
+            input_path=input_dir,
+            output_dir=tmp_path / "output",
+        )
+
+        assert result.success is False
+        assert "No supported images found" in result.error
+
+    def test_nonexistent_input_path(self, tmp_path: Path):
+        """Test handling of nonexistent input path.
+
+        Note: The CLI layer validates path existence via typer's exists=True,
+        so this tests the underlying function behavior.
+        """
+        from transformation_portal.cli.ingest_e2e import _discover_images
+
+        nonexistent = tmp_path / "does_not_exist"
+        # _discover_images will fail if path doesn't exist
+        # This is expected behavior - the path should be validated before calling
+        try:
+            images = _discover_images(nonexistent, recursive=True)
+            # If no exception, should return empty list
+            assert len(images) == 0
+        except (FileNotFoundError, OSError):
+            # This is acceptable behavior for nonexistent paths
+            pass
+
 
 class TestCLIIntegration:
     """Integration tests for CLI commands."""
