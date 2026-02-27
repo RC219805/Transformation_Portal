@@ -23,9 +23,21 @@ Usage::
 
 from __future__ import annotations
 
+import atexit
+import os
 import time
 from contextlib import contextmanager
 from typing import Any, Dict, Optional
+
+_SHUTTING_DOWN = False
+
+
+def _mark_shutting_down() -> None:
+    global _SHUTTING_DOWN
+    _SHUTTING_DOWN = True
+
+
+atexit.register(_mark_shutting_down)
 
 
 class TimingContext:
@@ -64,37 +76,50 @@ class TimingContext:
     def _sync_device(self) -> None:
         """Synchronize GPU/MPS before timing.
 
-        Uses unified torch.accelerator.synchronize() when available (PyTorch 2.4+),
-        falls back to device-specific sync for older versions.
+        NOTE:
+          * This is best-effort instrumentation only.
+          * MPS sync is disabled by default because it can segfault on some
+            macOS/PyTorch combinations.
+          * Enable MPS sync explicitly with TP_TIMING_SYNC_MPS=1 if needed.
+
+        Controls:
+          * TP_DISABLE_DEVICE_SYNC=1 disables all device synchronization.
+          * TP_TIMING_SYNC_MPS=1 enables MPS synchronization.
         """
-        if self.device in {"mps", "cuda"}:
-            try:
-                import torch
+        if _SHUTTING_DOWN:
+            return
 
-                # Try unified API first (PyTorch 2.4+)
-                if hasattr(torch, "accelerator") and hasattr(torch.accelerator, "synchronize"):
-                    torch.accelerator.synchronize()
-                    return
+        if os.getenv("TP_DISABLE_DEVICE_SYNC", "").strip().lower() in {"1", "true", "yes"}:
+            return
 
-                # Fallback to device-specific sync with safe attribute checks
-                if (
-                    self.device == "mps"
-                    and hasattr(torch, "backends")
-                    and hasattr(torch.backends, "mps")
-                    and torch.backends.mps.is_available()
-                    and hasattr(torch, "mps")
-                    and hasattr(torch.mps, "synchronize")
-                ):
-                    torch.mps.synchronize()
-                elif (
-                    self.device == "cuda"
-                    and hasattr(torch, "cuda")
-                    and torch.cuda.is_available()
-                    and hasattr(torch.cuda, "synchronize")
-                ):
+        if self.device not in {"mps", "cuda"}:
+            return
+
+        if self.device == "mps":
+            if os.getenv("TP_TIMING_SYNC_MPS", "").strip().lower() not in {"1", "true", "yes"}:
+                return
+
+        try:
+            import torch
+        except ImportError:
+            return
+
+        try:
+            if self.device == "cuda":
+                if hasattr(torch, "cuda") and torch.cuda.is_available() and hasattr(torch.cuda, "synchronize"):
                     torch.cuda.synchronize()
-            except ImportError:
-                pass  # torch not available, fall back to CPU timing
+                return
+
+            if (
+                hasattr(torch, "backends")
+                and hasattr(torch.backends, "mps")
+                and torch.backends.mps.is_available()
+                and hasattr(torch, "mps")
+                and hasattr(torch.mps, "synchronize")
+            ):
+                torch.mps.synchronize()
+        except Exception:
+            return
 
 
 @contextmanager
