@@ -3,5 +3,5 @@
 # Scope: docs/schemas/evalsuite/**/*.schema.json
 
 dbb32fed527b34044b182ce7c59a0f11554112c54841fb8ffae366871d0ebe3f  docs/schemas/evalsuite/evalsuite.resolution.v0/resolution.schema.json
-37a10bffa4bfccdbad663471a178abd0f834e281d0fae6e5fca4c01ad25b99db  docs/schemas/evalsuite/evalsuite.v0/evalsuite.schema.json
+55c596755f50bb327a9888277f601006944bca3568e61c046fe1a8210a0dc385  docs/schemas/evalsuite/evalsuite.v0/evalsuite.schema.json
 652fe66945d77fd665b64693f6a02ff8f1163eef08bc121bc917ae5d08a03fb0  docs/schemas/evalsuite/taxonomy.v0/taxonomy.schema.json

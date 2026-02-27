@@ -102,6 +102,10 @@
     {
       "if": { "required": ["order_direction"] },
       "then": { "required": ["order_by"] }
+    },
+    {
+      "if": { "required": ["order_by"] },
+      "then": { "required": ["order_direction"] }
     }
   ],
 
