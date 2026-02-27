@@ -1,0 +1,95 @@
+name: Eval Suite Contract Validation
+
+# Enforces evalsuite schema stability via:
+#  - Draft 2020-12 schema validation
+#  - example fixture validation
+#  - SHA256 drift lock enforcement (SCHEMA_LOCKS.sha256)
+#
+# Contract violations are blocking.
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/schemas/evalsuite/**"
+      - "docs/contracts/examples/**"
+      - "docs/contracts/SCHEMA_LOCKS.sha256"
+      - "tools/update_schema_locks.py"
+      - "tools/validate_evalsuite_contract_schemas.py"
+      - ".github/workflows/evalsuite_contract_validation.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "docs/schemas/evalsuite/**"
+      - "docs/contracts/examples/**"
+      - "docs/contracts/SCHEMA_LOCKS.sha256"
+      - "tools/update_schema_locks.py"
+      - "tools/validate_evalsuite_contract_schemas.py"
+      - ".github/workflows/evalsuite_contract_validation.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUNBUFFERED: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  contract-validation:
+    name: Eval Suite Contract Gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements-ci.txt
+            pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+          pip install -e .
+
+      - name: Validate evalsuite schemas + lockfile
+        run: |
+          set -euo pipefail
+          python tools/validate_evalsuite_contract_schemas.py
+
+      - name: Contract validation summary
+        if: always()
+        run: |
+          set -euo pipefail
+          echo ""
+          echo "================================================"
+          echo "Eval Suite Contract Validation Summary"
+          echo "================================================"
+          echo ""
+          echo "Schemas:"
+          echo "  - docs/schemas/evalsuite/taxonomy.v0/taxonomy.schema.json"
+          echo "  - docs/schemas/evalsuite/evalsuite.v0/evalsuite.schema.json"
+          echo "  - docs/schemas/evalsuite/evalsuite.resolution.v0/resolution.schema.json"
+          echo ""
+          if [[ "${{ job.status }}" == "success" ]]; then
+            echo "✅ Contract gate passed (schemas stable + examples valid + lockfile matches)"
+          else
+            echo "❌ Contract gate failed"
+          fi
