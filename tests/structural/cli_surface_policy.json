@@ -1,0 +1,5 @@
+{
+  "policy_version": 1,
+  "cli_module": "luxury_tiff_batch_processor.cli",
+  "parser_builder": "build_parser"
+}

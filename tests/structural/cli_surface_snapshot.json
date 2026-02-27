@@ -1,0 +1,172 @@
+{
+  "arguments": {
+    "--chroma-denoise": {
+      "choices": null,
+      "default": null,
+      "dest": "chroma_denoise",
+      "required": false
+    },
+    "--clarity": {
+      "choices": null,
+      "default": null,
+      "dest": "clarity",
+      "required": false
+    },
+    "--compression": {
+      "choices": null,
+      "default": "tiff_lzw",
+      "dest": "compression",
+      "required": false
+    },
+    "--config": {
+      "choices": null,
+      "default": null,
+      "dest": "config",
+      "required": false
+    },
+    "--dry-run": {
+      "choices": null,
+      "default": false,
+      "dest": "dry_run",
+      "required": false
+    },
+    "--exposure": {
+      "choices": null,
+      "default": null,
+      "dest": "exposure",
+      "required": false
+    },
+    "--help": {
+      "choices": null,
+      "default": "__SUPPRESS__",
+      "dest": "help",
+      "required": false
+    },
+    "--highlight-recovery": {
+      "choices": null,
+      "default": null,
+      "dest": "highlight_recovery",
+      "required": false
+    },
+    "--log-level": {
+      "choices": [
+        "CRITICAL",
+        "DEBUG",
+        "ERROR",
+        "INFO",
+        "WARNING"
+      ],
+      "default": "INFO",
+      "dest": "log_level",
+      "required": false
+    },
+    "--luxury-glow": {
+      "choices": null,
+      "default": null,
+      "dest": "glow",
+      "required": false
+    },
+    "--midtone-contrast": {
+      "choices": null,
+      "default": null,
+      "dest": "midtone_contrast",
+      "required": false
+    },
+    "--no-progress": {
+      "choices": null,
+      "default": false,
+      "dest": "no_progress",
+      "required": false
+    },
+    "--overwrite": {
+      "choices": null,
+      "default": false,
+      "dest": "overwrite",
+      "required": false
+    },
+    "--preset": {
+      "choices": [
+        "architectural",
+        "golden_hour_courtyard",
+        "signature",
+        "twilight"
+      ],
+      "default": "signature",
+      "dest": "preset",
+      "required": false
+    },
+    "--profile": {
+      "choices": [
+        "balanced",
+        "performance",
+        "quality"
+      ],
+      "default": "quality",
+      "dest": "profile",
+      "required": false
+    },
+    "--recursive": {
+      "choices": null,
+      "default": false,
+      "dest": "recursive",
+      "required": false
+    },
+    "--resize-long-edge": {
+      "choices": null,
+      "default": null,
+      "dest": "resize_long_edge",
+      "required": false
+    },
+    "--saturation": {
+      "choices": null,
+      "default": null,
+      "dest": "saturation",
+      "required": false
+    },
+    "--shadow-lift": {
+      "choices": null,
+      "default": null,
+      "dest": "shadow_lift",
+      "required": false
+    },
+    "--suffix": {
+      "choices": null,
+      "default": "_lux",
+      "dest": "suffix",
+      "required": false
+    },
+    "--vibrance": {
+      "choices": null,
+      "default": null,
+      "dest": "vibrance",
+      "required": false
+    },
+    "--white-balance-temp": {
+      "choices": null,
+      "default": null,
+      "dest": "white_balance_temp",
+      "required": false
+    },
+    "--white-balance-tint": {
+      "choices": null,
+      "default": null,
+      "dest": "white_balance_tint",
+      "required": false
+    },
+    "--workers": {
+      "choices": null,
+      "default": 1,
+      "dest": "workers",
+      "required": false
+    },
+    "-h": {
+      "choices": null,
+      "default": "__SUPPRESS__",
+      "dest": "help",
+      "required": false
+    }
+  },
+  "cli_module": "luxury_tiff_batch_processor.cli",
+  "parser_builder": "build_parser",
+  "snapshot_version": 1
+}

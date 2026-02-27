@@ -155,7 +155,11 @@ def default_output_folder(input_folder: Path) -> Path:
     return input_folder / "luxury_output"
 
 
-def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
+    """Build the CLI argument parser.
+
+    Exposed to support deterministic CLI surface introspection in structural tests.
+    """
     parser = argparse.ArgumentParser(
         description="Batch enhance TIFF files for ultra-luxury marketing output.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -269,6 +273,11 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         help="Logging verbosity",
     )
+    return parser
+
+
+def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
+    parser = build_parser()
 
     argv_list = list(argv) if argv is not None else None
 
@@ -501,6 +510,7 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
 
 
 __all__ = [
+    "build_parser",
     "build_adjustments",
     "default_output_folder",
     "main",

@@ -1,0 +1,12 @@
+{
+  "policy_version": 1,
+  "public_package": "transformation_portal",
+  "public_modules": [
+    "transformation_portal",
+    "transformation_portal.cli"
+  ],
+  "ignore_modules": [],
+  "require___all__": true,
+  "allow_fallback_without___all__": [],
+  "ignore_symbols": []
+}

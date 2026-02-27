@@ -1,0 +1,20 @@
+{
+  "policy_version": 1,
+  "rules": [
+    {
+      "source_root": "src",
+      "forbid_import_globs": [
+        "tests*",
+        "scripts*"
+      ],
+      "allow_import_globs": []
+    },
+    {
+      "source_root": "scripts",
+      "forbid_import_globs": [
+        "tests*"
+      ],
+      "allow_import_globs": []
+    }
+  ]
+}
