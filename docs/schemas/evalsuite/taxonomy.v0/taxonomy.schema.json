@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.transformation-portal.dev/evalsuite/taxonomy.v0/taxonomy.schema.json",
+  "title": "Scene Classification Taxonomy (taxonomy.v0)",
+  "description": "Locked enum taxonomy for Asset Catalog scene labels.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["taxonomy_id", "taxonomy_version", "label_keys"],
+  "properties": {
+    "taxonomy_id": { "const": "taxonomy.v0" },
+    "taxonomy_version": { "const": "0.0.0" },
+    "label_keys": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "environment",
+        "room_type",
+        "lighting",
+        "dynamic_range",
+        "clutter_level",
+        "specular_presence",
+        "motion_blur"
+      ],
+      "properties": {
+        "environment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "allowed_values"],
+          "properties": {
+            "type": { "const": "enum" },
+            "allowed_values": {
+              "const": ["indoor", "outdoor", "mixed"]
+            }
+          }
+        },
+        "room_type": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "allowed_values"],
+          "properties": {
+            "type": { "const": "enum" },
+            "allowed_values": {
+              "const": [
+                "kitchen",
+                "bathroom",
+                "bedroom",
+                "living_room",
+                "dining_room",
+                "hallway",
+                "office",
+                "garage",
+                "staircase",
+                "utility",
+                "unknown"
+              ]
+            }
+          }
+        },
+        "lighting": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "allowed_values"],
+          "properties": {
+            "type": { "const": "enum" },
+            "allowed_values": {
+              "const": ["day", "night", "mixed", "artificial_only"]
+            }
+          }
+        },
+        "dynamic_range": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "allowed_values"],
+          "properties": {
+            "type": { "const": "enum" },
+            "allowed_values": {
+              "const": ["low", "moderate", "high"]
+            }
+          }
+        },
+        "clutter_level": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "allowed_values"],
+          "properties": {
+            "type": { "const": "enum" },
+            "allowed_values": {
+              "const": ["minimal", "moderate", "dense"]
+            }
+          }
+        },
+        "specular_presence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "allowed_values"],
+          "properties": {
+            "type": { "const": "enum" },
+            "allowed_values": {
+              "const": ["none", "minor", "dominant"]
+            }
+          }
+        },
+        "motion_blur": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "allowed_values"],
+          "properties": {
+            "type": { "const": "enum" },
+            "allowed_values": {
+              "const": ["none", "minor", "severe"]
+            }
+          }
+        }
+      }
+    }
+  }
+}

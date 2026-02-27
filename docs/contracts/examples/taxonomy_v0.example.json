@@ -1,0 +1,28 @@
+{
+  "taxonomy_id": "taxonomy.v0",
+  "taxonomy_version": "0.0.0",
+  "label_keys": {
+    "environment": { "type": "enum", "allowed_values": ["indoor", "outdoor", "mixed"] },
+    "room_type": {
+      "type": "enum",
+      "allowed_values": [
+        "kitchen",
+        "bathroom",
+        "bedroom",
+        "living_room",
+        "dining_room",
+        "hallway",
+        "office",
+        "garage",
+        "staircase",
+        "utility",
+        "unknown"
+      ]
+    },
+    "lighting": { "type": "enum", "allowed_values": ["day", "night", "mixed", "artificial_only"] },
+    "dynamic_range": { "type": "enum", "allowed_values": ["low", "moderate", "high"] },
+    "clutter_level": { "type": "enum", "allowed_values": ["minimal", "moderate", "dense"] },
+    "specular_presence": { "type": "enum", "allowed_values": ["none", "minor", "dominant"] },
+    "motion_blur": { "type": "enum", "allowed_values": ["none", "minor", "severe"] }
+  }
+}

@@ -1,0 +1,319 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.transformation-portal.dev/evalsuite/evalsuite.v0/evalsuite.schema.json",
+  "title": "Evaluation Suite Query Contract (evalsuite.v0)",
+  "description": "Deterministic, versioned query definition for selecting Asset Catalog subsets.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "schema_version",
+    "suite_id",
+    "suite_version",
+    "taxonomy_id",
+    "taxonomy_version",
+    "filters"
+  ],
+  "properties": {
+    "schema": { "const": "evalsuite.v0" },
+    "schema_version": { "const": "0.0.0" },
+
+    "suite_id": { "type": "string", "minLength": 1 },
+    "suite_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+
+    "taxonomy_id": { "const": "taxonomy.v0" },
+    "taxonomy_version": { "const": "0.0.0" },
+
+    "filters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "metadata": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "camera_model": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "uniqueItems": true
+            },
+            "iso_min": { "type": "integer", "minimum": 0 },
+            "iso_max": { "type": "integer", "minimum": 0 },
+            "width_min": { "type": "integer", "minimum": 1 },
+            "height_min": { "type": "integer", "minimum": 1 }
+          },
+          "allOf": [
+            {
+              "if": {
+                "required": ["iso_min", "iso_max"],
+                "properties": { "iso_min": { "type": "integer" }, "iso_max": { "type": "integer" } }
+              },
+              "then": {
+                "properties": {
+                  "iso_min": { "type": "integer" },
+                  "iso_max": { "type": "integer" }
+                }
+              }
+            }
+          ]
+        },
+
+        "labels": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/label_predicate" }
+        },
+
+        "quality": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "blur_score_max": { "type": "number", "minimum": 0.0 },
+            "clip_highlights_frac_max": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+          }
+        }
+      }
+    },
+
+    "dedup_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "exclude_same_cluster": { "type": "boolean" },
+        "cluster_method": { "type": "string", "enum": ["phash", "embed_cosine", "raw_sha256"] },
+        "max_per_cluster": { "type": "integer", "minimum": 1 }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "exclude_same_cluster": { "const": true } },
+            "required": ["exclude_same_cluster"]
+          },
+          "then": { "required": ["cluster_method"] }
+        }
+      ]
+    },
+
+    "limit": { "type": "integer", "minimum": 1 },
+
+    "order_by": {
+      "type": "string",
+      "enum": ["capture_timestamp_utc", "iso", "width", "height"]
+    },
+    "order_direction": { "type": "string", "enum": ["asc", "desc"] },
+
+    "artifact_requirements": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    }
+  },
+
+  "allOf": [
+    {
+      "if": { "required": ["order_direction"] },
+      "then": { "required": ["order_by"] }
+    }
+  ],
+
+  "$defs": {
+    "taxonomy_label_key": {
+      "type": "string",
+      "enum": [
+        "environment",
+        "room_type",
+        "lighting",
+        "dynamic_range",
+        "clutter_level",
+        "specular_presence",
+        "motion_blur"
+      ]
+    },
+
+    "label_value_any": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      ]
+    },
+
+    "label_predicate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label_key", "op", "value"],
+      "properties": {
+        "label_key": { "$ref": "#/$defs/taxonomy_label_key" },
+        "op": { "type": "string", "enum": ["==", "!=", "in", "not_in"] },
+        "value": { "$ref": "#/$defs/label_value_any" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "op": { "enum": ["in", "not_in"] } }, "required": ["op"] },
+          "then": { "properties": { "value": { "type": "array", "minItems": 1, "uniqueItems": true } } },
+          "else": { "properties": { "value": { "type": "string", "minLength": 1 } } }
+        },
+
+        {
+          "if": { "properties": { "label_key": { "const": "environment" } }, "required": ["label_key"] },
+          "then": {
+            "properties": {
+              "value": {
+                "oneOf": [
+                  { "type": "string", "enum": ["indoor", "outdoor", "mixed"] },
+                  {
+                    "type": "array",
+                    "items": { "type": "string", "enum": ["indoor", "outdoor", "mixed"] },
+                    "minItems": 1,
+                    "uniqueItems": true
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "label_key": { "const": "room_type" } }, "required": ["label_key"] },
+          "then": {
+            "properties": {
+              "value": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "kitchen",
+                      "bathroom",
+                      "bedroom",
+                      "living_room",
+                      "dining_room",
+                      "hallway",
+                      "office",
+                      "garage",
+                      "staircase",
+                      "utility",
+                      "unknown"
+                    ]
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "kitchen",
+                        "bathroom",
+                        "bedroom",
+                        "living_room",
+                        "dining_room",
+                        "hallway",
+                        "office",
+                        "garage",
+                        "staircase",
+                        "utility",
+                        "unknown"
+                      ]
+                    },
+                    "minItems": 1,
+                    "uniqueItems": true
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "label_key": { "const": "lighting" } }, "required": ["label_key"] },
+          "then": {
+            "properties": {
+              "value": {
+                "oneOf": [
+                  { "type": "string", "enum": ["day", "night", "mixed", "artificial_only"] },
+                  {
+                    "type": "array",
+                    "items": { "type": "string", "enum": ["day", "night", "mixed", "artificial_only"] },
+                    "minItems": 1,
+                    "uniqueItems": true
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "label_key": { "const": "dynamic_range" } }, "required": ["label_key"] },
+          "then": {
+            "properties": {
+              "value": {
+                "oneOf": [
+                  { "type": "string", "enum": ["low", "moderate", "high"] },
+                  {
+                    "type": "array",
+                    "items": { "type": "string", "enum": ["low", "moderate", "high"] },
+                    "minItems": 1,
+                    "uniqueItems": true
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "label_key": { "const": "clutter_level" } }, "required": ["label_key"] },
+          "then": {
+            "properties": {
+              "value": {
+                "oneOf": [
+                  { "type": "string", "enum": ["minimal", "moderate", "dense"] },
+                  {
+                    "type": "array",
+                    "items": { "type": "string", "enum": ["minimal", "moderate", "dense"] },
+                    "minItems": 1,
+                    "uniqueItems": true
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "label_key": { "const": "specular_presence" } }, "required": ["label_key"] },
+          "then": {
+            "properties": {
+              "value": {
+                "oneOf": [
+                  { "type": "string", "enum": ["none", "minor", "dominant"] },
+                  {
+                    "type": "array",
+                    "items": { "type": "string", "enum": ["none", "minor", "dominant"] },
+                    "minItems": 1,
+                    "uniqueItems": true
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "label_key": { "const": "motion_blur" } }, "required": ["label_key"] },
+          "then": {
+            "properties": {
+              "value": {
+                "oneOf": [
+                  { "type": "string", "enum": ["none", "minor", "severe"] },
+                  {
+                    "type": "array",
+                    "items": { "type": "string", "enum": ["none", "minor", "severe"] },
+                    "minItems": 1,
+                    "uniqueItems": true
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.transformation-portal.dev/evalsuite/evalsuite.resolution.v0/resolution.schema.json",
+  "title": "Evaluation Suite Resolution Manifest (evalsuite.resolution.v0)",
+  "description": "Deterministic resolution manifest emitted by tools/resolve_suite.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "schema_version",
+    "suite_id",
+    "suite_version",
+    "suite_sha256",
+    "catalog_version",
+    "db_fingerprint_sha256",
+    "taxonomy_id",
+    "taxonomy_version",
+    "resolved_count",
+    "resolved_asset_ids_sha256",
+    "created_at_utc"
+  ],
+  "properties": {
+    "schema": { "const": "evalsuite.resolution.v0" },
+    "schema_version": { "const": "0.0.0" },
+
+    "suite_id": { "type": "string", "minLength": 1 },
+    "suite_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+
+    "suite_sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "catalog_version": { "type": "string", "minLength": 1 },
+    "db_fingerprint_sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+
+    "taxonomy_id": { "const": "taxonomy.v0" },
+    "taxonomy_version": { "const": "0.0.0" },
+
+    "resolved_count": { "type": "integer", "minimum": 0 },
+    "resolved_asset_ids_sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+
+    "resolved_asset_ids_path": { "type": "string" },
+
+    "created_at_utc": { "type": "string", "format": "date-time" }
+  }
+}
