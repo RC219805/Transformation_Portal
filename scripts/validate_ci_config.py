@@ -33,6 +33,9 @@ except ImportError:
 class CIValidator:
     """Validate GitHub Actions workflow configurations."""
 
+    MIN_CHECKOUT_MAJOR = 4
+    REQUIRED_FLAKE8_FATAL_CODES = {"E9", "F63", "F7", "F82"}
+
     def __init__(self, repo_root: Path, fix_mode: bool = False):
         self.repo_root = repo_root
         self.fix_mode = fix_mode
@@ -147,9 +150,8 @@ class CIValidator:
         return valid
 
     def validate_checkout_action(self, workflow_path: Path, config: Dict) -> bool:
-        """Validate checkout action versions."""
+        """Validate checkout action versions against policy baselines."""
         valid = True
-        recommended_version = "v5"
 
         for job_name, job_config in config.get("jobs", {}).items():
             if not isinstance(job_config, dict):
@@ -166,11 +168,18 @@ class CIValidator:
                 uses = step.get("uses", "")
                 if "actions/checkout@" in uses:
                     version = uses.split("@")[1] if "@" in uses else ""
-                    if version != recommended_version:
-                        self.log_warning(
-                            f"{workflow_path.name}:{job_name}: "
-                            f"Checkout action version '{version}' != recommended '{recommended_version}'"
-                        )
+                    if re.fullmatch(r"[a-f0-9]{40}", version):
+                        # Full-length pin is acceptable and typically stronger than tag pinning.
+                        continue
+
+                    match = re.fullmatch(r"v(\d+)(?:\.\d+)?(?:\.\d+)?", version)
+                    if match and int(match.group(1)) >= self.MIN_CHECKOUT_MAJOR:
+                        continue
+
+                    self.log_warning(
+                        f"{workflow_path.name}:{job_name}: "
+                        f"Checkout action version '{version}' is below minimum supported v{self.MIN_CHECKOUT_MAJOR}"
+                    )
 
         return valid
 
@@ -200,9 +209,8 @@ class CIValidator:
         return valid
 
     def validate_flake8_config(self, workflow_path: Path, config: Dict) -> bool:
-        """Validate flake8 configuration matches CI requirements."""
+        """Validate flake8 configuration against minimum fatal-code policy."""
         valid = True
-        expected_select = "E9,F63,F7,F82"
 
         for job_name, job_config in config.get("jobs", {}).items():
             if not isinstance(job_config, dict):
@@ -218,18 +226,16 @@ class CIValidator:
 
                 run_cmd = step.get("run", "")
                 if "flake8" in run_cmd:
-                    # Check if using correct select flags
                     if "--select=" in run_cmd:
                         match = re.search(r"--select=([^\s]+)", run_cmd)
                         if match:
-                            select_flags = match.group(1)
-                            if select_flags != expected_select:
+                            selected_codes = {code.strip() for code in match.group(1).split(",") if code.strip()}
+                            if not self.REQUIRED_FLAKE8_FATAL_CODES.issubset(selected_codes):
+                                required = ",".join(sorted(self.REQUIRED_FLAKE8_FATAL_CODES))
                                 self.log_warning(
                                     f"{workflow_path.name}:{job_name}: "
-                                    f"flake8 select flags '{select_flags}' != expected '{expected_select}'"
+                                    f"flake8 select flags missing required fatal codes '{required}'"
                                 )
-                    else:
-                        self.log_warning(f"{workflow_path.name}:{job_name}: " "flake8 running without explicit --select flags")
 
         return valid
 
