@@ -109,3 +109,12 @@ def test_verify_cli_allows_missing_attestation_self_hash_with_flag(tmp_path: Pat
     )
 
     assert result.returncode == 0, result.stderr
+
+
+def test_verify_cli_rejects_non_gpg_algorithm_when_gpg_flag_is_set(tmp_path: Path) -> None:
+    evidence_path, attestation_path, _ = _build_inputs(tmp_path)
+
+    result = _run_tool("--evidence", str(evidence_path), "--attestation", str(attestation_path), "--gpg")
+
+    assert result.returncode == 5
+    assert "signature.algorithm must be 'openpgp-clearsign'" in result.stderr

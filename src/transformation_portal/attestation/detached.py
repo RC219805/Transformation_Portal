@@ -79,7 +79,7 @@ def canonical_attestation_preimage_bytes(evidence_payload: Mapping[str, Any]) ->
 def compute_attestation_sha256(attestation_payload: Mapping[str, Any]) -> str:
     """Compute sha256 of canonical attestation payload excluding ``attestation_sha256`` itself."""
     payload = dict(attestation_payload)
-    payload["attestation_sha256"] = None
+    payload.pop("attestation_sha256", None)
     return hashlib.sha256(canonicalize_json(payload)).hexdigest()
 
 

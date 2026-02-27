@@ -17,9 +17,8 @@ from transformation_portal.attestation.verify import (
 
 EXIT_SUCCESS = 0
 EXIT_INPUT_ERROR = 2
-EXIT_OUTPUT_ERROR = 3
-EXIT_BUILD_ERROR = 4
 EXIT_VERIFY_FAILED = 5
+_GPG_SIGNATURE_ALGORITHM = "openpgp-clearsign"
 
 
 def _parse_args() -> argparse.Namespace:
@@ -30,7 +29,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--allow-missing-attestation-sha",
         action="store_true",
-        help="Allow missing/null attestation_sha256 (self-hash check is skipped when absent).",
+        help="Allow missing/null attestation_sha256 for migration compatibility.",
     )
     return parser.parse_args()
 
@@ -70,6 +69,13 @@ def main() -> int:
 
     if args.gpg:
         try:
+            signature_algorithm = attestation["signature"]["algorithm"]
+            if signature_algorithm != _GPG_SIGNATURE_ALGORITHM:
+                raise ValueError(
+                    "signature.algorithm must be "
+                    f"{_GPG_SIGNATURE_ALGORITHM!r} when --gpg is enabled, got {signature_algorithm!r}"
+                )
+
             from transformation_portal.attestation.gpg import gpg_verify_clearsign
 
             signature_text = str(attestation["signature"]["signature"])

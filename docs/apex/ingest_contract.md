@@ -155,7 +155,8 @@ Governance invariants for this boundary:
 - Builder and CLI flows keep evidence immutable and detached (no mutation of `tp.meta.evidence.v1` payloads).
 - Evidence recompute checks are on by default: `sha256(canonicalize_json(projected_envelope))` must match stored `evidence_sha256`.
 - Cryptographic signatures bind to the canonical preimage `tp.attestation.detached.v1.preimage` (serialized under `tp.canonical.json.v1`), not the full attestation JSON document.
-- Verifiers must enforce `attestation_sha256` integrity by recomputing the canonical digest and matching it to the stored value.
+- Verifiers enforce `attestation_sha256` integrity by default by recomputing the canonical digest and matching it to the stored value.
+- Migration-only compatibility mode may allow missing `attestation_sha256` while older artifacts are backfilled.
 
 Operational model:
 - Signing can run offline with custody-held keys; detached attestation payloads are later distributed with evidence artifacts.
