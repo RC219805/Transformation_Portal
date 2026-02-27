@@ -1,0 +1,42 @@
+{
+  "policy_version": 1,
+  "rules": [
+    {
+      "source_root": "src",
+      "forbid_import_globs": [
+        "tests*",
+        "scripts*"
+      ],
+      "allow_import_globs": []
+    },
+    {
+      "source_root": "scripts",
+      "forbid_import_globs": [
+        "tests*"
+      ],
+      "allow_import_globs": []
+    },
+    {
+      "source_root": "tests",
+      "forbid_import_globs": [
+        "scripts*"
+      ],
+      "allow_import_globs": [
+        "scripts.apex_dashboard_generator",
+        "scripts.apex_matrix_runner",
+        "scripts.codebase_philosophy_auditor",
+        "scripts.decision_decay_dashboard",
+        "scripts.governance",
+        "scripts.lib.repo_root",
+        "scripts.pipelines.pro_pipeline",
+        "scripts.synthetic_viewer",
+        "scripts.temporal_evolution",
+        "scripts.utilities.format_utils_enhancements",
+        "scripts.utilities.material_response",
+        "scripts.utilities.material_response_optimizer",
+        "scripts.utilities.realize_v8_unified",
+        "scripts.utilities.realize_v8_unified_cli_extension"
+      ]
+    }
+  ]
+}

@@ -1,5 +1,7 @@
 """Tests for timing context with GPU synchronization."""
 
+import builtins
+import os
 import time
 
 import pytest
@@ -40,8 +42,7 @@ class TestTimingContext:
         assert timer.elapsed_sec >= 0.01
 
     def test_timing_context_mps_device_graceful_fallback(self):
-        """Test MPS device falls back gracefully if torch unavailable."""
-        # This should not crash even if torch.mps not available
+        """Test MPS device is safe by default (sync opt-in)."""
         with timing_context("test", device="mps") as timer:
             time.sleep(0.01)
 
@@ -65,6 +66,22 @@ class TestTimingContext:
             time.sleep(0.01)
 
         # Should not sync, but should still time correctly
+        assert timer.elapsed_sec >= 0.01
+
+    def test_timing_context_torch_import_oserror_graceful_fallback(self, monkeypatch: pytest.MonkeyPatch):
+        """Test timing context tolerates non-ImportError torch import failures."""
+        original_import = builtins.__import__
+
+        def _failing_torch_import(name, *args, **kwargs):  # noqa: ANN001
+            if name == "torch":
+                raise OSError("simulated missing shared library")
+            return original_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", _failing_torch_import)
+
+        with timing_context("test", device="cuda") as timer:
+            time.sleep(0.01)
+
         assert timer.elapsed_sec >= 0.01
 
     def test_elapsed_sec_available_after_exit(self):
@@ -102,7 +119,7 @@ class TestTimingContextWithTorch:
     """Tests for timing context with torch (requires ML deps)."""
 
     def test_mps_sync_if_available(self):
-        """Test MPS synchronization if torch available."""
+        """Test MPS synchronization only when explicitly enabled."""
         try:
             import torch
 
@@ -113,7 +130,10 @@ class TestTimingContextWithTorch:
         if not has_mps:
             pytest.skip("MPS not available")
 
-        # This test just verifies no crash with actual MPS sync
+        if os.getenv("TP_TIMING_SYNC_MPS", "").strip().lower() not in {"1", "true", "yes"}:
+            pytest.skip("MPS sync is opt-in; set TP_TIMING_SYNC_MPS=1 to exercise synchronization")
+
+        # This test verifies no crash with explicit MPS sync
         with timing_context("test", device="mps") as timer:
             time.sleep(0.01)
 

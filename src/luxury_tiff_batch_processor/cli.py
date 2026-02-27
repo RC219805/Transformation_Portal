@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import errno
 import json
 import logging
 import uuid
@@ -155,7 +156,11 @@ def default_output_folder(input_folder: Path) -> Path:
     return input_folder / "luxury_output"
 
 
-def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
+    """Build the CLI argument parser.
+
+    Exposed to support deterministic CLI surface introspection in structural tests.
+    """
     parser = argparse.ArgumentParser(
         description="Batch enhance TIFF files for ultra-luxury marketing output.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -269,6 +274,11 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         help="Logging verbosity",
     )
+    return parser
+
+
+def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
+    parser = build_parser()
 
     argv_list = list(argv) if argv is not None else None
 
@@ -373,7 +383,12 @@ def run_pipeline(args: argparse.Namespace) -> int:
     resize_target = getattr(args, "resize_target", None)
     compression = profile.resolve_compression(args.compression)
 
-    if workers <= 1:
+    def is_restricted_pool_error(exc: BaseException) -> bool:
+        return isinstance(exc, PermissionError) or (isinstance(exc, OSError) and exc.errno in {errno.EPERM, errno.EACCES})
+
+    def run_serial_batch() -> None:
+        nonlocal processed
+
         progress_iterable = _wrap_with_progress(
             images,
             total=len(images),
@@ -409,61 +424,88 @@ def run_pipeline(args: argparse.Namespace) -> int:
             # pylint: enable=duplicate-code
             if not args.dry_run:
                 processed += 1
+
+    if workers <= 1:
+        run_serial_batch()
     else:
-        progress_range = _wrap_with_progress(
-            range(len(images)),
-            total=len(images),
-            description="Processing images",
-            enabled=not getattr(args, "no_progress", False),
-        )
-        progress_iterator = iter(progress_range)
-
-        def advance_progress() -> None:
-            try:
-                next(progress_iterator)
-            except StopIteration:
-                pass
-
-        futures = []
-        with ProcessPoolExecutor(max_workers=workers) as executor:
-            for image_path in images:
-                destination = ensure_output_path(
-                    input_root,
-                    output_root,
-                    image_path,
-                    args.suffix,
-                    args.recursive,
-                    create=not args.dry_run,
+        try:
+            executor_ctx = ProcessPoolExecutor(max_workers=workers)
+        except (PermissionError, OSError) as exc:
+            if is_restricted_pool_error(exc):
+                LOGGER.warning(
+                    "ProcessPoolExecutor unavailable in this environment (%s). Falling back to single-process execution.",
+                    exc,
                 )
-                if destination.exists() and not args.overwrite and not args.dry_run:
-                    LOGGER.warning("Skipping %s (exists, use --overwrite to replace)", destination)
-                    advance_progress()
-                    continue
-                if args.dry_run:
-                    LOGGER.info("Dry run: would process %s -> %s", image_path, destination)
-                futures.append(
-                    executor.submit(
-                        _process_image_worker,
-                        image_path,
-                        destination,
-                        adjustments,
-                        compression=compression,
-                        resize_long_edge=resize_long_edge,
-                        resize_target=resize_target,
-                        dry_run=args.dry_run,
-                        profile=profile,
-                    )
-                )
+                run_serial_batch()
+            else:
+                raise
+        else:
+            progress_range = _wrap_with_progress(
+                range(len(images)),
+                total=len(images),
+                description="Processing images",
+                enabled=not getattr(args, "no_progress", False),
+            )
+            progress_iterator = iter(progress_range)
 
-            for future in as_completed(futures):
+            def advance_progress() -> None:
                 try:
-                    wrote_output = future.result()
-                except Exception:
+                    next(progress_iterator)
+                except StopIteration:
+                    pass
+
+            futures = []
+            with executor_ctx as executor:
+                for image_path in images:
+                    destination = ensure_output_path(
+                        input_root,
+                        output_root,
+                        image_path,
+                        args.suffix,
+                        args.recursive,
+                        create=not args.dry_run,
+                    )
+                    if destination.exists() and not args.overwrite and not args.dry_run:
+                        LOGGER.warning("Skipping %s (exists, use --overwrite to replace)", destination)
+                        advance_progress()
+                        continue
+                    if args.dry_run:
+                        LOGGER.info("Dry run: would process %s -> %s", image_path, destination)
+                    try:
+                        future = executor.submit(
+                            _process_image_worker,
+                            image_path,
+                            destination,
+                            adjustments,
+                            compression=compression,
+                            resize_long_edge=resize_long_edge,
+                            resize_target=resize_target,
+                            dry_run=args.dry_run,
+                            profile=profile,
+                        )
+                    except (PermissionError, OSError) as exc:
+                        # Process workers are started lazily in many runtimes.
+                        # Fall back safely only if no parallel work was accepted.
+                        if is_restricted_pool_error(exc) and not futures:
+                            LOGGER.warning(
+                                "ProcessPoolExecutor worker startup unavailable in this environment (%s). "
+                                "Falling back to single-process execution.",
+                                exc,
+                            )
+                            run_serial_batch()
+                            return processed
+                        raise
+                    futures.append(future)
+
+                for future in as_completed(futures):
+                    try:
+                        wrote_output = future.result()
+                    except Exception:
+                        advance_progress()
+                        raise
+                    if wrote_output:
+                        processed += 1
                     advance_progress()
-                    raise
-                if wrote_output:
-                    processed += 1
-                advance_progress()
 
     LOGGER.info("Finished batch run %s; processed %s image(s)", run_id, processed)
     return processed
@@ -479,14 +521,15 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
         None (exits with appropriate status code).
     """
     args = parse_args(argv)
-    processed = run_pipeline(args)
-    # Exit with success (0) if any images were processed, error (1) otherwise
+    run_pipeline(args)
+    # run_pipeline raises on execution failure; successful completion always exits 0.
     import sys
 
-    sys.exit(0 if processed >= 0 else 1)
+    sys.exit(0)
 
 
 __all__ = [
+    "build_parser",
     "build_adjustments",
     "default_output_folder",
     "main",

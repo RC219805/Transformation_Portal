@@ -1,0 +1,26 @@
+{
+  "_version_marker": "0.1.0",
+  "modules": {
+    "transformation_portal": [
+      "__author__",
+      "__version__",
+      "get_lux_render_pipeline",
+      "get_material_response"
+    ],
+    "transformation_portal.cli": [
+      "analyze_app",
+      "analyze_cli",
+      "app",
+      "info",
+      "main",
+      "pipeline_app",
+      "process_app",
+      "process_cli",
+      "render_app",
+      "render_cli",
+      "version"
+    ]
+  },
+  "package": "transformation_portal",
+  "snapshot_version": 1
+}
