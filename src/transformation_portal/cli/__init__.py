@@ -508,6 +508,202 @@ def pipeline_validate_recipe(
 
 
 # ============================================================================
+# INGEST END-TO-END COMMANDS
+# ============================================================================
+
+ingest_app = typer.Typer(
+    name="ingest",
+    help="RAW file ingest and provenance capture operations",
+    no_args_is_help=True,
+)
+
+
+@ingest_app.command("e2e")
+def ingest_e2e(
+    input_path: Path = typer.Option(
+        ...,
+        "--input", "-i",
+        exists=True,
+        help="Input file or directory containing RAW/TIFF images",
+    ),
+    output_dir: Path = typer.Option(
+        ...,
+        "--output", "-o",
+        help="Output directory for all artifacts",
+    ),
+    contract: str = typer.Option(
+        "legacy_linear_srgb",
+        "--contract", "-c",
+        help="Ingest contract: 'camera_native_linear' or 'legacy_linear_srgb'",
+    ),
+    enable_depth: bool = typer.Option(
+        False,
+        "--enable-depth/--no-depth",
+        help="Enable depth estimation (DA3) phase",
+    ),
+    enable_evidence: bool = typer.Option(
+        False,
+        "--enable-evidence/--no-evidence",
+        help="Enable evidence bundle generation phase",
+    ),
+    depth_device: str = typer.Option(
+        "cpu",
+        "--depth-device",
+        help="Device for depth estimation: cpu, mps, or cuda",
+    ),
+    generate_pbr: bool = typer.Option(
+        False,
+        "--generate-pbr/--no-pbr",
+        help="Generate PBR maps during depth phase",
+    ),
+    recursive: bool = typer.Option(
+        True,
+        "--recursive/--no-recursive",
+        help="Search subdirectories for images",
+    ),
+    strict: bool = typer.Option(
+        True,
+        "--strict/--no-strict",
+        help="Fail on validation errors",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run", "-n",
+        help="Preview plan without executing",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json/--no-json",
+        help="Output machine-readable JSON",
+    ),
+):
+    """Run end-to-end RAW file ingest through integrated phases.
+
+    This command orchestrates the complete ingest pipeline:
+
+    1. INGEST: Extract metadata and generate provenance sidecars
+    2. DEPTH (optional): Run depth estimation with DA3
+    3. EVIDENCE (optional): Generate Merkle-backed evidence bundle
+
+    Examples:
+
+        # Basic ingest with provenance capture
+        transformation-portal ingest e2e -i /path/to/images -o /output
+
+        # Full pipeline with depth and evidence
+        transformation-portal ingest e2e -i /path/to/images -o /output \\
+            --enable-depth --enable-evidence --depth-device mps
+
+        # Dry run to preview plan
+        transformation-portal ingest e2e -i /path/to/images -o /output --dry-run
+    """
+    from transformation_portal.cli.ingest_e2e import run_e2e_ingest
+    import json
+
+    # Validate inputs
+    valid_contracts = ("camera_native_linear", "legacy_linear_srgb")
+    if contract not in valid_contracts:
+        if json_output:
+            typer.echo(json.dumps({
+                "success": False,
+                "error": f"Invalid contract: {contract}. Valid: {valid_contracts}",
+            }))
+        else:
+            typer.echo(f"❌ Invalid contract: {contract}", err=True)
+        raise typer.Exit(code=2)
+
+    valid_devices = ("cpu", "mps", "cuda")
+    if depth_device not in valid_devices:
+        if json_output:
+            typer.echo(json.dumps({
+                "success": False,
+                "error": f"Invalid device: {depth_device}. Valid: {valid_devices}",
+            }))
+        else:
+            typer.echo(f"❌ Invalid device: {depth_device}", err=True)
+        raise typer.Exit(code=2)
+
+    if not json_output:
+        typer.echo("🚀 End-to-End RAW Ingest Pipeline")
+        typer.echo(f"   Input: {input_path}")
+        typer.echo(f"   Output: {output_dir}")
+        typer.echo(f"   Contract: {contract}")
+        phases_str = "ingest"
+        if enable_depth:
+            phases_str += " + depth"
+        if enable_evidence:
+            phases_str += " + evidence"
+        typer.echo(f"   Phases: {phases_str}")
+        if dry_run:
+            typer.echo("   Mode: DRY RUN")
+        typer.echo()
+
+    result = run_e2e_ingest(
+        input_path=input_path,
+        output_dir=output_dir,
+        contract=contract,
+        enable_depth=enable_depth,
+        enable_evidence=enable_evidence,
+        depth_device=depth_device,
+        generate_pbr=generate_pbr,
+        recursive=recursive,
+        strict=strict,
+        dry_run=dry_run,
+    )
+
+    if json_output:
+        typer.echo(json.dumps(result.to_dict(), indent=2))
+    else:
+        if dry_run:
+            typer.echo("📋 Execution Plan:")
+            for phase in result.phases:
+                plan = phase.artifacts.get("plan", "Process items")
+                typer.echo(f"   • {phase.phase.upper()}: {plan}")
+            typer.echo(f"\nTotal images: {result.input_count}")
+        else:
+            typer.echo("📊 Results:")
+            for phase in result.phases:
+                status = "✅" if phase.success else "❌"
+                typer.echo(f"   {status} {phase.phase.upper()}: "
+                           f"{phase.items_processed} processed "
+                           f"({phase.elapsed_seconds:.2f}s)")
+                if phase.error:
+                    typer.echo(f"      Error: {phase.error}")
+
+            if result.success:
+                typer.echo(f"\n✅ Pipeline completed ({result.total_elapsed_seconds:.2f}s)")
+            else:
+                typer.echo(f"\n❌ Pipeline failed: {result.error}")
+
+    raise typer.Exit(code=0 if result.success else 3)
+
+
+@ingest_app.command("info")
+def ingest_info():
+    """Show information about ingest phases and dependencies."""
+    from transformation_portal.cli.ingest_e2e import SUPPORTED_RAW_EXTENSIONS, SUPPORTED_IMAGE_EXTENSIONS
+
+    typer.echo("🔧 End-to-End Ingest Pipeline Information\n")
+
+    typer.echo("Available Phases:")
+    typer.echo("  1. INGEST - Metadata extraction and provenance capture")
+    typer.echo("  2. DEPTH  - Depth estimation (DA3) with optional PBR")
+    typer.echo("  3. EVIDENCE - Merkle-backed evidence bundle generation")
+    typer.echo()
+
+    typer.echo("Supported Contracts:")
+    typer.echo("  • legacy_linear_srgb - Phase I (default)")
+    typer.echo("  • camera_native_linear - Phase II (requires rawpy)")
+    typer.echo()
+
+    typer.echo("Supported Formats:")
+    raw_exts = ", ".join(sorted(SUPPORTED_RAW_EXTENSIONS))
+    img_exts = ", ".join(sorted(SUPPORTED_IMAGE_EXTENSIONS - SUPPORTED_RAW_EXTENSIONS))
+    typer.echo(f"  RAW: {raw_exts}")
+    typer.echo(f"  Other: {img_exts}")
+
+
+# ============================================================================
 # MAIN UNIFIED CLI (For development/testing)
 # ============================================================================
 
@@ -516,6 +712,7 @@ app.add_typer(render_app, name="render")
 app.add_typer(process_app, name="process")
 app.add_typer(analyze_app, name="analyze")
 app.add_typer(pipeline_app, name="pipeline")
+app.add_typer(ingest_app, name="ingest")
 
 
 @app.command()
@@ -583,6 +780,7 @@ __all__ = [
     "process_app",
     "analyze_app",
     "pipeline_app",
+    "ingest_app",
     "render_cli",
     "process_cli",
     "analyze_cli",
