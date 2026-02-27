@@ -1,5 +1,6 @@
 """Tests for timing context with GPU synchronization."""
 
+import builtins
 import os
 import time
 
@@ -65,6 +66,22 @@ class TestTimingContext:
             time.sleep(0.01)
 
         # Should not sync, but should still time correctly
+        assert timer.elapsed_sec >= 0.01
+
+    def test_timing_context_torch_import_oserror_graceful_fallback(self, monkeypatch: pytest.MonkeyPatch):
+        """Test timing context tolerates non-ImportError torch import failures."""
+        original_import = builtins.__import__
+
+        def _failing_torch_import(name, *args, **kwargs):  # noqa: ANN001
+            if name == "torch":
+                raise OSError("simulated missing shared library")
+            return original_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", _failing_torch_import)
+
+        with timing_context("test", device="cuda") as timer:
+            time.sleep(0.01)
+
         assert timer.elapsed_sec >= 0.01
 
     def test_elapsed_sec_available_after_exit(self):

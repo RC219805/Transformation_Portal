@@ -22,13 +22,13 @@ from transformation_portal.spatial_ai.reconstruction import (  # pylint: disable
 def _tier_mode() -> str:
     if os.getenv("TP_LONG_TESTS", "").lower() in {"1", "true", "yes"}:
         return "long"
-    if os.getenv("CI"):
+    if _is_ci():
         return "ci"
     return "standard"
 
 
 def _is_ci() -> bool:
-    return bool(os.getenv("CI", "").strip())
+    return os.getenv("CI", "").strip().lower() in {"1", "true", "yes"}
 
 
 def _require_heavy() -> bool:
@@ -56,6 +56,23 @@ def _image_size() -> tuple[int, int]:
 # ---------------------------------------------------------------------
 # Integration Tests
 # ---------------------------------------------------------------------
+
+
+def test_ci_env_detection_requires_truthy_values(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("CI", raising=False)
+    assert _is_ci() is False
+
+    monkeypatch.setenv("CI", "false")
+    assert _is_ci() is False
+
+    monkeypatch.setenv("CI", "0")
+    assert _is_ci() is False
+
+    monkeypatch.setenv("CI", "true")
+    assert _is_ci() is True
+
+    monkeypatch.setenv("CI", "1")
+    assert _is_ci() is True
 
 
 class TestPhase23Integration:

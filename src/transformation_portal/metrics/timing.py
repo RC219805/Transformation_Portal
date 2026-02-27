@@ -101,7 +101,7 @@ class TimingContext:
 
         try:
             import torch
-        except ImportError:
+        except Exception:
             return
 
         try:

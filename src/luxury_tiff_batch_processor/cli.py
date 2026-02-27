@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import errno
 import json
 import logging
 import uuid
@@ -441,12 +442,19 @@ def run_pipeline(args: argparse.Namespace) -> int:
         futures = []
         try:
             executor_ctx = ProcessPoolExecutor(max_workers=workers)
-        except PermissionError:
-            LOGGER.warning(
-                "ProcessPoolExecutor unavailable due to system semaphore restrictions. "
-                "Falling back to single-process execution."
-            )
-            run_serial_batch()
+        except (PermissionError, OSError) as exc:
+            error_is_restricted_env = isinstance(exc, PermissionError) or exc.errno in {
+                errno.EPERM,
+                errno.EACCES,
+            }
+            if error_is_restricted_env:
+                LOGGER.warning(
+                    "ProcessPoolExecutor unavailable in this environment (%s). Falling back to single-process execution.",
+                    exc,
+                )
+                run_serial_batch()
+            else:
+                raise
         else:
             with executor_ctx as executor:
                 for image_path in images:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import hashlib
 import subprocess
 import sys
@@ -313,7 +314,7 @@ def test_run_pipeline_parallel_execution(tmp_path: Path):
     assert outputs == [f"frame_{i}_lux.tif" for i in range(3)]
 
 
-def test_run_pipeline_parallel_and_permissionerror_fallback_are_deterministic(
+def test_run_pipeline_parallel_permissionerror_and_oserror_fallback_are_deterministic(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ):
     input_dir = tmp_path / "input"
@@ -360,15 +361,28 @@ def test_run_pipeline_parallel_and_permissionerror_fallback_are_deterministic(
         def __init__(self, max_workers: int):  # pylint: disable=unused-argument
             raise PermissionError("simulated semaphore restriction")
 
-    monkeypatch.setattr(ltiff_cli, "ProcessPoolExecutor", _DeniedExecutor)
-    fallback_output = tmp_path / "fallback_output"
-    fallback_args = ltiff.parse_args([str(input_dir), str(fallback_output), "--workers", "2", "--no-progress"])
-    with caplog.at_level("WARNING", logger="luxury_tiff_batch_processor"):
-        fallback_processed = ltiff.run_pipeline(fallback_args)
-    fallback_hashes = _collect_output_hashes(fallback_output)
+    class _DeniedOSErrorExecutor:
+        def __init__(self, max_workers: int):  # pylint: disable=unused-argument
+            raise OSError(errno.EPERM, "simulated restricted system call")
 
-    assert serial_processed == parallel_processed == fallback_processed == 3
-    assert serial_hashes == parallel_hashes == fallback_hashes
+    monkeypatch.setattr(ltiff_cli, "ProcessPoolExecutor", _DeniedExecutor)
+    fallback_permission_output = tmp_path / "fallback_permission_output"
+    fallback_permission_args = ltiff.parse_args(
+        [str(input_dir), str(fallback_permission_output), "--workers", "2", "--no-progress"]
+    )
+    with caplog.at_level("WARNING", logger="luxury_tiff_batch_processor"):
+        fallback_permission_processed = ltiff.run_pipeline(fallback_permission_args)
+    fallback_permission_hashes = _collect_output_hashes(fallback_permission_output)
+
+    monkeypatch.setattr(ltiff_cli, "ProcessPoolExecutor", _DeniedOSErrorExecutor)
+    fallback_oserror_output = tmp_path / "fallback_oserror_output"
+    fallback_oserror_args = ltiff.parse_args([str(input_dir), str(fallback_oserror_output), "--workers", "2", "--no-progress"])
+    with caplog.at_level("WARNING", logger="luxury_tiff_batch_processor"):
+        fallback_oserror_processed = ltiff.run_pipeline(fallback_oserror_args)
+    fallback_oserror_hashes = _collect_output_hashes(fallback_oserror_output)
+
+    assert serial_processed == parallel_processed == fallback_permission_processed == fallback_oserror_processed == 3
+    assert serial_hashes == parallel_hashes == fallback_permission_hashes == fallback_oserror_hashes
     assert "Falling back to single-process execution." in caplog.text
 
 
