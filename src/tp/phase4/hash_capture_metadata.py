@@ -6,6 +6,8 @@ import hashlib
 import json
 from typing import Any
 
+from .schema_validation import build_draft202012_validator
+
 METADATA_CONTRACT_VERSION = "tp.meta.capture.v1"
 METADATA_MANIFEST_CONTRACT_VERSION = "tp.meta.capture_manifest.v1"
 
@@ -42,17 +44,7 @@ def compute_metadata_sha256(metadata_object: dict[str, Any]) -> str:
 
 
 def _build_validator(schema: dict[str, Any], *, error_cls: type[Exception], label: str) -> Any:
-    try:
-        import jsonschema
-    except ImportError as exc:
-        raise error_cls("jsonschema dependency is required for schema validation") from exc
-
-    try:
-        jsonschema.Draft202012Validator.check_schema(schema)
-    except jsonschema.exceptions.SchemaError as exc:
-        raise error_cls(f"invalid {label} schema: {exc.message}") from exc
-
-    return jsonschema.Draft202012Validator(schema)
+    return build_draft202012_validator(schema, error_cls=error_cls, label=label)
 
 
 def _validate_metadata_records(records: list[dict[str, Any]], metadata_schema: dict[str, Any]) -> None:

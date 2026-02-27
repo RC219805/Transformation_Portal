@@ -9,8 +9,9 @@ from pathlib import Path
 from typing import Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+SRC_ROOT = PROJECT_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
 
 from tp.phase4.verify_phase4_chain import (  # noqa: E402
     Phase4AlignmentError,
@@ -22,6 +23,7 @@ from tp.phase4.verify_phase4_chain import (  # noqa: E402
     verify_phase4_chain_from_paths,
 )
 
+# ADR-041 freezes verifier routing to the dedicated 31-37 range.
 EXIT_SUCCESS = 0
 EXIT_MALFORMED_INPUT = 31
 EXIT_SCHEMA_VALIDATION_FAILURE = 32
@@ -117,4 +119,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

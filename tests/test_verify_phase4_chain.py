@@ -144,9 +144,9 @@ def _build_two_record_chain_payloads() -> tuple[list[dict[str, Any]], dict[str, 
     return [record_a, record_b], metadata_manifest, provenance_manifest, provenance_merkle
 
 
-def test_phase4f_cli_help_works_without_pythonpath() -> None:
+def test_phase4f_cli_help_works_without_pythonpath_or_site_packages() -> None:
     result = subprocess.run(
-        [sys.executable, str(VERIFY_TOOL), "--help"],
+        [sys.executable, "-S", str(VERIFY_TOOL), "--help"],
         cwd=str(PROJECT_ROOT),
         capture_output=True,
         text=True,

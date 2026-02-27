@@ -20,6 +20,7 @@ from .provenance_capture import (
     PROVENANCE_MERKLE_CONTRACT_VERSION,
     compute_provenance_entry_sha256,
 )
+from .schema_validation import build_draft202012_validator
 
 FAILURE_LABEL_MALFORMED_INPUT = "MALFORMED_INPUT"
 FAILURE_LABEL_SCHEMA_VALIDATION_FAILURE = "SCHEMA_VALIDATION_FAILURE"
@@ -56,16 +57,7 @@ class Phase4MerkleMismatchError(ValueError):
 
 
 def _build_validator(schema: dict[str, Any], *, error_cls: type[Exception], label: str) -> Any:
-    try:
-        import jsonschema
-    except ImportError as exc:
-        raise error_cls("jsonschema dependency is required for schema validation") from exc
-
-    try:
-        jsonschema.Draft202012Validator.check_schema(schema)
-    except jsonschema.exceptions.SchemaError as exc:
-        raise error_cls(f"invalid {label} schema: {exc.message}") from exc
-    return jsonschema.Draft202012Validator(schema)
+    return build_draft202012_validator(schema, error_cls=error_cls, label=label)
 
 
 def _ensure_sha256_hex(value: Any, *, label: str, error_cls: type[Exception]) -> str:
