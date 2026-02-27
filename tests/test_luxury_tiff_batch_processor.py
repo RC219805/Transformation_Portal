@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import subprocess
 import sys
 import warnings
@@ -24,6 +25,7 @@ pytest.importorskip("PIL.TiffImagePlugin")
 from PIL import Image, TiffImagePlugin  # noqa: E402  # pylint: disable=wrong-import-position
 
 import luxury_tiff_batch_processor as ltiff  # noqa: E402  # pylint: disable=wrong-import-position,consider-using-from-import
+from luxury_tiff_batch_processor import cli as ltiff_cli  # noqa: E402  # pylint: disable=wrong-import-position
 from luxury_tiff_batch_processor import io_utils  # noqa: E402  # pylint: disable=wrong-import-position
 from luxury_tiff_batch_processor import pipeline  # noqa: E402  # pylint: disable=wrong-import-position
 
@@ -35,9 +37,7 @@ def test_run_pipeline_exposed_in_dunder_all():
 
 def test_cli_module_importable():
     """Test that the CLI module can be imported."""
-    from luxury_tiff_batch_processor import cli  # noqa: F401
-
-    assert hasattr(cli, "main"), "CLI module should have a main function"
+    assert hasattr(ltiff_cli, "main"), "CLI module should have a main function"
 
 
 def test_cli_help_works():
@@ -282,6 +282,13 @@ def _create_sample_image(path: Path) -> None:
     image.save(path)
 
 
+def _collect_output_hashes(output_dir: Path) -> dict[str, str]:
+    return {
+        path.name: hashlib.sha256(path.read_bytes()).hexdigest()  # nosec B324 - test-only deterministic hash comparison
+        for path in sorted(output_dir.glob("*.tif"))
+    }
+
+
 def test_run_pipeline_parallel_execution(tmp_path: Path):
     input_dir = tmp_path / "input"
     output_dir = tmp_path / "output"
@@ -304,6 +311,65 @@ def test_run_pipeline_parallel_execution(tmp_path: Path):
     outputs = sorted(p.name for p in output_dir.glob("*.tif"))
     assert processed == 3
     assert outputs == [f"frame_{i}_lux.tif" for i in range(3)]
+
+
+def test_run_pipeline_parallel_and_permissionerror_fallback_are_deterministic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+):
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    for index in range(3):
+        _create_sample_image(input_dir / f"frame_{index}.tif")
+
+    class _ImmediateFuture:
+        def __init__(self, value: bool) -> None:
+            self._value = value
+
+        def result(self) -> bool:
+            return self._value
+
+    class _InlineExecutor:
+        def __init__(self, max_workers: int):  # pylint: disable=unused-argument
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb) -> bool:  # noqa: ANN001, ANN201
+            return False
+
+        def submit(self, fn, *args, **kwargs) -> _ImmediateFuture:  # noqa: ANN001, ANN002
+            return _ImmediateFuture(fn(*args, **kwargs))
+
+    def _as_completed_inline(futures):  # noqa: ANN001, ANN202
+        yield from futures
+
+    serial_output = tmp_path / "serial_output"
+    serial_args = ltiff.parse_args([str(input_dir), str(serial_output), "--workers", "1", "--no-progress"])
+    serial_processed = ltiff.run_pipeline(serial_args)
+    serial_hashes = _collect_output_hashes(serial_output)
+
+    monkeypatch.setattr(ltiff_cli, "ProcessPoolExecutor", _InlineExecutor)
+    monkeypatch.setattr(ltiff_cli, "as_completed", _as_completed_inline)
+    parallel_output = tmp_path / "parallel_output"
+    parallel_args = ltiff.parse_args([str(input_dir), str(parallel_output), "--workers", "2", "--no-progress"])
+    parallel_processed = ltiff.run_pipeline(parallel_args)
+    parallel_hashes = _collect_output_hashes(parallel_output)
+
+    class _DeniedExecutor:
+        def __init__(self, max_workers: int):  # pylint: disable=unused-argument
+            raise PermissionError("simulated semaphore restriction")
+
+    monkeypatch.setattr(ltiff_cli, "ProcessPoolExecutor", _DeniedExecutor)
+    fallback_output = tmp_path / "fallback_output"
+    fallback_args = ltiff.parse_args([str(input_dir), str(fallback_output), "--workers", "2", "--no-progress"])
+    with caplog.at_level("WARNING", logger="luxury_tiff_batch_processor"):
+        fallback_processed = ltiff.run_pipeline(fallback_args)
+    fallback_hashes = _collect_output_hashes(fallback_output)
+
+    assert serial_processed == parallel_processed == fallback_processed == 3
+    assert serial_hashes == parallel_hashes == fallback_hashes
+    assert "Falling back to single-process execution." in caplog.text
 
 
 def test_run_pipeline_invokes_progress_wrapper(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
