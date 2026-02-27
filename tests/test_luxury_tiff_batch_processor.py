@@ -420,6 +420,45 @@ def test_run_pipeline_fallback_avoids_parallel_progress_initialization(tmp_path:
     assert progress_calls[0]["enabled"] is True
 
 
+def test_run_pipeline_submit_time_fallback_is_deterministic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+):
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    for index in range(3):
+        _create_sample_image(input_dir / f"frame_{index}.tif")
+
+    class _SubmitDeniedExecutor:
+        def __init__(self, max_workers: int):  # pylint: disable=unused-argument
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb) -> bool:  # noqa: ANN001, ANN201
+            return False
+
+        def submit(self, *_args, **_kwargs):  # noqa: ANN002, ANN003, ANN202
+            raise OSError(errno.EPERM, "simulated worker spawn restriction")
+
+    serial_output = tmp_path / "serial_output"
+    serial_args = ltiff.parse_args([str(input_dir), str(serial_output), "--workers", "1", "--no-progress"])
+    serial_processed = ltiff.run_pipeline(serial_args)
+    serial_hashes = _collect_output_hashes(serial_output)
+
+    monkeypatch.setattr(ltiff_cli, "ProcessPoolExecutor", _SubmitDeniedExecutor)
+    fallback_output = tmp_path / "fallback_output"
+    fallback_args = ltiff.parse_args([str(input_dir), str(fallback_output), "--workers", "2", "--no-progress"])
+    with caplog.at_level("WARNING", logger="luxury_tiff_batch_processor"):
+        fallback_processed = ltiff.run_pipeline(fallback_args)
+    fallback_hashes = _collect_output_hashes(fallback_output)
+
+    assert serial_processed == fallback_processed == 3
+    assert serial_hashes == fallback_hashes
+    assert "worker startup unavailable" in caplog.text
+    assert "Falling back to single-process execution." in caplog.text
+
+
 def test_run_pipeline_invokes_progress_wrapper(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     input_dir = tmp_path / "input"
     output_dir = tmp_path / "output"

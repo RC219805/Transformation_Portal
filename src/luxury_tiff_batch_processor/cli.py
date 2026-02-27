@@ -383,6 +383,9 @@ def run_pipeline(args: argparse.Namespace) -> int:
     resize_target = getattr(args, "resize_target", None)
     compression = profile.resolve_compression(args.compression)
 
+    def is_restricted_pool_error(exc: BaseException) -> bool:
+        return isinstance(exc, PermissionError) or (isinstance(exc, OSError) and exc.errno in {errno.EPERM, errno.EACCES})
+
     def run_serial_batch() -> None:
         nonlocal processed
 
@@ -428,11 +431,7 @@ def run_pipeline(args: argparse.Namespace) -> int:
         try:
             executor_ctx = ProcessPoolExecutor(max_workers=workers)
         except (PermissionError, OSError) as exc:
-            error_is_restricted_env = isinstance(exc, PermissionError) or exc.errno in {
-                errno.EPERM,
-                errno.EACCES,
-            }
-            if error_is_restricted_env:
+            if is_restricted_pool_error(exc):
                 LOGGER.warning(
                     "ProcessPoolExecutor unavailable in this environment (%s). Falling back to single-process execution.",
                     exc,
@@ -472,8 +471,8 @@ def run_pipeline(args: argparse.Namespace) -> int:
                         continue
                     if args.dry_run:
                         LOGGER.info("Dry run: would process %s -> %s", image_path, destination)
-                    futures.append(
-                        executor.submit(
+                    try:
+                        future = executor.submit(
                             _process_image_worker,
                             image_path,
                             destination,
@@ -484,7 +483,19 @@ def run_pipeline(args: argparse.Namespace) -> int:
                             dry_run=args.dry_run,
                             profile=profile,
                         )
-                    )
+                    except (PermissionError, OSError) as exc:
+                        # Process workers are started lazily in many runtimes.
+                        # Fall back safely only if no parallel work was accepted.
+                        if is_restricted_pool_error(exc) and not futures:
+                            LOGGER.warning(
+                                "ProcessPoolExecutor worker startup unavailable in this environment (%s). "
+                                "Falling back to single-process execution.",
+                                exc,
+                            )
+                            run_serial_batch()
+                            return processed
+                        raise
+                    futures.append(future)
 
                 for future in as_completed(futures):
                     try:
