@@ -33,6 +33,17 @@ Quick reference for common workflows and commands in this repo.
 - `make docs` build API docs with Sphinx.
 - `make docs-clean` remove generated docs output.
 
+## End-to-End Ingest CLI
+- `python -m transformation_portal.cli.ingest_e2e run -i INPUT -o OUTPUT` run end-to-end RAW file ingest.
+  - `--enable-depth` enable depth estimation (DA3) phase.
+  - `--enable-evidence` enable Merkle-backed evidence bundle generation.
+  - `--depth-device cpu|mps|cuda` specify device for depth estimation.
+  - `--generate-pbr` generate PBR maps during depth phase.
+  - `--contract legacy_linear_srgb|camera_native_linear` select ingest contract.
+  - `--dry-run` preview plan without executing.
+  - `--json` output machine-readable JSON.
+- `python -m transformation_portal.cli.ingest_e2e info` show available phases and dependencies.
+
 ## Workflow scripts (bash)
 - `./scripts/pipelines/run_montecito_apex_full.sh` run Montecito Shores APEX batch with all deliverables (interactive prompt).
 - `./scripts/pipelines/run_montecito_apex_lean.sh` run Montecito Shores APEX batch (lean outputs, faster).
