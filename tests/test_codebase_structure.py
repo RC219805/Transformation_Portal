@@ -6,6 +6,7 @@ These tests ensure that the repository maintains good structure and
 prevents accumulation of clutter or structural issues.
 """
 
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -245,6 +246,34 @@ class TestNoOrphanedFiles:
             # Some may be in .gitignore, but shouldn't be tracked
             if matching:
                 print(f"Note: Found build artifacts matching {pattern}")
+
+    def test_no_exact_duplicate_python_modules_between_src_and_scripts(self):
+        """Keep `scripts/` wrappers thin and prevent copy/paste module drift."""
+        src_root = _repo_root / "src" / "transformation_portal"
+        scripts_root = _repo_root / "scripts"
+
+        if not src_root.exists() or not scripts_root.exists():
+            return
+
+        src_hashes = {}
+        for src_file in src_root.rglob("*.py"):
+            if src_file.is_file():
+                digest = hashlib.sha1(src_file.read_bytes()).hexdigest()
+                src_hashes.setdefault(digest, []).append(src_file.relative_to(_repo_root))
+
+        duplicates = []
+        for script_file in scripts_root.rglob("*.py"):
+            if not script_file.is_file():
+                continue
+            digest = hashlib.sha1(script_file.read_bytes()).hexdigest()
+            if digest in src_hashes:
+                for src_match in src_hashes[digest]:
+                    duplicates.append(f"{script_file.relative_to(_repo_root)} == {src_match}")
+
+        assert not duplicates, (
+            "Exact duplicate Python implementations found between scripts/ and src/. "
+            "Convert script copies to thin wrappers that import canonical src modules.\n" + "\n".join(sorted(duplicates))
+        )
 
 
 class TestConfigurationFiles:
