@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
 from tp.crypto.merkle import merkle_root_sha256
 from tp.phase4.hash_capture_metadata import (
     METADATA_CONTRACT_VERSION,
