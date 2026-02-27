@@ -373,7 +373,9 @@ def run_pipeline(args: argparse.Namespace) -> int:
     resize_target = getattr(args, "resize_target", None)
     compression = profile.resolve_compression(args.compression)
 
-    if workers <= 1:
+    def run_serial_batch() -> None:
+        nonlocal processed
+
         progress_iterable = _wrap_with_progress(
             images,
             total=len(images),
@@ -409,6 +411,9 @@ def run_pipeline(args: argparse.Namespace) -> int:
             # pylint: enable=duplicate-code
             if not args.dry_run:
                 processed += 1
+
+    if workers <= 1:
+        run_serial_batch()
     else:
         progress_range = _wrap_with_progress(
             range(len(images)),
@@ -425,45 +430,54 @@ def run_pipeline(args: argparse.Namespace) -> int:
                 pass
 
         futures = []
-        with ProcessPoolExecutor(max_workers=workers) as executor:
-            for image_path in images:
-                destination = ensure_output_path(
-                    input_root,
-                    output_root,
-                    image_path,
-                    args.suffix,
-                    args.recursive,
-                    create=not args.dry_run,
-                )
-                if destination.exists() and not args.overwrite and not args.dry_run:
-                    LOGGER.warning("Skipping %s (exists, use --overwrite to replace)", destination)
-                    advance_progress()
-                    continue
-                if args.dry_run:
-                    LOGGER.info("Dry run: would process %s -> %s", image_path, destination)
-                futures.append(
-                    executor.submit(
-                        _process_image_worker,
+        try:
+            executor_ctx = ProcessPoolExecutor(max_workers=workers)
+        except PermissionError:
+            LOGGER.warning(
+                "ProcessPoolExecutor unavailable due to system semaphore restrictions. "
+                "Falling back to single-process execution."
+            )
+            run_serial_batch()
+        else:
+            with executor_ctx as executor:
+                for image_path in images:
+                    destination = ensure_output_path(
+                        input_root,
+                        output_root,
                         image_path,
-                        destination,
-                        adjustments,
-                        compression=compression,
-                        resize_long_edge=resize_long_edge,
-                        resize_target=resize_target,
-                        dry_run=args.dry_run,
-                        profile=profile,
+                        args.suffix,
+                        args.recursive,
+                        create=not args.dry_run,
                     )
-                )
+                    if destination.exists() and not args.overwrite and not args.dry_run:
+                        LOGGER.warning("Skipping %s (exists, use --overwrite to replace)", destination)
+                        advance_progress()
+                        continue
+                    if args.dry_run:
+                        LOGGER.info("Dry run: would process %s -> %s", image_path, destination)
+                    futures.append(
+                        executor.submit(
+                            _process_image_worker,
+                            image_path,
+                            destination,
+                            adjustments,
+                            compression=compression,
+                            resize_long_edge=resize_long_edge,
+                            resize_target=resize_target,
+                            dry_run=args.dry_run,
+                            profile=profile,
+                        )
+                    )
 
-            for future in as_completed(futures):
-                try:
-                    wrote_output = future.result()
-                except Exception:
+                for future in as_completed(futures):
+                    try:
+                        wrote_output = future.result()
+                    except Exception:
+                        advance_progress()
+                        raise
+                    if wrote_output:
+                        processed += 1
                     advance_progress()
-                    raise
-                if wrote_output:
-                    processed += 1
-                advance_progress()
 
     LOGGER.info("Finished batch run %s; processed %s image(s)", run_id, processed)
     return processed
