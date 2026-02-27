@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import errno
 import hashlib
 import subprocess
 import sys
@@ -255,7 +256,14 @@ def _tsa_server(
         def log_message(self, format: str, *args: object) -> None:  # noqa: A003
             return
 
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    try:
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    except PermissionError as exc:
+        pytest.skip(f"Local HTTP server bind not permitted in this environment: {exc}")
+    except OSError as exc:
+        if exc.errno in {errno.EPERM, errno.EACCES}:
+            pytest.skip(f"Local HTTP server bind not permitted in this environment: {exc}")
+        raise
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     url = f"http://127.0.0.1:{server.server_port}/tsa"
