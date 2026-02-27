@@ -8,7 +8,11 @@ import pytest
 pytest.importorskip("torch", reason="torch required for reconstruction integration")
 pytestmark = pytest.mark.ml
 
-from transformation_portal.spatial_ai.reconstruction import CameraParams, GeometricValidator, SceneBuilder
+from transformation_portal.spatial_ai.reconstruction import (  # pylint: disable=wrong-import-position
+    CameraParams,
+    GeometricValidator,
+    SceneBuilder,
+)
 
 # ---------------------------------------------------------------------
 # Budget Helpers

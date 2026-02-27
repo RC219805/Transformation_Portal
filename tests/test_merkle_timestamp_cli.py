@@ -58,7 +58,11 @@ def _timestamp(
 
 def _write_roots(path: Path) -> None:
     path.write_text(
-        "{\n" '  "hash_algorithm": "sha256",\n' '  "tree_method_version": "v1",\n' '  "global_root": "6f32b71a"\n' "}\n",
+        "{\n"
+        + '  "hash_algorithm": "sha256",\n'
+        + '  "tree_method_version": "v1",\n'
+        + '  "global_root": "6f32b71a"\n'
+        + "}\n",
         encoding="utf-8",
     )
 
@@ -218,8 +222,8 @@ def _decode_timestamp_query(query_bytes: bytes) -> tuple[str, bytes, int, bool]:
     if offset < len(req_value):
         cert_req_tag, cert_req_value, offset = _der_read_tlv(req_value, offset)
         assert cert_req_tag == 0x01
-        assert cert_req_value in (b"\x00", b"\xFF")
-        cert_req = cert_req_value == b"\xFF"
+        assert cert_req_value in (b"\x00", b"\xff")
+        cert_req = cert_req_value == b"\xff"
     assert offset == len(req_value)
 
     return SHA256_OID, digest_value, nonce, cert_req
@@ -253,7 +257,7 @@ def _tsa_server(
             if response_body:
                 self.wfile.write(response_body)
 
-        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+        def log_message(self, format: str, *args: object) -> None:  # pylint: disable=redefined-builtin
             return
 
     try:

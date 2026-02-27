@@ -8,7 +8,7 @@ import pytest
 pytest.importorskip("torch", reason="torch is required for Gaussian backend tests")
 pytestmark = pytest.mark.ml
 
-from transformation_portal.spatial_ai.reconstruction import (
+from transformation_portal.spatial_ai.reconstruction import (  # pylint: disable=wrong-import-position
     CameraParams,
     GaussianBackend,
     LicenseRestrictionError,
