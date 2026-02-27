@@ -144,6 +144,24 @@ For cryptographic attestations, use the separate evidence artifact flow:
 The evidence flow hashes a projected envelope that removes volatile telemetry fields (for example `elapsed_seconds` and tool version strings), enabling reproducible third-party verification without changing the machine-mode contract.
 Serialization intentionally differs by layer: machine wire output uses `ensure_ascii=True` for transport-facing payloads, while evidence canonicalization uses `ensure_ascii=False` under `tp.canonical.json.v1`.
 
+### Phase 3.4 Detached Attestation Boundary
+
+Phase 3.4 introduces detached attestations under schema `tp.attestation.detached.v1` at:
+- `docs/schemas/attestation/tp.attestation.detached.v1/attestation.schema.json`
+
+Governance invariants for this boundary:
+- Attestation subject binds to `subject.evidence_sha256` from `tp.meta.evidence.v1`, not raw evidence JSON bytes.
+- `subject.file_sha256` and `subject.bundle_root_sha256` are optional secondary anchors when present.
+- Builder and CLI flows keep evidence immutable and detached (no mutation of `tp.meta.evidence.v1` payloads).
+- Evidence recompute checks are on by default: `sha256(canonicalize_json(projected_envelope))` must match stored `evidence_sha256`.
+- Cryptographic signatures bind to the canonical preimage `tp.attestation.detached.v1.preimage` (serialized under `tp.canonical.json.v1`), not the full attestation JSON document.
+- Verifiers enforce `attestation_sha256` integrity by default by recomputing the canonical digest and matching it to the stored value.
+- Migration-only compatibility mode may allow missing `attestation_sha256` while older artifacts are backfilled.
+
+Operational model:
+- Signing can run offline with custody-held keys; detached attestation payloads are later distributed with evidence artifacts.
+- Verifiers first validate attestation schema surface, evidence hash binding, and attestation self-hash, then perform optional signature backend checks.
+
 **Immutability:**
 
 All Pydantic models are frozen (`frozen=True`). Once created, sidecar objects cannot be modified.
