@@ -388,6 +388,7 @@ surface = {}
 positionals = []
 for action in parser._actions:
     option_strings = list(getattr(action, "option_strings", []) or [])
+    type_obj = getattr(action, "type", None)
     payload = {
         "required": bool(getattr(action, "required", False)),
         "choices": sorted(str(choice) for choice in (getattr(action, "choices", None) or [])) or None,
@@ -403,7 +404,7 @@ for action in parser._actions:
             "nargs": getattr(action, "nargs", None),
             "choices": payload["choices"],
             "default": payload["default"],
-            "type": getattr(getattr(action, "type", None), "__name__", repr(getattr(action, "type", None))),
+            "type": type_obj.__name__ if callable(type_obj) and hasattr(type_obj, "__name__") else None,
         })
 
 print(json.dumps({
@@ -514,15 +515,50 @@ def _validate_console_script_targets_resolve_to_src_modules(scripts: dict[str, s
         module_rel = Path(*module.split("."))
         module_file = SRC_ROOT / (str(module_rel) + ".py")
         module_init = SRC_ROOT / module_rel / "__init__.py"
-        if not module_file.exists() and not module_init.exists():
+        if module_file.exists():
+            module_path = module_file
+        elif module_init.exists():
+            module_path = module_init
+        else:
             raise AssertionError(
                 f"Console script '{name}' points to missing module '{module}'. "
                 f"Expected one of: {module_file.relative_to(REPO_ROOT)}, {module_init.relative_to(REPO_ROOT)}"
             )
 
+        root_symbol = callable_name.split(".", 1)[0]
+        tree = ast.parse(module_path.read_text(encoding="utf-8"))
+        top_level_symbols: set[str] = set()
+        for node in tree.body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                top_level_symbols.add(node.name)
+            elif isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        top_level_symbols.add(target.id)
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                top_level_symbols.add(node.target.id)
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    symbol = alias.asname or alias.name.split(".", 1)[0]
+                    top_level_symbols.add(symbol)
+            elif isinstance(node, ast.ImportFrom):
+                for alias in node.names:
+                    symbol = alias.asname or alias.name
+                    top_level_symbols.add(symbol)
+
+        if root_symbol not in top_level_symbols:
+            raise AssertionError(
+                f"Console script '{name}' target callable root '{root_symbol}' "
+                f"not found as a top-level symbol in '{module}'."
+            )
+
 
 def test_console_scripts_are_frozen_and_version_gated():
     """Freeze [project.scripts] and enforce SemVer bump requirements for contract changes."""
+    version_policy = _load_json(VERSION_POLICY_FILE)
+    if version_policy.get("version_source") != "pyproject":
+        raise AssertionError("Console script SemVer gating requires version_source='pyproject'.")
+
     current = _collect_console_scripts()
     _validate_console_script_targets_resolve_to_src_modules(current["scripts"])
     current_version = _extract_version()
