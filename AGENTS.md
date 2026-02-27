@@ -13,6 +13,7 @@ Quick reference for common workflows and commands in this repo.
 - `make test-integration` run DA3/HuggingFace model-loading integration (`tests/test_da3_inference_integration.py`) with `TP_RUN_HF_MODEL_TESTS=1` (downloads models from HF Hub unless offline; typically requires `HF_TOKEN`).
 - `make test-structure` run codebase structure validation.
 - `make test-utils` run performance/error utility tests.
+- `make clean` remove Python caches and build/test artifacts.
 - `make lint` run flake8 + pylint (non-blocking).
 - `make ci` run local CI checks (lint + test-fast).
 - `make ci-full` run comprehensive local CI (`./scripts/local_ci_check.sh`).
@@ -21,6 +22,7 @@ Quick reference for common workflows and commands in this repo.
 - `make install-hooks` install git pre-commit hook.
 - `make quality-check` run lint + CI validation + doc structure checks.
 - `make fix-quality` auto-fix quality issues (`scripts/auto_fix_quality.py --fix-all`).
+- `make check-quality` dry-run quality auto-fix checks (`scripts/auto_fix_quality.py --dry-run`).
 - `make validate-ci` validate GitHub Actions configs.
 - `make organize-docs` move markdown files into `docs/` (repo hygiene).
 - `make check-docs` dry-run docs organization.
@@ -38,6 +40,9 @@ Quick reference for common workflows and commands in this repo.
 - `./scripts/pipelines/process_source_tiffs_individual.sh` per-image APEX V2 enhancement commands (manual execution).
 - `./scripts/test_v2_integration.sh` validate end-to-end lux-depth-v3 + V2 stage integration (`--verbose`, `--clean` available).
 - `./scripts/validate_dependency_constraints.sh` enforce dependency pinning rules used by repo policy (`--verbose` available).
+- `./scripts/diagnostics/full_chain_determinism_trial.sh` run Phase 4C/4D/4E determinism checks (`--input-root` or `--capture-metadata`).
+- `./scripts/setup/auto-organize-install.sh` install repository file-organization guardrails and pre-commit hook.
+- `./scripts/setup/pre-commit-check.sh` run root-file placement validation manually (also used by the hook).
 
 ## ComfyUI workflows (`workflows/`)
 - `python -c "from transformation_portal.comfyui import WorkflowTemplates; WorkflowTemplates.save_all_templates('workflows/templates')"` generate ComfyUI template workflows.
