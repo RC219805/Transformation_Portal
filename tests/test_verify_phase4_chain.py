@@ -341,4 +341,3 @@ except SystemExit as exc:
         check=False,
     )
     assert result.returncode == 0, result.stderr
-

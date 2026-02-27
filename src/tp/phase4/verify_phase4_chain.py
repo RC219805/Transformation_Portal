@@ -445,4 +445,3 @@ def verify_phase4_chain_from_paths(
         provenance_merkle_schema=provenance_merkle_schema,
         strict_input_order=strict_input_order,
     )
-
