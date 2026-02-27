@@ -70,6 +70,22 @@ for source_file in files:
             "DateTimeOriginal": "2024:06:30 05:34:56",
             "OffsetTimeOriginal": "-07:00"
         }})
+    elif mode == "dji-float-case":
+        record.update({{
+            "Make": "DJI",
+            "Model": "Mavic 3",
+            "LensModel": "24.0 mm f/2.8",
+            "DateTimeOriginal": "2024:06:30 05:34:56",
+            "GPSLatitude": 34.01714642,
+            "GPSLongitude": -118.2903693,
+            "GPSLatitudeRef": "North",
+            "GPSLongitudeRef": "West",
+            "FocalLength": 24.0,
+            "FNumber": 2.8,
+            "ExposureTime": "1/200",
+            "ExposureCompensation": "+0.7",
+            "Orientation": 1
+        }})
     else:
         record.update({{
             "Make": "Canon",
@@ -188,6 +204,24 @@ def test_phase4c_output_validates_against_metadata_schema(tmp_path: Path) -> Non
         validator.validate(record)
 
 
+def test_phase4c_schema_does_not_use_multipleof_for_float_fields() -> None:
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    properties = schema["properties"]
+    float_fields = {
+        "gps_latitude",
+        "gps_longitude",
+        "focal_length_mm",
+        "aperture_fnumber",
+        "shutter_speed_seconds",
+        "exposure_compensation_ev",
+    }
+    for field in sorted(float_fields):
+        variants = properties[field]["oneOf"]
+        numeric_variant = next((variant for variant in variants if variant.get("type") == "number"), None)
+        assert numeric_variant is not None, f"missing numeric variant for {field}"
+        assert "multipleOf" not in numeric_variant, f"multipleOf must not be used for {field}"
+
+
 def test_phase4c_records_embed_config_fingerprint() -> None:
     expected_fingerprint = GOLDEN_CONFIG_FINGERPRINT.read_text(encoding="utf-8").strip()
     payload = json.loads(GOLDEN_OUTPUT.read_text(encoding="utf-8"))
@@ -252,6 +286,33 @@ def test_phase4c_invalid_gps_datetime_warns_and_uses_fallback(tmp_path: Path) ->
     record = json.loads(out_path.read_text(encoding="utf-8"))[0]
     assert record["capture_datetime_utc"] == "2024-06-30T12:34:56Z"
     assert "WARN_GPS_PARSE_FAIL" in record["extraction_warnings"]
+
+
+def test_phase4c_dji_float_case_schema_and_rounding(tmp_path: Path) -> None:
+    pytest.importorskip("jsonschema")
+    fake_exiftool = _build_fake_exiftool(tmp_path, mode="dji-float-case")
+    out_path = tmp_path / "capture_metadata.tp.meta.capture.v1.json"
+    result = _run_cli(input_root=FIXTURE_ROOT, out_path=out_path, fake_exiftool=fake_exiftool)
+    assert result.returncode == 0, result.stderr
+
+    record = json.loads(out_path.read_text(encoding="utf-8"))[0]
+    assert record["aperture_fnumber"] == 2.8
+    assert record["exposure_compensation_ev"] == 0.7
+    assert record["gps_latitude"] == 34.01714642
+    assert record["gps_longitude"] == -118.2903693
+    assert record["capture_datetime_utc"] is None
+    assert record["extraction_warnings"] == ["WARN_DATETIME_NO_TZ"]
+
+    strict_out_path = tmp_path / "capture_metadata.strict.tp.meta.capture.v1.json"
+    strict_result = _run_cli(
+        input_root=FIXTURE_ROOT,
+        out_path=strict_out_path,
+        fake_exiftool=fake_exiftool,
+        strict=True,
+    )
+    assert strict_result.returncode == 6
+    assert "Strict-mode warning failure:" in strict_result.stderr
+    assert not strict_out_path.exists()
 
 
 def test_phase4c_strict_mode_fails_on_warnings(tmp_path: Path) -> None:
