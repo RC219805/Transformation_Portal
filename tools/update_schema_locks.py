@@ -5,7 +5,7 @@ Deterministic schema lockfile updater for evalsuite contracts.
 Rewrites docs/contracts/SCHEMA_LOCKS.sha256 in canonical sorted order.
 
 Locks only:
-  docs/schemas/evalsuite/**/*.json
+  docs/schemas/evalsuite/**/*.schema.json
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ def main() -> None:
     if not SCHEMA_ROOT.exists():
         raise SystemExit(f"Schema root not found: {SCHEMA_ROOT}")
 
-    schema_files = [p for p in SCHEMA_ROOT.rglob("*.json") if p.is_file()]
+    schema_files = [p for p in SCHEMA_ROOT.rglob("*.schema.json") if p.is_file()]
     if not schema_files:
         raise SystemExit(f"No schema JSON files found under: {SCHEMA_ROOT}")
 
@@ -43,7 +43,7 @@ def main() -> None:
     lines = [
         "# Auto-generated. Do not edit manually.",
         "# Update using: python tools/update_schema_locks.py",
-        "# Scope: docs/schemas/evalsuite/**/*.json",
+        "# Scope: docs/schemas/evalsuite/**/*.schema.json",
         "",
     ]
 

@@ -42,20 +42,10 @@
             "width_min": { "type": "integer", "minimum": 1 },
             "height_min": { "type": "integer", "minimum": 1 }
           },
-          "allOf": [
-            {
-              "if": {
-                "required": ["iso_min", "iso_max"],
-                "properties": { "iso_min": { "type": "integer" }, "iso_max": { "type": "integer" } }
-              },
-              "then": {
-                "properties": {
-                  "iso_min": { "type": "integer" },
-                  "iso_max": { "type": "integer" }
-                }
-              }
-            }
-          ]
+          "dependentRequired": {
+            "iso_min": ["iso_max"],
+            "iso_max": ["iso_min"]
+          }
         },
 
         "labels": {

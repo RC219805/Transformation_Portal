@@ -1,7 +1,7 @@
 # Auto-generated. Do not edit manually.
 # Update using: python tools/update_schema_locks.py
-# Scope: docs/schemas/evalsuite/**/*.json
+# Scope: docs/schemas/evalsuite/**/*.schema.json
 
 9e6c3439fe214af95834d9324ef1f95dbe38bc8858e7830ea104e2ff2f1847cc  docs/schemas/evalsuite/evalsuite.resolution.v0/resolution.schema.json
-1735c5126b3e3637cd03f1043d586170f156d721ae616c0fc179c9768c934937  docs/schemas/evalsuite/evalsuite.v0/evalsuite.schema.json
+37a10bffa4bfccdbad663471a178abd0f834e281d0fae6e5fca4c01ad25b99db  docs/schemas/evalsuite/evalsuite.v0/evalsuite.schema.json
 652fe66945d77fd665b64693f6a02ff8f1163eef08bc121bc917ae5d08a03fb0  docs/schemas/evalsuite/taxonomy.v0/taxonomy.schema.json

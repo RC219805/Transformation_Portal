@@ -19,12 +19,8 @@ from typing import Dict, List, Tuple
 import jsonschema
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-
-SCHEMAS: List[Path] = [
-    REPO_ROOT / "docs" / "schemas" / "evalsuite" / "taxonomy.v0" / "taxonomy.schema.json",
-    REPO_ROOT / "docs" / "schemas" / "evalsuite" / "evalsuite.v0" / "evalsuite.schema.json",
-    REPO_ROOT / "docs" / "schemas" / "evalsuite" / "evalsuite.resolution.v0" / "resolution.schema.json",
-]
+SCHEMA_ROOT = REPO_ROOT / "docs" / "schemas" / "evalsuite"
+FORMAT_CHECKER = jsonschema.FormatChecker()
 
 LOCKFILE = REPO_ROOT / "docs" / "contracts" / "SCHEMA_LOCKS.sha256"
 
@@ -36,6 +32,10 @@ EXAMPLES: List[Tuple[Path, Path]] = [
     (
         REPO_ROOT / "docs" / "contracts" / "examples" / "evalsuite_v0.example.json",
         REPO_ROOT / "docs" / "schemas" / "evalsuite" / "evalsuite.v0" / "evalsuite.schema.json",
+    ),
+    (
+        REPO_ROOT / "docs" / "contracts" / "examples" / "evalsuite_resolution_v0.example.json",
+        REPO_ROOT / "docs" / "schemas" / "evalsuite" / "evalsuite.resolution.v0" / "resolution.schema.json",
     ),
 ]
 
@@ -70,6 +70,19 @@ def parse_lockfile(path: Path) -> Dict[str, str]:
     return locks
 
 
+def discover_schemas() -> List[Path]:
+    if not SCHEMA_ROOT.exists():
+        raise SystemExit(f"Schema root not found: {SCHEMA_ROOT}")
+
+    schemas = sorted(
+        [p for p in SCHEMA_ROOT.rglob("*.schema.json") if p.is_file()],
+        key=lambda p: p.relative_to(REPO_ROOT).as_posix(),
+    )
+    if not schemas:
+        raise SystemExit(f"No schema files found under: {SCHEMA_ROOT}")
+    return schemas
+
+
 def validate_schemas_are_valid(schemas: List[Path]) -> None:
     for s in schemas:
         if not s.exists():
@@ -89,17 +102,34 @@ def validate_examples(examples: List[Tuple[Path, Path]]) -> None:
         schema_obj = load_json(schema_path)
         instance = load_json(example_path)
 
-        jsonschema.Draft202012Validator(schema_obj).validate(instance)
+        jsonschema.Draft202012Validator(
+            schema_obj,
+            format_checker=FORMAT_CHECKER,
+        ).validate(instance)
 
 
 def validate_lockfile(schemas: List[Path], lockfile: Path) -> None:
     locks = parse_lockfile(lockfile)
+    expected_relpaths = {s.relative_to(REPO_ROOT).as_posix() for s in schemas}
+    lock_relpaths = set(locks.keys())
+
+    missing = sorted(expected_relpaths - lock_relpaths)
+    extra = sorted(lock_relpaths - expected_relpaths)
+    if missing or extra:
+        lines = ["Lockfile entries do not exactly match discovered schemas."]
+        if missing:
+            lines.append("Missing entries:")
+            lines.extend(f"  - {rel}" for rel in missing)
+        if extra:
+            lines.append("Unexpected extra entries:")
+            lines.extend(f"  - {rel}" for rel in extra)
+        lines.append("")
+        lines.append("If intentional, update lockfile with:")
+        lines.append("  python tools/update_schema_locks.py")
+        raise SystemExit("\n".join(lines))
 
     for s in schemas:
         rel = s.relative_to(REPO_ROOT).as_posix()
-        if rel not in locks:
-            raise SystemExit(f"Lockfile missing entry for: {rel}")
-
         got = sha256_file(s)
         exp = locks[rel]
         if got != exp:
@@ -114,10 +144,11 @@ def validate_lockfile(schemas: List[Path], lockfile: Path) -> None:
 
 
 def main() -> int:
+    schemas = discover_schemas()
     try:
-        validate_schemas_are_valid(SCHEMAS)
+        validate_schemas_are_valid(schemas)
         validate_examples(EXAMPLES)
-        validate_lockfile(SCHEMAS, LOCKFILE)
+        validate_lockfile(schemas, LOCKFILE)
     except jsonschema.ValidationError as e:
         print("❌ JSON Schema validation failed", file=sys.stderr)
         print(str(e), file=sys.stderr)

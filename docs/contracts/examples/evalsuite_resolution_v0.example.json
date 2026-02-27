@@ -1,0 +1,15 @@
+{
+  "schema": "evalsuite.resolution.v0",
+  "schema_version": "0.0.0",
+  "suite_id": "indoor-day-sample",
+  "suite_version": "0.1.0",
+  "suite_sha256": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "catalog_version": "asset-catalog-2026-02-01",
+  "db_fingerprint_sha256": "sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+  "taxonomy_id": "taxonomy.v0",
+  "taxonomy_version": "0.0.0",
+  "resolved_count": 42,
+  "resolved_asset_ids_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "resolved_asset_ids_path": "artifacts/evalsuite/indoor-day-sample/asset_ids.txt",
+  "created_at_utc": "2026-02-27T12:00:00Z"
+}
