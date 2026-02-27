@@ -204,6 +204,24 @@ def test_phase4c_output_validates_against_metadata_schema(tmp_path: Path) -> Non
         validator.validate(record)
 
 
+def test_phase4c_schema_does_not_use_multipleof_for_float_fields() -> None:
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    properties = schema["properties"]
+    float_fields = {
+        "gps_latitude",
+        "gps_longitude",
+        "focal_length_mm",
+        "aperture_fnumber",
+        "shutter_speed_seconds",
+        "exposure_compensation_ev",
+    }
+    for field in sorted(float_fields):
+        variants = properties[field]["oneOf"]
+        numeric_variant = next((variant for variant in variants if variant.get("type") == "number"), None)
+        assert numeric_variant is not None, f"missing numeric variant for {field}"
+        assert "multipleOf" not in numeric_variant, f"multipleOf must not be used for {field}"
+
+
 def test_phase4c_records_embed_config_fingerprint() -> None:
     expected_fingerprint = GOLDEN_CONFIG_FINGERPRINT.read_text(encoding="utf-8").strip()
     payload = json.loads(GOLDEN_OUTPUT.read_text(encoding="utf-8"))
