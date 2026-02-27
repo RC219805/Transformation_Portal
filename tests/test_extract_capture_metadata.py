@@ -301,7 +301,7 @@ def test_phase4c_dji_float_case_schema_and_rounding(tmp_path: Path) -> None:
     assert record["gps_latitude"] == 34.01714642
     assert record["gps_longitude"] == -118.2903693
     assert record["capture_datetime_utc"] is None
-    assert "WARN_DATETIME_NO_TZ" in record["extraction_warnings"]
+    assert record["extraction_warnings"] == ["WARN_DATETIME_NO_TZ"]
 
     strict_out_path = tmp_path / "capture_metadata.strict.tp.meta.capture.v1.json"
     strict_result = _run_cli(

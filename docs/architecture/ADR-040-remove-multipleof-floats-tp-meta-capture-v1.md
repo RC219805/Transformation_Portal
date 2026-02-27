@@ -74,6 +74,21 @@ Trade-off:
 - schema no longer encodes decimal precision granularity directly; this is now
   a canonicalization-policy responsibility and must stay test-covered.
 
+## Alternatives Considered
+
+- Keep `multipleOf` on float fields. Rejected due IEEE-754 false-negative
+  validation risk for otherwise correct canonical values.
+- Switch numeric fields to string-encoded decimals in schema. Rejected because
+  it would change the contract shape and increase downstream compatibility
+  burden without addressing current governance needs.
+
+## Enforcement
+
+- `tests/test_extract_capture_metadata.py::test_phase4c_dji_float_case_schema_and_rounding`
+  locks the production float edge case and warning behavior.
+- `tests/test_extract_capture_metadata.py::test_phase4c_schema_does_not_use_multipleof_for_float_fields`
+  guards against reintroduction of `multipleOf` on the designated float fields.
+
 ## References
 
 - `schemas/phase4/metadata.schema.json`
