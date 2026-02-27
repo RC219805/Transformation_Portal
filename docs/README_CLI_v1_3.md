@@ -1,6 +1,5 @@
-## v1.3 additions
-### Auto-measure eye-line & gutters
-```bash
-python presence_cli_v1_3.py measure --image In-Command_In-Conversation_2400x3000.jpg --aspect 4:5
-# -> JSON report: eye_line_pct, gutters, confidence
-```
+# Readme Cli V1 3
+
+> Canonical location: [docs/guides/README_CLI_v1_3.md](guides/README_CLI_v1_3.md)
+
+This file is a compatibility stub to avoid duplicate maintenance.

@@ -249,6 +249,11 @@ Future enforcement (not yet active):
 - Max 15 markdown files in root
 - No directories with spaces in names
 
+### Local Ignore Rules
+- Treat `.git/info/exclude` as machine-local scratch only.
+- Do not rely on `.git/info/exclude` for team policy; shared ignore rules must live in `.gitignore`.
+- If you add a local exclude that others will need, promote it to `.gitignore` in the same PR.
+
 ## Running CI Checks Locally
 
 ### Quick Check (before committing)
