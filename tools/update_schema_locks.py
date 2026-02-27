@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+from uuid import uuid4
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_ROOT = REPO_ROOT / "docs" / "schemas" / "evalsuite"
@@ -24,6 +25,17 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def atomic_write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    try:
+        tmp_path.write_text(text, encoding="utf-8")
+        tmp_path.replace(path)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink()
 
 
 def main() -> None:
@@ -52,8 +64,7 @@ def main() -> None:
         digest = sha256_file(path)
         lines.append(f"{digest}  {rel}")
 
-    LOCKFILE.parent.mkdir(parents=True, exist_ok=True)
-    LOCKFILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    atomic_write_text(LOCKFILE, "\n".join(lines) + "\n")
 
     print(f"Updated lockfile: {LOCKFILE}")
     print(f"Locked {len(schema_files_sorted)} schema file(s).")

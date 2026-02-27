@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.transformation-portal.dev/evalsuite/evalsuite.resolution.v0/resolution.schema.json",
   "title": "Evaluation Suite Resolution Manifest (evalsuite.resolution.v0)",
-  "description": "Deterministic resolution manifest emitted by tools/resolve_suite.py.",
+  "description": "Deterministic resolution manifest for evalsuite suites.",
   "type": "object",
   "additionalProperties": false,
   "required": [

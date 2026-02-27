@@ -13,10 +13,35 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import jsonschema
+
+EXIT_SUCCESS = 0
+EXIT_INPUT_PARSE_ERROR = 2
+EXIT_INPUT_INVARIANT_FAILURE = 3
+EXIT_SCHEMA_VALIDATION_FAILURE = 4
+
+
+class ContractValidationError(Exception):
+    """Base class for predictable contract validation failures."""
+
+    exit_code = EXIT_INPUT_INVARIANT_FAILURE
+
+
+class InputParseError(ContractValidationError):
+    """Raised when JSON/text inputs cannot be parsed."""
+
+    exit_code = EXIT_INPUT_PARSE_ERROR
+
+
+class InputInvariantError(ContractValidationError):
+    """Raised when required files or lockfile invariants are violated."""
+
+    exit_code = EXIT_INPUT_INVARIANT_FAILURE
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_ROOT = REPO_ROOT / "docs" / "schemas" / "evalsuite"
@@ -40,6 +65,21 @@ EXAMPLES: List[Tuple[Path, Path]] = [
 ]
 
 
+@FORMAT_CHECKER.checks("date-time")
+def is_rfc3339_datetime(instance: object) -> bool:
+    """Strict enough RFC3339 gate for contract fields like created_at_utc."""
+    if not isinstance(instance, str):
+        return True
+    if "T" not in instance:
+        return False
+    normalized = instance.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return False
+    return parsed.tzinfo is not None
+
+
 def sha256_file(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as f:
@@ -48,23 +88,31 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def load_json(path: Path) -> dict:
-    with path.open("r", encoding="utf-8") as f:
-        return json.load(f)
+def load_json(path: Path) -> Any:
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise InputParseError(f"Failed to load JSON file {path}: {exc}") from exc
 
 
 def parse_lockfile(path: Path) -> Dict[str, str]:
     if not path.exists():
-        raise SystemExit(f"LOCKFILE missing: {path}")
+        raise InputInvariantError(f"LOCKFILE missing: {path}")
+
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError) as exc:
+        raise InputParseError(f"Failed to read lockfile {path}: {exc}") from exc
 
     locks: Dict[str, str] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in lines:
         line = line.strip()
         if not line or line.startswith("#"):
             continue
         parts = line.split()
         if len(parts) != 2:
-            raise SystemExit(f"Invalid lockfile line: {line!r}")
+            raise InputInvariantError(f"Invalid lockfile line: {line!r}")
         digest, rel = parts
         locks[rel] = digest
     return locks
@@ -72,32 +120,32 @@ def parse_lockfile(path: Path) -> Dict[str, str]:
 
 def discover_schemas() -> List[Path]:
     if not SCHEMA_ROOT.exists():
-        raise SystemExit(f"Schema root not found: {SCHEMA_ROOT}")
+        raise InputInvariantError(f"Schema root not found: {SCHEMA_ROOT}")
 
     schemas = sorted(
         [p for p in SCHEMA_ROOT.rglob("*.schema.json") if p.is_file()],
         key=lambda p: p.relative_to(REPO_ROOT).as_posix(),
     )
     if not schemas:
-        raise SystemExit(f"No schema files found under: {SCHEMA_ROOT}")
+        raise InputInvariantError(f"No schema files found under: {SCHEMA_ROOT}")
     return schemas
 
 
 def validate_schemas_are_valid(schemas: List[Path]) -> None:
-    for s in schemas:
-        if not s.exists():
-            raise SystemExit(f"Missing schema file: {s}")
-        schema_obj = load_json(s)
-        # Validates that this JSON is a valid Draft 2020-12 schema
+    for schema_path in schemas:
+        if not schema_path.exists():
+            raise InputInvariantError(f"Missing schema file: {schema_path}")
+        schema_obj = load_json(schema_path)
+        # Ensures each schema document itself is valid Draft 2020-12 JSON Schema.
         jsonschema.Draft202012Validator.check_schema(schema_obj)
 
 
 def validate_examples(examples: List[Tuple[Path, Path]]) -> None:
     for example_path, schema_path in examples:
         if not example_path.exists():
-            raise SystemExit(f"Missing example fixture: {example_path}")
+            raise InputInvariantError(f"Missing example fixture: {example_path}")
         if not schema_path.exists():
-            raise SystemExit(f"Missing schema for example: {schema_path}")
+            raise InputInvariantError(f"Missing schema for example: {schema_path}")
 
         schema_obj = load_json(schema_path)
         instance = load_json(example_path)
@@ -126,14 +174,14 @@ def validate_lockfile(schemas: List[Path], lockfile: Path) -> None:
         lines.append("")
         lines.append("If intentional, update lockfile with:")
         lines.append("  python tools/update_schema_locks.py")
-        raise SystemExit("\n".join(lines))
+        raise InputInvariantError("\n".join(lines))
 
-    for s in schemas:
-        rel = s.relative_to(REPO_ROOT).as_posix()
-        got = sha256_file(s)
+    for schema_path in schemas:
+        rel = schema_path.relative_to(REPO_ROOT).as_posix()
+        got = sha256_file(schema_path)
         exp = locks[rel]
         if got != exp:
-            raise SystemExit(
+            raise InputInvariantError(
                 "Schema drift detected.\n"
                 f"  file:     {rel}\n"
                 f"  expected: {exp}\n"
@@ -144,18 +192,22 @@ def validate_lockfile(schemas: List[Path], lockfile: Path) -> None:
 
 
 def main() -> int:
-    schemas = discover_schemas()
     try:
+        schemas = discover_schemas()
         validate_schemas_are_valid(schemas)
         validate_examples(EXAMPLES)
         validate_lockfile(schemas, LOCKFILE)
-    except jsonschema.ValidationError as e:
+    except (jsonschema.ValidationError, jsonschema.SchemaError) as exc:
         print("❌ JSON Schema validation failed", file=sys.stderr)
-        print(str(e), file=sys.stderr)
-        return 2
+        print(str(exc), file=sys.stderr)
+        return EXIT_SCHEMA_VALIDATION_FAILURE
+    except ContractValidationError as exc:
+        print("❌ EvalSuite contract validation failed", file=sys.stderr)
+        print(str(exc), file=sys.stderr)
+        return exc.exit_code
 
     print("✅ OK: evalsuite schemas valid, examples valid, lockfile matches.")
-    return 0
+    return EXIT_SUCCESS
 
 
 if __name__ == "__main__":
