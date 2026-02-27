@@ -70,6 +70,22 @@ for source_file in files:
             "DateTimeOriginal": "2024:06:30 05:34:56",
             "OffsetTimeOriginal": "-07:00"
         }})
+    elif mode == "dji-float-case":
+        record.update({{
+            "Make": "DJI",
+            "Model": "Mavic 3",
+            "LensModel": "24.0 mm f/2.8",
+            "DateTimeOriginal": "2024:06:30 05:34:56",
+            "GPSLatitude": 34.01714642,
+            "GPSLongitude": -118.2903693,
+            "GPSLatitudeRef": "North",
+            "GPSLongitudeRef": "West",
+            "FocalLength": 24.0,
+            "FNumber": 2.8,
+            "ExposureTime": "1/200",
+            "ExposureCompensation": "+0.7",
+            "Orientation": 1
+        }})
     else:
         record.update({{
             "Make": "Canon",
@@ -252,6 +268,33 @@ def test_phase4c_invalid_gps_datetime_warns_and_uses_fallback(tmp_path: Path) ->
     record = json.loads(out_path.read_text(encoding="utf-8"))[0]
     assert record["capture_datetime_utc"] == "2024-06-30T12:34:56Z"
     assert "WARN_GPS_PARSE_FAIL" in record["extraction_warnings"]
+
+
+def test_phase4c_dji_float_case_schema_and_rounding(tmp_path: Path) -> None:
+    pytest.importorskip("jsonschema")
+    fake_exiftool = _build_fake_exiftool(tmp_path, mode="dji-float-case")
+    out_path = tmp_path / "capture_metadata.tp.meta.capture.v1.json"
+    result = _run_cli(input_root=FIXTURE_ROOT, out_path=out_path, fake_exiftool=fake_exiftool)
+    assert result.returncode == 0, result.stderr
+
+    record = json.loads(out_path.read_text(encoding="utf-8"))[0]
+    assert record["aperture_fnumber"] == 2.8
+    assert record["exposure_compensation_ev"] == 0.7
+    assert record["gps_latitude"] == 34.01714642
+    assert record["gps_longitude"] == -118.2903693
+    assert record["capture_datetime_utc"] is None
+    assert "WARN_DATETIME_NO_TZ" in record["extraction_warnings"]
+
+    strict_out_path = tmp_path / "capture_metadata.strict.tp.meta.capture.v1.json"
+    strict_result = _run_cli(
+        input_root=FIXTURE_ROOT,
+        out_path=strict_out_path,
+        fake_exiftool=fake_exiftool,
+        strict=True,
+    )
+    assert strict_result.returncode == 6
+    assert "Strict-mode warning failure:" in strict_result.stderr
+    assert not strict_out_path.exists()
 
 
 def test_phase4c_strict_mode_fails_on_warnings(tmp_path: Path) -> None:
