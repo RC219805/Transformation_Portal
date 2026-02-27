@@ -386,6 +386,40 @@ def test_run_pipeline_parallel_permissionerror_and_oserror_fallback_are_determin
     assert "Falling back to single-process execution." in caplog.text
 
 
+def test_run_pipeline_fallback_avoids_parallel_progress_initialization(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    input_dir.mkdir()
+    _create_sample_image(input_dir / "frame.tif")
+
+    progress_calls: list[dict[str, Any]] = []
+
+    def _progress_spy(iterable, *, total=None, description=None, enabled=True):  # noqa: ANN001, ANN202
+        progress_calls.append(
+            {
+                "total": total,
+                "description": description,
+                "enabled": enabled,
+            }
+        )
+        yield from iterable
+
+    class _DeniedExecutor:
+        def __init__(self, max_workers: int):  # pylint: disable=unused-argument
+            raise OSError(errno.EPERM, "simulated restricted system call")
+
+    monkeypatch.setattr(ltiff_cli, "_wrap_with_progress", _progress_spy)
+    monkeypatch.setattr(ltiff_cli, "ProcessPoolExecutor", _DeniedExecutor)
+
+    args = ltiff.parse_args([str(input_dir), str(output_dir), "--workers", "2"])
+    processed = ltiff.run_pipeline(args)
+
+    assert processed == 1
+    assert len(progress_calls) == 1
+    assert progress_calls[0]["total"] == 1
+    assert progress_calls[0]["enabled"] is True
+
+
 def test_run_pipeline_invokes_progress_wrapper(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     input_dir = tmp_path / "input"
     output_dir = tmp_path / "output"

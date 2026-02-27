@@ -425,21 +425,6 @@ def run_pipeline(args: argparse.Namespace) -> int:
     if workers <= 1:
         run_serial_batch()
     else:
-        progress_range = _wrap_with_progress(
-            range(len(images)),
-            total=len(images),
-            description="Processing images",
-            enabled=not getattr(args, "no_progress", False),
-        )
-        progress_iterator = iter(progress_range)
-
-        def advance_progress() -> None:
-            try:
-                next(progress_iterator)
-            except StopIteration:
-                pass
-
-        futures = []
         try:
             executor_ctx = ProcessPoolExecutor(max_workers=workers)
         except (PermissionError, OSError) as exc:
@@ -456,6 +441,21 @@ def run_pipeline(args: argparse.Namespace) -> int:
             else:
                 raise
         else:
+            progress_range = _wrap_with_progress(
+                range(len(images)),
+                total=len(images),
+                description="Processing images",
+                enabled=not getattr(args, "no_progress", False),
+            )
+            progress_iterator = iter(progress_range)
+
+            def advance_progress() -> None:
+                try:
+                    next(progress_iterator)
+                except StopIteration:
+                    pass
+
+            futures = []
             with executor_ctx as executor:
                 for image_path in images:
                     destination = ensure_output_path(

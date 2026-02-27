@@ -157,8 +157,16 @@ class TestPhase23Integration:
         validator = GeometricValidator()
         results = validator.validate_scene(scene)
 
-        assert "rmse_pass" in results
-        assert "quality_grade" in results
+        assert isinstance(results.get("rmse_pass"), bool)
+        assert results.get("quality_grade") in {"A", "B", "C", "D"}
+        if results["rmse_pass"]:
+            assert results["quality_grade"] in {"A", "B"}
+        else:
+            assert results["quality_grade"] in {"C", "D"}
+
+        coverage = results.get("coverage")
+        assert isinstance(coverage, dict)
+        assert {"mean_points_per_view", "min_points_per_view", "max_points_per_view", "coverage_std"} <= set(coverage)
 
     def test_gamma_contract(self):
         images, _, _, cameras = self._build_scene_inputs(2)
