@@ -10,7 +10,12 @@ from typing import Any
 
 from tp.crypto.merkle import merkle_root_sha256
 
-from .hash_capture_metadata import METADATA_CONTRACT_VERSION, METADATA_MANIFEST_CONTRACT_VERSION, compute_metadata_sha256
+from .hash_capture_metadata import (
+    METADATA_CONTRACT_VERSION,
+    METADATA_MANIFEST_CONTRACT_VERSION,
+    canonical_json_bytes,
+    compute_metadata_sha256,
+)
 from .provenance_capture import (
     PROVENANCE_CONTRACT_VERSION,
     PROVENANCE_MERKLE_CONTRACT_VERSION,
@@ -18,12 +23,18 @@ from .provenance_capture import (
 )
 from .schema_validation import build_draft202012_validator
 
+VERIFICATION_REPORT_CONTRACT_VERSION = "tp.meta.verification_report.v1"
+VERIFIER_NAME = "verify_phase4_chain.py"
+VERIFIER_VERSION = "phase4f-v1"
+VERIFIER_BUILD_ID = "phase4f-build-v1"
+
 FAILURE_LABEL_MALFORMED_INPUT = "MALFORMED_INPUT"
 FAILURE_LABEL_SCHEMA_VALIDATION_FAILURE = "SCHEMA_VALIDATION_FAILURE"
 FAILURE_LABEL_ALIGNMENT_FAILURE = "ALIGNMENT_FAILURE"
 FAILURE_LABEL_METADATA_HASH_MISMATCH = "METADATA_HASH_MISMATCH"
 FAILURE_LABEL_PROVENANCE_ENTRY_HASH_MISMATCH = "PROVENANCE_ENTRY_HASH_MISMATCH"
 FAILURE_LABEL_MERKLE_MISMATCH = "MERKLE_MISMATCH"
+FAILURE_LABEL_REPORT_WRITE_FAILURE = "REPORT_WRITE_FAILURE"
 
 _SHA256_HEX_RE = re.compile(r"^[a-f0-9]{64}$")
 
@@ -33,7 +44,7 @@ class Phase4VerificationInputError(ValueError):
 
 
 class Phase4SchemaValidationError(ValueError):
-    """Raised when schema validation fails for artifacts."""
+    """Raised when schema validation fails for artifacts or report payloads."""
 
 
 class Phase4AlignmentError(ValueError):
@@ -62,7 +73,17 @@ def _ensure_sha256_hex(value: Any, *, label: str, error_cls: type[Exception]) ->
     return value
 
 
-def _read_json_file(path: Path, *, label: str) -> Any:
+def _string_or_none(value: Any) -> str | None:
+    if isinstance(value, str):
+        return value
+    return None
+
+
+def _sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _read_json_file_with_digest(path: Path, *, label: str) -> tuple[Any, str]:
     try:
         raw = path.read_bytes()
     except OSError as exc:
@@ -72,7 +93,7 @@ def _read_json_file(path: Path, *, label: str) -> Any:
         payload = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise Phase4VerificationInputError(f"unable to parse {label} {path}: {exc}") from exc
-    return payload
+    return payload, _sha256_bytes(raw)
 
 
 def _read_json_schema(path: Path, *, label: str) -> dict[str, Any]:
@@ -383,10 +404,8 @@ def verify_phase4_chain_payloads(
             f"recomputed={recomputed_provenance_merkle_root}, expected={expected_provenance_merkle_root}"
         )
 
-    metadata_sha256_summary_sha256 = hashlib.sha256("".join(recomputed_metadata_hashes).encode("ascii")).hexdigest()
-    provenance_entry_sha256_summary_sha256 = hashlib.sha256(
-        "".join(recomputed_provenance_entry_hashes).encode("ascii")
-    ).hexdigest()
+    metadata_sha256_summary_sha256 = _sha256_bytes("".join(recomputed_metadata_hashes).encode("ascii"))
+    provenance_entry_sha256_summary_sha256 = _sha256_bytes("".join(recomputed_provenance_entry_hashes).encode("ascii"))
     return {
         "computed": {
             "metadata_sha256_summary_sha256": metadata_sha256_summary_sha256,
@@ -395,6 +414,72 @@ def verify_phase4_chain_payloads(
             "provenance_entry_count": len(recomputed_provenance_entry_hashes),
             "provenance_merkle_root": recomputed_provenance_merkle_root,
             "provenance_leaf_count": len(leaf_hashes),
+        },
+    }
+
+
+def _derive_capture_contract_version(capture_payload: Any) -> str | None:
+    if not isinstance(capture_payload, list) or not capture_payload:
+        return None
+    versions = {record.get("metadata_contract_version") for record in capture_payload if isinstance(record, dict)}
+    if len(versions) != 1:
+        return None
+    only = versions.pop()
+    return _string_or_none(only)
+
+
+def _build_inputs_block(
+    *,
+    capture_payload: Any,
+    capture_file_sha256: str | None,
+    metadata_manifest_payload: Any,
+    metadata_manifest_file_sha256: str | None,
+    provenance_manifest_payload: Any,
+    provenance_manifest_file_sha256: str | None,
+    provenance_merkle_payload: Any,
+    provenance_merkle_file_sha256: str | None,
+) -> dict[str, Any]:
+    metadata_manifest_contract_version = None
+    metadata_manifest_metadata_contract_version = None
+    if isinstance(metadata_manifest_payload, dict):
+        metadata_manifest_contract_version = _string_or_none(metadata_manifest_payload.get("metadata_manifest_contract_version"))
+        metadata_manifest_metadata_contract_version = _string_or_none(metadata_manifest_payload.get("metadata_contract_version"))
+
+    provenance_manifest_contract_version = None
+    provenance_manifest_metadata_contract_version = None
+    if isinstance(provenance_manifest_payload, dict):
+        provenance_manifest_contract_version = _string_or_none(provenance_manifest_payload.get("provenance_contract_version"))
+        provenance_manifest_metadata_contract_version = _string_or_none(provenance_manifest_payload.get("metadata_contract_version"))
+
+    provenance_merkle_contract_version = None
+    provenance_merkle_provenance_contract_version = None
+    if isinstance(provenance_merkle_payload, dict):
+        provenance_merkle_contract_version = _string_or_none(
+            provenance_merkle_payload.get("provenance_merkle_contract_version")
+        )
+        provenance_merkle_provenance_contract_version = _string_or_none(
+            provenance_merkle_payload.get("provenance_contract_version")
+        )
+
+    return {
+        "capture_metadata": {
+            "file_sha256": capture_file_sha256,
+            "metadata_contract_version": _derive_capture_contract_version(capture_payload),
+        },
+        "metadata_manifest": {
+            "file_sha256": metadata_manifest_file_sha256,
+            "metadata_manifest_contract_version": metadata_manifest_contract_version,
+            "metadata_contract_version": metadata_manifest_metadata_contract_version,
+        },
+        "provenance_manifest": {
+            "file_sha256": provenance_manifest_file_sha256,
+            "provenance_contract_version": provenance_manifest_contract_version,
+            "metadata_contract_version": provenance_manifest_metadata_contract_version,
+        },
+        "provenance_merkle": {
+            "file_sha256": provenance_merkle_file_sha256,
+            "provenance_merkle_contract_version": provenance_merkle_contract_version,
+            "provenance_contract_version": provenance_merkle_provenance_contract_version,
         },
     }
 
@@ -412,17 +497,23 @@ def verify_phase4_chain_from_paths(
     strict_input_order: bool = True,
 ) -> dict[str, Any]:
     """Load JSON artifacts from disk and verify the full Phase 4 chain."""
-    capture_payload = _read_json_file(capture_metadata_path, label="capture metadata artifact")
-    metadata_manifest_payload = _read_json_file(metadata_manifest_path, label="metadata manifest artifact")
-    provenance_manifest_payload = _read_json_file(provenance_manifest_path, label="provenance manifest artifact")
-    provenance_merkle_payload = _read_json_file(provenance_merkle_path, label="provenance merkle artifact")
+    capture_payload, capture_file_sha256 = _read_json_file_with_digest(capture_metadata_path, label="capture metadata artifact")
+    metadata_manifest_payload, metadata_manifest_file_sha256 = _read_json_file_with_digest(
+        metadata_manifest_path, label="metadata manifest artifact"
+    )
+    provenance_manifest_payload, provenance_manifest_file_sha256 = _read_json_file_with_digest(
+        provenance_manifest_path, label="provenance manifest artifact"
+    )
+    provenance_merkle_payload, provenance_merkle_file_sha256 = _read_json_file_with_digest(
+        provenance_merkle_path, label="provenance merkle artifact"
+    )
 
     metadata_schema = _read_json_schema(metadata_schema_path, label="metadata")
     metadata_manifest_schema = _read_json_schema(metadata_manifest_schema_path, label="metadata manifest")
     provenance_manifest_schema = _read_json_schema(provenance_manifest_schema_path, label="provenance manifest")
     provenance_merkle_schema = _read_json_schema(provenance_merkle_schema_path, label="provenance merkle")
 
-    return verify_phase4_chain_payloads(
+    verification = verify_phase4_chain_payloads(
         capture_payload,
         metadata_manifest_payload,
         provenance_manifest_payload,
@@ -433,3 +524,108 @@ def verify_phase4_chain_from_paths(
         provenance_merkle_schema=provenance_merkle_schema,
         strict_input_order=strict_input_order,
     )
+    inputs = _build_inputs_block(
+        capture_payload=capture_payload,
+        capture_file_sha256=capture_file_sha256,
+        metadata_manifest_payload=metadata_manifest_payload,
+        metadata_manifest_file_sha256=metadata_manifest_file_sha256,
+        provenance_manifest_payload=provenance_manifest_payload,
+        provenance_manifest_file_sha256=provenance_manifest_file_sha256,
+        provenance_merkle_payload=provenance_merkle_payload,
+        provenance_merkle_file_sha256=provenance_merkle_file_sha256,
+    )
+    return {"inputs": inputs, "computed": verification["computed"]}
+
+
+def _safe_read_json_file_with_digest(path: Path) -> tuple[Any | None, str | None]:
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return None, None
+    digest = _sha256_bytes(raw)
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None, digest
+    return payload, digest
+
+
+def collect_report_inputs_from_paths(
+    *,
+    capture_metadata_path: Path,
+    metadata_manifest_path: Path,
+    provenance_manifest_path: Path,
+    provenance_merkle_path: Path,
+) -> dict[str, Any]:
+    """Best-effort input digest/contract extraction for success and failure reports."""
+    capture_payload, capture_file_sha256 = _safe_read_json_file_with_digest(capture_metadata_path)
+    metadata_manifest_payload, metadata_manifest_file_sha256 = _safe_read_json_file_with_digest(metadata_manifest_path)
+    provenance_manifest_payload, provenance_manifest_file_sha256 = _safe_read_json_file_with_digest(provenance_manifest_path)
+    provenance_merkle_payload, provenance_merkle_file_sha256 = _safe_read_json_file_with_digest(provenance_merkle_path)
+    return _build_inputs_block(
+        capture_payload=capture_payload,
+        capture_file_sha256=capture_file_sha256,
+        metadata_manifest_payload=metadata_manifest_payload,
+        metadata_manifest_file_sha256=metadata_manifest_file_sha256,
+        provenance_manifest_payload=provenance_manifest_payload,
+        provenance_manifest_file_sha256=provenance_manifest_file_sha256,
+        provenance_merkle_payload=provenance_merkle_payload,
+        provenance_merkle_file_sha256=provenance_merkle_file_sha256,
+    )
+
+
+def default_failure_computed_block() -> dict[str, Any]:
+    """Return deterministic null-valued computed fields for failure reports."""
+    return {
+        "metadata_sha256_summary_sha256": None,
+        "metadata_entry_count": None,
+        "provenance_entry_sha256_summary_sha256": None,
+        "provenance_entry_count": None,
+        "provenance_merkle_root": None,
+        "provenance_leaf_count": None,
+    }
+
+
+def build_verification_report_payload(
+    *,
+    inputs: dict[str, Any],
+    computed: dict[str, Any],
+    passed: bool,
+    failure_code_label: str | None = None,
+    failure_message: str | None = None,
+) -> dict[str, Any]:
+    """Build deterministic verification report payload."""
+    return {
+        "verification_contract_version": VERIFICATION_REPORT_CONTRACT_VERSION,
+        "inputs": inputs,
+        "computed": {
+            "metadata_sha256_summary_sha256": computed.get("metadata_sha256_summary_sha256"),
+            "metadata_entry_count": computed.get("metadata_entry_count"),
+            "provenance_entry_sha256_summary_sha256": computed.get("provenance_entry_sha256_summary_sha256"),
+            "provenance_entry_count": computed.get("provenance_entry_count"),
+            "provenance_merkle_root": computed.get("provenance_merkle_root"),
+            "provenance_leaf_count": computed.get("provenance_leaf_count"),
+        },
+        "verifier": {
+            "name": VERIFIER_NAME,
+            "version": VERIFIER_VERSION,
+            "build_id": VERIFIER_BUILD_ID,
+        },
+        "verification_status": {
+            "passed": passed,
+            "failure_code_label": None if passed else failure_code_label,
+            "failure_message": None if passed else failure_message,
+        },
+    }
+
+
+def validate_verification_report_payload(payload: dict[str, Any], *, report_schema: dict[str, Any]) -> None:
+    """Validate verification report payload against tp.meta.verification_report.v1 schema."""
+    if not isinstance(payload, dict):
+        raise Phase4SchemaValidationError("verification report payload must be a JSON object")
+    _validate_payload(payload, report_schema, label="verification_report")
+
+
+def serialize_verification_report_payload(payload: dict[str, Any]) -> bytes:
+    """Serialize verification report payload with canonical JSON and trailing newline."""
+    return canonical_json_bytes(payload, trailing_newline=True)
