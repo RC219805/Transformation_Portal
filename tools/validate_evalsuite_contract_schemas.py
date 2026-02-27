@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -21,7 +22,8 @@ import jsonschema
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 SCHEMA_ROOT = REPO_ROOT / "docs" / "schemas" / "evalsuite"
-LOCK_SCOPE_GLOB = "docs/schemas/evalsuite/**/*.json"
+LOCK_SCOPE_GLOB = "docs/schemas/evalsuite/**/*.schema.json"
+SHA256_RE = re.compile(r"^[a-f0-9]{64}$")
 
 LOCKFILE = REPO_ROOT / "docs" / "contracts" / "SCHEMA_LOCKS.sha256"
 
@@ -61,12 +63,12 @@ def discover_schema_files(schema_root: Path) -> List[Path]:
     Discover evalsuite contract schemas under docs/schemas/evalsuite/**.
 
     NOTE: This intentionally matches the lockfile scope (LOCK_SCOPE_GLOB):
-      docs/schemas/evalsuite/**/*.json
+      docs/schemas/evalsuite/**/*.schema.json
     """
     if not schema_root.exists():
         raise SystemExit(f"Schema root not found: {schema_root}")
 
-    schema_files = [p for p in schema_root.rglob("*.json") if p.is_file()]
+    schema_files = [p for p in schema_root.rglob("*.schema.json") if p.is_file()]
     if not schema_files:
         raise SystemExit(f"No schema JSON files found under: {schema_root}")
 
@@ -79,6 +81,7 @@ def parse_lockfile(path: Path) -> Dict[str, str]:
         raise SystemExit(f"LOCKFILE missing: {path}")
 
     locks: Dict[str, str] = {}
+    rel_order: List[str] = []
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
@@ -87,9 +90,21 @@ def parse_lockfile(path: Path) -> Dict[str, str]:
         if len(parts) != 2:
             raise SystemExit(f"Invalid lockfile line: {line!r}")
         digest, rel = parts
+        if not SHA256_RE.match(digest):
+            raise SystemExit(f"Invalid sha256 digest in lockfile for {rel}: {digest!r}")
         if rel in locks:
             raise SystemExit(f"Duplicate lockfile entry for: {rel}")
         locks[rel] = digest
+        rel_order.append(rel)
+
+    expected_order = sorted(rel_order)
+    if rel_order != expected_order:
+        raise SystemExit(
+            "Lockfile entries are not in canonical sorted order.\n"
+            "Expected repo-relative lexical ordering.\n"
+            "If intentional, regenerate lockfile with:\n"
+            "  python tools/update_schema_locks.py\n"
+        )
     return locks
 
 

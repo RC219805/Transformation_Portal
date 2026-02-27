@@ -38,7 +38,24 @@ def test_parse_lockfile_rejects_malformed_lines(tmp_path: Path) -> None:
         validator.parse_lockfile(lockfile)
 
 
-def test_discover_schema_files_scans_json_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_parse_lockfile_rejects_noncanonical_order(tmp_path: Path) -> None:
+    lockfile = tmp_path / "SCHEMA_LOCKS.sha256"
+    lockfile.write_text(
+        "\n".join(
+            [
+                "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  docs/schemas/evalsuite/z.v0/z.schema.json",
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  docs/schemas/evalsuite/a.v0/a.schema.json",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit, match="canonical sorted order"):
+        validator.parse_lockfile(lockfile)
+
+
+def test_discover_schema_files_scans_schema_json_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     repo_root = tmp_path
     schema_root = repo_root / "docs" / "schemas" / "evalsuite"
     file_a = schema_root / "a.v0" / "a.schema.json"
@@ -49,7 +66,19 @@ def test_discover_schema_files_scans_json_files(tmp_path: Path, monkeypatch: pyt
     monkeypatch.setattr(validator, "REPO_ROOT", repo_root)
 
     discovered = validator.discover_schema_files(schema_root)
-    assert discovered == sorted([file_a, file_b], key=lambda p: p.relative_to(repo_root).as_posix())
+    assert discovered == [file_a]
+
+
+def test_parse_lockfile_rejects_invalid_digest(tmp_path: Path) -> None:
+    lockfile = tmp_path / "SCHEMA_LOCKS.sha256"
+    lockfile.write_text(
+        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  "
+        "docs/schemas/evalsuite/a.v0/a.schema.json\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit, match="Invalid sha256 digest"):
+        validator.parse_lockfile(lockfile)
 
 
 def test_validate_schemas_are_valid_rejects_invalid_schema(tmp_path: Path) -> None:
@@ -114,8 +143,8 @@ def test_validate_lockfile_rejects_extra_entries(tmp_path: Path, monkeypatch: py
         "\n".join(
             [
                 "# generated",
-                f"{digest}  {rel}",
                 "0000000000000000000000000000000000000000000000000000000000000000  docs/schemas/evalsuite/extra.v0/extra.schema.json",
+                f"{digest}  {rel}",
             ]
         )
         + "\n",
