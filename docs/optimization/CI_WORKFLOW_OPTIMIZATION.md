@@ -1,4 +1,4 @@
-# Ci Workflow Optimization
+# CI Workflow Optimization
 
 > Canonical location: [docs/guides/CI_WORKFLOW_OPTIMIZATION.md](../guides/CI_WORKFLOW_OPTIMIZATION.md)
 

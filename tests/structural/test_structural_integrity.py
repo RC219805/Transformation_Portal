@@ -11,7 +11,6 @@ Enforces:
 
 from __future__ import annotations
 
-import argparse
 import ast
 import hashlib
 import json
@@ -204,7 +203,11 @@ def _collect_public_api_surface() -> dict[str, Any]:
                 )
             symbols = _ast_extract_declared_public_defs(tree)
 
-        filtered = sorted(s for s in symbols if s not in ignore_symbols and not s.startswith("_"))
+        if explicit_all is not None:
+            # __all__ is authoritative; keep explicit dunder/underscore exports.
+            filtered = sorted(s for s in symbols if s not in ignore_symbols)
+        else:
+            filtered = sorted(s for s in symbols if s not in ignore_symbols and not s.startswith("_"))
         if filtered:
             modules[module] = filtered
 
@@ -218,9 +221,20 @@ def _collect_public_api_surface() -> dict[str, Any]:
 def _extract_version() -> str:
     """Read package version from version policy target."""
     policy = _load_json(VERSION_POLICY_FILE)
+    source = policy.get("version_source", "python_var")
+
+    if source == "pyproject":
+        import tomllib
+
+        pyproject_file = REPO_ROOT / policy.get("pyproject_file", "pyproject.toml")
+        data = tomllib.loads(pyproject_file.read_text(encoding="utf-8"))
+        try:
+            return data["project"]["version"]
+        except KeyError as exc:
+            raise AssertionError(f"Missing [project].version in {pyproject_file}") from exc
+
     version_file = REPO_ROOT / policy["version_file"]
     version_variable = policy["version_variable"]
-
     text = version_file.read_text(encoding="utf-8")
     match = re.search(rf'^\s*{re.escape(version_variable)}\s*=\s*["\']([^"\']+)["\']\s*$', text, re.MULTILINE)
     if not match:
@@ -369,23 +383,32 @@ def normalize_default(value):
     return repr(value)
 
 surface = {}
+positionals = []
 for action in parser._actions:
     option_strings = list(getattr(action, "option_strings", []) or [])
-    if not option_strings:
-        continue
     payload = {
         "required": bool(getattr(action, "required", False)),
         "choices": sorted(str(choice) for choice in (getattr(action, "choices", None) or [])) or None,
         "default": normalize_default(getattr(action, "default", None)),
         "dest": getattr(action, "dest", None),
     }
-    for opt in option_strings:
-        surface[opt] = payload
+    if option_strings:
+        for opt in option_strings:
+            surface[opt] = payload
+    else:
+        positionals.append({
+            "dest": getattr(action, "dest", None),
+            "nargs": getattr(action, "nargs", None),
+            "choices": payload["choices"],
+            "default": payload["default"],
+            "type": getattr(getattr(action, "type", None), "__name__", repr(getattr(action, "type", None))),
+        })
 
 print(json.dumps({
     "snapshot_version": 1,
     "cli_module": cli_module,
     "parser_builder": parser_builder,
+    "positionals": positionals,
     "arguments": dict(sorted(surface.items())),
 }, sort_keys=True))
 """

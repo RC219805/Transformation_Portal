@@ -59,7 +59,6 @@ def _image_size() -> tuple[int, int]:
 # ---------------------------------------------------------------------
 
 
-@pytest.mark.slow
 class TestGaussianBackend:
     def test_initialization_valid_tier(self):
         backend = GaussianBackend(tier="apex_research")
@@ -115,7 +114,6 @@ class TestGaussianBackend:
 # ---------------------------------------------------------------------
 
 
-@pytest.mark.slow
 class TestGaussianBackendReconstruction:
     def _build_basic_input(self, views: int = 3):
         h, w = _image_size()

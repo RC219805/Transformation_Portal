@@ -168,5 +168,21 @@
   },
   "cli_module": "luxury_tiff_batch_processor.cli",
   "parser_builder": "build_parser",
+  "positionals": [
+    {
+      "choices": null,
+      "default": null,
+      "dest": "input",
+      "nargs": null,
+      "type": "Path"
+    },
+    {
+      "choices": null,
+      "default": null,
+      "dest": "output",
+      "nargs": "?",
+      "type": "Path"
+    }
+  ],
   "snapshot_version": 1
 }

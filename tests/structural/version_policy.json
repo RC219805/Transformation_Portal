@@ -1,6 +1,6 @@
 {
   "policy_version": 1,
-  "version_file": "src/transformation_portal/__init__.py",
-  "version_variable": "__version__",
+  "version_source": "pyproject",
+  "pyproject_file": "pyproject.toml",
   "semver_mode": "strict"
 }

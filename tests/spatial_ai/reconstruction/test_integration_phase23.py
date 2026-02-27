@@ -58,7 +58,6 @@ def _image_size() -> tuple[int, int]:
 # ---------------------------------------------------------------------
 
 
-@pytest.mark.slow
 class TestPhase23Integration:
     def _build_scene_inputs(self, views: int = 3):
         h, w = _image_size()

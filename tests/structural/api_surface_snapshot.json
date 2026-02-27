@@ -1,7 +1,9 @@
 {
-  "_version_marker": "2.0.0",
+  "_version_marker": "0.1.0",
   "modules": {
     "transformation_portal": [
+      "__author__",
+      "__version__",
       "get_lux_render_pipeline",
       "get_material_response"
     ],

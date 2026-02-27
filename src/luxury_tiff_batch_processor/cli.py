@@ -502,11 +502,11 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
         None (exits with appropriate status code).
     """
     args = parse_args(argv)
-    processed = run_pipeline(args)
-    # Exit with success (0) if any images were processed, error (1) otherwise
+    run_pipeline(args)
+    # run_pipeline raises on execution failure; successful completion always exits 0.
     import sys
 
-    sys.exit(0 if processed >= 0 else 1)
+    sys.exit(0)
 
 
 __all__ = [
