@@ -768,35 +768,43 @@
             const q = (v) => `"${String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
             const onoff = (v) => (v ? '"on"' : '"off"');
 
-            let cli = [`${payload.pipeline} \\`, `  --input-dir ${q(payload.args.input_dir)} \\`, `  --output-dir ${q(payload.args.output_dir)}`];
+            const cliLines = [
+                `${payload.pipeline}`,
+                `  --input-dir ${q(payload.args.input_dir)}`,
+                `  --output-dir ${q(payload.args.output_dir)}`
+            ];
 
             if (payload.pipeline === 'lux-depth-v3') {
-                cli.push(`  --preset ${q(payload.args.preset)} \\`);
-                cli.push(`  --quality-tier ${q(payload.args.quality_tier)} \\`);
-                cli.push(`  --depth-backend ${q(payload.args.depth_backend)} \\`);
-                cli.push(`  --depth-device ${q(payload.args.depth_device)} \\`);
-                cli.push(`  --materials-v3 ${onoff(payload.args.materials_v3)} \\`);
-                cli.push(`  --pbr ${onoff(payload.args.pbr)} \\`);
-                cli.push(`  --cache-depth ${onoff(payload.args.cache_depth)} \\`);
-                cli.push(`  --emit-master16 ${onoff(payload.args.emit_master16)} \\`);
-                cli.push(`  --emit-upscaled16 ${onoff(payload.args.emit_upscaled16)} \\`);
-                cli.push(`  --emit-marketing ${onoff(payload.args.emit_marketing)} \\`);
-                cli.push(`  --emit-report ${onoff(payload.args.emit_report)} \\`);
-                cli.push(`  --emit-run-card ${onoff(payload.args.emit_run_card)}`);
+                cliLines.push(`  --preset ${q(payload.args.preset)}`);
+                cliLines.push(`  --quality-tier ${q(payload.args.quality_tier)}`);
+                cliLines.push(`  --depth-backend ${q(payload.args.depth_backend)}`);
+                cliLines.push(`  --depth-device ${q(payload.args.depth_device)}`);
+                cliLines.push(`  --materials-v3 ${onoff(payload.args.materials_v3)}`);
+                cliLines.push(`  --pbr ${onoff(payload.args.pbr)}`);
+                cliLines.push(`  --cache-depth ${onoff(payload.args.cache_depth)}`);
+                cliLines.push(`  --emit-master16 ${onoff(payload.args.emit_master16)}`);
+                cliLines.push(`  --emit-upscaled16 ${onoff(payload.args.emit_upscaled16)}`);
+                cliLines.push(`  --emit-marketing ${onoff(payload.args.emit_marketing)}`);
+                cliLines.push(`  --emit-report ${onoff(payload.args.emit_report)}`);
+                cliLines.push(`  --emit-run-card ${onoff(payload.args.emit_run_card)}`);
 
                 if (payload.args.enable_v2) {
-                    cli.push(`  --enable-v2 "on" \\`);
-                    cli.push(`  --v2-preset ${q(payload.args.v2_preset)}`);
+                    cliLines.push(`  --enable-v2 "on"`);
+                    cliLines.push(`  --v2-preset ${q(payload.args.v2_preset)}`);
                 }
                 if (payload.args.depth_backend === 'depth_pro') {
-                    if (payload.args.non_commercial_ok) cli.push(`  --non-commercial-ok "true" \\`);
-                    if (payload.args.accept_apple_depth_pro_research_license) cli.push(`  --accept-apple-depth-pro-research-license "true"`);
+                    if (payload.args.non_commercial_ok) cliLines.push(`  --non-commercial-ok "true"`);
+                    if (payload.args.accept_apple_depth_pro_research_license) cliLines.push(`  --accept-apple-depth-pro-research-license "true"`);
                 }
             } else {
-                if (payload.args.dedup) cli.push(`  --dedup "on"`);
-                if (payload.args.sign) cli.push(`  --sign "true"`);
+                if (payload.args.dedup) cliLines.push(`  --dedup "on"`);
+                if (payload.args.sign) cliLines.push(`  --sign "true"`);
             }
-            if (payload.args.overwrite) cli.push(`  --overwrite`);
+            if (payload.args.overwrite) cliLines.push(`  --overwrite`);
+
+            const cli = cliLines.map((line, idx) =>
+                idx === cliLines.length - 1 ? line : `${line} \\`
+            );
 
             els.cliPreview.textContent = cli.join('\n');
         }

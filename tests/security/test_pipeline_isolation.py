@@ -9,6 +9,8 @@ Tests cover:
 Architecture: ADR-023 (Isolation), ADR-026 (APEX Research Ultra), Phase 1.1 (Item 4)
 """
 
+# pylint: disable=wrong-import-position
+
 from __future__ import annotations
 
 import sys

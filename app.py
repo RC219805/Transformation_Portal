@@ -115,7 +115,6 @@ class Job:
 
 JOBS: Dict[str, Job] = {}
 EVENT_SUBSCRIBERS: Dict[str, Dict[str, "asyncio.Queue[Dict[str, Any]]"]] = {}
-_cleanup_task: Optional[asyncio.Task[None]] = None
 RATE_LIMIT_BUCKETS: Dict[str, Deque[float]] = {}
 
 # Gate pipelines integrated directly
@@ -317,9 +316,26 @@ def _install_stream_body_limit(request: Request) -> None:
 
 def _sanitized_child_env() -> Dict[str, str]:
     child_env = os.environ.copy()
+    sensitive_exact = {
+        "TP_API_KEY",
+        "HF_TOKEN",
+        "HUGGING_FACE_HUB_TOKEN",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_ACCESS_KEY_ID",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+    }
+    sensitive_suffixes = (
+        "_TOKEN",
+        "_SECRET",
+        "_PASSWORD",
+        "_API_KEY",
+        "_ACCESS_KEY",
+        "_PRIVATE_KEY",
+    )
     for key in list(child_env.keys()):
         upper = key.upper()
-        if key == "TP_API_KEY" or "SECRET" in upper or "TOKEN" in upper:
+        if upper in sensitive_exact or upper.endswith(sensitive_suffixes):
             child_env.pop(key, None)
     return child_env
 
@@ -482,6 +498,7 @@ def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
 
 
 app = FastAPI(title="Transformation Portal Orchestrator", version="0.2.0")
+app.state.cleanup_task = None
 
 if ENABLE_TRUSTED_HOSTS:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=TRUSTED_HOSTS)
@@ -497,21 +514,21 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup() -> None:
-    global _cleanup_task
-    if _cleanup_task is None or _cleanup_task.done():
-        _cleanup_task = asyncio.create_task(_cleanup_loop())
+    cleanup_task = getattr(app.state, "cleanup_task", None)
+    if cleanup_task is None or cleanup_task.done():
+        app.state.cleanup_task = asyncio.create_task(_cleanup_loop())
 
 
 @app.on_event("shutdown")
 async def shutdown() -> None:
-    global _cleanup_task
-    if _cleanup_task is not None:
-        _cleanup_task.cancel()
+    cleanup_task = getattr(app.state, "cleanup_task", None)
+    if cleanup_task is not None:
+        cleanup_task.cancel()
         try:
-            await _cleanup_task
+            await cleanup_task
         except asyncio.CancelledError:
             pass
-        _cleanup_task = None
+        app.state.cleanup_task = None
 
 
 @app.middleware("http")
@@ -577,7 +594,7 @@ async def create_job(payload: Dict[str, Any]) -> JSONResponse:
     try:
         argv = _argv_from_request(payload)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     _cleanup_expired_jobs(_now())
     jid = "job_" + uuid.uuid4().hex[:8]
@@ -618,12 +635,19 @@ async def get_job(job_id: str) -> Dict[str, Any]:
 
 
 @app.post("/v1/jobs/{job_id}/cancel")
-async def cancel_job(job_id: str) -> Dict[str, Any]:
+async def cancel_job(job_id: str) -> JSONResponse:
     job = JOBS.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="job not found")
     await _request_cancel(job)
-    return {"ok": True, "id": job_id, "state": job.state}
+    return JSONResponse(
+        {
+            "schema": "tp.orchestrator.job.v1",
+            "success": True,
+            "data": {"id": job_id, "state": job.state},
+            "error": None,
+        }
+    )
 
 
 @app.get("/v1/jobs/{job_id}/events")

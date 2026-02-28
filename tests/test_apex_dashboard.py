@@ -9,6 +9,8 @@ Validates:
 - Chart.js data structure compliance
 """
 
+# pylint: disable=redefined-outer-name
+
 from __future__ import annotations
 
 import json
