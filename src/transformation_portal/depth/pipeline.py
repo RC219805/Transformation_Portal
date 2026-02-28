@@ -118,6 +118,10 @@ class ArchitecturalDepthPipeline:
             variant=variant,
             backend=backend,
             precision=model_config.get("precision", "fp16"),
+            model_revision=model_config.get("model_revision"),
+            onnx_revision=model_config.get("onnx_revision"),
+            coreml_revision=model_config.get("coreml_revision"),
+            strict_model_lock=model_config.get("strict_model_lock"),
         )
 
         return model
