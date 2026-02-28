@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import os
 import sys
 from typing import Dict
 
@@ -362,6 +363,60 @@ def test_content_length_limit_blocks_oversized_payloads() -> None:
 
     assert response is not None
     assert response.status_code == 413
+
+
+def test_stream_body_limit_blocks_oversized_chunked_payloads() -> None:
+    previous_limit = orchestrator_app.MAX_REQUEST_BYTES
+    try:
+        orchestrator_app.MAX_REQUEST_BYTES = 8
+        request = _build_request("POST", "/v1/jobs", headers={"content-type": "application/json"})
+        chunks = [
+            {"type": "http.request", "body": b"12345", "more_body": True},
+            {"type": "http.request", "body": b"6789", "more_body": False},
+        ]
+
+        async def receive():
+            if chunks:
+                return chunks.pop(0)
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        setattr(request, "_receive", receive)
+        orchestrator_app._install_stream_body_limit(request)
+
+        first = asyncio.run(request._receive())  # type: ignore[attr-defined]
+        assert first["body"] == b"12345"
+
+        with pytest.raises(orchestrator_app.HTTPException) as exc:
+            asyncio.run(request._receive())  # type: ignore[attr-defined]
+        assert exc.value.status_code == 413
+    finally:
+        orchestrator_app.MAX_REQUEST_BYTES = previous_limit
+
+
+def test_sanitized_child_env_redacts_secret_like_values() -> None:
+    old_values = {
+        "TP_API_KEY": os.environ.get("TP_API_KEY"),
+        "HF_TOKEN": os.environ.get("HF_TOKEN"),
+        "AWS_SECRET_ACCESS_KEY": os.environ.get("AWS_SECRET_ACCESS_KEY"),
+        "PATH": os.environ.get("PATH"),
+    }
+    try:
+        os.environ["TP_API_KEY"] = "tp-secret"
+        os.environ["HF_TOKEN"] = "hf-secret"
+        os.environ["AWS_SECRET_ACCESS_KEY"] = "aws-secret"
+        os.environ["PATH"] = "/usr/bin"
+        child_env = orchestrator_app._sanitized_child_env()
+    finally:
+        for key, value in old_values.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+    assert "TP_API_KEY" not in child_env
+    assert "HF_TOKEN" not in child_env
+    assert "AWS_SECRET_ACCESS_KEY" not in child_env
+    assert child_env["PATH"] == "/usr/bin"
 
 
 def test_rate_limiting_returns_true_after_threshold() -> None:

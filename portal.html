@@ -1058,7 +1058,9 @@
             if (els.logPane) els.logPane.textContent = '';
             if (els.logStatusIndicator) els.logStatusIndicator.classList.remove('hidden');
             scheduleRenderJobQueue();
-            logToPane(job.id, `[INFO] Initializing ${payload.pipeline}...`);
+            const initLine = `[INFO] Initializing ${payload.pipeline}...`;
+            appendJobLog(job, initLine);
+            logToPane(job.id, initLine);
 
             if (state.backendOk) {
                 try {
@@ -1118,7 +1120,9 @@
                     }
                 }
             } else {
-                logToPane(job.id, `[WARN] Backend unreachable. Running mock simulation.`);
+                const offlineLine = `[WARN] Backend unreachable. Running mock simulation.`;
+                appendJobLog(job, offlineLine);
+                logToPane(job.id, offlineLine);
                 if (els.runJobBtn) {
                     els.runJobBtn.disabled = false;
                     els.runJobBtn.textContent = "Execute Job";

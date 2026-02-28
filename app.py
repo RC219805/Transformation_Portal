@@ -50,14 +50,25 @@ def _env_int(name: str, default: int, minimum: int = 0) -> int:
     return max(minimum, parsed)
 
 
+def _env_float(name: str, default: float, minimum: float = 0.0) -> float:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        parsed = float(raw)
+    except ValueError:
+        return default
+    return max(minimum, parsed)
+
+
 PORTAL_HTML = Path(__file__).resolve().parent / "portal.html"
 LOG_TAIL_LIMIT = 2000
 STATUS_LOG_LIMIT = 250
 EVENT_QUEUE_MAXSIZE = 512
 HEARTBEAT_SECONDS = 15
-JOB_RETENTION_SECONDS = int(os.getenv("TP_JOB_RETENTION_SECONDS", "3600"))
-CLEANUP_INTERVAL_SECONDS = int(os.getenv("TP_CLEANUP_INTERVAL_SECONDS", "60"))
-CANCEL_GRACE_SECONDS = float(os.getenv("TP_CANCEL_GRACE_SECONDS", "5"))
+JOB_RETENTION_SECONDS = _env_int("TP_JOB_RETENTION_SECONDS", 3600, minimum=1)
+CLEANUP_INTERVAL_SECONDS = _env_int("TP_CLEANUP_INTERVAL_SECONDS", 60, minimum=1)
+CANCEL_GRACE_SECONDS = _env_float("TP_CANCEL_GRACE_SECONDS", 5.0, minimum=0.1)
 PROGRESS_RE = re.compile(r"progress=(\d{1,3})%")
 DEFAULT_ALLOWED_ORIGINS = ["http://localhost", "http://localhost:3000", "http://127.0.0.1:8000"]
 ALLOWED_ORIGINS = _env_csv("TP_ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS)
@@ -276,6 +287,43 @@ def _enforce_content_length_limit(request: Request) -> Optional[JSONResponse]:
     return None
 
 
+def _install_stream_body_limit(request: Request) -> None:
+    if request.method not in {"POST", "PUT", "PATCH"}:
+        return
+    if getattr(request.state, "_tp_body_limit_installed", False):
+        return
+
+    original_receive = getattr(request, "_receive", None)
+    if original_receive is None:
+        return
+
+    async def limited_receive() -> Dict[str, Any]:
+        message = await original_receive()
+        if message.get("type") == "http.request":
+            body = message.get("body", b"") or b""
+            consumed = getattr(request.state, "_tp_body_bytes_received", 0)
+            consumed += len(body)
+            request.state._tp_body_bytes_received = consumed
+            if consumed > MAX_REQUEST_BYTES:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"request body too large (max {MAX_REQUEST_BYTES} bytes)",
+                )
+        return message
+
+    setattr(request, "_receive", limited_receive)
+    request.state._tp_body_limit_installed = True
+
+
+def _sanitized_child_env() -> Dict[str, str]:
+    child_env = os.environ.copy()
+    for key in list(child_env.keys()):
+        upper = key.upper()
+        if key == "TP_API_KEY" or "SECRET" in upper or "TOKEN" in upper:
+            child_env.pop(key, None)
+    return child_env
+
+
 async def _publish_event(job_id: str, event: str, data: Dict[str, Any]) -> None:
     subscribers = EVENT_SUBSCRIBERS.get(job_id)
     if not subscribers:
@@ -472,6 +520,8 @@ async def security_layer(request: Request, call_next):
     if maybe_error is not None:
         return maybe_error
 
+    _install_stream_body_limit(request)
+
     if API_KEY_SECRET and _is_mutating_job_endpoint(request.method, request.url.path) and not _has_valid_api_key(request):
         return JSONResponse(status_code=401, content={"detail": "invalid or missing API key"})
 
@@ -637,7 +687,7 @@ async def _run_job(job: Job, argv: List[str]) -> None:
             *argv,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
-            env=os.environ.copy(),
+            env=_sanitized_child_env(),
         )
         job.proc = proc
 
