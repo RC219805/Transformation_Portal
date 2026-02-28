@@ -5,11 +5,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -20,6 +21,8 @@ from archive_governance_common import deterministic_json_dumps
 EXIT_SUCCESS = 0
 EXIT_INPUT_ERROR = 2
 EXIT_VALIDATION_ERROR = 3
+
+RFC3339_TIMESTAMP_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$")
 
 
 def _iso_now_utc() -> str:
@@ -82,26 +85,162 @@ def append_event(path: Path, payload: dict[str, Any]) -> None:
         handle.write(line)
 
 
+def _expect_object(value: Any, *, path: str, line_number: int) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError(f"line {line_number}: {path} must be an object")
+    return value
+
+
+def _expect_string(value: Any, *, path: str, line_number: int, min_length: int = 0) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"line {line_number}: {path} must be a string")
+    if len(value) < min_length:
+        raise ValueError(f"line {line_number}: {path} must be length >= {min_length}")
+    return value
+
+
+def _expect_array(value: Any, *, path: str, line_number: int) -> list[Any]:
+    if not isinstance(value, list):
+        raise ValueError(f"line {line_number}: {path} must be an array")
+    return value
+
+
+def _expect_exact_keys(obj: dict[str, Any], *, required: set[str], path: str, line_number: int) -> None:
+    missing = sorted(required.difference(obj.keys()))
+    if missing:
+        raise ValueError(f"line {line_number}: missing {path}.{', '.join(missing)}")
+    extras = sorted(set(obj.keys()).difference(required))
+    if extras:
+        raise ValueError(f"line {line_number}: unexpected {path}.{', '.join(extras)}")
+
+
+def _validate_rfc3339_timestamp(value: str, *, path: str, line_number: int) -> None:
+    if RFC3339_TIMESTAMP_RE.fullmatch(value) is None:
+        raise ValueError(f"line {line_number}: {path} must be RFC3339 date-time")
+    normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
+    try:
+        datetime.fromisoformat(normalized)
+    except ValueError as exc:
+        raise ValueError(f"line {line_number}: {path} must be RFC3339 date-time") from exc
+
+
 def _validate_event(payload: dict[str, Any], *, line_number: int) -> None:
+    _expect_exact_keys(payload, required={"premis_version", "event"}, path="payload", line_number=line_number)
+
     if payload.get("premis_version") != "3.0":
         raise ValueError(f"line {line_number}: premis_version must be '3.0'")
 
-    event = payload.get("event")
-    if not isinstance(event, dict):
-        raise ValueError(f"line {line_number}: event must be an object")
+    event = _expect_object(payload.get("event"), path="event", line_number=line_number)
+    _expect_exact_keys(
+        event,
+        required={
+            "eventIdentifier",
+            "eventType",
+            "eventDateTime",
+            "eventDetail",
+            "eventOutcomeInformation",
+            "linkingAgentIdentifier",
+            "linkingObjectIdentifier",
+        },
+        path="event",
+        line_number=line_number,
+    )
 
-    for field in (
-        "eventIdentifier",
-        "eventType",
-        "eventDateTime",
-        "eventDetail",
-        "eventOutcomeInformation",
-        "linkingAgentIdentifier",
-        "linkingObjectIdentifier",
-    ):
-        if field not in event:
-            raise ValueError(f"line {line_number}: missing event.{field}")
+    event_identifier = _expect_object(event.get("eventIdentifier"), path="event.eventIdentifier", line_number=line_number)
+    _expect_exact_keys(
+        event_identifier,
+        required={"eventIdentifierType", "eventIdentifierValue"},
+        path="event.eventIdentifier",
+        line_number=line_number,
+    )
+    event_identifier_type = _expect_string(
+        event_identifier.get("eventIdentifierType"),
+        path="event.eventIdentifier.eventIdentifierType",
+        line_number=line_number,
+    )
+    event_identifier_value = _expect_string(
+        event_identifier.get("eventIdentifierValue"),
+        path="event.eventIdentifier.eventIdentifierValue",
+        line_number=line_number,
+        min_length=1,
+    )
+    if event_identifier_type == "uuid":
+        try:
+            UUID(event_identifier_value)
+        except ValueError as exc:
+            raise ValueError(f"line {line_number}: event.eventIdentifier.eventIdentifierValue must be a valid UUID") from exc
 
+    _expect_string(event.get("eventType"), path="event.eventType", line_number=line_number, min_length=1)
+    event_datetime = _expect_string(event.get("eventDateTime"), path="event.eventDateTime", line_number=line_number)
+    _validate_rfc3339_timestamp(event_datetime, path="event.eventDateTime", line_number=line_number)
+    _expect_string(event.get("eventDetail"), path="event.eventDetail", line_number=line_number)
+
+    event_outcome_information = _expect_object(
+        event.get("eventOutcomeInformation"),
+        path="event.eventOutcomeInformation",
+        line_number=line_number,
+    )
+    _expect_exact_keys(
+        event_outcome_information,
+        required={"eventOutcome"},
+        path="event.eventOutcomeInformation",
+        line_number=line_number,
+    )
+    event_outcome = _expect_string(
+        event_outcome_information.get("eventOutcome"),
+        path="event.eventOutcomeInformation.eventOutcome",
+        line_number=line_number,
+    )
+    if event_outcome not in {"success", "failure"}:
+        raise ValueError(f"line {line_number}: event.eventOutcomeInformation.eventOutcome must be one of: success, failure")
+
+    linking_agents = _expect_array(
+        event.get("linkingAgentIdentifier"), path="event.linkingAgentIdentifier", line_number=line_number
+    )
+    for index, agent in enumerate(linking_agents):
+        agent_path = f"event.linkingAgentIdentifier[{index}]"
+        agent_obj = _expect_object(agent, path=agent_path, line_number=line_number)
+        _expect_exact_keys(
+            agent_obj,
+            required={"linkingAgentIdentifierType", "linkingAgentIdentifierValue"},
+            path=agent_path,
+            line_number=line_number,
+        )
+        _expect_string(
+            agent_obj.get("linkingAgentIdentifierType"),
+            path=f"{agent_path}.linkingAgentIdentifierType",
+            line_number=line_number,
+        )
+        _expect_string(
+            agent_obj.get("linkingAgentIdentifierValue"),
+            path=f"{agent_path}.linkingAgentIdentifierValue",
+            line_number=line_number,
+        )
+
+    linking_objects = _expect_array(
+        event.get("linkingObjectIdentifier"),
+        path="event.linkingObjectIdentifier",
+        line_number=line_number,
+    )
+    for index, obj in enumerate(linking_objects):
+        obj_path = f"event.linkingObjectIdentifier[{index}]"
+        obj_record = _expect_object(obj, path=obj_path, line_number=line_number)
+        _expect_exact_keys(
+            obj_record,
+            required={"linkingObjectIdentifierType", "linkingObjectIdentifierValue"},
+            path=obj_path,
+            line_number=line_number,
+        )
+        _expect_string(
+            obj_record.get("linkingObjectIdentifierType"),
+            path=f"{obj_path}.linkingObjectIdentifierType",
+            line_number=line_number,
+        )
+        _expect_string(
+            obj_record.get("linkingObjectIdentifierValue"),
+            path=f"{obj_path}.linkingObjectIdentifierValue",
+            line_number=line_number,
+        )
 
 
 def _validate_jsonl(path: Path) -> int:

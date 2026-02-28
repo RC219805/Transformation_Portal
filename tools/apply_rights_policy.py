@@ -10,7 +10,8 @@ import re
 import sys
 from collections import Counter
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
+from uuid import uuid4
 
 import yaml
 
@@ -33,8 +34,7 @@ def _normalize_relpath(value: str) -> str:
     return value.replace("\\", "/")
 
 
-def _load_manifest_entries(path: Path) -> list[dict[str, Any]]:
-    entries: list[dict[str, Any]] = []
+def _iter_manifest_entries(path: Path) -> Iterable[dict[str, Any]]:
     with path.open("r", encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, start=1):
             stripped = line.strip()
@@ -46,8 +46,7 @@ def _load_manifest_entries(path: Path) -> list[dict[str, Any]]:
                 raise ValueError(f"Invalid JSONL at line {line_number}: {exc}") from exc
             if not isinstance(payload, dict):
                 raise ValueError(f"Manifest JSONL line {line_number} must be an object")
-            entries.append(payload)
-    return entries
+            yield payload
 
 
 def _normalize_flags(raw_flags: Any, *, context: str) -> list[str]:
@@ -168,12 +167,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-
-    try:
-        entries = _load_manifest_entries(Path(args.manifest_jsonl))
-    except ValueError as exc:
-        print(f"Input error: {exc}", file=sys.stderr)
-        return EXIT_INPUT_ERROR
+    manifest_path = Path(args.manifest_jsonl)
+    out_jsonl_path = Path(args.out_jsonl)
+    out_summary_path = Path(args.out_summary)
+    tmp_out_path = out_jsonl_path.with_name(f".{out_jsonl_path.name}.{uuid4().hex}.tmp")
 
     try:
         policy = _load_policy(Path(args.policy_yaml))
@@ -181,45 +178,58 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Policy error: {exc}", file=sys.stderr)
         return EXIT_POLICY_ERROR
 
-    processed: list[dict[str, Any]] = []
     rule_hits: Counter[str] = Counter()
+    processed_count = 0
 
-    for entry in entries:
-        chosen_rule = "default"
-        rights_flags = list(policy["default_flags"])
-        owner = str(entry.get("owner") or policy["default_owner"])
+    try:
+        out_jsonl_path.parent.mkdir(parents=True, exist_ok=True)
+        with tmp_out_path.open("w", encoding="utf-8", newline="\n") as output_handle:
+            for entry in _iter_manifest_entries(manifest_path):
+                chosen_rule = "default"
+                rights_flags = list(policy["default_flags"])
+                owner = str(entry.get("owner") or policy["default_owner"])
 
-        for rule in policy["rules"]:
-            if _rule_matches(entry, rule):
-                chosen_rule = str(rule["id"])
-                rights_flags = list(rule["flags"])
-                if rule.get("owner"):
-                    owner = str(rule["owner"])
-                break
+                for rule in policy["rules"]:
+                    if _rule_matches(entry, rule):
+                        chosen_rule = str(rule["id"])
+                        rights_flags = list(rule["flags"])
+                        if rule.get("owner"):
+                            owner = str(rule["owner"])
+                        break
 
-        updated = dict(entry)
-        updated["rights_flags"] = sorted(set(rights_flags))
-        updated["owner"] = owner
-        processed.append(updated)
-        rule_hits[chosen_rule] += 1
+                updated = dict(entry)
+                updated["rights_flags"] = sorted(set(rights_flags))
+                updated["owner"] = owner
+                output_handle.write(json_line(updated))
+
+                rule_hits[chosen_rule] += 1
+                processed_count += 1
+        tmp_out_path.replace(out_jsonl_path)
+    except ValueError as exc:
+        print(f"Input error: {exc}", file=sys.stderr)
+        return EXIT_INPUT_ERROR
+    except OSError as exc:
+        print(f"Output error: {exc}", file=sys.stderr)
+        return EXIT_POLICY_ERROR
+    finally:
+        if tmp_out_path.exists():
+            tmp_out_path.unlink()
 
     summary_payload = {
         "schema_version": "tp.archive.rights.summary.v1",
         "policy_version": int(policy["version"]),
-        "entry_count": len(processed),
+        "entry_count": processed_count,
         "rule_hit_counts": {key: int(value) for key, value in sorted(rule_hits.items())},
         "default_classification_count": int(rule_hits.get("default", 0)),
     }
 
-    lines = [json_line(row) for row in processed]
     try:
-        atomic_write_text(Path(args.out_jsonl), "".join(lines))
-        atomic_write_text(Path(args.out_summary), deterministic_json_dumps(summary_payload, pretty=True) + "\n")
+        atomic_write_text(out_summary_path, deterministic_json_dumps(summary_payload, pretty=True) + "\n")
     except OSError as exc:
         print(f"Output error: {exc}", file=sys.stderr)
         return EXIT_POLICY_ERROR
 
-    print(f"Applied rights policy to {len(processed)} entries")
+    print(f"Applied rights policy to {processed_count} entries")
     print(f"Wrote {args.out_jsonl} and {args.out_summary}")
     return EXIT_SUCCESS
 

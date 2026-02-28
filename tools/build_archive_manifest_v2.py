@@ -100,6 +100,13 @@ def _open_csv_reader(path: Path) -> Iterable[dict[str, str]]:
             yield row
 
 
+def _consume_csv_rows(path: Path) -> int:
+    row_count = 0
+    for _ in _open_csv_reader(path):
+        row_count += 1
+    return row_count
+
+
 def _materialize_relpath(relpath: str) -> tuple[Path | None, str]:
     if "\x00" in relpath:
         return None, "invalid_relpath_nul"
@@ -323,7 +330,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         # Parse both for sanity/lineage validation even though hash rows drive output.
-        _ = list(_open_csv_reader(Path(args.archive_index)))
+        _consume_csv_rows(Path(args.archive_index))
         hash_rows = _load_hash_rows(Path(args.hash_manifest))
         rights_map = _load_rights(Path(args.rights_jsonl) if args.rights_jsonl else None)
     except ValueError as exc:

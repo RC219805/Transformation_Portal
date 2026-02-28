@@ -77,17 +77,8 @@ def deterministic_json_dumps(
     _ensure_finite_numbers(payload)
 
     if canonical_profile == CANONICAL_PROFILE_JCS:
-        text = jcs_dumps(payload)
-        if pretty:
-            parsed = json.loads(text)
-            return json.dumps(
-                parsed,
-                indent=2,
-                sort_keys=True,
-                ensure_ascii=False,
-                allow_nan=False,
-            )
-        return text
+        # JCS output must remain canonical RFC 8785 JSON regardless of pretty preference.
+        return jcs_dumps(payload)
 
     if canonical_profile != CANONICAL_PROFILE_V1:
         supported = ", ".join(CANONICAL_PROFILES)

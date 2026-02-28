@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TOOLS_DIR = PROJECT_ROOT / "tools"
 if str(TOOLS_DIR) not in sys.path:
@@ -17,6 +19,8 @@ if str(TOOLS_DIR) not in sys.path:
 MANIFEST_TOOL_PATH = PROJECT_ROOT / "tools" / "build_archive_manifest_v2.py"
 RIGHTS_TOOL_PATH = PROJECT_ROOT / "tools" / "apply_rights_policy.py"
 GOVERNANCE_TOOL_PATH = PROJECT_ROOT / "tools" / "archive_governance.py"
+COMMON_TOOL_PATH = PROJECT_ROOT / "tools" / "archive_governance_common.py"
+PREMIS_TOOL_PATH = PROJECT_ROOT / "tools" / "premis_events.py"
 
 
 def _load_tool_module(module_path: Path, module_name: str):
@@ -33,6 +37,8 @@ def _load_tool_module(module_path: Path, module_name: str):
 MANIFEST_TOOL = _load_tool_module(MANIFEST_TOOL_PATH, "tests_build_archive_manifest_v2_hardening")
 RIGHTS_TOOL = _load_tool_module(RIGHTS_TOOL_PATH, "tests_apply_rights_policy_hardening")
 GOVERNANCE_TOOL = _load_tool_module(GOVERNANCE_TOOL_PATH, "tests_archive_governance_hardening")
+COMMON_TOOL = _load_tool_module(COMMON_TOOL_PATH, "tests_archive_governance_common_hardening")
+PREMIS_TOOL = _load_tool_module(PREMIS_TOOL_PATH, "tests_premis_events_hardening")
 
 
 def test_build_entry_normalizes_relpath_for_rights_and_provenance(tmp_path: Path) -> None:
@@ -80,6 +86,15 @@ def test_deterministic_mime_map_uses_repo_owned_rules() -> None:
     assert MANIFEST_TOOL._deterministic_mime("archive.tar.gz") == "application/gzip"
     assert MANIFEST_TOOL._deterministic_mime("capture.CR3") == "image/x-canon-cr3"
     assert MANIFEST_TOOL._deterministic_mime("unknown.custom") == "application/octet-stream"
+
+
+def test_manifest_archive_index_validation_streams_rows(tmp_path: Path) -> None:
+    archive_index = tmp_path / "archive_index_normalized.csv"
+    archive_index.write_text(
+        "origin_drive,partition,relpath\nDriveA,Part1,DriveA/Part1/alpha.txt\nDriveB,Part2,DriveB/Part2/beta.txt\n",
+        encoding="utf-8",
+    )
+    assert MANIFEST_TOOL._consume_csv_rows(archive_index) == 2
 
 
 def test_rule_matches_normalizes_slashes_for_path_glob() -> None:
@@ -133,3 +148,75 @@ def test_run_wrapped_tool_normalizes_negative_returncode(monkeypatch) -> None:
     assert captured["exit_code"] == GOVERNANCE_TOOL.EXIT_OTHER_FAILURE
     assert "signal 9" in str(captured["error"]["message"])
     assert captured["error"]["exit_code"]["value"] == GOVERNANCE_TOOL.EXIT_OTHER_FAILURE
+
+
+def test_jcs_profile_ignores_pretty_flag() -> None:
+    payload = {"z": "last", "a": "first", "n": 1}
+    compact = COMMON_TOOL.deterministic_json_dumps(
+        payload,
+        pretty=False,
+        canonical_profile=COMMON_TOOL.CANONICAL_PROFILE_JCS,
+    )
+    pretty = COMMON_TOOL.deterministic_json_dumps(
+        payload,
+        pretty=True,
+        canonical_profile=COMMON_TOOL.CANONICAL_PROFILE_JCS,
+    )
+    assert pretty == compact
+
+
+def test_apply_rights_policy_streaming_does_not_publish_partial_output_on_invalid_input(tmp_path: Path) -> None:
+    manifest_jsonl = tmp_path / "manifest.jsonl"
+    manifest_jsonl.write_text(
+        '{"relpath":"DriveA/Part1/alpha.txt","extension":".txt","owner":"owner-a"}\n'
+        '{"relpath":"DriveA/Part1/beta.txt","extension":".txt","owner":"owner-b"\n',
+        encoding="utf-8",
+    )
+    policy_yaml = tmp_path / "rights_flags.yml"
+    policy_yaml.write_text(
+        "version: 1\n" "default_flags: [unspecified]\n" "default_owner: UNSPECIFIED\n" "rules: []\n",
+        encoding="utf-8",
+    )
+    out_jsonl = tmp_path / "asset_rights.jsonl"
+    out_summary = tmp_path / "asset_rights.summary.json"
+
+    exit_code = RIGHTS_TOOL.main(
+        [
+            "--manifest-jsonl",
+            str(manifest_jsonl),
+            "--policy-yaml",
+            str(policy_yaml),
+            "--out-jsonl",
+            str(out_jsonl),
+            "--out-summary",
+            str(out_summary),
+        ]
+    )
+    assert exit_code == RIGHTS_TOOL.EXIT_INPUT_ERROR
+    assert not out_jsonl.exists()
+    assert not out_summary.exists()
+
+
+def test_premis_validate_rejects_invalid_datetime_and_outcome() -> None:
+    payload = PREMIS_TOOL.build_premis_event(
+        event_type="validation",
+        event_detail="event",
+        event_outcome="success",
+        agent_id="tp.archive.tests",
+        object_ids=["/tmp/object"],
+        event_datetime="2026-02-28T01:00:00Z",
+        event_id="2b9d322b-0785-44a5-a59d-7da8af4f8a07",
+    )
+    PREMIS_TOOL._validate_event(payload, line_number=1)
+
+    invalid_datetime = dict(payload)
+    invalid_datetime["event"] = dict(payload["event"])
+    invalid_datetime["event"]["eventDateTime"] = "2026-02-28 01:00:00"
+    with pytest.raises(ValueError, match="RFC3339"):
+        PREMIS_TOOL._validate_event(invalid_datetime, line_number=2)
+
+    invalid_outcome = dict(payload)
+    invalid_outcome["event"] = dict(payload["event"])
+    invalid_outcome["event"]["eventOutcomeInformation"] = {"eventOutcome": "maybe"}
+    with pytest.raises(ValueError, match="eventOutcome"):
+        PREMIS_TOOL._validate_event(invalid_outcome, line_number=3)
