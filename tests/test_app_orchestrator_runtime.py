@@ -291,6 +291,42 @@ def test_mutating_job_route_detection() -> None:
     assert orchestrator_app._is_mutating_job_endpoint("GET", "/v1/jobs/job_123/events") is False
 
 
+def test_extract_client_ip_does_not_trust_forwarded_header_by_default() -> None:
+    previous_trust = orchestrator_app.TRUST_X_FORWARDED_FOR
+    previous_proxies = orchestrator_app.TRUSTED_PROXY_IPS
+    try:
+        orchestrator_app.TRUST_X_FORWARDED_FOR = False
+        orchestrator_app.TRUSTED_PROXY_IPS = set()
+        request = _build_request(
+            "POST",
+            "/v1/jobs",
+            headers={"x-forwarded-for": "198.51.100.8, 203.0.113.3"},
+            client_host="10.0.0.9",
+        )
+        assert orchestrator_app._extract_client_ip(request) == "10.0.0.9"
+    finally:
+        orchestrator_app.TRUST_X_FORWARDED_FOR = previous_trust
+        orchestrator_app.TRUSTED_PROXY_IPS = previous_proxies
+
+
+def test_extract_client_ip_trusts_forwarded_header_for_trusted_proxy() -> None:
+    previous_trust = orchestrator_app.TRUST_X_FORWARDED_FOR
+    previous_proxies = orchestrator_app.TRUSTED_PROXY_IPS
+    try:
+        orchestrator_app.TRUST_X_FORWARDED_FOR = False
+        orchestrator_app.TRUSTED_PROXY_IPS = {"10.0.0.9"}
+        request = _build_request(
+            "POST",
+            "/v1/jobs",
+            headers={"x-forwarded-for": "198.51.100.8, 203.0.113.3"},
+            client_host="10.0.0.9",
+        )
+        assert orchestrator_app._extract_client_ip(request) == "198.51.100.8"
+    finally:
+        orchestrator_app.TRUST_X_FORWARDED_FOR = previous_trust
+        orchestrator_app.TRUSTED_PROXY_IPS = previous_proxies
+
+
 def test_api_key_validation_accepts_header_and_bearer() -> None:
     previous_key = orchestrator_app.API_KEY_SECRET
     previous_header = orchestrator_app.API_KEY_HEADER
@@ -344,6 +380,6 @@ def test_rate_limiting_returns_true_after_threshold() -> None:
     assert second is True
 
 
-def test_client_ip_prefers_forwarded_for_header() -> None:
+def test_client_ip_prefers_peer_by_default() -> None:
     request = _build_request("GET", "/ready", headers={"x-forwarded-for": "203.0.113.9, 127.0.0.1"}, client_host="10.0.0.1")
-    assert orchestrator_app._extract_client_ip(request) == "203.0.113.9"
+    assert orchestrator_app._extract_client_ip(request) == "10.0.0.1"

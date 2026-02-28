@@ -293,8 +293,10 @@ jobs:
       - name: Validate dependency constraints
         run: |
           set -euo pipefail
+          set +e
           bash scripts/validate_dependency_constraints.sh --verbose
           status=$?
+          set -e
           if [ "$status" -eq 2 ]; then
             echo "⚠️ Dependency constraints validation completed with warnings (non-blocking)."
             exit 0

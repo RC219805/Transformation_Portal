@@ -23,6 +23,7 @@ from starlette.responses import StreamingResponse
 # In-memory job store (MVP)
 # ----------------------------
 
+
 def _env_csv(name: str, default: List[str]) -> List[str]:
     raw = os.getenv(name)
     if raw is None:
@@ -64,6 +65,8 @@ TRUSTED_HOSTS = _env_csv("TP_TRUSTED_HOSTS", ["localhost", "127.0.0.1", "::1", "
 ENABLE_TRUSTED_HOSTS = _env_bool("TP_ENABLE_TRUSTED_HOSTS", True)
 API_KEY_HEADER = os.getenv("TP_API_KEY_HEADER", "x-api-key").strip().lower() or "x-api-key"
 API_KEY_SECRET = os.getenv("TP_API_KEY", "").strip()
+TRUST_X_FORWARDED_FOR = _env_bool("TP_TRUST_X_FORWARDED_FOR", False)
+TRUSTED_PROXY_IPS = set(_env_csv("TP_TRUSTED_PROXY_IPS", []))
 MAX_REQUEST_BYTES = _env_int("TP_MAX_REQUEST_BYTES", 1024 * 1024, minimum=1024)
 RATE_LIMIT_PER_MINUTE = _env_int("TP_RATE_LIMIT_PER_MINUTE", 0, minimum=0)
 RATE_LIMIT_WINDOW_SECONDS = 60.0
@@ -203,13 +206,18 @@ def _is_mutating_job_endpoint(method: str, path: str) -> bool:
 
 
 def _extract_client_ip(request: Request) -> str:
-    forwarded_for = request.headers.get("x-forwarded-for", "")
-    if forwarded_for:
-        first = forwarded_for.split(",")[0].strip()
-        if first:
-            return first
-    if request.client and request.client.host:
-        return request.client.host
+    peer_ip = request.client.host if request.client and request.client.host else None
+    trust_forwarded = TRUST_X_FORWARDED_FOR or (peer_ip in TRUSTED_PROXY_IPS if peer_ip else False)
+
+    if trust_forwarded:
+        forwarded_for = request.headers.get("x-forwarded-for", "")
+        if forwarded_for:
+            first = forwarded_for.split(",")[0].strip()
+            if first:
+                return first
+
+    if peer_ip:
+        return peer_ip
     return "unknown"
 
 
@@ -361,25 +369,40 @@ def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
         if backend not in ALLOWED_BACKENDS:
             raise ValueError("Invalid depth_backend")
 
-        argv.extend([
-            "--preset", preset,
-            "--quality-tier", quality,
-            "--depth-backend", backend,
-            "--materials-v3", onoff(_pick(args, "materials_v3", "materials", default=False)),
-            "--pbr", onoff(_pick(args, "pbr", default=False)),
-            "--cache-depth", onoff(_pick(args, "cache_depth", "cacheDepth", default=False)),
-        ])
+        argv.extend(
+            [
+                "--preset",
+                preset,
+                "--quality-tier",
+                quality,
+                "--depth-backend",
+                backend,
+                "--materials-v3",
+                onoff(_pick(args, "materials_v3", "materials", default=False)),
+                "--pbr",
+                onoff(_pick(args, "pbr", default=False)),
+                "--cache-depth",
+                onoff(_pick(args, "cache_depth", "cacheDepth", default=False)),
+            ]
+        )
 
         if depth_device:
             argv.extend(["--depth-device", str(depth_device)])
 
-        argv.extend([
-            "--emit-master16", onoff(_pick(args, "emit_master16", "emitMaster16", default=True)),
-            "--emit-upscaled16", onoff(_pick(args, "emit_upscaled16", "emitUpscaled16", default=True)),
-            "--emit-marketing", onoff(_pick(args, "emit_marketing", "emitMarketing", default=False)),
-            "--emit-report", onoff(_pick(args, "emit_report", "emitReport", default=True)),
-            "--emit-run-card", onoff(_pick(args, "emit_run_card", "emitRunCard", default=True)),
-        ])
+        argv.extend(
+            [
+                "--emit-master16",
+                onoff(_pick(args, "emit_master16", "emitMaster16", default=True)),
+                "--emit-upscaled16",
+                onoff(_pick(args, "emit_upscaled16", "emitUpscaled16", default=True)),
+                "--emit-marketing",
+                onoff(_pick(args, "emit_marketing", "emitMarketing", default=False)),
+                "--emit-report",
+                onoff(_pick(args, "emit_report", "emitReport", default=True)),
+                "--emit-run-card",
+                onoff(_pick(args, "emit_run_card", "emitRunCard", default=True)),
+            ]
+        )
 
         enable_v2 = _as_bool(_pick(args, "enable_v2", "enableV2", default=False))
         if enable_v2:
@@ -475,6 +498,7 @@ async def serve_ui():
 @app.get("/ready")
 async def ready() -> Dict[str, Any]:
     from shutil import which
+
     return {
         "ok": True,
         "time": _now(),
@@ -492,6 +516,8 @@ async def ready() -> Dict[str, Any]:
             "rate_limit_per_minute": RATE_LIMIT_PER_MINUTE,
             "max_request_bytes": MAX_REQUEST_BYTES,
             "trusted_hosts_enabled": ENABLE_TRUSTED_HOSTS,
+            "trust_x_forwarded_for": TRUST_X_FORWARDED_FOR,
+            "trusted_proxy_ips_count": len(TRUSTED_PROXY_IPS),
         },
     }
 
@@ -511,12 +537,14 @@ async def create_job(payload: Dict[str, Any]) -> JSONResponse:
 
     asyncio.create_task(_run_job(job, argv))
 
-    return JSONResponse({
-        "schema": "tp.orchestrator.job.v1",
-        "success": True,
-        "data": {"id": jid, "state": job.state, "events_url": f"/v1/jobs/{jid}/events"},
-        "error": None,
-    })
+    return JSONResponse(
+        {
+            "schema": "tp.orchestrator.job.v1",
+            "success": True,
+            "data": {"id": jid, "state": job.state, "events_url": f"/v1/jobs/{jid}/events"},
+            "error": None,
+        }
+    )
 
 
 @app.get("/v1/jobs/{job_id}")
@@ -535,7 +563,7 @@ async def get_job(job_id: str) -> Dict[str, Any]:
             "progress": job.progress,
             "exit_code": job.exit_code,
             "logs_tail": job.logs_tail[-STATUS_LOG_LIMIT:],
-        }
+        },
     }
 
 

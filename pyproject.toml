@@ -20,6 +20,8 @@ dependencies = [
     "opencv-python>=4.8.0,<5",  # required for depth_writer (core pipeline)
     "typer>=0.10.0,<1",
     "tqdm>=4.66,<5",
+    # Web stack ranges are intentionally bounded here.
+    # Exact versions are enforced in requirements/base.in and compiled lockfiles.
     "fastapi>=0.110.0,<0.111",
     "uvicorn>=0.29.0,<0.30",
     "aiofiles>=23.2.1,<24",
