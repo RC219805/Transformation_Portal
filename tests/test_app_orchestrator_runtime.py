@@ -30,7 +30,9 @@ def _flag_value(argv: list[str], flag: str) -> str:
     return argv[idx + 1]
 
 
-def _build_request(method: str, path: str, headers: Dict[str, str] | None = None, client_host: str = "127.0.0.1") -> StarletteRequest:
+def _build_request(
+    method: str, path: str, headers: Dict[str, str] | None = None, client_host: str = "127.0.0.1"
+) -> StarletteRequest:
     raw_headers = []
     for key, value in (headers or {}).items():
         raw_headers.append((key.lower().encode("latin-1"), value.encode("latin-1")))
