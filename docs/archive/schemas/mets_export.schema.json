@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.transformation-portal.dev/archive/mets_export.schema.json",
+  "title": "METS export summary",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "manifest_rows",
+    "payload_rows",
+    "file_groups",
+    "partitions",
+    "collection_id",
+    "output_xml"
+  ],
+  "properties": {
+    "schema_version": { "const": "tp.archive.mets_export.v1" },
+    "manifest_rows": { "type": "integer", "minimum": 0 },
+    "payload_rows": { "type": "integer", "minimum": 0 },
+    "file_groups": {
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "partitions": {
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "collection_id": { "type": "string", "minLength": 1 },
+    "output_xml": { "type": "string", "minLength": 1 }
+  },
+  "additionalProperties": false
+}
