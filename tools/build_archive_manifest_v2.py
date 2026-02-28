@@ -8,7 +8,6 @@ import csv
 import gzip
 import hashlib
 import json
-import mimetypes
 import sys
 from collections import Counter
 from datetime import UTC, datetime
@@ -24,6 +23,46 @@ from archive_governance_common import atomic_write_text, deterministic_json_dump
 EXIT_SUCCESS = 0
 EXIT_INPUT_ERROR = 2
 EXIT_BUILD_ERROR = 3
+
+MIME_BY_EXTENSION = {
+    ".arw": "image/x-sony-arw",
+    ".avi": "video/x-msvideo",
+    ".bmp": "image/bmp",
+    ".cr2": "image/x-canon-cr2",
+    ".cr3": "image/x-canon-cr3",
+    ".csv": "text/csv",
+    ".dng": "image/x-adobe-dng",
+    ".flac": "audio/flac",
+    ".gif": "image/gif",
+    ".gz": "application/gzip",
+    ".heic": "image/heic",
+    ".heif": "image/heif",
+    ".jpeg": "image/jpeg",
+    ".jpg": "image/jpeg",
+    ".json": "application/json",
+    ".jsonl": "application/x-ndjson",
+    ".mkv": "video/x-matroska",
+    ".mov": "video/quicktime",
+    ".mp3": "audio/mpeg",
+    ".mp4": "video/mp4",
+    ".nef": "image/x-nikon-nef",
+    ".pdf": "application/pdf",
+    ".png": "image/png",
+    ".tar": "application/x-tar",
+    ".tif": "image/tiff",
+    ".tiff": "image/tiff",
+    ".txt": "text/plain",
+    ".wav": "audio/wav",
+    ".webp": "image/webp",
+    ".xml": "application/xml",
+    ".yaml": "application/yaml",
+    ".yml": "application/yaml",
+    ".zip": "application/zip",
+}
+MIME_BY_COMPOUND_EXTENSION = {
+    ".jsonl.gz": "application/gzip",
+    ".tar.gz": "application/gzip",
+}
 
 
 def _open_csv_reader(path: Path) -> Iterable[dict[str, str]]:
@@ -119,6 +158,27 @@ def _path_times(path: Path) -> tuple[str | None, str | None, str | None, str]:
     return created_utc, modified_utc, accessed_utc, created_source
 
 
+def _normalize_relpath(relpath: str) -> tuple[str, Path | None, str]:
+    relpath_obj, relpath_error = _materialize_relpath(relpath)
+    if relpath_obj is not None:
+        return relpath_obj.as_posix(), relpath_obj, ""
+    return relpath.replace("\\", "/"), None, relpath_error
+
+
+def _deterministic_mime(relpath: str) -> str:
+    path = Path(relpath)
+    suffixes = [suffix.lower() for suffix in path.suffixes]
+    if len(suffixes) >= 2:
+        compound = f"{suffixes[-2]}{suffixes[-1]}"
+        if compound in MIME_BY_COMPOUND_EXTENSION:
+            return MIME_BY_COMPOUND_EXTENSION[compound]
+
+    extension = path.suffix.lower()
+    if extension in MIME_BY_EXTENSION:
+        return MIME_BY_EXTENSION[extension]
+    return "application/octet-stream"
+
+
 def _load_rights(path: Path | None) -> dict[str, dict[str, Any]]:
     if path is None:
         return {}
@@ -134,9 +194,10 @@ def _load_rights(path: Path | None) -> dict[str, dict[str, Any]]:
             except json.JSONDecodeError as exc:
                 raise ValueError(f"Invalid rights JSONL at line {line_number}: {exc}") from exc
 
-            relpath = str(payload.get("relpath") or "").strip()
-            if not relpath:
+            relpath_raw = str(payload.get("relpath") or "").strip()
+            if not relpath_raw:
                 raise ValueError(f"Missing relpath in rights JSONL line {line_number}")
+            relpath, _, _ = _normalize_relpath(relpath_raw)
             flags_raw = payload.get("rights_flags")
             if not isinstance(flags_raw, list) or not flags_raw:
                 raise ValueError(f"rights_flags must be non-empty list in rights JSONL line {line_number}")
@@ -186,8 +247,8 @@ def _build_entry(
     collection_id: str,
     default_owner: str,
 ) -> dict[str, Any]:
-    relpath = str(hash_row.get("relpath") or "")
-    relpath_obj, relpath_error = _materialize_relpath(relpath)
+    raw_relpath = str(hash_row.get("relpath") or "")
+    relpath, relpath_obj, relpath_error = _normalize_relpath(raw_relpath)
 
     created_utc: str | None = None
     modified_utc: str | None = None
@@ -199,7 +260,7 @@ def _build_entry(
     elif relpath_error:
         created_source = relpath_error
 
-    guessed_mime, _ = mimetypes.guess_type(relpath)
+    guessed_mime = _deterministic_mime(relpath)
     extension = Path(relpath).suffix.lower()
 
     rights = rights_map.get(relpath, {})

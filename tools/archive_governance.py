@@ -43,6 +43,14 @@ def _first_nonempty_line(text: str) -> str:
     return ""
 
 
+def _normalize_process_returncode(return_code: int) -> tuple[int, str | None]:
+    if 0 <= return_code <= 255:
+        return return_code, None
+    if return_code < 0:
+        return EXIT_OTHER_FAILURE, f"terminated by signal {abs(return_code)}"
+    return EXIT_OTHER_FAILURE, f"out-of-range exit code {return_code}"
+
+
 def _emit_result(
     *,
     args: argparse.Namespace,
@@ -98,11 +106,16 @@ def _record_premis(
 
 
 def _tool_failure_error(command_name: str, return_code: int, stderr: str) -> dict[str, Any]:
+    normalized_exit_code, normalization_note = _normalize_process_returncode(return_code)
     detail = _first_nonempty_line(stderr) or "tool exited non-zero"
+    if normalization_note:
+        message = f"{command_name} failed with return {return_code} ({normalization_note}): {detail}"
+    else:
+        message = f"{command_name} failed with exit {normalized_exit_code}: {detail}"
     return make_typed_error(
         type_name="ToolExecutionError",
-        message=f"{command_name} failed with exit {return_code}: {detail}",
-        exit_code=return_code if return_code > 0 else EXIT_OTHER_FAILURE,
+        message=message,
+        exit_code=normalized_exit_code,
         exit_name="OTHER_FAILURE",
         priority=20,
     )
@@ -152,6 +165,7 @@ def _handle_fixity_scan(args: argparse.Namespace) -> int:
     error = None
     if result.returncode != 0:
         error = _tool_failure_error("fixity-scan", result.returncode, result.stderr)
+    normalized_exit_code, _ = _normalize_process_returncode(result.returncode)
 
     _record_premis(
         premis_log=args.premis_log,
@@ -164,7 +178,7 @@ def _handle_fixity_scan(args: argparse.Namespace) -> int:
     return _emit_result(
         args=args,
         command_name="fixity-scan",
-        exit_code=int(result.returncode),
+        exit_code=normalized_exit_code,
         data=data,
         error=error,
     )
@@ -206,6 +220,7 @@ def _handle_fixity_verify(args: argparse.Namespace) -> int:
     error = None
     if result.returncode != 0:
         error = _tool_failure_error("fixity-verify", result.returncode, result.stderr)
+    normalized_exit_code, _ = _normalize_process_returncode(result.returncode)
 
     _record_premis(
         premis_log=args.premis_log,
@@ -218,7 +233,7 @@ def _handle_fixity_verify(args: argparse.Namespace) -> int:
     return _emit_result(
         args=args,
         command_name="fixity-verify",
-        exit_code=int(result.returncode),
+        exit_code=normalized_exit_code,
         data=data,
         error=error,
     )
@@ -248,6 +263,7 @@ def _run_wrapped_tool(
     error = None
     if result.returncode != 0:
         error = _tool_failure_error(command_name, result.returncode, result.stderr)
+    normalized_exit_code, _ = _normalize_process_returncode(result.returncode)
 
     if premis_event_type is not None:
         _record_premis(
@@ -262,7 +278,7 @@ def _run_wrapped_tool(
     return _emit_result(
         args=args,
         command_name=command_name,
-        exit_code=int(result.returncode),
+        exit_code=normalized_exit_code,
         data=data,
         error=error,
     )
@@ -539,6 +555,7 @@ def _handle_sealed_eval_run(args: argparse.Namespace) -> int:
     error = None
     if result.returncode != 0:
         error = _tool_failure_error("sealed-eval-run", result.returncode, result.stderr)
+    normalized_exit_code, _ = _normalize_process_returncode(result.returncode)
 
     _record_premis(
         premis_log=args.premis_log,
@@ -552,7 +569,7 @@ def _handle_sealed_eval_run(args: argparse.Namespace) -> int:
     return _emit_result(
         args=args,
         command_name="sealed-eval-run",
-        exit_code=int(result.returncode),
+        exit_code=normalized_exit_code,
         data=data,
         error=error,
     )

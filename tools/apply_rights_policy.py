@@ -29,6 +29,10 @@ class PolicyError(ValueError):
     """Raised when policy YAML is invalid."""
 
 
+def _normalize_relpath(value: str) -> str:
+    return value.replace("\\", "/")
+
+
 def _load_manifest_entries(path: Path) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
     with path.open("r", encoding="utf-8") as handle:
@@ -112,11 +116,7 @@ def _load_policy(path: Path) -> dict[str, Any]:
             if not isinstance(extension_in, list) or not extension_in:
                 raise PolicyError(f"{context}.extension_in must be a non-empty list")
             ext_values = sorted(
-                {
-                    str(value).strip().lower()
-                    for value in extension_in
-                    if isinstance(value, str) and str(value).strip()
-                }
+                {str(value).strip().lower() for value in extension_in if isinstance(value, str) and str(value).strip()}
             )
             if not ext_values:
                 raise PolicyError(f"{context}.extension_in must include string values")
@@ -142,10 +142,10 @@ def _load_policy(path: Path) -> dict[str, Any]:
 
 
 def _rule_matches(entry: dict[str, Any], rule: dict[str, Any]) -> bool:
-    relpath = str(entry.get("relpath") or "")
+    relpath = _normalize_relpath(str(entry.get("relpath") or ""))
     extension = str(entry.get("extension") or "").lower()
 
-    if "path_glob" in rule and not fnmatch.fnmatch(relpath, str(rule["path_glob"])):
+    if "path_glob" in rule and not fnmatch.fnmatchcase(relpath, _normalize_relpath(str(rule["path_glob"]))):
         return False
 
     if "extension_in" in rule and extension not in set(rule["extension_in"]):

@@ -1,0 +1,135 @@
+"""Regression tests for deterministic archive governance hardening."""
+
+from __future__ import annotations
+
+import hashlib
+import importlib.util
+import subprocess
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+TOOLS_DIR = PROJECT_ROOT / "tools"
+if str(TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(TOOLS_DIR))
+
+MANIFEST_TOOL_PATH = PROJECT_ROOT / "tools" / "build_archive_manifest_v2.py"
+RIGHTS_TOOL_PATH = PROJECT_ROOT / "tools" / "apply_rights_policy.py"
+GOVERNANCE_TOOL_PATH = PROJECT_ROOT / "tools" / "archive_governance.py"
+
+
+def _load_tool_module(module_path: Path, module_name: str):
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Unable to load module from {module_path}")
+
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+MANIFEST_TOOL = _load_tool_module(MANIFEST_TOOL_PATH, "tests_build_archive_manifest_v2_hardening")
+RIGHTS_TOOL = _load_tool_module(RIGHTS_TOOL_PATH, "tests_apply_rights_policy_hardening")
+GOVERNANCE_TOOL = _load_tool_module(GOVERNANCE_TOOL_PATH, "tests_archive_governance_hardening")
+
+
+def test_build_entry_normalizes_relpath_for_rights_and_provenance(tmp_path: Path) -> None:
+    archive_root = tmp_path / "archive_root"
+    target_file = archive_root / "DriveA" / "Part1" / "alpha.txt"
+    target_file.parent.mkdir(parents=True, exist_ok=True)
+    target_file.write_text("alpha", encoding="utf-8")
+
+    entry = MANIFEST_TOOL._build_entry(
+        archive_root=archive_root,
+        hash_row={
+            "origin_drive": "DriveA",
+            "partition": "Part1",
+            "relpath": "DriveA\\Part1\\.\\alpha.txt",
+            "filesize_bytes": "5",
+            "sha256": "abc123",
+            "hash_status": "ok",
+        },
+        rights_map={"DriveA/Part1/alpha.txt": {"rights_flags": ["restricted"], "owner": "Legal"}},
+        collection_id="COLL-1",
+        default_owner="UNSPECIFIED",
+    )
+
+    assert entry["relpath"] == "DriveA/Part1/alpha.txt"
+    assert entry["rights_flags"] == ["restricted"]
+    assert entry["owner"] == "Legal"
+    assert entry["mime"] == "text/plain"
+    expected_seed = "\0".join(["DriveA", "Part1", "DriveA/Part1/alpha.txt"])
+    assert entry["provenance_id"] == hashlib.sha256(expected_seed.encode("utf-8")).hexdigest()
+
+
+def test_load_rights_normalizes_relpath_keys(tmp_path: Path) -> None:
+    rights_path = tmp_path / "rights.jsonl"
+    rights_path.write_text(
+        '{"relpath":"DriveA\\\\Part1\\\\.\\\\alpha.txt","rights_flags":["restricted"],"owner":"Legal"}\n',
+        encoding="utf-8",
+    )
+
+    rights = MANIFEST_TOOL._load_rights(rights_path)
+    assert "DriveA/Part1/alpha.txt" in rights
+    assert rights["DriveA/Part1/alpha.txt"]["rights_flags"] == ["restricted"]
+
+
+def test_deterministic_mime_map_uses_repo_owned_rules() -> None:
+    assert MANIFEST_TOOL._deterministic_mime("archive.tar.gz") == "application/gzip"
+    assert MANIFEST_TOOL._deterministic_mime("capture.CR3") == "image/x-canon-cr3"
+    assert MANIFEST_TOOL._deterministic_mime("unknown.custom") == "application/octet-stream"
+
+
+def test_rule_matches_normalizes_slashes_for_path_glob() -> None:
+    entry = {"relpath": "DriveA\\Part1\\alpha.txt", "extension": ".txt"}
+    rule = {"id": "r1", "flags": ["restricted"], "path_glob": "DriveA/Part1/*.txt"}
+    assert RIGHTS_TOOL._rule_matches(entry, rule) is True
+
+
+def test_rule_matches_keeps_case_sensitive_glob_semantics(monkeypatch) -> None:
+    monkeypatch.setattr(RIGHTS_TOOL.fnmatch.os.path, "normcase", lambda value: value.lower())
+    entry = {"relpath": "DriveA/Part1/ALPHA.TXT", "extension": ".txt"}
+    rule = {"id": "r1", "flags": ["restricted"], "path_glob": "DriveA/Part1/*.txt"}
+    assert RIGHTS_TOOL._rule_matches(entry, rule) is False
+
+
+def test_run_wrapped_tool_normalizes_negative_returncode(monkeypatch) -> None:
+    def _fake_run_tool(command: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=command, returncode=-9, stdout="", stderr="killed")
+
+    captured: dict[str, object] = {}
+
+    def _fake_emit_result(*, args, command_name: str, exit_code: int, data, error=None) -> int:
+        captured["command_name"] = command_name
+        captured["exit_code"] = exit_code
+        captured["error"] = error
+        return exit_code
+
+    monkeypatch.setattr(GOVERNANCE_TOOL, "_run_tool", _fake_run_tool)
+    monkeypatch.setattr(GOVERNANCE_TOOL, "_emit_result", _fake_emit_result)
+    monkeypatch.setattr(GOVERNANCE_TOOL, "_record_premis", lambda **_: None)
+
+    args = SimpleNamespace(
+        json=True,
+        json_pretty=False,
+        json_output=None,
+        json_canonical_profile="canonical_v1",
+        premis_log=None,
+        premis_agent_id="tp.archive.governance.v1",
+    )
+    exit_code = GOVERNANCE_TOOL._run_wrapped_tool(
+        args=args,
+        command_name="manifest-build",
+        script_name="build_archive_manifest_v2.py",
+        tool_args=["--help"],
+        premis_event_type=None,
+        premis_event_detail="",
+        premis_object_ids=[],
+    )
+
+    assert exit_code == GOVERNANCE_TOOL.EXIT_OTHER_FAILURE
+    assert captured["exit_code"] == GOVERNANCE_TOOL.EXIT_OTHER_FAILURE
+    assert "signal 9" in str(captured["error"]["message"])
+    assert captured["error"]["exit_code"]["value"] == GOVERNANCE_TOOL.EXIT_OTHER_FAILURE
