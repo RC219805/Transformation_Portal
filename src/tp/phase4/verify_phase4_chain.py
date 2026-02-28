@@ -10,11 +10,7 @@ from typing import Any
 
 from tp.crypto.merkle import merkle_root_sha256
 
-from .hash_capture_metadata import (
-    METADATA_CONTRACT_VERSION,
-    METADATA_MANIFEST_CONTRACT_VERSION,
-    compute_metadata_sha256,
-)
+from .hash_capture_metadata import METADATA_CONTRACT_VERSION, METADATA_MANIFEST_CONTRACT_VERSION, compute_metadata_sha256
 from .provenance_capture import (
     PROVENANCE_CONTRACT_VERSION,
     PROVENANCE_MERKLE_CONTRACT_VERSION,
