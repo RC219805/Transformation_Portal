@@ -2,7 +2,11 @@
 # This ensures consistent dependency resolution across all layers
 
 SHELL := /bin/bash
-PIP_COMPILE := pip-compile -q --resolver=backtracking
+LOCK_PYTHON_VERSION ?= 3.11
+PIP_TOOLS_CACHE_DIR ?= $(CURDIR)/.pip-tools-cache
+PIP_COMPILE_BASE := pip-compile -q --resolver=backtracking
+PIP_COMPILE_PY_FLAG := $(shell pip-compile --help 2>/dev/null | grep -q -- '--python-version' && echo "--python-version=$(LOCK_PYTHON_VERSION)" || true)
+PIP_COMPILE := mkdir -p "$(PIP_TOOLS_CACHE_DIR)" && PIP_TOOLS_CACHE_DIR="$(PIP_TOOLS_CACHE_DIR)" $(PIP_COMPILE_BASE) $(PIP_COMPILE_PY_FLAG)
 
 # Default target: compile all requirements
 .PHONY: all compile compile-all update help clean check

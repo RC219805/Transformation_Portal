@@ -1116,8 +1116,9 @@
                     });
                     es.onerror = () => {};
                 } catch (err) {
+                    const errorMessage = err instanceof Error ? err.message : String(err);
                     job.state = 'failed';
-                    appendJobLog(job, `[ERROR] ${err.message}`);
+                    appendJobLog(job, `[ERROR] ${errorMessage}`);
                     scheduleRenderJobQueue();
                     createToast("Backend submission failed.", "error");
                     if (state.selectedJobId === job.id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
