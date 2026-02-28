@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.transformation-portal.dev/archive/archive_manifest_v2_summary.schema.json",
+  "title": "tp.archive.manifest.v2 summary",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "entry_count",
+    "collection_id",
+    "archive_root",
+    "hash_status_counts",
+    "created_source_counts",
+    "rights_classified_count",
+    "rights_unspecified_count"
+  ],
+  "properties": {
+    "schema_version": { "const": "tp.archive.manifest.v2.summary.v1" },
+    "entry_count": { "type": "integer", "minimum": 0 },
+    "collection_id": { "type": "string", "minLength": 1 },
+    "archive_root": { "type": "string", "minLength": 1 },
+    "hash_status_counts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "created_source_counts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "rights_classified_count": { "type": "integer", "minimum": 0 },
+    "rights_unspecified_count": { "type": "integer", "minimum": 0 }
+  },
+  "additionalProperties": false
+}

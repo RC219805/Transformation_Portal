@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.transformation-portal.dev/machine_mode/tp.archive.machine.v1/data.sealed-eval-run.schema.json",
+  "title": "sealed-eval-run data payload",
+  "type": "object",
+  "required": [
+    "tool",
+    "archive_index",
+    "archive_root",
+    "out_root",
+    "subset_root",
+    "eval_command",
+    "validate_schemas",
+    "allow_writable_subset",
+    "stdout",
+    "stderr"
+  ],
+  "properties": {
+    "tool": { "type": "string" },
+    "archive_index": { "type": "string" },
+    "archive_root": { "type": "string" },
+    "out_root": { "type": "string" },
+    "subset_root": { "type": "string" },
+    "eval_command": { "type": ["string", "null"] },
+    "validate_schemas": { "type": "boolean" },
+    "allow_writable_subset": { "type": "boolean" },
+    "stdout": { "type": "string" },
+    "stderr": { "type": "string" }
+  },
+  "additionalProperties": false
+}

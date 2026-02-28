@@ -44,11 +44,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install OpenAI package
-        run: |
-          python -m pip install --upgrade pip
-          pip install --no-cache-dir openai
-
       - name: Run summarizer (safe Option B)
         id: summarizer
         timeout-minutes: 4
@@ -60,7 +55,7 @@ jobs:
           EVENT_NAME: '${{ github.event_name }}'
         run: |
           python - <<'PY'
-          import os, sys, textwrap
+          import json, os, sys, textwrap, urllib.error, urllib.request
           RESPONSE_FILE = os.environ["RESPONSE_FILE"]
           OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
@@ -72,10 +67,6 @@ jobs:
               # DEBUG: print only the non-sensitive message to runner logs
               print("AI summarizer skipped; diagnostic message written to RESPONSE_FILE.")
               sys.exit(0)
-
-          # If key present: perform summarization (example; keep minimal)
-          from openai import OpenAI
-          client = OpenAI(api_key=OPENAI_API_KEY)
 
           title = (os.getenv("ISSUE_TITLE") or "").strip()
           body  = (os.getenv("ISSUE_BODY") or "").strip()[:4000]
@@ -120,12 +111,29 @@ jobs:
               {body}
               """)
           try:
-              completion = client.chat.completions.create(
-                  model="gpt-4o-mini",
-                  messages=[{"role":"user","content":prompt}],
-                  max_tokens=160, temperature=0.2
+              payload = {
+                  "model": "gpt-4o-mini",
+                  "messages": [{"role": "user", "content": prompt}],
+                  "max_tokens": 160,
+                  "temperature": 0.2,
+              }
+              req = urllib.request.Request(
+                  "https://api.openai.com/v1/chat/completions",
+                  data=json.dumps(payload).encode("utf-8"),
+                  headers={
+                      "Authorization": f"Bearer {OPENAI_API_KEY}",
+                      "Content-Type": "application/json",
+                  },
+                  method="POST",
               )
-              summary = (completion.choices[0].message.content or "").strip()
+              with urllib.request.urlopen(req, timeout=45) as resp:
+                  response_json = json.loads(resp.read().decode("utf-8"))
+              summary = (
+                  response_json.get("choices", [{}])[0]
+                  .get("message", {})
+                  .get("content", "")
+                  .strip()
+              )
           except Exception as e:
               # Write a short friendly failure message (no secrets) and log only minimal error classification.
               summary = "AI summarization failed: an internal error occurred. See CI logs for details."

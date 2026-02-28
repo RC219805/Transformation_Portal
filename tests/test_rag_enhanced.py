@@ -10,6 +10,8 @@ Tests:
 - Full pipeline integration
 """
 
+# pylint: disable=wrong-import-position,redefined-outer-name
+
 import sys
 import tempfile
 import time
@@ -24,7 +26,7 @@ sys.path.insert(0, str(agents_path))
 from rag_system.citation import CitationGenerator  # noqa: E402
 from rag_system.config import Config, get_config, reset_config  # noqa: E402
 from rag_system.exceptions import IndexingError, RetrievalError  # noqa: E402
-from rag_system.indexer import RepositoryIndexer  # noqa: E402
+from rag_system.indexer import DocumentChunk, RepositoryIndexer  # noqa: E402
 from rag_system.logger import get_logger  # noqa: E402
 from rag_system.reranker import ResultReranker  # noqa: E402
 from rag_system.retriever import HybridRetriever  # noqa: E402
@@ -166,6 +168,27 @@ class TestPersistentCaching:
 
         indexer.clear_cache()
         assert not indexer.cache_file.exists()
+
+    def test_save_cache_cleans_unique_temp_file_on_replace_failure(self, temp_repo):
+        """Test temp cache file cleanup when atomic replace fails."""
+        indexer = RepositoryIndexer(str(temp_repo), use_cache=True)
+        indexer.chunks = [
+            DocumentChunk(
+                content="sample",
+                file_path="src/main.py",
+                start_line=1,
+                end_line=1,
+                chunk_type="code",
+            )
+        ]
+
+        indexer.cache_dir.mkdir(parents=True, exist_ok=True)
+        indexer.cache_file.mkdir(parents=True, exist_ok=True)
+
+        indexer._save_cache()
+
+        tmp_files = list(indexer.cache_dir.glob(f".{indexer.cache_file.name}.*.tmp"))
+        assert not tmp_files
 
 
 class TestLogging:

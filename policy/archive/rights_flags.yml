@@ -1,0 +1,53 @@
+version: 1
+default_flags:
+  - restricted_ok
+default_owner: UNSPECIFIED
+rules:
+  - id: public_web_derivatives
+    path_glob: "**/public/**"
+    flags:
+      - public_ok
+      - ai_training_permitted
+
+  - id: raw_camera_masters
+    extension_in:
+      - .arw
+      - .cr2
+      - .cr3
+      - .dng
+      - .nef
+      - .orf
+      - .pef
+      - .raf
+      - .rw2
+      - .srw
+    flags:
+      - restricted_ok
+      - evaluation_only_72h
+
+  - id: sidecar_metadata
+    extension_in:
+      - .json
+      - .xmp
+      - .yaml
+      - .yml
+    flags:
+      - restricted_ok
+      - ai_training_prohibited
+
+  - id: motion_video
+    extension_in:
+      - .mov
+      - .mp4
+      - .mxf
+    flags:
+      - restricted_ok
+      - privacy_sensitive
+      - ai_training_prohibited
+
+  - id: third_party_reference
+    relpath_regex: "(?i)(third_party|licensed|partner)"
+    flags:
+      - third_party_ip
+      - restricted_ok
+      - ai_training_prohibited

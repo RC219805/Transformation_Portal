@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.transformation-portal.dev/machine_mode/tp.archive.machine.v1/data.bag-build.schema.json",
+  "title": "bag-build data payload",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.archive.machine.v1/data.tool-exec.schema.json"
+    }
+  ]
+}

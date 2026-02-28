@@ -98,7 +98,7 @@ def test_v2_variants():
             from transformers import AutoModelForDepthEstimation
 
             # Just check if model config is accessible (don't download)
-            _ = AutoModelForDepthEstimation.from_pretrained(model_id, trust_remote_code=True, low_cpu_mem_usage=True)
+            _ = AutoModelForDepthEstimation.from_pretrained(model_id, trust_remote_code=False, low_cpu_mem_usage=True)
             logger.info(f"  ✓ Accessible and working")
             accessible.append(model_id)
 

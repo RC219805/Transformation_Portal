@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.transformation-portal.dev/machine_mode/tp.archive.machine.v1/data.fixity-scan.schema.json",
+  "title": "fixity-scan data payload",
+  "type": "object",
+  "required": [
+    "tool",
+    "archive_index",
+    "archive_root",
+    "out_dir",
+    "workers",
+    "strict",
+    "strict_identity",
+    "validate_schemas",
+    "artifacts",
+    "stdout",
+    "stderr"
+  ],
+  "properties": {
+    "tool": { "type": "string" },
+    "archive_index": { "type": "string" },
+    "archive_root": { "type": "string" },
+    "out_dir": { "type": "string" },
+    "workers": { "type": "integer", "minimum": 1 },
+    "strict": { "type": "boolean" },
+    "strict_identity": { "type": "boolean" },
+    "validate_schemas": { "type": "boolean" },
+    "artifacts": {
+      "type": "object",
+      "required": ["hash_manifest", "hash_summary", "merkle_roots"],
+      "properties": {
+        "hash_manifest": { "type": "string" },
+        "hash_summary": { "type": "string" },
+        "merkle_roots": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "stdout": { "type": "string" },
+    "stderr": { "type": "string" }
+  },
+  "additionalProperties": false
+}

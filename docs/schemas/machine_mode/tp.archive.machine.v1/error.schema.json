@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.transformation-portal.dev/machine_mode/tp.archive.machine.v1/error.schema.json",
+  "title": "Archive Machine Typed Error",
+  "type": "object",
+  "required": [
+    "type",
+    "message",
+    "exit_code",
+    "priority"
+  ],
+  "properties": {
+    "type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "message": {
+      "type": "string"
+    },
+    "exit_code": {
+      "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.archive.machine.v1/exit_code.schema.json"
+    },
+    "priority": {
+      "type": "integer"
+    }
+  },
+  "additionalProperties": false
+}

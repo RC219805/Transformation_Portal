@@ -228,12 +228,19 @@ jobs:
 
       - name: Audit all dependencies
         run: |
-          pip-audit --desc --require requirements.txt --format json --output audit-report.json || true
+          pip-audit --desc -r requirements.txt --format json --output audit-report.json || true
 
       - name: Check for banned dependencies
         run: |
           # Enforce banned dependencies from requirements/constraints.txt
-          if grep -i "realesrgan" requirements.txt requirements-*.txt; then
+          shopt -s nullglob
+          files=(requirements.txt requirements-*.txt)
+          if grep -hEv '^[[:space:]]*($|#)' "${files[@]}" \
+            | cut -d';' -f1 \
+            | sed -E 's/[[:space:]]+#.*$//' \
+            | sed -E 's/[[:space:]]+$//' \
+            | awk -F'[<>=!~\\[]' '{gsub(/[[:space:]]+/,"",$1); print tolower($1)}' \
+            | grep -Fxq "realesrgan"; then
             echo "ERROR: Banned dependency 'realesrgan' found"
             exit 1
           fi

@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.transformation-portal.dev/archive/premis_event_v3.schema.json",
+  "title": "PREMIS v3 Event Record",
+  "type": "object",
+  "required": [
+    "premis_version",
+    "event"
+  ],
+  "properties": {
+    "premis_version": {
+      "const": "3.0"
+    },
+    "event": {
+      "type": "object",
+      "required": [
+        "eventIdentifier",
+        "eventType",
+        "eventDateTime",
+        "eventDetail",
+        "eventOutcomeInformation",
+        "linkingAgentIdentifier",
+        "linkingObjectIdentifier"
+      ],
+      "properties": {
+        "eventIdentifier": {
+          "type": "object",
+          "required": ["eventIdentifierType", "eventIdentifierValue"],
+          "properties": {
+            "eventIdentifierType": { "type": "string" },
+            "eventIdentifierValue": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        "eventType": { "type": "string", "minLength": 1 },
+        "eventDateTime": { "type": "string", "format": "date-time" },
+        "eventDetail": { "type": "string" },
+        "eventOutcomeInformation": {
+          "type": "object",
+          "required": ["eventOutcome"],
+          "properties": {
+            "eventOutcome": { "type": "string", "enum": ["success", "failure"] }
+          },
+          "additionalProperties": false
+        },
+        "linkingAgentIdentifier": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["linkingAgentIdentifierType", "linkingAgentIdentifierValue"],
+            "properties": {
+              "linkingAgentIdentifierType": { "type": "string" },
+              "linkingAgentIdentifierValue": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "linkingObjectIdentifier": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["linkingObjectIdentifierType", "linkingObjectIdentifierValue"],
+            "properties": {
+              "linkingObjectIdentifierType": { "type": "string" },
+              "linkingObjectIdentifierValue": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

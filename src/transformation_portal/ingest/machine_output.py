@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -11,6 +12,22 @@ from .metadata_service import BatchExtractResult, BatchItemResult, ExtractResult
 
 MACHINE_SCHEMA_VERSION = "tp.meta.machine.v1"
 _CANONICAL_JSON_KWARGS: Dict[str, Any] = {"sort_keys": True, "ensure_ascii": True}
+
+
+def _ensure_json_safe(value: Any, *, path: str = "$") -> None:
+    """Reject non-finite floating point values before JSON serialization."""
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError(f"Non-finite float encountered at {path}")
+        return
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            _ensure_json_safe(nested, path=f"{path}.{key}")
+        return
+    if isinstance(value, list):
+        for index, nested in enumerate(value):
+            _ensure_json_safe(nested, path=f"{path}[{index}]")
+        return
 
 
 def exit_code_to_dict(code: IngestExitCode) -> Dict[str, Any]:
@@ -112,6 +129,9 @@ def batch_result_to_dict(
 
 def dump_json(payload: Dict[str, Any], *, pretty: bool) -> str:
     """Dump payload with lexicographic key ordering (`sort_keys=True`)."""
+    _ensure_json_safe(payload)
+    kwargs = dict(_CANONICAL_JSON_KWARGS)
+    kwargs["allow_nan"] = False
     if pretty:
-        return json.dumps(payload, indent=2, **_CANONICAL_JSON_KWARGS)
-    return json.dumps(payload, separators=(",", ":"), **_CANONICAL_JSON_KWARGS)
+        return json.dumps(payload, indent=2, **kwargs)
+    return json.dumps(payload, separators=(",", ":"), **kwargs)
