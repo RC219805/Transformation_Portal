@@ -351,7 +351,6 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install flake8 pylint
           python -m pip install -r requirements-lint.txt
           echo "Disk space after dependency install:"
           df -h

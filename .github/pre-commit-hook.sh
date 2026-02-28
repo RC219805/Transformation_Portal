@@ -30,7 +30,54 @@ if git ls-files --others --exclude-standard | grep -E '^(app\.py|portal\.html|te
     exit 1
 fi
 
-# 1. Check for undefined names on staged Python files only.
+# 1. Ensure local lint tool versions match CI pins.
+if [ "${#staged_py[@]}" -gt 0 ]; then
+    echo "Checking lint tool version parity..."
+    if ! "$PYTHON_BIN" - <<'PYEOF'
+import sys
+from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
+
+req_path = Path("requirements-lint.txt")
+if not req_path.exists():
+    print("❌ requirements-lint.txt not found")
+    sys.exit(1)
+
+pinned = {}
+for raw in req_path.read_text(encoding="utf-8").splitlines():
+    line = raw.split("#", 1)[0].strip()
+    if not line or "==" not in line:
+        continue
+    name, ver = line.split("==", 1)
+    pinned[name.strip().lower()] = ver.strip()
+
+errors = []
+for tool in ("black", "isort", "flake8", "pylint"):
+    expected = pinned.get(tool)
+    if not expected:
+        errors.append(f"{tool}: missing exact pin in requirements-lint.txt")
+        continue
+    try:
+        actual = version(tool)
+    except PackageNotFoundError:
+        errors.append(f"{tool}: not installed (expected {expected})")
+        continue
+    if actual != expected:
+        errors.append(f"{tool}: expected {expected}, found {actual}")
+
+if errors:
+    print("❌ Lint tool versions do not match CI pins:")
+    for item in errors:
+        print(f"  - {item}")
+    sys.exit(1)
+PYEOF
+    then
+        echo "Install exact lint tooling with: $PYTHON_BIN -m pip install -r requirements-lint.txt"
+        exit 1
+    fi
+fi
+
+# 2. Check for undefined names on staged Python files only.
 if [ "${#staged_py[@]}" -gt 0 ]; then
     echo "Checking for undefined names..."
     flake8_out="$(mktemp)"
@@ -42,7 +89,7 @@ if [ "${#staged_py[@]}" -gt 0 ]; then
     fi
 fi
 
-# 2. Auto-fix trailing whitespace in staged Python files.
+# 3. Auto-fix trailing whitespace in staged Python files.
 if [ "${#staged_py[@]}" -gt 0 ]; then
     echo "Auto-fixing trailing whitespace..."
     for file in "${staged_py[@]}"; do
@@ -53,14 +100,28 @@ if [ "${#staged_py[@]}" -gt 0 ]; then
     done
 fi
 
-# 3. Check markdown file count in root (warning only).
+# 4. Enforce black/isort checks using CI-pinned versions.
+if [ "${#staged_py[@]}" -gt 0 ]; then
+    echo "Checking black formatting parity with CI..."
+    if ! "$PYTHON_BIN" -m black --check --diff --line-length=127 "${staged_py[@]}"; then
+        echo "❌ Black check failed (CI parity)."
+        exit 1
+    fi
+    echo "Checking isort ordering parity with CI..."
+    if ! "$PYTHON_BIN" -m isort --check-only --diff --profile=black --line-length=127 "${staged_py[@]}"; then
+        echo "❌ isort check failed (CI parity)."
+        exit 1
+    fi
+fi
+
+# 5. Check markdown file count in root (warning only).
 markdown_count="$(find . -maxdepth 1 -name '*.md' -type f | wc -l | tr -d ' ')"
 if [ "$markdown_count" -gt 10 ]; then
     echo "⚠️  WARNING: $markdown_count markdown files in root (max: 10)"
     echo "Consider moving some to docs/"
 fi
 
-# 4. Quick staged-file import heuristics.
+# 6. Quick staged-file import heuristics.
 if [ "${#staged_py[@]}" -gt 0 ]; then
     echo "Checking for missing imports..."
     if ! "$PYTHON_BIN" - "${staged_py[@]}" <<'PYEOF'
