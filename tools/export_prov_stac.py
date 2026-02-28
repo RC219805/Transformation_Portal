@@ -202,6 +202,17 @@ def _write_stac_outputs(
     return items_written, len(item_links)
 
 
+def _count_stac_eligible_rows(rows: list[dict[str, Any]], *, datetime_field: str) -> int:
+    count = 0
+    for row in rows:
+        if str(row.get("hash_status") or "") != "ok":
+            continue
+        eligible, _, _, _ = _eligible_for_stac(row, datetime_field=datetime_field)
+        if eligible:
+            count += 1
+    return count
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest-jsonl", required=True, help="Input archive_manifest_v2 JSONL path")
@@ -232,10 +243,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Input error: {exc}", file=sys.stderr)
         return EXIT_INPUT_ERROR
 
+    stac_requested = bool(args.out_stac_catalog)
+    if stac_requested and args.require_stac and _count_stac_eligible_rows(rows, datetime_field=args.datetime_field) == 0:
+        print("STAC export unavailable: no entries with gps_latitude/gps_longitude and datetime", file=sys.stderr)
+        return EXIT_STAC_UNAVAILABLE
+
     prov_payload = _build_prov_payload(rows)
     atomic_write_text(Path(args.out_prov_jsonld), deterministic_json_dumps(prov_payload, pretty=True) + "\n")
 
-    stac_requested = bool(args.out_stac_catalog)
     items_written = 0
     stac_written = False
 
