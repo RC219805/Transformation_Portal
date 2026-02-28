@@ -442,14 +442,20 @@ def _build_inputs_block(
     metadata_manifest_contract_version = None
     metadata_manifest_metadata_contract_version = None
     if isinstance(metadata_manifest_payload, dict):
-        metadata_manifest_contract_version = _string_or_none(metadata_manifest_payload.get("metadata_manifest_contract_version"))
-        metadata_manifest_metadata_contract_version = _string_or_none(metadata_manifest_payload.get("metadata_contract_version"))
+        metadata_manifest_contract_version = _string_or_none(
+            metadata_manifest_payload.get("metadata_manifest_contract_version")
+        )
+        metadata_manifest_metadata_contract_version = _string_or_none(
+            metadata_manifest_payload.get("metadata_contract_version")
+        )
 
     provenance_manifest_contract_version = None
     provenance_manifest_metadata_contract_version = None
     if isinstance(provenance_manifest_payload, dict):
         provenance_manifest_contract_version = _string_or_none(provenance_manifest_payload.get("provenance_contract_version"))
-        provenance_manifest_metadata_contract_version = _string_or_none(provenance_manifest_payload.get("metadata_contract_version"))
+        provenance_manifest_metadata_contract_version = _string_or_none(
+            provenance_manifest_payload.get("metadata_contract_version")
+        )
 
     provenance_merkle_contract_version = None
     provenance_merkle_provenance_contract_version = None
@@ -497,7 +503,9 @@ def verify_phase4_chain_from_paths(
     strict_input_order: bool = True,
 ) -> dict[str, Any]:
     """Load JSON artifacts from disk and verify the full Phase 4 chain."""
-    capture_payload, capture_file_sha256 = _read_json_file_with_digest(capture_metadata_path, label="capture metadata artifact")
+    capture_payload, capture_file_sha256 = _read_json_file_with_digest(
+        capture_metadata_path, label="capture metadata artifact"
+    )
     metadata_manifest_payload, metadata_manifest_file_sha256 = _read_json_file_with_digest(
         metadata_manifest_path, label="metadata manifest artifact"
     )
