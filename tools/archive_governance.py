@@ -13,13 +13,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from archive_governance_common import (
+from archive_governance_common import (  # pylint: disable=wrong-import-position
     CANONICAL_PROFILES,
     emit_machine_payload,
     make_machine_envelope,
     make_typed_error,
 )
-from premis_events import append_event, build_premis_event
+from premis_events import append_event, build_premis_event  # pylint: disable=wrong-import-position
 
 EXIT_SUCCESS = 0
 EXIT_OTHER_FAILURE = 5

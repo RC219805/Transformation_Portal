@@ -16,7 +16,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from archive_governance_common import deterministic_json_dumps
+from archive_governance_common import deterministic_json_dumps  # pylint: disable=wrong-import-position
 
 EXIT_SUCCESS = 0
 EXIT_INPUT_ERROR = 2

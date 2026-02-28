@@ -19,7 +19,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from archive_governance_common import atomic_write_text, deterministic_json_dumps, json_line
+from archive_governance_common import (  # pylint: disable=wrong-import-position
+    atomic_write_text,
+    deterministic_json_dumps,
+    json_line,
+)
 
 EXIT_SUCCESS = 0
 EXIT_INPUT_ERROR = 2

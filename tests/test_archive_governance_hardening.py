@@ -174,7 +174,7 @@ def test_apply_rights_policy_streaming_does_not_publish_partial_output_on_invali
     )
     policy_yaml = tmp_path / "rights_flags.yml"
     policy_yaml.write_text(
-        "version: 1\n" "default_flags: [unspecified]\n" "default_owner: UNSPECIFIED\n" "rules: []\n",
+        "version: 1\n" + "default_flags: [unspecified]\n" + "default_owner: UNSPECIFIED\n" + "rules: []\n",
         encoding="utf-8",
     )
     out_jsonl = tmp_path / "asset_rights.jsonl"

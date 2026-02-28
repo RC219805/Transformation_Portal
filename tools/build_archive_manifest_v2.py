@@ -18,7 +18,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from archive_governance_common import atomic_write_text, deterministic_json_dumps, json_line
+from archive_governance_common import (  # pylint: disable=wrong-import-position
+    atomic_write_text,
+    deterministic_json_dumps,
+    json_line,
+)
 
 EXIT_SUCCESS = 0
 EXIT_INPUT_ERROR = 2
@@ -96,8 +100,7 @@ def _open_csv_reader(path: Path) -> Iterable[dict[str, str]]:
         reader = csv.DictReader(_iter_lines())
         if reader.fieldnames is None:
             raise ValueError(f"CSV has no header row: {path}")
-        for row in reader:
-            yield row
+        yield from reader
 
 
 def _consume_csv_rows(path: Path) -> int:
