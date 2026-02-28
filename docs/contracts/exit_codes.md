@@ -54,20 +54,24 @@ consumers MUST NOT interpret a bare integer without tool context.
 - `4`: schema validation failure
 - `5`: merkle write failure
 
-### `tools/verify_phase4_chain.py` (Phase 4F external verifier)
+### `tools/verify_phase4_chain.py` (`tp.meta.verification_report.v1` verify/report)
 
-- `0`: success
-- `31`: malformed input / invalid args / unreadable files
+- `0`: verification passed
+- `31`: malformed input / invalid arguments / unreadable files
 - `32`: schema validation failure
-- `33`: alignment failure (path mismatch, duplicates, ordering violation in strict mode, version mismatch)
-- `34`: metadata hash mismatch
-- `35`: provenance entry hash mismatch
-- `36`: merkle mismatch
+- `33`: alignment failure (path mismatch, duplicates, ordering, version consistency)
+- `34`: metadata hash mismatch (Phase 4D recomputation mismatch)
+- `35`: provenance entry hash mismatch (Phase 4E recomputation mismatch)
+- `36`: Merkle mismatch (leaf count/root recomputation mismatch)
 - `37`: report write failure
 
 ### Cross-runtime parity gates
 
 - `tools/check_phase4d_manifest_cross_runtime.py`
+  - `0`: success
+  - `31`: runtime invocation failure
+  - `32`: parity mismatch
+- `tools/check_phase4f_verifier_cross_runtime.py`
   - `0`: success
   - `31`: runtime invocation failure
   - `32`: parity mismatch

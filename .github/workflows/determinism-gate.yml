@@ -86,6 +86,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install dependencies for Python 3.12 parity gates
+        run: |
+          python -m pip install --upgrade "pip==24.0" "setuptools==69.0.3" "wheel==0.42.0"
+          pip install -r requirements/base.txt -r requirements/dev.txt
+          pip install -e . --no-deps
+
       - name: Phase 4D manifest cross-runtime parity gate (3.11 vs 3.12)
         env:
           PY311: ${{ steps.setup-python-311.outputs.python-path }}
@@ -93,6 +99,17 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}/src:${{ github.workspace }}
         run: |
           "$PY312" tools/check_phase4d_manifest_cross_runtime.py \
+            --python-a "$PY311" \
+            --python-b "$PY312" \
+            --project-root "$GITHUB_WORKSPACE"
+
+      - name: Phase 4F verifier cross-runtime parity gate (3.11 vs 3.12)
+        env:
+          PY311: ${{ steps.setup-python-311.outputs.python-path }}
+          PY312: ${{ steps.setup-python-312.outputs.python-path }}
+          PYTHONPATH: ${{ github.workspace }}/src:${{ github.workspace }}
+        run: |
+          "$PY312" tools/check_phase4f_verifier_cross_runtime.py \
             --python-a "$PY311" \
             --python-b "$PY312" \
             --project-root "$GITHUB_WORKSPACE"
