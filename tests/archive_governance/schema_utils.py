@@ -40,7 +40,6 @@ def _load_schema_bundle() -> tuple[dict[str, Any], Registry]:
     return schemas_by_name[SCHEMA_ENTRYPOINT], registry
 
 
-
 def _format_path(path: Iterable[Any]) -> str:
     rendered = "$"
     for segment in path:
@@ -49,7 +48,6 @@ def _format_path(path: Iterable[Any]) -> str:
         else:
             rendered += f"[{segment!r}]"
     return rendered
-
 
 
 def validate_archive_machine_payload(payload: dict[str, Any]) -> None:

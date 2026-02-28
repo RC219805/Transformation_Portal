@@ -384,6 +384,7 @@ def test_run_wrapped_tool_reports_missing_script_with_typed_error(monkeypatch) -
 
     monkeypatch.setattr(GOVERNANCE_TOOL, "_emit_result", _fake_emit_result)
     monkeypatch.setattr(GOVERNANCE_TOOL, "_record_premis", lambda **_: None)
+    monkeypatch.setattr(GOVERNANCE_TOOL, "PROJECT_ROOT", Path("/tmp/tp_missing_sealed_eval_harness"))
 
     args = SimpleNamespace(
         json=True,
@@ -496,6 +497,7 @@ def test_sealed_eval_reports_missing_harness_with_typed_error(monkeypatch) -> No
 
     monkeypatch.setattr(GOVERNANCE_TOOL, "_emit_result", _fake_emit_result)
     monkeypatch.setattr(GOVERNANCE_TOOL, "_record_premis", lambda **_: None)
+    monkeypatch.setattr(GOVERNANCE_TOOL, "PROJECT_ROOT", Path("/tmp/tp_missing_sealed_eval_harness"))
 
     args = SimpleNamespace(
         json=True,
