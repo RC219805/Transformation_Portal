@@ -10,6 +10,8 @@ Tests:
 - Full pipeline integration
 """
 
+# pylint: disable=wrong-import-position,redefined-outer-name
+
 import sys
 import tempfile
 import time
@@ -186,7 +188,7 @@ class TestPersistentCaching:
         indexer._save_cache()
 
         tmp_files = list(indexer.cache_dir.glob(f".{indexer.cache_file.name}.*.tmp"))
-        assert tmp_files == []
+        assert not tmp_files
 
 
 class TestLogging:

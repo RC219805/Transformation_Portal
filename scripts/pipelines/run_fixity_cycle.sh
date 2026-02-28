@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
+cd "$REPO_ROOT"
+
 ARCHIVE_INDEX=""
 ARCHIVE_ROOT=""
 OUT_ROOT="archive_reports/fixity"
@@ -104,6 +109,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import tempfile
 import sys
 
 run_dir = Path(sys.argv[1])
@@ -118,7 +124,11 @@ summary = {
     "merkle_roots": str(scan_dir / "merkle_roots.json"),
     "verification_report": str(report_path),
 }
-(run_dir / "fixity_cycle_summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+summary_path = run_dir / "fixity_cycle_summary.json"
+with tempfile.NamedTemporaryFile("w", encoding="utf-8", newline="\n", dir=run_dir, delete=False) as handle:
+    handle.write(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+    temp_path = Path(handle.name)
+temp_path.replace(summary_path)
 PY
 
 echo "Fixity cycle completed"

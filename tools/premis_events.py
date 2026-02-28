@@ -61,6 +61,13 @@ def build_premis_event(
     """Build a PREMIS event payload."""
     if event_outcome not in {"success", "failure"}:
         raise ValueError("event_outcome must be 'success' or 'failure'")
+    if event_datetime is not None:
+        _validate_rfc3339_timestamp(event_datetime, path="event_datetime", line_number=1)
+    if event_id is not None:
+        try:
+            UUID(event_id)
+        except ValueError as exc:
+            raise ValueError("event_id must be a valid UUID") from exc
 
     object_entries = [
         {

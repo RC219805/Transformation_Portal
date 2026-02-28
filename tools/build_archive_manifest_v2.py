@@ -209,6 +209,8 @@ def _load_rights(path: Path | None) -> dict[str, dict[str, Any]]:
                 payload = json.loads(stripped)
             except json.JSONDecodeError as exc:
                 raise ValueError(f"Invalid rights JSONL at line {line_number}: {exc}") from exc
+            if not isinstance(payload, dict):
+                raise ValueError(f"rights JSONL line {line_number} must decode to an object")
 
             relpath_raw = str(payload.get("relpath") or "").strip()
             if not relpath_raw:

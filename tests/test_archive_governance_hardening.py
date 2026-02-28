@@ -82,6 +82,14 @@ def test_load_rights_normalizes_relpath_keys(tmp_path: Path) -> None:
     assert rights["DriveA/Part1/alpha.txt"]["rights_flags"] == ["restricted"]
 
 
+def test_load_rights_rejects_non_object_records(tmp_path: Path) -> None:
+    rights_path = tmp_path / "rights.jsonl"
+    rights_path.write_text('["not-an-object"]\n', encoding="utf-8")
+
+    with pytest.raises(ValueError, match="must decode to an object"):
+        MANIFEST_TOOL._load_rights(rights_path)
+
+
 def test_deterministic_mime_map_uses_repo_owned_rules() -> None:
     assert MANIFEST_TOOL._deterministic_mime("archive.tar.gz") == "application/gzip"
     assert MANIFEST_TOOL._deterministic_mime("capture.CR3") == "image/x-canon-cr3"
@@ -126,7 +134,14 @@ def test_manifest_build_streaming_does_not_publish_partial_output_on_build_error
 
     archive_index = tmp_path / "archive_index_normalized.csv"
     archive_index.write_text(
-        "origin_drive,partition,relpath\n" "DriveA,Part1,DriveA/Part1/alpha.txt\n" "DriveA,Part1,DriveA/Part1/beta.txt\n",
+        "\n".join(
+            [
+                "origin_drive,partition,relpath",
+                "DriveA,Part1,DriveA/Part1/alpha.txt",
+                "DriveA,Part1,DriveA/Part1/beta.txt",
+            ]
+        )
+        + "\n",
         encoding="utf-8",
     )
 
@@ -322,6 +337,28 @@ def test_premis_validate_rejects_invalid_datetime_and_outcome() -> None:
     invalid_outcome["event"]["eventOutcomeInformation"] = {"eventOutcome": "maybe"}
     with pytest.raises(ValueError, match="eventOutcome"):
         PREMIS_TOOL._validate_event(invalid_outcome, line_number=3)
+
+
+def test_build_premis_event_rejects_invalid_emit_inputs() -> None:
+    with pytest.raises(ValueError, match="event_datetime"):
+        PREMIS_TOOL.build_premis_event(
+            event_type="validation",
+            event_detail="event",
+            event_outcome="success",
+            agent_id="tp.archive.tests",
+            object_ids=["/tmp/object"],
+            event_datetime="2026-02-28 01:00:00",
+        )
+
+    with pytest.raises(ValueError, match="event_id"):
+        PREMIS_TOOL.build_premis_event(
+            event_type="validation",
+            event_detail="event",
+            event_outcome="success",
+            agent_id="tp.archive.tests",
+            object_ids=["/tmp/object"],
+            event_id="not-a-uuid",
+        )
 
 
 def test_premis_validate_rejects_non_finite_json_constants(tmp_path: Path) -> None:
