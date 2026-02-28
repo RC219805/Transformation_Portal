@@ -6,17 +6,22 @@ into chunks with metadata for efficient retrieval.
 """
 
 import hashlib
-import pickle
+import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from .config import get_config
 from .exceptions import CacheError, IndexingError
 from .logger import get_logger
 
 logger = get_logger(__name__)
+
+CACHE_FORMAT_VERSION = 1
+CACHE_FORMAT_NAME = "tp.rag.chunks.v1"
+CACHE_FILENAME = "chunks.json"
+LEGACY_CACHE_FILENAME = "chunks.pkl"
 
 
 @dataclass
@@ -38,6 +43,69 @@ class DocumentChunk:
             # Using SHA-256 for chunk IDs (non-security-critical but modern hash)
             content_hash = hashlib.sha256(f"{self.file_path}:{self.start_line}:{self.content}".encode()).hexdigest()[:8]
             self.chunk_id = f"{self.file_path}:{self.start_line}:{content_hash}"
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize chunk to JSON-safe dict."""
+        return {
+            "content": self.content,
+            "file_path": self.file_path,
+            "start_line": self.start_line,
+            "end_line": self.end_line,
+            "chunk_type": self.chunk_type,
+            "language": self.language,
+            "metadata": self.metadata,
+            "chunk_id": self.chunk_id,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Dict[str, Any]) -> "DocumentChunk":
+        """Deserialize chunk from validated JSON dict."""
+        if not isinstance(payload, dict):
+            raise ValueError(f"Invalid chunk payload type: {type(payload).__name__}")
+
+        required_keys = {"content", "file_path", "start_line", "end_line", "chunk_type"}
+        missing = required_keys - payload.keys()
+        if missing:
+            raise ValueError(f"Missing required chunk keys: {sorted(missing)}")
+
+        content = payload["content"]
+        file_path = payload["file_path"]
+        start_line = payload["start_line"]
+        end_line = payload["end_line"]
+        chunk_type = payload["chunk_type"]
+        language = payload.get("language")
+        metadata = payload.get("metadata", {})
+        chunk_id = payload.get("chunk_id")
+
+        if not isinstance(content, str) or not content:
+            raise ValueError("Chunk field 'content' must be a non-empty string")
+        if not isinstance(file_path, str) or not file_path:
+            raise ValueError("Chunk field 'file_path' must be a non-empty string")
+        if not isinstance(start_line, int) or start_line < 1:
+            raise ValueError("Chunk field 'start_line' must be a positive integer")
+        if not isinstance(end_line, int) or end_line < start_line:
+            raise ValueError("Chunk field 'end_line' must be an integer >= start_line")
+        if not isinstance(chunk_type, str) or not chunk_type:
+            raise ValueError("Chunk field 'chunk_type' must be a non-empty string")
+        if language is not None and not isinstance(language, str):
+            raise ValueError("Chunk field 'language' must be a string or null")
+        if metadata is None:
+            metadata = {}
+        if not isinstance(metadata, dict):
+            raise ValueError("Chunk field 'metadata' must be an object")
+        if chunk_id is not None and not isinstance(chunk_id, str):
+            raise ValueError("Chunk field 'chunk_id' must be a string or null")
+
+        return cls(
+            content=content,
+            file_path=file_path,
+            start_line=start_line,
+            end_line=end_line,
+            chunk_type=chunk_type,
+            language=language,
+            metadata=metadata,
+            chunk_id=chunk_id,
+        )
 
 
 class RepositoryIndexer:
@@ -88,7 +156,8 @@ class RepositoryIndexer:
         # Setup cache directory
         cache_dir = indexer_config.get("cache_dir", ".rag_cache")
         self.cache_dir = self.repo_root / cache_dir
-        self.cache_file = self.cache_dir / "chunks.pkl"
+        self.cache_file = self.cache_dir / CACHE_FILENAME
+        self.legacy_cache_file = self.cache_dir / LEGACY_CACHE_FILENAME
 
         logger.debug(
             f"Initialized indexer: chunk_size={self.chunk_size}, " f"overlap={self.overlap}, cache_enabled={self.use_cache}"
@@ -417,13 +486,27 @@ class RepositoryIndexer:
             List of cached chunks or None if cache doesn't exist/is invalid
         """
         if not self.cache_file.exists():
+            if self.legacy_cache_file.exists():
+                logger.warning(
+                    "Ignoring legacy insecure cache format %s; reindexing with JSON cache",
+                    self.legacy_cache_file,
+                )
             logger.debug("No cache file found")
             return None
 
         try:
-            with open(self.cache_file, "rb") as f:
-                chunks = pickle.load(f)
+            payload = json.loads(self.cache_file.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                raise ValueError("Cache root must be an object")
+            if payload.get("cache_format") != CACHE_FORMAT_NAME:
+                raise ValueError(f"Unexpected cache_format: {payload.get('cache_format')!r}")
+            if payload.get("version") != CACHE_FORMAT_VERSION:
+                raise ValueError(f"Unsupported cache version: {payload.get('version')!r}")
+            chunks_payload = payload.get("chunks")
+            if not isinstance(chunks_payload, list):
+                raise ValueError("Cache field 'chunks' must be a list")
 
+            chunks = [DocumentChunk.from_dict(chunk_payload) for chunk_payload in chunks_payload]
             logger.debug(f"Loaded {len(chunks)} chunks from cache: {self.cache_file}")
             return chunks
 
@@ -437,9 +520,15 @@ class RepositoryIndexer:
         try:
             # Create cache directory if it doesn't exist
             self.cache_dir.mkdir(parents=True, exist_ok=True)
-
-            with open(self.cache_file, "wb") as f:
-                pickle.dump(self.chunks, f, protocol=pickle.HIGHEST_PROTOCOL)
+            payload = {
+                "cache_format": CACHE_FORMAT_NAME,
+                "version": CACHE_FORMAT_VERSION,
+                "chunks": [chunk.to_dict() for chunk in self.chunks],
+            }
+            tmp_path = self.cache_file.with_suffix(".tmp")
+            serialized = json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(",", ":"), sort_keys=True)
+            tmp_path.write_text(serialized + "\n", encoding="utf-8")
+            tmp_path.replace(self.cache_file)
 
             logger.debug(f"Saved {len(self.chunks)} chunks to cache: {self.cache_file}")
 
@@ -450,13 +539,14 @@ class RepositoryIndexer:
 
     def clear_cache(self):
         """Clear the cache file."""
-        if self.cache_file.exists():
-            try:
-                self.cache_file.unlink()
-                logger.info(f"Cleared cache: {self.cache_file}")
-            except Exception as e:
-                logger.warning(f"Failed to clear cache: {e}")
-                raise CacheError(f"Cache clearing failed: {e}")
+        for cache_path in (self.cache_file, self.legacy_cache_file):
+            if cache_path.exists():
+                try:
+                    cache_path.unlink()
+                    logger.info(f"Cleared cache: {cache_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to clear cache {cache_path}: {e}")
+                    raise CacheError(f"Cache clearing failed for {cache_path}: {e}")
 
     def get_statistics(self) -> Dict:
         """Get indexing statistics."""

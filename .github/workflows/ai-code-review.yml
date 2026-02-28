@@ -61,7 +61,7 @@ jobs:
         if: steps.changes.outputs.any_changed == 'true'
         run: |
           pip install --upgrade pip
-          pip install openai requests
+          pip install requests==2.32.5
 
       - name: Run AI Code Review
         if: steps.changes.outputs.any_changed == 'true'
@@ -80,7 +80,6 @@ jobs:
           import random
           import requests
           import time
-          from openai import OpenAI
 
           api_key = os.getenv("OPENAI_API_KEY", "").strip()
           gh_token = os.getenv("GH_TOKEN")
@@ -91,8 +90,6 @@ jobs:
           if not api_key:
               print("No OPENAI_API_KEY provided; skipping.")
               sys.exit(0)
-
-          client = OpenAI(api_key=api_key)
 
           headers = {
               "Authorization": f"token {gh_token}",
@@ -144,37 +141,50 @@ jobs:
           # Use retry logic with exponential backoff + jitter for rate-limit / transient errors.
           print("🤖 Requesting AI review from GPT-4o-mini with retry logic...")
 
-          def call_openai_with_retries(client, messages, model="gpt-4o-mini", max_retries=6, **kwargs):
+          def call_openai_with_retries(api_key, messages, model="gpt-4o-mini", max_retries=6, **kwargs):
+              openai_headers = {
+                  "Authorization": f"Bearer {api_key}",
+                  "Content-Type": "application/json",
+              }
               for attempt in range(1, max_retries + 1):
+                  payload = {
+                      "model": model,
+                      "messages": messages,
+                      "max_tokens": 1000,
+                      "temperature": 0.3,
+                  }
+                  payload.update(kwargs)
                   try:
-                      return client.chat.completions.create(
-                          model=model,
-                          messages=messages,
-                          max_tokens=1000,
-                          temperature=0.3,
-                          **kwargs
+                      response = requests.post(
+                          "https://api.openai.com/v1/chat/completions",
+                          headers=openai_headers,
+                          json=payload,
+                          timeout=45,
                       )
-                  except Exception as e:
-                      err_str = str(e)
-                      # Detect rate-limit / 429 occurrences (best-effort)
-                      status_is_429 = False
-                      status = getattr(e, "status_code", None) or getattr(e, "http_status", None) or getattr(e, "status", None)
-                      if status == 429:
-                          status_is_429 = True
-                      if "429" in err_str or "Rate limit" in err_str or "RateLimit" in err_str:
-                          status_is_429 = True
-
-                      # If we are rate-limited and we have attempts left, wait and retry
-                      if status_is_429 and attempt < max_retries:
-                          # Exponential backoff with jitter, capped to avoid extremely long waits
+                  except requests.RequestException as e:
+                      if attempt < max_retries:
                           base_wait = min(60, 2 ** attempt)
                           jitter = random.uniform(0.5, 1.5)
                           wait = base_wait * jitter
-                          print(f"⚠️ Rate limited by OpenAI (attempt {attempt}/{max_retries}). Waiting {wait:.1f}s before retrying...")
+                          print(f"⚠️ OpenAI network error (attempt {attempt}/{max_retries}). Waiting {wait:.1f}s before retrying...")
                           time.sleep(wait)
                           continue
-                      # For non-rate-limit or last attempt, raise to be handled by caller
-                      raise
+                      raise RuntimeError("OpenAI request failed after retries") from e
+
+                  if response.status_code == 429 and attempt < max_retries:
+                      base_wait = min(60, 2 ** attempt)
+                      jitter = random.uniform(0.5, 1.5)
+                      wait = base_wait * jitter
+                      print(f"⚠️ Rate limited by OpenAI (attempt {attempt}/{max_retries}). Waiting {wait:.1f}s before retrying...")
+                      time.sleep(wait)
+                      continue
+
+                  if response.status_code >= 400:
+                      raise RuntimeError(f"OpenAI HTTP {response.status_code}: {response.text[:400]}")
+
+                  return response.json()
+
+              raise RuntimeError("OpenAI request failed after retries")
 
           messages = [
               {"role": "system", "content": system_prompt},
@@ -183,13 +193,12 @@ jobs:
 
           review_text = None
           try:
-              response = call_openai_with_retries(client, messages, model="gpt-4o-mini", max_retries=6)
-              # Parse response robustly across possible SDK shapes
-              if response and hasattr(response, "choices") and len(response.choices) > 0:
-                  try:
-                      review_text = response.choices[0].message.content
-                  except Exception:
-                      review_text = getattr(response.choices[0], "text", None) or str(response)
+              response = call_openai_with_retries(api_key, messages, model="gpt-4o-mini", max_retries=6)
+              choices = response.get("choices") if isinstance(response, dict) else None
+              if choices and isinstance(choices, list):
+                  first = choices[0] if choices else {}
+                  message = first.get("message", {}) if isinstance(first, dict) else {}
+                  review_text = message.get("content") if isinstance(message, dict) else None
               else:
                   print("⚠️ OpenAI returned an unexpected response structure.")
           except Exception as e:
@@ -197,23 +206,9 @@ jobs:
               print("::warning::AI Code Review OpenAI request failed (non-blocking). See job logs for diagnostic details.")
               print("Detailed error classification (exception type and basic status/code):", file=sys.stderr)
               print(f"Exception type: {type(e).__name__}", file=sys.stderr)
-              status = None
-              error_code = None
-              try:
-                  status = getattr(e, "status_code", None) or getattr(e, "status", None)
-              except Exception:
-                  status = None
-              try:
-                  error_code = getattr(e, "code", None)
-                  error_payload = getattr(e, "error", None)
-                  if error_code is None and isinstance(error_payload, dict):
-                      error_code = error_payload.get("code")
-              except Exception:
-                  error_code = None
-              if status is not None:
-                  print(f"HTTP status: {status}", file=sys.stderr)
-              if error_code is not None:
-                  print(f"Error code: {error_code}", file=sys.stderr)
+              err_str = str(e)
+              if "HTTP " in err_str:
+                  print(err_str[:500], file=sys.stderr)
               review_text = ("⚠️ AI review unavailable: the AI service returned errors (rate limits or other). "
                              "Please retry or review manually. See CI logs for diagnostic details (error type/status/code).")
 

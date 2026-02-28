@@ -34,7 +34,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install openai requests
+          pip install requests==2.32.5
 
       - name: Smart Issue/PR Triage
         timeout-minutes: 4
@@ -52,7 +52,6 @@ jobs:
           import requests
           import time
           import random
-          from openai import OpenAI
 
           # Initialize
           openai_api_key = os.getenv('OPENAI_API_KEY', '').strip()
@@ -67,8 +66,6 @@ jobs:
           if not issue_number or not repo:
               print("::warning::Smart Issue Triage skipped: missing ISSUE_NUMBER or REPO_FULL_NAME (non-blocking).")
               sys.exit(0)
-
-          client = OpenAI(api_key=openai_api_key)
 
           headers = {
               'Authorization': f'token {github_token}',
@@ -116,41 +113,54 @@ jobs:
           # Use retry logic with exponential backoff + jitter for rate-limit / transient errors.
           print("🤖 Requesting AI classification with retry logic...")
 
-          def call_openai_with_retries(client, messages, model="gpt-4o-mini", max_retries=6, **kwargs):
+          def call_openai_with_retries(api_key, messages, model="gpt-4o-mini", max_retries=6, **kwargs):
+              openai_headers = {
+                  "Authorization": f"Bearer {api_key}",
+                  "Content-Type": "application/json",
+              }
               for attempt in range(1, max_retries + 1):
+                  payload = {
+                      "model": model,
+                      "messages": messages,
+                  }
+                  payload.update(kwargs)
                   try:
-                      return client.chat.completions.create(
-                          model=model,
-                          messages=messages,
-                          **kwargs
+                      response = requests.post(
+                          "https://api.openai.com/v1/chat/completions",
+                          headers=openai_headers,
+                          json=payload,
+                          timeout=45,
                       )
-                  except Exception as e:
-                      err_str = str(e)
-                      # Detect rate-limit / 429 occurrences (best-effort)
-                      status_is_429 = False
-                      status = getattr(e, "status_code", None) or getattr(e, "http_status", None) or getattr(e, "status", None)
-                      if status == 429:
-                          status_is_429 = True
-                      if "429" in err_str or "Rate limit" in err_str or "RateLimit" in err_str:
-                          status_is_429 = True
-
-                      # If we are rate-limited and we have attempts left, wait and retry
-                      if status_is_429 and attempt < max_retries:
-                          # Exponential backoff with jitter, capped to avoid extremely long waits
+                  except requests.RequestException as e:
+                      if attempt < max_retries:
                           base_wait = min(60, 2 ** attempt)
                           jitter = random.uniform(0.5, 1.5)
                           wait = base_wait * jitter
-                          print(f"⚠️ Rate limited by OpenAI (attempt {attempt}/{max_retries}). Waiting {wait:.1f}s before retrying...")
+                          print(f"⚠️ OpenAI network error (attempt {attempt}/{max_retries}). Waiting {wait:.1f}s before retrying...")
                           time.sleep(wait)
                           continue
-                      # For non-rate-limit or last attempt, raise to be handled by caller
-                      raise
+                      raise RuntimeError("OpenAI request failed after retries") from e
+
+                  if response.status_code == 429 and attempt < max_retries:
+                      base_wait = min(60, 2 ** attempt)
+                      jitter = random.uniform(0.5, 1.5)
+                      wait = base_wait * jitter
+                      print(f"⚠️ Rate limited by OpenAI (attempt {attempt}/{max_retries}). Waiting {wait:.1f}s before retrying...")
+                      time.sleep(wait)
+                      continue
+
+                  if response.status_code >= 400:
+                      raise RuntimeError(f"OpenAI HTTP {response.status_code}: {response.text[:400]}")
+
+                  return response.json()
+
+              raise RuntimeError("OpenAI request failed after retries")
 
           analysis = None
           try:
               # Call OpenAI with retry logic
               response = call_openai_with_retries(
-                  client,
+                  openai_api_key,
                   messages=[
                       {"role": "system", "content": system_prompt},
                       {"role": "user", "content": user_prompt}
@@ -163,9 +173,11 @@ jobs:
               )
 
               # Parse response robustly
-              if response and hasattr(response, "choices") and len(response.choices) > 0:
+              choices = response.get("choices") if isinstance(response, dict) else None
+              if choices and isinstance(choices, list):
                   try:
-                      analysis = json.loads(response.choices[0].message.content)
+                      content = (choices[0].get("message", {}) or {}).get("content", "")
+                      analysis = json.loads(content)
                   except (json.JSONDecodeError, AttributeError):
                       print("::warning::AI Advisory / Smart Triage response parsing failed (non-blocking).")
                       print("⚠️ Failed to parse OpenAI response (JSON parse error; non-blocking).")
