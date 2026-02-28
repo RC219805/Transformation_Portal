@@ -13,7 +13,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = PROJECT_ROOT / "scripts" / "test_metadata_extraction.py"
 
 
-
 def _load_script_module():
     spec = importlib.util.spec_from_file_location("tp_metadata_cli", SCRIPT_PATH)
     assert spec is not None and spec.loader is not None
@@ -21,7 +20,6 @@ def _load_script_module():
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
-
 
 
 def test_emit_machine_raises_typed_ingest_error_for_non_finite_payload() -> None:
