@@ -9,6 +9,8 @@ Validates:
 - Chart.js data structure compliance
 """
 
+# pylint: disable=redefined-outer-name
+
 from __future__ import annotations
 
 import json
@@ -239,15 +241,13 @@ def test_query_performance_with_indexes(sample_ledger: Path) -> None:
 
         # Query using composite index
         start = time.perf_counter()
-        cursor = conn.execute(
-            """
+        cursor = conn.execute("""
             SELECT * FROM apex_runs
             WHERE bucket_name = 'small_depth_v1'
               AND zone = 'local'
             ORDER BY timestamp DESC
             LIMIT 100
-            """
-        )
+            """)
         cursor.fetchall()
         elapsed_composite = time.perf_counter() - start
 
@@ -339,8 +339,7 @@ def test_ledger_migration_v2_to_v3(tmp_path: Path) -> None:
     with sqlite3.connect(db_path) as conn:
         conn.execute("CREATE TABLE schema_version (version INTEGER PRIMARY KEY)")
         conn.execute("INSERT INTO schema_version (version) VALUES (2)")
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE apex_runs (
                 run_id TEXT NOT NULL,
                 commit_sha TEXT NOT NULL,
@@ -358,8 +357,7 @@ def test_ledger_migration_v2_to_v3(tmp_path: Path) -> None:
                 raw_capsules_json TEXT,
                 PRIMARY KEY (run_id, workflow_version, zone, bucket_name)
             )
-            """
-        )
+            """)
         conn.commit()
 
     # Initialize ledger (should trigger migration)

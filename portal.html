@@ -1,0 +1,1351 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self';" />
+    <title>Transformation Portal — Orchestrator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px rgba(15, 23, 42, 0.05)',
+                        'soft-dark': '0 4px 20px rgba(0, 0, 0, 0.4)',
+                    }
+                }
+            }
+        };
+    </script>
+    <style>
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+                scroll-behavior: auto !important;
+            }
+        }
+
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 4px; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #475569; }
+        .custom-scrollbar:hover::-webkit-scrollbar-thumb { background-color: #94a3b8; }
+
+        .kbd { 
+            font-family: "JetBrains Mono", monospace; 
+            font-size: 10px; 
+            padding: 3px 6px; 
+            border-radius: 4px; 
+            border: 1px solid #e2e8f0; 
+            background: #f8fafc; 
+            color: #64748b;
+        }
+        .dark .kbd { border-color: #334155; background: #1e293b; color: #94a3b8; }
+
+        .skip-link { position: absolute; left: 1rem; top: -4rem; z-index: 60; }
+        .skip-link:focus { top: 1rem; }
+
+        .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: #94a3b8; flex-shrink: 0; }
+        .status-dot.running { background-color: #f59e0b; box-shadow: 0 0 8px #f59e0b; animation: pulse 2s infinite; }
+        .status-dot.succeeded, .status-dot.ready { background-color: #10b981; }
+        .status-dot.failed, .status-dot.canceled, .status-dot.offline { background-color: #ef4444; }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        progress {
+            appearance: none;
+            -webkit-appearance: none;
+            border: none;
+            height: 6px;
+            border-radius: 3px;
+            background-color: #e2e8f0;
+            overflow: hidden;
+        }
+        .dark progress { background-color: #334155; }
+        progress::-webkit-progress-bar { background-color: transparent; }
+        progress::-webkit-progress-value { background-color: #4f46e5; transition: width 0.3s ease; }
+        .dark progress::-webkit-progress-value { background-color: #6366f1; }
+        progress::-moz-progress-bar { background-color: #4f46e5; transition: width 0.3s ease; }
+        .dark progress::-moz-progress-bar { background-color: #6366f1; }
+
+        .toast-enter { transform: translateY(10px); opacity: 0; }
+        .toast-active { transform: translateY(0); opacity: 1; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        .toast-exit { transform: translateY(10px); opacity: 0; transition: all 0.2s ease; }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased selection:bg-indigo-500/30 transition-colors duration-300">
+
+    <a href="#main-content" class="skip-link rounded-lg px-4 py-2 text-sm font-medium text-white bg-indigo-600 shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+        Skip to main content
+    </a>
+
+    <!-- Header -->
+    <header class="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md transition-colors duration-300">
+        <div class="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between gap-4">
+            <div class="flex items-center gap-4">
+                <div class="flex flex-col">
+                    <p class="text-[10px] uppercase tracking-[0.25em] font-semibold text-indigo-600 dark:text-indigo-400">APEX Phase 4</p>
+                    <h1 class="text-sm font-semibold tracking-tight mt-0.5">Transformation Portal</h1>
+                </div>
+                <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 ml-4 shadow-inner">
+                    <span id="healthIndicator" class="status-dot"></span>
+                    <span id="healthText" class="text-[11px] font-mono font-semibold text-slate-600 dark:text-slate-400">Checking...</span>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <button id="shortcutsBtn" type="button" class="text-[11px] font-semibold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors focus:outline-none">
+                    Shortcuts
+                </button>
+                <button id="themeBtn" type="button" class="rounded-lg px-3 py-1.5 text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500" aria-label="Toggle theme">
+                    Toggle Theme
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main id="main-content" tabindex="-1" class="mx-auto max-w-7xl px-6 py-8 outline-none">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+            <!-- Left Column: Configuration -->
+            <section class="lg:col-span-7 flex flex-col gap-6">
+                
+                <!-- Orchestration Profile -->
+                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-soft dark:shadow-soft-dark p-6 transition-colors duration-300">
+                    <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-4">Governance & Profiles</h2>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="pipelineSelect">Pipeline Execution</label>
+                            <select id="pipelineSelect" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                <option value="lux-depth-v3">lux-depth-v3</option>
+                                <option value="archive-gate-a">archive-gate-a (Manifest)</option>
+                                <option value="archive-gate-b">archive-gate-b (BagIt)</option>
+                                <option value="archive-gate-c">archive-gate-c (METS/PROV)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="profileSelect">Local Profile</label>
+                            <div class="flex gap-2">
+                                <select id="profileSelect" class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                    <!-- Populated by JS -->
+                                </select>
+                                <button id="saveProfileBtn" type="button" class="rounded-xl px-4 py-2 text-[13px] font-semibold border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                    Save
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="apiKeyInput">API Key (optional)</label>
+                        <div class="flex flex-col sm:flex-row gap-2 sm:items-center">
+                            <input type="password" id="apiKeyInput" class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="Token for protected mutations" autocomplete="off" spellcheck="false" />
+                            <label class="flex items-center gap-2 text-[12px] text-slate-600 dark:text-slate-400">
+                                <input type="checkbox" id="rememberApiKey" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                Remember in local storage
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Parameters -->
+                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-soft dark:shadow-soft-dark p-6 transition-colors duration-300">
+                    <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-4">Pipeline Parameters</h2>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="inputDir">Input Directory</label>
+                            <input type="text" id="inputDir" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" value="./input_images" autocomplete="off" spellcheck="false" />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="outputDir">Output Directory</label>
+                            <input type="text" id="outputDir" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" value="./output/lux_depth_v3_apex" autocomplete="off" spellcheck="false" />
+                        </div>
+                    </div>
+
+                    <!-- Lux Depth Specific Fields -->
+                    <div id="fieldsLuxDepth" class="pipeline-fields block space-y-6">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="presetSelect">Compute Preset</label>
+                                <select id="presetSelect" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                    <option value="premium">premium (Stable)</option>
+                                    <option value="default">default (Canary)</option>
+                                    <option value="depth-anything-v3.1-research-m4">v3.1-m4 (Experimental)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="qualityTier">Quality Tier</label>
+                                <select id="qualityTier" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                    <option value="apex" selected>apex (Max)</option>
+                                    <option value="premium">premium</option>
+                                    <option value="standard">standard</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="depthDevice">Compute Device</label>
+                                <select id="depthDevice" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                    <option value="cpu">cpu</option>
+                                    <option value="cuda" selected>cuda</option>
+                                    <option value="mps">mps (macOS)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="depthBackend">Depth Backend</label>
+                            <select id="depthBackend" class="w-full sm:w-1/2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                <option value="da3" selected>da3 (Depth Anything v3)</option>
+                                <option value="depth_pro">depth_pro (Research-Only)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Archive Gate Fields -->
+                    <div id="fieldsArchiveGate" class="pipeline-fields hidden space-y-4 pt-4 border-t border-slate-200 dark:border-slate-800">
+                        <p class="text-[12px] text-slate-500 dark:text-slate-400">Archiving parameters for deterministic packaging and export. Align with repository governance.</p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" id="gateDedup" checked class="rounded w-4 h-4 text-indigo-600 focus:ring-indigo-500 bg-white border-slate-300 dark:bg-slate-800 dark:border-slate-600"> Generate Dedup Ledger</label>
+                            <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" id="gateSign" checked class="rounded w-4 h-4 text-indigo-600 focus:ring-indigo-500 bg-white border-slate-300 dark:bg-slate-800 dark:border-slate-600"> Sign Artifact Payload</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pipeline Flags -->
+                <fieldset class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-soft dark:shadow-soft-dark p-6 transition-colors duration-300">
+                    <legend class="block text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-4">Core Flags & Emit Artifacts</legend>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        
+                        <!-- Toggle Wrapper Template -->
+                        <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 px-4 py-3.5 cursor-pointer group transition-colors">
+                            <span class="text-[13px] font-medium select-none text-slate-700 dark:text-slate-300">Materials V3</span>
+                            <div class="relative inline-flex items-center">
+                                <input type="checkbox" id="flagMaterials" role="switch" class="sr-only peer" checked />
+                                <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
+                                <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
+                            </div>
+                        </label>
+
+                        <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 px-4 py-3.5 cursor-pointer group transition-colors">
+                            <span class="text-[13px] font-medium select-none text-slate-700 dark:text-slate-300">PBR Generation</span>
+                            <div class="relative inline-flex items-center">
+                                <input type="checkbox" id="flagPBR" role="switch" class="sr-only peer" checked />
+                                <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
+                                <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
+                            </div>
+                        </label>
+
+                        <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 px-4 py-3.5 cursor-pointer group transition-colors">
+                            <span class="text-[13px] font-medium select-none text-slate-700 dark:text-slate-300">Cache Depth</span>
+                            <div class="relative inline-flex items-center">
+                                <input type="checkbox" id="flagCache" role="switch" class="sr-only peer" checked />
+                                <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
+                                <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
+                            </div>
+                        </label>
+                        
+                        <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 px-4 py-3.5 cursor-pointer group transition-colors">
+                            <span class="text-[13px] font-medium select-none text-red-600 dark:text-red-400">Overwrite Existing</span>
+                            <div class="relative inline-flex items-center">
+                                <input type="checkbox" id="flagOverwrite" role="switch" class="sr-only peer" />
+                                <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-red-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-red-500"></div>
+                                <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
+                            </div>
+                        </label>
+                        
+                        <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 px-4 py-3.5 cursor-pointer group transition-colors sm:col-span-2">
+                            <span class="text-[13px] font-medium select-none text-slate-700 dark:text-slate-300">Enable V2 Compatibility</span>
+                            <div class="relative inline-flex items-center ml-4">
+                                <input type="checkbox" id="flagEnableV2" role="switch" class="sr-only peer" />
+                                <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
+                                <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
+                            </div>
+                        </label>
+                        
+                        <div class="sm:col-span-2">
+                             <input type="text" id="v2Preset" placeholder="V2 Preset (e.g. default)" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors disabled:opacity-50" value="default" disabled autocomplete="off" spellcheck="false" />
+                        </div>
+                    </div>
+
+                    <!-- Native Emit Checkboxes -->
+                    <div class="mt-6 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
+                        <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                            <input type="checkbox" id="emitMaster16" checked class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                            <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">master16</span>
+                        </label>
+                        <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                            <input type="checkbox" id="emitUpscaled16" checked class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                            <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">upscaled16</span>
+                        </label>
+                        <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                            <input type="checkbox" id="emitMarketing" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                            <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">marketing</span>
+                        </label>
+                        <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                            <input type="checkbox" id="emitReport" checked class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                            <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">report</span>
+                        </label>
+                        <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                            <input type="checkbox" id="emitRunCard" checked class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                            <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">run_card</span>
+                        </label>
+                    </div>
+
+                    <!-- Licenses -->
+                    <div class="mt-6 p-4 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10 transition-colors">
+                        <p class="text-[11px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-500 mb-3">Compliance & Research Acknowledgments</p>
+                        <div class="space-y-3">
+                            <label class="flex items-start gap-3 cursor-pointer group">
+                                <input type="checkbox" id="licenseNonCommercial" class="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
+                                <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I acknowledge this run is strictly for <strong>Non-Commercial</strong> purposes.</span>
+                            </label>
+                            <label class="flex items-start gap-3 cursor-pointer group">
+                                <input type="checkbox" id="licenseApple" class="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
+                                <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I accept the <strong>Apple Depth Pro Research License</strong> terms.</span>
+                            </label>
+                        </div>
+                    </div>
+                </fieldset>
+
+                <!-- CLI Preview & Actions -->
+                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-soft dark:shadow-soft-dark p-6 transition-colors duration-300">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Equivalent Command</h3>
+                        <div class="flex gap-2 items-center">
+                            <button id="importBtn" type="button" class="text-[11px] font-semibold uppercase tracking-widest text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors focus:outline-none">Import JSON</button>
+                            <span class="text-slate-300 dark:text-slate-700">|</span>
+                            <button id="exportBtn" type="button" class="text-[11px] font-semibold uppercase tracking-widest text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors focus:outline-none">Export JSON</button>
+                            <span class="text-slate-300 dark:text-slate-700">|</span>
+                            <button id="copyCliBtn" type="button" class="text-[11px] font-semibold uppercase tracking-widest text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors focus:outline-none">Copy CLI</button>
+                            <input type="file" id="fileInput" accept=".json" class="hidden" />
+                        </div>
+                    </div>
+                    <textarea id="cliPreview" readonly class="w-full min-h-[140px] rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-4 text-[12px] font-mono leading-relaxed text-slate-600 dark:text-slate-300 overflow-y-auto custom-scrollbar resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                    
+                    <div class="mt-6 border-t border-slate-200 dark:border-slate-800 pt-6">
+                        <button id="runJobBtn" type="button" class="w-full rounded-xl px-6 py-3.5 text-[14px] font-semibold text-white shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-indigo-600 hover:bg-indigo-700 dark:focus:ring-offset-slate-900">
+                            Execute Job
+                        </button>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- Right Column: Queue & Logs -->
+            <aside class="lg:col-span-5 flex flex-col gap-6">
+                
+                <!-- Job Queue -->
+                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-soft dark:shadow-soft-dark p-6 transition-colors duration-300 flex flex-col max-h-[350px]">
+                    <div class="flex items-center justify-between mb-4 pb-4 border-b border-slate-200 dark:border-slate-800">
+                        <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Job Queue</h2>
+                        <span id="queueCount" class="text-[11px] text-slate-500 dark:text-slate-400 font-mono">0 jobs</span>
+                    </div>
+
+                    <div class="flex-1 overflow-y-auto custom-scrollbar pr-2 min-h-[100px]">
+                        <ul id="jobList" class="space-y-3" aria-live="polite"></ul>
+                        <div id="emptyQueueState" class="h-full flex flex-col items-center justify-center text-center py-8">
+                            <p class="text-[13px] font-medium text-slate-500 dark:text-slate-400">No active jobs.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Logs -->
+                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-soft dark:shadow-soft-dark flex flex-col flex-1 min-h-[400px] overflow-hidden transition-colors duration-300">
+                    <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900">
+                        <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                            Live Logs
+                            <span id="logStatusIndicator" class="hidden h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                        </h2>
+                        <button id="clearLogsBtn" class="text-[10px] uppercase font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors focus:outline-none">Clear</button>
+                    </div>
+                    <pre id="logPane" class="flex-1 p-6 text-[11px] font-mono leading-relaxed bg-[#0b1020] text-slate-300 overflow-y-auto custom-scrollbar whitespace-pre-wrap break-words"></pre>
+                </div>
+
+            </aside>
+
+        </div>
+    </main>
+
+    <!-- Shortcuts Modal -->
+    <div id="shortcutsModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 dark:bg-black/60 transition-opacity" aria-hidden="true">
+        <div class="w-full max-w-sm rounded-xl bg-white shadow-2xl border border-slate-200 dark:bg-slate-900 dark:border-slate-800 transform scale-95 opacity-0 transition-all duration-200" id="shortcutsPanel" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle">
+            <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                <h2 id="shortcutsTitle" class="text-sm font-semibold">Keyboard Shortcuts</h2>
+                <button id="closeShortcutsBtn" class="rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:hover:bg-slate-800 dark:hover:text-white transition-colors" aria-label="Close dialog">
+                    <span class="text-lg leading-none">&times;</span>
+                </button>
+            </div>
+            <div class="p-5 text-sm text-slate-700 dark:text-slate-300 space-y-4">
+                <div class="flex justify-between items-center"><span class="text-slate-600 dark:text-slate-400">Run Job</span> <kbd class="kbd text-[11px]">Ctrl/⌘ + Enter</kbd></div>
+                <div class="flex justify-between items-center"><span class="text-slate-600 dark:text-slate-400">Copy Command</span> <kbd class="kbd text-[11px]">Ctrl/⌘ + Shift + C</kbd></div>
+                <div class="flex justify-between items-center"><span class="text-slate-600 dark:text-slate-400">Toggle Theme</span> <kbd class="kbd text-[11px]">Ctrl/⌘ + J</kbd></div>
+                <div class="flex justify-between items-center"><span class="text-slate-600 dark:text-slate-400">Close Dialog</span> <kbd class="kbd text-[11px]">Esc</kbd></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed bottom-6 right-6 z-50 flex flex-col gap-3 w-full max-w-sm pointer-events-none" aria-live="polite"></div>
+
+    <!-- Application Logic -->
+    <script>
+        const API_BASE = '';
+        const STORAGE_KEY = 'tp_orchestrator_profiles_final';
+        const API_KEY_STORAGE_KEY = 'tp_api_key';
+        const MAX_JOB_LOG_LINES = 1200;
+        const HEALTH_CHECK_INTERVAL_MS = 15000;
+        const HEALTH_CHECK_TIMEOUT_MS = 2000;
+        const HEALTH_CHECK_MIN_GAP_MS = 10000;
+        const SAFE_JOB_STATES = new Set(['queued', 'running', 'succeeded', 'failed', 'canceled', 'ready', 'offline']);
+
+        let queueRenderScheduled = false;
+        let healthPollIntervalId = null;
+        let healthCheckInFlight = false;
+        let lastHealthCheckAt = 0;
+
+        const state = {
+            pipeline: 'lux-depth-v3',
+            config: {
+                preset: 'premium',
+                inputDir: './input_images',
+                outputDir: './output/lux_depth_v3_apex',
+                qualityTier: 'apex',
+                depthBackend: 'da3',
+                depthDevice: 'cpu',
+                flags: {
+                    materials: true, pbr: true, cache: true, overwrite: false, enableV2: false
+                },
+                v2Preset: 'default',
+                emits: {
+                    master16: true, upscaled16: true, marketing: false, report: true, runCard: true
+                },
+                gate: { dedup: true, sign: true },
+                licenses: { nonCommercialOk: false, acceptApple: false }
+            },
+            jobs: [],
+            selectedJobId: null,
+            backendOk: false,
+            theme: 'light'
+        };
+
+        const els = {
+            pipelineSelect: document.getElementById('pipelineSelect'),
+            presetSelect: document.getElementById('presetSelect'),
+            profileSelect: document.getElementById('profileSelect'),
+            saveProfileBtn: document.getElementById('saveProfileBtn'),
+            apiKeyInput: document.getElementById('apiKeyInput'),
+            rememberApiKey: document.getElementById('rememberApiKey'),
+
+            inputDir: document.getElementById('inputDir'),
+            outputDir: document.getElementById('outputDir'),
+            qualityTier: document.getElementById('qualityTier'),
+            depthBackend: document.getElementById('depthBackend'),
+            depthDevice: document.getElementById('depthDevice'),
+
+            flags: {
+                materials: document.getElementById('flagMaterials'),
+                pbr: document.getElementById('flagPBR'),
+                cache: document.getElementById('flagCache'),
+                overwrite: document.getElementById('flagOverwrite'),
+                enableV2: document.getElementById('flagEnableV2')
+            },
+            v2Preset: document.getElementById('v2Preset'),
+
+            emits: {
+                master16: document.getElementById('emitMaster16'),
+                upscaled16: document.getElementById('emitUpscaled16'),
+                marketing: document.getElementById('emitMarketing'),
+                report: document.getElementById('emitReport'),
+                runCard: document.getElementById('emitRunCard')
+            },
+
+            licenses: {
+                nonCommercialOk: document.getElementById('licenseNonCommercial'),
+                acceptApple: document.getElementById('licenseApple')
+            },
+
+            gateDedup: document.getElementById('gateDedup'),
+            gateSign: document.getElementById('gateSign'),
+
+            fieldsLuxDepth: document.getElementById('fieldsLuxDepth'),
+            fieldsArchiveGate: document.getElementById('fieldsArchiveGate'),
+
+            cliPreview: document.getElementById('cliPreview'),
+            copyCliBtn: document.getElementById('copyCliBtn'),
+            importBtn: document.getElementById('importBtn'),
+            exportBtn: document.getElementById('exportBtn'),
+            fileInput: document.getElementById('fileInput'),
+            runJobBtn: document.getElementById('runJobBtn'),
+
+            jobList: document.getElementById('jobList'),
+            emptyQueueState: document.getElementById('emptyQueueState'),
+            queueCount: document.getElementById('queueCount'),
+            logPane: document.getElementById('logPane'),
+            logStatusIndicator: document.getElementById('logStatusIndicator'),
+            clearLogsBtn: document.getElementById('clearLogsBtn'),
+
+            themeBtn: document.getElementById('themeBtn'),
+            shortcutsBtn: document.getElementById('shortcutsBtn'),
+            shortcutsModal: document.getElementById('shortcutsModal'),
+            shortcutsPanel: document.getElementById('shortcutsPanel'),
+            closeShortcutsBtn: document.getElementById('closeShortcutsBtn'),
+
+            healthIndicator: document.getElementById('healthIndicator'),
+            healthText: document.getElementById('healthText'),
+            toastContainer: document.getElementById('toastContainer')
+        };
+
+        function createToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast-enter pointer-events-auto rounded-xl border px-4 py-3.5 shadow-lg flex items-start gap-3 ${
+                type === 'error' ? 'bg-red-50 dark:bg-red-950/50 border-red-200 dark:border-red-900/50 text-red-800 dark:text-red-300' :
+                type === 'success' ? 'bg-emerald-50 dark:bg-emerald-950/50 border-emerald-200 dark:border-emerald-900/50 text-emerald-800 dark:text-emerald-300' :
+                'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200'
+            }`;
+
+            const messageEl = document.createElement('p');
+            messageEl.className = 'text-[12px] font-medium leading-relaxed';
+            messageEl.textContent = String(message);
+            toast.appendChild(messageEl);
+            els.toastContainer.appendChild(toast);
+
+            requestAnimationFrame(() => {
+                toast.classList.remove('toast-enter');
+                toast.classList.add('toast-active');
+            });
+
+            setTimeout(() => {
+                toast.classList.remove('toast-active');
+                toast.classList.add('toast-exit');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        function _normalizeApiToken(raw) {
+            const value = String(raw || '').trim();
+            if (!value) return '';
+            if (value.toLowerCase().startsWith('bearer ')) return value.slice(7).trim();
+            return value;
+        }
+
+        function _persistApiKeyFromInputs() {
+            const remember = Boolean(els.rememberApiKey && els.rememberApiKey.checked);
+            const token = _normalizeApiToken(els.apiKeyInput ? els.apiKeyInput.value : '');
+            if (!token) {
+                localStorage.removeItem(API_KEY_STORAGE_KEY);
+                sessionStorage.removeItem(API_KEY_STORAGE_KEY);
+                return;
+            }
+            if (remember) {
+                localStorage.setItem(API_KEY_STORAGE_KEY, token);
+                sessionStorage.removeItem(API_KEY_STORAGE_KEY);
+            } else {
+                sessionStorage.setItem(API_KEY_STORAGE_KEY, token);
+                localStorage.removeItem(API_KEY_STORAGE_KEY);
+            }
+        }
+
+        function _loadApiKeyIntoInputs() {
+            const localValue = localStorage.getItem(API_KEY_STORAGE_KEY) || '';
+            const sessionValue = sessionStorage.getItem(API_KEY_STORAGE_KEY) || '';
+            const stored = localValue || sessionValue;
+            if (els.apiKeyInput) els.apiKeyInput.value = stored;
+            if (els.rememberApiKey) els.rememberApiKey.checked = Boolean(localValue);
+        }
+
+        function _buildAuthHeaders(base = {}) {
+            const headers = { ...base };
+            const token = _normalizeApiToken(
+                (els.apiKeyInput && els.apiKeyInput.value) ||
+                sessionStorage.getItem(API_KEY_STORAGE_KEY) ||
+                localStorage.getItem(API_KEY_STORAGE_KEY) ||
+                ''
+            );
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+                headers['x-api-key'] = token;
+            }
+            return headers;
+        }
+
+        async function copyToClipboard(text) {
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    const ta = document.createElement("textarea");
+                    ta.value = text;
+                    ta.style.position = "absolute";
+                    ta.style.left = "-9999px";
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand("copy");
+                    document.body.removeChild(ta);
+                }
+                createToast('Copied to clipboard.', 'success');
+            } catch (err) {
+                createToast('Failed to copy text.', 'error');
+            }
+        }
+
+        function shellQuote(str) {
+            const v = String(str).replace(/[\r\n]+/g, " ").trim().replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+            return `"${v}"`;
+        }
+
+        function appendJobLog(job, line) {
+            job.logs.push(line);
+            if (job.logs.length > MAX_JOB_LOG_LINES) {
+                job.logs.splice(0, job.logs.length - MAX_JOB_LOG_LINES);
+            }
+        }
+
+        function selectJob(jobId) {
+            state.selectedJobId = jobId;
+            const job = state.jobs.find((item) => item.id === jobId);
+            if (job && els.logPane) {
+                els.logPane.textContent = job.logs.join('\n') + (job.logs.length ? '\n' : '');
+                els.logPane.scrollTop = els.logPane.scrollHeight;
+            }
+            scheduleRenderJobQueue();
+        }
+
+        function stopJobActivity(job) {
+            if (job.eventSource) {
+                job.eventSource.close();
+                job.eventSource = null;
+            }
+            if (job.mockInterval) {
+                clearInterval(job.mockInterval);
+                job.mockInterval = null;
+            }
+        }
+
+        function cleanupActiveJobHandles() {
+            state.jobs.forEach(stopJobActivity);
+            if (healthPollIntervalId !== null) {
+                clearInterval(healthPollIntervalId);
+                healthPollIntervalId = null;
+            }
+        }
+
+        function scheduleRenderJobQueue() {
+            if (queueRenderScheduled) return;
+            queueRenderScheduled = true;
+            requestAnimationFrame(() => {
+                queueRenderScheduled = false;
+                renderJobQueue();
+            });
+        }
+
+        async function fetchWithTimeout(url, options = {}, timeoutMs = HEALTH_CHECK_TIMEOUT_MS) {
+            if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+                return fetch(url, { ...options, signal: AbortSignal.timeout(timeoutMs) });
+            }
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                return await fetch(url, { ...options, signal: controller.signal });
+            } finally {
+                clearTimeout(timeoutId);
+            }
+        }
+
+        function canonicalDepthBackend(value) {
+            if (!value) return 'da3';
+            if (value === 'depth_anything_v3' || value === 'depth-anything-v3') return 'da3';
+            return value;
+        }
+
+        function updateUIFromState() {
+            if (!els.pipelineSelect) return;
+            els.pipelineSelect.value = state.pipeline;
+
+            if (state.pipeline === 'lux-depth-v3') {
+                els.fieldsLuxDepth.classList.remove('hidden');
+                els.fieldsArchiveGate.classList.add('hidden');
+            } else {
+                els.fieldsLuxDepth.classList.add('hidden');
+                els.fieldsArchiveGate.classList.remove('hidden');
+            }
+
+            const c = state.config;
+            c.depthBackend = canonicalDepthBackend(c.depthBackend);
+            if (els.presetSelect) els.presetSelect.value = c.preset;
+            if (els.inputDir) els.inputDir.value = c.inputDir;
+            if (els.outputDir) els.outputDir.value = c.outputDir;
+            if (els.qualityTier) els.qualityTier.value = c.qualityTier;
+            if (els.depthBackend) els.depthBackend.value = c.depthBackend;
+            if (els.depthDevice) els.depthDevice.value = c.depthDevice;
+            if (els.v2Preset) {
+                els.v2Preset.value = c.v2Preset;
+                els.v2Preset.disabled = !c.flags.enableV2;
+            }
+
+            const safeSyncCheck = (el, val) => {
+                if (el) {
+                    el.checked = val;
+                    if (el.hasAttribute('role') && el.getAttribute('role') === 'switch') {
+                        el.setAttribute('aria-checked', val);
+                    }
+                }
+            };
+
+            safeSyncCheck(els.flags.materials, c.flags.materials);
+            safeSyncCheck(els.flags.pbr, c.flags.pbr);
+            safeSyncCheck(els.flags.cache, c.flags.cache);
+            safeSyncCheck(els.flags.overwrite, c.flags.overwrite);
+            safeSyncCheck(els.flags.enableV2, c.flags.enableV2);
+
+            safeSyncCheck(els.emits.master16, c.emits.master16);
+            safeSyncCheck(els.emits.upscaled16, c.emits.upscaled16);
+            safeSyncCheck(els.emits.marketing, c.emits.marketing);
+            safeSyncCheck(els.emits.report, c.emits.report);
+            safeSyncCheck(els.emits.runCard, c.emits.runCard);
+
+            safeSyncCheck(els.gateDedup, c.gate.dedup);
+            safeSyncCheck(els.gateSign, c.gate.sign);
+
+            safeSyncCheck(els.licenses.nonCommercialOk, c.licenses.nonCommercialOk);
+            safeSyncCheck(els.licenses.acceptApple, c.licenses.acceptApple);
+
+            renderCLI();
+        }
+
+        function generatePayload() {
+            const p = state.pipeline;
+            const c = state.config;
+
+            let args = {
+                input_dir: c.inputDir,
+                output_dir: c.outputDir,
+                overwrite: c.flags.overwrite
+            };
+
+            if (p === 'lux-depth-v3') {
+                const depthBackend = canonicalDepthBackend(c.depthBackend);
+                args = {
+                    ...args,
+                    preset: c.preset,
+                    quality_tier: c.qualityTier,
+                    depth_backend: depthBackend,
+                    depth_device: c.depthDevice,
+                    materials_v3: c.flags.materials,
+                    pbr: c.flags.pbr,
+                    cache_depth: c.flags.cache,
+                    enable_v2: c.flags.enableV2,
+                    v2_preset: c.v2Preset,
+                    emit_master16: c.emits.master16,
+                    emit_upscaled16: c.emits.upscaled16,
+                    emit_marketing: c.emits.marketing,
+                    emit_report: c.emits.report,
+                    emit_run_card: c.emits.runCard,
+                    non_commercial_ok: c.licenses.nonCommercialOk,
+                    accept_apple_depth_pro_research_license: c.licenses.acceptApple
+                };
+            } else {
+                args = { ...args, dedup: c.gate.dedup, sign: c.gate.sign };
+            }
+
+            return { pipeline: p, args };
+        }
+
+        function renderCLI() {
+            if (!els.cliPreview) return;
+            const payload = generatePayload();
+            const q = (v) => `"${String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+            const onoff = (v) => (v ? '"on"' : '"off"');
+
+            const cliLines = [
+                `${payload.pipeline}`,
+                `  --input-dir ${q(payload.args.input_dir)}`,
+                `  --output-dir ${q(payload.args.output_dir)}`
+            ];
+
+            if (payload.pipeline === 'lux-depth-v3') {
+                cliLines.push(`  --preset ${q(payload.args.preset)}`);
+                cliLines.push(`  --quality-tier ${q(payload.args.quality_tier)}`);
+                cliLines.push(`  --depth-backend ${q(payload.args.depth_backend)}`);
+                cliLines.push(`  --depth-device ${q(payload.args.depth_device)}`);
+                cliLines.push(`  --materials-v3 ${onoff(payload.args.materials_v3)}`);
+                cliLines.push(`  --pbr ${onoff(payload.args.pbr)}`);
+                cliLines.push(`  --cache-depth ${onoff(payload.args.cache_depth)}`);
+                cliLines.push(`  --emit-master16 ${onoff(payload.args.emit_master16)}`);
+                cliLines.push(`  --emit-upscaled16 ${onoff(payload.args.emit_upscaled16)}`);
+                cliLines.push(`  --emit-marketing ${onoff(payload.args.emit_marketing)}`);
+                cliLines.push(`  --emit-report ${onoff(payload.args.emit_report)}`);
+                cliLines.push(`  --emit-run-card ${onoff(payload.args.emit_run_card)}`);
+
+                if (payload.args.enable_v2) {
+                    cliLines.push(`  --enable-v2 "on"`);
+                    cliLines.push(`  --v2-preset ${q(payload.args.v2_preset)}`);
+                }
+                if (payload.args.depth_backend === 'depth_pro') {
+                    if (payload.args.non_commercial_ok) cliLines.push(`  --non-commercial-ok "true"`);
+                    if (payload.args.accept_apple_depth_pro_research_license) cliLines.push(`  --accept-apple-depth-pro-research-license "true"`);
+                }
+            } else {
+                if (payload.args.dedup) cliLines.push(`  --dedup "on"`);
+                if (payload.args.sign) cliLines.push(`  --sign "true"`);
+            }
+            if (payload.args.overwrite) cliLines.push(`  --overwrite`);
+
+            const cli = cliLines.map((line, idx) =>
+                idx === cliLines.length - 1 ? line : `${line} \\`
+            );
+
+            els.cliPreview.textContent = cli.join('\n');
+        }
+
+        function bindInputs() {
+            const safeBindText = (el, category, key) => {
+                if (!el) return;
+                el.addEventListener('change', (e) => {
+                    if (category) state.config[category][key] = e.target.value;
+                    else if (key in state.config) state.config[key] = e.target.value;
+                    else state[key] = e.target.value;
+                    if (key === 'pipeline') updateUIFromState();
+                    else renderCLI();
+                });
+            };
+            const safeBindInput = (el, category, key) => {
+                if (!el) return;
+                el.addEventListener('input', (e) => {
+                    if (category) state.config[category][key] = e.target.value;
+                    else state.config[key] = e.target.value;
+                    renderCLI();
+                });
+            };
+            const safeBindCheck = (el, category, key) => {
+                if (!el) return;
+                el.addEventListener('change', (e) => {
+                    state.config[category][key] = e.target.checked;
+                    if (el.hasAttribute('role') && el.getAttribute('role') === 'switch') {
+                        el.setAttribute('aria-checked', e.target.checked);
+                    }
+                    if (key === 'enableV2' && els.v2Preset) els.v2Preset.disabled = !e.target.checked;
+                    renderCLI();
+                });
+            };
+
+            safeBindText(els.pipelineSelect, null, 'pipeline');
+            safeBindText(els.presetSelect, null, 'preset');
+            safeBindInput(els.inputDir, null, 'inputDir');
+            safeBindInput(els.outputDir, null, 'outputDir');
+            safeBindText(els.qualityTier, null, 'qualityTier');
+            safeBindText(els.depthBackend, null, 'depthBackend');
+            safeBindText(els.depthDevice, null, 'depthDevice');
+            safeBindInput(els.v2Preset, null, 'v2Preset');
+
+            safeBindCheck(els.flags.materials, 'flags', 'materials');
+            safeBindCheck(els.flags.pbr, 'flags', 'pbr');
+            safeBindCheck(els.flags.cache, 'flags', 'cache');
+            safeBindCheck(els.flags.overwrite, 'flags', 'overwrite');
+            safeBindCheck(els.flags.enableV2, 'flags', 'enableV2');
+
+            safeBindCheck(els.emits.master16, 'emits', 'master16');
+            safeBindCheck(els.emits.upscaled16, 'emits', 'upscaled16');
+            safeBindCheck(els.emits.marketing, 'emits', 'marketing');
+            safeBindCheck(els.emits.report, 'emits', 'report');
+            safeBindCheck(els.emits.runCard, 'emits', 'runCard');
+
+            safeBindCheck(els.gateDedup, 'gate', 'dedup');
+            safeBindCheck(els.gateSign, 'gate', 'sign');
+
+            safeBindCheck(els.licenses.nonCommercialOk, 'licenses', 'nonCommercialOk');
+            safeBindCheck(els.licenses.acceptApple, 'licenses', 'acceptApple');
+
+            if (els.apiKeyInput) {
+                els.apiKeyInput.addEventListener('input', _persistApiKeyFromInputs);
+            }
+            if (els.rememberApiKey) {
+                els.rememberApiKey.addEventListener('change', _persistApiKeyFromInputs);
+            }
+        }
+
+        function getProfiles() {
+            try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); } catch { return {}; }
+        }
+
+        function refreshProfileDropdown() {
+            if (!els.profileSelect) return;
+            const profiles = getProfiles();
+            els.profileSelect.innerHTML = '<option value="">Select Profile...</option>';
+            Object.keys(profiles).sort().forEach((k) => {
+                const opt = document.createElement('option');
+                opt.value = k;
+                opt.textContent = k;
+                els.profileSelect.appendChild(opt);
+            });
+        }
+
+        function renderJobQueue() {
+            if (!els.jobList) return;
+            if (els.queueCount) els.queueCount.textContent = `${state.jobs.length} jobs`;
+            if (state.jobs.length === 0) {
+                if (els.emptyQueueState) els.emptyQueueState.style.display = 'flex';
+                els.jobList.innerHTML = '';
+                return;
+            }
+            if (els.emptyQueueState) els.emptyQueueState.style.display = 'none';
+
+            const fragment = document.createDocumentFragment();
+            [...state.jobs].reverse().forEach((job) => {
+                const li = document.createElement('li');
+                li.dataset.jobId = job.id;
+                const isSelected = state.selectedJobId === job.id;
+                li.className = `rounded-xl border p-4 cursor-pointer transition-colors ${isSelected ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30' : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-800'}`;
+
+                let badgeColor = 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700';
+                if (job.state === 'running') badgeColor = 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800';
+                if (job.state === 'succeeded') badgeColor = 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800';
+                if (job.state === 'failed' || job.state === 'canceled') badgeColor = 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800';
+
+                const safeState = SAFE_JOB_STATES.has(job.state) ? job.state : 'offline';
+                const safePipeline = String(job.pipeline || 'unknown');
+                const safeId = String(job.id || 'job_unknown');
+                const safeProgress = Math.max(0, Math.min(100, Number(job.progress) || 0));
+                const canCancel = job.state === 'running' || job.state === 'queued';
+
+                const header = document.createElement('div');
+                header.className = 'flex items-center justify-between mb-3';
+
+                const headerLeft = document.createElement('div');
+                headerLeft.className = 'flex items-center gap-2';
+
+                const statusDot = document.createElement('span');
+                statusDot.className = `status-dot ${safeState}`;
+                headerLeft.appendChild(statusDot);
+
+                const pipelineSpan = document.createElement('span');
+                pipelineSpan.className = 'text-[12px] font-semibold text-slate-900 dark:text-slate-100 truncate max-w-[150px]';
+                pipelineSpan.textContent = safePipeline;
+                headerLeft.appendChild(pipelineSpan);
+
+                header.appendChild(headerLeft);
+
+                const cancelButton = document.createElement('button');
+                cancelButton.dataset.action = 'cancel-job';
+                cancelButton.dataset.jobId = safeId;
+                cancelButton.className = `text-[10px] uppercase font-bold text-red-500 hover:text-red-700 focus:outline-none ${canCancel ? '' : 'hidden'}`;
+                cancelButton.textContent = 'Cancel';
+                header.appendChild(cancelButton);
+                li.appendChild(header);
+
+                const meta = document.createElement('div');
+                meta.className = 'flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 font-mono mb-2';
+
+                const idSpan = document.createElement('span');
+                idSpan.textContent = `${safeId.substring(0, 8)}...`;
+                meta.appendChild(idSpan);
+
+                const stateBadge = document.createElement('span');
+                stateBadge.className = `px-2 py-0.5 rounded-full border ${badgeColor}`;
+                stateBadge.textContent = safeState;
+                meta.appendChild(stateBadge);
+                li.appendChild(meta);
+
+                const progressRow = document.createElement('div');
+                progressRow.className = 'flex items-center gap-2 mt-1';
+
+                const progressEl = document.createElement('progress');
+                progressEl.max = 100;
+                progressEl.value = safeProgress;
+                progressEl.className = 'flex-1';
+                progressRow.appendChild(progressEl);
+
+                const progressText = document.createElement('span');
+                progressText.className = 'text-[10px] font-medium text-slate-500 dark:text-slate-400 w-8 text-right';
+                progressText.textContent = `${safeProgress}%`;
+                progressRow.appendChild(progressText);
+                li.appendChild(progressRow);
+
+                fragment.appendChild(li);
+            });
+
+            els.jobList.innerHTML = '';
+            els.jobList.appendChild(fragment);
+        }
+
+        function logToPane(jobId, line) {
+            if (state.selectedJobId === jobId || !state.selectedJobId) {
+                if (els.logPane) {
+                    els.logPane.textContent += line + '\n';
+                    els.logPane.scrollTop = els.logPane.scrollHeight;
+                }
+            }
+        }
+
+        async function checkBackend(force = false) {
+            const now = Date.now();
+            if (!force && (healthCheckInFlight || (now - lastHealthCheckAt) < HEALTH_CHECK_MIN_GAP_MS)) {
+                return;
+            }
+            healthCheckInFlight = true;
+            lastHealthCheckAt = now;
+            try {
+                const res = await fetchWithTimeout(`${API_BASE}/ready`, {}, HEALTH_CHECK_TIMEOUT_MS);
+                if (res.ok) {
+                    state.backendOk = true;
+                    if (els.healthIndicator) els.healthIndicator.className = 'status-dot ready';
+                    if (els.healthText) els.healthText.textContent = 'Backend Online';
+                } else {
+                    throw new Error('backend not ready');
+                }
+            } catch {
+                state.backendOk = false;
+                if (els.healthIndicator) els.healthIndicator.className = 'status-dot offline';
+                if (els.healthText) els.healthText.textContent = 'Offline / Mock Mode';
+            } finally {
+                healthCheckInFlight = false;
+            }
+        }
+
+        async function cancelJob(id) {
+            const job = state.jobs.find((item) => item.id === id);
+            if (!job || (job.state !== 'running' && job.state !== 'queued')) return;
+
+            stopJobActivity(job);
+            job.state = 'canceled';
+            appendJobLog(job, `[WARN] Cancelled by user.`);
+            logToPane(id, `[WARN] Cancelled by user.`);
+
+            const headers = _buildAuthHeaders({});
+            fetch(`${API_BASE}/v1/jobs/${id}/cancel`, { method: 'POST', headers }).catch(() => {});
+
+            scheduleRenderJobQueue();
+            if (state.selectedJobId === id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
+            createToast("Job canceled.", "error");
+        }
+
+        function handleJobListClick(event) {
+            const cancelBtn = event.target.closest('[data-action="cancel-job"]');
+            if (cancelBtn) {
+                event.stopPropagation();
+                cancelJob(cancelBtn.dataset.jobId);
+                return;
+            }
+
+            const row = event.target.closest('li[data-job-id]');
+            if (!row) return;
+            selectJob(row.dataset.jobId);
+        }
+
+        async function submitJob() {
+            if (state.pipeline === 'lux-depth-v3' && canonicalDepthBackend(state.config.depthBackend) === 'depth_pro') {
+                if (!state.config.licenses.nonCommercialOk || !state.config.licenses.acceptApple) {
+                    createToast('Depth Pro requires acknowledgment of research/non-commercial licenses.', 'error');
+                    return;
+                }
+            }
+
+            if (els.runJobBtn) {
+                els.runJobBtn.disabled = true;
+                els.runJobBtn.textContent = "Dispatching...";
+            }
+
+            const payload = generatePayload();
+            const randomId = window.crypto?.randomUUID ? window.crypto.randomUUID().replace(/-/g, '').slice(0, 8) : Math.random().toString(36).slice(2, 8);
+            const localId = `job_${randomId}`;
+
+            const job = { id: localId, pipeline: payload.pipeline, state: 'running', progress: 0, logs: [], eventSource: null, mockInterval: null };
+            state.jobs.push(job);
+            state.selectedJobId = job.id;
+            if (els.logPane) els.logPane.textContent = '';
+            if (els.logStatusIndicator) els.logStatusIndicator.classList.remove('hidden');
+            scheduleRenderJobQueue();
+            const initLine = `[INFO] Initializing ${payload.pipeline}...`;
+            appendJobLog(job, initLine);
+            logToPane(job.id, initLine);
+
+            if (state.backendOk) {
+                try {
+                    const headers = _buildAuthHeaders({ 'Content-Type': 'application/json' });
+                    const res = await fetch(`${API_BASE}/v1/jobs`, {
+                        method: 'POST',
+                        headers,
+                        body: JSON.stringify(payload)
+                    });
+                    if (!res.ok) throw new Error(await res.text());
+                    const data = await res.json();
+
+                    job.id = data.data.id;
+                    state.selectedJobId = job.id;
+                    scheduleRenderJobQueue();
+                    createToast(`Job dispatched: ${job.id}`, 'success');
+
+                    const es = new EventSource(`${API_BASE}${data.data.events_url}`);
+                    job.eventSource = es;
+
+                    es.addEventListener('log', (e) => {
+                        const line = JSON.parse(e.data).line;
+                        appendJobLog(job, line);
+                        logToPane(job.id, line);
+                    });
+                    es.addEventListener('progress', (e) => {
+                        job.progress = JSON.parse(e.data).progress;
+                        scheduleRenderJobQueue();
+                    });
+                    es.addEventListener('state', (e) => {
+                        job.state = JSON.parse(e.data).state;
+                        scheduleRenderJobQueue();
+                    });
+                    es.addEventListener('done', (e) => {
+                        const parsed = JSON.parse(e.data);
+                        job.state = parsed.state;
+                        job.progress = job.state === 'succeeded' ? 100 : job.progress;
+                        const endLine = `[SYSTEM] Stream closed. Exit code: ${parsed.exit_code}`;
+                        appendJobLog(job, endLine);
+                        logToPane(job.id, endLine);
+                        stopJobActivity(job);
+                        scheduleRenderJobQueue();
+                        createToast(`Job ${job.state}.`, job.state === 'succeeded' ? 'success' : 'error');
+                        if (state.selectedJobId === job.id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
+                    });
+                    es.onerror = () => {};
+                } catch (err) {
+                    const errorMessage = err instanceof Error ? err.message : String(err);
+                    job.state = 'failed';
+                    appendJobLog(job, `[ERROR] ${errorMessage}`);
+                    scheduleRenderJobQueue();
+                    createToast("Backend submission failed.", "error");
+                    if (state.selectedJobId === job.id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
+                } finally {
+                    if (els.runJobBtn) {
+                        els.runJobBtn.disabled = false;
+                        els.runJobBtn.textContent = "Execute Job";
+                    }
+                }
+            } else {
+                const offlineLine = `[WARN] Backend unreachable. Running mock simulation.`;
+                appendJobLog(job, offlineLine);
+                logToPane(job.id, offlineLine);
+                if (els.runJobBtn) {
+                    els.runJobBtn.disabled = false;
+                    els.runJobBtn.textContent = "Execute Job";
+                }
+                let progress = 0;
+                job.mockInterval = setInterval(() => {
+                    if (job.state !== 'running') {
+                        stopJobActivity(job);
+                        return;
+                    }
+                    progress += 15;
+                    job.progress = Math.min(100, progress);
+                    const line = `[SIM] Processing step... ${job.progress}%`;
+                    appendJobLog(job, line);
+                    logToPane(job.id, line);
+                    if (job.progress >= 100) {
+                        job.state = 'succeeded';
+                        stopJobActivity(job);
+                        appendJobLog(job, `[SIM] Execution complete.`);
+                        logToPane(job.id, `[SIM] Execution complete.`);
+                        createToast("Mock job complete.", "success");
+                        if (state.selectedJobId === job.id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
+                    }
+                    scheduleRenderJobQueue();
+                }, 800);
+            }
+        }
+
+        function startHealthPolling() {
+            if (healthPollIntervalId !== null) return;
+            healthPollIntervalId = setInterval(() => {
+                if (!document.hidden) checkBackend();
+            }, HEALTH_CHECK_INTERVAL_MS);
+        }
+
+        function stopHealthPolling() {
+            if (healthPollIntervalId === null) return;
+            clearInterval(healthPollIntervalId);
+            healthPollIntervalId = null;
+        }
+
+        if (els.saveProfileBtn) els.saveProfileBtn.addEventListener('click', () => {
+            const name = prompt("Profile name:");
+            if (!name || !name.trim()) return;
+            const profiles = getProfiles();
+            profiles[name.trim()] = { pipeline: state.pipeline, config: JSON.parse(JSON.stringify(state.config)) };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
+            refreshProfileDropdown();
+            els.profileSelect.value = name.trim();
+            createToast(`Profile "${name.trim()}" saved.`, "success");
+        });
+
+        if (els.profileSelect) els.profileSelect.addEventListener('change', (e) => {
+            const name = e.target.value;
+            if (!name) return;
+            const profiles = getProfiles();
+            if (profiles[name]) {
+                state.pipeline = profiles[name].pipeline;
+                state.config = JSON.parse(JSON.stringify(profiles[name].config));
+                updateUIFromState();
+                createToast(`Profile ${name} loaded.`);
+            }
+        });
+
+        if (els.exportBtn) els.exportBtn.addEventListener('click', () => {
+            const payload = generatePayload();
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `job_${state.pipeline}_config.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        if (els.importBtn) els.importBtn.addEventListener('click', () => els.fileInput.click());
+        if (els.fileInput) els.fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            try {
+                const data = JSON.parse(await file.text());
+                if (data.pipeline) state.pipeline = data.pipeline;
+                if (data.args) {
+                    const c = state.config;
+                    c.inputDir = data.args.input_dir || c.inputDir;
+                    c.outputDir = data.args.output_dir || c.outputDir;
+                    c.preset = data.args.preset || c.preset;
+                    c.qualityTier = data.args.quality_tier || c.qualityTier;
+                    c.depthBackend = canonicalDepthBackend(data.args.depth_backend || c.depthBackend);
+                    c.depthDevice = data.args.depth_device || c.depthDevice;
+
+                    c.flags.materials = data.args.materials_v3 ?? c.flags.materials;
+                    c.flags.pbr = data.args.pbr ?? c.flags.pbr;
+                    c.flags.cache = data.args.cache_depth ?? c.flags.cache;
+                    c.flags.overwrite = !!data.args.overwrite;
+                    c.flags.enableV2 = !!data.args.enable_v2;
+                    c.v2Preset = data.args.v2_preset || c.v2Preset;
+
+                    c.emits.master16 = data.args.emit_master16 ?? c.emits.master16;
+                    c.emits.upscaled16 = data.args.emit_upscaled16 ?? c.emits.upscaled16;
+                    c.emits.marketing = data.args.emit_marketing ?? c.emits.marketing;
+                    c.emits.report = data.args.emit_report ?? c.emits.report;
+                    c.emits.runCard = data.args.emit_run_card ?? c.emits.runCard;
+
+                    c.gate.dedup = data.args.dedup ?? c.gate.dedup;
+                    c.gate.sign = data.args.sign ?? c.gate.sign;
+                }
+                updateUIFromState();
+                createToast("Configuration imported.", "success");
+            } catch (err) {
+                createToast("Invalid JSON file.", "error");
+            }
+            els.fileInput.value = "";
+        });
+
+        if (els.copyCliBtn) els.copyCliBtn.addEventListener('click', async () => {
+            await copyToClipboard(els.cliPreview.textContent);
+        });
+
+        if (els.clearLogsBtn) els.clearLogsBtn.addEventListener('click', () => {
+            if (els.logPane) els.logPane.textContent = '';
+        });
+        if (els.runJobBtn) els.runJobBtn.addEventListener('click', submitJob);
+        if (els.jobList) els.jobList.addEventListener('click', handleJobListClick);
+
+        function setTheme(mode) {
+            state.theme = mode;
+            if (mode === 'dark') document.documentElement.classList.add('dark');
+            else document.documentElement.classList.remove('dark');
+            localStorage.setItem('tp_theme', mode);
+        }
+
+        if (els.themeBtn) els.themeBtn.addEventListener('click', () => {
+            setTheme(state.theme === 'dark' ? 'light' : 'dark');
+        });
+
+        const toggleModal = (show) => {
+            if (show) {
+                els.shortcutsModal.classList.remove('hidden');
+                els.shortcutsModal.classList.add('flex');
+                void els.shortcutsModal.offsetWidth;
+                els.shortcutsModal.classList.remove('opacity-0');
+                els.shortcutsPanel.classList.remove('scale-95', 'opacity-0');
+                els.shortcutsPanel.classList.add('scale-100', 'opacity-100');
+                els.shortcutsModal.setAttribute("aria-hidden", "false");
+                els.closeShortcutsBtn.focus();
+            } else {
+                els.shortcutsModal.classList.add('opacity-0');
+                els.shortcutsPanel.classList.remove('scale-100', 'opacity-100');
+                els.shortcutsPanel.classList.add('scale-95', 'opacity-0');
+                setTimeout(() => {
+                    els.shortcutsModal.classList.add('hidden');
+                    els.shortcutsModal.classList.remove('flex');
+                    els.shortcutsModal.setAttribute("aria-hidden", "true");
+                }, 200);
+            }
+        };
+
+        if (els.shortcutsBtn) els.shortcutsBtn.addEventListener('click', () => toggleModal(true));
+        if (els.closeShortcutsBtn) els.closeShortcutsBtn.addEventListener('click', () => toggleModal(false));
+        if (els.shortcutsModal) els.shortcutsModal.addEventListener('click', (e) => {
+            if (e.target === els.shortcutsModal) toggleModal(false);
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === "Escape" && els.shortcutsModal && !els.shortcutsModal.classList.contains("hidden")) {
+                e.preventDefault();
+                toggleModal(false);
+                return;
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                submitJob();
+            }
+            if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
+                e.preventDefault();
+                if (els.copyCliBtn) els.copyCliBtn.click();
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
+                e.preventDefault();
+                if (els.themeBtn) els.themeBtn.click();
+            }
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                stopHealthPolling();
+                return;
+            }
+            checkBackend(true);
+            startHealthPolling();
+        });
+
+        window.addEventListener('beforeunload', cleanupActiveJobHandles);
+        window.addEventListener('pagehide', cleanupActiveJobHandles);
+
+        function init() {
+            const savedTheme = localStorage.getItem('tp_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            setTheme(savedTheme);
+
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+                if (!localStorage.getItem('tp_theme')) setTheme(e.matches ? 'dark' : 'light');
+            });
+
+            _loadApiKeyIntoInputs();
+            refreshProfileDropdown();
+            updateUIFromState();
+            bindInputs();
+            renderJobQueue();
+            checkBackend();
+            startHealthPolling();
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

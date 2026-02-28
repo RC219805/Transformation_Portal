@@ -2,7 +2,11 @@
 # This ensures consistent dependency resolution across all layers
 
 SHELL := /bin/bash
-PIP_COMPILE := pip-compile -q --resolver=backtracking
+LOCK_PYTHON_VERSION ?= 3.11
+PIP_TOOLS_CACHE_DIR ?= $(CURDIR)/.pip-tools-cache
+PIP_COMPILE_BASE := pip-compile -q --resolver=backtracking
+PIP_COMPILE_PY_FLAG := $(shell pip-compile --help 2>/dev/null | grep -q -- '--python-version' && echo "--python-version=$(LOCK_PYTHON_VERSION)" || true)
+PIP_COMPILE := mkdir -p "$(PIP_TOOLS_CACHE_DIR)" && PIP_TOOLS_CACHE_DIR="$(PIP_TOOLS_CACHE_DIR)" $(PIP_COMPILE_BASE) $(PIP_COMPILE_PY_FLAG)
 
 # Default target: compile all requirements
 .PHONY: all compile compile-all update help clean check
@@ -69,19 +73,29 @@ update:
 # Check if .txt files are up-to-date
 check:
 	@echo "Checking if requirements are up-to-date..."
-	@$(PIP_COMPILE) --dry-run --quiet all.in -o all.txt 2>&1 | grep -q "No changes" || \
-		(echo "❌ all.txt is out of date. Run 'make compile' to update." && exit 1)
-	@$(PIP_COMPILE) --dry-run --quiet -c all.txt base.in -o base.txt 2>&1 | grep -q "No changes" || \
-		(echo "❌ base.txt is out of date. Run 'make compile' to update." && exit 1)
-	@$(PIP_COMPILE) --dry-run --quiet -c all.txt ml.in -o ml.txt 2>&1 | grep -q "No changes" || \
-		(echo "❌ ml.txt is out of date. Run 'make compile' to update." && exit 1)
-	@$(PIP_COMPILE) --dry-run --quiet -c all.txt dev.in -o dev.txt 2>&1 | grep -q "No changes" || \
-		(echo "❌ dev.txt is out of date. Run 'make compile' to update." && exit 1)
-	@$(PIP_COMPILE) --dry-run --quiet -c all.txt ci.in -o ci.txt 2>&1 | grep -q "No changes" || \
-		(echo "❌ ci.txt is out of date. Run 'make compile' to update." && exit 1)
-	@$(PIP_COMPILE) --dry-run --quiet -c all.txt tools-archive.in -o tools-archive.txt 2>&1 | grep -q "No changes" || \
-		(echo "❌ tools-archive.txt is out of date. Run 'make compile' to update." && exit 1)
-	@echo "✓ All requirements are up-to-date"
+	@set -euo pipefail; \
+	repo_dir="$$(pwd)"; \
+	tmp_dir="$$(mktemp -d)"; \
+	trap 'rm -rf "$$tmp_dir"' EXIT; \
+	cp all.in base.in ml.in dev.in ci.in tools-archive.in "$$tmp_dir"/; \
+	cp all.txt base.txt ml.txt dev.txt ci.txt tools-archive.txt "$$tmp_dir"/; \
+	cd "$$tmp_dir"; \
+	$(PIP_COMPILE) all.in -o all.txt >/dev/null; \
+	$(PIP_COMPILE) -c all.txt base.in -o base.txt >/dev/null; \
+	$(PIP_COMPILE) -c all.txt ml.in -o ml.txt >/dev/null; \
+	$(PIP_COMPILE) -c all.txt dev.in -o dev.txt >/dev/null; \
+	$(PIP_COMPILE) -c all.txt ci.in -o ci.txt >/dev/null; \
+	$(PIP_COMPILE) -c all.txt tools-archive.in -o tools-archive.txt >/dev/null; \
+	normalize_req() { \
+		awk 'BEGIN{start=0} { if (!start) { if ($$0 ~ /^#/ || $$0 ~ /^[[:space:]]*$$/) next; start=1 } print }' "$$1"; \
+	}; \
+	for f in all.txt base.txt ml.txt dev.txt ci.txt tools-archive.txt; do \
+		if ! diff -u <(normalize_req "$$tmp_dir/$$f") <(normalize_req "$$repo_dir/$$f") >/dev/null; then \
+			echo "❌ $$f is out of date. Run 'make compile' to update."; \
+			exit 1; \
+		fi; \
+	done; \
+	echo "✓ All requirements are up-to-date"
 
 # Clean compiled files
 clean:

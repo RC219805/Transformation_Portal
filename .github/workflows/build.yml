@@ -269,6 +269,42 @@ jobs:
           python -m pip install jsonschema==4.23.0
           python scripts/validation/validate_compliance_schemas.py
 
+  dependency-constraints:
+    name: Validate dependency constraints (ADR-032)
+    needs: [preflight]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install minimal tooling
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install packaging
+
+      - name: Validate dependency constraints
+        run: |
+          set -euo pipefail
+          set +e
+          bash scripts/validate_dependency_constraints.sh --verbose
+          status=$?
+          set -e
+          if [ "$status" -eq 2 ]; then
+            echo "⚠️ Dependency constraints validation completed with warnings (non-blocking)."
+            exit 0
+          elif [ "$status" -ne 0 ]; then
+            echo "❌ Dependency constraints validation failed with exit code $status."
+            exit "$status"
+          fi
+
   lint:
     needs: [preflight]
     if: needs.preflight.outputs.run_full == 'true'
@@ -317,7 +353,6 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install flake8 pylint
           python -m pip install -r requirements-lint.txt
           echo "Disk space after dependency install:"
           df -h
@@ -744,7 +779,7 @@ jobs:
   ci_gate:
     name: CI Gate
     runs-on: ubuntu-24.04
-    needs: [preflight, lightweight, lint, test, generate-manifest]
+    needs: [preflight, lightweight, dependency-constraints, lint, test, generate-manifest]
     if: ${{ always() }}
     timeout-minutes: 5
     permissions:
@@ -760,6 +795,7 @@ jobs:
           echo ""
           echo "Job results:"
           echo "  lightweight:       ${{ needs.lightweight.result }}"
+          echo "  dependency-constraints: ${{ needs['dependency-constraints'].result }}"
           echo "  lint:              ${{ needs.lint.result }}"
           echo "  test:              ${{ needs.test.result }}"
           echo "  generate-manifest: ${{ needs['generate-manifest'].result }}"
@@ -778,6 +814,14 @@ jobs:
             echo "❌ lightweight checks failed"
             echo "GATE_STATUS=failure" >> "$GITHUB_ENV"
             echo "GATE_MODE=lightweight (failed)" >> "$GITHUB_ENV"
+            exit 1
+          fi
+
+          # Dependency constraints must always succeed (ADR-032)
+          if [ "${{ needs['dependency-constraints'].result }}" != "success" ]; then
+            echo "❌ dependency-constraints checks failed"
+            echo "GATE_STATUS=failure" >> "$GITHUB_ENV"
+            echo "GATE_MODE=dependency-constraints (failed)" >> "$GITHUB_ENV"
             exit 1
           fi
 
@@ -859,6 +903,7 @@ jobs:
             echo "| Job | Status |"
             echo "|-----|--------|"
             echo "| lightweight | ${{ needs.lightweight.result }} |"
+            echo "| dependency-constraints | ${{ needs['dependency-constraints'].result }} |"
             echo "| lint | ${{ needs.lint.result }} |"
             echo "| test | ${{ needs.test.result }} |"
             echo "| generate-manifest | ${{ needs['generate-manifest'].result }} |"
@@ -898,6 +943,7 @@ jobs:
 
             **Job Results**:
             - lightweight: ${{ needs.lightweight.result }}
+            - dependency-constraints: ${{ needs['dependency-constraints'].result }}
             - lint: ${{ needs.lint.result }}
             - test: ${{ needs.test.result }}
             - generate-manifest: ${{ needs['generate-manifest'].result }}

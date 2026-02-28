@@ -20,6 +20,11 @@ dependencies = [
     "opencv-python>=4.8.0,<5",  # required for depth_writer (core pipeline)
     "typer>=0.10.0,<1",
     "tqdm>=4.66,<5",
+    # Web stack ranges are intentionally bounded here.
+    # Exact versions are enforced in requirements/base.in and compiled lockfiles.
+    "fastapi>=0.110.0,<0.111",
+    "uvicorn>=0.29.0,<0.30",
+    "aiofiles>=23.2.1,<24",
     "tifffile>=2023.7.18,<2027",
     "imagecodecs>=2023.9.18,<2027",
     "PyYAML>=6.0,<7",  # required for APEX pipeline config parsing
@@ -49,7 +54,7 @@ ml = [
     "colour-science>=0.4.2",
     "psutil>=5.9.0",
     "memory-profiler>=0.61.0",
-    "sentence-transformers>=2.2.0,<3",
+    "sentence-transformers>=5.2.2,<6",
     "accelerate>=0.20.0,<2",
 ]
 # CoreML acceleration (optional, Apple Silicon only)
