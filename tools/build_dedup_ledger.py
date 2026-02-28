@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import io
 import json
 import re
 import sys
@@ -35,7 +36,6 @@ _RAW_EXTENSIONS = {
     ".rw2",
     ".srw",
 }
-
 
 
 def _load_manifest(path: Path) -> list[dict[str, Any]]:
@@ -83,12 +83,52 @@ def _canonical_choice(entries: list[dict[str, Any]]) -> dict[str, Any]:
     )[0]
 
 
+def _parse_iso_utc_timestamp(value: str) -> datetime | None:
+    normalized = value.strip().replace("Z", "+00:00")
+    if not normalized:
+        return None
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _derive_decision_date_utc(rows: list[dict[str, Any]]) -> str:
+    candidates: list[datetime] = []
+    for row in rows:
+        for field in ("modified_utc", "created_utc", "accessed_utc"):
+            value = row.get(field)
+            if not isinstance(value, str):
+                continue
+            parsed = _parse_iso_utc_timestamp(value)
+            if parsed is not None:
+                candidates.append(parsed)
+    if not candidates:
+        return "1970-01-01T00:00:00Z"
+    return max(candidates).isoformat().replace("+00:00", "Z")
+
+
+def _normalize_decision_date_utc(value: str) -> str:
+    parsed = _parse_iso_utc_timestamp(value)
+    if parsed is None:
+        raise ValueError(f"Invalid --decision-date-utc value: {value!r}")
+    return parsed.isoformat().replace("+00:00", "Z")
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest-jsonl", required=True, help="Input archive_manifest_v2.jsonl path")
     parser.add_argument("--out-ledger", required=True, help="Output CSV ledger path")
     parser.add_argument("--out-summary", required=True, help="Output summary JSON path")
     parser.add_argument("--approver", default="UNSPECIFIED", help="Decision approver label")
+    parser.add_argument(
+        "--decision-date-utc",
+        default=None,
+        help="Override deterministic decision date with explicit UTC timestamp (ISO-8601).",
+    )
     return parser.parse_args(argv)
 
 
@@ -111,7 +151,16 @@ def main(argv: list[str] | None = None) -> int:
             continue
         groups[sha256].append(row)
 
-    decision_date = datetime.now(tz=UTC).isoformat().replace("+00:00", "Z")
+    grouped_rows = [entry for group in groups.values() for entry in group]
+    if args.decision_date_utc is None:
+        decision_date = _derive_decision_date_utc(grouped_rows)
+    else:
+        try:
+            decision_date = _normalize_decision_date_utc(str(args.decision_date_utc))
+        except ValueError as exc:
+            print(f"Input error: {exc}", file=sys.stderr)
+            return EXIT_INPUT_ERROR
+
     ledger_rows: list[dict[str, Any]] = []
 
     duplicate_groups = 0
@@ -125,16 +174,14 @@ def main(argv: list[str] | None = None) -> int:
         canonical = _canonical_choice(group)
         canonical_path = str(canonical.get("relpath") or "")
         duplicate_paths = sorted(
-            str(entry.get("relpath") or "")
-            for entry in group
-            if str(entry.get("relpath") or "") != canonical_path
+            str(entry.get("relpath") or "") for entry in group if str(entry.get("relpath") or "") != canonical_path
         )
 
         ledger_rows.append(
             {
                 "sha256": sha256,
                 "canonical_path": canonical_path,
-                "duplicate_paths": "|".join(duplicate_paths),
+                "duplicate_paths": deterministic_json_dumps(duplicate_paths, pretty=False),
                 "duplicate_count": len(group),
                 "decision_reason": "highest_metadata_completeness_then_shortest_path",
                 "date_utc": decision_date,
@@ -154,16 +201,17 @@ def main(argv: list[str] | None = None) -> int:
 
     out_ledger = Path(args.out_ledger)
     out_ledger.parent.mkdir(parents=True, exist_ok=True)
-    with out_ledger.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=ledger_columns, lineterminator="\n")
-        writer.writeheader()
-        for row in ledger_rows:
-            writer.writerow(row)
+    ledger_buffer = io.StringIO()
+    writer = csv.DictWriter(ledger_buffer, fieldnames=ledger_columns, lineterminator="\n")
+    writer.writeheader()
+    for row in ledger_rows:
+        writer.writerow(row)
+    atomic_write_text(out_ledger, ledger_buffer.getvalue())
 
     summary_payload = {
         "schema_version": "tp.archive.dedup.summary.v1",
         "input_rows": len(rows),
-        "hashable_rows": sum(1 for row in rows if _SHA256_RE.fullmatch(str(row.get("sha256") or "")) is not None),
+        "hashable_rows": sum(len(group) for group in groups.values()),
         "duplicate_groups": duplicate_groups,
         "duplicate_excess_files": duplicate_excess_files,
         "ledger_rows": len(ledger_rows),

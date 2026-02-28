@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import shutil
+import stat
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -25,6 +26,68 @@ EXIT_VALIDATE_ERROR = 4
 
 READ_CHUNK_BYTES = 1024 * 1024
 
+
+def _materialize_relpath(relpath: str) -> tuple[Path | None, str]:
+    if "\x00" in relpath:
+        return None, "invalid_relpath_nul"
+
+    normalized_raw = relpath.replace("\\", "/")
+    if not normalized_raw or normalized_raw == ".":
+        return None, "invalid_relpath_empty"
+    if normalized_raw.startswith("/"):
+        return None, "invalid_relpath_anchored"
+
+    normalized = normalized_raw.lstrip("/")
+    if not normalized or normalized == ".":
+        return None, "invalid_relpath_empty"
+
+    parts = [part for part in normalized.split("/") if part and part != "."]
+    if not parts:
+        return None, "invalid_relpath_empty"
+    if any(part == ".." for part in parts):
+        return None, "invalid_relpath_parent_ref"
+
+    first = parts[0]
+    if len(first) >= 2 and first[0].isalpha() and first[1] == ":":
+        return None, "invalid_relpath_drive_spec"
+
+    candidate = Path(*parts)
+    if candidate.is_absolute() or getattr(candidate, "drive", ""):
+        return None, "invalid_relpath_anchored"
+
+    return candidate, ""
+
+
+def _check_symlink_components(root: Path, rel_path_obj: Path) -> str:
+    current = root
+    for part in rel_path_obj.parts:
+        current = current / part
+        try:
+            mode = current.lstat().st_mode
+        except FileNotFoundError:
+            return ""
+        except PermissionError:
+            return "permission_denied"
+        except OSError:
+            return "stat_failed"
+
+        if stat.S_ISLNK(mode):
+            return "symlink_skipped"
+    return ""
+
+
+def _resolves_within_root(root: Path, candidate: Path) -> bool:
+    try:
+        root_resolved = root.resolve(strict=False)
+        candidate_resolved = candidate.resolve(strict=False)
+    except OSError:
+        return True
+
+    try:
+        candidate_resolved.relative_to(root_resolved)
+    except ValueError:
+        return False
+    return True
 
 
 def _sha256_for_path(path: Path) -> str:
@@ -138,8 +201,19 @@ def _build_bag(
     payload_entries = sorted(payload_entries, key=lambda row: str(row.get("relpath") or ""))
     bagging_date = _derive_bagging_date(payload_entries)
 
+    if bag_dir.exists():
+        if not bag_dir.is_dir():
+            print(f"Build error: bag_dir is not a directory: {bag_dir}", file=sys.stderr)
+            return EXIT_BUILD_ERROR
+        if any(bag_dir.iterdir()):
+            print(f"Build error: bag_dir must be empty before build: {bag_dir}", file=sys.stderr)
+            return EXIT_BUILD_ERROR
+    else:
+        bag_dir.mkdir(parents=True, exist_ok=False)
+
     data_dir = bag_dir / "data"
-    data_dir.mkdir(parents=True, exist_ok=True)
+    data_dir.mkdir(parents=False, exist_ok=False)
+    archive_root_resolved = archive_root.resolve(strict=False)
 
     manifest_rows: list[tuple[str, str]] = []
     copied_files = 0
@@ -148,15 +222,51 @@ def _build_bag(
     for entry in payload_entries:
         relpath = str(entry.get("relpath") or "")
         expected_sha = str(entry.get("sha256") or "")
-        source_path = archive_root / Path(relpath)
-        destination = data_dir / Path(relpath)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-
-        if not source_path.exists() or not source_path.is_file():
-            print(f"Build error: source payload missing for relpath={relpath}", file=sys.stderr)
+        relpath_obj, relpath_error = _materialize_relpath(relpath)
+        if relpath_obj is None:
+            print(f"Build error: invalid relpath for relpath={relpath}: {relpath_error}", file=sys.stderr)
             return EXIT_BUILD_ERROR
 
-        shutil.copy2(source_path, destination)
+        symlink_component_error = _check_symlink_components(archive_root, relpath_obj)
+        if symlink_component_error:
+            print(
+                f"Build error: source payload rejected for relpath={relpath}: {symlink_component_error}",
+                file=sys.stderr,
+            )
+            return EXIT_BUILD_ERROR
+
+        source_path = archive_root / relpath_obj
+        destination = data_dir / relpath_obj
+        if not _resolves_within_root(data_dir, destination):
+            print(f"Build error: destination escapes bag data directory for relpath={relpath}", file=sys.stderr)
+            return EXIT_BUILD_ERROR
+        destination.parent.mkdir(parents=True, exist_ok=True)
+
+        try:
+            source_resolved = source_path.resolve(strict=True)
+        except FileNotFoundError:
+            print(f"Build error: source payload missing for relpath={relpath}", file=sys.stderr)
+            return EXIT_BUILD_ERROR
+        except PermissionError:
+            print(f"Build error: source payload unreadable for relpath={relpath}", file=sys.stderr)
+            return EXIT_BUILD_ERROR
+        except OSError:
+            print(f"Build error: source payload stat failed for relpath={relpath}", file=sys.stderr)
+            return EXIT_BUILD_ERROR
+
+        if source_path.is_symlink():
+            print(f"Build error: source payload symlink not allowed for relpath={relpath}", file=sys.stderr)
+            return EXIT_BUILD_ERROR
+        if not source_resolved.is_file():
+            print(f"Build error: source payload missing for relpath={relpath}", file=sys.stderr)
+            return EXIT_BUILD_ERROR
+        try:
+            source_resolved.relative_to(archive_root_resolved)
+        except ValueError:
+            print(f"Build error: source payload outside archive_root for relpath={relpath}", file=sys.stderr)
+            return EXIT_BUILD_ERROR
+
+        shutil.copy2(source_resolved, destination)
         observed_sha = _sha256_for_path(destination)
         if expected_sha and observed_sha != expected_sha:
             print(
@@ -167,8 +277,7 @@ def _build_bag(
 
         payload_bytes += int(destination.stat().st_size)
         copied_files += 1
-        relpath_posix = relpath.replace("\\", "/")
-        manifest_rows.append((observed_sha, f"data/{relpath_posix}"))
+        manifest_rows.append((observed_sha, f"data/{relpath_obj.as_posix()}"))
 
     bagit_path = bag_dir / "bagit.txt"
     bag_info_path = bag_dir / "bag-info.txt"
@@ -242,9 +351,7 @@ def _validate_bag(
     tag_manifest_path = bag_dir / "tagmanifest-sha256.txt"
 
     missing_required = [
-        str(path)
-        for path in (bagit_path, bag_info_path, payload_manifest_path, tag_manifest_path)
-        if not path.exists()
+        str(path) for path in (bagit_path, bag_info_path, payload_manifest_path, tag_manifest_path) if not path.exists()
     ]
     if missing_required:
         report_payload = {
@@ -266,39 +373,44 @@ def _validate_bag(
         print(f"Validation error: {exc}", file=sys.stderr)
         return EXIT_VALIDATE_ERROR
 
-    for expected_sha, relpath in payload_rows:
-        target = bag_dir / Path(relpath)
-        if not target.exists() or not target.is_file():
-            mismatches.append({"scope": "payload", "path": relpath, "issue": "missing"})
-            continue
-        observed_sha = _sha256_for_path(target)
-        if observed_sha != expected_sha:
-            mismatches.append(
-                {
-                    "scope": "payload",
-                    "path": relpath,
-                    "issue": "sha256_mismatch",
-                    "expected": expected_sha,
-                    "observed": observed_sha,
-                }
-            )
+    def _validate_rows(scope: str, rows: list[tuple[str, str]]) -> None:
+        for expected_sha, relpath in rows:
+            relpath_obj, relpath_error = _materialize_relpath(relpath)
+            if relpath_obj is None:
+                mismatches.append({"scope": scope, "path": relpath, "issue": relpath_error})
+                continue
 
-    for expected_sha, relpath in tag_rows:
-        target = bag_dir / Path(relpath)
-        if not target.exists() or not target.is_file():
-            mismatches.append({"scope": "tag", "path": relpath, "issue": "missing"})
-            continue
-        observed_sha = _sha256_for_path(target)
-        if observed_sha != expected_sha:
-            mismatches.append(
-                {
-                    "scope": "tag",
-                    "path": relpath,
-                    "issue": "sha256_mismatch",
-                    "expected": expected_sha,
-                    "observed": observed_sha,
-                }
-            )
+            symlink_component_error = _check_symlink_components(bag_dir, relpath_obj)
+            if symlink_component_error:
+                mismatches.append({"scope": scope, "path": relpath, "issue": symlink_component_error})
+                continue
+
+            target = bag_dir / relpath_obj
+            if not _resolves_within_root(bag_dir, target):
+                mismatches.append({"scope": scope, "path": relpath, "issue": "outside_bag_root"})
+                continue
+
+            if not target.exists() or not target.is_file():
+                mismatches.append({"scope": scope, "path": relpath, "issue": "missing"})
+                continue
+            if target.is_symlink():
+                mismatches.append({"scope": scope, "path": relpath, "issue": "symlink_skipped"})
+                continue
+
+            observed_sha = _sha256_for_path(target)
+            if observed_sha != expected_sha:
+                mismatches.append(
+                    {
+                        "scope": scope,
+                        "path": relpath,
+                        "issue": "sha256_mismatch",
+                        "expected": expected_sha,
+                        "observed": observed_sha,
+                    }
+                )
+
+    _validate_rows("payload", payload_rows)
+    _validate_rows("tag", tag_rows)
 
     library_validation: dict[str, Any] | None = None
     if validate_with_bagit_python:
