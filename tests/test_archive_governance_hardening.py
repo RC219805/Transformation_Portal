@@ -97,6 +97,20 @@ def test_manifest_archive_index_validation_streams_rows(tmp_path: Path) -> None:
     assert MANIFEST_TOOL._consume_csv_rows(archive_index) == 2
 
 
+def test_manifest_archive_index_validation_rejects_missing_required_columns(tmp_path: Path) -> None:
+    archive_index = tmp_path / "archive_index_normalized.csv"
+    archive_index.write_text(
+        "origin_drive,partition\nDriveA,Part1\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="missing required columns"):
+        MANIFEST_TOOL._consume_csv_rows(
+            archive_index,
+            required_columns={"origin_drive", "partition", "relpath"},
+        )
+
+
 def test_rule_matches_normalizes_slashes_for_path_glob() -> None:
     entry = {"relpath": "DriveA\\Part1\\alpha.txt", "extension": ".txt"}
     rule = {"id": "r1", "flags": ["restricted"], "path_glob": "DriveA/Part1/*.txt"}
@@ -108,6 +122,25 @@ def test_rule_matches_keeps_case_sensitive_glob_semantics(monkeypatch) -> None:
     entry = {"relpath": "DriveA/Part1/ALPHA.TXT", "extension": ".txt"}
     rule = {"id": "r1", "flags": ["restricted"], "path_glob": "DriveA/Part1/*.txt"}
     assert RIGHTS_TOOL._rule_matches(entry, rule) is False
+
+
+def test_load_policy_compiles_relpath_regex_once(tmp_path: Path) -> None:
+    policy_yaml = tmp_path / "rights_flags.yml"
+    policy_yaml.write_text(
+        "version: 1\n"
+        "default_flags: [unspecified]\n"
+        "default_owner: UNSPECIFIED\n"
+        "rules:\n"
+        "  - id: regex-rule\n"
+        "    flags: [restricted]\n"
+        "    relpath_regex: '^DriveA/.+\\.txt$'\n",
+        encoding="utf-8",
+    )
+    policy = RIGHTS_TOOL._load_policy(policy_yaml)
+    rule = policy["rules"][0]
+
+    assert "_relpath_regex_compiled" in rule
+    assert RIGHTS_TOOL._rule_matches({"relpath": "DriveA/Part1/alpha.txt", "extension": ".txt"}, rule)
 
 
 def test_run_wrapped_tool_normalizes_negative_returncode(monkeypatch) -> None:
@@ -222,6 +255,17 @@ def test_premis_validate_rejects_invalid_datetime_and_outcome() -> None:
         PREMIS_TOOL._validate_event(invalid_outcome, line_number=3)
 
 
+def test_premis_validate_rejects_non_finite_json_constants(tmp_path: Path) -> None:
+    invalid_jsonl = tmp_path / "premis_invalid.jsonl"
+    invalid_jsonl.write_text(
+        '{"premis_version":"3.0","event":{"eventIdentifier":{"eventIdentifierType":"uuid","eventIdentifierValue":"x"},"eventType":"fixity","eventDateTime":"2026-02-28T01:00:00Z","eventDetail":NaN,"eventOutcomeInformation":{"eventOutcome":"success"},"linkingAgentIdentifier":[{"linkingAgentIdentifierType":"software","linkingAgentIdentifierValue":"tp.archive.tests"}],"linkingObjectIdentifier":[]}}\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="invalid JSON"):
+        PREMIS_TOOL._validate_jsonl(invalid_jsonl)
+
+
 def test_run_wrapped_tool_reports_missing_script_with_typed_error(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
@@ -255,6 +299,80 @@ def test_run_wrapped_tool_reports_missing_script_with_typed_error(monkeypatch) -
 
     assert exit_code == GOVERNANCE_TOOL.EXIT_OTHER_FAILURE
     assert captured["exit_code"] == GOVERNANCE_TOOL.EXIT_OTHER_FAILURE
+    assert captured["error"]["type"] == "ToolUnavailableError"
+    assert "missing tool script" in str(captured["error"]["message"])
+    assert "missing_tool" in captured["data"]
+
+
+def test_fixity_scan_reports_missing_script_with_typed_error(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_emit_result(*, args, command_name: str, exit_code: int, data, error=None) -> int:
+        captured["command_name"] = command_name
+        captured["exit_code"] = exit_code
+        captured["data"] = data
+        captured["error"] = error
+        return exit_code
+
+    monkeypatch.setattr(GOVERNANCE_TOOL, "_emit_result", _fake_emit_result)
+    monkeypatch.setattr(GOVERNANCE_TOOL, "_record_premis", lambda **_: None)
+    monkeypatch.setattr(GOVERNANCE_TOOL, "PROJECT_ROOT", tmp_path)
+
+    args = SimpleNamespace(
+        json=True,
+        json_pretty=False,
+        json_output=None,
+        json_canonical_profile="canonical_v1",
+        premis_log=None,
+        premis_agent_id="tp.archive.governance.v1",
+        archive_index="index.csv.gz",
+        archive_root="/archive",
+        out_dir="archive_reports/fixity",
+        workers=4,
+        strict=False,
+        strict_identity=False,
+        validate_schemas=True,
+    )
+    exit_code = GOVERNANCE_TOOL._handle_fixity_scan(args)
+
+    assert exit_code == GOVERNANCE_TOOL.EXIT_OTHER_FAILURE
+    assert captured["command_name"] == "fixity-scan"
+    assert captured["error"]["type"] == "ToolUnavailableError"
+    assert "missing tool script" in str(captured["error"]["message"])
+    assert "missing_tool" in captured["data"]
+
+
+def test_fixity_verify_reports_missing_script_with_typed_error(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_emit_result(*, args, command_name: str, exit_code: int, data, error=None) -> int:
+        captured["command_name"] = command_name
+        captured["exit_code"] = exit_code
+        captured["data"] = data
+        captured["error"] = error
+        return exit_code
+
+    monkeypatch.setattr(GOVERNANCE_TOOL, "_emit_result", _fake_emit_result)
+    monkeypatch.setattr(GOVERNANCE_TOOL, "_record_premis", lambda **_: None)
+    monkeypatch.setattr(GOVERNANCE_TOOL, "PROJECT_ROOT", tmp_path)
+
+    args = SimpleNamespace(
+        json=True,
+        json_pretty=False,
+        json_output=None,
+        json_canonical_profile="canonical_v1",
+        premis_log=None,
+        premis_agent_id="tp.archive.governance.v1",
+        hash_manifest="archive_reports/fixity/hash_manifest.csv.gz",
+        archive_root="/archive",
+        report_path=None,
+        workers=4,
+        verify_sample=0,
+    )
+    exit_code = GOVERNANCE_TOOL._handle_fixity_verify(args)
+
+    assert exit_code == GOVERNANCE_TOOL.EXIT_OTHER_FAILURE
+    assert captured["command_name"] == "fixity-verify"
     assert captured["error"]["type"] == "ToolUnavailableError"
     assert "missing tool script" in str(captured["error"]["message"])
     assert "missing_tool" in captured["data"]

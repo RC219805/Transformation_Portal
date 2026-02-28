@@ -129,10 +129,11 @@ def _load_policy(path: Path) -> dict[str, Any]:
             if not isinstance(relpath_regex, str) or not relpath_regex.strip():
                 raise PolicyError(f"{context}.relpath_regex must be a non-empty string")
             try:
-                re.compile(relpath_regex)
+                compiled_relpath_regex = re.compile(relpath_regex)
             except re.error as exc:
                 raise PolicyError(f"{context}.relpath_regex is invalid: {exc}") from exc
             normalized_rule["relpath_regex"] = relpath_regex
+            normalized_rule["_relpath_regex_compiled"] = compiled_relpath_regex
 
         normalized_rules.append(normalized_rule)
 
@@ -154,7 +155,10 @@ def _rule_matches(entry: dict[str, Any], rule: dict[str, Any]) -> bool:
     if "extension_in" in rule and extension not in set(rule["extension_in"]):
         return False
 
-    if "relpath_regex" in rule and re.search(str(rule["relpath_regex"]), relpath) is None:
+    compiled_relpath_regex = rule.get("_relpath_regex_compiled")
+    if compiled_relpath_regex is None and "relpath_regex" in rule:
+        compiled_relpath_regex = re.compile(str(rule["relpath_regex"]))
+    if compiled_relpath_regex is not None and compiled_relpath_regex.search(relpath) is None:
         return False
 
     return True

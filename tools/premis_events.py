@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 from datetime import UTC, datetime
@@ -27,6 +28,24 @@ RFC3339_TIMESTAMP_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+
 
 def _iso_now_utc() -> str:
     return datetime.now(tz=UTC).isoformat().replace("+00:00", "Z")
+
+
+def _reject_json_constants(value: str) -> None:
+    raise ValueError(f"invalid JSON constant {value!r}")
+
+
+def _ensure_finite_json_value(value: Any, *, line_number: int, path: str = "$") -> None:
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError(f"line {line_number}: non-finite number at {path}")
+        return
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            _ensure_finite_json_value(nested, line_number=line_number, path=f"{path}.{key}")
+        return
+    if isinstance(value, list):
+        for index, nested in enumerate(value):
+            _ensure_finite_json_value(nested, line_number=line_number, path=f"{path}[{index}]")
 
 
 def build_premis_event(
@@ -251,11 +270,12 @@ def _validate_jsonl(path: Path) -> int:
             if not stripped:
                 continue
             try:
-                payload = json.loads(stripped)
-            except json.JSONDecodeError as exc:
+                payload = json.loads(stripped, parse_constant=_reject_json_constants)
+            except (json.JSONDecodeError, ValueError) as exc:
                 raise ValueError(f"line {line_number}: invalid JSON: {exc}") from exc
             if not isinstance(payload, dict):
                 raise ValueError(f"line {line_number}: payload must be an object")
+            _ensure_finite_json_value(payload, line_number=line_number)
             _validate_event(payload, line_number=line_number)
             count += 1
     return count

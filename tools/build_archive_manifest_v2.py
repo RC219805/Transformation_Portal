@@ -13,6 +13,7 @@ from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Iterable
+from uuid import uuid4
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -69,7 +70,7 @@ MIME_BY_COMPOUND_EXTENSION = {
 }
 
 
-def _open_csv_reader(path: Path) -> Iterable[dict[str, str]]:
+def _open_csv_reader(path: Path, *, required_columns: set[str] | None = None) -> Iterable[dict[str, str]]:
     if path.suffix == ".gz":
         handle = gzip.open(path, "rt", encoding="utf-8", newline="")
     else:
@@ -100,12 +101,17 @@ def _open_csv_reader(path: Path) -> Iterable[dict[str, str]]:
         reader = csv.DictReader(_iter_lines())
         if reader.fieldnames is None:
             raise ValueError(f"CSV has no header row: {path}")
+        if required_columns is not None:
+            available_columns = {name for name in reader.fieldnames if name}
+            missing = sorted(required_columns.difference(available_columns))
+            if missing:
+                raise ValueError(f"CSV missing required columns ({', '.join(missing)}): {path}")
         yield from reader
 
 
-def _consume_csv_rows(path: Path) -> int:
+def _consume_csv_rows(path: Path, *, required_columns: set[str] | None = None) -> int:
     row_count = 0
-    for _ in _open_csv_reader(path):
+    for _ in _open_csv_reader(path, required_columns=required_columns):
         row_count += 1
     return row_count
 
@@ -333,7 +339,10 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         # Parse both for sanity/lineage validation even though hash rows drive output.
-        _consume_csv_rows(Path(args.archive_index))
+        _consume_csv_rows(
+            Path(args.archive_index),
+            required_columns={"origin_drive", "partition", "relpath"},
+        )
         hash_rows = _load_hash_rows(Path(args.hash_manifest))
         rights_map = _load_rights(Path(args.rights_jsonl) if args.rights_jsonl else None)
     except ValueError as exc:
@@ -370,13 +379,20 @@ def main(argv: list[str] | None = None) -> int:
         "rights_unspecified_count": len(entries) - rights_coverage,
     }
 
-    lines = [json_line(entry) for entry in entries]
+    tmp_out_path = out_jsonl.with_name(f".{out_jsonl.name}.{uuid4().hex}.tmp")
     try:
-        atomic_write_text(out_jsonl, "".join(lines))
+        out_jsonl.parent.mkdir(parents=True, exist_ok=True)
+        with tmp_out_path.open("w", encoding="utf-8", newline="\n") as out_handle:
+            for entry in entries:
+                out_handle.write(json_line(entry))
+        tmp_out_path.replace(out_jsonl)
         atomic_write_text(out_summary, deterministic_json_dumps(summary_payload, pretty=True) + "\n")
     except OSError as exc:
         print(f"Build error: unable to write outputs: {exc}", file=sys.stderr)
         return EXIT_BUILD_ERROR
+    finally:
+        if tmp_out_path.exists():
+            tmp_out_path.unlink()
 
     print(f"Wrote {len(entries)} manifest rows to {out_jsonl}")
     print(f"Wrote summary to {out_summary}")

@@ -133,6 +133,33 @@ def _tool_unavailable_error(command_name: str, script_path: Path) -> dict[str, A
 
 def _handle_fixity_scan(args: argparse.Namespace) -> int:
     script_path = PROJECT_ROOT / "tools" / "archive_hash_manifest.py"
+    out_dir = Path(args.out_dir)
+    if not script_path.is_file():
+        return _emit_result(
+            args=args,
+            command_name="fixity-scan",
+            exit_code=EXIT_OTHER_FAILURE,
+            data={
+                "tool": "archive_hash_manifest.py",
+                "archive_index": args.archive_index,
+                "archive_root": args.archive_root,
+                "out_dir": args.out_dir,
+                "workers": int(args.workers),
+                "strict": bool(args.strict),
+                "strict_identity": bool(args.strict_identity),
+                "validate_schemas": bool(args.validate_schemas),
+                "artifacts": {
+                    "hash_manifest": str(out_dir / "hash_manifest.csv.gz"),
+                    "hash_summary": str(out_dir / "hash_summary.json"),
+                    "merkle_roots": str(out_dir / "merkle_roots.json"),
+                },
+                "stdout": "",
+                "stderr": "",
+                "missing_tool": str(script_path),
+            },
+            error=_tool_unavailable_error("fixity-scan", script_path),
+        )
+
     command = [
         sys.executable,
         str(script_path),
@@ -153,7 +180,6 @@ def _handle_fixity_scan(args: argparse.Namespace) -> int:
         command.append("--validate-schemas")
 
     result = _run_tool(command)
-    out_dir = Path(args.out_dir)
     data = {
         "tool": "archive_hash_manifest.py",
         "archive_index": args.archive_index,
@@ -197,6 +223,24 @@ def _handle_fixity_scan(args: argparse.Namespace) -> int:
 def _handle_fixity_verify(args: argparse.Namespace) -> int:
     script_path = PROJECT_ROOT / "tools" / "verify_hash_manifest.py"
     report_path = Path(args.report_path) if args.report_path else Path(args.hash_manifest).parent / "verification_report.json"
+    if not script_path.is_file():
+        return _emit_result(
+            args=args,
+            command_name="fixity-verify",
+            exit_code=EXIT_OTHER_FAILURE,
+            data={
+                "tool": "verify_hash_manifest.py",
+                "hash_manifest": args.hash_manifest,
+                "archive_root": args.archive_root,
+                "report_path": str(report_path),
+                "workers": int(args.workers),
+                "verify_sample": int(args.verify_sample),
+                "stdout": "",
+                "stderr": "",
+                "missing_tool": str(script_path),
+            },
+            error=_tool_unavailable_error("fixity-verify", script_path),
+        )
 
     command = [
         sys.executable,
