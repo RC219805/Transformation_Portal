@@ -251,6 +251,36 @@ def test_phase4f_cli_returns_exit_code_33_for_strict_order_violation(tmp_path: P
     assert "capture metadata array must be sorted by relative_path" in result.stderr
 
 
+def test_phase4f_cli_allows_unsorted_input_when_strict_disabled(tmp_path: Path) -> None:
+    capture_payload, metadata_manifest_payload, provenance_manifest_payload, provenance_merkle_payload = (
+        _build_two_record_chain_payloads()
+    )
+    unsorted_capture_payload = [capture_payload[1], capture_payload[0]]
+
+    capture_path = tmp_path / "capture_unsorted_non_strict.json"
+    metadata_manifest_path = tmp_path / "metadata_manifest.json"
+    provenance_manifest_path = tmp_path / "provenance_manifest.json"
+    provenance_merkle_path = tmp_path / "provenance_merkle.json"
+    _write_json(capture_path, unsorted_capture_payload)
+    _write_json(metadata_manifest_path, metadata_manifest_payload)
+    _write_json(provenance_manifest_path, provenance_manifest_payload)
+    _write_json(provenance_merkle_path, provenance_merkle_payload)
+
+    result = _run_verify_cli(
+        "--capture-metadata",
+        str(capture_path),
+        "--metadata-manifest",
+        str(metadata_manifest_path),
+        "--provenance-manifest",
+        str(provenance_manifest_path),
+        "--provenance-merkle",
+        str(provenance_merkle_path),
+        "--no-strict-input-order",
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+
+
 def test_phase4f_cli_returns_exit_code_34_for_metadata_hash_mismatch(tmp_path: Path) -> None:
     bad_manifest = tmp_path / "metadata_manifest_bad_hash.json"
     bad_provenance = tmp_path / "provenance_manifest_bad_hash.json"
