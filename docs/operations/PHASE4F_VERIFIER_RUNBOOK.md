@@ -81,17 +81,12 @@ See `docs/contracts/exit_codes.md` for normative contract details.
 
 ## Cross-Runtime Parity Gate
 
-CI parity checker:
-
-```bash
-python tools/check_phase4f_verifier_cross_runtime.py \
-  --python-a /path/to/python3.11 \
-  --python-b /path/to/python3.12 \
-  --project-root /path/to/repo
-```
+Cross-runtime parity is enforced by CI in
+`.github/workflows/determinism-gate.yml` at step
+`Phase 4F verifier cross-runtime parity gate (3.11 vs 3.12)`.
 
 Expected behavior:
 
-- `0`: parity passed (identical outcomes and report bytes)
-- `31`: runtime invocation failure
-- `32`: parity mismatch
+- CI step green: parity passed (identical outcomes and report bytes)
+- CI step failure: inspect determinism-gate logs for parity mismatch or runtime
+  invocation failure details.

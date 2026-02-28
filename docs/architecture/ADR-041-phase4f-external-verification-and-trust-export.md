@@ -68,11 +68,13 @@ required verifier dependency (not optional) for deterministic audit behavior.
 
 ### D3. Strict Mode Semantics Are Frozen for Verification
 
-The verifier supports `--strict` with the following frozen semantics:
+The verifier supports `--strict-input-order` / `--no-strict-input-order`
+(default: strict input ordering enabled) with the following frozen semantics:
 
 - inputs MUST already be sorted by `relative_path` when ordering is defined,
 - aligned inputs MUST match 1:1 by `relative_path`,
-- any mismatch in recomputed hashes, Merkle root, or schema validity is fatal,
+- any mismatch in recomputed hashes, Merkle root, or schema validity is fatal
+  regardless of input-order toggle,
 - strict mode does not reinterpret Phase 4C warnings; it verifies what was emitted.
 
 Phase 4F MUST NOT change Phase 4C strict-mode extraction policy.
@@ -233,6 +235,6 @@ Trade-offs:
 - `tools/build_provenance_manifest.py`
 - `tools/build_provenance_merkle.py`
 - `tools/verify_phase4_chain.py`
-- `tools/check_phase4f_verifier_cross_runtime.py`
+- `.github/workflows/determinism-gate.yml`
 - `docs/architecture/ADR-035-bundle-root-anchoring-invariants.md`
 - `docs/architecture/ADR-040-remove-multipleof-floats-tp-meta-capture-v1.md`
