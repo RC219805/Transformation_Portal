@@ -126,9 +126,7 @@ def test_manifest_build_streaming_does_not_publish_partial_output_on_build_error
 
     archive_index = tmp_path / "archive_index_normalized.csv"
     archive_index.write_text(
-        "origin_drive,partition,relpath\n"
-        "DriveA,Part1,DriveA/Part1/alpha.txt\n"
-        "DriveA,Part1,DriveA/Part1/beta.txt\n",
+        "origin_drive,partition,relpath\n" "DriveA,Part1,DriveA/Part1/alpha.txt\n" "DriveA,Part1,DriveA/Part1/beta.txt\n",
         encoding="utf-8",
     )
 
