@@ -27,6 +27,9 @@ VERIFICATION_REPORT_CONTRACT_VERSION = "tp.meta.verification_report.v1"
 VERIFIER_NAME = "verify_phase4_chain.py"
 VERIFIER_VERSION = "phase4f-v1"
 VERIFIER_BUILD_ID = "phase4f-build-v1"
+FAILURE_CODE_LABEL_MAX_LENGTH = 128
+FAILURE_MESSAGE_MAX_LENGTH = 16384
+_FAILURE_MESSAGE_TRUNCATION_SUFFIX = "... [truncated]"
 
 FAILURE_LABEL_MALFORMED_INPUT = "MALFORMED_INPUT"
 FAILURE_LABEL_SCHEMA_VALIDATION_FAILURE = "SCHEMA_VALIDATION_FAILURE"
@@ -594,6 +597,21 @@ def default_failure_computed_block() -> dict[str, Any]:
     }
 
 
+def _normalize_failure_detail(value: Any, *, default: str, max_length: int) -> str:
+    if value is None:
+        text = default
+    else:
+        text = str(value)
+        if not text:
+            text = default
+    if len(text) <= max_length:
+        return text
+    if max_length <= len(_FAILURE_MESSAGE_TRUNCATION_SUFFIX):
+        return _FAILURE_MESSAGE_TRUNCATION_SUFFIX[:max_length]
+    cutoff = max_length - len(_FAILURE_MESSAGE_TRUNCATION_SUFFIX)
+    return f"{text[:cutoff]}{_FAILURE_MESSAGE_TRUNCATION_SUFFIX}"
+
+
 def build_verification_report_payload(
     *,
     inputs: dict[str, Any],
@@ -603,6 +621,21 @@ def build_verification_report_payload(
     failure_message: str | None = None,
 ) -> dict[str, Any]:
     """Build deterministic verification report payload."""
+    if passed:
+        normalized_failure_code_label: str | None = None
+        normalized_failure_message: str | None = None
+    else:
+        normalized_failure_code_label = _normalize_failure_detail(
+            failure_code_label,
+            default="UNSPECIFIED_FAILURE",
+            max_length=FAILURE_CODE_LABEL_MAX_LENGTH,
+        )
+        normalized_failure_message = _normalize_failure_detail(
+            failure_message,
+            default="verification failed",
+            max_length=FAILURE_MESSAGE_MAX_LENGTH,
+        )
+
     return {
         "verification_contract_version": VERIFICATION_REPORT_CONTRACT_VERSION,
         "inputs": inputs,
@@ -621,8 +654,8 @@ def build_verification_report_payload(
         },
         "verification_status": {
             "passed": passed,
-            "failure_code_label": None if passed else failure_code_label,
-            "failure_message": None if passed else failure_message,
+            "failure_code_label": normalized_failure_code_label,
+            "failure_message": normalized_failure_message,
         },
     }
 

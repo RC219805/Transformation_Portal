@@ -36,7 +36,7 @@ from tp.phase4.verify_phase4_chain import (  # noqa: E402
     verify_phase4_chain_from_paths,
 )
 
-# Phase 4F exit-code contract freezes verifier routing to the dedicated 31-36 range (docs/contracts/exit_codes.md).
+# Phase 4F exit-code contract freezes verifier routing to the dedicated 31-37 range (docs/contracts/exit_codes.md).
 EXIT_SUCCESS = 0
 EXIT_MALFORMED_INPUT = 31
 EXIT_SCHEMA_VALIDATION_FAILURE = 32

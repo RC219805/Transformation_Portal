@@ -50,7 +50,9 @@
               "oneOf": [
                 {
                   "type": "string",
-                  "const": "tp.meta.capture.v1"
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^tp\\.meta\\.[a-z0-9_]+\\.v[0-9]+$"
                 },
                 {
                   "type": "null"
@@ -83,7 +85,9 @@
               "oneOf": [
                 {
                   "type": "string",
-                  "const": "tp.meta.capture_manifest.v1"
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^tp\\.meta\\.[a-z0-9_]+\\.v[0-9]+$"
                 },
                 {
                   "type": "null"
@@ -94,7 +98,9 @@
               "oneOf": [
                 {
                   "type": "string",
-                  "const": "tp.meta.capture.v1"
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^tp\\.meta\\.[a-z0-9_]+\\.v[0-9]+$"
                 },
                 {
                   "type": "null"
@@ -127,7 +133,9 @@
               "oneOf": [
                 {
                   "type": "string",
-                  "const": "tp.meta.provenance.v1"
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^tp\\.meta\\.[a-z0-9_]+\\.v[0-9]+$"
                 },
                 {
                   "type": "null"
@@ -138,7 +146,9 @@
               "oneOf": [
                 {
                   "type": "string",
-                  "const": "tp.meta.capture.v1"
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^tp\\.meta\\.[a-z0-9_]+\\.v[0-9]+$"
                 },
                 {
                   "type": "null"
@@ -171,7 +181,9 @@
               "oneOf": [
                 {
                   "type": "string",
-                  "const": "tp.meta.provenance_merkle.v1"
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^tp\\.meta\\.[a-z0-9_]+\\.v[0-9]+$"
                 },
                 {
                   "type": "null"
@@ -182,7 +194,9 @@
               "oneOf": [
                 {
                   "type": "string",
-                  "const": "tp.meta.provenance.v1"
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^tp\\.meta\\.[a-z0-9_]+\\.v[0-9]+$"
                 },
                 {
                   "type": "null"
@@ -328,7 +342,7 @@
             {
               "type": "string",
               "minLength": 1,
-              "maxLength": 4096
+              "maxLength": 16384
             },
             {
               "type": "null"
@@ -337,5 +351,121 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "verification_status": {
+            "required": [
+              "passed"
+            ],
+            "properties": {
+              "passed": {
+                "const": true
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "verification_status": {
+            "properties": {
+              "failure_code_label": {
+                "type": "null"
+              },
+              "failure_message": {
+                "type": "null"
+              }
+            }
+          },
+          "computed": {
+            "properties": {
+              "metadata_sha256_summary_sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "metadata_entry_count": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "provenance_entry_sha256_summary_sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "provenance_entry_count": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "provenance_merkle_root": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "provenance_leaf_count": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "verification_status": {
+            "required": [
+              "passed"
+            ],
+            "properties": {
+              "passed": {
+                "const": false
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "verification_status": {
+            "properties": {
+              "failure_code_label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "failure_message": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 16384
+              }
+            }
+          },
+          "computed": {
+            "properties": {
+              "metadata_sha256_summary_sha256": {
+                "type": "null"
+              },
+              "metadata_entry_count": {
+                "type": "null"
+              },
+              "provenance_entry_sha256_summary_sha256": {
+                "type": "null"
+              },
+              "provenance_entry_count": {
+                "type": "null"
+              },
+              "provenance_merkle_root": {
+                "type": "null"
+              },
+              "provenance_leaf_count": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

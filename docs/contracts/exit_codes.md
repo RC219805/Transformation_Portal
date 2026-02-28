@@ -63,6 +63,7 @@ consumers MUST NOT interpret a bare integer without tool context.
 - `34`: metadata hash mismatch
 - `35`: provenance entry hash mismatch
 - `36`: merkle mismatch
+- `37`: report write failure
 
 ### Cross-runtime parity gates
 
