@@ -119,7 +119,10 @@ payload = {
     "read_only_observed": read_only_observed,
     "allow_writable_subset": allow_writable_subset,
 }
-contract_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+serialized = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+tmp_contract_path = contract_path.with_name(f".{contract_path.name}.tmp")
+tmp_contract_path.write_text(serialized, encoding="utf-8")
+tmp_contract_path.replace(contract_path)
 PY
 
 PRE_HASH_CMD=("$PYTHON_BIN" tools/archive_hash_manifest.py
@@ -227,13 +230,17 @@ summary = {
         "sha256": post_digest,
         "verification_passed": post_ok,
     },
-    "evaluation_command": eval_command,
+    "evaluation_command_present": bool(eval_command),
+    "evaluation_command_sha256": hashlib.sha256(eval_command.encode("utf-8")).hexdigest() if eval_command else None,
     "evaluation_exit_code": eval_exit,
     "hash_manifest_match": manifest_match,
     "sealed_integrity_passed": bool(manifest_match and pre_ok and post_ok and eval_exit == 0),
 }
 
-(run_dir / "sealed_eval_summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+summary_path = run_dir / "sealed_eval_summary.json"
+tmp_summary_path = run_dir / ".sealed_eval_summary.json.tmp"
+tmp_summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+tmp_summary_path.replace(summary_path)
 PY
 
 if [[ ! -f "$RUN_DIR/sealed_eval_summary.json" ]]; then
@@ -284,7 +291,10 @@ manifest_payload = {
     "file_count": len(entries),
     "files": entries,
 }
-(audit_dir / "audit_manifest.json").write_text(json.dumps(manifest_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+manifest_path = audit_dir / "audit_manifest.json"
+tmp_manifest_path = audit_dir / ".audit_manifest.json.tmp"
+tmp_manifest_path.write_text(json.dumps(manifest_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+tmp_manifest_path.replace(manifest_path)
 PY
 
 INTEGRITY_PASSED="$("$PYTHON_BIN" - <<'PY' "$RUN_DIR/sealed_eval_summary.json"

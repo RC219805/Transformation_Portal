@@ -386,6 +386,10 @@ def test_sealed_eval_run_emits_audit_package_and_machine_payload(tmp_path: Path)
     assert summary_files, "Expected sealed eval summary output"
     summary_payload = json.loads(summary_files[-1].read_text(encoding="utf-8"))
     assert summary_payload["sealed_integrity_passed"] is True
+    assert summary_payload["evaluation_command_present"] is True
+    assert isinstance(summary_payload["evaluation_command_sha256"], str)
+    assert len(summary_payload["evaluation_command_sha256"]) == 64
+    assert "evaluation_command" not in summary_payload
 
     audit_manifest = summary_files[-1].parent / "audit_package" / "audit_manifest.json"
     assert audit_manifest.exists()

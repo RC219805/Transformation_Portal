@@ -106,8 +106,7 @@ def main(argv: list[str] | None = None) -> int:
     partition_items: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
     for entry in file_entries:
         relpath = entry["relpath"]
-        item_label = Path(relpath).stem or relpath
-        partition_items[entry["partition"]][item_label].append(entry["id"])
+        partition_items[entry["partition"]][relpath].append(entry["id"])
 
     collection_id = "UNSPECIFIED"
     if payload_rows:
@@ -121,10 +120,7 @@ def main(argv: list[str] | None = None) -> int:
         lines.append(f'    <mets:fileGrp USE="{_escape(group)}">')
         for entry in sorted(grouped_files[group], key=lambda item: item["id"]):
             lines.append(f'      <mets:file ID="{entry["id"]}" MIMETYPE="{_escape(entry["mime"])}">')
-            lines.append(
-                "        <mets:FLocat "
-                f'LOCTYPE="URL" xlink:href="{_escape(entry["href"])}"/>'
-            )
+            lines.append("        <mets:FLocat " f'LOCTYPE="URL" xlink:href="{_escape(entry["href"])}"/>')
             lines.append("      </mets:file>")
         lines.append("    </mets:fileGrp>")
     lines.append("  </mets:fileSec>")
@@ -135,9 +131,9 @@ def main(argv: list[str] | None = None) -> int:
         partition_label = partition or "UNSPECIFIED"
         lines.append(f'      <mets:div TYPE="partition" LABEL="{_escape(partition_label)}">')
         items = partition_items[partition]
-        for item_label in sorted(items):
-            lines.append(f'        <mets:div TYPE="item" LABEL="{_escape(item_label)}">')
-            for file_id in sorted(set(items[item_label])):
+        for item_relpath in sorted(items):
+            lines.append(f'        <mets:div TYPE="item" LABEL="{_escape(item_relpath)}">')
+            for file_id in sorted(set(items[item_relpath])):
                 lines.append(f'          <mets:fptr FILEID="{file_id}"/>')
             lines.append("        </mets:div>")
         lines.append("      </mets:div>")

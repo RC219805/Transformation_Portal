@@ -21,7 +21,6 @@ EXIT_INPUT_ERROR = 2
 EXIT_STAC_UNAVAILABLE = 3
 
 
-
 def _load_manifest(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     with path.open("r", encoding="utf-8") as handle:
@@ -119,8 +118,7 @@ def _write_stac_outputs(
     items_dir: Path,
     datetime_field: str,
 ) -> tuple[int, int]:
-    item_links: list[dict[str, str]] = []
-    items_written = 0
+    stac_items: list[tuple[str, dict[str, Any], dict[str, str]]] = []
 
     for row in sorted(rows, key=lambda row: str(row.get("relpath") or "")):
         if str(row.get("hash_status") or "") != "ok":
@@ -164,16 +162,27 @@ def _write_stac_outputs(
             ],
         }
 
-        items_dir.mkdir(parents=True, exist_ok=True)
-        atomic_write_text(items_dir / item_filename, deterministic_json_dumps(item_payload, pretty=True) + "\n")
-        item_links.append(
-            {
-                "rel": "item",
-                "href": f"items/{item_filename}",
-                "type": "application/geo+json",
-            }
+        stac_items.append(
+            (
+                item_filename,
+                item_payload,
+                {
+                    "rel": "item",
+                    "href": f"items/{item_filename}",
+                    "type": "application/geo+json",
+                },
+            )
         )
-        items_written += 1
+
+    if not stac_items:
+        return 0, 0
+
+    items_dir.mkdir(parents=True, exist_ok=True)
+    for item_filename, item_payload, _ in stac_items:
+        atomic_write_text(items_dir / item_filename, deterministic_json_dumps(item_payload, pretty=True) + "\n")
+
+    item_links = [link for _, _, link in stac_items]
+    items_written = len(stac_items)
 
     catalog_payload = {
         "type": "Catalog",
@@ -213,6 +222,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
 
+    if args.out_stac_items_dir and not args.out_stac_catalog:
+        print("Input error: --out-stac-items-dir requires --out-stac-catalog", file=sys.stderr)
+        return EXIT_INPUT_ERROR
+
     try:
         rows = _load_manifest(Path(args.manifest_jsonl))
     except ValueError as exc:
@@ -238,8 +251,6 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         if items_written == 0:
-            if catalog_path.exists():
-                catalog_path.unlink()
             if args.require_stac:
                 print("STAC export unavailable: no entries with gps_latitude/gps_longitude and datetime", file=sys.stderr)
                 return EXIT_STAC_UNAVAILABLE
