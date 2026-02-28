@@ -396,7 +396,7 @@ def test_run_wrapped_tool_reports_missing_script_with_typed_error(monkeypatch) -
     exit_code = GOVERNANCE_TOOL._run_wrapped_tool(
         args=args,
         command_name="bag-build",
-        script_name="archive_bagit.py",
+        script_name="archive_bagit_missing.py",
         tool_args=["build"],
         premis_event_type=None,
         premis_event_detail="",
