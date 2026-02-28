@@ -79,6 +79,16 @@ def _normalize_revision(revision: Optional[str]) -> Optional[str]:
     return normalized
 
 
+def _canonicalize_revision(revision: Optional[str]) -> Optional[str]:
+    """Normalize whitespace and canonicalize pinned SHAs to lowercase."""
+    normalized = _normalize_revision(revision)
+    if normalized is None:
+        return None
+    if is_pinned_revision(normalized):
+        return normalized.lower()
+    return normalized
+
+
 def is_pinned_revision(revision: Optional[str]) -> bool:
     """True if revision is a deterministic pinned commit SHA."""
     normalized = _normalize_revision(revision)
@@ -178,8 +188,8 @@ def resolve_model_lock_revision(
         manifest_path=manifest_path,
         strict_manifest_required=strict_enabled and manifest_supplied,
     )
-    manifest_rev_normalized = _normalize_revision(manifest_rev)
-    requested = _normalize_revision(requested_revision)
+    manifest_rev_normalized = _canonicalize_revision(manifest_rev)
+    requested = _canonicalize_revision(requested_revision)
 
     if requested is None and is_pinned_revision(manifest_rev_normalized):
         requested = manifest_rev_normalized

@@ -220,13 +220,14 @@ class DepthAnythingV2Model:
 
         if self.backend == ModelBackend.COREML:
             coreml_repo = self._coreml_repo_for_variant(self.variant)
-            if coreml_repo:
-                self.coreml_revision = resolve_model_lock_revision(
-                    coreml_repo,
-                    self.coreml_revision,
-                    strict=self.strict_model_lock,
-                    context="DepthAnythingV2Model(CoreML)",
-                )
+            if not coreml_repo:
+                raise ValueError(f"CoreML model not available for variant {self.variant}. " "Use SMALL or BASE.")
+            self.coreml_revision = resolve_model_lock_revision(
+                coreml_repo,
+                self.coreml_revision,
+                strict=self.strict_model_lock,
+                context="DepthAnythingV2Model(CoreML)",
+            )
             if not self.coreml_revision:
                 logger.warning(
                     "DepthAnythingV2 CoreML artifact for '%s' is unpinned (no coreml_revision). "

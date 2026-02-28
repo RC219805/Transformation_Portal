@@ -97,6 +97,19 @@ def test_resolve_model_lock_revision_strict_allows_manifest_sha_with_whitespace(
     assert resolve_model_lock_revision("depth-anything/Depth-Anything-V2-Small-hf", sha) == sha
 
 
+def test_resolve_model_lock_revision_strict_canonicalizes_sha_casing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    manifest_path = tmp_path / "model_lock.yaml"
+    sha_lower = "2" * 40
+    _write_manifest(
+        manifest_path,
+        {"depth-anything/Depth-Anything-V2-Small-hf": {"revision": sha_lower}},
+    )
+    monkeypatch.setenv("TP_MODEL_LOCK_MANIFEST", str(manifest_path))
+    monkeypatch.setenv("TP_STRICT_MODEL_LOCK", "1")
+
+    assert resolve_model_lock_revision("depth-anything/Depth-Anything-V2-Small-hf", sha_lower.upper()) == sha_lower
+
+
 def test_depth_anything_model_enforces_strict_model_lock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     manifest_path = tmp_path / "model_lock.yaml"
     _write_manifest(
@@ -112,6 +125,14 @@ def test_depth_anything_model_enforces_strict_model_lock(tmp_path: Path, monkeyp
             variant=ModelVariant.SMALL,
             backend=ModelBackend.PYTORCH_CPU,
             strict_model_lock=True,
+        )
+
+
+def test_depth_anything_coreml_large_variant_fails_with_unsupported_message() -> None:
+    with pytest.raises(ValueError, match="CoreML model not available for variant"):
+        DepthAnythingV2Model(
+            variant=ModelVariant.LARGE,
+            backend=ModelBackend.COREML,
         )
 
 
