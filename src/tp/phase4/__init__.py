@@ -35,6 +35,22 @@ from .provenance_capture import (
     serialize_provenance_manifest,
     serialize_provenance_merkle,
 )
+from .verify_phase4_chain import (
+    FAILURE_LABEL_ALIGNMENT_FAILURE,
+    FAILURE_LABEL_MALFORMED_INPUT,
+    FAILURE_LABEL_MERKLE_MISMATCH,
+    FAILURE_LABEL_METADATA_HASH_MISMATCH,
+    FAILURE_LABEL_PROVENANCE_ENTRY_HASH_MISMATCH,
+    FAILURE_LABEL_SCHEMA_VALIDATION_FAILURE,
+    Phase4AlignmentError,
+    Phase4MerkleMismatchError,
+    Phase4MetadataHashMismatchError,
+    Phase4ProvenanceEntryHashMismatchError,
+    Phase4SchemaValidationError,
+    Phase4VerificationInputError,
+    verify_phase4_chain_from_paths,
+    verify_phase4_chain_payloads,
+)
 
 __all__ = [
     "ConfigValidationError",
@@ -66,4 +82,18 @@ __all__ = [
     "compute_provenance_entry_sha256",
     "serialize_provenance_manifest",
     "serialize_provenance_merkle",
+    "FAILURE_LABEL_ALIGNMENT_FAILURE",
+    "FAILURE_LABEL_MALFORMED_INPUT",
+    "FAILURE_LABEL_MERKLE_MISMATCH",
+    "FAILURE_LABEL_METADATA_HASH_MISMATCH",
+    "FAILURE_LABEL_PROVENANCE_ENTRY_HASH_MISMATCH",
+    "FAILURE_LABEL_SCHEMA_VALIDATION_FAILURE",
+    "Phase4AlignmentError",
+    "Phase4MerkleMismatchError",
+    "Phase4MetadataHashMismatchError",
+    "Phase4ProvenanceEntryHashMismatchError",
+    "Phase4SchemaValidationError",
+    "Phase4VerificationInputError",
+    "verify_phase4_chain_from_paths",
+    "verify_phase4_chain_payloads",
 ]

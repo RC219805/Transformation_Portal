@@ -14,6 +14,7 @@ from .hash_capture_metadata import (
     canonical_json_bytes,
     compute_metadata_sha256,
 )
+from .schema_validation import build_draft202012_validator
 
 PROVENANCE_CONTRACT_VERSION = "tp.meta.provenance.v1"
 PROVENANCE_MERKLE_CONTRACT_VERSION = "tp.meta.provenance_merkle.v1"
@@ -34,17 +35,7 @@ class ProvenanceMerkleSchemaValidationError(ValueError):
 
 
 def _build_validator(schema: dict[str, Any], *, error_cls: type[Exception], label: str) -> Any:
-    try:
-        import jsonschema
-    except ImportError as exc:
-        raise error_cls("jsonschema dependency is required for schema validation") from exc
-
-    try:
-        jsonschema.Draft202012Validator.check_schema(schema)
-    except jsonschema.exceptions.SchemaError as exc:
-        raise error_cls(f"invalid {label} schema: {exc.message}") from exc
-
-    return jsonschema.Draft202012Validator(schema)
+    return build_draft202012_validator(schema, error_cls=error_cls, label=label)
 
 
 def _validate_capture_records(records: list[dict[str, Any]], metadata_schema: dict[str, Any]) -> None:

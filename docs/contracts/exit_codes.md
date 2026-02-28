@@ -17,7 +17,7 @@ consumers MUST NOT interpret a bare integer without tool context.
 - `0`: Success
 - `1`: Unhandled/runtime failure (not part of deterministic contract surfaces)
 - `2-9`: Phase 4 tool-local deterministic failures
-- `30-39`: Cross-runtime determinism/parity gate failures
+- `30-39`: External verification/parity deterministic failures
 
 ## Current Assignments
 
@@ -53,6 +53,16 @@ consumers MUST NOT interpret a bare integer without tool context.
 - `3`: input invariant failure
 - `4`: schema validation failure
 - `5`: merkle write failure
+
+### `tools/verify_phase4_chain.py` (Phase 4F external verifier)
+
+- `0`: success
+- `31`: malformed input / invalid args / unreadable files
+- `32`: schema validation failure
+- `33`: alignment failure (path mismatch, duplicates, ordering violation in strict mode, version mismatch)
+- `34`: metadata hash mismatch
+- `35`: provenance entry hash mismatch
+- `36`: merkle mismatch
 
 ### Cross-runtime parity gates
 
