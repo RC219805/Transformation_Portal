@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.transformation-portal.dev/machine_mode/tp.archive.machine.v1/data.manifest-build.schema.json",
+  "title": "manifest-build data payload",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.archive.machine.v1/data.tool-exec.schema.json"
+    }
+  ]
+}

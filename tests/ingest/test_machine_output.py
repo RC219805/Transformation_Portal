@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from transformation_portal.ingest.errors import (
     BitDepthViolation,
     IngestExitCode,
@@ -257,3 +259,9 @@ def test_golden_contract_validate_result_canonical_output() -> None:
         "Machine contract violation: validate_result_to_dict output has changed. "
         "This breaks tp.meta.machine.v1 contract. If intentional, bump MACHINE_SCHEMA_VERSION."
     )
+
+
+def test_dump_json_rejects_non_finite_floats() -> None:
+    for value in (float("nan"), float("inf"), float("-inf")):
+        with pytest.raises(ValueError, match="Non-finite float encountered"):
+            dump_json({"value": value}, pretty=False)

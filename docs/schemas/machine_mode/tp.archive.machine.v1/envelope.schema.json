@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.transformation-portal.dev/machine_mode/tp.archive.machine.v1/envelope.schema.json",
+  "title": "Archive Governance Machine Envelope",
+  "type": "object",
+  "required": [
+    "schema",
+    "command",
+    "success",
+    "exit_code",
+    "data",
+    "error"
+  ],
+  "properties": {
+    "schema": {
+      "const": "tp.archive.machine.v1"
+    },
+    "command": {
+      "type": "string",
+      "enum": [
+        "fixity-scan",
+        "fixity-verify",
+        "manifest-build",
+        "rights-apply",
+        "bag-build",
+        "bag-validate",
+        "premis-export",
+        "dedup-plan",
+        "mets-export",
+        "prov-export",
+        "stac-export",
+        "sealed-eval-run"
+      ]
+    },
+    "success": {
+      "type": "boolean"
+    },
+    "exit_code": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255
+    },
+    "data": {
+      "type": "object"
+    },
+    "error": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.archive.machine.v1/error.schema.json"
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "success": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "exit_code": {
+            "const": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "success": {
+            "const": false
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "exit_code": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 255
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

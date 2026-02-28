@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.transformation-portal.dev/machine_mode/tp.archive.machine.v1/machine_mode.schema.json",
+  "title": "Archive Governance Machine Contract (tp.archive.machine.v1)",
+  "allOf": [
+    {
+      "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.archive.machine.v1/envelope.schema.json"
+    },
+    {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["command", "data"],
+          "properties": {
+            "command": { "const": "fixity-scan" },
+            "data": {
+              "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.archive.machine.v1/data.fixity-scan.schema.json"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["command", "data"],
+          "properties": {
+            "command": { "const": "fixity-verify" },
+            "data": {
+              "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.archive.machine.v1/data.fixity-verify.schema.json"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["command", "data"],
+          "properties": {
+            "command": { "const": "manifest-build" },
+            "data": {
+              "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.archive.machine.v1/data.manifest-build.schema.json"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["command", "data"],
+          "properties": {
+            "command": { "const": "rights-apply" },
+            "data": {
+              "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.archive.machine.v1/data.rights-apply.schema.json"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["command", "data"],
+          "properties": {
+            "command": { "const": "bag-build" },
+            "data": {
+              "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.archive.machine.v1/data.bag-build.schema.json"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["command", "data"],
+          "properties": {
+            "command": { "const": "bag-validate" },
+            "data": {
+              "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.archive.machine.v1/data.bag-validate.schema.json"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["command", "data"],
+          "properties": {
+            "command": { "const": "premis-export" },
+            "data": {
+              "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.archive.machine.v1/data.premis-export.schema.json"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["command", "data"],
+          "properties": {
+            "command": { "const": "dedup-plan" },
+            "data": {
+              "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.archive.machine.v1/data.dedup-plan.schema.json"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["command", "data"],
+          "properties": {
+            "command": { "const": "mets-export" },
+            "data": {
+              "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.archive.machine.v1/data.mets-export.schema.json"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["command", "data"],
+          "properties": {
+            "command": { "const": "prov-export" },
+            "data": {
+              "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.archive.machine.v1/data.prov-export.schema.json"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["command", "data"],
+          "properties": {
+            "command": { "const": "stac-export" },
+            "data": {
+              "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.archive.machine.v1/data.stac-export.schema.json"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["command", "data"],
+          "properties": {
+            "command": { "const": "sealed-eval-run" },
+            "data": {
+              "$ref": "https://schemas.transformation-portal.dev/machine_mode/tp.archive.machine.v1/data.sealed-eval-run.schema.json"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.transformation-portal.dev/machine_mode/tp.archive.machine.v1/data.fixity-verify.schema.json",
+  "title": "fixity-verify data payload",
+  "type": "object",
+  "required": [
+    "tool",
+    "hash_manifest",
+    "archive_root",
+    "report_path",
+    "workers",
+    "verify_sample",
+    "stdout",
+    "stderr"
+  ],
+  "properties": {
+    "tool": { "type": "string" },
+    "hash_manifest": { "type": "string" },
+    "archive_root": { "type": "string" },
+    "report_path": { "type": "string" },
+    "workers": { "type": "integer", "minimum": 1 },
+    "verify_sample": { "type": "integer", "minimum": 0 },
+    "stdout": { "type": "string" },
+    "stderr": { "type": "string" }
+  },
+  "additionalProperties": false
+}

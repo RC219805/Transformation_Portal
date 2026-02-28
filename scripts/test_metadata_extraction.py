@@ -839,7 +839,10 @@ def _check_system_result_to_machine_data(result: SystemCheckResult) -> Dict[str,
 
 
 def _emit_machine(envelope: Dict[str, Any], args: argparse.Namespace) -> None:
-    payload = dump_json(envelope, pretty=args.json_pretty)
+    try:
+        payload = dump_json(envelope, pretty=args.json_pretty)
+    except ValueError as exc:
+        raise OtherIngestFailure(f"Machine JSON serialization rejected non-finite payload: {exc}") from exc
     if args.json_output:
         destination = Path(args.json_output)
         destination.parent.mkdir(parents=True, exist_ok=True)
