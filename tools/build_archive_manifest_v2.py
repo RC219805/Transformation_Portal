@@ -238,12 +238,7 @@ def _load_hash_rows(path: Path) -> list[dict[str, str]]:
         "hash_status",
         "error",
     }
-    rows = list(_open_csv_reader(path))
-    if not rows:
-        return []
-    missing = sorted(required.difference(rows[0].keys()))
-    if missing:
-        raise ValueError(f"hash manifest missing required columns: {', '.join(missing)}")
+    rows = list(_open_csv_reader(path, required_columns=required))
 
     return sorted(
         rows,
@@ -349,44 +344,33 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Input error: {exc}", file=sys.stderr)
         return EXIT_INPUT_ERROR
 
-    try:
-        entries = [
-            _build_entry(
-                archive_root=archive_root,
-                hash_row=row,
-                rights_map=rights_map,
-                collection_id=args.collection_id,
-                default_owner=args.owner,
-            )
-            for row in hash_rows
-        ]
-    except ValueError as exc:
-        print(f"Build error: {exc}", file=sys.stderr)
-        return EXIT_BUILD_ERROR
-
-    by_hash_status = Counter(str(item.get("hash_status") or "") for item in entries)
-    by_created_source = Counter(str(item.get("created_source") or "") for item in entries)
-    rights_coverage = sum(1 for item in entries if item.get("rights_flags") and item["rights_flags"] != ["unspecified"])
-
-    summary_payload: dict[str, Any] = {
-        "schema_version": "tp.archive.manifest.v2.summary.v1",
-        "entry_count": len(entries),
-        "collection_id": args.collection_id,
-        "archive_root": str(archive_root),
-        "hash_status_counts": {key: int(value) for key, value in sorted(by_hash_status.items())},
-        "created_source_counts": {key: int(value) for key, value in sorted(by_created_source.items())},
-        "rights_classified_count": rights_coverage,
-        "rights_unspecified_count": len(entries) - rights_coverage,
-    }
+    by_hash_status: Counter[str] = Counter()
+    by_created_source: Counter[str] = Counter()
+    rights_coverage = 0
+    entry_count = 0
 
     tmp_out_path = out_jsonl.with_name(f".{out_jsonl.name}.{uuid4().hex}.tmp")
     try:
         out_jsonl.parent.mkdir(parents=True, exist_ok=True)
         with tmp_out_path.open("w", encoding="utf-8", newline="\n") as out_handle:
-            for entry in entries:
+            for row in hash_rows:
+                entry = _build_entry(
+                    archive_root=archive_root,
+                    hash_row=row,
+                    rights_map=rights_map,
+                    collection_id=args.collection_id,
+                    default_owner=args.owner,
+                )
                 out_handle.write(json_line(entry))
+                by_hash_status[str(entry.get("hash_status") or "")] += 1
+                by_created_source[str(entry.get("created_source") or "")] += 1
+                if entry.get("rights_flags") and entry["rights_flags"] != ["unspecified"]:
+                    rights_coverage += 1
+                entry_count += 1
         tmp_out_path.replace(out_jsonl)
-        atomic_write_text(out_summary, deterministic_json_dumps(summary_payload, pretty=True) + "\n")
+    except ValueError as exc:
+        print(f"Build error: {exc}", file=sys.stderr)
+        return EXIT_BUILD_ERROR
     except OSError as exc:
         print(f"Build error: unable to write outputs: {exc}", file=sys.stderr)
         return EXIT_BUILD_ERROR
@@ -394,7 +378,23 @@ def main(argv: list[str] | None = None) -> int:
         if tmp_out_path.exists():
             tmp_out_path.unlink()
 
-    print(f"Wrote {len(entries)} manifest rows to {out_jsonl}")
+    summary_payload: dict[str, Any] = {
+        "schema_version": "tp.archive.manifest.v2.summary.v1",
+        "entry_count": entry_count,
+        "collection_id": args.collection_id,
+        "archive_root": str(archive_root),
+        "hash_status_counts": {key: int(value) for key, value in sorted(by_hash_status.items())},
+        "created_source_counts": {key: int(value) for key, value in sorted(by_created_source.items())},
+        "rights_classified_count": rights_coverage,
+        "rights_unspecified_count": entry_count - rights_coverage,
+    }
+    try:
+        atomic_write_text(out_summary, deterministic_json_dumps(summary_payload, pretty=True) + "\n")
+    except OSError as exc:
+        print(f"Build error: unable to write outputs: {exc}", file=sys.stderr)
+        return EXIT_BUILD_ERROR
+
+    print(f"Wrote {entry_count} manifest rows to {out_jsonl}")
     print(f"Wrote summary to {out_summary}")
     return EXIT_SUCCESS
 

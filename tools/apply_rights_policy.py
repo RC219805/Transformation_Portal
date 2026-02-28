@@ -124,6 +124,7 @@ def _load_policy(path: Path) -> dict[str, Any]:
             if not ext_values:
                 raise PolicyError(f"{context}.extension_in must include string values")
             normalized_rule["extension_in"] = ext_values
+            normalized_rule["_extension_in_set"] = set(ext_values)
 
         if relpath_regex is not None:
             if not isinstance(relpath_regex, str) or not relpath_regex.strip():
@@ -152,7 +153,10 @@ def _rule_matches(entry: dict[str, Any], rule: dict[str, Any]) -> bool:
     if "path_glob" in rule and not fnmatch.fnmatchcase(relpath, _normalize_relpath(str(rule["path_glob"]))):
         return False
 
-    if "extension_in" in rule and extension not in set(rule["extension_in"]):
+    extension_in_set = rule.get("_extension_in_set")
+    if extension_in_set is None and "extension_in" in rule:
+        extension_in_set = set(str(value).strip().lower() for value in rule["extension_in"])
+    if extension_in_set is not None and extension not in extension_in_set:
         return False
 
     compiled_relpath_regex = rule.get("_relpath_regex_compiled")

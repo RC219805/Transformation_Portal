@@ -11,6 +11,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from uuid import uuid4
 
 from .config import get_config
 from .exceptions import CacheError, IndexingError
@@ -517,6 +518,7 @@ class RepositoryIndexer:
 
     def _save_cache(self):
         """Save chunks to cache file."""
+        tmp_path = self.cache_file.with_name(f".{self.cache_file.name}.{uuid4().hex}.tmp")
         try:
             # Create cache directory if it doesn't exist
             self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -525,7 +527,6 @@ class RepositoryIndexer:
                 "version": CACHE_FORMAT_VERSION,
                 "chunks": [chunk.to_dict() for chunk in self.chunks],
             }
-            tmp_path = self.cache_file.with_suffix(".tmp")
             serialized = json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(",", ":"), sort_keys=True)
             tmp_path.write_text(serialized + "\n", encoding="utf-8")
             tmp_path.replace(self.cache_file)
@@ -536,6 +537,13 @@ class RepositoryIndexer:
             logger.warning(f"Failed to save cache: {e}")
             # Don't raise - caching is optional
             # raise CacheError(f"Cache saving failed: {e}")
+        finally:
+            if tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except OSError:
+                    # Best effort cleanup only; cache writes are optional.
+                    logger.debug("Failed to remove temporary cache file %s", tmp_path)
 
     def clear_cache(self):
         """Clear the cache file."""

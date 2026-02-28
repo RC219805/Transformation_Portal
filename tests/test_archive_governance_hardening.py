@@ -111,6 +111,57 @@ def test_manifest_archive_index_validation_rejects_missing_required_columns(tmp_
         )
 
 
+def test_load_hash_rows_rejects_missing_required_columns_without_data_rows(tmp_path: Path) -> None:
+    hash_manifest = tmp_path / "hash_manifest.csv"
+    hash_manifest.write_text("origin_drive,partition,relpath\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="missing required columns"):
+        MANIFEST_TOOL._load_hash_rows(hash_manifest)
+
+
+def test_manifest_build_streaming_does_not_publish_partial_output_on_build_error(tmp_path: Path) -> None:
+    archive_root = tmp_path / "archive_root"
+    (archive_root / "DriveA" / "Part1").mkdir(parents=True, exist_ok=True)
+    (archive_root / "DriveA" / "Part1" / "alpha.txt").write_text("alpha", encoding="utf-8")
+
+    archive_index = tmp_path / "archive_index_normalized.csv"
+    archive_index.write_text(
+        "origin_drive,partition,relpath\n"
+        "DriveA,Part1,DriveA/Part1/alpha.txt\n"
+        "DriveA,Part1,DriveA/Part1/beta.txt\n",
+        encoding="utf-8",
+    )
+
+    hash_manifest = tmp_path / "hash_manifest.csv"
+    hash_manifest.write_text(
+        "origin_drive,partition,relpath,filesize_bytes,sha256,hash_status,error\n"
+        "DriveA,Part1,DriveA/Part1/alpha.txt,5,abc,ok,\n"
+        "DriveA,Part1,DriveA/Part1/beta.txt,not-an-int,def,error,boom\n",
+        encoding="utf-8",
+    )
+
+    out_jsonl = tmp_path / "archive_manifest_v2.jsonl"
+    out_summary = tmp_path / "archive_manifest_v2.summary.json"
+    exit_code = MANIFEST_TOOL.main(
+        [
+            "--archive-index",
+            str(archive_index),
+            "--hash-manifest",
+            str(hash_manifest),
+            "--archive-root",
+            str(archive_root),
+            "--out-jsonl",
+            str(out_jsonl),
+            "--out-summary",
+            str(out_summary),
+        ]
+    )
+
+    assert exit_code == MANIFEST_TOOL.EXIT_BUILD_ERROR
+    assert not out_jsonl.exists()
+    assert not out_summary.exists()
+
+
 def test_rule_matches_normalizes_slashes_for_path_glob() -> None:
     entry = {"relpath": "DriveA\\Part1\\alpha.txt", "extension": ".txt"}
     rule = {"id": "r1", "flags": ["restricted"], "path_glob": "DriveA/Part1/*.txt"}
@@ -141,6 +192,26 @@ def test_load_policy_compiles_relpath_regex_once(tmp_path: Path) -> None:
 
     assert "_relpath_regex_compiled" in rule
     assert RIGHTS_TOOL._rule_matches({"relpath": "DriveA/Part1/alpha.txt", "extension": ".txt"}, rule)
+
+
+def test_load_policy_precomputes_extension_match_set(tmp_path: Path) -> None:
+    policy_yaml = tmp_path / "rights_flags.yml"
+    policy_yaml.write_text(
+        "version: 1\n"
+        "default_flags: [unspecified]\n"
+        "default_owner: UNSPECIFIED\n"
+        "rules:\n"
+        "  - id: ext-rule\n"
+        "    flags: [restricted]\n"
+        "    extension_in: ['.TXT', '.csv']\n",
+        encoding="utf-8",
+    )
+    policy = RIGHTS_TOOL._load_policy(policy_yaml)
+    rule = policy["rules"][0]
+
+    assert rule["_extension_in_set"] == {".txt", ".csv"}
+    assert RIGHTS_TOOL._rule_matches({"relpath": "DriveA/Part1/alpha.txt", "extension": ".txt"}, rule)
+    assert RIGHTS_TOOL._rule_matches({"relpath": "DriveA/Part1/alpha.jpg", "extension": ".jpg"}, rule) is False
 
 
 def test_run_wrapped_tool_normalizes_negative_returncode(monkeypatch) -> None:
