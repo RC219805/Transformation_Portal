@@ -1285,8 +1285,9 @@ def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments,to
         False,
         help="Use Real-ESRGAN (requires weights, GPU recommended)",
     ),
-    strict_model_lock: bool = typer.Option(
-        False,
+    strict_model_lock: Optional[bool] = typer.Option(
+        None,
+        "--strict-model-lock/--no-strict-model-lock",
         help="Fail when remote model repos are unpinned (requires pinned revisions).",
     ),
 ):

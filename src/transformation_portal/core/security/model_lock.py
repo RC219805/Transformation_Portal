@@ -30,8 +30,15 @@ class ModelLockError(RuntimeError):
 
 
 def _repo_root() -> Path:
-    """Resolve repository root from this module path."""
-    return Path(__file__).resolve().parents[4]
+    """Best-effort repository root discovery."""
+    this_file = Path(__file__).resolve()
+    for parent in this_file.parents:
+        if (parent / _DEFAULT_MANIFEST_RELATIVE_PATH).exists():
+            return parent
+    for parent in this_file.parents:
+        if (parent / "pyproject.toml").exists() or (parent / ".git").exists():
+            return parent
+    return this_file.parents[0]
 
 
 def model_lock_manifest_path(path: Optional[Path] = None) -> Path:
@@ -41,7 +48,13 @@ def model_lock_manifest_path(path: Optional[Path] = None) -> Path:
     env_path = os.getenv(_MANIFEST_ENV_VAR)
     if env_path:
         return Path(env_path)
-    return _repo_root() / _DEFAULT_MANIFEST_RELATIVE_PATH
+    repo_candidate = _repo_root() / _DEFAULT_MANIFEST_RELATIVE_PATH
+    if repo_candidate.exists():
+        return repo_candidate
+    cwd_candidate = Path.cwd() / _DEFAULT_MANIFEST_RELATIVE_PATH
+    if cwd_candidate.exists():
+        return cwd_candidate
+    return repo_candidate
 
 
 def _parse_bool(raw: Optional[str]) -> bool:
@@ -165,10 +178,11 @@ def resolve_model_lock_revision(
         manifest_path=manifest_path,
         strict_manifest_required=strict_enabled and manifest_supplied,
     )
+    manifest_rev_normalized = _normalize_revision(manifest_rev)
     requested = _normalize_revision(requested_revision)
 
-    if requested is None and is_pinned_revision(manifest_rev):
-        requested = _normalize_revision(manifest_rev)
+    if requested is None and is_pinned_revision(manifest_rev_normalized):
+        requested = manifest_rev_normalized
 
     if strict_enabled and not is_pinned_revision(requested):
         prefix = f"{context}: " if context else ""
@@ -178,12 +192,12 @@ def resolve_model_lock_revision(
             + "Provide a 40-char commit SHA directly or via config/model_lock_manifest.yaml."
         )
 
-    if strict_enabled and requested and is_pinned_revision(manifest_rev) and requested != manifest_rev:
+    if strict_enabled and requested and is_pinned_revision(manifest_rev_normalized) and requested != manifest_rev_normalized:
         prefix = f"{context}: " if context else ""
         raise ModelLockError(
             prefix
             + f"repo '{repo_id}' revision mismatch with model lock manifest "
-            + f"(requested={requested}, manifest={manifest_rev})."
+            + f"(requested={requested}, manifest={manifest_rev_normalized})."
         )
 
     if not strict_enabled:
@@ -193,11 +207,11 @@ def resolve_model_lock_revision(
                 repo_id,
                 requested,
             )
-        if requested is None and manifest_rev is not None and not is_pinned_revision(manifest_rev):
+        if requested is None and manifest_rev_normalized is not None and not is_pinned_revision(manifest_rev_normalized):
             logger.warning(
                 "Model lock manifest entry for '%s' is not pinned ('%s')",
                 repo_id,
-                manifest_rev,
+                manifest_rev_normalized,
             )
 
     return requested

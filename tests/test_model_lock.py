@@ -12,6 +12,7 @@ from transformation_portal.core.security.model_lock import (
     is_model_lock_strict_enabled,
     is_pinned_revision,
     load_model_lock_manifest,
+    model_lock_manifest_path,
     resolve_model_lock_revision,
 )
 from transformation_portal.depth.models.depth_anything_v2 import DepthAnythingV2Model, ModelBackend, ModelVariant
@@ -81,6 +82,21 @@ def test_resolve_model_lock_revision_strict_detects_manifest_mismatch(tmp_path: 
         resolve_model_lock_revision("depth-anything/Depth-Anything-V2-Small-hf", "d" * 40)
 
 
+def test_resolve_model_lock_revision_strict_allows_manifest_sha_with_whitespace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest_path = tmp_path / "model_lock.yaml"
+    sha = "1" * 40
+    _write_manifest(
+        manifest_path,
+        {"depth-anything/Depth-Anything-V2-Small-hf": {"revision": f" {sha} "}},
+    )
+    monkeypatch.setenv("TP_MODEL_LOCK_MANIFEST", str(manifest_path))
+    monkeypatch.setenv("TP_STRICT_MODEL_LOCK", "1")
+
+    assert resolve_model_lock_revision("depth-anything/Depth-Anything-V2-Small-hf", sha) == sha
+
+
 def test_depth_anything_model_enforces_strict_model_lock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     manifest_path = tmp_path / "model_lock.yaml"
     _write_manifest(
@@ -129,3 +145,18 @@ def test_resolve_model_lock_revision_strict_without_manifest_rejects_unpinned(
 
     with pytest.raises(ModelLockError):
         resolve_model_lock_revision("depth-anything/Depth-Anything-V2-Small-hf", None)
+
+
+def test_model_lock_manifest_path_falls_back_to_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    manifest = tmp_path / "config" / "model_lock_manifest.yaml"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text("version: 1\nrepositories: {}\n", encoding="utf-8")
+
+    monkeypatch.delenv("TP_MODEL_LOCK_MANIFEST", raising=False)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "transformation_portal.core.security.model_lock._repo_root",
+        lambda: tmp_path / "does-not-contain-manifest",
+    )
+
+    assert model_lock_manifest_path() == manifest
