@@ -8,6 +8,8 @@ attrs==25.4.0
     # via
     #   jsonschema
     #   referencing
+bagit==1.9.0
+    # via -r requirements/tools-archive.in
 cffi==2.0.0
     # via cryptography
 cryptography==46.0.5
@@ -24,6 +26,8 @@ pandas==3.0.1
     # via -r requirements/tools-archive.in
 pycparser==3.0
     # via cffi
+pyyaml==6.0.3
+    # via -r requirements/tools-archive.in
 python-dateutil==2.9.0.post0
     # via pandas
 referencing==0.37.0
