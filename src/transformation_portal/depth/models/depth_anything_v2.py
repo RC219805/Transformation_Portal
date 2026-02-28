@@ -21,6 +21,8 @@ from typing import Any, Dict, Optional, Tuple, Union
 import numpy as np
 from PIL import Image
 
+from transformation_portal.core.security.model_lock import resolve_model_lock_revision
+
 try:
     import torch
 
@@ -125,6 +127,10 @@ class DepthAnythingV2Model:
         device: Optional[str] = None,
         *,
         precision: str = "fp16",
+        model_revision: Optional[str] = None,
+        onnx_revision: Optional[str] = None,
+        coreml_revision: Optional[str] = None,
+        strict_model_lock: Optional[bool] = None,
     ):
         """
         Initialize depth estimation model.
@@ -135,10 +141,19 @@ class DepthAnythingV2Model:
             model_path: Path to local model file (downloads if None)
             device: Device override ("cpu", "mps", "cuda")
             precision: Model precision ("fp32", "fp16")
+            model_revision: Optional immutable HF revision for PyTorch model loads
+            onnx_revision: Optional immutable HF revision for ONNX artifact downloads
+            coreml_revision: Optional immutable HF revision for CoreML artifact downloads
+            strict_model_lock: Enforce pinned revisions for remote model loads.
+                If None, uses ``TP_STRICT_MODEL_LOCK`` environment variable.
         """
         self.variant = variant
         self.precision = precision
         self.model_path = Path(model_path) if model_path else None
+        self.model_revision = model_revision
+        self.onnx_revision = onnx_revision
+        self.coreml_revision = coreml_revision
+        self.strict_model_lock = strict_model_lock
 
         # Auto-detect backend if not specified
         if backend is None:
@@ -149,6 +164,7 @@ class DepthAnythingV2Model:
         if device is None:
             device = self._auto_detect_device()
         self.device = device
+        self._resolve_remote_artifact_revisions()
 
         # Initialize model with proper types
         self.model: Optional[Union[DepthEstimationPipeline, Any]] = None
@@ -161,6 +177,63 @@ class DepthAnythingV2Model:
             backend.name,
             device,
         )
+
+    @staticmethod
+    def _coreml_repo_for_variant(variant: ModelVariant) -> Optional[str]:
+        return {
+            ModelVariant.SMALL: "apple/coreml-depth-anything-v2-small",
+            ModelVariant.BASE: "apple/coreml-depth-anything-v2-base",
+        }.get(variant)
+
+    def _resolve_remote_artifact_revisions(self) -> None:
+        """Resolve effective revisions from explicit args + model lock manifest."""
+        if self.model_path is not None:
+            return
+
+        if self.backend in (ModelBackend.PYTORCH_CPU, ModelBackend.PYTORCH_MPS):
+            self.model_revision = resolve_model_lock_revision(
+                self.variant.value,
+                self.model_revision,
+                strict=self.strict_model_lock,
+                context="DepthAnythingV2Model(PyTorch)",
+            )
+            if not self.model_revision:
+                logger.warning(
+                    "DepthAnythingV2 PyTorch model '%s' is unpinned (no revision). "
+                    "Set model_revision or config/model_lock_manifest.yaml for deterministic, supply-chain-safe loads.",
+                    self.variant.value,
+                )
+
+        if self.backend == ModelBackend.ONNX:
+            self.onnx_revision = resolve_model_lock_revision(
+                "onnx/Depth-Anything-V2",
+                self.onnx_revision,
+                strict=self.strict_model_lock,
+                context="DepthAnythingV2Model(ONNX)",
+            )
+            if not self.onnx_revision:
+                logger.warning(
+                    "DepthAnythingV2 ONNX artifact for '%s' is unpinned (no onnx_revision). "
+                    "Set onnx_revision or config/model_lock_manifest.yaml for deterministic, supply-chain-safe downloads.",
+                    self.variant.value,
+                )
+
+        if self.backend == ModelBackend.COREML:
+            coreml_repo = self._coreml_repo_for_variant(self.variant)
+            if not coreml_repo:
+                raise ValueError(f"CoreML model not available for variant {self.variant}. " "Use SMALL or BASE.")
+            self.coreml_revision = resolve_model_lock_revision(
+                coreml_repo,
+                self.coreml_revision,
+                strict=self.strict_model_lock,
+                context="DepthAnythingV2Model(CoreML)",
+            )
+            if not self.coreml_revision:
+                logger.warning(
+                    "DepthAnythingV2 CoreML artifact for '%s' is unpinned (no coreml_revision). "
+                    "Set coreml_revision or config/model_lock_manifest.yaml for deterministic, supply-chain-safe downloads.",
+                    self.variant.value,
+                )
 
     def _auto_detect_backend(self) -> ModelBackend:
         """Auto-detect optimal backend for current hardware."""
@@ -219,10 +292,18 @@ class DepthAnythingV2Model:
 
         try:
             # Use transformers pipeline for simplicity
+            pipeline_kwargs = {
+                "task": "depth-estimation",
+                "model": self.variant.value,
+                "device": self.device if self.device != "mps" else 0,  # MPS uses device 0
+            }
+            if self.model_revision:
+                pipeline_kwargs["revision"] = self.model_revision
             self.model = pipeline(
                 task="depth-estimation",
-                model=self.variant.value,
-                device=self.device if self.device != "mps" else 0,  # MPS uses device 0
+                model=pipeline_kwargs["model"],
+                device=pipeline_kwargs["device"],
+                revision=pipeline_kwargs.get("revision"),
             )
             logger.info("Loaded PyTorch model: %s", self.variant.value)
 
@@ -230,8 +311,11 @@ class DepthAnythingV2Model:
             logger.error("Failed to load PyTorch model: %s", e)
             # Fallback: manual loading
             # Production deployments should pin specific model revisions
-            self.processor = AutoImageProcessor.from_pretrained(self.variant.value)  # nosec B615
-            self.model = AutoModelForDepthEstimation.from_pretrained(self.variant.value)  # nosec B615
+            self.processor = AutoImageProcessor.from_pretrained(self.variant.value, revision=self.model_revision)  # nosec B615
+            self.model = AutoModelForDepthEstimation.from_pretrained(  # nosec B615
+                self.variant.value,
+                revision=self.model_revision,
+            )
 
             if self.device == "mps":
                 self.model = self.model.to("mps")
@@ -321,6 +405,7 @@ class DepthAnythingV2Model:
             repo_id=onnx_repo,
             filename=onnx_filename,
             cache_dir=Path.home() / ".cache" / "depth_anything_v2",
+            revision=self.onnx_revision,
         )
 
         return Path(model_path)
@@ -352,10 +437,7 @@ class DepthAnythingV2Model:
         from huggingface_hub import hf_hub_download  # pylint: disable=import-outside-toplevel
 
         # Map variant to CoreML repo
-        coreml_variant = {
-            ModelVariant.SMALL: "apple/coreml-depth-anything-v2-small",
-            ModelVariant.BASE: "apple/coreml-depth-anything-v2-base",
-        }.get(self.variant)
+        coreml_variant = self._coreml_repo_for_variant(self.variant)
 
         if not coreml_variant:
             raise ValueError(f"CoreML model not available for variant {self.variant}. " "Use SMALL or BASE.")
@@ -367,6 +449,7 @@ class DepthAnythingV2Model:
             repo_id=coreml_variant,
             filename=filename,
             cache_dir=Path.home() / ".cache" / "depth_anything_v2",
+            revision=self.coreml_revision,
         )
 
         return Path(model_path)

@@ -1,0 +1,40 @@
+version: 1
+updated_at: "2026-02-28"
+description: >
+  Repository-wide HuggingFace model lock manifest. Replace placeholders with
+  verified 40-character commit SHAs before enabling strict model lock in CI/production.
+
+repositories:
+  depth-anything/Depth-Anything-V2-Small-hf:
+    revision: "NEEDS_VERIFICATION_DEPTH_ANYTHING_V2_SMALL_20260228"
+    owner: "depth pipeline"
+  depth-anything/Depth-Anything-V2-Base-hf:
+    revision: "NEEDS_VERIFICATION_DEPTH_ANYTHING_V2_BASE_20260228"
+    owner: "depth pipeline"
+  depth-anything/Depth-Anything-V2-Large-hf:
+    revision: "NEEDS_VERIFICATION_DEPTH_ANYTHING_V2_LARGE_20260228"
+    owner: "depth pipeline"
+  onnx/Depth-Anything-V2:
+    revision: "NEEDS_VERIFICATION_ONNX_DEPTH_ANYTHING_V2_20260228"
+    owner: "depth pipeline"
+  apple/coreml-depth-anything-v2-small:
+    revision: "NEEDS_VERIFICATION_COREML_DEPTH_ANYTHING_V2_SMALL_20260228"
+    owner: "depth pipeline"
+  apple/coreml-depth-anything-v2-base:
+    revision: "NEEDS_VERIFICATION_COREML_DEPTH_ANYTHING_V2_BASE_20260228"
+    owner: "depth pipeline"
+  runwayml/stable-diffusion-v1-5:
+    revision: "NEEDS_VERIFICATION_SD15_BASE_MODEL_20260228"
+    owner: "lux render pipeline"
+  lllyasviel/sd-controlnet-canny:
+    revision: "NEEDS_VERIFICATION_CONTROLNET_CANNY_20260228"
+    owner: "lux render pipeline"
+  lllyasviel/sd-controlnet-depth:
+    revision: "NEEDS_VERIFICATION_CONTROLNET_DEPTH_20260228"
+    owner: "lux render pipeline"
+  stabilityai/sd-x2-latent-upscaler:
+    revision: "NEEDS_VERIFICATION_SD_X2_LATENT_UPSCALER_20260228"
+    owner: "lux render pipeline"
+  stabilityai/stable-diffusion-xl-refiner-1.0:
+    revision: "NEEDS_VERIFICATION_SDXL_REFINER_20260228"
+    owner: "lux render pipeline"

@@ -78,6 +78,8 @@ from PIL import Image, ImageDraw, ImageFont
 from scipy.ndimage import gaussian_filter, sobel
 from torch import Generator
 
+from transformation_portal.core.security.model_lock import resolve_model_lock_revision
+
 # SDXL (optional). Imported lazily only if used.
 try:
     from diffusers import StableDiffusionXLControlNetPipeline, StableDiffusionXLImg2ImgPipeline
@@ -637,10 +639,15 @@ class ModelIDs:
     """Identifiers for diffusion base models, ControlNets, and upscalers."""
 
     base_model: str = "runwayml/stable-diffusion-v1-5"
+    base_model_revision: Optional[str] = None
     controlnet_canny: str = "lllyasviel/sd-controlnet-canny"
+    controlnet_canny_revision: Optional[str] = None
     controlnet_depth: str = "lllyasviel/sd-controlnet-depth"
+    controlnet_depth_revision: Optional[str] = None
     upscaler_id: str = "stabilityai/sd-x2-latent-upscaler"
+    upscaler_revision: Optional[str] = None
     refiner: Optional[str] = None  # e.g., "stabilityai/stable-diffusion-xl-refiner-1.0"
+    refiner_revision: Optional[str] = None
 
 
 @dataclass
@@ -719,22 +726,82 @@ class LuxuryRenderPipeline:
         fp16: bool = True,
         use_realesrgan: bool = False,
         use_depth: bool = True,
+        strict_model_lock: Optional[bool] = None,
     ):
         """Initialise diffusion pipelines, ControlNets, and optional upscalers."""
+
+        model_ids.base_model_revision = resolve_model_lock_revision(
+            model_ids.base_model,
+            model_ids.base_model_revision,
+            strict=strict_model_lock,
+            context="LuxuryRenderPipeline(base_model)",
+        )
+        model_ids.controlnet_canny_revision = resolve_model_lock_revision(
+            model_ids.controlnet_canny,
+            model_ids.controlnet_canny_revision,
+            strict=strict_model_lock,
+            context="LuxuryRenderPipeline(controlnet_canny)",
+        )
+        if use_depth:
+            model_ids.controlnet_depth_revision = resolve_model_lock_revision(
+                model_ids.controlnet_depth,
+                model_ids.controlnet_depth_revision,
+                strict=strict_model_lock,
+                context="LuxuryRenderPipeline(controlnet_depth)",
+            )
+        model_ids.upscaler_revision = resolve_model_lock_revision(
+            model_ids.upscaler_id,
+            model_ids.upscaler_revision,
+            strict=strict_model_lock,
+            context="LuxuryRenderPipeline(upscaler)",
+        )
+        if model_ids.refiner:
+            model_ids.refiner_revision = resolve_model_lock_revision(
+                model_ids.refiner,
+                model_ids.refiner_revision,
+                strict=strict_model_lock,
+                context="LuxuryRenderPipeline(refiner)",
+            )
 
         self.model_ids = model_ids
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.dtype = torch.float16 if (fp16 and torch.cuda.is_available()) else torch.float32
         self._use_depth = use_depth
 
+        missing_revisions = []
+        if not model_ids.base_model_revision:
+            missing_revisions.append("base_model_revision")
+        if not model_ids.controlnet_canny_revision:
+            missing_revisions.append("controlnet_canny_revision")
+        if self._use_depth and not model_ids.controlnet_depth_revision:
+            missing_revisions.append("controlnet_depth_revision")
+        if not model_ids.upscaler_revision:
+            missing_revisions.append("upscaler_revision")
+        if model_ids.refiner and not model_ids.refiner_revision:
+            missing_revisions.append("refiner_revision")
+        if missing_revisions:
+            print(
+                "[Warn] Unpinned model revisions: "
+                + ", ".join(sorted(missing_revisions))
+                + ". Set revision flags for deterministic, supply-chain-safe loads."
+            )
+
+        def revision_kwargs(revision: Optional[str]) -> dict:
+            return {"revision": revision} if revision else {}
+
         # Load ControlNets
         print("[Load] ControlNets...")
         self.cn_canny = ControlNetModel.from_pretrained(  # nosec B615
             model_ids.controlnet_canny,
             torch_dtype=self.dtype,
+            **revision_kwargs(model_ids.controlnet_canny_revision),
         )
         self.cn_depth = (
-            ControlNetModel.from_pretrained(model_ids.controlnet_depth, torch_dtype=self.dtype)  # nosec B615
+            ControlNetModel.from_pretrained(  # nosec B615
+                model_ids.controlnet_depth,
+                torch_dtype=self.dtype,
+                **revision_kwargs(model_ids.controlnet_depth_revision),
+            )
             if self._use_depth
             else None
         )
@@ -755,6 +822,7 @@ class LuxuryRenderPipeline:
                 controlnet=controlnet_arg,
                 torch_dtype=self.dtype,
                 add_watermarker=False,
+                **revision_kwargs(model_ids.base_model_revision),
             )
             if model_ids.refiner:
                 print("[Load] SDXL refiner...")
@@ -762,6 +830,7 @@ class LuxuryRenderPipeline:
                     model_ids.refiner,
                     torch_dtype=self.dtype,
                     add_watermarker=False,
+                    **revision_kwargs(model_ids.refiner_revision),
                 )
             else:
                 self.refiner = None
@@ -773,6 +842,7 @@ class LuxuryRenderPipeline:
                 torch_dtype=self.dtype,
                 safety_checker=None,
                 feature_extractor=None,
+                **revision_kwargs(model_ids.base_model_revision),
             )
             self.refiner = None
 
@@ -783,7 +853,9 @@ class LuxuryRenderPipeline:
         print("[Load] Latent x2 upscaler...")
         try:
             self.upscaler = StableDiffusionLatentUpscalePipeline.from_pretrained(  # nosec B615
-                model_ids.upscaler_id, torch_dtype=self.dtype
+                model_ids.upscaler_id,
+                torch_dtype=self.dtype,
+                **revision_kwargs(model_ids.upscaler_revision),
             ).to(self.device)
         except (OSError, RuntimeError, ValueError) as e:
             print(f"[Warn] Latent upscaler not available ({e}). Will skip latent upscaling.")
@@ -1046,10 +1118,15 @@ def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments,to
     seed: int = typer.Option(1234),
     # Models
     base_model: str = typer.Option("runwayml/stable-diffusion-v1-5"),
+    base_model_revision: Optional[str] = typer.Option(None, help="Optional immutable revision for --base-model"),
     controlnet_canny: str = typer.Option("lllyasviel/sd-controlnet-canny"),
+    controlnet_canny_revision: Optional[str] = typer.Option(None, help="Optional immutable revision for --controlnet-canny"),
     controlnet_depth: str = typer.Option("lllyasviel/sd-controlnet-depth"),
+    controlnet_depth_revision: Optional[str] = typer.Option(None, help="Optional immutable revision for --controlnet-depth"),
     upscaler_id: str = typer.Option("stabilityai/sd-x2-latent-upscaler"),
+    upscaler_revision: Optional[str] = typer.Option(None, help="Optional immutable revision for --upscaler-id"),
     refiner: Optional[str] = typer.Option(None, help="Only for SDXL (optional)"),
+    refiner_revision: Optional[str] = typer.Option(None, help="Optional immutable revision for --refiner"),
     # Finishing
     no_aces: bool = typer.Option(False, help="Disable ACES tonemap"),
     no_wb: bool = typer.Option(False, help="Disable white balance"),
@@ -1208,6 +1285,11 @@ def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments,to
         False,
         help="Use Real-ESRGAN (requires weights, GPU recommended)",
     ),
+    strict_model_lock: Optional[bool] = typer.Option(
+        None,
+        "--strict-model-lock/--no-strict-model-lock",
+        help="Fail when remote model repos are unpinned (requires pinned revisions).",
+    ),
 ):
     """Batch CLI entry point for the luxury render pipeline."""
 
@@ -1219,10 +1301,15 @@ def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments,to
 
     model_ids = ModelIDs(
         base_model=base_model,
+        base_model_revision=base_model_revision,
         controlnet_canny=controlnet_canny,
+        controlnet_canny_revision=controlnet_canny_revision,
         controlnet_depth=controlnet_depth,
+        controlnet_depth_revision=controlnet_depth_revision,
         upscaler_id=upscaler_id,
+        upscaler_revision=upscaler_revision,
         refiner=refiner,
+        refiner_revision=refiner_revision,
     )
     cfg = RenderConfig(
         width=width,
@@ -1275,6 +1362,7 @@ def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments,to
         model_ids,
         use_realesrgan=use_realesrgan,
         use_depth=not no_depth,
+        strict_model_lock=strict_model_lock,
     )
 
     files = sorted([p for g in input_glob.split(",") for p in glob.glob(g.strip())])
