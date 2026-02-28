@@ -1,4 +1,4 @@
-"""Tests for Phase 4F external chain verifier core behavior."""
+"""Tests for Phase 4F external chain verifier and deterministic report emission."""
 
 from __future__ import annotations
 
@@ -22,9 +22,15 @@ from tp.phase4.provenance_capture import (
     PROVENANCE_MERKLE_CONTRACT_VERSION,
     compute_provenance_entry_sha256,
 )
+from tp.phase4.verify_phase4_chain import (
+    FAILURE_MESSAGE_MAX_LENGTH,
+    build_verification_report_payload,
+    default_failure_computed_block,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 VERIFY_TOOL = PROJECT_ROOT / "tools" / "verify_phase4_chain.py"
+REPORT_SCHEMA_PATH = PROJECT_ROOT / "schemas" / "phase4" / "verification_report.schema.json"
 
 GOLDEN_CAPTURE = PROJECT_ROOT / "tests" / "golden" / "phase4" / "expected_capture_metadata.tp.meta.capture.v1.json"
 GOLDEN_METADATA_MANIFEST = (
@@ -35,6 +41,9 @@ GOLDEN_PROVENANCE_MANIFEST = (
 )
 GOLDEN_PROVENANCE_MERKLE = (
     PROJECT_ROOT / "tests" / "golden" / "phase4" / "expected_provenance_merkle.tp.meta.provenance_merkle.v1.json"
+)
+GOLDEN_VERIFICATION_REPORT = (
+    PROJECT_ROOT / "tests" / "golden" / "phase4" / "expected_verification_report.tp.meta.verification_report.v1.json"
 )
 
 pytestmark = [pytest.mark.regression, pytest.mark.golden]
@@ -162,6 +171,55 @@ def test_phase4f_golden_artifacts_verify_successfully() -> None:
     result = _run_verify_cli(*_golden_args())
     assert result.returncode == 0, result.stderr
     assert result.stderr == ""
+
+
+def test_phase4f_success_report_matches_expected_golden(tmp_path: Path) -> None:
+    report_path = tmp_path / "verification_report.tp.meta.verification_report.v1.json"
+    result = _run_verify_cli(*_golden_args(), "--out-report", str(report_path))
+    assert result.returncode == 0, result.stderr
+    assert report_path.read_bytes() == GOLDEN_VERIFICATION_REPORT.read_bytes()
+
+
+def test_phase4f_report_bytes_are_deterministic_across_runs(tmp_path: Path) -> None:
+    report_a = tmp_path / "report_a.json"
+    report_b = tmp_path / "report_b.json"
+
+    first = _run_verify_cli(*_golden_args(), "--out-report", str(report_a))
+    second = _run_verify_cli(*_golden_args(), "--out-report", str(report_b))
+
+    assert first.returncode == 0, first.stderr
+    assert second.returncode == 0, second.stderr
+    assert report_a.read_bytes() == report_b.read_bytes()
+
+
+def test_phase4f_report_validates_against_schema(tmp_path: Path) -> None:
+    jsonschema = pytest.importorskip("jsonschema")
+    report_path = tmp_path / "verification_report.json"
+    result = _run_verify_cli(*_golden_args(), "--out-report", str(report_path))
+    assert result.returncode == 0, result.stderr
+
+    schema = _load_json(REPORT_SCHEMA_PATH)
+    payload = _load_json(report_path)
+    jsonschema.Draft202012Validator(schema).validate(payload)
+
+
+def test_phase4f_report_has_no_nondeterministic_fields(tmp_path: Path) -> None:
+    report_path = tmp_path / "verification_report.json"
+    result = _run_verify_cli(*_golden_args(), "--out-report", str(report_path))
+    assert result.returncode == 0, result.stderr
+    payload = _load_json(report_path)
+
+    forbidden_keys = {"timestamp", "generated_at", "host", "hostname", "cwd", "absolute_path"}
+
+    stack = [payload]
+    while stack:
+        current = stack.pop()
+        if isinstance(current, dict):
+            for key, value in current.items():
+                assert key not in forbidden_keys
+                stack.append(value)
+        elif isinstance(current, list):
+            stack.extend(current)
 
 
 def test_phase4f_cli_returns_exit_code_31_for_invalid_input_json(tmp_path: Path) -> None:
@@ -343,6 +401,174 @@ def test_phase4f_cli_returns_exit_code_36_for_merkle_mismatch(tmp_path: Path) ->
     )
     assert result.returncode == 36
     assert "Merkle mismatch:" in result.stderr
+
+
+def test_phase4f_cli_returns_exit_code_37_for_report_write_failure(tmp_path: Path) -> None:
+    parent_file = tmp_path / "not_a_directory"
+    parent_file.write_text("content", encoding="utf-8")
+    bad_report_path = parent_file / "report.json"
+
+    result = _run_verify_cli(*_golden_args(), "--out-report", str(bad_report_path))
+    assert result.returncode == 37
+    assert "Report write failure:" in result.stderr
+
+
+def test_phase4f_failure_does_not_emit_report_by_default(tmp_path: Path) -> None:
+    bad_merkle = tmp_path / "provenance_merkle_bad_root.json"
+    merkle_payload = _load_json(GOLDEN_PROVENANCE_MERKLE)
+    merkle_payload["provenance_merkle_root"] = "1" * 64
+    _write_json(bad_merkle, merkle_payload)
+
+    report_path = tmp_path / "failure_report.json"
+    result = _run_verify_cli(
+        "--capture-metadata",
+        str(GOLDEN_CAPTURE),
+        "--metadata-manifest",
+        str(GOLDEN_METADATA_MANIFEST),
+        "--provenance-manifest",
+        str(GOLDEN_PROVENANCE_MANIFEST),
+        "--provenance-merkle",
+        str(bad_merkle),
+        "--out-report",
+        str(report_path),
+    )
+    assert result.returncode == 36
+    assert not report_path.exists()
+
+
+def test_phase4f_failure_can_emit_report_with_opt_in_flag(tmp_path: Path) -> None:
+    bad_merkle = tmp_path / "provenance_merkle_bad_root.json"
+    merkle_payload = _load_json(GOLDEN_PROVENANCE_MERKLE)
+    merkle_payload["provenance_merkle_root"] = "2" * 64
+    _write_json(bad_merkle, merkle_payload)
+
+    report_path = tmp_path / "failure_report.json"
+    result = _run_verify_cli(
+        "--capture-metadata",
+        str(GOLDEN_CAPTURE),
+        "--metadata-manifest",
+        str(GOLDEN_METADATA_MANIFEST),
+        "--provenance-manifest",
+        str(GOLDEN_PROVENANCE_MANIFEST),
+        "--provenance-merkle",
+        str(bad_merkle),
+        "--out-report",
+        str(report_path),
+        "--write-report-on-failure",
+    )
+    assert result.returncode == 36
+    assert report_path.exists()
+
+    report_payload = _load_json(report_path)
+    assert report_payload["verification_status"]["passed"] is False
+    assert report_payload["verification_status"]["failure_code_label"] == "MERKLE_MISMATCH"
+
+
+def test_phase4f_failure_report_validates_against_schema_and_is_deterministic(tmp_path: Path) -> None:
+    jsonschema = pytest.importorskip("jsonschema")
+    bad_merkle = tmp_path / "provenance_merkle_bad_root.json"
+    merkle_payload = _load_json(GOLDEN_PROVENANCE_MERKLE)
+    merkle_payload["provenance_merkle_root"] = "3" * 64
+    _write_json(bad_merkle, merkle_payload)
+
+    report_a = tmp_path / "failure_report_a.json"
+    report_b = tmp_path / "failure_report_b.json"
+    first = _run_verify_cli(
+        "--capture-metadata",
+        str(GOLDEN_CAPTURE),
+        "--metadata-manifest",
+        str(GOLDEN_METADATA_MANIFEST),
+        "--provenance-manifest",
+        str(GOLDEN_PROVENANCE_MANIFEST),
+        "--provenance-merkle",
+        str(bad_merkle),
+        "--out-report",
+        str(report_a),
+        "--write-report-on-failure",
+    )
+    second = _run_verify_cli(
+        "--capture-metadata",
+        str(GOLDEN_CAPTURE),
+        "--metadata-manifest",
+        str(GOLDEN_METADATA_MANIFEST),
+        "--provenance-manifest",
+        str(GOLDEN_PROVENANCE_MANIFEST),
+        "--provenance-merkle",
+        str(bad_merkle),
+        "--out-report",
+        str(report_b),
+        "--write-report-on-failure",
+    )
+    assert first.returncode == 36
+    assert second.returncode == 36
+    assert report_a.read_bytes() == report_b.read_bytes()
+
+    schema = _load_json(REPORT_SCHEMA_PATH)
+    payload = _load_json(report_a)
+    jsonschema.Draft202012Validator(schema).validate(payload)
+
+
+def test_phase4f_failure_report_allows_unexpected_input_contract_versions(tmp_path: Path) -> None:
+    jsonschema = pytest.importorskip("jsonschema")
+    bad_metadata_manifest = tmp_path / "metadata_manifest_bad_contract.json"
+    metadata_manifest = _load_json(GOLDEN_METADATA_MANIFEST)
+    metadata_manifest["metadata_contract_version"] = "tp.meta.capture.v999"
+    _write_json(bad_metadata_manifest, metadata_manifest)
+
+    report_path = tmp_path / "failure_report_bad_contract.json"
+    result = _run_verify_cli(
+        "--capture-metadata",
+        str(GOLDEN_CAPTURE),
+        "--metadata-manifest",
+        str(bad_metadata_manifest),
+        "--provenance-manifest",
+        str(GOLDEN_PROVENANCE_MANIFEST),
+        "--provenance-merkle",
+        str(GOLDEN_PROVENANCE_MERKLE),
+        "--out-report",
+        str(report_path),
+        "--write-report-on-failure",
+    )
+    assert result.returncode == 32
+    assert report_path.exists()
+
+    payload = _load_json(report_path)
+    assert payload["verification_status"]["passed"] is False
+    assert payload["inputs"]["metadata_manifest"]["metadata_contract_version"] == "tp.meta.capture.v999"
+    schema = _load_json(REPORT_SCHEMA_PATH)
+    jsonschema.Draft202012Validator(schema).validate(payload)
+
+
+def test_phase4f_failure_report_truncates_long_failure_messages() -> None:
+    jsonschema = pytest.importorskip("jsonschema")
+    long_failure_message = "x" * (FAILURE_MESSAGE_MAX_LENGTH + 512)
+    golden_report_payload = _load_json(GOLDEN_VERIFICATION_REPORT)
+    payload = build_verification_report_payload(
+        inputs=dict(golden_report_payload["inputs"]),
+        computed=default_failure_computed_block(),
+        passed=False,
+        failure_code_label="MERKLE_MISMATCH",
+        failure_message=long_failure_message,
+    )
+    failure_message = payload["verification_status"]["failure_message"]
+    assert isinstance(failure_message, str)
+    assert len(failure_message) == FAILURE_MESSAGE_MAX_LENGTH
+    assert failure_message.endswith("... [truncated]")
+
+    schema = _load_json(REPORT_SCHEMA_PATH)
+    jsonschema.Draft202012Validator(schema).validate(payload)
+
+
+def test_phase4f_report_schema_rejects_inconsistent_pass_fail_fields() -> None:
+    jsonschema = pytest.importorskip("jsonschema")
+    schema = _load_json(REPORT_SCHEMA_PATH)
+    validator = jsonschema.Draft202012Validator(schema)
+
+    payload = _load_json(GOLDEN_VERIFICATION_REPORT)
+    payload["verification_status"]["failure_code_label"] = "MERKLE_MISMATCH"
+    payload["verification_status"]["failure_message"] = "should be null when passed=true"
+    with pytest.raises(jsonschema.ValidationError):
+        validator.validate(payload)
 
 
 def test_phase4f_verifier_import_and_help_do_not_require_ml_stack() -> None:

@@ -1,0 +1,471 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rc219805.github.io/Transformation_Portal/schemas/phase4/verification_report.schema.json",
+  "title": "tp.meta.verification_report.v1 — Phase 4 Verification Report",
+  "description": "Deterministic verification report for validating the Phase 4C/4D/4E capture provenance chain.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "verification_contract_version",
+    "inputs",
+    "computed",
+    "verifier",
+    "verification_status"
+  ],
+  "properties": {
+    "verification_contract_version": {
+      "type": "string",
+      "const": "tp.meta.verification_report.v1"
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capture_metadata",
+        "metadata_manifest",
+        "provenance_manifest",
+        "provenance_merkle"
+      ],
+      "properties": {
+        "capture_metadata": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "file_sha256",
+            "metadata_contract_version"
+          ],
+          "properties": {
+            "file_sha256": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "metadata_contract_version": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^tp\\.meta\\.[a-z0-9_]+\\.v[0-9]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "metadata_manifest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "file_sha256",
+            "metadata_manifest_contract_version",
+            "metadata_contract_version"
+          ],
+          "properties": {
+            "file_sha256": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "metadata_manifest_contract_version": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^tp\\.meta\\.[a-z0-9_]+\\.v[0-9]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "metadata_contract_version": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^tp\\.meta\\.[a-z0-9_]+\\.v[0-9]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "provenance_manifest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "file_sha256",
+            "provenance_contract_version",
+            "metadata_contract_version"
+          ],
+          "properties": {
+            "file_sha256": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "provenance_contract_version": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^tp\\.meta\\.[a-z0-9_]+\\.v[0-9]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "metadata_contract_version": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^tp\\.meta\\.[a-z0-9_]+\\.v[0-9]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "provenance_merkle": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "file_sha256",
+            "provenance_merkle_contract_version",
+            "provenance_contract_version"
+          ],
+          "properties": {
+            "file_sha256": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "provenance_merkle_contract_version": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^tp\\.meta\\.[a-z0-9_]+\\.v[0-9]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "provenance_contract_version": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^tp\\.meta\\.[a-z0-9_]+\\.v[0-9]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "computed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "metadata_sha256_summary_sha256",
+        "metadata_entry_count",
+        "provenance_entry_sha256_summary_sha256",
+        "provenance_entry_count",
+        "provenance_merkle_root",
+        "provenance_leaf_count"
+      ],
+      "properties": {
+        "metadata_sha256_summary_sha256": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "metadata_entry_count": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "provenance_entry_sha256_summary_sha256": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "provenance_entry_count": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "provenance_merkle_root": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "provenance_leaf_count": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "verifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "build_id"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "build_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    },
+    "verification_status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "passed",
+        "failure_code_label",
+        "failure_message"
+      ],
+      "properties": {
+        "passed": {
+          "type": "boolean"
+        },
+        "failure_code_label": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "failure_message": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 16384
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "verification_status": {
+            "required": [
+              "passed"
+            ],
+            "properties": {
+              "passed": {
+                "const": true
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "verification_status": {
+            "properties": {
+              "failure_code_label": {
+                "type": "null"
+              },
+              "failure_message": {
+                "type": "null"
+              }
+            }
+          },
+          "computed": {
+            "properties": {
+              "metadata_sha256_summary_sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "metadata_entry_count": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "provenance_entry_sha256_summary_sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "provenance_entry_count": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "provenance_merkle_root": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "provenance_leaf_count": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "verification_status": {
+            "required": [
+              "passed"
+            ],
+            "properties": {
+              "passed": {
+                "const": false
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "verification_status": {
+            "properties": {
+              "failure_code_label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "failure_message": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 16384
+              }
+            }
+          },
+          "computed": {
+            "properties": {
+              "metadata_sha256_summary_sha256": {
+                "type": "null"
+              },
+              "metadata_entry_count": {
+                "type": "null"
+              },
+              "provenance_entry_sha256_summary_sha256": {
+                "type": "null"
+              },
+              "provenance_entry_count": {
+                "type": "null"
+              },
+              "provenance_merkle_root": {
+                "type": "null"
+              },
+              "provenance_leaf_count": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
