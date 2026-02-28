@@ -220,3 +220,78 @@ def test_premis_validate_rejects_invalid_datetime_and_outcome() -> None:
     invalid_outcome["event"]["eventOutcomeInformation"] = {"eventOutcome": "maybe"}
     with pytest.raises(ValueError, match="eventOutcome"):
         PREMIS_TOOL._validate_event(invalid_outcome, line_number=3)
+
+
+def test_run_wrapped_tool_reports_missing_script_with_typed_error(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_emit_result(*, args, command_name: str, exit_code: int, data, error=None) -> int:
+        captured["command_name"] = command_name
+        captured["exit_code"] = exit_code
+        captured["data"] = data
+        captured["error"] = error
+        return exit_code
+
+    monkeypatch.setattr(GOVERNANCE_TOOL, "_emit_result", _fake_emit_result)
+    monkeypatch.setattr(GOVERNANCE_TOOL, "_record_premis", lambda **_: None)
+
+    args = SimpleNamespace(
+        json=True,
+        json_pretty=False,
+        json_output=None,
+        json_canonical_profile="canonical_v1",
+        premis_log=None,
+        premis_agent_id="tp.archive.governance.v1",
+    )
+    exit_code = GOVERNANCE_TOOL._run_wrapped_tool(
+        args=args,
+        command_name="bag-build",
+        script_name="archive_bagit.py",
+        tool_args=["build"],
+        premis_event_type=None,
+        premis_event_detail="",
+        premis_object_ids=[],
+    )
+
+    assert exit_code == GOVERNANCE_TOOL.EXIT_OTHER_FAILURE
+    assert captured["exit_code"] == GOVERNANCE_TOOL.EXIT_OTHER_FAILURE
+    assert captured["error"]["type"] == "ToolUnavailableError"
+    assert "missing tool script" in str(captured["error"]["message"])
+    assert "missing_tool" in captured["data"]
+
+
+def test_sealed_eval_reports_missing_harness_with_typed_error(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_emit_result(*, args, command_name: str, exit_code: int, data, error=None) -> int:
+        captured["command_name"] = command_name
+        captured["exit_code"] = exit_code
+        captured["data"] = data
+        captured["error"] = error
+        return exit_code
+
+    monkeypatch.setattr(GOVERNANCE_TOOL, "_emit_result", _fake_emit_result)
+    monkeypatch.setattr(GOVERNANCE_TOOL, "_record_premis", lambda **_: None)
+
+    args = SimpleNamespace(
+        json=True,
+        json_pretty=False,
+        json_output=None,
+        json_canonical_profile="canonical_v1",
+        premis_log=None,
+        premis_agent_id="tp.archive.governance.v1",
+        archive_index="index.csv.gz",
+        archive_root="/archive",
+        out_root="archive_reports/sealed_eval",
+        subset_root=None,
+        eval_command=None,
+        validate_schemas=True,
+        allow_writable_subset=False,
+    )
+    exit_code = GOVERNANCE_TOOL._handle_sealed_eval_run(args)
+
+    assert exit_code == GOVERNANCE_TOOL.EXIT_OTHER_FAILURE
+    assert captured["command_name"] == "sealed-eval-run"
+    assert captured["error"]["type"] == "ToolUnavailableError"
+    assert "missing tool script" in str(captured["error"]["message"])
+    assert "missing_tool" in captured["data"]

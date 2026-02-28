@@ -121,6 +121,16 @@ def _tool_failure_error(command_name: str, return_code: int, stderr: str) -> dic
     )
 
 
+def _tool_unavailable_error(command_name: str, script_path: Path) -> dict[str, Any]:
+    return make_typed_error(
+        type_name="ToolUnavailableError",
+        message=f"{command_name} unavailable: missing tool script at {script_path}",
+        exit_code=EXIT_OTHER_FAILURE,
+        exit_name="OTHER_FAILURE",
+        priority=20,
+    )
+
+
 def _handle_fixity_scan(args: argparse.Namespace) -> int:
     script_path = PROJECT_ROOT / "tools" / "archive_hash_manifest.py"
     command = [
@@ -250,6 +260,21 @@ def _run_wrapped_tool(
     premis_object_ids: list[str],
 ) -> int:
     script_path = PROJECT_ROOT / "tools" / script_name
+    if not script_path.is_file():
+        return _emit_result(
+            args=args,
+            command_name=command_name,
+            exit_code=EXIT_OTHER_FAILURE,
+            data={
+                "tool": script_name,
+                "arguments": tool_args,
+                "stdout": "",
+                "stderr": "",
+                "missing_tool": str(script_path),
+            },
+            error=_tool_unavailable_error(command_name, script_path),
+        )
+
     command = [sys.executable, str(script_path), *tool_args]
     result = _run_tool(command)
 
@@ -521,6 +546,27 @@ def _handle_stac_export(args: argparse.Namespace) -> int:
 
 def _handle_sealed_eval_run(args: argparse.Namespace) -> int:
     script_path = PROJECT_ROOT / "scripts" / "pipelines" / "run_sealed_eval_72h.sh"
+    if not script_path.is_file():
+        return _emit_result(
+            args=args,
+            command_name="sealed-eval-run",
+            exit_code=EXIT_OTHER_FAILURE,
+            data={
+                "tool": "run_sealed_eval_72h.sh",
+                "archive_index": args.archive_index,
+                "archive_root": args.archive_root,
+                "out_root": args.out_root,
+                "subset_root": args.subset_root or args.archive_root,
+                "eval_command": args.eval_command,
+                "validate_schemas": bool(args.validate_schemas),
+                "allow_writable_subset": bool(args.allow_writable_subset),
+                "stdout": "",
+                "stderr": "",
+                "missing_tool": str(script_path),
+            },
+            error=_tool_unavailable_error("sealed-eval-run", script_path),
+        )
+
     command = [
         str(script_path),
         "--archive-index",

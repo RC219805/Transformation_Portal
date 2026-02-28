@@ -45,7 +45,9 @@ Top-level key ordering is deterministic through canonical serialization. Consume
 - `stac-export`
 - `sealed-eval-run`
 
-`sealed-eval-run` supports `--subset-root` and enforces a read-only subset mount contract by default (override with `--allow-writable-subset` for local development). The harness writes a deterministic audit package under `audit_package/` with `audit_manifest.json`.
+Phase availability note: branches that have not landed the implementation scripts for a command MUST emit `ToolUnavailableError` with non-zero `exit_code`, instead of a raw subprocess failure.
+
+`sealed-eval-run` supports `--subset-root` and enforces a read-only subset mount contract by default (override with `--allow-writable-subset` for local development) when `scripts/pipelines/run_sealed_eval_72h.sh` is present. In that configuration, the harness writes a deterministic audit package under `audit_package/` with `audit_manifest.json`.
 
 ## Serialization Profiles
 `archive_governance.py` supports:
