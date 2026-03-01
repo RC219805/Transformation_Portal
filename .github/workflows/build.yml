@@ -839,7 +839,7 @@ jobs:
 
             if [ "${test_result}" != "success" ]; then
               if [ "${test_result}" = "skipped" ] && [ "${lint_result}" != "success" ]; then
-                echo "ℹ️ test matrix skipped due failed dependency (lint=${lint_result})"
+                echo "ℹ️ test matrix skipped due to failed dependency (lint=${lint_result})"
               else
                 echo "❌ test matrix did not succeed (result=${test_result})"
               fi
@@ -848,7 +848,7 @@ jobs:
 
             if [ "${manifest_result}" != "success" ]; then
               if [ "${manifest_result}" = "skipped" ] && [ "${test_result}" != "success" ]; then
-                echo "ℹ️ generate-manifest skipped due failed dependency (test=${test_result})"
+                echo "ℹ️ generate-manifest skipped due to failed dependency (test=${test_result})"
               else
                 echo "❌ generate-manifest did not succeed (result=${manifest_result})"
               fi

@@ -13,7 +13,8 @@ from PIL import Image
 
 from transformation_portal.lux_depth_v3.batch_stats import compute_batch_runtime_stats
 from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
-from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+from transformation_portal.lux_depth_v3.input_manager import ImageInput
+from transformation_portal.lux_depth_v3.orchestrator import ApexStrictGateError, EnhanceOrchestrator
 
 
 class TestBatchRuntimeStats:
@@ -347,3 +348,115 @@ class TestEnhanceBatch:
                             assert stats["count"] >= 0
                         if "mean" in stats:
                             assert stats["mean"] >= 0
+
+    def test_enhance_batch_parallel_enriches_apex_gate_error_payload(self, batch_temp_workspace):
+        """Parallel batch path should emit structured ApexStrictGateError fields."""
+        config = EnhanceConfig(
+            model_variant=ModelVariant.METRIC_LARGE,
+            enable_v2=False,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry") as mock_registry_class:
+                mock_backend = Mock()
+                mock_backend.ensure_available.return_value = None
+                mock_backend.name = "da3"
+
+                mock_registry = Mock()
+                mock_registry.get_backend.return_value = mock_backend
+                mock_registry_class.return_value = mock_registry
+
+                orchestrator = EnhanceOrchestrator(
+                    config=config,
+                    output_root=tmpdir_path,
+                )
+
+                # Ensure the parallel path is selected.
+                orchestrator._use_parallel = True
+
+                fake_inputs = [ImageInput(path=batch_temp_workspace["input_dir"] / f"test_{i}.jpg") for i in range(4)]
+                preprocessed = [
+                    {
+                        "status": "ok",
+                        "image_input": fake_inputs[0],
+                        "output_key": Path("test_0"),
+                        "depth_path": tmpdir_path / "depth" / "test_0_depth.png",
+                        "manifest_path": tmpdir_path / "manifests" / "test_0_combined.json",
+                        "should_skip": False,
+                    }
+                ]
+
+                expected_details = {
+                    "passed": False,
+                    "failure_codes": ["APEX_DEPTH_PLATEAU"],
+                    "metrics": {"upper_iqr": 0.0},
+                    "thresholds": {"upper_iqr_min": 1e-4},
+                }
+
+                def _raise_apex_gate(*_args, **_kwargs):
+                    raise ApexStrictGateError(
+                        "APEX_DEPTH_PLATEAU",
+                        "APEX depth validity gate failed: APEX_DEPTH_PLATEAU",
+                        details=expected_details,
+                    )
+
+                with (
+                    patch.object(orchestrator, "_parallel_preprocess_batch", return_value=preprocessed),
+                    patch.object(orchestrator, "enhance_image", side_effect=_raise_apex_gate),
+                ):
+                    results = orchestrator.enhance_batch_parallel(fake_inputs, input_root=batch_temp_workspace["input_dir"])
+
+                assert len(results) == 1
+                assert results[0]["status"] == "error"
+                assert results[0]["error_code"] == "APEX_DEPTH_PLATEAU"
+                assert results[0]["error_details"] == expected_details
+
+    def test_enhance_batch_sequential_enriches_apex_gate_error_payload(self, batch_temp_workspace):
+        """Sequential batch path should emit structured ApexStrictGateError fields."""
+        config = EnhanceConfig(
+            model_variant=ModelVariant.METRIC_LARGE,
+            enable_v2=False,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry") as mock_registry_class:
+                mock_backend = Mock()
+                mock_backend.ensure_available.return_value = None
+                mock_backend.name = "da3"
+
+                mock_registry = Mock()
+                mock_registry.get_backend.return_value = mock_backend
+                mock_registry_class.return_value = mock_registry
+
+                orchestrator = EnhanceOrchestrator(
+                    config=config,
+                    output_root=tmpdir_path,
+                )
+                orchestrator._use_parallel = False
+
+                expected_details = {
+                    "passed": False,
+                    "failure_codes": ["APEX_DEPTH_SATURATION_HIGH"],
+                    "metrics": {"saturation_high_fraction": 0.4},
+                    "thresholds": {"saturation_high_fraction_max": 0.02},
+                }
+
+                def _raise_apex_gate(*_args, **_kwargs):
+                    raise ApexStrictGateError(
+                        "APEX_DEPTH_SATURATION_HIGH",
+                        "APEX depth validity gate failed: APEX_DEPTH_SATURATION_HIGH",
+                        details=expected_details,
+                    )
+
+                with patch.object(orchestrator, "enhance_image", side_effect=_raise_apex_gate):
+                    results = orchestrator.enhance_batch(batch_temp_workspace["input_dir"])
+
+                assert len(results) == 3
+                for result in results:
+                    assert result["status"] == "error"
+                    assert result["error_code"] == "APEX_DEPTH_SATURATION_HIGH"
+                    assert result["error_details"] == expected_details
