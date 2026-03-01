@@ -69,6 +69,8 @@ def _env_float(name: str, default: float, minimum: float = 0.0) -> float:
 
 
 PORTAL_HTML = Path(__file__).resolve().parent / "portal.html"
+REPO_ROOT = Path(__file__).resolve().parent
+ARCHIVE_GOVERNANCE_SCRIPT = REPO_ROOT / "tools" / "archive_governance.py"
 LOG_TAIL_LIMIT = 2000
 STATUS_LOG_LIMIT = 250
 EVENT_QUEUE_MAXSIZE = 512
@@ -195,6 +197,16 @@ RATE_LIMIT_BUCKETS: Dict[str, Deque[float]] = {}
 # Gate pipelines integrated directly
 ARCHIVE_GATE_PIPELINES = {"archive-gate-a", "archive-gate-b", "archive-gate-c"}
 ALLOWED_PIPELINES = {"lux-depth-v3", *ARCHIVE_GATE_PIPELINES}
+ARCHIVE_GATE_DEFAULT_COMMANDS = {
+    "archive-gate-a": "fixity-scan",
+    "archive-gate-b": "bag-build",
+    "archive-gate-c": "mets-export",
+}
+ARCHIVE_GATE_ALLOWED_COMMANDS = {
+    "archive-gate-a": {"fixity-scan", "fixity-verify", "manifest-build", "rights-apply"},
+    "archive-gate-b": {"bag-build", "bag-validate", "dedup-plan"},
+    "archive-gate-c": {"mets-export", "prov-export", "stac-export"},
+}
 ALLOWED_QUALITY = {"standard", "premium", "apex"}
 ALLOWED_BACKENDS = {"da3", "depth_pro"}
 DEPTH_BACKEND_ALIASES = {
@@ -206,6 +218,9 @@ VALIDATION_REASON_CODES = {
     "input_dir and output_dir are required": "missing_required_paths",
     "Invalid quality_tier": "invalid_quality_tier",
     "Invalid depth_backend": "invalid_depth_backend",
+    "Archive governance runner unavailable": "archive_runner_unavailable",
+    "Invalid archive_command": "invalid_archive_command",
+    "Invalid archive integer option": "invalid_archive_integer_option",
 }
 
 
@@ -652,6 +667,290 @@ def _serialize_job(job: Job, *, include_logs: bool = True) -> Dict[str, Any]:
     return data
 
 
+def _path_arg(args: Dict[str, Any], *keys: str, default: str) -> str:
+    value = _pick(args, *keys, default=default)
+    text = str(value or "").strip()
+    return text or default
+
+
+def _int_arg(args: Dict[str, Any], *keys: str, default: int, minimum: int = 0) -> int:
+    value = _pick(args, *keys, default=None)
+    if value is None:
+        return default
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Invalid archive integer option") from exc
+    if parsed < minimum:
+        raise ValueError("Invalid archive integer option")
+    return parsed
+
+
+def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, output_dir: str) -> List[str]:
+    if not ARCHIVE_GOVERNANCE_SCRIPT.is_file():
+        raise ValueError("Archive governance runner unavailable")
+
+    default_command = ARCHIVE_GATE_DEFAULT_COMMANDS[pipeline]
+    command = str(_pick(args, "archive_command", "archiveCommand", default=default_command) or "").strip()
+    if command not in ARCHIVE_GATE_ALLOWED_COMMANDS[pipeline]:
+        raise ValueError("Invalid archive_command")
+
+    manifest_default = str(Path(output_dir) / "archive_manifest_v2.jsonl")
+    rights_manifest_default = str(Path(output_dir) / "archive_manifest_v2.rights.jsonl")
+    argv = [sys.executable, str(ARCHIVE_GOVERNANCE_SCRIPT), "--json", command]
+
+    if command == "fixity-scan":
+        archive_index = _path_arg(
+            args, "archive_index", "archiveIndex", default=str(Path(input_dir) / "archive_index_normalized.csv.gz")
+        )
+        archive_root = _path_arg(args, "archive_root", "archiveRoot", default=input_dir)
+        out_dir = _path_arg(args, "out_dir", "outDir", default=output_dir)
+        workers = _int_arg(args, "workers", default=1, minimum=1)
+
+        argv.extend(
+            [
+                "--archive-index",
+                archive_index,
+                "--archive-root",
+                archive_root,
+                "--out-dir",
+                out_dir,
+                "--workers",
+                str(workers),
+            ]
+        )
+        strict = _pick(args, "strict")
+        if strict is not None:
+            argv.append("--strict" if _as_bool(strict) else "--no-strict")
+        strict_identity = _pick(args, "strict_identity", "strictIdentity")
+        if strict_identity is not None:
+            argv.append("--strict-identity" if _as_bool(strict_identity) else "--no-strict-identity")
+        validate_schemas = _pick(args, "validate_schemas", "validateSchemas")
+        if validate_schemas is not None:
+            argv.append("--validate-schemas" if _as_bool(validate_schemas, default=True) else "--no-validate-schemas")
+
+    elif command == "fixity-verify":
+        hash_manifest = _path_arg(
+            args, "hash_manifest", "hashManifest", default=str(Path(output_dir) / "hash_manifest.csv.gz")
+        )
+        archive_root = _path_arg(args, "archive_root", "archiveRoot", default=input_dir)
+        report_path = _path_arg(
+            args,
+            "report_path",
+            "reportPath",
+            default=str(Path(output_dir) / "verification_report.json"),
+        )
+        verify_sample = _int_arg(args, "verify_sample", "verifySample", default=0, minimum=0)
+        workers = _int_arg(args, "workers", default=1, minimum=1)
+
+        argv.extend(
+            [
+                "--hash-manifest",
+                hash_manifest,
+                "--archive-root",
+                archive_root,
+                "--report-path",
+                report_path,
+                "--verify-sample",
+                str(verify_sample),
+                "--workers",
+                str(workers),
+            ]
+        )
+
+    elif command == "manifest-build":
+        archive_index = _path_arg(
+            args, "archive_index", "archiveIndex", default=str(Path(input_dir) / "archive_index_normalized.csv.gz")
+        )
+        hash_manifest = _path_arg(
+            args, "hash_manifest", "hashManifest", default=str(Path(output_dir) / "hash_manifest.csv.gz")
+        )
+        archive_root = _path_arg(args, "archive_root", "archiveRoot", default=input_dir)
+        out_jsonl = _path_arg(args, "out_jsonl", "outJsonl", default=manifest_default)
+        out_summary = _path_arg(
+            args, "out_summary", "outSummary", default=str(Path(output_dir) / "archive_manifest_v2.summary.json")
+        )
+        collection_id = str(_pick(args, "collection_id", "collectionId", default="UNSPECIFIED") or "UNSPECIFIED").strip()
+        owner = str(_pick(args, "owner", default="UNSPECIFIED") or "UNSPECIFIED").strip()
+
+        argv.extend(
+            [
+                "--archive-index",
+                archive_index,
+                "--hash-manifest",
+                hash_manifest,
+                "--archive-root",
+                archive_root,
+                "--out-jsonl",
+                out_jsonl,
+                "--out-summary",
+                out_summary,
+                "--collection-id",
+                collection_id or "UNSPECIFIED",
+                "--owner",
+                owner or "UNSPECIFIED",
+            ]
+        )
+        rights_jsonl = _pick(args, "rights_jsonl", "rightsJsonl")
+        if rights_jsonl:
+            argv.extend(["--rights-jsonl", str(rights_jsonl)])
+
+    elif command == "rights-apply":
+        manifest_jsonl = _path_arg(args, "manifest_jsonl", "manifestJsonl", default=manifest_default)
+        policy_yaml = _path_arg(
+            args,
+            "policy_yaml",
+            "policyYaml",
+            default=str(REPO_ROOT / "policy" / "archive" / "rights_flags.yml"),
+        )
+        out_jsonl = _path_arg(args, "out_jsonl", "outJsonl", default=rights_manifest_default)
+        out_summary = _path_arg(args, "out_summary", "outSummary", default=str(Path(output_dir) / "asset_rights.summary.json"))
+
+        argv.extend(
+            [
+                "--manifest-jsonl",
+                manifest_jsonl,
+                "--policy-yaml",
+                policy_yaml,
+                "--out-jsonl",
+                out_jsonl,
+                "--out-summary",
+                out_summary,
+            ]
+        )
+
+    elif command == "bag-build":
+        manifest_jsonl = _path_arg(args, "manifest_jsonl", "manifestJsonl", default=rights_manifest_default)
+        archive_root = _path_arg(args, "archive_root", "archiveRoot", default=input_dir)
+        bag_dir = _path_arg(args, "bag_dir", "bagDir", default=str(Path(output_dir) / "bag"))
+        report_json = _path_arg(args, "report_json", "reportJson", default=str(Path(output_dir) / "bag_build_report.json"))
+        source_organization = str(
+            _pick(args, "source_organization", "sourceOrganization", default="UNSPECIFIED") or "UNSPECIFIED"
+        ).strip()
+        validate_with_bagit = _pick(args, "validate_with_bagit_python", "validateWithBagitPython")
+        if validate_with_bagit is None:
+            validate_with_bagit = _pick(args, "sign")
+
+        argv.extend(
+            [
+                "--manifest-jsonl",
+                manifest_jsonl,
+                "--archive-root",
+                archive_root,
+                "--bag-dir",
+                bag_dir,
+                "--report-json",
+                report_json,
+                "--source-organization",
+                source_organization or "UNSPECIFIED",
+            ]
+        )
+        if _as_bool(validate_with_bagit, default=False):
+            argv.append("--validate-with-bagit-python")
+
+    elif command == "bag-validate":
+        bag_dir = _path_arg(args, "bag_dir", "bagDir", default=str(Path(output_dir) / "bag"))
+        report_json = _path_arg(args, "report_json", "reportJson", default=str(Path(output_dir) / "bag_validate_report.json"))
+        validate_with_bagit = _pick(args, "validate_with_bagit_python", "validateWithBagitPython")
+        if validate_with_bagit is None:
+            validate_with_bagit = _pick(args, "sign")
+
+        argv.extend(["--bag-dir", bag_dir, "--report-json", report_json])
+        if _as_bool(validate_with_bagit, default=False):
+            argv.append("--validate-with-bagit-python")
+
+    elif command == "dedup-plan":
+        manifest_jsonl = _path_arg(args, "manifest_jsonl", "manifestJsonl", default=rights_manifest_default)
+        out_ledger = _path_arg(args, "out_ledger", "outLedger", default=str(Path(output_dir) / "dedup_ledger.csv"))
+        out_summary = _path_arg(args, "out_summary", "outSummary", default=str(Path(output_dir) / "dedup_summary.json"))
+        approver = str(_pick(args, "approver", default="UNSPECIFIED") or "UNSPECIFIED").strip()
+
+        argv.extend(
+            [
+                "--manifest-jsonl",
+                manifest_jsonl,
+                "--out-ledger",
+                out_ledger,
+                "--out-summary",
+                out_summary,
+                "--approver",
+                approver or "UNSPECIFIED",
+            ]
+        )
+
+    elif command == "mets-export":
+        manifest_jsonl = _path_arg(args, "manifest_jsonl", "manifestJsonl", default=rights_manifest_default)
+        out_xml = _path_arg(args, "out_xml", "outXml", default=str(Path(output_dir) / "mets_export.xml"))
+        out_summary = _path_arg(args, "out_summary", "outSummary", default=str(Path(output_dir) / "mets_summary.json"))
+        href_prefix = str(_pick(args, "href_prefix", "hrefPrefix", default="data") or "data").strip()
+
+        argv.extend(
+            [
+                "--manifest-jsonl",
+                manifest_jsonl,
+                "--out-xml",
+                out_xml,
+                "--out-summary",
+                out_summary,
+                "--href-prefix",
+                href_prefix or "data",
+            ]
+        )
+
+    elif command == "prov-export":
+        manifest_jsonl = _path_arg(args, "manifest_jsonl", "manifestJsonl", default=rights_manifest_default)
+        out_prov_jsonld = _path_arg(args, "out_prov_jsonld", "outProvJsonld", default=str(Path(output_dir) / "prov.jsonld"))
+        out_summary = _path_arg(args, "out_summary", "outSummary", default=str(Path(output_dir) / "prov_summary.json"))
+        datetime_field = str(_pick(args, "datetime_field", "datetimeField", default="modified_utc") or "modified_utc").strip()
+
+        argv.extend(
+            [
+                "--manifest-jsonl",
+                manifest_jsonl,
+                "--out-prov-jsonld",
+                out_prov_jsonld,
+                "--out-summary",
+                out_summary,
+                "--datetime-field",
+                datetime_field or "modified_utc",
+            ]
+        )
+
+    elif command == "stac-export":
+        manifest_jsonl = _path_arg(args, "manifest_jsonl", "manifestJsonl", default=rights_manifest_default)
+        out_prov_jsonld = _path_arg(args, "out_prov_jsonld", "outProvJsonld", default=str(Path(output_dir) / "prov.jsonld"))
+        out_stac_catalog = _path_arg(
+            args, "out_stac_catalog", "outStacCatalog", default=str(Path(output_dir) / "catalog.json")
+        )
+        out_stac_items_dir = _path_arg(
+            args, "out_stac_items_dir", "outStacItemsDir", default=str(Path(output_dir) / "stac_items")
+        )
+        out_summary = _path_arg(args, "out_summary", "outSummary", default=str(Path(output_dir) / "stac_summary.json"))
+        datetime_field = str(_pick(args, "datetime_field", "datetimeField", default="modified_utc") or "modified_utc").strip()
+        require_stac = _pick(args, "require_stac", "requireStac")
+
+        argv.extend(
+            [
+                "--manifest-jsonl",
+                manifest_jsonl,
+                "--out-prov-jsonld",
+                out_prov_jsonld,
+                "--out-stac-catalog",
+                out_stac_catalog,
+                "--out-stac-items-dir",
+                out_stac_items_dir,
+                "--out-summary",
+                out_summary,
+                "--datetime-field",
+                datetime_field or "modified_utc",
+            ]
+        )
+        if require_stac is not None:
+            argv.append("--require-stac" if _as_bool(require_stac, default=False) else "--no-require-stac")
+
+    return argv
+
+
 def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
     """
     Build argv securely (no shell).
@@ -747,12 +1046,7 @@ def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
         ):
             argv.extend(["--accept-apple-depth-pro-research-license", "true"])
     elif pipeline in ARCHIVE_GATE_PIPELINES:
-        if _as_bool(_pick(args, "dedup", default=False)):
-            argv.append("--dedup")
-            argv.append("on")
-        if _as_bool(_pick(args, "sign", default=False)):
-            argv.append("--sign")
-            argv.append("true")
+        argv = _archive_gate_argv(str(pipeline), args, input_dir, output_dir)
 
     return argv
 
@@ -871,6 +1165,7 @@ async def ready() -> Dict[str, Any]:
         "version": "0.3.0",
         "cli": {
             "lux-depth-v3": bool(which("lux-depth-v3")),
+            "archive-governance": ARCHIVE_GOVERNANCE_SCRIPT.is_file(),
             "python": sys.version.split()[0],
         },
         "jobs": {
@@ -927,21 +1222,6 @@ async def create_job(payload: Dict[str, Any]) -> JSONResponse:
             code="INVALID_ARGUMENT",
             message="invalid job request",
             details={"field": "payload", "reason": reason_code},
-        )
-
-    pipeline = str(payload.get("pipeline") or "")
-    if pipeline in ARCHIVE_GATE_PIPELINES:
-        # These logical pipelines are exposed in presets/UI, but no concrete
-        # runner command is currently registered in project scripts/PATH.
-        return _error_response(
-            501,
-            code="UNIMPLEMENTED",
-            message=f"Pipeline '{pipeline}' is not wired to an executable runner yet",
-            details={
-                "pipeline": pipeline,
-                "reason": "runner_unavailable",
-                "recommended_runner": "tools/archive_governance.py",
-            },
         )
 
     _cleanup_expired_jobs(_now())

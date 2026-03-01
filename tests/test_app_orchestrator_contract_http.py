@@ -156,17 +156,24 @@ def test_invalid_job_payload_returns_typed_invalid_argument(client: TestClient) 
     assert body["error"]["code"] == "INVALID_ARGUMENT"
 
 
-def test_archive_gate_pipeline_returns_unimplemented(client: TestClient) -> None:
+def test_archive_gate_pipeline_submission_returns_job_envelope(client: TestClient, monkeypatch) -> None:
+    async def fake_run_job(job, _argv):  # noqa: ANN001
+        job.state = "succeeded"
+        job.exit_code = 0
+        job.finished_at = orchestrator_app._now()
+
+    monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
+
     response = client.post(
         "/v1/jobs",
         json={"pipeline": "archive-gate-a", "args": {"input_dir": "./in", "output_dir": "./out"}},
     )
     body = response.json()
-    assert response.status_code == 501
-    assert body["schema"] == "tp.orchestrator.error.v1"
-    assert body["success"] is False
-    assert body["error"]["code"] == "UNIMPLEMENTED"
-    assert body["error"]["details"]["pipeline"] == "archive-gate-a"
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.job.v1"
+    assert body["success"] is True
+    assert body["error"] is None
+    assert body["data"]["id"].startswith("job_")
 
 
 def test_oversized_v1_request_returns_typed_413_envelope(client: TestClient) -> None:

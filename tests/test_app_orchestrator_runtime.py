@@ -160,6 +160,103 @@ def test_argv_normalization_depth_backend_is_case_insensitive() -> None:
     assert _flag_value(argv, "--depth-backend") == "da3"
 
 
+def test_argv_archive_gate_a_defaults_to_fixity_scan_runner() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "archive-gate-a",
+        "args": {
+            "input_dir": "./archive_root",
+            "output_dir": "./archive_reports",
+        },
+    }
+
+    argv = orchestrator_app._argv_from_request(payload)
+
+    assert argv[0] == sys.executable
+    assert argv[1].endswith("tools/archive_governance.py")
+    assert argv[2] == "--json"
+    assert argv[3] == "fixity-scan"
+    assert _flag_value(argv, "--archive-root") == "./archive_root"
+    assert _flag_value(argv, "--out-dir") == "./archive_reports"
+
+
+def test_argv_archive_gate_b_allows_command_override_and_sign_maps_to_bagit_validation() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "archive-gate-b",
+        "args": {
+            "input_dir": "./archive_root",
+            "output_dir": "./archive_reports",
+            "archive_command": "bag-validate",
+            "sign": True,
+        },
+    }
+
+    argv = orchestrator_app._argv_from_request(payload)
+
+    assert argv[3] == "bag-validate"
+    assert _flag_value(argv, "--bag-dir") == "archive_reports/bag"
+    assert "--validate-with-bagit-python" in argv
+
+
+def test_argv_archive_gate_fixity_verify_uses_canonical_default_report_filename() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "archive-gate-a",
+        "args": {
+            "input_dir": "./archive_root",
+            "output_dir": "./archive_reports",
+            "archive_command": "fixity-verify",
+        },
+    }
+
+    argv = orchestrator_app._argv_from_request(payload)
+
+    assert argv[3] == "fixity-verify"
+    assert _flag_value(argv, "--report-path") == "archive_reports/verification_report.json"
+
+
+def test_argv_archive_gate_rejects_workers_below_minimum() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "archive-gate-a",
+        "args": {
+            "input_dir": "./archive_root",
+            "output_dir": "./archive_reports",
+            "archive_command": "fixity-scan",
+            "workers": 0,
+        },
+    }
+
+    with pytest.raises(ValueError, match="Invalid archive integer option"):
+        orchestrator_app._argv_from_request(payload)
+
+
+def test_argv_archive_gate_rejects_negative_verify_sample() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "archive-gate-a",
+        "args": {
+            "input_dir": "./archive_root",
+            "output_dir": "./archive_reports",
+            "archive_command": "fixity-verify",
+            "verify_sample": -1,
+        },
+    }
+
+    with pytest.raises(ValueError, match="Invalid archive integer option"):
+        orchestrator_app._argv_from_request(payload)
+
+
+def test_argv_archive_gate_invalid_command_is_rejected() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "archive-gate-c",
+        "args": {
+            "input_dir": "./archive_root",
+            "output_dir": "./archive_reports",
+            "archive_command": "bag-build",
+        },
+    }
+
+    with pytest.raises(ValueError, match="Invalid archive_command"):
+        orchestrator_app._argv_from_request(payload)
+
+
 def test_run_job_is_async_and_does_not_block_event_loop() -> None:
     async def scenario() -> None:
         job = orchestrator_app.Job(id="job_async", created_at=orchestrator_app._now())
@@ -556,21 +653,44 @@ def test_create_job_validation_uses_typed_error_envelope() -> None:
     assert body["error"]["code"] == "INVALID_ARGUMENT"
 
 
-def test_create_job_archive_gate_is_fail_fast_unimplemented() -> None:
+def test_create_job_archive_gate_invalid_command_uses_typed_error_envelope() -> None:
     response = asyncio.run(
         orchestrator_app.create_job(
             {
                 "pipeline": "archive-gate-a",
-                "args": {"input_dir": "./input_images", "output_dir": "./output"},
+                "args": {"input_dir": "./input_images", "output_dir": "./output", "archive_command": "stac-export"},
             }
         )
     )
     body = json.loads(response.body.decode("utf-8"))
 
-    assert response.status_code == 501
+    assert response.status_code == 400
     assert body["success"] is False
-    assert body["error"]["code"] == "UNIMPLEMENTED"
-    assert body["error"]["details"]["pipeline"] == "archive-gate-a"
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["reason"] == "invalid_archive_command"
+    assert orchestrator_app.JOBS == {}
+
+
+def test_create_job_archive_gate_invalid_integer_option_uses_typed_error_envelope() -> None:
+    response = asyncio.run(
+        orchestrator_app.create_job(
+            {
+                "pipeline": "archive-gate-a",
+                "args": {
+                    "input_dir": "./input_images",
+                    "output_dir": "./output",
+                    "archive_command": "fixity-scan",
+                    "workers": 0,
+                },
+            }
+        )
+    )
+    body = json.loads(response.body.decode("utf-8"))
+
+    assert response.status_code == 400
+    assert body["success"] is False
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["reason"] == "invalid_archive_integer_option"
     assert orchestrator_app.JOBS == {}
 
 
