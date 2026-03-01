@@ -360,8 +360,8 @@ def main(
         print(error_msg, file=sys.stdout)  # Also print to stdout for CLI tests
         raise typer.Exit(code=1)
 
-    # Validate SAM2 size option
-    if sam2_model_size.lower() not in ["base", "large"]:
+    # Validate SAM2 size option only when SAM2 backend is selected.
+    if segmentation_backend.lower() == "sam2" and sam2_model_size.lower() not in ["base", "large"]:
         error_msg = "Invalid --sam2-model-size. Must be one of: base, large"
         logger.error(error_msg)
         print(error_msg, file=sys.stdout)

@@ -555,6 +555,7 @@ def test_runtime_depth_cache_hit_uses_uint8_original_image_for_depth_result(tmp_
 
     assert output["status"] == "ok"
     assert observed_original_dtype["dtype"] == "uint8"
+    assert output["attempts"][0]["device"] == "cache"
     assert backend.compute.call_count == 0
 
 
@@ -590,6 +591,60 @@ def test_runtime_attempt_device_records_actual_backend_device(tmp_path):
     assert result["status"] == "ok"
     assert result["attempts"][0]["backend"] == "da3"
     assert result["attempts"][0]["device"] == "cpu"
+
+
+def test_runtime_metric_depth_resize_preserves_metric_units(tmp_path):
+    """Resizing depth back to original shape must preserve metric-value scale."""
+    from PIL import Image
+
+    from transformation_portal.depth.backends.protocol import DepthResult
+    from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+    test_image = tmp_path / "metric_resize.png"
+    Image.new("RGB", (97, 103), color="white").save(test_image)
+
+    metric_depth = np.linspace(20.0, 40.0, 98 * 98, dtype=np.float32).reshape(98, 98)
+    metric_result = DepthResult(
+        depth_map=metric_depth,
+        original_image=np.array(Image.new("RGB", (98, 98), color="white")),
+        metadata={
+            "source_depth_units": "meters",
+            "output_depth_units": "meters",
+            "output_normalization": "native_metric",
+        },
+        depth_units="meters",
+        backend_id="da3",
+        device="cpu",
+    )
+
+    config = EnhanceConfig(
+        depth_backend="da3",
+        depth_device="cpu",
+        enable_v2=False,
+        save_float_depth=True,
+    )
+
+    da3_backend = Mock()
+    da3_backend.name = "da3"
+    da3_backend.license_type = Mock(value="commercial")
+    da3_backend.ensure_available.return_value = None
+    da3_backend.compute.return_value = metric_result
+
+    registry = Mock()
+    registry.get_backend.return_value = da3_backend
+
+    with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry", return_value=registry):
+        orchestrator = EnhanceOrchestrator(config, tmp_path)
+        orchestrator.postprocessor = Mock(process=lambda result: result)
+        result = orchestrator.enhance_image(ImageInput(path=test_image))
+
+    assert result["status"] == "ok"
+    assert result["depth_float_path"] is not None
+
+    resized_depth = np.load(result["depth_float_path"])
+    assert resized_depth.shape == (103, 97)
+    assert float(np.max(resized_depth)) > 5.0
+    assert float(np.min(resized_depth)) >= 15.0
 
 
 def test_runtime_multilevel_operational_fallback_chain_is_deterministic(tmp_path):

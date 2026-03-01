@@ -509,6 +509,46 @@ class TestSegmentationCLI:
         assert result.exit_code == 1
         assert "sam2-model-size" in result.stdout.lower()
 
+    def test_invalid_sam2_model_size_is_ignored_for_non_sam2_backend(self, tmp_path):
+        """Invalid SAM2 size should not block runs when backend is not SAM2."""
+        from unittest.mock import MagicMock, patch
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "test.jpg").touch()
+
+        captured_config = None
+
+        def mock_orch_init(config, output_root):
+            del output_root
+            nonlocal captured_config
+            captured_config = config
+            mock_orch = MagicMock()
+            mock_orch.enhance_batch.return_value = [{"status": "ok"}]
+            return mock_orch
+
+        with patch(
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            side_effect=mock_orch_init,
+        ):
+            result = runner.invoke(
+                app,
+                [
+                    "--input-dir",
+                    str(input_dir),
+                    "--output-dir",
+                    str(tmp_path / "output"),
+                    "--segmentation-backend",
+                    "efficientsam",
+                    "--sam2-model-size",
+                    "tiny",
+                ],
+            )
+
+        assert result.exit_code == 0
+        assert captured_config is not None
+        assert captured_config.material_segmentation_backend == "efficientsam"
+
     def test_segmentation_config_defaults(self, tmp_path):
         """Test segmentation config with default values."""
         from unittest.mock import MagicMock, patch

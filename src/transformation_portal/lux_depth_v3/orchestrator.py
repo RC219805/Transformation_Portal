@@ -1033,10 +1033,13 @@ class EnhanceOrchestrator:
                         if cached_depth is not None:
                             from ..depth.backends.protocol import DepthResult
 
+                            # No inference runs on cache hit; mark device provenance explicitly.
+                            attempt_record["device"] = "cache"
                             cache_metadata: Dict[str, Any] = {
                                 "cached": True,
                                 "output_normalization": "cache_reuse",
                                 "cache_backend_id": backend_id,
+                                "device": "cache",
                             }
                             if image_sha256 and attempt_cache_fp_hash:
                                 cache_metadata["cache_key"] = f"{image_sha256}_{attempt_cache_fp_hash}"
@@ -1047,7 +1050,7 @@ class EnhanceOrchestrator:
                                 metadata=cache_metadata,
                                 depth_units="meters" if backend_id == "depth_pro" else "relative",
                                 backend_id=backend_id,
-                                device=attempt_record["device"],
+                                device="cache",
                                 dtype="float32",
                                 input_size=original_shape,
                             )
@@ -1075,12 +1078,13 @@ class EnhanceOrchestrator:
                             from PIL import Image as PILImage
 
                             logger.debug(f"Resizing depth map from {current_shape} back to original {original_shape}")
-                            depth_pil = PILImage.fromarray((depth_candidate * 65535).astype(np.uint16), mode="I;16")
+                            # Preserve raw numeric depth semantics (relative or metric) during resize.
+                            depth_pil = PILImage.fromarray(np.asarray(depth_candidate, dtype=np.float32), mode="F")
                             depth_pil_resized = depth_pil.resize(
                                 (original_shape[1], original_shape[0]),
-                                PILImage.Resampling.LANCZOS,
+                                PILImage.Resampling.BILINEAR,
                             )
-                            depth_candidate = np.array(depth_pil_resized, dtype=np.float32) / 65535.0
+                            depth_candidate = np.array(depth_pil_resized, dtype=np.float32)
                             if hasattr(result_candidate, "depth_map"):
                                 result_candidate.depth_map = depth_candidate
                             else:

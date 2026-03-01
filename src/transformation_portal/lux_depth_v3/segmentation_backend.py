@@ -1047,7 +1047,8 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
 # =============================================================================
 
 
-@lru_cache(maxsize=8)  # Cache backend instances by backend + device + model options
+# Keep this small: SAM2 instances are heavyweight and multiple cached variants can exhaust memory.
+@lru_cache(maxsize=2)  # Cache backend instances by backend + device + model options
 def _get_backend_instance(
     backend_name: str,
     device: str = "auto",
