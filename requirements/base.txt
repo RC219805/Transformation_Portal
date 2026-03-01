@@ -126,6 +126,7 @@ shellingham==1.5.4
 starlette==0.47.2
     # via
     #   -c all.txt
+    #   -r base.in
     #   fastapi
 threadpoolctl==3.6.0
     # via
