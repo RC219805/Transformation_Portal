@@ -10,7 +10,7 @@ from __future__ import annotations
 import importlib.util
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from .security import HashMode
 
@@ -190,6 +190,8 @@ class EnhanceConfig:
     depth_fallback: str = "fail"  # Options: "fail", "skip", "v2-auto"
     v2_timeout: int = 300
     allow_synthetic_fallback: bool = False  # Allow synthetic depth backend when no ML deps (test/CI only)
+    allow_semantic_fallback: bool = False  # Allow backend fallback after APEX semantic-gate failures
+    depth_operational_fallback_chain: Tuple[str, ...] = ("da3", "da2")
 
     # Hash mode
     hash_mode: HashMode = HashMode.IF_MANIFEST_EXISTS
@@ -258,8 +260,10 @@ class EnhanceConfig:
 
     # Materials V3 segmentation backend (Phase 3)
     enable_material_segmentation: bool = False  # Enable automatic material segmentation
-    material_segmentation_backend: str = "stub"  # Options: stub, efficientsam
+    material_segmentation_backend: str = "stub"  # Options: stub, efficientsam, sam2
     strict_backend: bool = False  # If True, raise on backend errors instead of falling back to stub
+    sam2_model_size: str = "base"  # SAM2 variant when material_segmentation_backend="sam2": base or large
+    sam2_checkpoint_path: Optional[str] = None  # Optional SAM2 checkpoint override path
 
     # Emit flags (deliverables)
     emit_master16: bool = False  # Emit master 16-bit output

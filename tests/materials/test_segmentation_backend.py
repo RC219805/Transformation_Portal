@@ -1,10 +1,10 @@
 """Tests for material segmentation backends.
 
 These tests verify the SegmentationBackend Protocol implementation,
-including StubBackend and EfficientSAMBackend.
+including StubBackend, EfficientSAMBackend, and SAM2SegmentationBackend.
 
 Test Coverage:
-- Protocol compliance (stub and efficientsam backends)
+- Protocol compliance (stub, efficientsam, sam2 backends)
 - Shape contracts (RGB input → masks dict output)
 - Device placement (MPS/CUDA/CPU)
 - Fallback behavior (missing weights → stub)
@@ -16,6 +16,8 @@ Note: Tests marked with @pytest.mark.ml require torch/torchvision.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -23,6 +25,7 @@ from transformation_portal.lux_depth_v3.config import EnhanceConfig
 from transformation_portal.lux_depth_v3.protocols.segmentation_backend import SegmentationBackend, SegmentationBackendInfo
 from transformation_portal.lux_depth_v3.segmentation_backend import (
     EfficientSAMBackend,
+    SAM2SegmentationBackend,
     StubBackend,
     _get_backend_instance,
     segment_materials,
@@ -45,8 +48,8 @@ except ImportError:
 # =============================================================================
 
 
-@pytest.fixture
-def sample_image():
+@pytest.fixture(name="sample_image")
+def fixture_sample_image():
     """Create a sample RGB image for testing."""
     # Create a simple 64×64 RGB image with some color variation
     image = np.zeros((64, 64, 3), dtype=np.uint8)
@@ -59,8 +62,8 @@ def sample_image():
     return image
 
 
-@pytest.fixture
-def config_stub():
+@pytest.fixture(name="config_stub")
+def fixture_config_stub():
     """Config with stub backend."""
     return EnhanceConfig(
         enable_material_segmentation=True,
@@ -68,8 +71,8 @@ def config_stub():
     )
 
 
-@pytest.fixture
-def config_efficientsam():
+@pytest.fixture(name="config_efficientsam")
+def fixture_config_efficientsam():
     """Config with EfficientSAM backend."""
     return EnhanceConfig(
         enable_material_segmentation=True,
@@ -78,8 +81,18 @@ def config_efficientsam():
     )
 
 
-@pytest.fixture
-def config_strict():
+@pytest.fixture(name="config_sam2")
+def fixture_config_sam2():
+    """Config with SAM2 backend."""
+    return EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="sam2",
+        depth_device="cpu",
+    )
+
+
+@pytest.fixture(name="config_strict")
+def fixture_config_strict():
     """Config with strict_backend=True."""
     return EnhanceConfig(
         enable_material_segmentation=True,
@@ -129,6 +142,22 @@ def test_efficientsam_backend_implements_protocol():
     assert isinstance(info, SegmentationBackendInfo)
     assert info.name == "EfficientSAM"
     assert "efficientvit-sam" in info.model_id
+    assert info.requires_weights is True
+
+
+def test_sam2_backend_implements_protocol():
+    """Test that SAM2SegmentationBackend implements SegmentationBackend protocol."""
+    backend = SAM2SegmentationBackend()
+
+    assert isinstance(backend, SegmentationBackend)
+    assert hasattr(backend, "info")
+    assert hasattr(backend, "load")
+    assert hasattr(backend, "segment")
+
+    info = backend.info
+    assert isinstance(info, SegmentationBackendInfo)
+    assert info.name == "SAM2"
+    assert "sam2-hiera" in info.model_id
     assert info.requires_weights is True
 
 
@@ -270,6 +299,46 @@ def test_segment_materials_stub_backend(sample_image, config_stub):
     assert len(masks) == 0
 
 
+def test_segment_materials_passes_sky_knobs_without_mutating_backend(sample_image, monkeypatch):
+    """segment_materials should pass config knobs via factory args, not backend mutation."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    class DummyBackend:
+        @property
+        def info(self):
+            return SegmentationBackendInfo(name="dummy", model_id="dummy", requires_weights=False)
+
+        def segment(self, image):
+            del image
+            return {}
+
+    captured_kwargs = {}
+    backend = DummyBackend()
+
+    def fake_get_backend_instance(*args, **kwargs):
+        del args
+        captured_kwargs.update(kwargs)
+        return backend
+
+    monkeypatch.setattr(seg_module, "_get_backend_instance", fake_get_backend_instance)
+
+    config = EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        depth_device="cpu",
+        sky_top_region_fraction=0.42,
+        sky_gradient_threshold=0.11,
+        sky_brightness_threshold=0.55,
+    )
+
+    masks = segment_materials(sample_image, config)
+    assert masks == {}
+    assert captured_kwargs["sky_top_region_fraction"] == pytest.approx(0.42)
+    assert captured_kwargs["sky_gradient_threshold"] == pytest.approx(0.11)
+    assert captured_kwargs["sky_brightness_threshold"] == pytest.approx(0.55)
+    assert not hasattr(backend, "_config")
+
+
 @pytest.mark.ml
 def test_segment_materials_efficientsam_backend(sample_image, config_efficientsam):
     """Test that EfficientSAM backend returns masks."""
@@ -281,6 +350,88 @@ def test_segment_materials_efficientsam_backend(sample_image, config_efficientsa
     for material, mask in masks.items():
         assert mask.shape == sample_image.shape[:2]
         assert mask.dtype == np.float32
+
+
+def test_segment_materials_sam2_backend_with_mock(sample_image, config_sam2, monkeypatch):
+    """Test that SAM2 backend can be selected and returns canonical material masks."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    class FakeSpatialSAM2Backend:
+        def __init__(self, model_size, device, checkpoint_path, enable_material_classification, material_confidence_threshold):
+            del model_size, checkpoint_path, enable_material_classification, material_confidence_threshold
+            self.device = device
+
+        def segment(self, seg_input):
+            h, w = seg_input.image.shape[:2]
+            masks = np.zeros((1, h, w), dtype=bool)
+            masks[0, 10:30, 10:30] = True
+            scores = np.array([0.88], dtype=np.float32)
+            metadata = [
+                SimpleNamespace(
+                    area=400,
+                    bbox=(10, 10, 20, 20),
+                    stability_score=0.9,
+                    material_label="clear glass",
+                    material_confidence=0.91,
+                )
+            ]
+            return SimpleNamespace(masks=masks, scores=scores, metadata=metadata)
+
+    monkeypatch.setattr(seg_module, "SPATIAL_SAM2_AVAILABLE", True)
+    monkeypatch.setattr(seg_module, "SpatialSAM2Backend", FakeSpatialSAM2Backend)
+    seg_module._get_backend_instance.cache_clear()
+
+    try:
+        masks = segment_materials(sample_image, config_sam2)
+    finally:
+        seg_module._get_backend_instance.cache_clear()
+
+    assert "glass" in masks
+    assert masks["glass"].shape == sample_image.shape[:2]
+    assert masks["glass"].dtype == np.float32
+    assert float(masks["glass"].max()) == 1.0
+
+
+def test_segment_materials_sam2_strict_mode_missing_backend(sample_image, monkeypatch):
+    """Strict mode should raise when SAM2 backend dependencies are unavailable."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    monkeypatch.setattr(seg_module, "SPATIAL_SAM2_AVAILABLE", False)
+    seg_module._get_backend_instance.cache_clear()
+
+    config = EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="sam2",
+        strict_backend=True,
+    )
+
+    try:
+        with pytest.raises(RuntimeError, match="Material segmentation failed|Failed to load sam2"):
+            segment_materials(sample_image, config)
+    finally:
+        seg_module._get_backend_instance.cache_clear()
+
+
+def test_segment_materials_sam2_graceful_degradation(sample_image, monkeypatch):
+    """Non-strict SAM2 mode should fall back to empty masks when unavailable."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    monkeypatch.setattr(seg_module, "SPATIAL_SAM2_AVAILABLE", False)
+    seg_module._get_backend_instance.cache_clear()
+
+    config = EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="sam2",
+        strict_backend=False,
+    )
+
+    try:
+        masks = segment_materials(sample_image, config)
+    finally:
+        seg_module._get_backend_instance.cache_clear()
+
+    assert isinstance(masks, dict)
+    assert len(masks) == 0
 
 
 def test_segment_materials_unknown_backend(sample_image):
@@ -312,6 +463,35 @@ def test_backend_caching():
     backend4 = _get_backend_instance("efficientsam", device="cpu")
 
     assert backend3 is backend4  # Should be same instance
+
+
+def test_backend_caching_sam2(monkeypatch):
+    """SAM2 backend instances should also be cached by backend args."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    class FakeSpatialSAM2Backend:
+        def __init__(self, model_size, device, checkpoint_path, enable_material_classification, material_confidence_threshold):
+            del model_size, device, checkpoint_path, enable_material_classification, material_confidence_threshold
+
+        def segment(self, seg_input):
+            h, w = seg_input.image.shape[:2]
+            return SimpleNamespace(
+                masks=np.zeros((0, h, w), dtype=bool),
+                scores=np.zeros((0,), dtype=np.float32),
+                metadata=[],
+            )
+
+    monkeypatch.setattr(seg_module, "SPATIAL_SAM2_AVAILABLE", True)
+    monkeypatch.setattr(seg_module, "SpatialSAM2Backend", FakeSpatialSAM2Backend)
+    seg_module._get_backend_instance.cache_clear()
+
+    try:
+        backend1 = _get_backend_instance("sam2", device="cpu", sam2_model_size="base")
+        backend2 = _get_backend_instance("sam2", device="cpu", sam2_model_size="base")
+    finally:
+        seg_module._get_backend_instance.cache_clear()
+
+    assert backend1 is backend2
 
 
 # =============================================================================

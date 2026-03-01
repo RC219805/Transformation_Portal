@@ -499,62 +499,75 @@ class EnhanceOrchestrator:
         """Initialize depth backend using registry (ADR-019).
 
         Implements backend selection with fallback logic:
-        1. Try requested backend (from config.depth_backend)
+        1. Try requested backend (from config.depth_backend, default "da3")
         2. Check availability (checkpoint + dependencies)
-        3. Fallback to DA3 if unavailable
-        4. Record selection decision in metadata
+        3. Fallback to configured operational chain (default: da3 -> da2)
+        4. Optionally fallback to synthetic in explicit test/CI mode
+        5. Record selection decision in metadata
         """
         requested = self.config.depth_backend or "da3"
-        registry = DepthBackendRegistry()
+        self._depth_registry = DepthBackendRegistry()
+        self._depth_backend_cache: Dict[str, Any] = {}
+
+        allow_synthetic = bool(self.config.allow_synthetic_fallback) or os.getenv("TP_ALLOW_SYNTHETIC_FALLBACK") == "1"
+        candidate_chain: List[str] = [requested]
+        for fallback_backend in ("da3", "da2"):
+            if fallback_backend not in candidate_chain:
+                candidate_chain.append(fallback_backend)
+        if allow_synthetic and "synthetic" not in candidate_chain:
+            candidate_chain.append("synthetic")
 
         try:
-            # Get backend from registry
-            backend = registry.get_backend(requested, self.config)
+            backend = None
+            resolved = None
+            status = "error"
+            reason = None
+            init_errors: Dict[str, str] = {}
 
-            # Check availability
-            try:
-                backend.ensure_available()
-                available = True
-                reason = f"{backend.name} backend ready"
-            except (ImportError, FileNotFoundError) as e:
-                available = False
-                reason = str(e)
-
-            if not available:
-                # Fallback to DA3
-                logger.warning(f"Backend '{requested}' unavailable: {reason}. Falling back to DA3.")
-                backend = registry.get_backend("da3", self.config)
+            for index, backend_id in enumerate(candidate_chain):
                 try:
-                    backend.ensure_available()
-                    resolved = "da3"
-                    status = "fallback"
-                except (ImportError, FileNotFoundError) as fallback_error:
-                    # DA3 also unavailable (likely test environment without ML dependencies)
-                    # Check if synthetic fallback is explicitly allowed
-                    if not self.config.allow_synthetic_fallback:
-                        # Check environment variable override (for CI)
-                        if not os.getenv("TP_ALLOW_SYNTHETIC_FALLBACK") == "1":
-                            raise RuntimeError(
-                                f"No depth backend available: {fallback_error}. "
-                                "Install ML dependencies (torch, transformers) or explicitly enable "
-                                "synthetic fallback for testing (config.allow_synthetic_fallback=True "
-                                "or TP_ALLOW_SYNTHETIC_FALLBACK=1)."
-                            ) from fallback_error
+                    candidate_backend = self._depth_registry.get_backend(backend_id, self.config)
+                    candidate_backend.ensure_available()
+                    backend = candidate_backend
+                    resolved = backend_id
+                    if index == 0:
+                        status = "success"
+                        reason = f"{candidate_backend.name} backend ready"
+                    elif backend_id == "synthetic":
+                        status = "synthetic_fallback"
+                        reason = f"Test environment synthetic fallback after: {init_errors}"
+                    else:
+                        status = "fallback"
+                        requested_error = init_errors.get(requested, "unknown error")
+                        reason = f"Requested '{requested}' unavailable: {requested_error}. Selected '{backend_id}'"
+                    break
+                except LicenseRestrictionError:
+                    # Never bypass explicit license restrictions on requested backend.
+                    if index == 0:
+                        raise
+                    init_errors[backend_id] = "license_restriction"
+                except ValueError:
+                    # Unknown requested backend should remain a hard error.
+                    if index == 0:
+                        raise
+                    init_errors[backend_id] = "unknown_backend"
+                except (ImportError, FileNotFoundError, RuntimeError) as backend_error:
+                    init_errors[backend_id] = str(backend_error)
+                except Exception as backend_error:  # pragma: no cover - defensive hardening
+                    init_errors[backend_id] = str(backend_error)
 
-                    # Synthetic fallback explicitly allowed
-                    logger.warning(
-                        f"DA3 fallback also unavailable: {fallback_error}. "
-                        f"Using synthetic backend for testing (no ML dependencies)."
+            if backend is None or resolved is None:
+                if not allow_synthetic:
+                    raise RuntimeError(
+                        f"No depth backend available from candidates {candidate_chain}. "
+                        f"Errors: {init_errors}. Install ML dependencies (torch, transformers) or "
+                        "explicitly enable synthetic fallback for testing "
+                        "(config.allow_synthetic_fallback=True or TP_ALLOW_SYNTHETIC_FALLBACK=1)."
                     )
-                    backend = registry.get_backend("synthetic", self.config)
-                    resolved = "synthetic"
-                    status = "synthetic_fallback"
-                    reason = f"Test environment - using synthetic depth: {fallback_error}"
-            else:
-                resolved = requested
-                status = "success"
+                raise RuntimeError(f"No depth backend available from candidates {candidate_chain}. Errors: {init_errors}")
 
             self.depth_backend = backend
+            self._depth_backend_cache[resolved] = backend
             self._backend_metadata = BackendSelectionMetadata(
                 requested_backend=requested,
                 resolved_backend=resolved,
@@ -562,7 +575,11 @@ class EnhanceOrchestrator:
                 resolution_reason=reason,
                 model_id=self.config.model_variant.value.huggingface_id,
                 device=self.config.depth_device,
+                attempts=[],
             )
+            self._active_backend_metadata = self._backend_metadata
+            self._active_depth_attempts: List[Dict[str, Any]] = []
+            self._active_selected_attempt_index: Optional[int] = None
 
             logger.info(f"Depth backend: requested={requested} resolved={resolved} device={self.config.depth_device}")
 
@@ -572,6 +589,105 @@ class EnhanceOrchestrator:
         except Exception as e:
             logger.error(f"Backend initialization failed: {e}")
             raise
+
+    def _resolve_runtime_backend_chain(self, primary_backend_id: str) -> List[str]:
+        """Resolve ordered runtime fallback chain for per-image depth attempts."""
+        chain: List[str] = [primary_backend_id]
+        configured_chain = getattr(self.config, "depth_operational_fallback_chain", ("da3", "da2"))
+        for backend_id in configured_chain:
+            if backend_id and backend_id not in chain:
+                chain.append(backend_id)
+
+        allow_synthetic = bool(self.config.allow_synthetic_fallback) or os.getenv("TP_ALLOW_SYNTHETIC_FALLBACK") == "1"
+        if allow_synthetic and "synthetic" not in chain:
+            chain.append("synthetic")
+        return chain
+
+    @staticmethod
+    def _expected_output_depth_units_for_backend(backend_id: str) -> str:
+        """Return expected output depth units for cache-key partitioning."""
+        return "meters" if backend_id == "depth_pro" else "relative"
+
+    def _build_depth_cache_fingerprint(self, backend_id: str) -> str:
+        """Build backend-scoped cache fingerprint for depth reuse safety."""
+        base_fp = self.compute_config_fingerprint().depth_only().to_sha256()
+        expected_units = self._expected_output_depth_units_for_backend(backend_id)
+        payload = f"{base_fp}|backend={backend_id}|units={expected_units}"
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def _get_or_create_depth_backend(self, backend_id: str):
+        """Fetch backend instance from cache or registry and ensure availability."""
+        # Respect an already-initialized active backend when it matches the
+        # requested backend id. This keeps injected test doubles stable and
+        # avoids unnecessary registry lookups.
+        active_backend = getattr(self, "depth_backend", None)
+        if active_backend is not None and getattr(active_backend, "name", None) == backend_id:
+            self._depth_backend_cache[backend_id] = active_backend
+            return active_backend
+
+        cached = self._depth_backend_cache.get(backend_id)
+        if cached is not None:
+            return cached
+
+        backend = self._depth_registry.get_backend(backend_id, self.config)
+        backend.ensure_available()
+        self._depth_backend_cache[backend_id] = backend
+        return backend
+
+    @staticmethod
+    def _infer_operational_error_code(error: Exception) -> str:
+        """Map backend runtime exceptions to stable operational error codes."""
+        if isinstance(error, ImportError):
+            return "BACKEND_IMPORT_ERROR"
+        if isinstance(error, FileNotFoundError):
+            return "BACKEND_RESOURCE_MISSING"
+        message = str(error).lower()
+        if "torch not compiled with cuda enabled" in message:
+            return "CUDA_HARDCODED_IN_BACKEND"
+        if "cuda" in message and "not available" in message:
+            return "CUDA_UNAVAILABLE"
+        if "mps" in message and "not available" in message:
+            return "MPS_UNAVAILABLE"
+        return "BACKEND_RUNTIME_ERROR"
+
+    def _build_backend_metadata_for_attempts(
+        self,
+        selected_backend: str,
+        attempts: List[Dict[str, Any]],
+        result_metadata: Optional[Dict[str, Any]] = None,
+    ) -> BackendSelectionMetadata:
+        """Build per-image backend selection metadata including attempt provenance."""
+        requested = self._backend_metadata.requested_backend or self._backend_metadata.resolved_backend
+        resolution_status = "success" if selected_backend == requested else "fallback"
+        resolution_reason: Optional[str] = None
+        if resolution_status == "fallback":
+            failed = [attempt for attempt in attempts if attempt.get("status") == "failed"]
+            if failed:
+                first_failure = failed[0]
+                failure_kind = first_failure.get("failure_kind", "operational")
+                failure_code = first_failure.get("error_code", "UNKNOWN")
+                resolution_reason = (
+                    f"Fallback from '{requested}' to '{selected_backend}' " f"after {failure_kind} failure ({failure_code})"
+                )
+            else:
+                resolution_reason = f"Fallback from '{requested}' to '{selected_backend}'"
+
+        metadata = result_metadata or {}
+        model_id = (
+            metadata.get("resolved_model_id")
+            or metadata.get("requested_model_id")
+            or self.config.model_variant.value.huggingface_id
+        )
+
+        return BackendSelectionMetadata(
+            requested_backend=requested,
+            resolved_backend=selected_backend,
+            resolution_status=resolution_status,
+            resolution_reason=resolution_reason,
+            model_id=str(model_id),
+            device=self.config.depth_device,
+            attempts=attempts,
+        )
 
     def compute_config_fingerprint(self) -> ConfigFingerprint:
         return ConfigFingerprint(
@@ -604,6 +720,7 @@ class EnhanceOrchestrator:
                 resolution_reason=None,
                 model_id=self.config.model_variant.value.huggingface_id,
                 device=self.config.depth_device,
+                attempts=[],
             ),
         )
 
@@ -806,7 +923,16 @@ class EnhanceOrchestrator:
         float_depth_path: Path,
         manifest_path: Path,
         skip_depth: bool,
-    ) -> tuple[Optional[Any], float, Optional[dict], Optional[dict], float, Optional[Path]]:
+    ) -> tuple[
+        Optional[Any],
+        float,
+        Optional[dict],
+        Optional[dict],
+        float,
+        Optional[Path],
+        BackendSelectionMetadata,
+        List[Dict[str, Any]],
+    ]:
         """Stage A: Depth computation with caching and PBR generation.
 
         Args:
@@ -819,7 +945,8 @@ class EnhanceOrchestrator:
 
         Returns:
             Tuple of (depth_metadata, depth_runtime_s, pbr_assets, materials_v3_result,
-                     materials_v3_runtime_s, enhanced_image_path)
+                     materials_v3_runtime_s, enhanced_image_path,
+                     backend_selection_metadata, depth_attempts)
         """
         depth_runtime_s = 0.0
         depth_metadata = None
@@ -827,6 +954,9 @@ class EnhanceOrchestrator:
         materials_v3_result = None
         materials_v3_runtime_s = 0.0
         enhanced_image_path = None  # Will be set if Materials V3 produces enhanced_image
+        depth_attempts: List[Dict[str, Any]] = []
+        active_backend_metadata = self._backend_metadata
+        self._active_selected_attempt_index = None
 
         if not skip_depth:
             # Lazy preprocessing: Only validate and preprocess if we're running depth
@@ -858,65 +988,225 @@ class EnhanceOrchestrator:
             t0 = time.time()
             try:
                 # Phase 2: Check content-addressable depth cache
-                cached_depth = None
                 image_sha256 = None
                 if self.depth_cache:
                     image_sha256 = self._compute_or_skip_hash(image_input.path, manifest_exists=False, for_manifest_write=True)
-                    if image_sha256:
-                        config_fp_hash = self.compute_config_fingerprint().depth_only().to_sha256()
-                        cached_depth = self.depth_cache.get(image_sha256, config_fp_hash)
+
+                # 1. Inference with per-image backend attempt/fallback state machine.
+                from PIL import Image
+
+                preprocessed_uint8 = (np.clip(preprocessed_array, 0, 1) * 255).astype(np.uint8)
+                pil_image = Image.fromarray(preprocessed_uint8)
+                attempt_chain = self._resolve_runtime_backend_chain(self.depth_backend.name)
+
+                result = None
+                depth_map = None
+                depth_validity_metrics = None
+                selected_backend_id = self.depth_backend.name
+                selected_attempt_index: Optional[int] = None
+                last_error: Optional[Exception] = None
+
+                for attempt_index, backend_id in enumerate(attempt_chain):
+                    attempt_start = time.time()
+                    attempt_record: Dict[str, Any] = {
+                        "attempt": attempt_index,
+                        "backend": backend_id,
+                        "device": self.config.depth_device,
+                        "status": "started",
+                        "failure_kind": None,
+                        "error_code": None,
+                        "error_message": None,
+                        "apex_gate_passed": None,
+                        "cached": False,
+                    }
+
+                    try:
+                        attempt_cache_fp_hash = None
+                        cached_depth = None
+                        if self.depth_cache and image_sha256:
+                            attempt_cache_fp_hash = self._build_depth_cache_fingerprint(backend_id)
+                            cached_depth = self.depth_cache.get(image_sha256, attempt_cache_fp_hash)
+                            if cached_depth is not None:
+                                logger.info("Cache hit: using cached depth for %s (backend=%s)", output_key, backend_id)
+                        attempt_record["cached"] = bool(cached_depth is not None)
+
                         if cached_depth is not None:
-                            logger.info(f"Cache hit: using cached depth for {output_key}")
+                            from ..depth.backends.protocol import DepthResult
 
-                # 1. Inference (using preprocessed numpy array or cached depth)
-                if cached_depth is not None:
-                    # Use cached depth - wrap in result-like object
-                    from ..depth.backends.protocol import DepthResult
+                            # No inference runs on cache hit; mark device provenance explicitly.
+                            attempt_record["device"] = "cache"
+                            cache_metadata: Dict[str, Any] = {
+                                "cached": True,
+                                "output_normalization": "cache_reuse",
+                                "cache_backend_id": backend_id,
+                                "device": "cache",
+                            }
+                            if image_sha256 and attempt_cache_fp_hash:
+                                cache_metadata["cache_key"] = f"{image_sha256}_{attempt_cache_fp_hash}"
 
-                    result = DepthResult(depth_map=cached_depth, original_image=preprocessed_array, metadata={"cached": True})
-                else:
-                    # Run inference via backend
-                    # CRITICAL FIX: preprocessing returns float32 [0,1], must scale to uint8 [0,255] for PIL
-                    from PIL import Image
+                            result_candidate = DepthResult(
+                                depth_map=cached_depth,
+                                original_image=preprocessed_uint8,
+                                metadata=cache_metadata,
+                                depth_units="meters" if backend_id == "depth_pro" else "relative",
+                                backend_id=backend_id,
+                                device="cache",
+                                dtype="float32",
+                                input_size=original_shape,
+                            )
+                        else:
+                            backend = self._get_or_create_depth_backend(backend_id)
+                            self.depth_backend = backend
+                            resolved_backend_device = getattr(backend, "_device", None) or getattr(backend, "device", None)
+                            if isinstance(resolved_backend_device, str) and resolved_backend_device:
+                                attempt_record["device"] = resolved_backend_device
+                            result_candidate = backend.compute(pil_image)
+                            result_candidate = self.postprocessor.process(result_candidate)
+                            if self.depth_cache and image_sha256 and attempt_cache_fp_hash:
+                                self.depth_cache.store(image_sha256, attempt_cache_fp_hash, result_candidate.depth_map)
 
-                    preprocessed_uint8 = (np.clip(preprocessed_array, 0, 1) * 255).astype(np.uint8)
-                    pil_image = Image.fromarray(preprocessed_uint8)
-                    result = self.depth_backend.compute(pil_image)
+                        result_device = getattr(result_candidate, "device", None)
+                        if isinstance(result_device, str) and result_device:
+                            attempt_record["device"] = result_device
 
-                    # Store in cache if enabled
-                    if self.depth_cache and image_sha256:
-                        self.depth_cache.store(image_sha256, config_fp_hash, result.depth_map)
+                        # CRITICAL FIX (#2): Resize depth map back to original dimensions
+                        depth_candidate = (
+                            result_candidate.depth_map if hasattr(result_candidate, "depth_map") else result_candidate.depth
+                        )
+                        current_shape = depth_candidate.shape[:2]
+                        if current_shape != original_shape:
+                            from PIL import Image as PILImage
 
-                # 2. Post-Processing (Refinement) - skip for cached depths
-                if cached_depth is None:
-                    result = self.postprocessor.process(result)
+                            logger.debug(f"Resizing depth map from {current_shape} back to original {original_shape}")
+                            # Preserve raw numeric depth semantics (relative or metric) during resize.
+                            depth_pil = PILImage.fromarray(np.asarray(depth_candidate, dtype=np.float32), mode="F")
+                            depth_pil_resized = depth_pil.resize(
+                                (original_shape[1], original_shape[0]),
+                                PILImage.Resampling.BILINEAR,
+                            )
+                            depth_candidate = np.array(depth_pil_resized, dtype=np.float32)
+                            if hasattr(result_candidate, "depth_map"):
+                                result_candidate.depth_map = depth_candidate
+                            else:
+                                result_candidate.depth = depth_candidate
 
-                # CRITICAL FIX (#2): Resize depth map back to original dimensions
-                # preprocessing.py pads/crops to multiple of 14, but depth must match original source
-                depth_map = result.depth_map if hasattr(result, "depth_map") else result.depth
-                current_shape = depth_map.shape[:2]  # (H, W)
+                        result_metadata = dict(getattr(result_candidate, "metadata", None) or {})
+                        attempt_record["model_id"] = (
+                            result_metadata.get("resolved_model_id")
+                            or result_metadata.get("requested_model_id")
+                            or self.config.model_variant.value.huggingface_id
+                        )
+                        attempt_record["source_depth_units"] = result_metadata.get(
+                            "source_depth_units",
+                            getattr(result_candidate, "depth_units", None) or "unknown",
+                        )
+                        attempt_record["output_depth_units"] = result_metadata.get(
+                            "output_depth_units",
+                            getattr(result_candidate, "depth_units", None) or "unknown",
+                        )
+                        attempt_record["output_normalization"] = result_metadata.get("output_normalization", "unknown")
 
-                if current_shape != original_shape:
-                    from PIL import Image as PILImage
+                        # 2b. APEX depth validity gate (plateau/saturation guardrails)
+                        gate_result = self._enforce_apex_depth_validity_gate(
+                            depth_candidate,
+                            depth_units=getattr(result_candidate, "depth_units", None),
+                        )
 
-                    logger.debug(f"Resizing depth map from {current_shape} back to original {original_shape}")
-                    # Convert to PIL for high-quality resize
-                    depth_pil = PILImage.fromarray((depth_map * 65535).astype(np.uint16), mode="I;16")
-                    # Resize to original dimensions (H, W) -> PIL expects (W, H)
-                    depth_pil_resized = depth_pil.resize((original_shape[1], original_shape[0]), PILImage.Resampling.LANCZOS)
-                    depth_map = np.array(depth_pil_resized, dtype=np.float32) / 65535.0
-                    # Update result object
-                    if hasattr(result, "depth_map"):
-                        result.depth_map = depth_map
-                    else:
-                        result.depth = depth_map
+                        attempt_record.update(
+                            {
+                                "status": "success",
+                                "apex_gate_passed": bool(gate_result is None or gate_result.get("passed", False)),
+                            }
+                        )
+                        attempt_record["duration_s"] = time.time() - attempt_start
+                        depth_attempts.append(attempt_record)
+
+                        result = result_candidate
+                        depth_map = depth_candidate
+                        depth_validity_metrics = gate_result
+                        selected_backend_id = backend_id
+                        selected_attempt_index = attempt_index
+                        break
+
+                    except LicenseRestrictionError as license_error:
+                        attempt_record.update(
+                            {
+                                "status": "failed",
+                                "failure_kind": "license",
+                                "error_code": "LICENSE_RESTRICTION",
+                                "error_message": str(license_error),
+                                "apex_gate_passed": False,
+                                "duration_s": time.time() - attempt_start,
+                            }
+                        )
+                        depth_attempts.append(attempt_record)
+                        last_error = license_error
+                        raise
+
+                    except ApexStrictGateError as semantic_error:
+                        attempt_record.update(
+                            {
+                                "status": "failed",
+                                "failure_kind": "semantic",
+                                "error_code": semantic_error.code,
+                                "error_message": str(semantic_error),
+                                "error_details": semantic_error.details,
+                                "apex_gate_passed": False,
+                                "duration_s": time.time() - attempt_start,
+                            }
+                        )
+                        depth_attempts.append(attempt_record)
+                        last_error = semantic_error
+
+                        has_next = attempt_index + 1 < len(attempt_chain)
+                        if self.config.allow_semantic_fallback and has_next:
+                            logger.warning(
+                                "Semantic gate failed on backend=%s code=%s; attempting fallback backend.",
+                                backend_id,
+                                semantic_error.code,
+                            )
+                            continue
+                        raise
+
+                    except Exception as operational_error:
+                        error_code = self._infer_operational_error_code(operational_error)
+                        attempt_record.update(
+                            {
+                                "status": "failed",
+                                "failure_kind": "operational",
+                                "error_code": error_code,
+                                "error_message": str(operational_error),
+                                "apex_gate_passed": False,
+                                "duration_s": time.time() - attempt_start,
+                            }
+                        )
+                        depth_attempts.append(attempt_record)
+                        last_error = operational_error
+
+                        has_next = attempt_index + 1 < len(attempt_chain)
+                        if has_next:
+                            logger.warning(
+                                "Operational depth failure on backend=%s code=%s; attempting fallback backend.",
+                                backend_id,
+                                error_code,
+                            )
+                            continue
+                        raise
+
+                if result is None or depth_map is None:
+                    if last_error is not None:
+                        raise last_error
+                    raise RuntimeError("Depth inference failed before producing a result.")
 
                 depth_runtime_s = time.time() - t0
-
-                # 2b. APEX depth validity gate (plateau/saturation guardrails)
-                # Run immediately after depth inference/refinement so invalid depth never
-                # flows into Materials V3/PBR/write stages in APEX mode.
-                depth_validity_metrics = self._enforce_apex_depth_validity_gate(depth_map)
+                active_backend_metadata = self._build_backend_metadata_for_attempts(
+                    selected_backend_id,
+                    depth_attempts,
+                    result_metadata=getattr(result, "metadata", None) or {},
+                )
+                self._active_backend_metadata = active_backend_metadata
+                self._active_depth_attempts = depth_attempts
+                self._active_selected_attempt_index = selected_attempt_index
 
                 # 2c. Materials V3 Processing (if enabled)
                 materials_v3_result = None
@@ -1054,6 +1344,7 @@ class EnhanceOrchestrator:
                     "canonical_depth_path": (
                         str(float_depth_path) if getattr(self.config, "save_float_depth", False) else str(depth_path)
                     ),
+                    "attempts": depth_attempts,
                 }
                 if depth_validity_metrics:
                     stats["apex_depth_validity"] = depth_validity_metrics
@@ -1063,11 +1354,14 @@ class EnhanceOrchestrator:
                 for _k in ("requested_model_id", "resolved_model_id", "resolved_model_source"):
                     if _k in _md:
                         stats[_k] = _md[_k]
+                for _k in ("source_depth_units", "output_depth_units", "output_normalization"):
+                    if _k in _md:
+                        stats[_k] = _md[_k]
 
                 # CRITICAL FIX: Use resolved backend name, not config default
                 # This ensures depth.model matches what actually ran (backend_selection.resolved_backend)
                 # ADR-023 compliance: identity must match execution reality
-                resolved_backend = getattr(self, "_backend_metadata", None)
+                resolved_backend = active_backend_metadata
                 model_name = resolved_backend.resolved_backend if resolved_backend else self.config.model_variant.value.name
 
                 depth_metadata = DepthMetadata(
@@ -1105,12 +1399,16 @@ class EnhanceOrchestrator:
                 if self.config.depth_fallback == "fail":
                     raise
                 elif self.config.depth_fallback == "skip":
-                    return None, 0.0, None, None, 0.0, None
+                    self._active_backend_metadata = active_backend_metadata
+                    self._active_depth_attempts = depth_attempts
+                    return None, 0.0, None, None, 0.0, None, active_backend_metadata, depth_attempts
                 elif self.config.depth_fallback == "v2-auto":
                     logger.info("V2 fallback mode: V3 failed, will attempt V2 with independent depth")
                     if depth_path.exists():
                         depth_path.unlink()
-                    return None, 0.0, None, None, 0.0, None
+                    self._active_backend_metadata = active_backend_metadata
+                    self._active_depth_attempts = depth_attempts
+                    return None, 0.0, None, None, 0.0, None, active_backend_metadata, depth_attempts
                 else:
                     raise ValueError(f"Unsupported depth_fallback mode: {self.config.depth_fallback}") from e
         else:
@@ -1121,6 +1419,14 @@ class EnhanceOrchestrator:
                     m = CombinedManifest.load(manifest_path)
                     depth_metadata = m.depth
                     pbr_assets = getattr(m, "pbr_assets", None)
+                    if getattr(m, "backend_selection", None) is not None:
+                        active_backend_metadata = m.backend_selection
+                        depth_attempts = list(m.backend_selection.attempts or [])
+                        self._active_backend_metadata = active_backend_metadata
+                        self._active_depth_attempts = depth_attempts
+                        success_attempts = [attempt for attempt in depth_attempts if attempt.get("status") == "success"]
+                        if success_attempts:
+                            self._active_selected_attempt_index = int(success_attempts[-1].get("attempt", 0))
 
                     # Preserve Materials V3 result from previous run
                     if hasattr(m, "materials_v3") and m.materials_v3:
@@ -1148,7 +1454,16 @@ class EnhanceOrchestrator:
                 except Exception as pbr_error:
                     logger.warning(f"PBR generation from cache failed: {pbr_error}")
 
-        return depth_metadata, depth_runtime_s, pbr_assets, materials_v3_result, materials_v3_runtime_s, enhanced_image_path
+        return (
+            depth_metadata,
+            depth_runtime_s,
+            pbr_assets,
+            materials_v3_result,
+            materials_v3_runtime_s,
+            enhanced_image_path,
+            active_backend_metadata,
+            depth_attempts,
+        )
 
     def _generate_pbr_stage(self, depth: Any, output_key: Path) -> Optional[dict]:
         """Generate PBR maps from depth data.
@@ -1381,6 +1696,7 @@ class EnhanceOrchestrator:
         pipeline_end_time: float,
         materials_v3_result: Optional[dict] = None,
         materials_v3_runtime_s: float = 0.0,
+        backend_selection_metadata: Optional[BackendSelectionMetadata] = None,
     ) -> None:
         """Write combined manifest with all pipeline metadata.
 
@@ -1397,6 +1713,7 @@ class EnhanceOrchestrator:
             pipeline_end_time: Pipeline end timestamp
             materials_v3_result: Materials V3 result (optional)
             materials_v3_runtime_s: Materials V3 runtime (optional)
+            backend_selection_metadata: Per-image backend selection provenance
         """
         # --- PROVENANCE CAPTURE (audit-grade) ---
         # Capture provenance sidecar for RAW/TIFF inputs at ingestion point
@@ -1532,7 +1849,7 @@ class EnhanceOrchestrator:
             start_time=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(pipeline_start_time)),
             end_time=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(pipeline_end_time)),
             # ADR-023 Phase 3: Backend selection metadata
-            backend_selection=self._backend_metadata,
+            backend_selection=backend_selection_metadata or self._active_backend_metadata or self._backend_metadata,
         )
         manifest.write(manifest_path)
 
@@ -1555,6 +1872,11 @@ class EnhanceOrchestrator:
         """
         # Capture start time for accurate timestamps
         pipeline_start_time = time.time()
+        # Reset per-image active state up front so early exceptions cannot leak
+        # stale attempt/backend data from a previous image.
+        self._active_backend_metadata = getattr(self, "_backend_metadata", self._capture_backend_metadata())
+        self._active_depth_attempts = []
+        self._active_selected_attempt_index = None
 
         # PERFORMANCE FIX (#4): Use pre-computed paths from parallel batch if available
         if _precomputed_paths:
@@ -1599,6 +1921,8 @@ class EnhanceOrchestrator:
             materials_v3_result,
             materials_v3_runtime_s,
             enhanced_image_path,
+            backend_selection_metadata,
+            depth_attempts,
         ) = self._compute_depth_stage(
             image_input=image_input,
             output_key=output_key,
@@ -1611,7 +1935,31 @@ class EnhanceOrchestrator:
         # Handle depth stage failures that return early
         if depth_metadata is None and depth_runtime_s == 0.0 and pbr_assets is None:
             if self.config.depth_fallback == "skip":
-                return {"status": "skipped", "reason": "Depth computation failed", "image": str(image_input.path)}
+                return {
+                    "status": "skipped",
+                    "reason": "Depth computation failed",
+                    "image": str(image_input.path),
+                    "backend": backend_selection_metadata.resolved_backend if backend_selection_metadata else None,
+                    "fallback_used": bool(
+                        backend_selection_metadata and backend_selection_metadata.resolution_status != "success"
+                    ),
+                    "attempts": depth_attempts,
+                    "selected_attempt_index": None,
+                }
+
+        # Runtime invariant checks for attempt-selection consistency.
+        selected_attempt_index = getattr(self, "_active_selected_attempt_index", None)
+        if depth_metadata is not None and depth_attempts:
+            if selected_attempt_index is None or selected_attempt_index < 0 or selected_attempt_index >= len(depth_attempts):
+                raise RuntimeError(
+                    "Depth attempt invariant violated: selected_attempt_index is out of range for attempt history."
+                )
+            selected_attempt_backend = depth_attempts[selected_attempt_index].get("backend")
+            resolved_backend = backend_selection_metadata.resolved_backend if backend_selection_metadata else None
+            if selected_attempt_backend != resolved_backend:
+                raise RuntimeError(
+                    "Depth attempt invariant violated: selected attempt backend does not match resolved backend."
+                )
 
         # --- STAGE B: V2 ENHANCEMENT ---
         # Use enhanced image from Materials V3 if available, otherwise use original
@@ -1654,11 +2002,18 @@ class EnhanceOrchestrator:
             pipeline_end_time=pipeline_end_time,
             materials_v3_result=materials_v3_result,
             materials_v3_runtime_s=materials_v3_runtime_s,
+            backend_selection_metadata=backend_selection_metadata,
         )
 
         return {
             "status": "ok",
             "image": str(image_input.path),
+            "backend": backend_selection_metadata.resolved_backend if backend_selection_metadata else None,
+            "fallback_used": bool(backend_selection_metadata and backend_selection_metadata.resolution_status != "success"),
+            "model_id": backend_selection_metadata.model_id if backend_selection_metadata else None,
+            "device": backend_selection_metadata.device if backend_selection_metadata else None,
+            "attempts": depth_attempts,
+            "selected_attempt_index": selected_attempt_index,
             "depth_path": str(depth_path) if depth_metadata else None,
             "depth_float_path": (
                 str(float_depth_path)
@@ -1698,15 +2053,106 @@ class EnhanceOrchestrator:
         """Return True when APEX quality tier is active."""
         return str(getattr(self.config, "quality_tier", "")).lower() == "apex"
 
-    def _compute_depth_validity_metrics(self, depth_map: np.ndarray) -> Dict[str, Any]:
-        """Compute depth validity metrics used by APEX quality gate."""
-        depth = np.asarray(depth_map, dtype=np.float32)
-        finite_mask = np.isfinite(depth)
-        finite_pct = float(finite_mask.mean()) if finite_mask.size else 0.0
+    def _normalize_depth_for_gate(
+        self,
+        depth_map: np.ndarray,
+        depth_units: Optional[str] = None,
+    ) -> tuple[np.ndarray, Dict[str, Any]]:
+        """Normalize depth map to [0,1] for APEX gate metrics only."""
+        raw = np.asarray(depth_map, dtype=np.float32)
+        finite_mask = np.isfinite(raw)
+        finite_count = int(finite_mask.sum())
+        total_count = int(raw.size)
+        finite_pct = float(finite_mask.mean()) if total_count else 0.0
+        unit_hint = str(depth_units or "").strip().lower()
+        is_relative_unit = unit_hint in {"relative", "relative_0_1"}
 
-        if not finite_mask.any():
+        if finite_count == 0:
+            return np.zeros_like(raw, dtype=np.float32), {
+                "finite_count": 0,
+                "total_count": total_count,
+                "finite_pct": finite_pct,
+                "p1": None,
+                "p99": None,
+                "scaled": False,
+                "raw_min": None,
+                "raw_max": None,
+                "mode": "empty",
+            }
+
+        vals = raw[finite_mask]
+        p1 = float(np.percentile(vals, 1.0))
+        p99 = float(np.percentile(vals, 99.0))
+        raw_min = float(np.min(vals))
+        raw_max = float(np.max(vals))
+
+        # Preserve existing DA3/DA2 semantics for explicitly-relative depths.
+        # If units are unknown, treat [0,1] data as already gate-normalized.
+        relative_like_range = raw_min >= -1e-3 and raw_max <= 1.0 + 1e-3
+        if is_relative_unit or (not unit_hint and relative_like_range):
+            gate = np.clip(raw, 0.0, 1.0).astype(np.float32, copy=False)
+            gate[~finite_mask] = 0.0
+            return gate, {
+                "finite_count": finite_count,
+                "total_count": total_count,
+                "finite_pct": finite_pct,
+                "p1": p1,
+                "p99": p99,
+                "scaled": False,
+                "raw_min": raw_min,
+                "raw_max": raw_max,
+                "mode": "identity_relative",
+            }
+
+        if not np.isfinite(p1) or not np.isfinite(p99) or p99 <= p1:
+            return np.zeros_like(raw, dtype=np.float32), {
+                "finite_count": finite_count,
+                "total_count": total_count,
+                "finite_pct": finite_pct,
+                "p1": p1,
+                "p99": p99,
+                "scaled": False,
+                "raw_min": raw_min,
+                "raw_max": raw_max,
+                "mode": "invalid_percentiles",
+            }
+
+        gate = np.clip((raw - p1) / (p99 - p1), 0.0, 1.0).astype(np.float32, copy=False)
+        gate[~finite_mask] = 0.0
+        return gate, {
+            "finite_count": finite_count,
+            "total_count": total_count,
+            "finite_pct": finite_pct,
+            "p1": p1,
+            "p99": p99,
+            "scaled": True,
+            "raw_min": raw_min,
+            "raw_max": raw_max,
+            "mode": "percentile_1_99",
+        }
+
+    def _compute_depth_validity_metrics(
+        self,
+        depth_map: np.ndarray,
+        depth_units: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Compute depth validity metrics used by APEX quality gate.
+
+        Metrics are computed on a normalized `gate_depth` representation, while
+        preserving raw-unit diagnostics in the payload.
+        """
+        raw_depth = np.asarray(depth_map, dtype=np.float32)
+        gate_depth, normalization = self._normalize_depth_for_gate(raw_depth, depth_units=depth_units)
+
+        depth = gate_depth
+        raw_finite_mask = np.isfinite(raw_depth)
+        finite_pct = float(raw_finite_mask.mean()) if raw_finite_mask.size else 0.0
+
+        if not raw_finite_mask.any():
             return {
                 "finite_pct": finite_pct,
+                "source_unit": depth_units or "unknown",
+                "gate_unit": "relative_0_1",
                 "p75": None,
                 "p95": None,
                 "upper_iqr": None,
@@ -1714,12 +2160,21 @@ class EnhanceOrchestrator:
                 "saturation_low_fraction": None,
                 "gradient_energy": None,
                 "unique_hist_bins": None,
+                "raw_p75": None,
+                "raw_p95": None,
+                "raw_upper_iqr": None,
+                "gate_normalization": normalization,
             }
 
-        vals = depth[finite_mask]
+        vals = depth[raw_finite_mask]
         p75 = float(np.percentile(vals, 75.0))
         p95 = float(np.percentile(vals, 95.0))
         upper_iqr = p95 - p75
+
+        raw_vals = raw_depth[raw_finite_mask]
+        raw_p75 = float(np.percentile(raw_vals, 75.0)) if raw_vals.size else None
+        raw_p95 = float(np.percentile(raw_vals, 95.0)) if raw_vals.size else None
+        raw_upper_iqr = (raw_p95 - raw_p75) if (raw_p75 is not None and raw_p95 is not None) else None
 
         saturation_high_value = float(getattr(self.config, "apex_depth_saturation_high_value", 0.999))
         saturation_low_value = float(getattr(self.config, "apex_depth_saturation_low_value", 0.001))
@@ -1737,6 +2192,8 @@ class EnhanceOrchestrator:
 
         return {
             "finite_pct": finite_pct,
+            "source_unit": depth_units or "unknown",
+            "gate_unit": "relative_0_1",
             "p75": p75,
             "p95": p95,
             "upper_iqr": upper_iqr,
@@ -1744,14 +2201,22 @@ class EnhanceOrchestrator:
             "saturation_low_fraction": saturation_low_fraction,
             "gradient_energy": gradient_energy,
             "unique_hist_bins": unique_hist_bins,
+            "raw_p75": raw_p75,
+            "raw_p95": raw_p95,
+            "raw_upper_iqr": raw_upper_iqr,
+            "gate_normalization": normalization,
         }
 
-    def _enforce_apex_depth_validity_gate(self, depth_map: np.ndarray) -> Optional[Dict[str, Any]]:
+    def _enforce_apex_depth_validity_gate(
+        self,
+        depth_map: np.ndarray,
+        depth_units: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
         """APEX-only depth quality gate to prevent plateau/saturation degradation."""
         if not self._is_apex_tier():
             return None
 
-        metrics = self._compute_depth_validity_metrics(depth_map)
+        metrics = self._compute_depth_validity_metrics(depth_map, depth_units=depth_units)
 
         thresholds = {
             "finite_pct_min": float(getattr(self.config, "apex_depth_min_finite_pct", 0.999)),
@@ -1840,7 +2305,7 @@ class EnhanceOrchestrator:
             raise ApexStrictGateError(
                 "APEX_MATERIALS_STUB_BACKEND",
                 "APEX strict gate violated: Materials V3 in apex tier cannot use stub segmentation backend "
-                "(set --segmentation-backend efficientsam).",
+                "(set --segmentation-backend efficientsam or sam2).",
             )
 
         if not bool(getattr(self.config, "strict_backend", False)):
@@ -2017,6 +2482,9 @@ class EnhanceOrchestrator:
             except Exception as e:
                 logger.error(f"Enhancement failed for {item['image_input'].path}: {e}")
                 error_payload: Dict[str, Any] = {"status": "error", "image": str(item["image_input"].path), "error": str(e)}
+                error_payload["backend"] = getattr(self, "_active_backend_metadata", self._backend_metadata).resolved_backend
+                error_payload["attempts"] = list(getattr(self, "_active_depth_attempts", []) or [])
+                error_payload["selected_attempt_index"] = getattr(self, "_active_selected_attempt_index", None)
                 if isinstance(e, ApexStrictGateError):
                     error_payload["error_code"] = e.code
                     error_payload["error_details"] = e.details
@@ -2078,6 +2546,11 @@ class EnhanceOrchestrator:
                 except Exception as e:
                     logger.error(f"Failed {img_input.path}: {e}")
                     error_payload: Dict[str, Any] = {"status": "error", "image": str(img_input.path), "error": str(e)}
+                    error_payload["backend"] = getattr(
+                        self, "_active_backend_metadata", self._backend_metadata
+                    ).resolved_backend
+                    error_payload["attempts"] = list(getattr(self, "_active_depth_attempts", []) or [])
+                    error_payload["selected_attempt_index"] = getattr(self, "_active_selected_attempt_index", None)
                     if isinstance(e, ApexStrictGateError):
                         error_payload["error_code"] = e.code
                         error_payload["error_details"] = e.details
@@ -2213,6 +2686,42 @@ class EnhanceOrchestrator:
 
         return artifact_paths
 
+    def _compute_backend_summary(self, results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Compute concise backend fallback summary for run-card telemetry."""
+        requested_backend = self._backend_metadata.requested_backend or "auto"
+        final_backends_used = sorted(
+            {str(result.get("backend")) for result in results if result.get("status") == "ok" and result.get("backend")}
+        )
+
+        fallback_images = 0
+        semantic_fallback_images = 0
+        operational_fallback_images = 0
+        for result in results:
+            if result.get("status") != "ok":
+                continue
+            attempts = result.get("attempts")
+            if not isinstance(attempts, list) or not attempts:
+                continue
+
+            used_fallback = bool(result.get("fallback_used")) or len(attempts) > 1
+            if not used_fallback:
+                continue
+
+            fallback_images += 1
+            failure_kinds = {attempt.get("failure_kind") for attempt in attempts if attempt.get("status") == "failed"}
+            if "semantic" in failure_kinds:
+                semantic_fallback_images += 1
+            if "operational" in failure_kinds:
+                operational_fallback_images += 1
+
+        return {
+            "requested_backend": requested_backend,
+            "final_backends_used": final_backends_used,
+            "fallback_images": fallback_images,
+            "semantic_fallback_images": semantic_fallback_images,
+            "operational_fallback_images": operational_fallback_images,
+        }
+
     def _emit_run_card(
         self,
         batch_id: str,
@@ -2250,6 +2759,7 @@ class EnhanceOrchestrator:
                 "device": self._backend_metadata.device,
                 "model_id": self._backend_metadata.model_id,
             },
+            "backend_summary": self._compute_backend_summary(results),
             "environment": self.environment,
             "git_revision": {
                 "v3": self.v3_git,

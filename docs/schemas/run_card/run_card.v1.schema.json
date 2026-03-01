@@ -119,6 +119,42 @@
       },
       "additionalProperties": false
     },
+    "backend_summary": {
+      "type": "object",
+      "required": [
+        "requested_backend",
+        "final_backends_used",
+        "fallback_images",
+        "semantic_fallback_images",
+        "operational_fallback_images"
+      ],
+      "properties": {
+        "requested_backend": {
+          "type": "string",
+          "minLength": 1
+        },
+        "final_backends_used": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "fallback_images": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "semantic_fallback_images": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "operational_fallback_images": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
     "environment": {
       "type": "object",
       "required": [

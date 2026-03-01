@@ -5,6 +5,7 @@ Handles metric scaling, filtering, and edge preservation.
 
 from __future__ import annotations
 
+import importlib
 import logging
 from typing import List
 
@@ -15,6 +16,27 @@ from .config import PostprocessingConfig
 from .inference import DepthResult
 
 logger = logging.getLogger(__name__)
+
+_opencv = None
+_opencv_import_attempted = False
+
+
+def _get_opencv():
+    """Lazily import cv2 so environments without OpenCV don't pay import cost upfront."""
+    global _opencv
+    global _opencv_import_attempted
+
+    if _opencv_import_attempted:
+        return _opencv
+
+    _opencv_import_attempted = True
+    try:
+        _opencv = importlib.import_module("cv2")
+    except Exception as exc:  # pragma: no cover - optional dependency / platform-specific import failures
+        logger.debug("OpenCV unavailable for postprocessing bilateral filter: %s", exc)
+        _opencv = None
+    return _opencv
+
 
 # Edge refinement is optional (and may not be present in stripped-down deployments).
 try:
@@ -100,7 +122,9 @@ class Postprocessor:
             Filtered depth map (float32, same range as input)
         """
         try:
-            import cv2
+            opencv = _get_opencv()
+            if opencv is None:
+                raise ImportError
 
             # Heuristics for sigmaColor scaling based on depth value range
             LEGACY_SIGMA_COLOR_THRESHOLD = 100  # Legacy configs used 0-255-ish values
@@ -131,6 +155,11 @@ class Postprocessor:
                 effective_sigma_color = sigma_color * depth_range
 
             # Try RGB-guided joint bilateral filter if cv2.ximgproc available (better edges)
+            opencv_error = getattr(opencv, "error", None)
+            expected_joint_filter_errors: tuple[type[Exception], ...] = (AttributeError, TypeError, ValueError)
+            if isinstance(opencv_error, type) and issubclass(opencv_error, Exception):
+                expected_joint_filter_errors = expected_joint_filter_errors + (opencv_error,)
+
             try:
                 # Ensure image is uint8 RGB for joint bilateral
                 if image.dtype == np.float32:
@@ -154,26 +183,30 @@ class Postprocessor:
                 d_param = 0  # Auto-derive from sigma_space
 
                 # RGB-guided joint bilateral (preserves edges from color image)
-                filtered = cv2.ximgproc.jointBilateralFilter(
+                filtered = opencv.ximgproc.jointBilateralFilter(
                     image_u8, depth_f32, d=d_param, sigmaColor=effective_sigma_color, sigmaSpace=sigma_space
                 )
                 return filtered
 
-            except (ImportError, AttributeError, cv2.error):
-                # cv2.ximgproc not available or type mismatch - fall back to standard bilateral
-                # Guide shape validation: ensure depth is 2D
-                if depth.ndim != 2:
-                    logger.warning(f"Bilateral filter expects 2D depth, got shape {depth.shape}. Using first channel.")
-                    depth = depth[:, :, 0] if depth.ndim == 3 else depth.reshape(depth.shape[:2])
+            except expected_joint_filter_errors as exc:
+                logger.debug("Joint bilateral filter unavailable/incompatible; using bilateral fallback: %s", exc)
+            except Exception:
+                logger.exception("Unexpected joint bilateral filter failure; using bilateral fallback")
 
-                depth_f32 = depth.astype(np.float32) if depth.dtype != np.float32 else depth
+            # cv2.ximgproc not available or type mismatch - fall back to standard bilateral
+            # Guide shape validation: ensure depth is 2D
+            if depth.ndim != 2:
+                logger.warning(f"Bilateral filter expects 2D depth, got shape {depth.shape}. Using first channel.")
+                depth = depth[:, :, 0] if depth.ndim == 3 else depth.reshape(depth.shape[:2])
 
-                # Use d=0 for auto-derivation (avoids d=1 degenerate case)
-                d_param = 0
+            depth_f32 = depth.astype(np.float32) if depth.dtype != np.float32 else depth
 
-                # Apply bilateral filter directly on float32 (no quantization)
-                filtered = cv2.bilateralFilter(depth_f32, d=d_param, sigmaColor=effective_sigma_color, sigmaSpace=sigma_space)
-                return filtered
+            # Use d=0 for auto-derivation (avoids d=1 degenerate case)
+            d_param = 0
+
+            # Apply bilateral filter directly on float32 (no quantization)
+            filtered = opencv.bilateralFilter(depth_f32, d=d_param, sigmaColor=effective_sigma_color, sigmaSpace=sigma_space)
+            return filtered
 
         except ImportError:
             # Fallback to scipy for environments without OpenCV
@@ -182,11 +215,21 @@ class Postprocessor:
             return gaussian_filter(depth, sigma=sigma_space / 3.0)
 
     def _preserve_edges(self, depth: np.ndarray, image: np.ndarray, threshold: float) -> np.ndarray:
-        gray = np.mean(image, axis=2) if image.ndim == 3 else image
-        from scipy.ndimage import sobel
+        del threshold
+        try:
+            gray = np.asarray(image)
+        except Exception:
+            logger.warning("Edge preservation skipped: image is not array-like (%s)", type(image).__name__)
+            return depth
 
-        mag = np.hypot(sobel(gray, axis=0), sobel(gray, axis=1))
-        mag = mag / (mag.max() + 1e-8)
+        gray = np.mean(gray, axis=2) if gray.ndim == 3 else np.squeeze(gray)
+        if gray.ndim != 2:
+            logger.warning(
+                "Edge preservation skipped: expected 2D grayscale image, got shape %s",
+                getattr(gray, "shape", None),
+            )
+            return depth
+
         # Simple mask-based preservation logic (placeholder for more complex logic)
         # In production, this would likely blend based on edge magnitude
         return depth

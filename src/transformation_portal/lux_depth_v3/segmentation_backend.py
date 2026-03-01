@@ -6,6 +6,7 @@ Architecture:
 - Protocol-based design (SegmentationBackend Protocol)
 - Stub backend (default, production-safe, returns empty masks)
 - EfficientSAM backend (opt-in, requires ML dependencies)
+- SAM2 backend (opt-in, uses spatial_ai SAM2 integration)
 - Fail-safe fallback: missing weights → stub backend with warning
 - Lazy loading: models loaded only on first inference
 
@@ -23,9 +24,15 @@ Backends:
    - Performance: Works on CPU, optimized for MPS/CUDA
    - Material detection: Heuristic-based labeling (v1)
 
+3. SAM2SegmentationBackend (opt-in via config):
+   - Uses spatial_ai SAM2 backend for mask proposals
+   - License: Apache 2.0 (commercial use allowed)
+   - Model size: base (~400MB) or large (~850MB) checkpoints
+   - Material detection: metadata labels when available, else CLIP/heuristic fallback
+
 Configuration:
 - enable_material_segmentation: Enable/disable segmentation
-- material_segmentation_backend: "stub" (default) or "efficientsam"
+- material_segmentation_backend: "stub" (default), "efficientsam", or "sam2"
 - strict_backend: If True, raise on missing weights instead of falling back
 
 For usage examples, see docs/materials_v3_quick_reference.md
@@ -37,7 +44,7 @@ import logging
 from functools import lru_cache
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -83,6 +90,16 @@ try:
 except ImportError:
     OPEN_CLIP_AVAILABLE = False
     open_clip = None  # type: ignore
+
+try:
+    from transformation_portal.spatial_ai.segmentation.contracts import SegmentationInput as SpatialSegmentationInput
+    from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend as SpatialSAM2Backend
+
+    SPATIAL_SAM2_AVAILABLE = True
+except ImportError:
+    SPATIAL_SAM2_AVAILABLE = False
+    SpatialSAM2Backend = None  # type: ignore
+    SpatialSegmentationInput = None  # type: ignore
 
 
 # =============================================================================
@@ -144,7 +161,12 @@ class EfficientSAMBackend:
     Memory: ~50MB model + ~200MB inference overhead
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        sky_top_region_fraction: float = 0.5,
+        sky_gradient_threshold: float = 0.05,
+        sky_brightness_threshold: float = 0.4,
+    ):
         self._model = None
         self._device = None
         self._model_loaded = False
@@ -154,6 +176,9 @@ class EfficientSAMBackend:
         self._clip_model = None
         self._clip_preprocess = None
         self._clip_tokenizer = None
+        self._sky_top_region_fraction = float(sky_top_region_fraction)
+        self._sky_gradient_threshold = float(sky_gradient_threshold)
+        self._sky_brightness_threshold = float(sky_brightness_threshold)
 
     @property
     def info(self) -> SegmentationBackendInfo:
@@ -713,17 +738,11 @@ class EfficientSAMBackend:
         try:
             from .bootstrap.sky_seed import detect_sky_seed
 
-            # Get config values from self._config if available, else use defaults
-            cfg = getattr(self, "_config", None)
-            top_region_fraction = getattr(cfg, "sky_top_region_fraction", 0.5) if cfg else 0.5
-            gradient_threshold = getattr(cfg, "sky_gradient_threshold", 0.05) if cfg else 0.05
-            brightness_threshold = getattr(cfg, "sky_brightness_threshold", 0.4) if cfg else 0.4
-
             # Create minimal config object for bootstrap
             sky_config = SimpleNamespace(
-                sky_top_region_fraction=top_region_fraction,
-                sky_gradient_threshold=gradient_threshold,
-                sky_brightness_threshold=brightness_threshold,
+                sky_top_region_fraction=self._sky_top_region_fraction,
+                sky_gradient_threshold=self._sky_gradient_threshold,
+                sky_brightness_threshold=self._sky_brightness_threshold,
             )
 
             sky_result = detect_sky_seed(image, sky_config)
@@ -782,22 +801,272 @@ class EfficientSAMBackend:
 
 
 # =============================================================================
+# SAM2 Backend (Opt-In, spatial_ai Integration)
+# =============================================================================
+
+
+class SAM2SegmentationBackend(EfficientSAMBackend):
+    """SAM2-based material segmentation backend.
+
+    This backend reuses the existing CLIP/heuristic material classification flow
+    from EfficientSAMBackend, but sources instance masks from the spatial_ai SAM2
+    backend.
+    """
+
+    _LABEL_ALIASES = {
+        "sky": "sky",
+        "cloud": "sky",
+        "glass": "glass",
+        "window": "glass",
+        "water": "water",
+        "pool": "water",
+        "ocean": "water",
+        "sea": "water",
+        "foliage": "foliage",
+        "plant": "foliage",
+        "tree": "foliage",
+        "leaf": "foliage",
+        "stone": "stone",
+        "marble": "stone",
+        "granite": "stone",
+        "limestone": "stone",
+        "travertine": "stone",
+        "concrete": "stone",
+        "wood": "wood",
+        "metal": "metal",
+        "fabric": "fabric",
+        "stucco": "stucco",
+        "plaster": "stucco",
+    }
+
+    def __init__(
+        self,
+        model_size: str = "base",
+        checkpoint_path: Optional[str] = None,
+        enable_material_classification: bool = False,
+        material_confidence_threshold: float = 0.3,
+        sky_top_region_fraction: float = 0.5,
+        sky_gradient_threshold: float = 0.05,
+        sky_brightness_threshold: float = 0.4,
+    ):
+        super().__init__(
+            sky_top_region_fraction=sky_top_region_fraction,
+            sky_gradient_threshold=sky_gradient_threshold,
+            sky_brightness_threshold=sky_brightness_threshold,
+        )
+        self._model_size = model_size
+        self._checkpoint_path = checkpoint_path
+        self._enable_material_classification = enable_material_classification
+        self._material_confidence_threshold = material_confidence_threshold
+        self._sam2_backend = None
+
+    @property
+    def info(self) -> SegmentationBackendInfo:
+        return SegmentationBackendInfo(
+            name="SAM2",
+            model_id=f"facebook/sam2-hiera-{self._model_size}",
+            requires_gpu=False,
+            requires_weights=True,
+            approximate_memory_mb=850 if self._model_size == "large" else 400,
+            description="SAM2 segmentation backend via spatial_ai wrapper",
+        )
+
+    @classmethod
+    def _canonicalize_material_label(cls, label: Optional[str]) -> Optional[str]:
+        """Map free-form labels to the Materials V3 taxonomy keys."""
+        if not label:
+            return None
+
+        norm = label.strip().lower()
+        for token, canonical in cls._LABEL_ALIASES.items():
+            if token in norm:
+                return canonical
+        return None
+
+    @staticmethod
+    def _merge_material_result(
+        accumulator: Dict[str, Tuple[np.ndarray, float, int]],
+        material: str,
+        mask: np.ndarray,
+        confidence: float,
+    ) -> None:
+        """Merge another (mask, confidence) contribution into a material bucket."""
+        mask_f32 = mask.astype(np.float32, copy=False)
+        area = int(np.count_nonzero(mask_f32 > 0.5))
+        if area <= 0:
+            return
+
+        previous = accumulator.get(material)
+        if previous is None:
+            accumulator[material] = (mask_f32, float(np.clip(confidence, 0.0, 1.0)), area)
+            return
+
+        prev_mask, prev_conf, prev_area = previous
+        merged_mask = np.maximum(prev_mask, mask_f32)
+        total_area = prev_area + area
+        if total_area <= 0:
+            merged_conf = 0.0
+        else:
+            merged_conf = (prev_conf * prev_area + float(np.clip(confidence, 0.0, 1.0)) * area) / total_area
+        accumulator[material] = (merged_mask, merged_conf, total_area)
+
+    def load(self, device: str = "auto", weights_path: Optional[Path] = None) -> None:
+        """Load SAM2 backend from spatial_ai module."""
+        if self._model_loaded:
+            logger.debug("SAM2 backend already loaded, skipping")
+            return
+
+        if not SPATIAL_SAM2_AVAILABLE:
+            raise RuntimeError(
+                "SAM2 backend unavailable. Install spatial AI segmentation deps "
+                "(sam2 + torch + torchvision), or choose --segmentation-backend efficientsam."
+            )
+
+        if self._model_size not in {"base", "large"}:
+            raise RuntimeError(f"Invalid sam2 model size '{self._model_size}'. Expected 'base' or 'large'.")
+
+        resolved_device = self._resolve_device(device)
+        checkpoint_override: Optional[str] = None
+        if weights_path is not None:
+            checkpoint_override = str(weights_path)
+        elif self._checkpoint_path:
+            checkpoint_override = str(self._checkpoint_path)
+
+        try:
+            self._sam2_backend = SpatialSAM2Backend(
+                model_size=self._model_size,
+                device=resolved_device,
+                checkpoint_path=checkpoint_override,
+                enable_material_classification=self._enable_material_classification,
+                material_confidence_threshold=self._material_confidence_threshold,
+            )
+        except Exception as exc:
+            raise RuntimeError(f"SAM2 backend loading failed: {exc}") from exc
+
+        self._device = getattr(self._sam2_backend, "device", resolved_device)
+        self._model = self._sam2_backend
+        self._model_loaded = True
+        self._use_real_model = True
+        logger.info("SAM2 backend loaded successfully (model=%s, device=%s)", self._model_size, self._device)
+
+    def segment(self, image: np.ndarray) -> Dict[str, Tuple[np.ndarray, float]]:
+        """Run SAM2 segmentation and map masks to material outputs."""
+        if not self._model_loaded or self._sam2_backend is None:
+            raise RuntimeError("SAM2 model not loaded. Call .load() first.")
+
+        if image.ndim != 3 or image.shape[2] != 3:
+            raise ValueError(f"Expected RGB image (H, W, 3), got shape {image.shape}")
+        if image.dtype != np.uint8:
+            raise ValueError(f"Expected uint8 image, got dtype {image.dtype}")
+
+        image_linear = image.astype(np.float32) / 255.0
+
+        try:
+            seg_input = SpatialSegmentationInput(
+                image=image_linear,
+                gamma=1.0,
+                mode="auto",
+            )
+            seg_result = self._sam2_backend.segment(seg_input)
+        except Exception as exc:
+            raise RuntimeError(f"SAM2 inference failed: {exc}") from exc
+
+        if seg_result.masks.shape[0] == 0:
+            logger.debug("SAM2 produced no masks; falling back to heuristic material segmentation")
+            return self._heuristic_segmentation(image)
+
+        # First preference: use SAM2/CLIP labels when available.
+        material_buckets: Dict[str, Tuple[np.ndarray, float, int]] = {}
+        segments: List[Dict[str, Any]] = []
+        masks = np.asarray(seg_result.masks)
+        scores = np.asarray(seg_result.scores, dtype=np.float32)
+
+        for idx in range(masks.shape[0]):
+            raw_mask = masks[idx]
+            mask_2d = np.asarray(raw_mask).squeeze()
+            if mask_2d.ndim != 2:
+                logger.debug("Skipping SAM2 mask with unexpected shape: %s", raw_mask.shape)
+                continue
+
+            mask_bool = mask_2d.astype(bool, copy=False)
+            area = int(mask_bool.sum())
+            if area <= 0:
+                continue
+
+            metadata = seg_result.metadata[idx] if idx < len(seg_result.metadata) else None
+            if metadata is not None:
+                x, y, w_box, h_box = metadata.bbox
+                bbox = [int(x), int(y), int(w_box), int(h_box)]
+            else:
+                rows, cols = np.where(mask_bool)
+                bbox = [
+                    int(cols.min()),
+                    int(rows.min()),
+                    int(cols.max() - cols.min() + 1),
+                    int(rows.max() - rows.min() + 1),
+                ]
+
+            segments.append(
+                {
+                    "segmentation": mask_bool,
+                    "bbox": bbox,
+                    "area": area,
+                    "predicted_iou": float(scores[idx]) if idx < len(scores) else 0.5,
+                }
+            )
+
+            label = self._canonicalize_material_label(getattr(metadata, "material_label", None))
+            if label:
+                confidence = getattr(metadata, "material_confidence", None)
+                if confidence is None:
+                    confidence = float(scores[idx]) if idx < len(scores) else 0.5
+                self._merge_material_result(
+                    material_buckets,
+                    label,
+                    mask_bool.astype(np.float32, copy=False),
+                    float(confidence),
+                )
+
+        if material_buckets:
+            logger.debug(
+                "SAM2 classified %d masks via metadata labels: %s",
+                len(segments),
+                list(material_buckets.keys()),
+            )
+            return {k: (v[0], float(v[1])) for k, v in material_buckets.items()}
+
+        # No explicit labels: reuse existing CLIP/heuristic material labeling.
+        classified = self._classify_segments_with_clip(image, segments)
+        if classified:
+            return classified
+        return self._heuristic_segmentation(image)
+
+
+# =============================================================================
 # Backend Factory and Public API
 # =============================================================================
 
 
-@lru_cache(maxsize=2)  # Cache both stub and efficientsam instances
+# Keep this small: SAM2 instances are heavyweight and multiple cached variants can exhaust memory.
+@lru_cache(maxsize=2)  # Cache backend instances by backend + device + model options
 def _get_backend_instance(
     backend_name: str,
     device: str = "auto",
     strict: bool = False,
+    sam2_model_size: str = "base",
+    sam2_checkpoint_path: Optional[str] = None,
+    sky_top_region_fraction: float = 0.5,
+    sky_gradient_threshold: float = 0.05,
+    sky_brightness_threshold: float = 0.4,
 ) -> SegmentationBackend:
     """Get or create a cached backend instance.
 
     Args:
-        backend_name: "stub" or "efficientsam"
-        device: Device for backend (only used for efficientsam)
+        backend_name: "stub", "efficientsam", or "sam2"
+        device: Device for backend (used by model backends)
         strict: If True, raise on errors instead of falling back
+        sam2_model_size: SAM2 checkpoint family ("base" or "large")
+        sam2_checkpoint_path: Optional SAM2 checkpoint override
 
     Returns:
         SegmentationBackend instance
@@ -811,8 +1080,12 @@ def _get_backend_instance(
         backend.load()  # No-op for stub
         return backend
 
-    elif backend_name == "efficientsam":
-        backend = EfficientSAMBackend()
+    if backend_name == "efficientsam":
+        backend = EfficientSAMBackend(
+            sky_top_region_fraction=sky_top_region_fraction,
+            sky_gradient_threshold=sky_gradient_threshold,
+            sky_brightness_threshold=sky_brightness_threshold,
+        )
         # Lazy load will happen on first segment() call if needed
         # But we can pre-load here for better error handling
         try:
@@ -832,8 +1105,29 @@ def _get_backend_instance(
             return _get_backend_instance("stub", device="cpu", strict=False)
         return backend
 
-    else:
-        raise ValueError(f"Unknown segmentation backend: {backend_name}\n" f"Valid options: 'stub', 'efficientsam'")
+    if backend_name == "sam2":
+        backend = SAM2SegmentationBackend(
+            model_size=sam2_model_size,
+            checkpoint_path=sam2_checkpoint_path,
+            sky_top_region_fraction=sky_top_region_fraction,
+            sky_gradient_threshold=sky_gradient_threshold,
+            sky_brightness_threshold=sky_brightness_threshold,
+        )
+        try:
+            backend.load(device=device)
+        except RuntimeError as e:
+            if strict:
+                raise RuntimeError(f"Failed to load {backend_name} backend: {e}") from e
+            logger.warning(
+                "Failed to load SAM2 backend: %s\n"
+                "This is expected if checkpoint/dependencies are missing.\n"
+                "Falling back to stub backend.",
+                e,
+            )
+            return _get_backend_instance("stub", device="cpu", strict=False)
+        return backend
+
+    raise ValueError(f"Unknown segmentation backend: {backend_name}\n" f"Valid options: 'stub', 'efficientsam', 'sam2'")
 
 
 def segment_materials(
@@ -847,12 +1141,13 @@ def segment_materials(
     Backends:
     - stub (default): Returns empty masks, production-safe
     - efficientsam (opt-in): ML-powered segmentation
+    - sam2 (opt-in): SAM2 mask proposals + CLIP/heuristic material labeling
 
     Args:
         image: Input image as numpy array (H, W, 3) in RGB, uint8 [0-255]
         config: EnhanceConfig instance with segmentation settings
             - enable_material_segmentation: Enable/disable segmentation
-            - material_segmentation_backend: Backend to use ("stub" or "efficientsam")
+            - material_segmentation_backend: Backend to use ("stub", "efficientsam", or "sam2")
             - strict_backend: If True, raise on errors instead of falling back
 
     Returns:
@@ -876,13 +1171,27 @@ def segment_materials(
     # Get backend selection
     backend_name = getattr(config, "material_segmentation_backend", "stub")
     strict_backend = getattr(config, "strict_backend", False)
+    sam2_model_size = str(getattr(config, "sam2_model_size", "base")).lower()
+    sam2_checkpoint_path = getattr(config, "sam2_checkpoint_path", None)
+    sky_top_region_fraction = float(getattr(config, "sky_top_region_fraction", 0.5))
+    sky_gradient_threshold = float(getattr(config, "sky_gradient_threshold", 0.05))
+    sky_brightness_threshold = float(getattr(config, "sky_brightness_threshold", 0.4))
 
     # Get device for backend (if applicable)
     device = getattr(config, "depth_device", "cpu")  # Reuse depth_device setting
 
     try:
         # Get or create backend instance (cached)
-        backend = _get_backend_instance(backend_name, device=device, strict=strict_backend)
+        backend = _get_backend_instance(
+            backend_name,
+            device=device,
+            strict=strict_backend,
+            sam2_model_size=sam2_model_size,
+            sam2_checkpoint_path=sam2_checkpoint_path,
+            sky_top_region_fraction=sky_top_region_fraction,
+            sky_gradient_threshold=sky_gradient_threshold,
+            sky_brightness_threshold=sky_brightness_threshold,
+        )
 
         # Run segmentation
         results = backend.segment(image)

@@ -48,6 +48,14 @@ class DepthBackendRegistry:
         """Register built-in backends if not already registered."""
         # Lazy import to avoid circular dependencies
         try:
+            from .da2 import DA2Backend
+
+            if "da2" not in self._backends:
+                self._backends["da2"] = DA2Backend
+        except ImportError:
+            logger.debug("DA2Backend not available (missing dependencies)")
+
+        try:
             from .da3 import DA3Backend
 
             if "da3" not in self._backends:

@@ -5,7 +5,7 @@ APEX command variants for the lux_depth_v3 pipeline supporting:
 - Commercial-safe APEX mode (default)
 - Research-only APEX+ variants (explicit opt-in)
 - PBR-only workflows (skip V2 enhancement)
-- Material segmentation (stub or EfficientSAM backends)
+- Material segmentation (stub, EfficientSAM, or SAM2 backends)
 
 Usage:
     # Commercial-safe APEX (default, no research opt-ins)
@@ -101,7 +101,7 @@ Key Concepts:
 
     - Material Segmentation:
       * Use --enable-segmentation "on" to enable automatic material detection
-      * --segmentation-backend: Choose "stub" (heuristic, default) or "efficientsam" (AI-powered)
+      * --segmentation-backend: Choose "stub" (default), "efficientsam", or "sam2"
       * --strict-segmentation: Fail on backend errors instead of falling back to stub
 
     - Research Models:
@@ -198,7 +198,17 @@ def main(
     segmentation_backend: str = typer.Option(
         "stub",
         "--segmentation-backend",
-        help="Segmentation backend: stub (default, no segmentation), efficientsam (heuristic v1)",
+        help="Segmentation backend: stub (default, no segmentation), efficientsam, sam2",
+    ),
+    sam2_model_size: str = typer.Option(
+        "base",
+        "--sam2-model-size",
+        help="SAM2 model size (base|large) when --segmentation-backend sam2",
+    ),
+    sam2_checkpoint_path: Optional[Path] = typer.Option(
+        None,
+        "--sam2-checkpoint-path",
+        help="Optional path to SAM2 checkpoint (.pt) when --segmentation-backend sam2",
     ),
     strict_segmentation: bool = typer.Option(
         False, "--strict-segmentation", help="Fail on segmentation backend errors instead of falling back to stub"
@@ -253,6 +263,11 @@ def main(
         False,
         "--verify-images",
         help="Strict image verification via PIL.verify() - useful for CI/ingest validation",
+    ),
+    allow_semantic_fallback: bool = typer.Option(
+        False,
+        "--allow-semantic-fallback",
+        help="Allow fallback to secondary depth backends when APEX semantic gate fails",
     ),
     # Logging
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose logging"),
@@ -335,7 +350,7 @@ def main(
         raise typer.Exit(code=1)
 
     # Validate segmentation backend
-    valid_segmentation_backends = ["stub", "efficientsam"]
+    valid_segmentation_backends = ["stub", "efficientsam", "sam2"]
     if segmentation_backend.lower() not in valid_segmentation_backends:
         error_msg = (
             f"Invalid segmentation backend '{segmentation_backend}'. "
@@ -343,6 +358,13 @@ def main(
         )
         logger.error(error_msg)
         print(error_msg, file=sys.stdout)  # Also print to stdout for CLI tests
+        raise typer.Exit(code=1)
+
+    # Validate SAM2 size option only when SAM2 backend is selected.
+    if segmentation_backend.lower() == "sam2" and sam2_model_size.lower() not in ["base", "large"]:
+        error_msg = "Invalid --sam2-model-size. Must be one of: base, large"
+        logger.error(error_msg)
+        print(error_msg, file=sys.stdout)
         raise typer.Exit(code=1)
 
     # APEX strict gate: do not allow Materials V3 no-op configurations
@@ -359,7 +381,7 @@ def main(
         if segmentation_backend.lower() == "stub":
             error_msg = (
                 "APEX strict gate: Materials V3 in apex tier cannot use stub segmentation backend. "
-                "Use --segmentation-backend efficientsam."
+                "Use --segmentation-backend efficientsam or sam2."
             )
             logger.error(error_msg)
             print(error_msg, file=sys.stdout)
@@ -405,6 +427,8 @@ def main(
         enable_materials_v3=enable_materials_v3,
         enable_material_segmentation=enable_material_segmentation,
         material_segmentation_backend=segmentation_backend.lower(),
+        sam2_model_size=sam2_model_size.lower(),
+        sam2_checkpoint_path=str(sam2_checkpoint_path) if sam2_checkpoint_path else None,
         strict_backend=strict_segmentation,
         emit_master16=enable_emit_master16,
         emit_upscaled16=enable_emit_upscaled16,
@@ -412,6 +436,7 @@ def main(
         emit_report=enable_emit_report,
         emit_run_card=enable_emit_run_card,
         strict_inputs=strict_inputs,
+        allow_semantic_fallback=allow_semantic_fallback,
     )
 
     # Forward-compatible knobs: apply via setattr for non-breaking config evolution
