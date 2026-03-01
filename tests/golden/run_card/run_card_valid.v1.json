@@ -1,0 +1,52 @@
+{
+  "artifact_index": [
+    {
+      "artifact_type": "combined_manifest",
+      "path": "manifests/image_01_combined.json",
+      "relative_path": "manifests/image_01_combined.json",
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "size_bytes": 1234
+    }
+  ],
+  "artifact_merkle_root": "c2f480d4dda9f4522b9f6d590011636d904accfe59f12f9d66a0221c2558e3a2",
+  "backend_selection": {
+    "device": "cpu",
+    "model_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
+    "requested": "da3",
+    "resolved": "da3"
+  },
+  "batch_id": "2026-02-28_120000",
+  "config_fingerprint": {
+    "depth_device": "cpu",
+    "depth_quantization": "u16",
+    "model_variant": "METRIC_LARGE",
+    "preset": "premium",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "v2_device": "cpu",
+    "v2_preset": "premium",
+    "v2_upscaler_backend": "realesrgan"
+  },
+  "end_time": "2026-02-28T12:05:00Z",
+  "environment": {
+    "machine": "arm64",
+    "platform": "macOS-26.3-arm64-arm-64bit",
+    "python_version": "3.11.9"
+  },
+  "error_count": 0,
+  "git_revision": {
+    "v2": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "v3": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "outliers": [],
+  "runtime_stats": {
+    "count": 1,
+    "max": 23.7483,
+    "mean": 23.7483,
+    "median": 23.7483,
+    "min": 23.7483,
+    "total": 23.7483
+  },
+  "start_time": "2026-02-28T12:00:00Z",
+  "success_count": 1,
+  "total_images": 1
+}
