@@ -17,6 +17,7 @@ from typing import Any, AsyncGenerator, Deque, Dict, List, Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import StreamingResponse
 
@@ -241,6 +242,23 @@ def _error_response(
     )
 
 
+HTTP_STATUS_ERROR_CODES = {
+    400: "INVALID_ARGUMENT",
+    401: "UNAUTHORIZED",
+    404: "NOT_FOUND",
+    413: "REQUEST_TOO_LARGE",
+    429: "RATE_LIMITED",
+}
+
+
+def _is_api_v1_path(path: str) -> bool:
+    return path.startswith("/v1/")
+
+
+def _http_status_error_code(status_code: int) -> str:
+    return HTTP_STATUS_ERROR_CODES.get(status_code, "HTTP_ERROR")
+
+
 def _cleanup_expired_jobs(now: float) -> None:
     expired = [
         job_id
@@ -391,9 +409,23 @@ def _enforce_content_length_limit(request: Request) -> Optional[JSONResponse]:
     try:
         size = int(content_length)
     except ValueError:
+        if _is_api_v1_path(request.url.path):
+            return _error_response(
+                400,
+                code="INVALID_ARGUMENT",
+                message="invalid Content-Length header",
+                details={"path": request.url.path, "field": "content-length"},
+            )
         return JSONResponse(status_code=400, content={"detail": "invalid Content-Length header"})
 
     if size > MAX_REQUEST_BYTES:
+        if _is_api_v1_path(request.url.path):
+            return _error_response(
+                413,
+                code="REQUEST_TOO_LARGE",
+                message=f"request body too large (max {MAX_REQUEST_BYTES} bytes)",
+                details={"path": request.url.path, "max_request_bytes": MAX_REQUEST_BYTES},
+            )
         return JSONResponse(
             status_code=413,
             content={"detail": f"request body too large (max {MAX_REQUEST_BYTES} bytes)"},
@@ -717,6 +749,24 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Accept", "Authorization", API_KEY_HEADER],
 )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    if _is_api_v1_path(request.url.path):
+        detail = exc.detail
+        message = detail if isinstance(detail, str) and detail.strip() else "request failed"
+        details = {"path": request.url.path}
+        if detail is not None and not isinstance(detail, str):
+            details["detail"] = detail
+        return _error_response(
+            exc.status_code,
+            code=_http_status_error_code(exc.status_code),
+            message=message,
+            details=details,
+        )
+
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 
 @app.on_event("startup")

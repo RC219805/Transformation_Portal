@@ -40,6 +40,11 @@ Portal orchestrator docs:
 - [Portal + Orchestrator Quickstart](docs/guides/PORTAL_ORCHESTRATOR_QUICKSTART.md)
 - [Portal Orchestrator Roadmap (Re-Baselined)](docs/architecture/PORTAL_ORCHESTRATOR_ROADMAP.md)
 
+Portal orchestrator contract gate:
+```bash
+make test-orchestrator-contract
+```
+
 ---
 
 ## Major Feature: Context-Aware Rendering (Nov 2025)
