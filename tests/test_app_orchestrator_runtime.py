@@ -456,6 +456,16 @@ def test_api_key_validation_accepts_query_param() -> None:
         orchestrator_app.API_KEY_SECRET = previous_key
 
 
+def test_api_key_query_param_is_rejected_for_non_event_endpoints() -> None:
+    previous_key = orchestrator_app.API_KEY_SECRET
+    try:
+        orchestrator_app.API_KEY_SECRET = "query-secret"
+        request = _build_request("GET", "/v1/jobs", query_string="api_key=query-secret")
+        assert orchestrator_app._has_valid_api_key(request) is False
+    finally:
+        orchestrator_app.API_KEY_SECRET = previous_key
+
+
 def test_protected_job_route_detection() -> None:
     assert orchestrator_app._is_protected_job_endpoint("/v1/jobs") is True
     assert orchestrator_app._is_protected_job_endpoint("/v1/jobs/job_123") is True
@@ -479,6 +489,7 @@ def test_index_job_artifacts_populates_job_payload(tmp_path: Path) -> None:
     assert len(indexed) == 2
     assert job.artifacts["output_dir"] == str(output_dir)
     assert {item["artifact_type"] for item in indexed} == {"metadata", "image"}
+    assert {item["path"] for item in indexed} == {"manifest.json", "render.png"}
 
 
 def test_create_job_validation_uses_typed_error_envelope() -> None:

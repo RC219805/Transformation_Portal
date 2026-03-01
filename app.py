@@ -320,6 +320,10 @@ def _is_mutating_job_endpoint(method: str, path: str) -> bool:
     return bool(re.fullmatch(r"/v1/jobs/[^/]+/cancel", path))
 
 
+def _is_job_events_endpoint(path: str) -> bool:
+    return bool(re.fullmatch(r"/v1/jobs/[^/]+/events", path))
+
+
 def _is_protected_job_endpoint(path: str) -> bool:
     return path == "/v1/jobs" or path.startswith("/v1/jobs/")
 
@@ -369,7 +373,7 @@ def _has_valid_api_key(request: Request) -> bool:
         authorization = request.headers.get("authorization", "")
         if authorization.lower().startswith("bearer "):
             provided = authorization[7:].strip()
-    if not provided:
+    if not provided and _is_job_events_endpoint(request.url.path):
         provided = request.query_params.get("api_key", "").strip()
 
     if not provided:
@@ -536,14 +540,26 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
         job.artifacts = {"output_dir": str(output_dir), "items": [], "indexed_count": 0, "truncated": False}
         return []
 
-    items: List[Dict[str, Any]] = []
+    collected: List[tuple[str, Path]] = []
     truncated = False
-    paths = sorted((path for path in output_dir.rglob("*") if path.is_file()), key=lambda p: str(p).lower())
-    for path in paths:
+    for path in output_dir.rglob("*"):
+        if not path.is_file():
+            continue
         try:
             relative_path = str(path.relative_to(output_dir))
         except Exception:
             relative_path = path.name
+        collected.append((relative_path, path))
+        if len(collected) > MAX_INDEXED_ARTIFACTS:
+            truncated = True
+            break
+
+    collected.sort(key=lambda item: item[0].lower())
+    if truncated:
+        collected = collected[:MAX_INDEXED_ARTIFACTS]
+
+    items: List[Dict[str, Any]] = []
+    for relative_path, path in collected:
         try:
             size_bytes = path.stat().st_size
         except OSError:
@@ -551,14 +567,12 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
         items.append(
             {
                 "artifact_type": _infer_artifact_type(path),
-                "path": str(path),
+                # Do not expose absolute server paths in API/SSE payloads.
+                "path": relative_path,
                 "relative_path": relative_path,
                 "size_bytes": size_bytes,
             }
         )
-        if len(items) >= MAX_INDEXED_ARTIFACTS:
-            truncated = True
-            break
 
     job.artifacts = {
         "output_dir": str(output_dir),

@@ -30,7 +30,7 @@ Re-baseline the portal roadmap against current repository reality, then focus on
 - `GET /v1/jobs/{id}/events` (SSE events: `state`, `log`, `progress`, `artifact`, `done`)
 
 ### Envelope
-All orchestrator API endpoints use:
+All JSON `/v1` orchestrator API endpoints use this envelope for application-level success and failure. Non-JSON routes like `/ready` and some low-level framework/middleware failures (for example, request size limits) may still return FastAPI's default `{ "detail": ... }` shape until fully migrated.
 
 ```json
 {

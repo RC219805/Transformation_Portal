@@ -1236,6 +1236,7 @@
             const token = _currentApiToken();
             const baseUrl = `${API_BASE}${eventsUrl}`;
             if (!token) return baseUrl;
+            if (!/\/v1\/jobs\/[^/]+\/events(?:\?|$)/.test(eventsUrl)) return baseUrl;
             const separator = baseUrl.includes('?') ? '&' : '?';
             return `${baseUrl}${separator}api_key=${encodeURIComponent(token)}`;
         }
@@ -1650,10 +1651,7 @@
                 stopHealthPolling();
                 return;
             }
-            checkBackend(true).then(() => {
-                void fetchPresetsForPipeline(state.pipeline, true);
-                void recoverJobs();
-            });
+            void checkBackend(true);
             startHealthPolling();
         });
 
@@ -1675,10 +1673,7 @@
             bindInputs();
             renderJobQueue();
             renderArtifactPanel();
-            checkBackend(true).then(() => {
-                void fetchPresetsForPipeline(state.pipeline, true);
-                void recoverJobs();
-            });
+            void checkBackend(true);
             startHealthPolling();
         }
 
