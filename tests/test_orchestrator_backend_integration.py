@@ -173,7 +173,6 @@ def test_depth_metadata_uses_resolved_backend_not_config_default(tmp_path, mock_
     """
     import json
 
-    import numpy as np
     from PIL import Image
 
     from transformation_portal.depth.backends.protocol import DepthResult
@@ -265,7 +264,6 @@ def test_get_or_create_depth_backend_prefers_active_instance_over_stale_cache(tm
 
 def _make_depth_result(width: int = 64, height: int = 64):
     """Create synthetic depth result for orchestrator fallback tests."""
-    import numpy as np
     from PIL import Image
 
     from transformation_portal.depth.backends.protocol import DepthResult
