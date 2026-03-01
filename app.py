@@ -9,6 +9,7 @@ import re
 import sys
 import time
 import uuid
+from bisect import bisect_left
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -592,23 +593,38 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
         job.artifacts = {"output_dir": str(output_dir), "items": [], "indexed_count": 0, "truncated": False}
         return []
 
-    collected: List[tuple[str, Path]] = []
+    selected: List[tuple[tuple[str, str], str, Path]] = []
+    selected_keys: List[tuple[str, str]] = []
+    total_files = 0
     for path in output_dir.rglob("*"):
         if not path.is_file():
             continue
+        total_files += 1
         try:
             relative_path = str(path.relative_to(output_dir))
         except Exception:
             relative_path = path.name
-        collected.append((relative_path, path))
+        key = (relative_path.casefold(), relative_path)
 
-    collected.sort(key=lambda item: item[0].lower())
-    truncated = len(collected) > MAX_INDEXED_ARTIFACTS
-    if truncated:
-        collected = collected[:MAX_INDEXED_ARTIFACTS]
+        if len(selected) < MAX_INDEXED_ARTIFACTS:
+            insert_at = bisect_left(selected_keys, key)
+            selected_keys.insert(insert_at, key)
+            selected.insert(insert_at, (key, relative_path, path))
+            continue
+
+        if key >= selected_keys[-1]:
+            continue
+
+        insert_at = bisect_left(selected_keys, key)
+        selected_keys.insert(insert_at, key)
+        selected.insert(insert_at, (key, relative_path, path))
+        selected_keys.pop()
+        selected.pop()
+
+    truncated = total_files > MAX_INDEXED_ARTIFACTS
 
     items: List[Dict[str, Any]] = []
-    for relative_path, path in collected:
+    for _, relative_path, path in selected:
         try:
             size_bytes = path.stat().st_size
         except OSError:
