@@ -609,6 +609,14 @@ class EnhanceOrchestrator:
         if cached is not None:
             return cached
 
+        # Respect an already-initialized active backend when it matches the
+        # requested backend id. This keeps injected test doubles stable and
+        # avoids unnecessary registry lookups.
+        active_backend = getattr(self, "depth_backend", None)
+        if active_backend is not None and getattr(active_backend, "name", None) == backend_id:
+            self._depth_backend_cache[backend_id] = active_backend
+            return active_backend
+
         backend = self._depth_registry.get_backend(backend_id, self.config)
         backend.ensure_available()
         self._depth_backend_cache[backend_id] = backend
@@ -1008,18 +1016,32 @@ class EnhanceOrchestrator:
                     }
 
                     try:
-                        backend = self._get_or_create_depth_backend(backend_id)
-                        self.depth_backend = backend
-
                         if cached_depth is not None:
                             from ..depth.backends.protocol import DepthResult
+
+                            cache_metadata: Dict[str, Any] = {
+                                "cached": True,
+                                "output_normalization": "cache_reuse",
+                            }
+                            if image_sha256 and config_fp_hash:
+                                cache_metadata["cache_key"] = f"{image_sha256}_{config_fp_hash}"
+                            if self._backend_metadata.model_id:
+                                cache_metadata["resolved_model_id"] = self._backend_metadata.model_id
+                                cache_metadata["requested_model_id"] = self._backend_metadata.model_id
 
                             result_candidate = DepthResult(
                                 depth_map=cached_depth,
                                 original_image=preprocessed_array,
-                                metadata={"cached": True},
+                                metadata=cache_metadata,
+                                depth_units="meters" if backend_id == "depth_pro" else "relative",
+                                backend_id=backend_id,
+                                device=self.config.depth_device,
+                                dtype="float32",
+                                input_size=original_shape,
                             )
                         else:
+                            backend = self._get_or_create_depth_backend(backend_id)
+                            self.depth_backend = backend
                             result_candidate = backend.compute(pil_image)
                             result_candidate = self.postprocessor.process(result_candidate)
                             if self.depth_cache and image_sha256 and config_fp_hash:
@@ -1098,7 +1120,7 @@ class EnhanceOrchestrator:
                         depth_attempts.append(attempt_record)
                         last_error = semantic_error
 
-                        has_next = attempt_index < len(attempt_chain)
+                        has_next = attempt_index + 1 < len(attempt_chain)
                         if self.config.allow_semantic_fallback and has_next:
                             logger.warning(
                                 "Semantic gate failed on backend=%s code=%s; attempting fallback backend.",
@@ -1123,7 +1145,7 @@ class EnhanceOrchestrator:
                         depth_attempts.append(attempt_record)
                         last_error = operational_error
 
-                        has_next = attempt_index < len(attempt_chain)
+                        has_next = attempt_index + 1 < len(attempt_chain)
                         if has_next:
                             logger.warning(
                                 "Operational depth failure on backend=%s code=%s; attempting fallback backend.",
@@ -1812,6 +1834,11 @@ class EnhanceOrchestrator:
         """
         # Capture start time for accurate timestamps
         pipeline_start_time = time.time()
+        # Reset per-image active state up front so early exceptions cannot leak
+        # stale attempt/backend data from a previous image.
+        self._active_backend_metadata = getattr(self, "_backend_metadata", self._capture_backend_metadata())
+        self._active_depth_attempts = []
+        self._active_selected_attempt_index = None
 
         # PERFORMANCE FIX (#4): Use pre-computed paths from parallel batch if available
         if _precomputed_paths:

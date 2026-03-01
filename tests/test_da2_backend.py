@@ -1,5 +1,6 @@
 """Tests for DA2Backend adapter."""
 
+import sys
 from types import SimpleNamespace
 
 import numpy as np
@@ -46,3 +47,59 @@ def test_da2_backend_compute_contract(monkeypatch):
     assert result.backend_id == "da2"
     assert result.metadata["source_depth_units"] == "relative"
     assert result.metadata["output_depth_units"] == "relative"
+
+
+def test_da2_backend_cuda_request_without_cuda_falls_back_to_cpu(monkeypatch):
+    """Requested CUDA should gracefully normalize to CPU when unavailable."""
+
+    class _Unavailable:
+        @staticmethod
+        def is_available():
+            return False
+
+    fake_torch = SimpleNamespace(
+        cuda=_Unavailable(),
+        backends=SimpleNamespace(mps=_Unavailable()),
+    )
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+
+    backend = DA2Backend(SimpleNamespace(depth_device="cuda"))
+    assert backend._device == "cpu"
+
+
+def test_da2_backend_cuda_device_is_forwarded_to_model(monkeypatch):
+    """DA2 should pass CUDA through to the model wrapper when selected."""
+    from transformation_portal.depth.models import depth_anything_v2 as da2_model_module
+
+    captured = {}
+
+    class _CudaAvailable:
+        @staticmethod
+        def is_available():
+            return True
+
+    class _MpsUnavailable:
+        @staticmethod
+        def is_available():
+            return False
+
+    fake_torch = SimpleNamespace(
+        cuda=_CudaAvailable(),
+        backends=SimpleNamespace(mps=_MpsUnavailable()),
+    )
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+
+    class _FakeDepthAnythingV2Model:
+        def __init__(self, variant, backend, device):
+            captured["variant"] = variant
+            captured["backend"] = backend
+            captured["device"] = device
+
+    monkeypatch.setattr(da2_model_module, "DepthAnythingV2Model", _FakeDepthAnythingV2Model)
+
+    backend = DA2Backend(SimpleNamespace(depth_device="cuda"))
+    monkeypatch.setattr(backend, "ensure_available", lambda: None)
+    backend._model = None
+    backend._load_model()
+
+    assert captured["device"] == "cuda"

@@ -34,13 +34,27 @@ class DA2Backend:
         self._model = None
 
     def _resolve_device(self, config: Optional["EnhanceConfig"]) -> str:
+        requested: Optional[str] = None
         if config is not None:
             requested = getattr(config, "depth_device", None)
-            if requested:
-                return requested
+            if isinstance(requested, str):
+                requested = requested.lower()
 
         try:
             import torch
+
+            if requested == "cuda":
+                if torch.cuda.is_available():
+                    return "cuda"
+                logger.warning("Requested DA2 device=cuda but CUDA is unavailable; falling back to cpu.")
+                return "cpu"
+            if requested == "mps":
+                if torch.backends.mps.is_available():
+                    return "mps"
+                logger.warning("Requested DA2 device=mps but MPS is unavailable; falling back to cpu.")
+                return "cpu"
+            if requested == "cpu":
+                return "cpu"
 
             if torch.backends.mps.is_available():
                 return "mps"
@@ -49,6 +63,8 @@ class DA2Backend:
         except ImportError:
             logger.debug("PyTorch not installed; DA2 defaults to CPU.")
 
+        if requested in {"cpu", "mps", "cuda"}:
+            return "cpu"
         return "cpu"
 
     @classmethod
@@ -77,6 +93,10 @@ class DA2Backend:
         if self._device == "mps":
             backend = ModelBackend.PYTORCH_MPS
             model_device = "mps"
+        elif self._device == "cuda":
+            # DA2 wrapper uses the PyTorch backend path for CUDA as well.
+            backend = ModelBackend.PYTORCH_CPU
+            model_device = "cuda"
         else:
             backend = ModelBackend.PYTORCH_CPU
             model_device = "cpu"
@@ -96,9 +116,26 @@ class DA2Backend:
         """Estimate relative depth using Depth Anything V2."""
         self.ensure_available()
 
-        if device is not None and device != self._device:
-            self._device = device
-            self._model = None
+        if device is not None:
+            requested_device = str(device).lower()
+            if requested_device not in {"cpu", "mps", "cuda"}:
+                logger.warning("Unknown DA2 override device=%s; falling back to cpu.", requested_device)
+                requested_device = "cpu"
+            if requested_device != self._device:
+                self._device = requested_device
+                self._model = None
+        if self._device == "cuda":
+            try:
+                import torch
+
+                if not torch.cuda.is_available():
+                    logger.warning("CUDA override requested for DA2 but CUDA is unavailable; falling back to cpu.")
+                    self._device = "cpu"
+                    self._model = None
+            except ImportError:
+                logger.warning("PyTorch unavailable while resolving DA2 device override; falling back to cpu.")
+                self._device = "cpu"
+                self._model = None
 
         self._load_model()
 
