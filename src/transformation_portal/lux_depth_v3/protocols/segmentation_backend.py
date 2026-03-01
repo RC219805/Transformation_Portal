@@ -3,7 +3,7 @@
 This module defines the protocol (interface) that all segmentation backends
 must implement for Materials V3. This enables:
 
-- Hot-swappable backends (stub, efficientsam, future models)
+- Hot-swappable backends (stub, efficientsam, sam2, future models)
 - Fail-safe defaults (stub backend returns empty masks)
 - Consistent device handling (MPS/CUDA/CPU)
 - Lazy loading and model caching

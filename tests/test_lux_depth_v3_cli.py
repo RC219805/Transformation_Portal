@@ -488,6 +488,27 @@ class TestSegmentationCLI:
         assert result.exit_code == 1
         assert "invalid" in result.stdout.lower() or "segmentation backend" in result.stdout.lower()
 
+    def test_invalid_sam2_model_size(self, tmp_path):
+        """Test that invalid --sam2-model-size is rejected."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+
+        result = runner.invoke(
+            app,
+            [
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(tmp_path / "output"),
+                "--segmentation-backend",
+                "sam2",
+                "--sam2-model-size",
+                "tiny",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "sam2-model-size" in result.stdout.lower()
+
     def test_segmentation_config_defaults(self, tmp_path):
         """Test segmentation config with default values."""
         from unittest.mock import MagicMock, patch
@@ -565,6 +586,55 @@ class TestSegmentationCLI:
         assert captured_config is not None
         assert captured_config.enable_material_segmentation is True
         assert captured_config.material_segmentation_backend == "efficientsam"
+        assert captured_config.strict_backend is True
+
+    def test_segmentation_config_enabled_sam2(self, tmp_path):
+        """Test SAM2 segmentation backend configuration via CLI."""
+        from unittest.mock import MagicMock, patch
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "test.jpg").touch()
+
+        captured_config = None
+
+        def mock_orch_init(config, output_root):
+            nonlocal captured_config
+            captured_config = config
+            mock_orch = MagicMock()
+            mock_orch.enhance_batch.return_value = {"total": 0, "succeeded": 0}
+            return mock_orch
+
+        with patch(
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            side_effect=mock_orch_init,
+        ):
+            _result = runner.invoke(
+                app,
+                [
+                    "--input-dir",
+                    str(input_dir),
+                    "--output-dir",
+                    str(tmp_path / "output"),
+                    "--materials-v3",
+                    "on",
+                    "--enable-segmentation",
+                    "on",
+                    "--segmentation-backend",
+                    "sam2",
+                    "--sam2-model-size",
+                    "large",
+                    "--sam2-checkpoint-path",
+                    str(tmp_path / "sam2_hiera_large.pt"),
+                    "--strict-segmentation",
+                ],
+            )
+
+        assert captured_config is not None
+        assert captured_config.enable_material_segmentation is True
+        assert captured_config.material_segmentation_backend == "sam2"
+        assert captured_config.sam2_model_size == "large"
+        assert str(captured_config.sam2_checkpoint_path).endswith("sam2_hiera_large.pt")
         assert captured_config.strict_backend is True
 
 

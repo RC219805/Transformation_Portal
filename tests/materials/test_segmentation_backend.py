@@ -1,10 +1,10 @@
 """Tests for material segmentation backends.
 
 These tests verify the SegmentationBackend Protocol implementation,
-including StubBackend and EfficientSAMBackend.
+including StubBackend, EfficientSAMBackend, and SAM2SegmentationBackend.
 
 Test Coverage:
-- Protocol compliance (stub and efficientsam backends)
+- Protocol compliance (stub, efficientsam, sam2 backends)
 - Shape contracts (RGB input → masks dict output)
 - Device placement (MPS/CUDA/CPU)
 - Fallback behavior (missing weights → stub)
@@ -16,6 +16,8 @@ Note: Tests marked with @pytest.mark.ml require torch/torchvision.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -23,6 +25,7 @@ from transformation_portal.lux_depth_v3.config import EnhanceConfig
 from transformation_portal.lux_depth_v3.protocols.segmentation_backend import SegmentationBackend, SegmentationBackendInfo
 from transformation_portal.lux_depth_v3.segmentation_backend import (
     EfficientSAMBackend,
+    SAM2SegmentationBackend,
     StubBackend,
     _get_backend_instance,
     segment_materials,
@@ -79,6 +82,16 @@ def config_efficientsam():
 
 
 @pytest.fixture
+def config_sam2():
+    """Config with SAM2 backend."""
+    return EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="sam2",
+        depth_device="cpu",
+    )
+
+
+@pytest.fixture
 def config_strict():
     """Config with strict_backend=True."""
     return EnhanceConfig(
@@ -129,6 +142,22 @@ def test_efficientsam_backend_implements_protocol():
     assert isinstance(info, SegmentationBackendInfo)
     assert info.name == "EfficientSAM"
     assert "efficientvit-sam" in info.model_id
+    assert info.requires_weights is True
+
+
+def test_sam2_backend_implements_protocol():
+    """Test that SAM2SegmentationBackend implements SegmentationBackend protocol."""
+    backend = SAM2SegmentationBackend()
+
+    assert isinstance(backend, SegmentationBackend)
+    assert hasattr(backend, "info")
+    assert hasattr(backend, "load")
+    assert hasattr(backend, "segment")
+
+    info = backend.info
+    assert isinstance(info, SegmentationBackendInfo)
+    assert info.name == "SAM2"
+    assert "sam2-hiera" in info.model_id
     assert info.requires_weights is True
 
 
@@ -283,6 +312,88 @@ def test_segment_materials_efficientsam_backend(sample_image, config_efficientsa
         assert mask.dtype == np.float32
 
 
+def test_segment_materials_sam2_backend_with_mock(sample_image, config_sam2, monkeypatch):
+    """Test that SAM2 backend can be selected and returns canonical material masks."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    class FakeSpatialSAM2Backend:
+        def __init__(self, model_size, device, checkpoint_path, enable_material_classification, material_confidence_threshold):
+            del model_size, checkpoint_path, enable_material_classification, material_confidence_threshold
+            self.device = device
+
+        def segment(self, seg_input):
+            h, w = seg_input.image.shape[:2]
+            masks = np.zeros((1, h, w), dtype=bool)
+            masks[0, 10:30, 10:30] = True
+            scores = np.array([0.88], dtype=np.float32)
+            metadata = [
+                SimpleNamespace(
+                    area=400,
+                    bbox=(10, 10, 20, 20),
+                    stability_score=0.9,
+                    material_label="clear glass",
+                    material_confidence=0.91,
+                )
+            ]
+            return SimpleNamespace(masks=masks, scores=scores, metadata=metadata)
+
+    monkeypatch.setattr(seg_module, "SPATIAL_SAM2_AVAILABLE", True)
+    monkeypatch.setattr(seg_module, "SpatialSAM2Backend", FakeSpatialSAM2Backend)
+    seg_module._get_backend_instance.cache_clear()
+
+    try:
+        masks = segment_materials(sample_image, config_sam2)
+    finally:
+        seg_module._get_backend_instance.cache_clear()
+
+    assert "glass" in masks
+    assert masks["glass"].shape == sample_image.shape[:2]
+    assert masks["glass"].dtype == np.float32
+    assert float(masks["glass"].max()) == 1.0
+
+
+def test_segment_materials_sam2_strict_mode_missing_backend(sample_image, monkeypatch):
+    """Strict mode should raise when SAM2 backend dependencies are unavailable."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    monkeypatch.setattr(seg_module, "SPATIAL_SAM2_AVAILABLE", False)
+    seg_module._get_backend_instance.cache_clear()
+
+    config = EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="sam2",
+        strict_backend=True,
+    )
+
+    try:
+        with pytest.raises(RuntimeError, match="Material segmentation failed|Failed to load sam2"):
+            segment_materials(sample_image, config)
+    finally:
+        seg_module._get_backend_instance.cache_clear()
+
+
+def test_segment_materials_sam2_graceful_degradation(sample_image, monkeypatch):
+    """Non-strict SAM2 mode should fall back to empty masks when unavailable."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    monkeypatch.setattr(seg_module, "SPATIAL_SAM2_AVAILABLE", False)
+    seg_module._get_backend_instance.cache_clear()
+
+    config = EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="sam2",
+        strict_backend=False,
+    )
+
+    try:
+        masks = segment_materials(sample_image, config)
+    finally:
+        seg_module._get_backend_instance.cache_clear()
+
+    assert isinstance(masks, dict)
+    assert len(masks) == 0
+
+
 def test_segment_materials_unknown_backend(sample_image):
     """Test that unknown backend falls back to stub."""
     config = EnhanceConfig(
@@ -312,6 +423,35 @@ def test_backend_caching():
     backend4 = _get_backend_instance("efficientsam", device="cpu")
 
     assert backend3 is backend4  # Should be same instance
+
+
+def test_backend_caching_sam2(monkeypatch):
+    """SAM2 backend instances should also be cached by backend args."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    class FakeSpatialSAM2Backend:
+        def __init__(self, model_size, device, checkpoint_path, enable_material_classification, material_confidence_threshold):
+            del model_size, device, checkpoint_path, enable_material_classification, material_confidence_threshold
+
+        def segment(self, seg_input):
+            h, w = seg_input.image.shape[:2]
+            return SimpleNamespace(
+                masks=np.zeros((0, h, w), dtype=bool),
+                scores=np.zeros((0,), dtype=np.float32),
+                metadata=[],
+            )
+
+    monkeypatch.setattr(seg_module, "SPATIAL_SAM2_AVAILABLE", True)
+    monkeypatch.setattr(seg_module, "SpatialSAM2Backend", FakeSpatialSAM2Backend)
+    seg_module._get_backend_instance.cache_clear()
+
+    try:
+        backend1 = _get_backend_instance("sam2", device="cpu", sam2_model_size="base")
+        backend2 = _get_backend_instance("sam2", device="cpu", sam2_model_size="base")
+    finally:
+        seg_module._get_backend_instance.cache_clear()
+
+    assert backend1 is backend2
 
 
 # =============================================================================
