@@ -30,7 +30,7 @@ click==8.3.1
     #   -c all.txt
     #   typer
     #   uvicorn
-fastapi==0.110.0
+fastapi==0.120.0
     # via
     #   -c all.txt
     #   -r base.in
@@ -123,9 +123,10 @@ shellingham==1.5.4
     # via
     #   -c all.txt
     #   typer
-starlette==0.36.3
+starlette==0.47.2
     # via
     #   -c all.txt
+    #   -r base.in
     #   fastapi
 threadpoolctl==3.6.0
     # via

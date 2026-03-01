@@ -14,7 +14,9 @@ typer>=0.10.0,<1           # CLI framework
 tqdm>=4.66,<5              # progress bar utility
 
 # Web orchestration service stack (exact pins for API/UI parity)
-fastapi==0.110.0           # orchestrator API framework (pin for compatibility)
+# Security: bump fastapi so resolver can use non-vulnerable Starlette (>=0.47.2)
+fastapi==0.120.0           # orchestrator API framework (security-patched dependency chain)
+starlette==0.47.2          # direct runtime import + security pin (CVE remediation)
 uvicorn==0.29.0            # ASGI server runtime pin
 aiofiles==23.2.1           # async file I/O support for FastAPI file responses
 

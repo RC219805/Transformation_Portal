@@ -22,7 +22,8 @@ dependencies = [
     "tqdm>=4.66,<5",
     # Web stack ranges are intentionally bounded here.
     # Exact versions are enforced in requirements/base.in and compiled lockfiles.
-    "fastapi>=0.110.0,<0.111",
+    "fastapi>=0.120.0,<0.121",
+    "starlette>=0.47.2,<0.49",  # direct runtime import + patched multipart handling
     "uvicorn>=0.29.0,<0.30",
     "aiofiles>=23.2.1,<24",
     "tifffile>=2023.7.18,<2027",
