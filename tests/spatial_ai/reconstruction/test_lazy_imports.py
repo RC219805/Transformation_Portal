@@ -59,12 +59,10 @@ class TestTorchLazyImportContract:
             sys.modules can cause RuntimeError on re-import.
         """
         # Snapshot which torch modules exist before import
-        torch_modules_before = {key for key in sys.modules.keys() if key.startswith("torch")}
+        torch_modules_before = {key for key in sys.modules if key.startswith("torch")}
 
         # Remove reconstruction package to force fresh import
-        reconstruction_modules = [
-            key for key in sys.modules.keys() if "transformation_portal.spatial_ai.reconstruction" in key
-        ]
+        reconstruction_modules = [key for key in sys.modules if "transformation_portal.spatial_ai.reconstruction" in key]
         for module_name in reconstruction_modules:
             del sys.modules[module_name]
 
@@ -75,7 +73,7 @@ class TestTorchLazyImportContract:
         import_time = time.time() - start_time
 
         # Snapshot which torch modules exist after import
-        torch_modules_after = {key for key in sys.modules.keys() if key.startswith("torch")}
+        torch_modules_after = {key for key in sys.modules if key.startswith("torch")}
 
         # Verify NO NEW torch modules were loaded
         new_torch_modules = torch_modules_after - torch_modules_before
@@ -112,19 +110,17 @@ class TestTorchLazyImportContract:
             for the __getattr__ implementation.
         """
         # Snapshot torch modules before
-        torch_modules_before = {key for key in sys.modules.keys() if key.startswith("torch")}
+        torch_modules_before = {key for key in sys.modules if key.startswith("torch")}
 
         # Remove reconstruction from sys.modules to force fresh import
-        reconstruction_modules = [
-            key for key in sys.modules.keys() if "transformation_portal.spatial_ai.reconstruction" in key
-        ]
+        reconstruction_modules = [key for key in sys.modules if "transformation_portal.spatial_ai.reconstruction" in key]
         for module_name in reconstruction_modules:
             del sys.modules[module_name]
 
         # Import package (should not load NEW torch modules)
         import transformation_portal.spatial_ai.reconstruction as reconstruction_pkg
 
-        torch_modules_after_import = {key for key in sys.modules.keys() if key.startswith("torch")}
+        torch_modules_after_import = {key for key in sys.modules if key.startswith("torch")}
         new_modules_after_import = torch_modules_after_import - torch_modules_before
 
         # Verify no NEW torch modules after package import
@@ -137,7 +133,7 @@ class TestTorchLazyImportContract:
         load_time = time.time() - start_time
 
         # Verify NEW torch modules were loaded
-        torch_modules_after_access = {key for key in sys.modules.keys() if key.startswith("torch")}
+        torch_modules_after_access = {key for key in sys.modules if key.startswith("torch")}
         new_modules_after_access = torch_modules_after_access - torch_modules_after_import
 
         # If torch wasn't loaded before, we should see many torch modules now
@@ -172,9 +168,7 @@ class TestTorchLazyImportContract:
         This test verifies the lazy loading works through the dependency chain.
         """
         # Remove reconstruction from sys.modules
-        reconstruction_modules = [
-            key for key in sys.modules.keys() if "transformation_portal.spatial_ai.reconstruction" in key
-        ]
+        reconstruction_modules = [key for key in sys.modules if "transformation_portal.spatial_ai.reconstruction" in key]
         for module_name in reconstruction_modules:
             del sys.modules[module_name]
 
@@ -215,9 +209,7 @@ class TestTorchLazyImportContract:
         reconstruction_pkg = None
 
         def _cold_import_reconstruction():
-            reconstruction_modules = [
-                key for key in sys.modules.keys() if "transformation_portal.spatial_ai.reconstruction" in key
-            ]
+            reconstruction_modules = [key for key in sys.modules if "transformation_portal.spatial_ai.reconstruction" in key]
             for module_name in reconstruction_modules:
                 del sys.modules[module_name]
             start = time.perf_counter()
@@ -273,9 +265,7 @@ class TestTorchLazyImportContract:
         is that torch-dependent symbols DO load torch when accessed.
         """
         # Remove reconstruction from sys.modules
-        reconstruction_modules = [
-            key for key in sys.modules.keys() if "transformation_portal.spatial_ai.reconstruction" in key
-        ]
+        reconstruction_modules = [key for key in sys.modules if "transformation_portal.spatial_ai.reconstruction" in key]
         for module_name in reconstruction_modules:
             del sys.modules[module_name]
 
@@ -284,7 +274,7 @@ class TestTorchLazyImportContract:
 
         # Snapshot reconstruction modules before accessing torch-dependent symbol
         reconstruction_modules_before = {
-            key for key in sys.modules.keys() if "transformation_portal.spatial_ai.reconstruction" in key
+            key for key in sys.modules if "transformation_portal.spatial_ai.reconstruction" in key
         }
 
         # Access torch-dependent symbol
@@ -317,9 +307,7 @@ class TestLazyImportEdgeCases:
         return the same object, not re-import.
         """
         # Remove reconstruction from sys.modules
-        reconstruction_modules = [
-            key for key in sys.modules.keys() if "transformation_portal.spatial_ai.reconstruction" in key
-        ]
+        reconstruction_modules = [key for key in sys.modules if "transformation_portal.spatial_ai.reconstruction" in key]
         for module_name in reconstruction_modules:
             del sys.modules[module_name]
 
@@ -341,16 +329,14 @@ class TestLazyImportEdgeCases:
         direct attribute access. This should still trigger lazy loading.
         """
         # Remove reconstruction from sys.modules
-        reconstruction_modules = [
-            key for key in sys.modules.keys() if "transformation_portal.spatial_ai.reconstruction" in key
-        ]
+        reconstruction_modules = [key for key in sys.modules if "transformation_portal.spatial_ai.reconstruction" in key]
         for module_name in reconstruction_modules:
             del sys.modules[module_name]
 
         import transformation_portal.spatial_ai.reconstruction as reconstruction_pkg
 
         # Snapshot modules before
-        modules_before = set(sys.modules.keys())
+        modules_before = set(sys.modules)
 
         # Use getattr() instead of direct access
         backend = getattr(reconstruction_pkg, "GaussianBackend")

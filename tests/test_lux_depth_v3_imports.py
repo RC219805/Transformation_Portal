@@ -247,13 +247,6 @@ def test_all_imports_together():
     assert preprocessing is not None
 
 
-def test_stub_not_implemented_errors():
-    """Test that remaining stub implementations raise NotImplementedError with clear messages."""
-    # Note: depth_writer is now implemented and no longer a stub
-    # This test covers remaining stubs: v2_runner, preprocessing
-    pass  # Actual stub tests are in dedicated test functions below
-
-
 if __name__ == "__main__":
     # Allow running tests directly
     pytest.main([__file__, "-v"])
@@ -284,8 +277,6 @@ def test_da3_inference_engine_basic():
 
 def test_depth_writer_opencv_dependency():
     """Test that depth_writer properly handles opencv-python dependency."""
-    from pathlib import Path
-
     import numpy as np
 
     from transformation_portal.lux_depth_v3.depth_writer import HAS_CV2, atomic_write_depth_u16_png_with_stats
@@ -321,7 +312,6 @@ def test_v2_runner_fails_when_script_missing():
     Since scripts/enhance_image.py now exists, we simulate missing script by
     patching Path.exists() globally for the script check.
     """
-    from pathlib import Path
     from unittest.mock import patch
 
     from transformation_portal.lux_depth_v3.v2_runner import V2Runner
