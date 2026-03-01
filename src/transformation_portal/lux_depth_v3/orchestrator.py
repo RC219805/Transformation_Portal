@@ -25,6 +25,7 @@ import logging
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from enum import Enum
 from functools import lru_cache
 from multiprocessing import cpu_count
 from pathlib import Path
@@ -155,9 +156,6 @@ def _log_dependency_status() -> dict:
     return status
 
 
-logger = logging.getLogger(__name__)
-
-
 @lru_cache(maxsize=128)
 def _load_manifest_cached(manifest_path: str, mtime: float) -> CombinedManifest:
     """Cache manifests by path + modification time.
@@ -178,67 +176,181 @@ def _load_manifest_cached(manifest_path: str, mtime: float) -> CombinedManifest:
 
 
 def make_output_key(input_path: Path, input_root: Path, use_xxhash: bool = XXHASH_AVAILABLE) -> Path:
-    """Generate collision-free output key preserving directory structure.
+    """Compute a stable, sanitized output key for a given input image.
 
-    Creates a unique output key that:
-    1. Preserves the input's directory structure relative to input_root
-    2. Includes the sanitized original extension (without dot)
-    3. Appends an 8-character hash of the full relative path
-
-    Phase 3: xxHash is now default when available (5x faster than SHA-1).
-
-    This ensures unique output names even for files with the same name
-    in different directories or with different extensions.
-
-    Args:
-        input_path: Full path to input file
-        input_root: Base directory for relative path calculation
-        use_xxhash: Use xxHash instead of SHA-1 (default: True if available, else False)
-
-    Returns:
-        Path object representing the output key (without final extension)
-
-    Example:
-        Input: photos/scene1/image.JPG with root=photos/
-        Output: scene1/image_jpg_1a2b3c4d
+    The final key preserves the relative directory shape under ``input_root``
+    (when possible) and emits ``<stem>_<ext|noext>_<hash8>`` as the terminal
+    component. The 8-character suffix is derived from the POSIX-style relative
+    path, using xxh64 when enabled/available or SHA-1 otherwise.
     """
-    try:
-        relpath = input_path.relative_to(input_root)
-    except ValueError:
-        logger.warning(f"{input_path} is not relative to {input_root}, using flat naming")
-        relpath = Path(input_path.name)
+    input_resolved = input_path.resolve()
+    root_resolved = input_root.resolve()
 
-    # Extract directory structure and file components
+    try:
+        relpath = input_resolved.relative_to(root_resolved)
+    except ValueError:
+        logger.warning(
+            "%s is not relative to %s, using flat naming",
+            input_path,
+            input_root,
+        )
+        relpath = Path(input_resolved.name)
+
     rel_dir = relpath.parent
     name = relpath.stem
-    ext = relpath.suffix  # e.g., ".jpg"
+    ext = relpath.suffix
 
-    # Sanitize directory parts
     sanitized_parts = [sanitize_path_component_nonlossy(p) for p in rel_dir.parts]
+    ext_label = sanitize_path_component_nonlossy(ext.lstrip(".").lower() if ext else "noext")
 
-    # Sanitize extension (remove dot, lowercase, default to "noext")
-    ext_label = ext.lstrip(".").lower() if ext else "noext"
-    ext_label = sanitize_path_component_nonlossy(ext_label)
-
-    # Compute 8-char hash of full relative path for uniqueness
-    # Phase 3: Use xxHash if available and enabled (5x faster)
     hash_input = relpath.as_posix().encode("utf-8")
+
     if use_xxhash and XXHASH_AVAILABLE:
         hash_suffix = xxhash.xxh64(hash_input).hexdigest()[:8]
     else:
-        # Use SHA1 for file naming (not cryptographic security)
         hash_suffix = hashlib.sha1(hash_input, usedforsecurity=False).hexdigest()[:8]
 
-    # Sanitize stem
     stem_sanitized = sanitize_path_component_nonlossy(name)
-
-    # Construct output key: {stem}_{ext}_{hash}
     key_name = f"{stem_sanitized}_{ext_label}_{hash_suffix}"
 
-    if sanitized_parts:
-        return Path(*sanitized_parts) / key_name
-    else:
-        return Path(key_name)
+    return Path(*sanitized_parts, key_name) if sanitized_parts else Path(key_name)
+
+
+def _run_card_schema_path() -> Path:
+    """Return repository-local run card schema path."""
+    return Path(__file__).resolve().parents[3] / "docs" / "schemas" / "run_card" / "run_card.v1.schema.json"
+
+
+@lru_cache(maxsize=1)
+def _load_run_card_schema(schema_path_str: str) -> Dict[str, Any]:
+    """Load run card JSON schema once per process."""
+    schema_path = Path(schema_path_str)
+    with open(schema_path, "r", encoding="utf-8") as schema_file:
+        return json.load(schema_file)
+
+
+@lru_cache(maxsize=1)
+def _load_run_card_validator(schema_path_str: str) -> Any:
+    """Build cached Draft202012 validator for run card schema."""
+    try:
+        import jsonschema
+    except ImportError as exc:  # pragma: no cover - dependency is pinned, guard for runtime safety
+        raise RuntimeError("jsonschema dependency is required for run card schema validation") from exc
+
+    schema = _load_run_card_schema(schema_path_str)
+    try:
+        jsonschema.Draft202012Validator.check_schema(schema)
+    except jsonschema.exceptions.SchemaError as exc:
+        raise RuntimeError(f"Run card schema is invalid: {exc.message}") from exc
+    return jsonschema.Draft202012Validator(schema)
+
+
+def _validate_run_card_payload(payload: Dict[str, Any], schema_path: Path) -> None:
+    """Validate run card payload against run_card.v1 schema."""
+    validator = _load_run_card_validator(str(schema_path))
+    errors = sorted(validator.iter_errors(payload), key=lambda error: list(error.path))
+    if not errors:
+        return
+
+    formatted = []
+    for error in errors:
+        path = ".".join(str(p) for p in error.path) or "<root>"
+        formatted.append(f"{path}: {error.message}")
+    raise RuntimeError("Run card schema validation failed: " + "; ".join(formatted))
+
+
+def _infer_artifact_type(relative_path: str) -> str:
+    """Infer canonical artifact type from output-root relative path."""
+    rel = relative_path.lower()
+    name = Path(rel).name
+
+    if rel.startswith("depth/"):
+        if name.endswith("_metadata.json"):
+            return "depth_metadata"
+        if name.endswith(".png"):
+            return "depth_u16_png"
+        if name.endswith(".npy"):
+            return "depth_float_npy"
+        return "depth_aux"
+
+    if rel.startswith("v2/"):
+        if name.endswith("_report.json"):
+            return "v2_report"
+        return "v2_output"
+
+    if rel.startswith("manifests/"):
+        if name.startswith("batch_") and name.endswith(".json"):
+            return "batch_manifest"
+        if name.endswith("_provenance.json"):
+            return "provenance_sidecar"
+        if name.endswith("_combined.json"):
+            return "combined_manifest"
+        return "manifest_aux"
+
+    if rel.startswith("logs/"):
+        return "v2_log"
+
+    if rel.startswith("pbr/"):
+        if "normal" in name:
+            return "pbr_normal"
+        if "roughness" in name:
+            return "pbr_roughness"
+        if name.startswith("ao_") or "_ao" in name:
+            return "pbr_ao"
+        return "pbr_aux"
+
+    return "artifact"
+
+
+def _build_artifact_index(output_root: Path, artifact_paths: List[Path]) -> List[Dict[str, Any]]:
+    """Build deterministic artifact index with size and SHA256."""
+    root_resolved = output_root.resolve()
+    index_by_relative_path: Dict[str, Dict[str, Any]] = {}
+
+    for candidate in artifact_paths:
+        try:
+            resolved = candidate.resolve(strict=True)
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            logger.debug(f"Skipping artifact path due to resolution error ({candidate}): {exc}")
+            continue
+
+        if not resolved.is_file():
+            continue
+
+        try:
+            relative_path = resolved.relative_to(root_resolved).as_posix()
+        except ValueError:
+            logger.debug(f"Skipping artifact outside output root: {resolved}")
+            continue
+
+        if relative_path in index_by_relative_path:
+            continue
+
+        stat = resolved.stat()
+        index_by_relative_path[relative_path] = {
+            "artifact_type": _infer_artifact_type(relative_path),
+            "path": relative_path,
+            "relative_path": relative_path,
+            "size_bytes": stat.st_size,
+            "sha256": compute_file_sha256(resolved),
+        }
+
+    return [index_by_relative_path[path] for path in sorted(index_by_relative_path)]
+
+
+def _compute_artifact_merkle_root(artifact_index: List[Dict[str, Any]]) -> str:
+    """Compute deterministic run-card Merkle root over artifact SHA256 digests."""
+    sorted_artifacts = sorted(artifact_index, key=lambda item: item["relative_path"])
+    leaves = []
+    for artifact in sorted_artifacts:
+        digest = artifact.get("sha256")
+        if not isinstance(digest, str) or len(digest) != 64:
+            raise RuntimeError(f"Invalid artifact sha256 in run card index: {digest!r}")
+        leaves.append(bytes.fromhex(digest))
+
+    return hashlib.sha256(b"".join(leaves)).hexdigest()
 
 
 class EnhanceOrchestrator:
@@ -1286,7 +1398,6 @@ class EnhanceOrchestrator:
 
             # Write provenance sidecar
             provenance.write_sidecar(provenance_sidecar_path)
-            logger.info(f"Wrote provenance sidecar: {provenance_sidecar_path}")
 
         except ExiftoolNotFoundError as e:
             # Hard fail if exiftool is not available for RAW/TIFF (audit requirement)
@@ -1547,7 +1658,6 @@ class EnhanceOrchestrator:
         Returns:
             Depth array (numpy), or None if loading fails
         """
-        import numpy as np
 
         # Prefer float depth for better PBR quality (avoid quantization artifacts)
         if float_depth_path.exists():
@@ -1792,13 +1902,95 @@ class EnhanceOrchestrator:
                 "outliers": outliers if outliers else [],
             },
         )
-        bm.write(self.manifests_dir / f"batch_{batch_id}.json")
+        batch_manifest_path = self.manifests_dir / f"batch_{batch_id}.json"
+        bm.write(batch_manifest_path)
 
         # Emit run card if enabled
         if self.config.emit_run_card:
-            self._emit_run_card(batch_id, batch_start_utc, batch_end_utc, results, runtime_stats, outliers)
+            self._emit_run_card(
+                batch_id,
+                batch_start_utc,
+                batch_end_utc,
+                results,
+                runtime_stats,
+                outliers,
+                batch_manifest_path=batch_manifest_path,
+            )
 
         return results
+
+    def _collect_run_card_artifact_paths(
+        self, results: List[Dict[str, Any]], batch_manifest_path: Optional[Path] = None
+    ) -> List[Path]:
+        """Collect deterministic artifact paths associated with the current batch."""
+        artifact_paths: List[Path] = []
+
+        if batch_manifest_path and batch_manifest_path.exists():
+            artifact_paths.append(batch_manifest_path)
+
+        for result in results:
+            manifest_value = result.get("manifest")
+            if manifest_value:
+                manifest_path = Path(manifest_value)
+                if manifest_path.exists():
+                    artifact_paths.append(manifest_path)
+
+                    provenance_sidecar_path = manifest_path.with_name(f"{manifest_path.stem}_provenance.json")
+                    if provenance_sidecar_path.exists():
+                        artifact_paths.append(provenance_sidecar_path)
+
+                    # Include the per-image V2 stage log when available.
+                    manifest_name = manifest_path.stem
+                    output_key_name = manifest_name.removesuffix("_combined")
+                    try:
+                        manifest_relative = manifest_path.resolve().relative_to(self.manifests_dir.resolve())
+                        v2_log_path = self.logs_dir / manifest_relative.parent / f"v2_{output_key_name}.log"
+                    except ValueError:
+                        v2_log_path = self.logs_dir / f"v2_{output_key_name}.log"
+
+                    if v2_log_path.exists():
+                        artifact_paths.append(v2_log_path)
+
+                    try:
+                        combined_manifest = CombinedManifest.load(manifest_path)
+                    except Exception as exc:
+                        logger.debug(f"Skipping artifact extraction for unreadable manifest {manifest_path}: {exc}")
+                    else:
+                        if combined_manifest.depth and combined_manifest.depth.depth_path:
+                            artifact_paths.append(Path(combined_manifest.depth.depth_path))
+
+                        if combined_manifest.v2 and combined_manifest.v2.report_path:
+                            report_path = Path(combined_manifest.v2.report_path)
+                            artifact_paths.append(report_path)
+                            if report_path.exists():
+                                try:
+                                    with open(report_path, "r", encoding="utf-8") as report_file:
+                                        report_payload = json.load(report_file)
+                                except Exception as exc:
+                                    logger.debug(f"Failed to parse V2 report for artifact indexing ({report_path}): {exc}")
+                                else:
+                                    for field in ("output", "depth_map"):
+                                        value = report_payload.get(field)
+                                        if isinstance(value, str) and value:
+                                            artifact_paths.append(Path(value))
+
+                        if combined_manifest.pbr_assets:
+                            for key, value in combined_manifest.pbr_assets.items():
+                                if key.endswith("_path") and isinstance(value, str) and value:
+                                    artifact_paths.append(Path(value))
+
+            depth_value = result.get("depth_path")
+            if depth_value:
+                depth_path = Path(depth_value)
+                artifact_paths.append(depth_path)
+                depth_metadata_path = depth_path.with_name(f"{depth_path.stem}_metadata.json")
+                if depth_metadata_path.exists():
+                    artifact_paths.append(depth_metadata_path)
+                float_depth_path = depth_path.with_suffix(".npy")
+                if float_depth_path.exists():
+                    artifact_paths.append(float_depth_path)
+
+        return artifact_paths
 
     def _emit_run_card(
         self,
@@ -1808,24 +2000,23 @@ class EnhanceOrchestrator:
         results: List[Dict[str, Any]],
         runtime_stats: Dict[str, Any],
         outliers: List[Dict[str, Any]],
+        batch_manifest_path: Optional[Path] = None,
     ) -> None:
         """Emit run card for batch reproducibility.
 
-        Creates a human-readable and machine-parseable run card with:
-        - Configuration fingerprint
-        - Runtime statistics
-        - Outlier warnings
-        - Environment metadata
-
-        Args:
-            batch_id: Unique batch identifier
-            start_time: Batch start time (ISO 8601 UTC)
-            end_time: Batch end time (ISO 8601 UTC)
-            results: List of per-image processing results
-            runtime_stats: Aggregated runtime statistics
-            outliers: List of detected runtime outliers
+        Hardened JSON serialization:
+        - Explicit ConfigFingerprint handling
+        - Dataclass-safe conversion
+        - Enum normalization
+        - Path normalization
+        - Deterministic fallback
         """
+
         run_card_path = self.output_root / f"run_card_{batch_id}.json"
+
+        artifact_paths = self._collect_run_card_artifact_paths(results, batch_manifest_path=batch_manifest_path)
+        artifact_index = _build_artifact_index(self.output_root, artifact_paths)
+        artifact_merkle_root = _compute_artifact_merkle_root(artifact_index)
 
         run_card = {
             "batch_id": batch_id,
@@ -1848,11 +2039,75 @@ class EnhanceOrchestrator:
             "total_images": len(results),
             "success_count": sum(1 for r in results if r.get("status") == "ok"),
             "error_count": sum(1 for r in results if r.get("status") == "error"),
+            "artifact_index": artifact_index,
+            "artifact_merkle_root": artifact_merkle_root,
         }
 
+        def _json_default(obj: Any):
+            # --- ConfigFingerprint ---
+            if isinstance(obj, ConfigFingerprint):
+                return {
+                    "model_variant": obj.model_variant,
+                    "depth_quantization": obj.depth_quantization,
+                    "depth_device": obj.depth_device,
+                    "preset": obj.preset,
+                    "v2_preset": obj.v2_preset,
+                    "v2_device": obj.v2_device,
+                    "v2_upscaler_backend": obj.v2_upscaler_backend,
+                    "sha256": obj.to_sha256(),
+                }
+
+            # --- Enum handling ---
+            if isinstance(obj, Enum):
+                return obj.value
+
+            # --- Path handling ---
+            if isinstance(obj, Path):
+                return str(obj)
+
+            # --- Dataclass-safe conversion ---
+            if hasattr(obj, "__dataclass_fields__"):
+                return {k: getattr(obj, k) for k in obj.__dataclass_fields__.keys()}
+
+            # --- Explicit to_dict support ---
+            if hasattr(obj, "to_dict") and callable(obj.to_dict):
+                return obj.to_dict()
+
+            # --- Controlled __dict__ fallback (avoid deep recursion) ---
+            if hasattr(obj, "__dict__") and not isinstance(obj, (np.ndarray,)):
+                return {k: v for k, v in vars(obj).items() if not k.startswith("_")}
+
+            # --- Final deterministic fallback ---
+            return str(obj)
+
+        schema_path = _run_card_schema_path()
+        if not schema_path.exists():
+            logger.warning(
+                "Run card schema not found at %s; skipping run card emission for batch_id=%s",
+                schema_path,
+                batch_id,
+            )
+            return
+
         try:
-            with open(run_card_path, "w") as f:
-                json.dump(run_card, f, indent=2)
-            logger.info(f"✅ Run card emitted: {run_card_path}")
-        except Exception as e:
-            logger.warning(f"Failed to emit run card: {e}")
+            serialized_run_card = json.loads(json.dumps(run_card, default=_json_default, sort_keys=True))
+            _validate_run_card_payload(serialized_run_card, schema_path)
+
+            with open(run_card_path, "w", encoding="utf-8") as f:
+                json.dump(
+                    run_card,
+                    f,
+                    indent=2,
+                    default=_json_default,
+                    sort_keys=True,
+                )
+        except Exception:
+            logger.exception(
+                "Run card emission failed for batch_id=%s (schema: %s, output: %s). Continuing without run card.",
+                batch_id,
+                schema_path,
+                run_card_path,
+            )
+            return
+
+        logger.info(f"✅ Run card emitted: {run_card_path}")

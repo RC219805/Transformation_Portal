@@ -64,6 +64,53 @@ jobs:
         run: |
           pytest -v -m "not ml and not slow and not benchmark" tests/test_build_provenance_merkle.py
 
+      - name: Run card integrity unit gate
+        run: |
+          pytest -v -m "not ml and not slow and not benchmark" tests/test_verify_run_card_integrity.py
+
+      - name: Generate minimal runtime run card artifact
+        env:
+          TP_ALLOW_SYNTHETIC_FALLBACK: "1"
+        run: |
+          set -euo pipefail
+          mkdir -p output/run_card_gate_input output/run_card_gate_output
+
+          python - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+
+          input_path = Path("output/run_card_gate_input/minimal.png")
+          input_path.parent.mkdir(parents=True, exist_ok=True)
+          Image.new("RGB", (2, 2), color=(128, 128, 128)).save(input_path)
+          PY
+
+          python -m transformation_portal.lux_depth_v3 \
+            --input-dir output/run_card_gate_input \
+            --output-dir output/run_card_gate_output \
+            --depth-device cpu \
+            --enable-v2 off \
+            --emit-run-card on \
+            --cache-depth off \
+            --pbr off
+
+      - name: Run card artifact integrity gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/verify_run_card_integrity.py tests/golden/run_card/run_card_valid.v1.json --check-canonical-json
+
+          shopt -s globstar nullglob
+          run_cards=(output/**/run_card_*.json)
+          if [ "${#run_cards[@]}" -eq 0 ]; then
+            echo "❌ No generated run cards found under output/ for this workflow run."
+            echo "Determinism gate requires validating at least one runtime-generated run card."
+            exit 1
+          else
+            for run_card in "${run_cards[@]}"; do
+              python scripts/verify_run_card_integrity.py "$run_card" --check-canonical-json
+            done
+          fi
+
       - name: Ingest machine-json normalization determinism gate
         run: |
           pytest -v -m "not ml and not slow and not benchmark" tests/ingest/test_machine_json_normalization.py
