@@ -156,6 +156,19 @@ def test_invalid_job_payload_returns_typed_invalid_argument(client: TestClient) 
     assert body["error"]["code"] == "INVALID_ARGUMENT"
 
 
+def test_archive_gate_pipeline_returns_unimplemented(client: TestClient) -> None:
+    response = client.post(
+        "/v1/jobs",
+        json={"pipeline": "archive-gate-a", "args": {"input_dir": "./in", "output_dir": "./out"}},
+    )
+    body = response.json()
+    assert response.status_code == 501
+    assert body["schema"] == "tp.orchestrator.error.v1"
+    assert body["success"] is False
+    assert body["error"]["code"] == "UNIMPLEMENTED"
+    assert body["error"]["details"]["pipeline"] == "archive-gate-a"
+
+
 def test_oversized_v1_request_returns_typed_413_envelope(client: TestClient) -> None:
     orchestrator_app.MAX_REQUEST_BYTES = 32
     response = client.post(

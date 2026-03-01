@@ -7,13 +7,15 @@ from __future__ import annotations
 
 import importlib
 import logging
-from typing import List
+from typing import TYPE_CHECKING, List
 
 import numpy as np
 from scipy.ndimage import median_filter
 
 from .config import PostprocessingConfig
-from .inference import DepthResult
+
+if TYPE_CHECKING:
+    from .inference import DepthResult
 
 logger = logging.getLogger(__name__)
 
@@ -246,5 +248,8 @@ class Postprocessor:
             fused = np.median(depths, axis=0)
         else:
             fused = np.mean(depths, axis=0)  # Default
+
+        # Keep import lazy at module scope while ensuring runtime availability here.
+        from .inference import DepthResult
 
         return DepthResult(fused, results[0].original_image, metadata={"fusion_mode": self.config.fusion_mode})

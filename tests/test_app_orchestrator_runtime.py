@@ -8,6 +8,7 @@ import asyncio
 import importlib
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import Dict
@@ -127,6 +128,36 @@ def test_argv_normalization_accepts_legacy_keys() -> None:
     assert _flag_value(argv, "--depth-device") == "cpu"
     assert _flag_value(argv, "--enable-v2") == "on"
     assert _flag_value(argv, "--v2-preset") == "default"
+
+
+def test_argv_normalization_honors_explicit_v2_disable() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+            "enable_v2": False,
+        },
+    }
+
+    argv = orchestrator_app._argv_from_request(payload)
+
+    assert _flag_value(argv, "--enable-v2") == "off"
+    assert "--v2-preset" not in argv
+
+
+def test_argv_normalization_depth_backend_is_case_insensitive() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+            "depth_backend": "Depth-Anything-V3",
+        },
+    }
+
+    argv = orchestrator_app._argv_from_request(payload)
+    assert _flag_value(argv, "--depth-backend") == "da3"
 
 
 def test_run_job_is_async_and_does_not_block_event_loop() -> None:
@@ -492,6 +523,30 @@ def test_index_job_artifacts_populates_job_payload(tmp_path: Path) -> None:
     assert {item["path"] for item in indexed} == {"manifest.json", "render.png"}
 
 
+def test_index_job_artifacts_truncation_is_sorted_and_stable(tmp_path: Path) -> None:
+    previous_limit = orchestrator_app.MAX_INDEXED_ARTIFACTS
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "zeta.txt").write_text("z", encoding="utf-8")
+    (output_dir / "alpha.txt").write_text("a", encoding="utf-8")
+    (output_dir / "mid.txt").write_text("m", encoding="utf-8")
+
+    try:
+        orchestrator_app.MAX_INDEXED_ARTIFACTS = 2
+        job = orchestrator_app.Job(
+            id="job_artifacts_sorted",
+            created_at=orchestrator_app._now(),
+            request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        )
+        indexed = orchestrator_app._index_job_artifacts(job)
+    finally:
+        orchestrator_app.MAX_INDEXED_ARTIFACTS = previous_limit
+
+    assert [item["path"] for item in indexed] == ["alpha.txt", "mid.txt"]
+    assert job.artifacts["truncated"] is True
+    assert job.artifacts["indexed_count"] == 2
+
+
 def test_create_job_validation_uses_typed_error_envelope() -> None:
     response = asyncio.run(orchestrator_app.create_job({"pipeline": "unsupported", "args": {}}))
     body = json.loads(response.body.decode("utf-8"))
@@ -499,6 +554,36 @@ def test_create_job_validation_uses_typed_error_envelope() -> None:
     assert response.status_code == 400
     assert body["success"] is False
     assert body["error"]["code"] == "INVALID_ARGUMENT"
+
+
+def test_create_job_archive_gate_is_fail_fast_unimplemented() -> None:
+    response = asyncio.run(
+        orchestrator_app.create_job(
+            {
+                "pipeline": "archive-gate-a",
+                "args": {"input_dir": "./input_images", "output_dir": "./output"},
+            }
+        )
+    )
+    body = json.loads(response.body.decode("utf-8"))
+
+    assert response.status_code == 501
+    assert body["success"] is False
+    assert body["error"]["code"] == "UNIMPLEMENTED"
+    assert body["error"]["details"]["pipeline"] == "archive-gate-a"
+    assert orchestrator_app.JOBS == {}
+
+
+def test_importing_lux_depth_main_does_not_eagerly_import_depth_models() -> None:
+    probe = (
+        "import sys\n"
+        "import transformation_portal.lux_depth_v3.__main__\n"
+        "mods = sorted(m for m in sys.modules if m.startswith('transformation_portal.depth.models'))\n"
+        "print('\\n'.join(mods))\n"
+    )
+    result = subprocess.run([sys.executable, "-c", probe], check=True, capture_output=True, text=True)
+
+    assert result.stdout.strip() == ""
 
 
 def test_list_presets_filters_pipeline() -> None:
