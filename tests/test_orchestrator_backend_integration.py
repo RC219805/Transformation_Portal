@@ -8,8 +8,10 @@ import importlib.util
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import numpy as np
 import pytest
 
+from transformation_portal.depth.backends import protocol as depth_protocol_module
 from transformation_portal.depth.backends.protocol import LicenseRestrictionError
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
 from transformation_portal.lux_depth_v3.orchestrator import ApexStrictGateError, EnhanceOrchestrator
@@ -508,6 +510,88 @@ def test_runtime_depth_cache_fingerprint_is_backend_scoped(tmp_path):
     assert first_fp != second_fp
     assert cache.store.call_count == 1
     assert cache.store.call_args.args[1] == second_fp
+
+
+def test_runtime_depth_cache_hit_uses_uint8_original_image_for_depth_result(tmp_path):
+    """Cached depth path should construct DepthResult.original_image as uint8 RGB."""
+    from PIL import Image
+
+    from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+    test_image = tmp_path / "cache_hit_contract.png"
+    Image.new("RGB", (64, 64), color="white").save(test_image)
+
+    config = EnhanceConfig(
+        depth_backend="da3",
+        depth_device="cpu",
+        enable_v2=False,
+        enable_depth_cache=True,
+    )
+
+    backend = Mock()
+    backend.name = "da3"
+    backend.license_type = Mock(value="commercial")
+    backend.ensure_available.return_value = None
+
+    registry = Mock()
+    registry.get_backend.return_value = backend
+
+    observed_original_dtype = {}
+    original_depth_result = depth_protocol_module.DepthResult
+
+    def _capturing_depth_result(*args, **kwargs):
+        original_image = kwargs.get("original_image")
+        if original_image is None and len(args) >= 2:
+            original_image = args[1]
+        observed_original_dtype["dtype"] = str(original_image.dtype)
+        return original_depth_result(*args, **kwargs)
+
+    with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry", return_value=registry):
+        with patch("transformation_portal.depth.backends.protocol.DepthResult", side_effect=_capturing_depth_result):
+            orchestrator = EnhanceOrchestrator(config, tmp_path)
+            orchestrator.postprocessor = Mock(process=lambda result: result)
+            cache = Mock()
+            cache.get.return_value = np.full((64, 64), 0.5, dtype=np.float32)
+            orchestrator.depth_cache = cache
+            output = orchestrator.enhance_image(ImageInput(path=test_image))
+
+    assert output["status"] == "ok"
+    assert observed_original_dtype["dtype"] == "uint8"
+    assert backend.compute.call_count == 0
+
+
+def test_runtime_attempt_device_records_actual_backend_device(tmp_path):
+    """Attempt provenance should record the device actually used by backend output."""
+    from PIL import Image
+
+    from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+    test_image = tmp_path / "device_provenance.png"
+    Image.new("RGB", (64, 64), color="white").save(test_image)
+
+    config = EnhanceConfig(
+        depth_backend="da3",
+        depth_device="cuda",
+        enable_v2=False,
+    )
+
+    da3_backend = Mock()
+    da3_backend.name = "da3"
+    da3_backend.license_type = Mock(value="commercial")
+    da3_backend.ensure_available.return_value = None
+    da3_backend.compute.return_value = _make_depth_result()
+
+    registry = Mock()
+    registry.get_backend.return_value = da3_backend
+
+    with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry", return_value=registry):
+        orchestrator = EnhanceOrchestrator(config, tmp_path)
+        orchestrator.postprocessor = Mock(process=lambda result: result)
+        result = orchestrator.enhance_image(ImageInput(path=test_image))
+
+    assert result["status"] == "ok"
+    assert result["attempts"][0]["backend"] == "da3"
+    assert result["attempts"][0]["device"] == "cpu"
 
 
 def test_runtime_multilevel_operational_fallback_chain_is_deterministic(tmp_path):

@@ -17,11 +17,26 @@ from .inference import DepthResult
 
 logger = logging.getLogger(__name__)
 
-opencv = None
-try:
-    opencv = importlib.import_module("cv2")
-except ImportError:
-    opencv = None
+_opencv = None
+_opencv_import_attempted = False
+
+
+def _get_opencv():
+    """Lazily import cv2 so environments without OpenCV don't pay import cost upfront."""
+    global _opencv
+    global _opencv_import_attempted
+
+    if _opencv_import_attempted:
+        return _opencv
+
+    _opencv_import_attempted = True
+    try:
+        _opencv = importlib.import_module("cv2")
+    except Exception as exc:  # pragma: no cover - optional dependency / platform-specific import failures
+        logger.debug("OpenCV unavailable for postprocessing bilateral filter: %s", exc)
+        _opencv = None
+    return _opencv
+
 
 # Edge refinement is optional (and may not be present in stripped-down deployments).
 try:
@@ -107,6 +122,7 @@ class Postprocessor:
             Filtered depth map (float32, same range as input)
         """
         try:
+            opencv = _get_opencv()
             if opencv is None:
                 raise ImportError
 
@@ -212,15 +228,6 @@ class Postprocessor:
                 "Edge preservation skipped: expected 2D grayscale image, got shape %s",
                 getattr(gray, "shape", None),
             )
-            return depth
-
-        from scipy.ndimage import sobel
-
-        try:
-            mag = np.hypot(sobel(gray, axis=0), sobel(gray, axis=1))
-            _ = mag / (mag.max() + 1e-8)
-        except Exception:
-            logger.warning("Edge preservation skipped: sobel gradient computation failed")
             return depth
 
         # Simple mask-based preservation logic (placeholder for more complex logic)

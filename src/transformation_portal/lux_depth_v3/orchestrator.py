@@ -1036,30 +1036,35 @@ class EnhanceOrchestrator:
                             cache_metadata: Dict[str, Any] = {
                                 "cached": True,
                                 "output_normalization": "cache_reuse",
+                                "cache_backend_id": backend_id,
                             }
                             if image_sha256 and attempt_cache_fp_hash:
                                 cache_metadata["cache_key"] = f"{image_sha256}_{attempt_cache_fp_hash}"
-                            if self._backend_metadata.model_id:
-                                cache_metadata["resolved_model_id"] = self._backend_metadata.model_id
-                                cache_metadata["requested_model_id"] = self._backend_metadata.model_id
 
                             result_candidate = DepthResult(
                                 depth_map=cached_depth,
-                                original_image=preprocessed_array,
+                                original_image=preprocessed_uint8,
                                 metadata=cache_metadata,
                                 depth_units="meters" if backend_id == "depth_pro" else "relative",
                                 backend_id=backend_id,
-                                device=self.config.depth_device,
+                                device=attempt_record["device"],
                                 dtype="float32",
                                 input_size=original_shape,
                             )
                         else:
                             backend = self._get_or_create_depth_backend(backend_id)
                             self.depth_backend = backend
+                            resolved_backend_device = getattr(backend, "_device", None) or getattr(backend, "device", None)
+                            if isinstance(resolved_backend_device, str) and resolved_backend_device:
+                                attempt_record["device"] = resolved_backend_device
                             result_candidate = backend.compute(pil_image)
                             result_candidate = self.postprocessor.process(result_candidate)
                             if self.depth_cache and image_sha256 and attempt_cache_fp_hash:
                                 self.depth_cache.store(image_sha256, attempt_cache_fp_hash, result_candidate.depth_map)
+
+                        result_device = getattr(result_candidate, "device", None)
+                        if isinstance(result_device, str) and result_device:
+                            attempt_record["device"] = result_device
 
                         # CRITICAL FIX (#2): Resize depth map back to original dimensions
                         depth_candidate = (
