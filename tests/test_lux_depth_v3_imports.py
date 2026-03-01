@@ -196,6 +196,27 @@ def test_import_postprocessing():
     assert processor.config == config
 
 
+def test_postprocessor_fuse_multiview_constructs_depth_result():
+    """Fuse path should construct DepthResult without requiring module-level runtime import."""
+    import numpy as np
+
+    from transformation_portal.lux_depth_v3.config import PostprocessingConfig
+    from transformation_portal.lux_depth_v3.inference import DepthResult
+    from transformation_portal.lux_depth_v3.postprocessing import Postprocessor
+
+    config = PostprocessingConfig()
+    processor = Postprocessor(config)
+
+    image = np.zeros((8, 8, 3), dtype=np.uint8)
+    result_a = DepthResult(depth_map=np.ones((8, 8), dtype=np.float32), original_image=image, metadata={})
+    result_b = DepthResult(depth_map=np.full((8, 8), 3.0, dtype=np.float32), original_image=image, metadata={})
+
+    fused = processor.fuse_multiview([result_a, result_b])
+
+    assert isinstance(fused, DepthResult)
+    assert fused.depth_map.shape == (8, 8)
+
+
 def test_all_imports_together():
     """Test that all modules can be imported together without conflicts."""
     from transformation_portal.lux_depth_v3 import (

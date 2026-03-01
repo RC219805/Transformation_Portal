@@ -249,4 +249,7 @@ class Postprocessor:
         else:
             fused = np.mean(depths, axis=0)  # Default
 
+        # Keep import lazy at module scope while ensuring runtime availability here.
+        from .inference import DepthResult
+
         return DepthResult(fused, results[0].original_image, metadata={"fusion_mode": self.config.fusion_mode})
