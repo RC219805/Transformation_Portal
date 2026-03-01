@@ -57,6 +57,10 @@ get_security_minimum() {
             echo "10.0.0|Multiple CVEs in 9.x series"
             return 0
             ;;
+        "starlette")
+            echo "0.49.1|CVE-2025-62727 (FileResponse Range-header DoS)"
+            return 0
+            ;;
     esac
     return 1
 }
