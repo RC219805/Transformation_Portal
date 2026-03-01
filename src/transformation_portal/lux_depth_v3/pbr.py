@@ -225,16 +225,32 @@ def generate_pbr_maps(depth: np.ndarray, config: PBRConfig = PBRConfig()) -> Tup
 
 
 # Phase 3: GPU-accelerated batching
-# Lazy imports to avoid dependency errors
-try:
-    import torch
-    import torch.nn.functional as F
+# Deferred torch import keeps CPU-only/CI environments from crashing at module import time.
+TORCH_AVAILABLE = False
+_TORCH_IMPORT_ATTEMPTED = False
+torch = None  # type: ignore
+F = None  # type: ignore
 
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
-    torch = None  # type: ignore
-    F = None  # type: ignore
+
+def _ensure_torch_for_batching() -> bool:
+    """Lazily import torch for GPU batched PBR generation."""
+    global TORCH_AVAILABLE, _TORCH_IMPORT_ATTEMPTED, torch, F
+
+    if _TORCH_IMPORT_ATTEMPTED:
+        return TORCH_AVAILABLE
+
+    _TORCH_IMPORT_ATTEMPTED = True
+    try:
+        import torch as torch_module
+        import torch.nn.functional as functional_module
+
+        torch = torch_module  # type: ignore[assignment]
+        F = functional_module  # type: ignore[assignment]
+        TORCH_AVAILABLE = True
+    except Exception:  # pragma: no cover - optional dependency/runtime specific
+        TORCH_AVAILABLE = False
+
+    return TORCH_AVAILABLE
 
 
 def generate_pbr_maps_batched(depth_maps: list, config: PBRConfig = PBRConfig(), device: str = "cpu") -> list:
@@ -260,8 +276,12 @@ def generate_pbr_maps_batched(depth_maps: list, config: PBRConfig = PBRConfig(),
     if not depth_maps:
         return []
 
-    # Fallback to sequential if torch unavailable or device is CPU
-    if not TORCH_AVAILABLE or device == "cpu":
+    # Fast CPU path: no torch import needed.
+    if device == "cpu":
+        return [generate_pbr_maps(depth, config) for depth in depth_maps]
+
+    # Fallback to sequential if torch is unavailable.
+    if not _ensure_torch_for_batching():
         return [generate_pbr_maps(depth, config) for depth in depth_maps]
 
     # Validate device

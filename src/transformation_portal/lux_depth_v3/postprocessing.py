@@ -7,13 +7,15 @@ from __future__ import annotations
 
 import importlib
 import logging
-from typing import List
+from typing import TYPE_CHECKING, List
 
 import numpy as np
 from scipy.ndimage import median_filter
 
 from .config import PostprocessingConfig
-from .inference import DepthResult
+
+if TYPE_CHECKING:
+    from .inference import DepthResult
 
 logger = logging.getLogger(__name__)
 

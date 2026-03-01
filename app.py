@@ -192,7 +192,8 @@ EVENT_SUBSCRIBERS: Dict[str, Dict[str, "asyncio.Queue[Dict[str, Any]]"]] = {}
 RATE_LIMIT_BUCKETS: Dict[str, Deque[float]] = {}
 
 # Gate pipelines integrated directly
-ALLOWED_PIPELINES = {"lux-depth-v3", "archive-gate-a", "archive-gate-b", "archive-gate-c"}
+ARCHIVE_GATE_PIPELINES = {"archive-gate-a", "archive-gate-b", "archive-gate-c"}
+ALLOWED_PIPELINES = {"lux-depth-v3", *ARCHIVE_GATE_PIPELINES}
 ALLOWED_QUALITY = {"standard", "premium", "apex"}
 ALLOWED_BACKENDS = {"da3", "depth_pro"}
 DEPTH_BACKEND_ALIASES = {
@@ -328,7 +329,7 @@ def _extract_progress_percent(line: str) -> Optional[int]:
 
 
 def _canonical_depth_backend(value: Any) -> str:
-    backend = str(value or "").strip()
+    backend = str(value or "").strip().lower()
     if not backend:
         return ""
     return DEPTH_BACKEND_ALIASES.get(backend, backend)
@@ -577,7 +578,6 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
         return []
 
     collected: List[tuple[str, Path]] = []
-    truncated = False
     for path in output_dir.rglob("*"):
         if not path.is_file():
             continue
@@ -586,11 +586,9 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
         except Exception:
             relative_path = path.name
         collected.append((relative_path, path))
-        if len(collected) > MAX_INDEXED_ARTIFACTS:
-            truncated = True
-            break
 
     collected.sort(key=lambda item: item[0].lower())
+    truncated = len(collected) > MAX_INDEXED_ARTIFACTS
     if truncated:
         collected = collected[:MAX_INDEXED_ARTIFACTS]
 
@@ -711,9 +709,12 @@ def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
             ]
         )
 
-        enable_v2 = _as_bool(_pick(args, "enable_v2", "enableV2", default=False))
+        enable_v2_value = _pick(args, "enable_v2", "enableV2")
+        enable_v2_specified = enable_v2_value is not None
+        enable_v2 = _as_bool(enable_v2_value, default=True)
+        if enable_v2_specified:
+            argv.extend(["--enable-v2", onoff(enable_v2)])
         if enable_v2:
-            argv.extend(["--enable-v2", "on"])
             v2_preset = _pick(args, "v2_preset", "v2Preset")
             if v2_preset:
                 argv.extend(["--v2-preset", str(v2_preset)])
@@ -729,7 +730,7 @@ def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
             )
         ):
             argv.extend(["--accept-apple-depth-pro-research-license", "true"])
-    elif pipeline in ["archive-gate-a", "archive-gate-b", "archive-gate-c"]:
+    elif pipeline in ARCHIVE_GATE_PIPELINES:
         if _as_bool(_pick(args, "dedup", default=False)):
             argv.append("--dedup")
             argv.append("on")
@@ -910,6 +911,21 @@ async def create_job(payload: Dict[str, Any]) -> JSONResponse:
             code="INVALID_ARGUMENT",
             message="invalid job request",
             details={"field": "payload", "reason": reason_code},
+        )
+
+    pipeline = str(payload.get("pipeline") or "")
+    if pipeline in ARCHIVE_GATE_PIPELINES:
+        # These logical pipelines are exposed in presets/UI, but no concrete
+        # runner command is currently registered in project scripts/PATH.
+        return _error_response(
+            501,
+            code="UNIMPLEMENTED",
+            message=f"Pipeline '{pipeline}' is not wired to an executable runner yet",
+            details={
+                "pipeline": pipeline,
+                "reason": "runner_unavailable",
+                "recommended_runner": "tools/archive_governance.py",
+            },
         )
 
     _cleanup_expired_jobs(_now())
