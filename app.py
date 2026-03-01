@@ -681,7 +681,9 @@ def _int_arg(args: Dict[str, Any], *keys: str, default: int, minimum: int = 0) -
         parsed = int(value)
     except (TypeError, ValueError) as exc:
         raise ValueError("Invalid archive integer option") from exc
-    return max(minimum, parsed)
+    if parsed < minimum:
+        raise ValueError("Invalid archive integer option")
+    return parsed
 
 
 def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, output_dir: str) -> List[str]:
@@ -732,7 +734,12 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
             args, "hash_manifest", "hashManifest", default=str(Path(output_dir) / "hash_manifest.csv.gz")
         )
         archive_root = _path_arg(args, "archive_root", "archiveRoot", default=input_dir)
-        report_path = _path_arg(args, "report_path", "reportPath", default=str(Path(output_dir) / "verify_report.json"))
+        report_path = _path_arg(
+            args,
+            "report_path",
+            "reportPath",
+            default=str(Path(output_dir) / "verification_report.json"),
+        )
         verify_sample = _int_arg(args, "verify_sample", "verifySample", default=0, minimum=0)
         workers = _int_arg(args, "workers", default=1, minimum=1)
 

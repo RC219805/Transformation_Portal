@@ -197,6 +197,52 @@ def test_argv_archive_gate_b_allows_command_override_and_sign_maps_to_bagit_vali
     assert "--validate-with-bagit-python" in argv
 
 
+def test_argv_archive_gate_fixity_verify_uses_canonical_default_report_filename() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "archive-gate-a",
+        "args": {
+            "input_dir": "./archive_root",
+            "output_dir": "./archive_reports",
+            "archive_command": "fixity-verify",
+        },
+    }
+
+    argv = orchestrator_app._argv_from_request(payload)
+
+    assert argv[3] == "fixity-verify"
+    assert _flag_value(argv, "--report-path") == "archive_reports/verification_report.json"
+
+
+def test_argv_archive_gate_rejects_workers_below_minimum() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "archive-gate-a",
+        "args": {
+            "input_dir": "./archive_root",
+            "output_dir": "./archive_reports",
+            "archive_command": "fixity-scan",
+            "workers": 0,
+        },
+    }
+
+    with pytest.raises(ValueError, match="Invalid archive integer option"):
+        orchestrator_app._argv_from_request(payload)
+
+
+def test_argv_archive_gate_rejects_negative_verify_sample() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "archive-gate-a",
+        "args": {
+            "input_dir": "./archive_root",
+            "output_dir": "./archive_reports",
+            "archive_command": "fixity-verify",
+            "verify_sample": -1,
+        },
+    }
+
+    with pytest.raises(ValueError, match="Invalid archive integer option"):
+        orchestrator_app._argv_from_request(payload)
+
+
 def test_argv_archive_gate_invalid_command_is_rejected() -> None:
     payload: Dict[str, object] = {
         "pipeline": "archive-gate-c",
@@ -622,6 +668,29 @@ def test_create_job_archive_gate_invalid_command_uses_typed_error_envelope() -> 
     assert body["success"] is False
     assert body["error"]["code"] == "INVALID_ARGUMENT"
     assert body["error"]["details"]["reason"] == "invalid_archive_command"
+    assert orchestrator_app.JOBS == {}
+
+
+def test_create_job_archive_gate_invalid_integer_option_uses_typed_error_envelope() -> None:
+    response = asyncio.run(
+        orchestrator_app.create_job(
+            {
+                "pipeline": "archive-gate-a",
+                "args": {
+                    "input_dir": "./input_images",
+                    "output_dir": "./output",
+                    "archive_command": "fixity-scan",
+                    "workers": 0,
+                },
+            }
+        )
+    )
+    body = json.loads(response.body.decode("utf-8"))
+
+    assert response.status_code == 400
+    assert body["success"] is False
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["reason"] == "invalid_archive_integer_option"
     assert orchestrator_app.JOBS == {}
 
 
