@@ -15,3 +15,4 @@ tox>=4.5,<5            # test runner for multiple envs (future compatibility)
 # Additional CI utilities
 pypdf>=3.9.0           # PDF processing for reports
 pytest-json-report>=1.5,<2  # JSON test result reporting for flake tracking
+httpx>=0.28,<1         # required for FastAPI/Starlette TestClient in HTTP contract tests
