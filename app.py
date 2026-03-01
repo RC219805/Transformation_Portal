@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hmac
 import json
+import logging
 import os
 import re
 import sys
@@ -22,6 +23,8 @@ from starlette.responses import StreamingResponse
 # ----------------------------
 # In-memory job store (MVP)
 # ----------------------------
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _env_csv(name: str, default: List[str]) -> List[str]:
@@ -192,6 +195,12 @@ ALLOWED_BACKENDS = {"da3", "depth_pro"}
 DEPTH_BACKEND_ALIASES = {
     "depth_anything_v3": "da3",
     "depth-anything-v3": "da3",
+}
+VALIDATION_REASON_CODES = {
+    "Unsupported pipeline": "unsupported_pipeline",
+    "input_dir and output_dir are required": "missing_required_paths",
+    "Invalid quality_tier": "invalid_quality_tier",
+    "Invalid depth_backend": "invalid_depth_backend",
 }
 
 
@@ -815,12 +824,13 @@ async def list_presets(pipeline: Optional[str] = None) -> JSONResponse:
 async def create_job(payload: Dict[str, Any]) -> JSONResponse:
     try:
         argv = _argv_from_request(payload)
-    except ValueError as e:
+    except ValueError as exc:
+        reason_code = VALIDATION_REASON_CODES.get(str(exc), "invalid_request")
         return _error_response(
             400,
             code="INVALID_ARGUMENT",
-            message=str(e),
-            details={"field": "payload"},
+            message="invalid job request",
+            details={"field": "payload", "reason": reason_code},
         )
 
     _cleanup_expired_jobs(_now())
@@ -1008,11 +1018,16 @@ async def _run_job(job: Job, argv: List[str]) -> None:
         msg = f"runner_error: {job.error['message']}"
         job.add_log(msg)
         await _publish_event(job.id, "log", {"id": job.id, "line": msg})
-    except Exception as e:
+    except Exception as exc:
+        LOGGER.exception("Unhandled runner exception for job %s", job.id)
         job.state = "failed"
         job.exit_code = 1
-        job.error = _error_obj("RUNNER_ERROR", repr(e), {})
-        msg = f"runner_error: {job.error['message']}"
+        job.error = _error_obj(
+            "RUNNER_ERROR",
+            "unexpected runner failure",
+            {"exception_type": type(exc).__name__},
+        )
+        msg = "runner_error: unexpected runner failure"
         job.add_log(msg)
         await _publish_event(job.id, "log", {"id": job.id, "line": msg})
     finally:
