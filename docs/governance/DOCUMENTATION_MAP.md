@@ -2,7 +2,7 @@
 
 **Purpose:** Single source of truth for finding documentation in Transformation Portal.
 
-**Last Updated:** 2026-02-20
+**Last Updated:** 2026-03-01
 **Maintainer:** Repository Architect
 
 ---
@@ -31,17 +31,15 @@
 | **Certified Bounded Determinism Analysis (ANALYSIS-DH-001)** | [docs/architecture/analysis/ANALYSIS-DH-001.md](../architecture/analysis/ANALYSIS-DH-001.md) | ✅ Informative (Phase II) |
 | **API Reference** | [docs/api/](../api/) | ✅ Stable (Sphinx) |
 | **Code Quality Standards** | [docs/CODE_QUALITY_STANDARDS.md](../CODE_QUALITY_STANDARDS.md) | ✅ Stable |
-| **Testing Guidelines** | [docs/development/TESTING_GUIDE.md](../development/TESTING_GUIDE.md) | 🔄 In Progress |
 | **Custom Agents** | [docs/CUSTOM_AGENT_GUIDE.md](../CUSTOM_AGENT_GUIDE.md) | ✅ Stable |
-| **TODO Inventory** | [docs/analysis/TODO_INVENTORY.md](../analysis/TODO_INVENTORY.md) | ✅ **NEW** (v2.0.0) |
-| **TODO Executive Summary** | [docs/architecture/TODO_INVENTORY_EXECUTIVE_SUMMARY.md](../architecture/TODO_INVENTORY_EXECUTIVE_SUMMARY.md) | ✅ **NEW** (v2.0.0) |
-| **TODO Quick Reference** | [docs/architecture/TODO_INVENTORY_QUICK_REF.md](../architecture/TODO_INVENTORY_QUICK_REF.md) | ✅ **NEW** (v2.0.0) |
+| **TODO Inventory** | [docs/analysis/TODO_INVENTORY.md](../analysis/TODO_INVENTORY.md) | ✅ Stable (v2.0.0) |
+| **TODO Quick Reference** | [docs/architecture/TODO_INVENTORY_QUICK_REF.md](../architecture/TODO_INVENTORY_QUICK_REF.md) | ✅ Stable (v2.0.0) |
 
 ### CI/CD & Operations
 
 | Topic | Canonical Document | Status |
 |-------|-------------------|--------|
-| **CI/CD Overview** | [docs/ci_cd/README.md](../ci_cd/README.md) | ✅ Stable |
+| **CI/CD Workflows** | [docs/ci_cd/CI_CD_WORKFLOWS.md](../ci_cd/CI_CD_WORKFLOWS.md) | ✅ Stable |
 | **Workflow Reference** | [.github/workflows/build.yml](../../.github/workflows/build.yml) | ✅ Stable (Primary CI) |
 | **Branch Protection** | [docs/BRANCH_PROTECTION_SETUP.md](../BRANCH_PROTECTION_SETUP.md) | ✅ Stable |
 
@@ -49,7 +47,7 @@
 
 | Topic | Canonical Document | Status |
 |-------|-------------------|--------|
-| **Pipeline Overview** | [docs/pipeline/README.md](../pipeline/README.md) | 🔄 Needs Update |
+| **Luxury Estate Pipeline** | [docs/pipeline/LUXURY_ESTATE_PIPELINE_README.md](../pipeline/LUXURY_ESTATE_PIPELINE_README.md) | ✅ Stable |
 | **PBR Processing** | [docs/PBR_PROCESSOR_QUICKSTART.md](../PBR_PROCESSOR_QUICKSTART.md) | ✅ Stable |
 | **Lux Depth V3 CLI** | [docs/LUX_DEPTH_V3_CLI_GUIDE.md](../LUX_DEPTH_V3_CLI_GUIDE.md) | ✅ Stable |
 | **Lux Depth V3 Troubleshooting** | [docs/LUX_DEPTH_V3_TROUBLESHOOTING.md](../LUX_DEPTH_V3_TROUBLESHOOTING.md) | ✅ Stable |
@@ -59,7 +57,7 @@
 
 | Topic | Canonical Document | Status |
 |-------|-------------------|--------|
-| **CLI Reference** | [docs/CLI_REFERENCE.md](../CLI_REFERENCE.md) | ✅ Stable |
+| **CLI Reference** | [docs/cli/CLI_REFERENCE.md](../cli/CLI_REFERENCE.md) | ✅ Stable |
 | **PBR Presets** | [docs/PBR_PRESETS_QUICK_REFERENCE.md](../PBR_PRESETS_QUICK_REFERENCE.md) | ✅ Stable |
 | **Agent Quick Ref** | [docs/AGENT_QUICK_REFERENCE.md](../AGENT_QUICK_REFERENCE.md) | ✅ Stable |
 
