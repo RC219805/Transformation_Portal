@@ -218,19 +218,24 @@ validate_in_file() {
         # Check security minimums
         if security_info=$(get_security_minimum "$package"); then
             IFS='|' read -r min_version reason <<< "$security_info"
+            local current_version=""
+            local current_spec=""
 
-            # Extract current lower bound from constraint (works for both >=X.Y and >=X.Y,<Z)
-            if echo "$line" | grep -qE '>=[0-9.]+'; then
-                local current_version
+            # Enforce security minimums for both lower bounds and strict pins.
+            if echo "$line" | grep -qE '==[0-9.]+'; then
+                current_spec="=="
+                current_version=$(echo "$line" | grep -oE '==[0-9.]+' | head -1 | sed 's/==//') || current_version=""
+            elif echo "$line" | grep -qE '>=[0-9.]+'; then
+                current_spec=">="
                 current_version=$(echo "$line" | grep -oE '>=[0-9.]+' | head -1 | sed 's/>=//') || current_version=""
+            fi
 
-                if [[ -n "$current_version" ]] && ! version_gte "$current_version" "$min_version"; then
-                    echo -e "${RED}❌ $basename:$line_num: $line${NC}"
-                    echo -e "   ${BOLD}ERROR:${NC} Security minimum not met (need >=$min_version for $reason)"
-                    echo -e "   ${BOLD}Current:${NC} >=$current_version"
-                    echo -e "   ${BOLD}Fix:${NC} Update constraint to >=$min_version,<...\n"
-                    file_errors=$((file_errors + 1))
-                fi
+            if [[ -n "$current_version" ]] && ! version_gte "$current_version" "$min_version"; then
+                echo -e "${RED}❌ $basename:$line_num: $line${NC}"
+                echo -e "   ${BOLD}ERROR:${NC} Security minimum not met (need >=$min_version for $reason)"
+                echo -e "   ${BOLD}Current:${NC} ${current_spec}${current_version}"
+                echo -e "   ${BOLD}Fix:${NC} Update constraint to >=$min_version,<... or ==$min_version+\n"
+                file_errors=$((file_errors + 1))
             fi
         fi
 
