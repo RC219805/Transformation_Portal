@@ -50,7 +50,7 @@ def _install_fake_depth_anything3(monkeypatch):
                 raise RuntimeError("Model device not set before inference")
             if "cuda" in str(self.loaded_device):
                 raise RuntimeError("Torch not compiled with CUDA enabled")
-            depth = np.linspace(0.0, 1.0, 64 * 64, dtype=np.float32).reshape(1, 64, 64)
+            depth = np.linspace(0.0, 1.0, 64 * 64, dtype=np.float32).reshape((1, 64, 64))
             return SimpleNamespace(depth=depth)
 
     fake_pkg = types.ModuleType("depth_anything_3")
@@ -76,8 +76,6 @@ def test_da3_backend_availability():
     Verifies the method exists and is callable.
     Actual error handling is tested in test_da3_backend_availability_missing_transformers.
     """
-    from transformation_portal.depth.backends.da3 import DA3Backend
-
     backend = DA3Backend()
 
     # Verify method exists
@@ -90,10 +88,6 @@ def test_da3_backend_availability_missing_transformers(monkeypatch):
 
     Uses monkeypatch to manage sys.modules, simulating missing dependency.
     """
-    import sys
-
-    from transformation_portal.depth.backends.da3 import DA3Backend
-
     # Use monkeypatch to safely modify sys.modules
     monkeypatch.delitem(sys.modules, "transformers", raising=False)
     monkeypatch.setitem(sys.modules, "transformers", None)

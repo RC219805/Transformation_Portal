@@ -19,8 +19,8 @@ pytestmark = pytest.mark.ml
 DEPTH_PRO_PKG_AVAILABLE = importlib.util.find_spec("depth_pro") is not None
 
 
-@pytest.fixture
-def mock_da3_available():
+@pytest.fixture(name="mock_da3_available")
+def fixture_mock_da3_available():
     """Mock DA3Backend.ensure_available() to succeed in offline CI."""
     with patch("transformation_portal.depth.backends.da3.DA3Backend.ensure_available"):
         yield
@@ -170,7 +170,6 @@ def test_depth_metadata_uses_resolved_backend_not_config_default(tmp_path, mock_
     Critical for production debugging when fallbacks occur.
     """
     import json
-    from unittest.mock import patch
 
     import numpy as np
     from PIL import Image
@@ -262,7 +261,6 @@ def _make_depth_result(width: int = 64, height: int = 64):
 def test_runtime_operational_failure_falls_back_to_da2_with_attempt_provenance(tmp_path):
     """Operational failure should fallback to DA2 and persist attempts in metadata."""
     import json
-    from pathlib import Path
 
     from PIL import Image
 
@@ -307,7 +305,11 @@ def test_runtime_operational_failure_falls_back_to_da2_with_attempt_provenance(t
     assert result["attempts"][0]["error_code"] == "CUDA_HARDCODED_IN_BACKEND"
     assert result["attempts"][1]["status"] == "success"
     assert result["selected_attempt_index"] == 1
-    assert result["attempts"][result["selected_attempt_index"]]["backend"] == result["backend"]
+    selected_attempt_index = result["selected_attempt_index"]
+    assert any(
+        attempt.get("attempt") == selected_attempt_index and attempt.get("backend") == result["backend"]
+        for attempt in result["attempts"]
+    )
 
     manifest = json.loads(Path(result["manifest"]).read_text())
     backend_selection = manifest["backend_selection"]
@@ -320,7 +322,6 @@ def test_runtime_operational_failure_falls_back_to_da2_with_attempt_provenance(t
 def test_runtime_semantic_fallback_retries_when_enabled(tmp_path):
     """Semantic-gate failures should retry fallback backend when enabled."""
     import json
-    from pathlib import Path
 
     from PIL import Image
 
@@ -379,7 +380,11 @@ def test_runtime_semantic_fallback_retries_when_enabled(tmp_path):
     assert result["attempts"][0]["error_code"] == "APEX_DEPTH_PLATEAU"
     assert result["attempts"][1]["status"] == "success"
     assert result["selected_attempt_index"] == 1
-    assert result["attempts"][result["selected_attempt_index"]]["backend"] == result["backend"]
+    selected_attempt_index = result["selected_attempt_index"]
+    assert any(
+        attempt.get("attempt") == selected_attempt_index and attempt.get("backend") == result["backend"]
+        for attempt in result["attempts"]
+    )
 
     manifest = json.loads(Path(result["manifest"]).read_text())
     backend_selection = manifest["backend_selection"]
@@ -391,7 +396,6 @@ def test_runtime_semantic_fallback_retries_when_enabled(tmp_path):
 def test_runtime_multilevel_operational_fallback_chain_is_deterministic(tmp_path):
     """Depth Pro -> DA3 -> DA2 fallback should produce deterministic attempt indices [0,1,2]."""
     import json
-    from pathlib import Path
 
     from PIL import Image
 

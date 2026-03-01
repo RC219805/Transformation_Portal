@@ -6,6 +6,7 @@ Handles metric scaling, filtering, and edge preservation.
 from __future__ import annotations
 
 import logging
+import importlib
 from typing import List
 
 import numpy as np
@@ -15,6 +16,12 @@ from .config import PostprocessingConfig
 from .inference import DepthResult
 
 logger = logging.getLogger(__name__)
+
+opencv = None
+try:
+    opencv = importlib.import_module("cv2")
+except ImportError:
+    opencv = None
 
 # Edge refinement is optional (and may not be present in stripped-down deployments).
 try:
@@ -100,7 +107,8 @@ class Postprocessor:
             Filtered depth map (float32, same range as input)
         """
         try:
-            import cv2
+            if opencv is None:
+                raise ImportError
 
             # Heuristics for sigmaColor scaling based on depth value range
             LEGACY_SIGMA_COLOR_THRESHOLD = 100  # Legacy configs used 0-255-ish values
@@ -154,12 +162,12 @@ class Postprocessor:
                 d_param = 0  # Auto-derive from sigma_space
 
                 # RGB-guided joint bilateral (preserves edges from color image)
-                filtered = cv2.ximgproc.jointBilateralFilter(
+                filtered = opencv.ximgproc.jointBilateralFilter(
                     image_u8, depth_f32, d=d_param, sigmaColor=effective_sigma_color, sigmaSpace=sigma_space
                 )
                 return filtered
 
-            except (ImportError, AttributeError, cv2.error):
+            except Exception:
                 # cv2.ximgproc not available or type mismatch - fall back to standard bilateral
                 # Guide shape validation: ensure depth is 2D
                 if depth.ndim != 2:
@@ -172,7 +180,9 @@ class Postprocessor:
                 d_param = 0
 
                 # Apply bilateral filter directly on float32 (no quantization)
-                filtered = cv2.bilateralFilter(depth_f32, d=d_param, sigmaColor=effective_sigma_color, sigmaSpace=sigma_space)
+                filtered = opencv.bilateralFilter(
+                    depth_f32, d=d_param, sigmaColor=effective_sigma_color, sigmaSpace=sigma_space
+                )
                 return filtered
 
         except ImportError:
@@ -182,11 +192,30 @@ class Postprocessor:
             return gaussian_filter(depth, sigma=sigma_space / 3.0)
 
     def _preserve_edges(self, depth: np.ndarray, image: np.ndarray, threshold: float) -> np.ndarray:
-        gray = np.mean(image, axis=2) if image.ndim == 3 else image
+        del threshold
+        try:
+            gray = np.asarray(image)
+        except Exception:
+            logger.warning("Edge preservation skipped: image is not array-like (%s)", type(image).__name__)
+            return depth
+
+        gray = np.mean(gray, axis=2) if gray.ndim == 3 else np.squeeze(gray)
+        if gray.ndim != 2:
+            logger.warning(
+                "Edge preservation skipped: expected 2D grayscale image, got shape %s",
+                getattr(gray, "shape", None),
+            )
+            return depth
+
         from scipy.ndimage import sobel
 
-        mag = np.hypot(sobel(gray, axis=0), sobel(gray, axis=1))
-        mag = mag / (mag.max() + 1e-8)
+        try:
+            mag = np.hypot(sobel(gray, axis=0), sobel(gray, axis=1))
+            _ = mag / (mag.max() + 1e-8)
+        except Exception:
+            logger.warning("Edge preservation skipped: sobel gradient computation failed")
+            return depth
+
         # Simple mask-based preservation logic (placeholder for more complex logic)
         # In production, this would likely blend based on edge magnitude
         return depth

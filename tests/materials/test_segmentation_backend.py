@@ -48,8 +48,8 @@ except ImportError:
 # =============================================================================
 
 
-@pytest.fixture
-def sample_image():
+@pytest.fixture(name="sample_image")
+def fixture_sample_image():
     """Create a sample RGB image for testing."""
     # Create a simple 64×64 RGB image with some color variation
     image = np.zeros((64, 64, 3), dtype=np.uint8)
@@ -62,8 +62,8 @@ def sample_image():
     return image
 
 
-@pytest.fixture
-def config_stub():
+@pytest.fixture(name="config_stub")
+def fixture_config_stub():
     """Config with stub backend."""
     return EnhanceConfig(
         enable_material_segmentation=True,
@@ -71,8 +71,8 @@ def config_stub():
     )
 
 
-@pytest.fixture
-def config_efficientsam():
+@pytest.fixture(name="config_efficientsam")
+def fixture_config_efficientsam():
     """Config with EfficientSAM backend."""
     return EnhanceConfig(
         enable_material_segmentation=True,
@@ -81,8 +81,8 @@ def config_efficientsam():
     )
 
 
-@pytest.fixture
-def config_sam2():
+@pytest.fixture(name="config_sam2")
+def fixture_config_sam2():
     """Config with SAM2 backend."""
     return EnhanceConfig(
         enable_material_segmentation=True,
@@ -91,8 +91,8 @@ def config_sam2():
     )
 
 
-@pytest.fixture
-def config_strict():
+@pytest.fixture(name="config_strict")
+def fixture_config_strict():
     """Config with strict_backend=True."""
     return EnhanceConfig(
         enable_material_segmentation=True,
