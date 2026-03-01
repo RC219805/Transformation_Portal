@@ -88,7 +88,7 @@ pip install -e ".[ml]"
 
 ### Step 3: Depth Processing (Optional)
 
-For depth-aware processing with Depth Anything V3:
+For depth-aware processing with the Depth Anything backend:
 
 ```bash
 # Install transformers for model loading
@@ -114,18 +114,19 @@ Options:
 - `--model depth`: Download depth models
 - `--output-dir PATH`: Custom output directory (default: ./weights)
 
-### Depth Anything V3 (HuggingFace)
+### Depth Anything (HuggingFace)
 
-The transformers library will auto-download the model on first use:
+Transformation Portal uses Depth Anything for depth estimation. The transformers library will auto-download the model on first use:
 
 ```python
 from transformers import pipeline
 
 # Model downloads automatically (~400MB)
+# Note: "Depth Anything V3" in this repo is based on the commercial Depth Anything V2 weights
 depth_estimator = pipeline("depth-estimation", model="depth-anything/Depth-Anything-V2-Small")
 ```
 
-### Depth Anything V3 (CoreML - Apple Silicon)
+### Depth Anything (CoreML - Apple Silicon)
 
 For optimal performance on M-series chips, convert the model to CoreML:
 

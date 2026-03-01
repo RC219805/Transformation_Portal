@@ -41,7 +41,7 @@ Each module has a single, well-defined responsibility:
 ### Top-Level Organization
 
 ```
-Transformation_Portal/
+transformation_portal/              # Repository root
 ├── src/                          # Installable package source
 │   ├── transformation_portal/    # Main package
 │   ├── tp/                       # Short alias package
