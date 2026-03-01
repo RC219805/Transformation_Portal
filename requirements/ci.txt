@@ -4,6 +4,10 @@
 #
 #    pip-compile --constraint=all.txt --output-file=ci.txt ci.in
 #
+anyio==4.12.1
+    # via
+    #   -c all.txt
+    #   httpx
 backports-tarfile==1.2.0
     # via
     #   -c all.txt
@@ -23,6 +27,8 @@ cachetools==7.0.1
 certifi==2026.1.4
     # via
     #   -c all.txt
+    #   httpcore
+    #   httpx
     #   requests
 chardet==5.2.0
     # via
@@ -57,9 +63,23 @@ filelock==3.24.2
     #   -c all.txt
     #   tox
     #   virtualenv
+h11==0.16.0
+    # via
+    #   -c all.txt
+    #   httpcore
+httpcore==1.0.9
+    # via
+    #   -c all.txt
+    #   httpx
+httpx==0.28.1
+    # via
+    #   -c all.txt
+    #   -r ci.in
 idna==3.11
     # via
     #   -c all.txt
+    #   anyio
+    #   httpx
     #   requests
 importlib-metadata==8.7.1
     # via

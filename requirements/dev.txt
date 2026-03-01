@@ -4,6 +4,10 @@
 #
 #    pip-compile --constraint=all.txt --output-file=dev.txt dev.in
 #
+anyio==4.12.1
+    # via
+    #   -c all.txt
+    #   httpx
 astroid==4.0.3
     # via
     #   -c all.txt
@@ -25,6 +29,11 @@ cffi==2.0.0
     # via
     #   -c all.txt
     #   cryptography
+certifi==2026.1.4
+    # via
+    #   -c all.txt
+    #   httpcore
+    #   httpx
 click==8.3.1
     # via
     #   -c all.txt
@@ -45,10 +54,27 @@ flake8==7.3.0
     # via
     #   -c all.txt
     #   -r dev.in
+h11==0.16.0
+    # via
+    #   -c all.txt
+    #   httpcore
+httpcore==1.0.9
+    # via
+    #   -c all.txt
+    #   httpx
+httpx==0.28.1
+    # via
+    #   -c all.txt
+    #   -r dev.in
 hypothesis==6.151.5
     # via
     #   -c all.txt
     #   -r dev.in
+idna==3.11
+    # via
+    #   -c all.txt
+    #   anyio
+    #   httpx
 iniconfig==2.3.0
     # via
     #   -c all.txt

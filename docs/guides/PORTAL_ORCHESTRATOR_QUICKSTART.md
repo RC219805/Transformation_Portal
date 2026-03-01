@@ -68,11 +68,18 @@ When `TP_API_KEY` is configured:
 ## Validation Commands
 
 ```bash
-pytest -q tests/test_app_orchestrator_runtime.py
+make test-orchestrator-contract
 ```
 
-Optional local CI subset:
+Direct pytest equivalent:
 
 ```bash
-make test-fast
+pytest -q tests/test_app_orchestrator_runtime.py tests/test_app_orchestrator_contract_http.py
 ```
+
+Expected contract gate outcomes:
+- `/v1/*` success and failure responses use typed envelope (`schema`, `success`, `data`, `error`).
+- Validation failures return `400` with `error.code=INVALID_ARGUMENT`.
+- Oversized request paths return `413` with typed error envelope.
+- With `TP_API_KEY` set, `/v1/jobs*` and `/v1/jobs/{id}/events` enforce auth.
+- SSE lifecycle includes `state`, `log`, `progress`, `artifact`, and terminal `done` events.

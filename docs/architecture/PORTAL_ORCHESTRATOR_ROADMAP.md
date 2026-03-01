@@ -16,7 +16,7 @@ Re-baseline the portal roadmap against current repository reality, then focus on
 | Dynamic preset discovery API | Pending (now implemented) | `GET /v1/presets?pipeline=<name>` added in `app.py` | Integrated in UI |
 | Recover history across refresh | Pending (now implemented) | `GET /v1/jobs` added; UI recovery flow added | Validate with focused tests |
 | Artifact indexing and surfacing | Pending (now implemented) | Artifact indexing in runner + SSE `artifact` event + UI artifact panel | Validate with focused tests |
-| Typed error envelope consistency | Partial (now improved) | Validation/read/auth/rate-limit responses now use typed envelope for API paths | Continue migration for remaining plain errors over time |
+| Typed error envelope consistency | Completed in Phase 5A | `/v1/*` validation, auth/rate-limit, middleware body-size, and routed `HTTPException` paths return typed envelope | Maintain with contract gate |
 
 ## Current Contract Surfaces
 
@@ -30,7 +30,7 @@ Re-baseline the portal roadmap against current repository reality, then focus on
 - `GET /v1/jobs/{id}/events` (SSE events: `state`, `log`, `progress`, `artifact`, `done`)
 
 ### Envelope
-All JSON `/v1` orchestrator API endpoints use this envelope for application-level success and failure. Non-JSON routes like `/ready` and some low-level framework/middleware failures (for example, request size limits) may still return FastAPI's default `{ "detail": ... }` shape until fully migrated.
+All JSON `/v1` orchestrator API endpoints use this envelope for application-level success and failure, including middleware and routed `HTTPException` paths. Non-API routes like `/ready` keep native FastAPI response shapes.
 
 ```json
 {
@@ -77,14 +77,28 @@ Error shape:
   - Typed error envelopes for validation and auth/rate-limit cases.
 
 ### Phase 4: Validation and docs
-- In progress:
-  - Focused runtime tests updated/expanded for new endpoints and artifact indexing.
-  - Quickstart + API notes added (`docs/guides/PORTAL_ORCHESTRATOR_QUICKSTART.md`).
+- Completed in Phase 5A:
+  - Route-level contract suite added: `tests/test_app_orchestrator_contract_http.py`.
+  - Runtime coverage retained/expanded: `tests/test_app_orchestrator_runtime.py`.
+  - Quickstart/README updated with executable contract gate commands.
+
+## Release Sign-Off Traceability Matrix
+
+| Acceptance Item | Implementation Evidence | Automated Evidence |
+|---|---|---|
+| `GET /v1/presets` drives lux-depth preset selector | `app.py:list_presets`, `portal.html:fetchPresetsForPipeline` + `applyPipelinePresetOptions` | `tests/test_app_orchestrator_contract_http.py::test_presets_contract_for_lux_depth_pipeline` |
+| Refresh recovers job list and reconnects streams | `app.py:list_jobs` + `job_events`, `portal.html:recoverJobs` + `startJobEventStream` | `tests/test_app_orchestrator_contract_http.py::test_jobs_list_and_detail_include_recovery_fields` |
+| Artifact events populate artifact panel | `app.py:_index_job_artifacts` + SSE `artifact` event, `portal.html:upsertArtifact` + `renderArtifactPanel` | `tests/test_app_orchestrator_contract_http.py::test_job_events_stream_emits_state_log_progress_artifact_done`, `tests/test_app_orchestrator_contract_http.py::test_artifact_indexing_truncation_visible_via_job_status` |
+| API key blocks unauthorized read/list/event access | `app.py:security_layer` + `_has_valid_api_key` | `tests/test_app_orchestrator_contract_http.py::test_v1_routes_enforce_api_key_for_reads_and_events` |
+| Validation errors return typed envelope + 400 | `app.py:create_job` validation path | `tests/test_app_orchestrator_contract_http.py::test_invalid_job_payload_returns_typed_invalid_argument` |
+| Oversized request paths return typed envelope + 413 | `app.py:_enforce_content_length_limit`, `app.py:http_exception_handler` | `tests/test_app_orchestrator_contract_http.py::test_oversized_v1_request_returns_typed_413_envelope` |
+| Regression behavior for `/ready`, submit/cancel, and SSE/log/progress intact | `app.py` endpoint surfaces unchanged | `tests/test_app_orchestrator_runtime.py::test_run_job_is_async_and_does_not_block_event_loop`, `tests/test_app_orchestrator_runtime.py::test_cancel_request_terminates_running_job`, `tests/test_app_orchestrator_runtime.py::test_sse_broadcast_delivers_events_to_multiple_subscribers`, `tests/test_app_orchestrator_contract_http.py::test_ready_keeps_non_enveloped_shape` |
 
 ## Release Acceptance Checklist
-- [ ] `GET /v1/presets` drives lux-depth preset selector.
-- [ ] Refresh recovers job list and reconnects streams for running jobs.
-- [ ] Artifact events populate artifact panel for completed jobs.
-- [ ] API key blocks unauthorized read/list/event access when `TP_API_KEY` is set.
-- [ ] Validation errors return typed envelope and `400` semantics.
-- [ ] Regression behavior for `/ready`, job submit/cancel, and SSE progress/logs remains intact.
+- [x] `GET /v1/presets` drives lux-depth preset selector.
+- [x] Refresh recovers job list and reconnects streams for running jobs.
+- [x] Artifact events populate artifact panel for completed jobs.
+- [x] API key blocks unauthorized read/list/event access when `TP_API_KEY` is set.
+- [x] Validation errors return typed envelope and `400` semantics.
+- [x] Oversized payload paths on `/v1/*` return typed envelope and `413` semantics.
+- [x] Regression behavior for `/ready`, job submit/cancel, and SSE progress/logs remains intact.

@@ -16,7 +16,7 @@ FAST_TESTS := \
 	tests/test_float_roundtrip.py \
 	tests/test_golden_hour_courtyard_workflow.py
 
-.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils venv setup clean \
+.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract venv setup clean \
         lint ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs \
         lock lock-prod lock-ci lock-dev install-core install-ml docs docs-clean
 
@@ -28,6 +28,7 @@ help:
 	@echo "  test-fast          Run fast subset (no video/optional heavy paths)"
 	@echo "  test-novideo       Run all tests excluding video suite via -k filter"
 	@echo "  test-full          Run entire test suite (parallel if xdist present)"
+	@echo "  test-orchestrator-contract  Run route-level portal orchestrator contract suite"
 	@echo "  test-integration   Run integration tests (requires HF_TOKEN)"
 	@echo "  test-structure     Run codebase structure validation tests"
 	@echo "  test-utils         Run tests for performance and error handling utilities"
@@ -109,6 +110,10 @@ test-utils:
 	@echo "Running utility tests..."
 	@"$(PY)" -m pytest -v tests/test_performance_utils.py tests/test_error_handling.py
 
+test-orchestrator-contract:
+	@echo "Running portal orchestrator contract suite..."
+	@"$(PY)" -m pytest -q tests/test_app_orchestrator_runtime.py tests/test_app_orchestrator_contract_http.py
+
 clean:
 	@echo "Cleaning Python cache files and build artifacts..."
 	@find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
@@ -128,7 +133,7 @@ lint:
 	@echo "Running pylint (non-blocking)..."
 	@$(PY) -m pylint $(shell git ls-files '*.py' | grep -v -e '/deprecated/' -e 'src/transformation_portal/' -e 'src/luxury_tiff_batch_processor/' -e 'scripts/' -e 'examples/' || echo '') || true
 
-ci: lint test-fast
+ci: lint test-fast test-orchestrator-contract
 	@echo "✅ Local CI checks completed successfully."
 
 # Comprehensive CI simulation
