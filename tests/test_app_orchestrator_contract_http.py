@@ -51,8 +51,8 @@ def _reset_orchestrator_globals() -> None:
         orchestrator_app.RATE_LIMIT_BUCKETS.clear()
 
 
-@pytest.fixture
-def client() -> TestClient:
+@pytest.fixture(name="client")
+def _client_fixture() -> TestClient:
     with TestClient(orchestrator_app.app) as test_client:
         yield test_client
 
