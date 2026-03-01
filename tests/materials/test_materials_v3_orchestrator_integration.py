@@ -4,6 +4,9 @@ Tests that Materials V3 Engine is properly wired into the orchestrator
 and processes images when enabled.
 """
 
+# pytest fixture injection uses function args that match fixture names.
+# pylint: disable=redefined-outer-name
+
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -191,3 +194,191 @@ def test_materials_v3_masks_exposed_to_v2():
     assert "materials_v3_response_plan" in result
     assert "materials_v3_pixel_ops" in result
     assert "materials_v3_metadata" in result
+
+
+def test_apex_strict_gate_requires_segmentation_enabled(tmp_path, mock_depth_backend, mock_da3_available):
+    """APEX + Materials V3 must explicitly enable segmentation."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        enable_materials_v3=True,
+        enable_material_segmentation=False,
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    with pytest.raises(RuntimeError, match="enable-segmentation"):
+        orchestrator._enforce_apex_materials_gate()
+
+
+def test_apex_strict_gate_rejects_stub_backend(tmp_path, mock_depth_backend, mock_da3_available):
+    """APEX + Materials V3 must not use stub segmentation backend."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        enable_materials_v3=True,
+        enable_material_segmentation=True,
+        material_segmentation_backend="stub",
+        strict_backend=True,
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    with pytest.raises(RuntimeError, match="segmentation-backend efficientsam"):
+        orchestrator._enforce_apex_materials_gate()
+
+
+def test_apex_strict_gate_requires_strict_backend(tmp_path, mock_depth_backend, mock_da3_available):
+    """APEX + Materials V3 must run strict segmentation mode."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        enable_materials_v3=True,
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        strict_backend=False,
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    with pytest.raises(RuntimeError, match="strict-segmentation"):
+        orchestrator._enforce_apex_materials_gate()
+
+
+def test_apex_strict_gate_requires_non_empty_material_masks(tmp_path, mock_depth_backend, mock_da3_available):
+    """APEX + Materials V3 should fail when segmentation returns no materials."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        enable_materials_v3=True,
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        strict_backend=True,
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    with pytest.raises(RuntimeError, match="no material masks"):
+        orchestrator._enforce_apex_materials_gate({"materials": {}})
+
+
+def test_apex_strict_gate_not_applied_outside_apex(tmp_path, mock_depth_backend, mock_da3_available):
+    """Standard tier should not enforce apex-only gate constraints."""
+    config = EnhanceConfig(
+        quality_tier="standard",
+        enable_materials_v3=True,
+        enable_material_segmentation=False,
+        material_segmentation_backend="stub",
+        strict_backend=False,
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    # Should not raise outside apex tier
+    orchestrator._enforce_apex_materials_gate({"materials": {}})
+
+
+def test_apex_depth_validity_gate_rejects_upper_quartile_plateau(tmp_path, mock_depth_backend, mock_da3_available):
+    """APEX depth gate should fail on p95≈p75 plateau in upper quantiles."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    depth = np.concatenate(
+        [
+            np.linspace(0.05, 0.65, 70 * 100, dtype=np.float32),
+            np.full((30 * 100,), 0.7549, dtype=np.float32),
+        ]
+    ).reshape(100, 100)
+
+    with pytest.raises(RuntimeError, match="APEX_DEPTH_PLATEAU"):
+        orchestrator._enforce_apex_depth_validity_gate(depth)
+
+
+def test_apex_depth_validity_gate_rejects_high_saturation(tmp_path, mock_depth_backend, mock_da3_available):
+    """APEX depth gate should fail when too many pixels saturate near high end."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    depth = np.linspace(0.0, 0.95, 100 * 100, dtype=np.float32).reshape(100, 100)
+    depth[:20, :] = 1.0  # 20% saturation > default 2% threshold
+
+    with pytest.raises(RuntimeError, match="APEX_DEPTH_SATURATION_HIGH"):
+        orchestrator._enforce_apex_depth_validity_gate(depth)
+
+
+def test_apex_depth_validity_gate_rejects_low_saturation(tmp_path, mock_depth_backend, mock_da3_available):
+    """APEX depth gate should fail when too many pixels collapse near zero."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    depth = np.linspace(0.05, 1.0, 100 * 100, dtype=np.float32).reshape(100, 100)
+    depth[:25, :] = 0.0  # 25% low-end saturation > default 2% threshold
+
+    with pytest.raises(RuntimeError, match="APEX_DEPTH_SATURATION_LOW"):
+        orchestrator._enforce_apex_depth_validity_gate(depth)
+
+
+def test_apex_depth_validity_gate_rejects_nonfinite(tmp_path, mock_depth_backend, mock_da3_available):
+    """APEX depth gate should fail when finite percentage is below floor."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    depth = np.linspace(0.1, 0.9, 100 * 100, dtype=np.float32).reshape(100, 100)
+    depth[:2, :] = np.nan  # 2% NaN => finite_pct 0.98 < 0.999
+
+    with pytest.raises(RuntimeError, match="APEX_DEPTH_NONFINITE"):
+        orchestrator._enforce_apex_depth_validity_gate(depth)
+
+
+def test_apex_depth_validity_gate_returns_thresholds_and_metrics_on_pass(tmp_path, mock_depth_backend, mock_da3_available):
+    """APEX depth gate should emit structured decision payload on success."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    h, w = 256, 256
+    y = np.linspace(0.0, 1.0, h, dtype=np.float32)[:, None]
+    x = np.linspace(0.0, 1.0, w, dtype=np.float32)[None, :]
+    depth = np.clip(0.08 + 0.84 * (0.55 * y + 0.45 * x), 0.08, 0.92).astype(np.float32)
+
+    verdict = orchestrator._enforce_apex_depth_validity_gate(depth)
+    assert verdict is not None
+    assert verdict["passed"] is True
+    assert "thresholds" in verdict
+    assert "metrics" in verdict
+    assert "failure_codes" in verdict
+    assert verdict["failure_codes"] == []
+
+
+def test_apex_depth_validity_gate_noop_outside_apex(tmp_path, mock_depth_backend, mock_da3_available):
+    """Depth validity gate should be inactive for non-APEX tiers."""
+    config = EnhanceConfig(
+        quality_tier="standard",
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    depth = np.ones((32, 32), dtype=np.float32)
+    metrics = orchestrator._enforce_apex_depth_validity_gate(depth)
+    assert metrics is None

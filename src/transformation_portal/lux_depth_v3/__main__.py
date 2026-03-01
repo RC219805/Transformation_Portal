@@ -186,6 +186,11 @@ def main(
     # Materials V3 and PBR
     materials_v3: str = typer.Option("off", "--materials-v3", help="Enable Materials V3 surface-aware finishing: on/off"),
     pbr: str = typer.Option("off", "--pbr", help="Enable PBR map generation (normal, roughness, AO): on/off"),
+    save_float_depth: str = typer.Option(
+        "off",
+        "--save-float-depth",
+        help="Save canonical float depth artifact (.npy) alongside preview PNG depth: on/off",
+    ),
     # Material Segmentation
     enable_segmentation: str = typer.Option(
         "off", "--enable-segmentation", help="Enable automatic material segmentation: on/off (default: off)"
@@ -287,6 +292,7 @@ def main(
     enable_non_commercial = _parse_bool_flag(non_commercial_ok)
     enable_apple_license = _parse_bool_flag(accept_apple_depth_pro_research_license)
     enable_material_segmentation = _parse_bool_flag(enable_segmentation)
+    enable_save_float_depth = _parse_bool_flag(save_float_depth)
 
     # Parse V2 preset (convert "none" string to None for skipping V2)
     v2_preset_value = None if (v2_preset and v2_preset.lower() == "none") else v2_preset
@@ -339,6 +345,35 @@ def main(
         print(error_msg, file=sys.stdout)  # Also print to stdout for CLI tests
         raise typer.Exit(code=1)
 
+    # APEX strict gate: do not allow Materials V3 no-op configurations
+    if quality_tier.lower() == "apex" and enable_materials_v3:
+        if not enable_material_segmentation:
+            error_msg = (
+                "APEX strict gate: Materials V3 in apex tier requires --enable-segmentation on "
+                "(segmentation must be explicit)."
+            )
+            logger.error(error_msg)
+            print(error_msg, file=sys.stdout)
+            raise typer.Exit(code=1)
+
+        if segmentation_backend.lower() == "stub":
+            error_msg = (
+                "APEX strict gate: Materials V3 in apex tier cannot use stub segmentation backend. "
+                "Use --segmentation-backend efficientsam."
+            )
+            logger.error(error_msg)
+            print(error_msg, file=sys.stdout)
+            raise typer.Exit(code=1)
+
+        if not strict_segmentation:
+            error_msg = (
+                "APEX strict gate: Materials V3 in apex tier requires --strict-segmentation "
+                "to prevent silent backend fallback."
+            )
+            logger.error(error_msg)
+            print(error_msg, file=sys.stdout)
+            raise typer.Exit(code=1)
+
     # Build configuration
     logger.info(f"Configuring pipeline with quality tier: {quality_tier}")
 
@@ -365,6 +400,7 @@ def main(
         enable_v2=enable_v2_bool,
         v2_preset=v2_preset_value,
         generate_pbr=enable_pbr,
+        save_float_depth=enable_save_float_depth,
         quality_tier=quality_tier,
         enable_materials_v3=enable_materials_v3,
         enable_material_segmentation=enable_material_segmentation,
