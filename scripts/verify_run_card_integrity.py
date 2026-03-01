@@ -16,6 +16,7 @@ import hashlib
 import json
 import re
 import sys
+from json import JSONDecodeError
 from pathlib import Path
 from typing import Any
 
@@ -30,9 +31,18 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SCHEMA_PATH = PROJECT_ROOT / "docs" / "schemas" / "run_card" / "run_card.v1.schema.json"
 
 
-def _load_json(path: Path) -> Any:
-    with open(path, "r", encoding="utf-8") as handle:
-        return json.load(handle)
+def _load_json(path: Path) -> tuple[Any | None, str | None]:
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            return json.load(handle), None
+    except FileNotFoundError:
+        return None, f"JSON file not found: {path}"
+    except PermissionError:
+        return None, f"Permission denied reading JSON file: {path}"
+    except JSONDecodeError as exc:
+        return None, f"Invalid JSON in {path}: {exc.msg} (line {exc.lineno}, column {exc.colno})"
+    except OSError as exc:
+        return None, f"Failed to read JSON file {path}: {exc}"
 
 
 def _canonical_json_text(payload: Any) -> str:
@@ -67,8 +77,12 @@ def verify_run_card_integrity(
     if Draft202012Validator is None:
         return ["jsonschema dependency is required (install jsonschema>=4.21.0,<5)"]
 
-    run_card_payload = _load_json(run_card_path)
-    schema_payload = _load_json(schema_path)
+    run_card_payload, run_card_load_error = _load_json(run_card_path)
+    if run_card_load_error:
+        return [run_card_load_error]
+    schema_payload, schema_load_error = _load_json(schema_path)
+    if schema_load_error:
+        return [schema_load_error]
 
     validator = Draft202012Validator(schema_payload)
     schema_errors = sorted(validator.iter_errors(run_card_payload), key=lambda item: list(item.path))

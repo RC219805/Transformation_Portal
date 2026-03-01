@@ -176,6 +176,13 @@ def _load_manifest_cached(manifest_path: str, mtime: float) -> CombinedManifest:
 
 
 def make_output_key(input_path: Path, input_root: Path, use_xxhash: bool = XXHASH_AVAILABLE) -> Path:
+    """Compute a stable, sanitized output key for a given input image.
+
+    The final key preserves the relative directory shape under ``input_root``
+    (when possible) and emits ``<stem>_<ext|noext>_<hash8>`` as the terminal
+    component. The 8-character suffix is derived from the POSIX-style relative
+    path, using xxh64 when enabled/available or SHA-1 otherwise.
+    """
     input_resolved = input_path.resolve()
     root_resolved = input_root.resolve()
 
@@ -2075,18 +2082,32 @@ class EnhanceOrchestrator:
 
         schema_path = _run_card_schema_path()
         if not schema_path.exists():
-            raise RuntimeError(f"Run card schema not found: {schema_path}")
-
-        serialized_run_card = json.loads(json.dumps(run_card, default=_json_default, sort_keys=True))
-        _validate_run_card_payload(serialized_run_card, schema_path)
-
-        with open(run_card_path, "w", encoding="utf-8") as f:
-            json.dump(
-                run_card,
-                f,
-                indent=2,
-                default=_json_default,
-                sort_keys=True,
+            logger.warning(
+                "Run card schema not found at %s; skipping run card emission for batch_id=%s",
+                schema_path,
+                batch_id,
             )
+            return
+
+        try:
+            serialized_run_card = json.loads(json.dumps(run_card, default=_json_default, sort_keys=True))
+            _validate_run_card_payload(serialized_run_card, schema_path)
+
+            with open(run_card_path, "w", encoding="utf-8") as f:
+                json.dump(
+                    run_card,
+                    f,
+                    indent=2,
+                    default=_json_default,
+                    sort_keys=True,
+                )
+        except Exception:
+            logger.exception(
+                "Run card emission failed for batch_id=%s (schema: %s, output: %s). Continuing without run card.",
+                batch_id,
+                schema_path,
+                run_card_path,
+            )
+            return
 
         logger.info(f"✅ Run card emitted: {run_card_path}")

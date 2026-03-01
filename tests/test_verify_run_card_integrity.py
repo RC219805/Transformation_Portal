@@ -158,6 +158,15 @@ def test_verify_run_card_integrity_detects_canonical_json_drift(tmp_path: Path):
     assert any("canonical serialization drift" in error for error in errors)
 
 
+def test_verify_run_card_integrity_reports_invalid_json(tmp_path: Path):
+    module = _load_script_module("verify_run_card_integrity_script_invalid_json", "scripts/verify_run_card_integrity.py")
+    run_card_path = tmp_path / "run_card_invalid.json"
+    run_card_path.write_text("{", encoding="utf-8")
+
+    errors = module.verify_run_card_integrity(run_card_path)
+    assert any("Invalid JSON" in error for error in errors)
+
+
 pytestmark = [
     pytest.mark.unit,
     pytest.mark.regression,
