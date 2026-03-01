@@ -182,6 +182,29 @@ def test_unknown_v1_route_returns_typed_not_found_envelope(client: TestClient) -
     assert non_v1_missing.json() == {"detail": "Not Found"}
 
 
+def test_http_exception_handler_preserves_headers_for_v1_and_non_v1(client: TestClient) -> None:
+    v1_method_not_allowed = client.get("/v1/jobs/job_method/cancel")
+    assert v1_method_not_allowed.status_code == 405
+    assert v1_method_not_allowed.json()["error"]["code"] == "HTTP_ERROR"
+    assert v1_method_not_allowed.headers.get("allow") == "POST"
+
+    non_v1_method_not_allowed = client.post("/ready")
+    assert non_v1_method_not_allowed.status_code == 405
+    assert non_v1_method_not_allowed.json() == {"detail": "Method Not Allowed"}
+    assert non_v1_method_not_allowed.headers.get("allow") == "GET"
+
+
+def test_request_validation_errors_return_typed_envelope_for_v1(client: TestClient) -> None:
+    response = client.get("/v1/jobs", params={"limit": "not-an-int"})
+    body = response.json()
+    assert response.status_code == 400
+    assert body["schema"] == "tp.orchestrator.error.v1"
+    assert body["success"] is False
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["path"] == "/v1/jobs"
+    assert body["error"]["details"]["errors"]
+
+
 def test_job_events_stream_emits_state_log_progress_artifact_done(client: TestClient, monkeypatch) -> None:
     async def fake_run_job(job, _argv):  # noqa: ANN001
         job.state = "running"
@@ -193,6 +216,8 @@ def test_job_events_stream_emits_state_log_progress_artifact_done(client: TestCl
             if orchestrator_app.EVENT_SUBSCRIBERS.get(job.id):
                 break
             await asyncio.sleep(0.005)
+        if not orchestrator_app.EVENT_SUBSCRIBERS.get(job.id):
+            raise AssertionError(f"subscriber registration timed out for job {job.id}")
 
         log_line = "progress=33%"
         job.add_log(log_line)

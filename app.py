@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any, AsyncGenerator, Deque, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exception_handlers import request_validation_exception_handler as fastapi_request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -235,10 +237,12 @@ def _error_response(
     message: str,
     details: Optional[Dict[str, Any]] = None,
     schema: str = "tp.orchestrator.error.v1",
+    headers: Optional[Dict[str, str]] = None,
 ) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
         content=_api_envelope(schema, success=False, data=None, error=_error_obj(code, message, details)),
+        headers=headers,
     )
 
 
@@ -762,9 +766,22 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
             code=_http_status_error_code(exc.status_code),
             message=message,
             details=details,
+            headers=exc.headers,
         )
 
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers=exc.headers)
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    if _is_api_v1_path(request.url.path):
+        return _error_response(
+            400,
+            code="INVALID_ARGUMENT",
+            message="request validation failed",
+            details={"path": request.url.path, "errors": exc.errors()},
+        )
+    return await fastapi_request_validation_exception_handler(request, exc)
 
 
 @app.on_event("startup")
