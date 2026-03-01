@@ -239,6 +239,28 @@ def test_depth_metadata_uses_resolved_backend_not_config_default(tmp_path, mock_
     assert resolved_backend == "da3"
 
 
+def test_get_or_create_depth_backend_prefers_active_instance_over_stale_cache(tmp_path, mock_da3_available):
+    """When active backend matches backend id, orchestrator should prefer active instance."""
+    config = EnhanceConfig(
+        depth_backend="da3",
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    stale_cached = Mock()
+    stale_cached.name = "da3"
+    orchestrator._depth_backend_cache["da3"] = stale_cached
+
+    active_backend = Mock()
+    active_backend.name = "da3"
+    orchestrator.depth_backend = active_backend
+
+    resolved = orchestrator._get_or_create_depth_backend("da3")
+    assert resolved is active_backend
+    assert orchestrator._depth_backend_cache["da3"] is active_backend
+
+
 def _make_depth_result(width: int = 64, height: int = 64):
     """Create synthetic depth result for orchestrator fallback tests."""
     import numpy as np
@@ -391,6 +413,101 @@ def test_runtime_semantic_fallback_retries_when_enabled(tmp_path):
     assert backend_selection["resolved_backend"] == "da2"
     assert backend_selection["resolution_status"] == "fallback"
     assert backend_selection["attempts"][0]["failure_kind"] == "semantic"
+
+
+def test_runtime_license_restriction_does_not_fallback(tmp_path):
+    """LicenseRestrictionError should fail fast instead of continuing fallback chain."""
+    from PIL import Image
+
+    from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+    test_image = tmp_path / "license_fail_fast.png"
+    Image.new("RGB", (64, 64), color="white").save(test_image)
+
+    config = EnhanceConfig(
+        depth_backend="depth_pro",
+        depth_device="cpu",
+        enable_v2=False,
+        non_commercial_ok=True,
+        accept_apple_depth_pro_research_license=True,
+    )
+
+    depth_pro_backend = Mock()
+    depth_pro_backend.name = "depth_pro"
+    depth_pro_backend.license_type = Mock(value="research_only")
+    depth_pro_backend.ensure_available.return_value = None
+    depth_pro_backend.compute.side_effect = LicenseRestrictionError("restricted backend")
+
+    da3_backend = Mock()
+    da3_backend.name = "da3"
+    da3_backend.license_type = Mock(value="commercial")
+    da3_backend.ensure_available.return_value = None
+    da3_backend.compute.return_value = _make_depth_result()
+
+    registry = Mock()
+    registry.get_backend.side_effect = lambda backend_id, _config: {
+        "depth_pro": depth_pro_backend,
+        "da3": da3_backend,
+    }[backend_id]
+
+    with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry", return_value=registry):
+        orchestrator = EnhanceOrchestrator(config, tmp_path)
+        orchestrator.postprocessor = Mock(process=lambda result: result)
+        with pytest.raises(LicenseRestrictionError):
+            orchestrator.enhance_image(ImageInput(path=test_image))
+
+    assert da3_backend.compute.call_count == 0
+
+
+def test_runtime_depth_cache_fingerprint_is_backend_scoped(tmp_path):
+    """Cache lookups should use different fingerprints per backend attempt."""
+    from PIL import Image
+
+    from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+    test_image = tmp_path / "cache_scope.png"
+    Image.new("RGB", (64, 64), color="white").save(test_image)
+
+    config = EnhanceConfig(
+        depth_backend="da3",
+        depth_device="cpu",
+        enable_v2=False,
+        enable_depth_cache=True,
+    )
+
+    da3_backend = Mock()
+    da3_backend.name = "da3"
+    da3_backend.license_type = Mock(value="commercial")
+    da3_backend.ensure_available.return_value = None
+    da3_backend.compute.side_effect = RuntimeError("Torch not compiled with CUDA enabled")
+
+    da2_backend = Mock()
+    da2_backend.name = "da2"
+    da2_backend.license_type = Mock(value="commercial")
+    da2_backend.ensure_available.return_value = None
+    da2_backend.compute.return_value = _make_depth_result()
+
+    registry = Mock()
+    registry.get_backend.side_effect = lambda backend_id, _config: {
+        "da3": da3_backend,
+        "da2": da2_backend,
+    }[backend_id]
+
+    with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry", return_value=registry):
+        orchestrator = EnhanceOrchestrator(config, tmp_path)
+        orchestrator.postprocessor = Mock(process=lambda result: result)
+        cache = Mock()
+        cache.get.return_value = None
+        orchestrator.depth_cache = cache
+        result = orchestrator.enhance_image(ImageInput(path=test_image))
+
+    assert result["status"] == "ok"
+    assert cache.get.call_count == 2
+    first_fp = cache.get.call_args_list[0].args[1]
+    second_fp = cache.get.call_args_list[1].args[1]
+    assert first_fp != second_fp
+    assert cache.store.call_count == 1
+    assert cache.store.call_args.args[1] == second_fp
 
 
 def test_runtime_multilevel_operational_fallback_chain_is_deterministic(tmp_path):

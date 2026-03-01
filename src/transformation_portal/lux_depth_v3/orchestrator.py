@@ -603,12 +603,20 @@ class EnhanceOrchestrator:
             chain.append("synthetic")
         return chain
 
+    @staticmethod
+    def _expected_output_depth_units_for_backend(backend_id: str) -> str:
+        """Return expected output depth units for cache-key partitioning."""
+        return "meters" if backend_id == "depth_pro" else "relative"
+
+    def _build_depth_cache_fingerprint(self, backend_id: str) -> str:
+        """Build backend-scoped cache fingerprint for depth reuse safety."""
+        base_fp = self.compute_config_fingerprint().depth_only().to_sha256()
+        expected_units = self._expected_output_depth_units_for_backend(backend_id)
+        payload = f"{base_fp}|backend={backend_id}|units={expected_units}"
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
     def _get_or_create_depth_backend(self, backend_id: str):
         """Fetch backend instance from cache or registry and ensure availability."""
-        cached = self._depth_backend_cache.get(backend_id)
-        if cached is not None:
-            return cached
-
         # Respect an already-initialized active backend when it matches the
         # requested backend id. This keeps injected test doubles stable and
         # avoids unnecessary registry lookups.
@@ -616,6 +624,10 @@ class EnhanceOrchestrator:
         if active_backend is not None and getattr(active_backend, "name", None) == backend_id:
             self._depth_backend_cache[backend_id] = active_backend
             return active_backend
+
+        cached = self._depth_backend_cache.get(backend_id)
+        if cached is not None:
+            return cached
 
         backend = self._depth_registry.get_backend(backend_id, self.config)
         backend.ensure_available()
@@ -976,16 +988,9 @@ class EnhanceOrchestrator:
             t0 = time.time()
             try:
                 # Phase 2: Check content-addressable depth cache
-                cached_depth = None
                 image_sha256 = None
-                config_fp_hash = None
                 if self.depth_cache:
                     image_sha256 = self._compute_or_skip_hash(image_input.path, manifest_exists=False, for_manifest_write=True)
-                    if image_sha256:
-                        config_fp_hash = self.compute_config_fingerprint().depth_only().to_sha256()
-                        cached_depth = self.depth_cache.get(image_sha256, config_fp_hash)
-                        if cached_depth is not None:
-                            logger.info(f"Cache hit: using cached depth for {output_key}")
 
                 # 1. Inference with per-image backend attempt/fallback state machine.
                 from PIL import Image
@@ -1012,10 +1017,19 @@ class EnhanceOrchestrator:
                         "error_code": None,
                         "error_message": None,
                         "apex_gate_passed": None,
-                        "cached": bool(cached_depth is not None),
+                        "cached": False,
                     }
 
                     try:
+                        attempt_cache_fp_hash = None
+                        cached_depth = None
+                        if self.depth_cache and image_sha256:
+                            attempt_cache_fp_hash = self._build_depth_cache_fingerprint(backend_id)
+                            cached_depth = self.depth_cache.get(image_sha256, attempt_cache_fp_hash)
+                            if cached_depth is not None:
+                                logger.info("Cache hit: using cached depth for %s (backend=%s)", output_key, backend_id)
+                        attempt_record["cached"] = bool(cached_depth is not None)
+
                         if cached_depth is not None:
                             from ..depth.backends.protocol import DepthResult
 
@@ -1023,8 +1037,8 @@ class EnhanceOrchestrator:
                                 "cached": True,
                                 "output_normalization": "cache_reuse",
                             }
-                            if image_sha256 and config_fp_hash:
-                                cache_metadata["cache_key"] = f"{image_sha256}_{config_fp_hash}"
+                            if image_sha256 and attempt_cache_fp_hash:
+                                cache_metadata["cache_key"] = f"{image_sha256}_{attempt_cache_fp_hash}"
                             if self._backend_metadata.model_id:
                                 cache_metadata["resolved_model_id"] = self._backend_metadata.model_id
                                 cache_metadata["requested_model_id"] = self._backend_metadata.model_id
@@ -1044,8 +1058,8 @@ class EnhanceOrchestrator:
                             self.depth_backend = backend
                             result_candidate = backend.compute(pil_image)
                             result_candidate = self.postprocessor.process(result_candidate)
-                            if self.depth_cache and image_sha256 and config_fp_hash:
-                                self.depth_cache.store(image_sha256, config_fp_hash, result_candidate.depth_map)
+                            if self.depth_cache and image_sha256 and attempt_cache_fp_hash:
+                                self.depth_cache.store(image_sha256, attempt_cache_fp_hash, result_candidate.depth_map)
 
                         # CRITICAL FIX (#2): Resize depth map back to original dimensions
                         depth_candidate = (
@@ -1104,6 +1118,21 @@ class EnhanceOrchestrator:
                         selected_backend_id = backend_id
                         selected_attempt_index = attempt_index
                         break
+
+                    except LicenseRestrictionError as license_error:
+                        attempt_record.update(
+                            {
+                                "status": "failed",
+                                "failure_kind": "license",
+                                "error_code": "LICENSE_RESTRICTION",
+                                "error_message": str(license_error),
+                                "apex_gate_passed": False,
+                                "duration_s": time.time() - attempt_start,
+                            }
+                        )
+                        depth_attempts.append(attempt_record)
+                        last_error = license_error
+                        raise
 
                     except ApexStrictGateError as semantic_error:
                         attempt_record.update(

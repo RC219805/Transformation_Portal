@@ -161,7 +161,12 @@ class EfficientSAMBackend:
     Memory: ~50MB model + ~200MB inference overhead
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        sky_top_region_fraction: float = 0.5,
+        sky_gradient_threshold: float = 0.05,
+        sky_brightness_threshold: float = 0.4,
+    ):
         self._model = None
         self._device = None
         self._model_loaded = False
@@ -171,6 +176,9 @@ class EfficientSAMBackend:
         self._clip_model = None
         self._clip_preprocess = None
         self._clip_tokenizer = None
+        self._sky_top_region_fraction = float(sky_top_region_fraction)
+        self._sky_gradient_threshold = float(sky_gradient_threshold)
+        self._sky_brightness_threshold = float(sky_brightness_threshold)
 
     @property
     def info(self) -> SegmentationBackendInfo:
@@ -730,17 +738,11 @@ class EfficientSAMBackend:
         try:
             from .bootstrap.sky_seed import detect_sky_seed
 
-            # Get config values from self._config if available, else use defaults
-            cfg = getattr(self, "_config", None)
-            top_region_fraction = getattr(cfg, "sky_top_region_fraction", 0.5) if cfg else 0.5
-            gradient_threshold = getattr(cfg, "sky_gradient_threshold", 0.05) if cfg else 0.05
-            brightness_threshold = getattr(cfg, "sky_brightness_threshold", 0.4) if cfg else 0.4
-
             # Create minimal config object for bootstrap
             sky_config = SimpleNamespace(
-                sky_top_region_fraction=top_region_fraction,
-                sky_gradient_threshold=gradient_threshold,
-                sky_brightness_threshold=brightness_threshold,
+                sky_top_region_fraction=self._sky_top_region_fraction,
+                sky_gradient_threshold=self._sky_gradient_threshold,
+                sky_brightness_threshold=self._sky_brightness_threshold,
             )
 
             sky_result = detect_sky_seed(image, sky_config)
@@ -843,8 +845,15 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
         checkpoint_path: Optional[str] = None,
         enable_material_classification: bool = False,
         material_confidence_threshold: float = 0.3,
+        sky_top_region_fraction: float = 0.5,
+        sky_gradient_threshold: float = 0.05,
+        sky_brightness_threshold: float = 0.4,
     ):
-        super().__init__()
+        super().__init__(
+            sky_top_region_fraction=sky_top_region_fraction,
+            sky_gradient_threshold=sky_gradient_threshold,
+            sky_brightness_threshold=sky_brightness_threshold,
+        )
         self._model_size = model_size
         self._checkpoint_path = checkpoint_path
         self._enable_material_classification = enable_material_classification
@@ -1045,6 +1054,9 @@ def _get_backend_instance(
     strict: bool = False,
     sam2_model_size: str = "base",
     sam2_checkpoint_path: Optional[str] = None,
+    sky_top_region_fraction: float = 0.5,
+    sky_gradient_threshold: float = 0.05,
+    sky_brightness_threshold: float = 0.4,
 ) -> SegmentationBackend:
     """Get or create a cached backend instance.
 
@@ -1068,7 +1080,11 @@ def _get_backend_instance(
         return backend
 
     if backend_name == "efficientsam":
-        backend = EfficientSAMBackend()
+        backend = EfficientSAMBackend(
+            sky_top_region_fraction=sky_top_region_fraction,
+            sky_gradient_threshold=sky_gradient_threshold,
+            sky_brightness_threshold=sky_brightness_threshold,
+        )
         # Lazy load will happen on first segment() call if needed
         # But we can pre-load here for better error handling
         try:
@@ -1092,6 +1108,9 @@ def _get_backend_instance(
         backend = SAM2SegmentationBackend(
             model_size=sam2_model_size,
             checkpoint_path=sam2_checkpoint_path,
+            sky_top_region_fraction=sky_top_region_fraction,
+            sky_gradient_threshold=sky_gradient_threshold,
+            sky_brightness_threshold=sky_brightness_threshold,
         )
         try:
             backend.load(device=device)
@@ -1153,6 +1172,9 @@ def segment_materials(
     strict_backend = getattr(config, "strict_backend", False)
     sam2_model_size = str(getattr(config, "sam2_model_size", "base")).lower()
     sam2_checkpoint_path = getattr(config, "sam2_checkpoint_path", None)
+    sky_top_region_fraction = float(getattr(config, "sky_top_region_fraction", 0.5))
+    sky_gradient_threshold = float(getattr(config, "sky_gradient_threshold", 0.05))
+    sky_brightness_threshold = float(getattr(config, "sky_brightness_threshold", 0.4))
 
     # Get device for backend (if applicable)
     device = getattr(config, "depth_device", "cpu")  # Reuse depth_device setting
@@ -1165,10 +1187,10 @@ def segment_materials(
             strict=strict_backend,
             sam2_model_size=sam2_model_size,
             sam2_checkpoint_path=sam2_checkpoint_path,
+            sky_top_region_fraction=sky_top_region_fraction,
+            sky_gradient_threshold=sky_gradient_threshold,
+            sky_brightness_threshold=sky_brightness_threshold,
         )
-
-        # Propagate full config for backend heuristics (e.g., sky bootstrap tuning).
-        setattr(backend, "_config", config)
 
         # Run segmentation
         results = backend.segment(image)

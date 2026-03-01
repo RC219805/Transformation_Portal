@@ -299,6 +299,46 @@ def test_segment_materials_stub_backend(sample_image, config_stub):
     assert len(masks) == 0
 
 
+def test_segment_materials_passes_sky_knobs_without_mutating_backend(sample_image, monkeypatch):
+    """segment_materials should pass config knobs via factory args, not backend mutation."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    class DummyBackend:
+        @property
+        def info(self):
+            return SegmentationBackendInfo(name="dummy", model_id="dummy", requires_weights=False)
+
+        def segment(self, image):
+            del image
+            return {}
+
+    captured_kwargs = {}
+    backend = DummyBackend()
+
+    def fake_get_backend_instance(*args, **kwargs):
+        del args
+        captured_kwargs.update(kwargs)
+        return backend
+
+    monkeypatch.setattr(seg_module, "_get_backend_instance", fake_get_backend_instance)
+
+    config = EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        depth_device="cpu",
+        sky_top_region_fraction=0.42,
+        sky_gradient_threshold=0.11,
+        sky_brightness_threshold=0.55,
+    )
+
+    masks = segment_materials(sample_image, config)
+    assert masks == {}
+    assert captured_kwargs["sky_top_region_fraction"] == pytest.approx(0.42)
+    assert captured_kwargs["sky_gradient_threshold"] == pytest.approx(0.11)
+    assert captured_kwargs["sky_brightness_threshold"] == pytest.approx(0.55)
+    assert not hasattr(backend, "_config")
+
+
 @pytest.mark.ml
 def test_segment_materials_efficientsam_backend(sample_image, config_efficientsam):
     """Test that EfficientSAM backend returns masks."""

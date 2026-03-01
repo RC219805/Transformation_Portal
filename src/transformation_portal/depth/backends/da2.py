@@ -94,7 +94,8 @@ class DA2Backend:
             backend = ModelBackend.PYTORCH_MPS
             model_device = "mps"
         elif self._device == "cuda":
-            # DA2 wrapper uses the PyTorch backend path for CUDA as well.
+            # DepthAnythingV2Model has no dedicated PYTORCH_CUDA enum; CUDA is selected via device="cuda"
+            # while keeping the PyTorch backend family.
             backend = ModelBackend.PYTORCH_CPU
             model_device = "cuda"
         else:

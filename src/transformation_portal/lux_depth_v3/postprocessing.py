@@ -5,8 +5,8 @@ Handles metric scaling, filtering, and edge preservation.
 
 from __future__ import annotations
 
-import logging
 import importlib
+import logging
 from typing import List
 
 import numpy as np
@@ -139,6 +139,11 @@ class Postprocessor:
                 effective_sigma_color = sigma_color * depth_range
 
             # Try RGB-guided joint bilateral filter if cv2.ximgproc available (better edges)
+            opencv_error = getattr(opencv, "error", None)
+            expected_joint_filter_errors: tuple[type[Exception], ...] = (AttributeError, TypeError, ValueError)
+            if isinstance(opencv_error, type) and issubclass(opencv_error, Exception):
+                expected_joint_filter_errors = expected_joint_filter_errors + (opencv_error,)
+
             try:
                 # Ensure image is uint8 RGB for joint bilateral
                 if image.dtype == np.float32:
@@ -167,23 +172,25 @@ class Postprocessor:
                 )
                 return filtered
 
+            except expected_joint_filter_errors as exc:
+                logger.debug("Joint bilateral filter unavailable/incompatible; using bilateral fallback: %s", exc)
             except Exception:
-                # cv2.ximgproc not available or type mismatch - fall back to standard bilateral
-                # Guide shape validation: ensure depth is 2D
-                if depth.ndim != 2:
-                    logger.warning(f"Bilateral filter expects 2D depth, got shape {depth.shape}. Using first channel.")
-                    depth = depth[:, :, 0] if depth.ndim == 3 else depth.reshape(depth.shape[:2])
+                logger.exception("Unexpected joint bilateral filter failure; using bilateral fallback")
 
-                depth_f32 = depth.astype(np.float32) if depth.dtype != np.float32 else depth
+            # cv2.ximgproc not available or type mismatch - fall back to standard bilateral
+            # Guide shape validation: ensure depth is 2D
+            if depth.ndim != 2:
+                logger.warning(f"Bilateral filter expects 2D depth, got shape {depth.shape}. Using first channel.")
+                depth = depth[:, :, 0] if depth.ndim == 3 else depth.reshape(depth.shape[:2])
 
-                # Use d=0 for auto-derivation (avoids d=1 degenerate case)
-                d_param = 0
+            depth_f32 = depth.astype(np.float32) if depth.dtype != np.float32 else depth
 
-                # Apply bilateral filter directly on float32 (no quantization)
-                filtered = opencv.bilateralFilter(
-                    depth_f32, d=d_param, sigmaColor=effective_sigma_color, sigmaSpace=sigma_space
-                )
-                return filtered
+            # Use d=0 for auto-derivation (avoids d=1 degenerate case)
+            d_param = 0
+
+            # Apply bilateral filter directly on float32 (no quantization)
+            filtered = opencv.bilateralFilter(depth_f32, d=d_param, sigmaColor=effective_sigma_color, sigmaSpace=sigma_space)
+            return filtered
 
         except ImportError:
             # Fallback to scipy for environments without OpenCV
