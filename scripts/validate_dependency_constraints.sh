@@ -57,6 +57,10 @@ get_security_minimum() {
             echo "10.0.0|Multiple CVEs in 9.x series"
             return 0
             ;;
+        "starlette")
+            echo "0.49.1|CVE-2025-62727 (FileResponse Range-header DoS)"
+            return 0
+            ;;
     esac
     return 1
 }
@@ -214,19 +218,24 @@ validate_in_file() {
         # Check security minimums
         if security_info=$(get_security_minimum "$package"); then
             IFS='|' read -r min_version reason <<< "$security_info"
+            local current_version=""
+            local current_spec=""
 
-            # Extract current lower bound from constraint (works for both >=X.Y and >=X.Y,<Z)
-            if echo "$line" | grep -qE '>=[0-9.]+'; then
-                local current_version
+            # Enforce security minimums for both lower bounds and strict pins.
+            if echo "$line" | grep -qE '==[0-9.]+'; then
+                current_spec="=="
+                current_version=$(echo "$line" | grep -oE '==[0-9.]+' | head -1 | sed 's/==//') || current_version=""
+            elif echo "$line" | grep -qE '>=[0-9.]+'; then
+                current_spec=">="
                 current_version=$(echo "$line" | grep -oE '>=[0-9.]+' | head -1 | sed 's/>=//') || current_version=""
+            fi
 
-                if [[ -n "$current_version" ]] && ! version_gte "$current_version" "$min_version"; then
-                    echo -e "${RED}❌ $basename:$line_num: $line${NC}"
-                    echo -e "   ${BOLD}ERROR:${NC} Security minimum not met (need >=$min_version for $reason)"
-                    echo -e "   ${BOLD}Current:${NC} >=$current_version"
-                    echo -e "   ${BOLD}Fix:${NC} Update constraint to >=$min_version,<...\n"
-                    file_errors=$((file_errors + 1))
-                fi
+            if [[ -n "$current_version" ]] && ! version_gte "$current_version" "$min_version"; then
+                echo -e "${RED}❌ $basename:$line_num: $line${NC}"
+                echo -e "   ${BOLD}ERROR:${NC} Security minimum not met (need >=$min_version for $reason)"
+                echo -e "   ${BOLD}Current:${NC} ${current_spec}${current_version}"
+                echo -e "   ${BOLD}Fix:${NC} Update constraint to >=$min_version,<... or pin to ==$min_version (or a later patched version)\n"
+                file_errors=$((file_errors + 1))
             fi
         fi
 
@@ -259,6 +268,80 @@ validate_in_file() {
     fi
 }
 
+# Function: Validate pyproject dependency security minimums
+validate_pyproject_security_minimums() {
+    local pyproject_file="pyproject.toml"
+    local file_errors=0
+    local file_warnings=0
+
+    if [[ ! -f "$pyproject_file" ]]; then
+        return
+    fi
+
+    FILES_CHECKED=$((FILES_CHECKED + 1))
+    [[ $VERBOSE -eq 1 ]] && echo -e "${BLUE}Checking pyproject.toml dependencies...${NC}"
+
+    while IFS='|' read -r package spec raw_dep; do
+        [[ -z "$package" ]] && continue
+
+        if security_info=$(get_security_minimum "$package"); then
+            IFS='|' read -r min_version reason <<< "$security_info"
+            local current_version=""
+            local current_spec=""
+
+            if echo "$spec" | grep -qE '==[0-9.]+'; then
+                current_spec="=="
+                current_version=$(echo "$spec" | grep -oE '==[0-9.]+' | head -1 | sed 's/==//') || current_version=""
+            elif echo "$spec" | grep -qE '>=[0-9.]+'; then
+                current_spec=">="
+                current_version=$(echo "$spec" | grep -oE '>=[0-9.]+' | head -1 | sed 's/>=//') || current_version=""
+            fi
+
+            if [[ -n "$current_version" ]] && ! version_gte "$current_version" "$min_version"; then
+                echo -e "${RED}❌ pyproject.toml: $raw_dep${NC}"
+                echo -e "   ${BOLD}ERROR:${NC} Security minimum not met for '$package' (need >=$min_version for $reason)"
+                echo -e "   ${BOLD}Current:${NC} ${current_spec}${current_version}"
+                echo -e "   ${BOLD}Fix:${NC} Update constraint to >=$min_version,<... or pin to ==$min_version (or a later patched version)\n"
+                file_errors=$((file_errors + 1))
+            elif [[ -z "$current_version" ]]; then
+                echo -e "${YELLOW}⚠️  pyproject.toml: $raw_dep${NC}"
+                echo -e "   ${BOLD}WARNING:${NC} Could not parse version lower bound for security-managed package '$package'"
+                echo -e "   ${BOLD}Fix:${NC} Use an explicit >=X.Y (or ==X.Y) constraint in project.dependencies\n"
+                file_warnings=$((file_warnings + 1))
+            fi
+        fi
+    done < <(
+        python3 << 'PY'
+import re
+import tomllib
+from pathlib import Path
+
+path = Path("pyproject.toml")
+if not path.exists():
+    raise SystemExit(0)
+
+data = tomllib.loads(path.read_text(encoding="utf-8"))
+deps = data.get("project", {}).get("dependencies", [])
+
+for dep in deps:
+    dep = dep.split(";", 1)[0].strip()
+    match = re.match(r"^\s*([A-Za-z0-9_.-]+)(\[[^\]]+\])?\s*(.*)$", dep)
+    if not match:
+        continue
+    name = match.group(1)
+    spec = (match.group(3) or "").replace(" ", "")
+    print(f"{name}|{spec}|{dep}")
+PY
+    )
+
+    ERRORS=$((ERRORS + file_errors))
+    WARNINGS=$((WARNINGS + file_warnings))
+
+    if [[ $file_errors -eq 0 && $file_warnings -eq 0 ]]; then
+        echo -e "${GREEN}✅ pyproject.toml: Security minimums valid${NC}"
+    fi
+}
+
 # Main validation loop
 shopt -s nullglob
 IN_FILES=(requirements/*.in)
@@ -275,6 +358,9 @@ for in_file in "${IN_FILES[@]}"; do
     validate_in_file "$in_file"
     echo # Blank line between files
 done
+
+validate_pyproject_security_minimums
+echo
 
 # Summary
 echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"

@@ -81,7 +81,7 @@ efficientsam==1.0.0
     # via -r ml.in
 einops==0.8.2
     # via controlnet-aux
-fastapi==0.120.0
+fastapi==0.121.0
     # via -r base.in
 filelock==3.24.2
     # via
@@ -400,7 +400,7 @@ shellingham==1.5.4
     # via typer
 sortedcontainers==2.4.0
     # via hypothesis
-starlette==0.47.2
+starlette==0.49.1
     # via
     #   -r base.in
     #   fastapi
