@@ -222,12 +222,16 @@ class DepthProBackend:
             raise RuntimeError("Depth Pro did not return depth_map artifact")
 
         provenance = result.artifacts.get("depth_provenance", {})
+        metric_metadata = dict(provenance)
+        metric_metadata["source_depth_units"] = "meters"
+        metric_metadata["output_depth_units"] = "meters"
+        metric_metadata["output_normalization"] = "none"
 
         # Build DepthResult with metric depth
         return DepthResult(
             depth_map=depth_map.astype(np.float32),
             original_image=image_array,
-            metadata=provenance,
+            metadata=metric_metadata,
             depth_units="meters",
             focal_length_px=result.metadata.get("focal_length_px"),
             field_of_view_deg=result.metadata.get("fov_deg"),

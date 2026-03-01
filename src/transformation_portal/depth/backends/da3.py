@@ -27,7 +27,8 @@ class DA3Backend:
     """Depth Anything V3 backend adapter implementing DepthBackend protocol.
 
     Wraps DA3InferenceEngine for use with DepthBackendRegistry.
-    Provides relative depth (0-1 normalized) using transformers pipeline.
+    Produces normalized relative depth (0-1) for downstream compatibility,
+    while preserving source unit semantics in metadata.
 
     Attributes:
         name: Backend identifier ("da3").
@@ -143,6 +144,16 @@ class DA3Backend:
         """
         return ["transformers"]
 
+    def _infer_source_depth_units(self, metadata: dict) -> str:
+        """Infer source model depth unit semantics from resolved model metadata."""
+        resolved_model_id = str(metadata.get("resolved_model_id", "")).lower()
+        requested_model_id = str(metadata.get("requested_model_id", "")).lower()
+        model_hint = resolved_model_id or requested_model_id
+
+        if any(token in model_hint for token in ("metric", "da3nested", "nested-giant")):
+            return "meters"
+        return "relative"
+
     def compute(
         self,
         image: Union[Image.Image, np.ndarray],
@@ -156,7 +167,8 @@ class DA3Backend:
                     Note: Device override requires engine reload.
 
         Returns:
-            DepthResult with relative depth (0-1 normalized).
+            DepthResult with relative depth (0-1 normalized). Metadata includes
+            source/output unit semantics for contract-level clarity.
 
         Raises:
             RuntimeError: If inference fails.
@@ -181,11 +193,21 @@ class DA3Backend:
         # Run inference
         result = self._engine.predict(image_pil)
 
+        source_depth_units = self._infer_source_depth_units(result.metadata)
+        normalized_metadata = dict(result.metadata)
+        normalized_metadata["source_depth_units"] = source_depth_units
+        normalized_metadata["output_depth_units"] = "relative"
+        normalized_metadata["output_normalization"] = "minmax_0_1_per_image"
+
+        warnings = []
+        if source_depth_units == "meters":
+            warnings.append("source metric depth normalized to relative [0,1] for unified pipeline output")
+
         # Convert to unified DepthResult
         return DepthResult(
             depth_map=result.depth_map.astype(np.float32),
             original_image=image_array,
-            metadata=result.metadata,
+            metadata=normalized_metadata,
             depth_units="relative",  # DA3 produces relative depth (0-1)
             focal_length_px=None,  # DA3 doesn't estimate focal length
             field_of_view_deg=None,
@@ -193,6 +215,7 @@ class DA3Backend:
             device=use_device,
             dtype="float32",
             input_size=(image_array.shape[0], image_array.shape[1]),
+            warnings=warnings,
         )
 
     def get_cache_key(self, image: Union[Image.Image, np.ndarray]) -> str:

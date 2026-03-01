@@ -4,6 +4,9 @@ Tests that DA3Backend implements the DepthBackend protocol correctly
 and integrates with the registry.
 """
 
+import sys
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 from PIL import Image
@@ -16,6 +19,47 @@ from transformation_portal.depth.backends.registry import DepthBackendRegistry
 
 # Mark all tests in this module as ML tier (require torch + transformers)
 pytestmark = pytest.mark.ml
+
+
+def _install_fake_depth_anything3(monkeypatch):
+    """Install a lightweight fake depth_anything_3 module for device smoke tests."""
+    import types
+
+    class FakeDepthAnything3:
+        def __init__(self):
+            self.loaded_device = None
+
+        @classmethod
+        def from_pretrained(cls, model_id):
+            del model_id
+            return cls()
+
+        def to(self, device):
+            dev = str(device)
+            if "cuda" in dev:
+                raise RuntimeError("Unexpected CUDA path in DA3 smoke test")
+            self.loaded_device = dev
+            return self
+
+        def eval(self):
+            return self
+
+        def inference(self, images):
+            del images
+            if self.loaded_device is None:
+                raise RuntimeError("Model device not set before inference")
+            if "cuda" in str(self.loaded_device):
+                raise RuntimeError("Torch not compiled with CUDA enabled")
+            depth = np.linspace(0.0, 1.0, 64 * 64, dtype=np.float32).reshape(1, 64, 64)
+            return SimpleNamespace(depth=depth)
+
+    fake_pkg = types.ModuleType("depth_anything_3")
+    fake_api = types.ModuleType("depth_anything_3.api")
+    fake_pkg.DepthAnything3 = FakeDepthAnything3
+    fake_api.DepthAnything3 = FakeDepthAnything3
+
+    monkeypatch.setitem(sys.modules, "depth_anything_3", fake_pkg)
+    monkeypatch.setitem(sys.modules, "depth_anything_3.api", fake_api)
 
 
 def test_da3_backend_implements_protocol():
@@ -162,3 +206,68 @@ def test_da3_backend_device_override():
     # Should not raise even if device override is specified
     result = backend.compute(image, device="cpu")
     assert result.device == "cpu"
+
+
+def test_da3_backend_unit_contract_metadata(monkeypatch):
+    """DA3 adapter should expose source/output unit semantics in metadata."""
+    from transformation_portal.lux_depth_v3.config import EnhanceConfig
+
+    config = EnhanceConfig(depth_device="cpu")
+    backend = DA3Backend(config)
+
+    # Avoid dependency checks and heavy model loading.
+    monkeypatch.setattr(backend, "ensure_available", lambda: None)
+    backend._engine = SimpleNamespace(
+        predict=lambda _image: SimpleNamespace(
+            depth_map=np.ones((32, 32), dtype=np.float32),
+            metadata={"resolved_model_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1"},
+        )
+    )
+
+    result = backend.compute(Image.new("RGB", (32, 32), color="white"))
+
+    assert result.depth_units == "relative"
+    assert result.metadata["source_depth_units"] == "meters"
+    assert result.metadata["output_depth_units"] == "relative"
+    assert result.metadata["output_normalization"] == "minmax_0_1_per_image"
+    assert any("normalized to relative" in warning for warning in result.warnings)
+
+
+def test_da3_backend_smoke_cpu_no_hidden_cuda(monkeypatch):
+    """CPU DA3 inference path should not invoke CUDA implicitly."""
+    pytest.importorskip("torch")
+    import transformation_portal.lux_depth_v3.inference as inference_module
+    from transformation_portal.lux_depth_v3.config import EnhanceConfig
+
+    _install_fake_depth_anything3(monkeypatch)
+    monkeypatch.setattr(DA3Backend, "ensure_available", lambda self: None)
+    monkeypatch.setattr(inference_module, "TRANSFORMERS_AVAILABLE", True)
+
+    backend = DA3Backend(EnhanceConfig(depth_device="cpu"))
+    result = backend.compute(Image.new("RGB", (64, 64), color="white"))
+
+    assert result.device == "cpu"
+    assert result.depth_map.shape == (64, 64)
+
+
+def test_da3_backend_smoke_mps_no_hidden_cuda(monkeypatch):
+    """MPS DA3 inference path should not invoke CUDA implicitly."""
+    torch = pytest.importorskip("torch")
+    import transformation_portal.lux_depth_v3.inference as inference_module
+    from transformation_portal.lux_depth_v3.config import EnhanceConfig
+
+    _install_fake_depth_anything3(monkeypatch)
+    monkeypatch.setattr(DA3Backend, "ensure_available", lambda self: None)
+    monkeypatch.setattr(inference_module, "TRANSFORMERS_AVAILABLE", True)
+
+    if hasattr(torch.backends, "mps"):
+        monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
+    else:
+        monkeypatch.setattr(torch.backends, "mps", SimpleNamespace(is_available=lambda: True), raising=False)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+
+    backend = DA3Backend(EnhanceConfig(depth_device="mps"))
+    result = backend.compute(Image.new("RGB", (64, 64), color="white"))
+
+    assert result.device == "mps"
+    assert result.depth_map.shape == (64, 64)

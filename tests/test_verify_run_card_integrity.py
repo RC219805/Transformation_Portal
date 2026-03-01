@@ -59,6 +59,13 @@ def _valid_run_card_payload(module) -> dict:
             "device": "cpu",
             "model_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
         },
+        "backend_summary": {
+            "requested_backend": "da3",
+            "final_backends_used": ["da3"],
+            "fallback_images": 0,
+            "semantic_fallback_images": 0,
+            "operational_fallback_images": 0,
+        },
         "environment": {
             "python_version": "3.11.9",
             "platform": "macOS-26.3-arm64-arm-64bit",

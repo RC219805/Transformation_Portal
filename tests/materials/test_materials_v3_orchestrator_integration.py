@@ -245,6 +245,23 @@ def test_apex_strict_gate_requires_strict_backend(tmp_path, mock_depth_backend, 
         orchestrator._enforce_apex_materials_gate()
 
 
+def test_apex_strict_gate_accepts_sam2_backend_without_stub(tmp_path, mock_depth_backend, mock_da3_available):
+    """APEX + Materials V3 should allow SAM2 backend when strict mode is enabled."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        enable_materials_v3=True,
+        enable_material_segmentation=True,
+        material_segmentation_backend="sam2",
+        strict_backend=True,
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    # No segmentation_result provided: this should validate config-only gates and pass.
+    orchestrator._enforce_apex_materials_gate()
+
+
 def test_apex_strict_gate_requires_non_empty_material_masks(tmp_path, mock_depth_backend, mock_da3_available):
     """APEX + Materials V3 should fail when segmentation returns no materials."""
     config = EnhanceConfig(
@@ -345,6 +362,28 @@ def test_apex_depth_validity_gate_rejects_nonfinite(tmp_path, mock_depth_backend
 
     with pytest.raises(RuntimeError, match="APEX_DEPTH_NONFINITE"):
         orchestrator._enforce_apex_depth_validity_gate(depth)
+
+
+def test_apex_depth_validity_gate_normalizes_metric_depth_for_saturation_checks(
+    tmp_path, mock_depth_backend, mock_da3_available
+):
+    """Metric-depth ranges should be normalized before saturation checks in APEX gate."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    # Metric-style depth in meters (not pre-normalized to [0,1]).
+    depth = np.linspace(20.0, 40.0, 100 * 100, dtype=np.float32).reshape(100, 100)
+
+    verdict = orchestrator._enforce_apex_depth_validity_gate(depth, depth_units="meters")
+    assert verdict is not None
+    assert verdict["passed"] is True
+    assert verdict["metrics"]["source_unit"] == "meters"
+    assert verdict["metrics"]["gate_unit"] == "relative_0_1"
+    assert verdict["metrics"]["saturation_high_fraction"] < config.apex_depth_max_high_saturation_fraction
 
 
 def test_apex_depth_validity_gate_returns_thresholds_and_metrics_on_pass(tmp_path, mock_depth_backend, mock_da3_available):

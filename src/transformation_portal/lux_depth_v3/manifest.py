@@ -178,6 +178,7 @@ class BackendSelectionMetadata:
     resolution_reason: Optional[str]
     model_id: str
     device: str
+    attempts: Optional[List[Dict[str, Any]]] = None
     schema_version: str = "1.0"
 
     def to_dict(self) -> Dict[str, Any]:
@@ -208,6 +209,7 @@ class BackendSelectionMetadata:
             resolution_reason=data.get("resolution_reason"),
             model_id=data["model_id"],
             device=data["device"],
+            attempts=data.get("attempts"),
             schema_version=schema_version,
         )
 
