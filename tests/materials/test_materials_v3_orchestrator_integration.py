@@ -386,6 +386,24 @@ def test_apex_depth_validity_gate_normalizes_metric_depth_for_saturation_checks(
     assert verdict["metrics"]["saturation_high_fraction"] < config.apex_depth_max_high_saturation_fraction
 
 
+def test_apex_depth_validity_gate_preserves_relative_depth_semantics(tmp_path, mock_depth_backend, mock_da3_available):
+    """Relative depth should keep identity normalization to preserve threshold semantics."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    depth = np.linspace(0.0, 1.0, 100 * 100, dtype=np.float32).reshape(100, 100)
+    verdict = orchestrator._enforce_apex_depth_validity_gate(depth, depth_units="relative")
+    assert verdict is not None
+    assert verdict["passed"] is True
+    assert verdict["metrics"]["source_unit"] == "relative"
+    assert verdict["metrics"]["gate_normalization"]["scaled"] is False
+    assert verdict["metrics"]["gate_normalization"]["mode"] == "identity_relative"
+
+
 def test_apex_depth_validity_gate_returns_thresholds_and_metrics_on_pass(tmp_path, mock_depth_backend, mock_da3_available):
     """APEX depth gate should emit structured decision payload on success."""
     config = EnhanceConfig(

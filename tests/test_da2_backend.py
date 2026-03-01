@@ -67,8 +67,8 @@ def test_da2_backend_cuda_request_without_cuda_falls_back_to_cpu(monkeypatch):
     assert backend._device == "cpu"
 
 
-def test_da2_backend_cuda_device_is_forwarded_to_model(monkeypatch):
-    """DA2 should pass CUDA through to the model wrapper when selected."""
+def test_da2_backend_cuda_request_is_normalized_to_cpu_model(monkeypatch):
+    """DA2 should normalize CUDA requests to CPU to keep backend/device semantics coherent."""
     from transformation_portal.depth.models import depth_anything_v2 as da2_model_module
 
     captured = {}
@@ -102,4 +102,6 @@ def test_da2_backend_cuda_device_is_forwarded_to_model(monkeypatch):
     backend._model = None
     backend._load_model()
 
-    assert captured["device"] == "cuda"
+    assert backend._device == "cpu"
+    assert captured["backend"] == da2_model_module.ModelBackend.PYTORCH_CPU
+    assert captured["device"] == "cpu"

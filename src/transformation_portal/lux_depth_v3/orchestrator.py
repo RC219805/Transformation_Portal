@@ -2044,13 +2044,19 @@ class EnhanceOrchestrator:
         """Return True when APEX quality tier is active."""
         return str(getattr(self.config, "quality_tier", "")).lower() == "apex"
 
-    def _normalize_depth_for_gate(self, depth_map: np.ndarray) -> tuple[np.ndarray, Dict[str, Any]]:
+    def _normalize_depth_for_gate(
+        self,
+        depth_map: np.ndarray,
+        depth_units: Optional[str] = None,
+    ) -> tuple[np.ndarray, Dict[str, Any]]:
         """Normalize depth map to [0,1] for APEX gate metrics only."""
         raw = np.asarray(depth_map, dtype=np.float32)
         finite_mask = np.isfinite(raw)
         finite_count = int(finite_mask.sum())
         total_count = int(raw.size)
         finite_pct = float(finite_mask.mean()) if total_count else 0.0
+        unit_hint = str(depth_units or "").strip().lower()
+        is_relative_unit = unit_hint in {"relative", "relative_0_1"}
 
         if finite_count == 0:
             return np.zeros_like(raw, dtype=np.float32), {
@@ -2062,6 +2068,7 @@ class EnhanceOrchestrator:
                 "scaled": False,
                 "raw_min": None,
                 "raw_max": None,
+                "mode": "empty",
             }
 
         vals = raw[finite_mask]
@@ -2069,6 +2076,24 @@ class EnhanceOrchestrator:
         p99 = float(np.percentile(vals, 99.0))
         raw_min = float(np.min(vals))
         raw_max = float(np.max(vals))
+
+        # Preserve existing DA3/DA2 semantics for explicitly-relative depths.
+        # If units are unknown, treat [0,1] data as already gate-normalized.
+        relative_like_range = raw_min >= -1e-3 and raw_max <= 1.0 + 1e-3
+        if is_relative_unit or (not unit_hint and relative_like_range):
+            gate = np.clip(raw, 0.0, 1.0).astype(np.float32, copy=False)
+            gate[~finite_mask] = 0.0
+            return gate, {
+                "finite_count": finite_count,
+                "total_count": total_count,
+                "finite_pct": finite_pct,
+                "p1": p1,
+                "p99": p99,
+                "scaled": False,
+                "raw_min": raw_min,
+                "raw_max": raw_max,
+                "mode": "identity_relative",
+            }
 
         if not np.isfinite(p1) or not np.isfinite(p99) or p99 <= p1:
             return np.zeros_like(raw, dtype=np.float32), {
@@ -2080,6 +2105,7 @@ class EnhanceOrchestrator:
                 "scaled": False,
                 "raw_min": raw_min,
                 "raw_max": raw_max,
+                "mode": "invalid_percentiles",
             }
 
         gate = np.clip((raw - p1) / (p99 - p1), 0.0, 1.0).astype(np.float32, copy=False)
@@ -2093,6 +2119,7 @@ class EnhanceOrchestrator:
             "scaled": True,
             "raw_min": raw_min,
             "raw_max": raw_max,
+            "mode": "percentile_1_99",
         }
 
     def _compute_depth_validity_metrics(
@@ -2106,7 +2133,7 @@ class EnhanceOrchestrator:
         preserving raw-unit diagnostics in the payload.
         """
         raw_depth = np.asarray(depth_map, dtype=np.float32)
-        gate_depth, normalization = self._normalize_depth_for_gate(raw_depth)
+        gate_depth, normalization = self._normalize_depth_for_gate(raw_depth, depth_units=depth_units)
 
         depth = gate_depth
         raw_finite_mask = np.isfinite(raw_depth)
