@@ -37,6 +37,7 @@ def _reset_orchestrator_globals() -> None:
     previous_api_key = orchestrator_app.API_KEY_SECRET
     previous_max_request_bytes = orchestrator_app.MAX_REQUEST_BYTES
     previous_max_indexed_artifacts = orchestrator_app.MAX_INDEXED_ARTIFACTS
+    previous_rate_limit_per_minute = orchestrator_app.RATE_LIMIT_PER_MINUTE
     orchestrator_app.JOBS.clear()
     orchestrator_app.EVENT_SUBSCRIBERS.clear()
     orchestrator_app.RATE_LIMIT_BUCKETS.clear()
@@ -46,6 +47,7 @@ def _reset_orchestrator_globals() -> None:
         orchestrator_app.API_KEY_SECRET = previous_api_key
         orchestrator_app.MAX_REQUEST_BYTES = previous_max_request_bytes
         orchestrator_app.MAX_INDEXED_ARTIFACTS = previous_max_indexed_artifacts
+        orchestrator_app.RATE_LIMIT_PER_MINUTE = previous_rate_limit_per_minute
         orchestrator_app.JOBS.clear()
         orchestrator_app.EVENT_SUBSCRIBERS.clear()
         orchestrator_app.RATE_LIMIT_BUCKETS.clear()

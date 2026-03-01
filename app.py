@@ -757,8 +757,6 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
         detail = exc.detail
         message = detail if isinstance(detail, str) and detail.strip() else "request failed"
         details = {"path": request.url.path}
-        if detail is not None and not isinstance(detail, str):
-            details["detail"] = detail
         return _error_response(
             exc.status_code,
             code=_http_status_error_code(exc.status_code),
