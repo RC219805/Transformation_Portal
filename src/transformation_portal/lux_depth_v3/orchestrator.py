@@ -78,6 +78,15 @@ from .v2_runner import V2Runner, find_v2_report
 logger = logging.getLogger(__name__)
 
 
+class ApexStrictGateError(RuntimeError):
+    """Raised when APEX strict quality gates are violated."""
+
+    def __init__(self, code: str, message: str, details: Optional[Dict[str, Any]] = None):
+        self.code = code
+        self.details = details or {}
+        super().__init__(f"[{code}] {message}")
+
+
 def _log_dependency_status() -> dict:
     """Log startup dependency availability report.
 
@@ -792,13 +801,21 @@ class EnhanceOrchestrator:
 
                 depth_runtime_s = time.time() - t0
 
-                # 2b. Materials V3 Processing (if enabled)
+                # 2b. APEX depth validity gate (plateau/saturation guardrails)
+                # Run immediately after depth inference/refinement so invalid depth never
+                # flows into Materials V3/PBR/write stages in APEX mode.
+                depth_validity_metrics = self._enforce_apex_depth_validity_gate(depth_map)
+
+                # 2c. Materials V3 Processing (if enabled)
                 materials_v3_result = None
                 materials_v3_runtime_s = 0.0
                 if self.materials_v3_engine:
                     logger.info("Running Materials V3 surface-aware finishing...")
                     t_materials_start = time.time()
                     try:
+                        # APEX strict gate: enforce segmentation prerequisites before running Materials V3
+                        self._enforce_apex_materials_gate()
+
                         # Material segmentation (configurable backend)
                         # Current: stub backend (returns empty masks)
                         # Future: EfficientSAM integration for real material detection
@@ -807,6 +824,7 @@ class EnhanceOrchestrator:
                         # Convert preprocessed float32 [0,1] to uint8 [0,255] for segmentation backend
                         preprocessed_uint8_for_seg = (np.clip(preprocessed_array, 0, 1) * 255).astype(np.uint8)
                         segmentation_result = {"materials": segment_materials(preprocessed_uint8_for_seg, self.config)}
+                        self._enforce_apex_materials_gate(segmentation_result)
 
                         # Log segmentation result if materials were detected
                         if segmentation_result.get("materials"):
@@ -881,6 +899,9 @@ class EnhanceOrchestrator:
                                 f"{len(materials_v3_result.get('materials_v3_pixel_ops', {}).get('applied', []))} "
                                 f"operations applied"
                             )
+                    except ApexStrictGateError:
+                        # Hard-fail in apex strict mode: do not silently continue with no-op Materials V3
+                        raise
                     except Exception as e:
                         logger.warning(f"Materials V3 processing failed: {e}", exc_info=True)
                         materials_v3_result = None
@@ -912,7 +933,18 @@ class EnhanceOrchestrator:
                     "representation": "depth",
                     "convention": "higher_is_farther",
                     "unit": result.depth_units if hasattr(result, "depth_units") else "relative",
+                    "depth_png_path": str(depth_path),
+                    "depth_float_path": str(float_depth_path) if getattr(self.config, "save_float_depth", False) else None,
+                    "depth_float_dtype": "float32" if getattr(self.config, "save_float_depth", False) else None,
+                    "depth_float_shape": (
+                        list(result.depth.shape[:2]) if getattr(self.config, "save_float_depth", False) else None
+                    ),
+                    "canonical_depth_path": (
+                        str(float_depth_path) if getattr(self.config, "save_float_depth", False) else str(depth_path)
+                    ),
                 }
+                if depth_validity_metrics:
+                    stats["apex_depth_validity"] = depth_validity_metrics
 
                 # Merge inference provenance into depth stats
                 _md = getattr(result, "metadata", None) or {}
@@ -955,6 +987,9 @@ class EnhanceOrchestrator:
 
             except Exception as e:
                 logger.error(f"Depth failed: {e}")
+                if isinstance(e, ApexStrictGateError):
+                    logger.error("APEX strict gate failure: code=%s details=%s", e.code, e.details)
+                    raise
                 if self.config.depth_fallback == "fail":
                     raise
                 elif self.config.depth_fallback == "skip":
@@ -1514,6 +1549,11 @@ class EnhanceOrchestrator:
             "status": "ok",
             "image": str(image_input.path),
             "depth_path": str(depth_path) if depth_metadata else None,
+            "depth_float_path": (
+                str(float_depth_path)
+                if getattr(self.config, "save_float_depth", False) and float_depth_path.exists()
+                else None
+            ),
             "manifest": str(manifest_path),
             "runtime_s": pipeline_end_time - pipeline_start_time,
         }
@@ -1536,6 +1576,179 @@ class EnhanceOrchestrator:
                     logger.debug(f"PBR output missing: {value}")
                     return False
         return True
+
+    def _is_apex_materials_gate_enabled(self) -> bool:
+        """Return True when apex + Materials V3 strict gate should be enforced."""
+        return str(getattr(self.config, "quality_tier", "")).lower() == "apex" and bool(
+            getattr(self.config, "enable_materials_v3", False)
+        )
+
+    def _is_apex_tier(self) -> bool:
+        """Return True when APEX quality tier is active."""
+        return str(getattr(self.config, "quality_tier", "")).lower() == "apex"
+
+    def _compute_depth_validity_metrics(self, depth_map: np.ndarray) -> Dict[str, Any]:
+        """Compute depth validity metrics used by APEX quality gate."""
+        depth = np.asarray(depth_map, dtype=np.float32)
+        finite_mask = np.isfinite(depth)
+        finite_pct = float(finite_mask.mean()) if finite_mask.size else 0.0
+
+        if not finite_mask.any():
+            return {
+                "finite_pct": finite_pct,
+                "p75": None,
+                "p95": None,
+                "upper_iqr": None,
+                "saturation_high_fraction": None,
+                "saturation_low_fraction": None,
+                "gradient_energy": None,
+                "unique_hist_bins": None,
+            }
+
+        vals = depth[finite_mask]
+        p75 = float(np.percentile(vals, 75.0))
+        p95 = float(np.percentile(vals, 95.0))
+        upper_iqr = p95 - p75
+
+        saturation_high_value = float(getattr(self.config, "apex_depth_saturation_high_value", 0.999))
+        saturation_low_value = float(getattr(self.config, "apex_depth_saturation_low_value", 0.001))
+        saturation_high_fraction = float((vals >= saturation_high_value).mean())
+        saturation_low_fraction = float((vals <= saturation_low_value).mean())
+
+        grad_y, grad_x = np.gradient(depth)
+        grad_mag = np.hypot(grad_x, grad_y)
+        grad_mag = grad_mag[np.isfinite(grad_mag)]
+        gradient_energy = float(np.mean(np.abs(grad_mag))) if grad_mag.size else 0.0
+
+        hist_bins = int(getattr(self.config, "apex_depth_hist_bins", 64))
+        hist, _ = np.histogram(np.clip(vals, 0.0, 1.0), bins=hist_bins, range=(0.0, 1.0))
+        unique_hist_bins = int(np.count_nonzero(hist))
+
+        return {
+            "finite_pct": finite_pct,
+            "p75": p75,
+            "p95": p95,
+            "upper_iqr": upper_iqr,
+            "saturation_high_fraction": saturation_high_fraction,
+            "saturation_low_fraction": saturation_low_fraction,
+            "gradient_energy": gradient_energy,
+            "unique_hist_bins": unique_hist_bins,
+        }
+
+    def _enforce_apex_depth_validity_gate(self, depth_map: np.ndarray) -> Optional[Dict[str, Any]]:
+        """APEX-only depth quality gate to prevent plateau/saturation degradation."""
+        if not self._is_apex_tier():
+            return None
+
+        metrics = self._compute_depth_validity_metrics(depth_map)
+
+        thresholds = {
+            "finite_pct_min": float(getattr(self.config, "apex_depth_min_finite_pct", 0.999)),
+            "upper_iqr_min": float(getattr(self.config, "apex_depth_min_upper_iqr", 1e-4)),
+            "saturation_high_fraction_max": float(getattr(self.config, "apex_depth_max_high_saturation_fraction", 0.02)),
+            "saturation_low_fraction_max": float(getattr(self.config, "apex_depth_max_low_saturation_fraction", 0.02)),
+            "gradient_energy_min": float(getattr(self.config, "apex_depth_min_gradient_energy", 5e-4)),
+            "saturation_high_value": float(getattr(self.config, "apex_depth_saturation_high_value", 0.999)),
+            "saturation_low_value": float(getattr(self.config, "apex_depth_saturation_low_value", 0.001)),
+            "hist_bins": int(getattr(self.config, "apex_depth_hist_bins", 64)),
+        }
+
+        finite_fail = float(metrics.get("finite_pct") or 0.0) < thresholds["finite_pct_min"]
+        plateau_fail = (metrics.get("upper_iqr") is None) or (float(metrics["upper_iqr"]) <= thresholds["upper_iqr_min"])
+        high_saturation_fail = (metrics.get("saturation_high_fraction") is None) or (
+            float(metrics["saturation_high_fraction"]) >= thresholds["saturation_high_fraction_max"]
+        )
+        low_saturation_fail = (metrics.get("saturation_low_fraction") is None) or (
+            float(metrics["saturation_low_fraction"]) >= thresholds["saturation_low_fraction_max"]
+        )
+        low_gradient = (metrics.get("gradient_energy") is None) or (
+            float(metrics["gradient_energy"]) <= thresholds["gradient_energy_min"]
+        )
+
+        failure_codes: List[str] = []
+        if finite_fail:
+            failure_codes.append("APEX_DEPTH_NONFINITE")
+        if plateau_fail:
+            failure_codes.append("APEX_DEPTH_PLATEAU")
+        if high_saturation_fail:
+            failure_codes.append("APEX_DEPTH_SATURATION_HIGH")
+        if low_saturation_fail:
+            failure_codes.append("APEX_DEPTH_SATURATION_LOW")
+
+        # Stable ordering for deterministic payloads across runs/processes.
+        failure_codes = sorted(failure_codes)
+
+        if failure_codes:
+            details = {
+                "passed": False,
+                "failure_codes": failure_codes,
+                "metrics": metrics,
+                "thresholds": thresholds,
+            }
+            raise ApexStrictGateError(
+                failure_codes[0] if len(failure_codes) == 1 else "APEX_DEPTH_INVALID",
+                "APEX depth validity gate failed: " + ", ".join(failure_codes),
+                details=details,
+            )
+
+        warnings: List[str] = []
+        if low_gradient:
+            warnings.append("APEX_DEPTH_GRADIENT_LOW")
+            logger.warning("APEX depth validity warning: low gradient energy (metrics=%s, thresholds=%s)", metrics, thresholds)
+        warnings = sorted(warnings)
+
+        return {
+            "passed": True,
+            "failure_codes": [],
+            "warnings": warnings,
+            "metrics": metrics,
+            "thresholds": thresholds,
+        }
+
+    def _enforce_apex_materials_gate(self, segmentation_result: Optional[Dict[str, Any]] = None) -> None:
+        """Enforce APEX strict Materials V3 gate.
+
+        Gate policy (apex + materials_v3 only):
+        - Segmentation must be explicitly enabled
+        - Backend must not be stub
+        - Strict backend mode must be on (no silent fallback)
+        - Segmentation output must contain at least one material mask
+        """
+        if not self._is_apex_materials_gate_enabled():
+            return
+
+        if not bool(getattr(self.config, "enable_material_segmentation", False)):
+            raise ApexStrictGateError(
+                "APEX_MATERIALS_SEGMENTATION_DISABLED",
+                "APEX strict gate violated: Materials V3 in apex tier requires segmentation enabled "
+                "(set --enable-segmentation on).",
+            )
+
+        backend_name = str(getattr(self.config, "material_segmentation_backend", "stub")).lower()
+        if backend_name == "stub":
+            raise ApexStrictGateError(
+                "APEX_MATERIALS_STUB_BACKEND",
+                "APEX strict gate violated: Materials V3 in apex tier cannot use stub segmentation backend "
+                "(set --segmentation-backend efficientsam).",
+            )
+
+        if not bool(getattr(self.config, "strict_backend", False)):
+            raise ApexStrictGateError(
+                "APEX_MATERIALS_STRICT_SEGMENTATION_REQUIRED",
+                "APEX strict gate violated: Materials V3 in apex tier requires strict segmentation backend mode "
+                "(set --strict-segmentation).",
+            )
+
+        if segmentation_result is None:
+            return
+
+        materials = segmentation_result.get("materials", {}) if isinstance(segmentation_result, dict) else {}
+        if not materials:
+            raise ApexStrictGateError(
+                "APEX_MATERIALS_EMPTY_SEGMENTATION",
+                "APEX strict gate violated: segmentation produced no material masks; "
+                "failing instead of continuing with 0 Materials V3 operations.",
+            )
 
     def _load_cached_depth(self, depth_path: Path, float_depth_path: Path):
         """Load cached depth data, preferring float precision.
@@ -1693,7 +1906,11 @@ class EnhanceOrchestrator:
                 results.append(result)
             except Exception as e:
                 logger.error(f"Enhancement failed for {item['image_input'].path}: {e}")
-                results.append({"status": "error", "image": str(item["image_input"].path), "error": str(e)})
+                error_payload: Dict[str, Any] = {"status": "error", "image": str(item["image_input"].path), "error": str(e)}
+                if isinstance(e, ApexStrictGateError):
+                    error_payload["error_code"] = e.code
+                    error_payload["error_details"] = e.details
+                results.append(error_payload)
 
         return results
 
@@ -1750,7 +1967,11 @@ class EnhanceOrchestrator:
                     results.append(self.enhance_image(img_input, input_root=input_dir))
                 except Exception as e:
                     logger.error(f"Failed {img_input.path}: {e}")
-                    results.append({"status": "error", "image": str(img_input.path), "error": str(e)})
+                    error_payload: Dict[str, Any] = {"status": "error", "image": str(img_input.path), "error": str(e)}
+                    if isinstance(e, ApexStrictGateError):
+                        error_payload["error_code"] = e.code
+                        error_payload["error_details"] = e.details
+                    results.append(error_payload)
 
         # Capture accurate batch end time
         batch_end_time = time.time()

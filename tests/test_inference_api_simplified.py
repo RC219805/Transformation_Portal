@@ -10,6 +10,8 @@ This test suite validates:
 Coverage target: Issue #3 from PBR Implementation Audit
 """
 
+import sys
+import types
 from unittest.mock import MagicMock, Mock, patch
 
 import numpy as np
@@ -252,3 +254,40 @@ class TestRealWorldUsage:
         assert engine.config.model_variant == ModelVariant.METRIC_LARGE
         assert engine.commercial_use is True
         assert engine.validate_license_strict is True
+
+
+class TestDA3IntegrationLogging:
+    """Test DA3 integration logging accuracy."""
+
+    def test_da3_load_does_not_emit_stale_custom_integration_warning(self, monkeypatch):
+        """Loading DA3 model should not log stale 'custom integration required' warning."""
+        import transformation_portal.lux_depth_v3.inference as inference_module
+
+        class FakeDepthAnything3:
+            @classmethod
+            def from_pretrained(cls, _model_id):
+                model = MagicMock()
+                model.to.return_value = model
+                model.eval.return_value = None
+                return model
+
+        api_module = types.ModuleType("depth_anything_3.api")
+        api_module.DepthAnything3 = FakeDepthAnything3
+        package_module = types.ModuleType("depth_anything_3")
+        package_module.api = api_module
+
+        monkeypatch.setitem(sys.modules, "depth_anything_3", package_module)
+        monkeypatch.setitem(sys.modules, "depth_anything_3.api", api_module)
+
+        engine = DA3InferenceEngine.__new__(DA3InferenceEngine)
+        engine.device = "cpu"
+
+        with patch.object(inference_module.logger, "warning") as mock_warning:
+            with patch.object(inference_module.logger, "info") as mock_info:
+                engine._load_da3_model("depth-anything/da3nested-giant-large")
+
+        warning_text = " ".join(str(call.args[0]) for call in mock_warning.call_args_list if call.args)
+        assert "custom integration required" not in warning_text.lower()
+        assert any(
+            "custom api integration active" in str(call.args[0]).lower() for call in mock_info.call_args_list if call.args
+        )

@@ -226,6 +226,17 @@ class EnhanceConfig:
 
     # Quality tier and Materials V3
     quality_tier: str = "standard"  # Options: standard, premium, apex
+
+    # APEX depth validity gate (fail-closed quality policy)
+    apex_depth_min_finite_pct: float = 0.999
+    apex_depth_min_upper_iqr: float = 1e-4
+    apex_depth_max_high_saturation_fraction: float = 0.02
+    apex_depth_max_low_saturation_fraction: float = 0.02
+    apex_depth_saturation_high_value: float = 0.999
+    apex_depth_saturation_low_value: float = 0.001
+    apex_depth_min_gradient_energy: float = 5e-4
+    apex_depth_hist_bins: int = 64
+
     enable_materials_v3: bool = False  # Materials V3 surface-aware finishing
     apply_pixel_ops: bool = True  # Apply pixel operations in Materials V3 (requires enable_materials_v3=True)
 

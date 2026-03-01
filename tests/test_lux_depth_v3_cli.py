@@ -151,6 +151,82 @@ class TestCLIValidation:
         assert result.exit_code == 1
         assert "invalid" in result.stdout.lower() or "quality tier" in result.stdout.lower()
 
+    def test_apex_materials_v3_requires_segmentation_enabled(self, tmp_path):
+        """APEX strict gate should require explicit segmentation when Materials V3 is on."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+
+        result = runner.invoke(
+            app,
+            [
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(tmp_path / "output"),
+                "--quality-tier",
+                "apex",
+                "--materials-v3",
+                "on",
+                "--enable-segmentation",
+                "off",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "apex strict gate" in result.stdout.lower()
+        assert "enable-segmentation" in result.stdout.lower()
+
+    def test_apex_materials_v3_rejects_stub_segmentation_backend(self, tmp_path):
+        """APEX strict gate should reject stub backend for Materials V3."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+
+        result = runner.invoke(
+            app,
+            [
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(tmp_path / "output"),
+                "--quality-tier",
+                "apex",
+                "--materials-v3",
+                "on",
+                "--enable-segmentation",
+                "on",
+                "--segmentation-backend",
+                "stub",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "apex strict gate" in result.stdout.lower()
+        assert "stub segmentation backend" in result.stdout.lower()
+
+    def test_apex_materials_v3_requires_strict_segmentation(self, tmp_path):
+        """APEX strict gate should require strict segmentation mode."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+
+        result = runner.invoke(
+            app,
+            [
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(tmp_path / "output"),
+                "--quality-tier",
+                "apex",
+                "--materials-v3",
+                "on",
+                "--enable-segmentation",
+                "on",
+                "--segmentation-backend",
+                "efficientsam",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "apex strict gate" in result.stdout.lower()
+        assert "strict-segmentation" in result.stdout.lower()
+
 
 class TestCLIConfiguration:
     """Test CLI configuration building."""
@@ -315,6 +391,76 @@ class TestCLIConfiguration:
         assert captured_config is not None
         assert captured_config.v2_preset is None
 
+    def test_save_float_depth_defaults_false(self, tmp_path):
+        """save_float_depth should default to False when flag is omitted."""
+        from unittest.mock import MagicMock, patch
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "test.jpg").touch()
+
+        captured_config = None
+
+        def mock_orch_init(config, output_root):
+            nonlocal captured_config
+            captured_config = config
+            mock_orch = MagicMock()
+            mock_orch.enhance_batch.return_value = {"total": 0, "succeeded": 0}
+            return mock_orch
+
+        with patch(
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            side_effect=mock_orch_init,
+        ):
+            _result = runner.invoke(
+                app,
+                [
+                    "--input-dir",
+                    str(input_dir),
+                    "--output-dir",
+                    str(tmp_path / "output"),
+                ],
+            )
+
+        assert captured_config is not None
+        assert captured_config.save_float_depth is False
+
+    def test_save_float_depth_flag_on(self, tmp_path):
+        """--save-float-depth on should set save_float_depth=True."""
+        from unittest.mock import MagicMock, patch
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "test.jpg").touch()
+
+        captured_config = None
+
+        def mock_orch_init(config, output_root):
+            nonlocal captured_config
+            captured_config = config
+            mock_orch = MagicMock()
+            mock_orch.enhance_batch.return_value = {"total": 0, "succeeded": 0}
+            return mock_orch
+
+        with patch(
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            side_effect=mock_orch_init,
+        ):
+            _result = runner.invoke(
+                app,
+                [
+                    "--input-dir",
+                    str(input_dir),
+                    "--output-dir",
+                    str(tmp_path / "output"),
+                    "--save-float-depth",
+                    "on",
+                ],
+            )
+
+        assert captured_config is not None
+        assert captured_config.save_float_depth is True
+
 
 class TestSegmentationCLI:
     """Test material segmentation CLI flags."""
@@ -445,6 +591,13 @@ class TestCLIHelp:
         assert "enable-segmentation" in output
         assert "segmentation-backend" in output
         assert "strict-segmentation" in output
+
+    def test_save_float_depth_flag_in_help(self):
+        """Test that save float depth flag appears in help output."""
+        result = runner.invoke(app, ["--help"])
+        assert result.exit_code == 0
+        output = strip_ansi(result.stdout.lower())
+        assert "save-float-depth" in output
 
 
 if __name__ == "__main__":

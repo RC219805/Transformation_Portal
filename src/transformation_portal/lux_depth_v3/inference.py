@@ -373,7 +373,7 @@ class DA3InferenceEngine:
             self.model.to(self.device)
             self.model.eval()
             logger.info("✓ DA3 model loaded successfully")
-            logger.warning("⚠️  DA3 models use different inference API - custom integration required")
+            logger.info("DA3 custom API integration active (depth-anything-3 backend)")
         except Exception as e:
             error_msg = (
                 f"Failed to load DA3 model '{model_id}': {e}\n"
