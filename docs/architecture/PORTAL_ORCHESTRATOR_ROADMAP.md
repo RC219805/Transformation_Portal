@@ -79,7 +79,7 @@ Error shape:
 ### Phase 4: Validation and docs
 - In progress:
   - Focused runtime tests updated/expanded for new endpoints and artifact indexing.
-  - Quickstart + API notes added (`docs/PORTAL_ORCHESTRATOR_QUICKSTART.md`).
+  - Quickstart + API notes added (`docs/guides/PORTAL_ORCHESTRATOR_QUICKSTART.md`).
 
 ## Release Acceptance Checklist
 - [ ] `GET /v1/presets` drives lux-depth preset selector.

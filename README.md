@@ -37,7 +37,7 @@ pip install "git+https://github.com/RC219805/Transformation_Portal.git@v2.0.0"
 ```
 
 Portal orchestrator docs:
-- [Portal + Orchestrator Quickstart](docs/PORTAL_ORCHESTRATOR_QUICKSTART.md)
+- [Portal + Orchestrator Quickstart](docs/guides/PORTAL_ORCHESTRATOR_QUICKSTART.md)
 - [Portal Orchestrator Roadmap (Re-Baselined)](docs/architecture/PORTAL_ORCHESTRATOR_ROADMAP.md)
 
 ---
