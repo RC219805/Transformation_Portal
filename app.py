@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hmac
 import json
+import logging
 import os
 import re
 import sys
@@ -22,6 +23,8 @@ from starlette.responses import StreamingResponse
 # ----------------------------
 # In-memory job store (MVP)
 # ----------------------------
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _env_csv(name: str, default: List[str]) -> List[str]:
@@ -69,6 +72,8 @@ HEARTBEAT_SECONDS = 15
 JOB_RETENTION_SECONDS = _env_int("TP_JOB_RETENTION_SECONDS", 3600, minimum=1)
 CLEANUP_INTERVAL_SECONDS = _env_int("TP_CLEANUP_INTERVAL_SECONDS", 60, minimum=1)
 CANCEL_GRACE_SECONDS = _env_float("TP_CANCEL_GRACE_SECONDS", 5.0, minimum=0.1)
+JOB_LIST_LIMIT = _env_int("TP_JOB_LIST_LIMIT", 200, minimum=1)
+MAX_INDEXED_ARTIFACTS = _env_int("TP_MAX_INDEXED_ARTIFACTS", 200, minimum=1)
 PROGRESS_RE = re.compile(r"progress=(\d{1,3})%")
 DEFAULT_ALLOWED_ORIGINS = ["http://localhost", "http://localhost:3000", "http://127.0.0.1:8000"]
 ALLOWED_ORIGINS = _env_csv("TP_ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS)
@@ -81,12 +86,78 @@ TRUSTED_PROXY_IPS = set(_env_csv("TP_TRUSTED_PROXY_IPS", []))
 MAX_REQUEST_BYTES = _env_int("TP_MAX_REQUEST_BYTES", 1024 * 1024, minimum=1024)
 RATE_LIMIT_PER_MINUTE = _env_int("TP_RATE_LIMIT_PER_MINUTE", 0, minimum=0)
 RATE_LIMIT_WINDOW_SECONDS = 60.0
+DEFAULT_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src 'self' https://fonts.gstatic.com data:; "
+    "img-src 'self' data: blob:; "
+    "connect-src 'self'; "
+    "object-src 'none'; "
+    "base-uri 'self'; "
+    "frame-ancestors 'none'; "
+    "form-action 'self';"
+)
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "no-referrer",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
     "Cross-Origin-Opener-Policy": "same-origin",
+    "Content-Security-Policy": os.getenv("TP_CSP", DEFAULT_CSP).strip() or DEFAULT_CSP,
+}
+
+PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
+    "lux-depth-v3": [
+        {
+            "name": "premium",
+            "label": "premium (Stable)",
+            "stability": "stable",
+            "description": "Balanced production quality preset",
+            "is_research": False,
+        },
+        {
+            "name": "default",
+            "label": "default (Canary)",
+            "stability": "canary",
+            "description": "Canary preset for iterative validation",
+            "is_research": False,
+        },
+        {
+            "name": "depth-anything-v3.1-research-m4",
+            "label": "v3.1-m4 (Experimental)",
+            "stability": "experimental",
+            "description": "Research-only preset requiring non-commercial acknowledgments",
+            "is_research": True,
+        },
+    ],
+    "archive-gate-a": [
+        {
+            "name": "default",
+            "label": "default (Stable)",
+            "stability": "stable",
+            "description": "Manifest and provenance assembly",
+            "is_research": False,
+        }
+    ],
+    "archive-gate-b": [
+        {
+            "name": "default",
+            "label": "default (Stable)",
+            "stability": "stable",
+            "description": "BagIt packaging and validation workflow",
+            "is_research": False,
+        }
+    ],
+    "archive-gate-c": [
+        {
+            "name": "default",
+            "label": "default (Stable)",
+            "stability": "stable",
+            "description": "METS/PROV/STAC export workflow",
+            "is_research": False,
+        }
+    ],
 }
 
 
@@ -125,6 +196,12 @@ DEPTH_BACKEND_ALIASES = {
     "depth_anything_v3": "da3",
     "depth-anything-v3": "da3",
 }
+VALIDATION_REASON_CODES = {
+    "Unsupported pipeline": "unsupported_pipeline",
+    "input_dir and output_dir are required": "missing_required_paths",
+    "Invalid quality_tier": "invalid_quality_tier",
+    "Invalid depth_backend": "invalid_depth_backend",
+}
 
 
 def _now() -> float:
@@ -134,6 +211,34 @@ def _now() -> float:
 def _sse(event: str, data: Dict[str, Any]) -> str:
     # SSE payload format: event type + JSON data, terminated by double newline
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False, separators=(',', ':'))}\n\n"
+
+
+def _error_obj(code: str, message: str, details: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    return {"code": code, "message": message, "details": details or {}}
+
+
+def _api_envelope(
+    schema: str,
+    *,
+    success: bool,
+    data: Optional[Dict[str, Any]] = None,
+    error: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    return {"schema": schema, "success": success, "data": data, "error": error}
+
+
+def _error_response(
+    status_code: int,
+    *,
+    code: str,
+    message: str,
+    details: Optional[Dict[str, Any]] = None,
+    schema: str = "tp.orchestrator.error.v1",
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content=_api_envelope(schema, success=False, data=None, error=_error_obj(code, message, details)),
+    )
 
 
 def _cleanup_expired_jobs(now: float) -> None:
@@ -215,6 +320,14 @@ def _is_mutating_job_endpoint(method: str, path: str) -> bool:
     return bool(re.fullmatch(r"/v1/jobs/[^/]+/cancel", path))
 
 
+def _is_job_events_endpoint(path: str) -> bool:
+    return bool(re.fullmatch(r"/v1/jobs/[^/]+/events", path))
+
+
+def _is_protected_job_endpoint(path: str) -> bool:
+    return path == "/v1/jobs" or path.startswith("/v1/jobs/")
+
+
 def _extract_client_ip(request: Request) -> str:
     peer_ip = request.client.host if request.client and request.client.host else None
     trust_forwarded = TRUST_X_FORWARDED_FOR or (peer_ip in TRUSTED_PROXY_IPS if peer_ip else False)
@@ -260,6 +373,8 @@ def _has_valid_api_key(request: Request) -> bool:
         authorization = request.headers.get("authorization", "")
         if authorization.lower().startswith("bearer "):
             provided = authorization[7:].strip()
+    if not provided and _is_job_events_endpoint(request.url.path):
+        provided = request.query_params.get("api_key", "").strip()
 
     if not provided:
         return False
@@ -395,6 +510,98 @@ async def _request_cancel(job: Job) -> None:
         job.terminate_task = asyncio.create_task(_terminate_process(job.proc))
 
 
+def _job_output_dir(job: Job) -> Optional[Path]:
+    args = job.request.get("args")
+    if not isinstance(args, dict):
+        return None
+    output_dir = str(_pick(args, "output_dir", "outputDir", default="")).strip()
+    if not output_dir:
+        return None
+    return Path(output_dir).expanduser()
+
+
+def _infer_artifact_type(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix in {".json", ".yaml", ".yml", ".txt", ".md", ".log", ".csv"}:
+        return "metadata"
+    if suffix in {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".exr"}:
+        return "image"
+    if suffix in {".zip", ".tar", ".gz", ".tgz", ".bag"}:
+        return "archive"
+    return "file"
+
+
+def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
+    output_dir = _job_output_dir(job)
+    if output_dir is None:
+        job.artifacts = {"output_dir": None, "items": [], "indexed_count": 0, "truncated": False}
+        return []
+    if not output_dir.exists() or not output_dir.is_dir():
+        job.artifacts = {"output_dir": str(output_dir), "items": [], "indexed_count": 0, "truncated": False}
+        return []
+
+    collected: List[tuple[str, Path]] = []
+    truncated = False
+    for path in output_dir.rglob("*"):
+        if not path.is_file():
+            continue
+        try:
+            relative_path = str(path.relative_to(output_dir))
+        except Exception:
+            relative_path = path.name
+        collected.append((relative_path, path))
+        if len(collected) > MAX_INDEXED_ARTIFACTS:
+            truncated = True
+            break
+
+    collected.sort(key=lambda item: item[0].lower())
+    if truncated:
+        collected = collected[:MAX_INDEXED_ARTIFACTS]
+
+    items: List[Dict[str, Any]] = []
+    for relative_path, path in collected:
+        try:
+            size_bytes = path.stat().st_size
+        except OSError:
+            size_bytes = None
+        items.append(
+            {
+                "artifact_type": _infer_artifact_type(path),
+                # Do not expose absolute server paths in API/SSE payloads.
+                "path": relative_path,
+                "relative_path": relative_path,
+                "size_bytes": size_bytes,
+            }
+        )
+
+    job.artifacts = {
+        "output_dir": str(output_dir),
+        "items": items,
+        "indexed_count": len(items),
+        "truncated": truncated,
+    }
+    return items
+
+
+def _serialize_job(job: Job, *, include_logs: bool = True) -> Dict[str, Any]:
+    data = {
+        "id": job.id,
+        "pipeline": str(job.request.get("pipeline") or ""),
+        "created_at": job.created_at,
+        "started_at": job.started_at,
+        "finished_at": job.finished_at,
+        "state": job.state,
+        "progress": job.progress,
+        "exit_code": job.exit_code,
+        "events_url": f"/v1/jobs/{job.id}/events",
+        "artifacts": job.artifacts,
+        "error": job.error,
+    }
+    if include_logs:
+        data["logs_tail"] = job.logs_tail[-STATUS_LOG_LIMIT:]
+    return data
+
+
 def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
     """
     Build argv securely (no shell).
@@ -497,7 +704,7 @@ def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
     return argv
 
 
-app = FastAPI(title="Transformation Portal Orchestrator", version="0.2.0")
+app = FastAPI(title="Transformation Portal Orchestrator", version="0.3.0")
 app.state.cleanup_task = None
 
 if ENABLE_TRUSTED_HOSTS:
@@ -539,12 +746,22 @@ async def security_layer(request: Request, call_next):
 
     _install_stream_body_limit(request)
 
-    if API_KEY_SECRET and _is_mutating_job_endpoint(request.method, request.url.path) and not _has_valid_api_key(request):
-        return JSONResponse(status_code=401, content={"detail": "invalid or missing API key"})
+    if API_KEY_SECRET and _is_protected_job_endpoint(request.url.path) and not _has_valid_api_key(request):
+        return _error_response(
+            401,
+            code="UNAUTHORIZED",
+            message="invalid or missing API key",
+            details={"path": request.url.path},
+        )
 
     client_ip = _extract_client_ip(request)
     if _is_rate_limited(client_ip, _now()):
-        return JSONResponse(status_code=429, content={"detail": "rate limit exceeded"})
+        return _error_response(
+            429,
+            code="RATE_LIMITED",
+            message="rate limit exceeded",
+            details={"client_ip": client_ip},
+        )
 
     response = await call_next(request)
     for name, value in SECURITY_HEADERS.items():
@@ -569,7 +786,7 @@ async def ready() -> Dict[str, Any]:
     return {
         "ok": True,
         "time": _now(),
-        "version": "0.2.0",
+        "version": "0.3.0",
         "cli": {
             "lux-depth-v3": bool(which("lux-depth-v3")),
             "python": sys.version.split()[0],
@@ -585,16 +802,50 @@ async def ready() -> Dict[str, Any]:
             "trusted_hosts_enabled": ENABLE_TRUSTED_HOSTS,
             "trust_x_forwarded_for": TRUST_X_FORWARDED_FOR,
             "trusted_proxy_ips_count": len(TRUSTED_PROXY_IPS),
+            "api_key_protects_job_reads": bool(API_KEY_SECRET),
         },
     }
+
+
+@app.get("/v1/presets")
+async def list_presets(pipeline: Optional[str] = None) -> JSONResponse:
+    if pipeline is not None and pipeline not in PRESET_CATALOG:
+        return _error_response(
+            400,
+            code="INVALID_ARGUMENT",
+            message=f"Unsupported pipeline '{pipeline}'",
+            details={"field": "pipeline", "allowed": sorted(PRESET_CATALOG.keys())},
+        )
+
+    if pipeline is None:
+        data = {
+            "pipelines": [{"pipeline": pipeline_name, "presets": presets} for pipeline_name, presets in PRESET_CATALOG.items()]
+        }
+    else:
+        data = {"pipeline": pipeline, "presets": PRESET_CATALOG[pipeline]}
+
+    return JSONResponse(
+        _api_envelope(
+            "tp.orchestrator.presets.v1",
+            success=True,
+            data=data,
+            error=None,
+        )
+    )
 
 
 @app.post("/v1/jobs")
 async def create_job(payload: Dict[str, Any]) -> JSONResponse:
     try:
         argv = _argv_from_request(payload)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    except ValueError as exc:
+        reason_code = VALIDATION_REASON_CODES.get(str(exc), "invalid_request")
+        return _error_response(
+            400,
+            code="INVALID_ARGUMENT",
+            message="invalid job request",
+            details={"field": "payload", "reason": reason_code},
+        )
 
     _cleanup_expired_jobs(_now())
     jid = "job_" + uuid.uuid4().hex[:8]
@@ -605,56 +856,69 @@ async def create_job(payload: Dict[str, Any]) -> JSONResponse:
     asyncio.create_task(_run_job(job, argv))
 
     return JSONResponse(
-        {
-            "schema": "tp.orchestrator.job.v1",
-            "success": True,
-            "data": {"id": jid, "state": job.state, "events_url": f"/v1/jobs/{jid}/events"},
-            "error": None,
-        }
+        _api_envelope(
+            "tp.orchestrator.job.v1",
+            success=True,
+            data={"id": jid, "state": job.state, "events_url": f"/v1/jobs/{jid}/events"},
+            error=None,
+        )
+    )
+
+
+@app.get("/v1/jobs")
+async def list_jobs(limit: int = JOB_LIST_LIMIT) -> JSONResponse:
+    _cleanup_expired_jobs(_now())
+    bounded_limit = max(1, min(limit, JOB_LIST_LIMIT))
+    jobs_sorted = sorted(JOBS.values(), key=lambda item: item.created_at, reverse=True)
+    serialized = [_serialize_job(job) for job in jobs_sorted[:bounded_limit]]
+
+    return JSONResponse(
+        _api_envelope(
+            "tp.orchestrator.jobs.v1",
+            success=True,
+            data={"jobs": serialized, "total": len(JOBS), "returned": len(serialized)},
+            error=None,
+        )
     )
 
 
 @app.get("/v1/jobs/{job_id}")
-async def get_job(job_id: str) -> Dict[str, Any]:
+async def get_job(job_id: str) -> JSONResponse:
     _cleanup_expired_jobs(_now())
     job = JOBS.get(job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="job not found")
-    return {
-        "schema": "tp.orchestrator.job_status.v1",
-        "success": True,
-        "data": {
-            "id": job.id,
-            "created_at": job.created_at,
-            "state": job.state,
-            "progress": job.progress,
-            "exit_code": job.exit_code,
-            "logs_tail": job.logs_tail[-STATUS_LOG_LIMIT:],
-        },
-    }
+        return _error_response(404, code="NOT_FOUND", message="job not found", details={"job_id": job_id})
+    return JSONResponse(
+        _api_envelope(
+            "tp.orchestrator.job_status.v1",
+            success=True,
+            data=_serialize_job(job),
+            error=None,
+        )
+    )
 
 
 @app.post("/v1/jobs/{job_id}/cancel")
 async def cancel_job(job_id: str) -> JSONResponse:
     job = JOBS.get(job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="job not found")
+        return _error_response(404, code="NOT_FOUND", message="job not found", details={"job_id": job_id})
     await _request_cancel(job)
     return JSONResponse(
-        {
-            "schema": "tp.orchestrator.job.v1",
-            "success": True,
-            "data": {"id": job_id, "state": job.state},
-            "error": None,
-        }
+        _api_envelope(
+            "tp.orchestrator.job.v1",
+            success=True,
+            data={"id": job_id, "state": job.state},
+            error=None,
+        )
     )
 
 
 @app.get("/v1/jobs/{job_id}/events")
-async def job_events(request: Request, job_id: str) -> StreamingResponse:
+async def job_events(request: Request, job_id: str):
     job = JOBS.get(job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="job not found")
+        return _error_response(404, code="NOT_FOUND", message="job not found", details={"job_id": job_id})
 
     subscribers = EVENT_SUBSCRIBERS.setdefault(job_id, {})
     subscriber_id = uuid.uuid4().hex
@@ -665,7 +929,16 @@ async def job_events(request: Request, job_id: str) -> StreamingResponse:
         try:
             yield _sse("state", {"id": job_id, "state": job.state, "progress": job.progress})
             if job.finished_at is not None:
-                yield _sse("done", {"id": job.id, "state": job.state, "exit_code": job.exit_code})
+                yield _sse(
+                    "done",
+                    {
+                        "id": job.id,
+                        "state": job.state,
+                        "exit_code": job.exit_code,
+                        "error": job.error,
+                        "artifacts": job.artifacts,
+                    },
+                )
                 return
 
             last_beat = _now()
@@ -741,19 +1014,34 @@ async def _run_job(job: Job, argv: List[str]) -> None:
             job.state = "canceled"
         else:
             job.state = "succeeded" if rc == 0 else "failed"
+            if rc != 0:
+                job.error = _error_obj(
+                    "RUNNER_EXIT_NONZERO",
+                    f"runner exited with code {rc}",
+                    {"exit_code": int(rc)},
+                )
 
     except FileNotFoundError:
         job.state = "failed"
         job.exit_code = 127
-        job.error = {"code": "RUNNER_NOT_FOUND", "message": f"Command '{argv[0]}' not found in PATH."}
+        job.error = _error_obj(
+            "RUNNER_NOT_FOUND",
+            f"Command '{argv[0]}' not found in PATH.",
+            {"command": argv[0]},
+        )
         msg = f"runner_error: {job.error['message']}"
         job.add_log(msg)
         await _publish_event(job.id, "log", {"id": job.id, "line": msg})
-    except Exception as e:
+    except Exception as exc:
+        LOGGER.exception("Unhandled runner exception for job %s", job.id)
         job.state = "failed"
         job.exit_code = 1
-        job.error = {"code": "RUNNER_ERROR", "message": repr(e)}
-        msg = f"runner_error: {job.error['message']}"
+        job.error = _error_obj(
+            "RUNNER_ERROR",
+            "unexpected runner failure",
+            {"exception_type": type(exc).__name__},
+        )
+        msg = "runner_error: unexpected runner failure"
         job.add_log(msg)
         await _publish_event(job.id, "log", {"id": job.id, "line": msg})
     finally:
@@ -764,5 +1052,19 @@ async def _run_job(job: Job, argv: List[str]) -> None:
                 pass
 
         job.finished_at = _now()
-        await _publish_event(job.id, "done", {"id": job.id, "state": job.state, "exit_code": job.exit_code})
+        indexed_artifacts = _index_job_artifacts(job)
+        for artifact in indexed_artifacts:
+            await _publish_event(job.id, "artifact", {"id": job.id, **artifact})
+
+        await _publish_event(
+            job.id,
+            "done",
+            {
+                "id": job.id,
+                "state": job.state,
+                "exit_code": job.exit_code,
+                "error": job.error,
+                "artifacts": job.artifacts,
+            },
+        )
         _cleanup_expired_jobs(_now())

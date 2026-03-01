@@ -360,6 +360,20 @@
                     </div>
                 </div>
 
+                <!-- Artifacts -->
+                <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-soft dark:shadow-soft-dark p-6 transition-colors duration-300">
+                    <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-200 dark:border-slate-800">
+                        <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Artifacts</h2>
+                        <span id="artifactMeta" class="text-[11px] text-slate-500 dark:text-slate-400 font-mono">No job selected</span>
+                    </div>
+                    <div class="max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
+                        <ul id="artifactList" class="space-y-2"></ul>
+                        <div id="emptyArtifactState" class="py-4 text-center">
+                            <p class="text-[12px] text-slate-500 dark:text-slate-400">No artifacts indexed.</p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Live Logs -->
                 <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-soft dark:shadow-soft-dark flex flex-col flex-1 min-h-[400px] overflow-hidden transition-colors duration-300">
                     <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900">
@@ -436,7 +450,8 @@
             jobs: [],
             selectedJobId: null,
             backendOk: false,
-            theme: 'light'
+            theme: 'light',
+            presetsByPipeline: {}
         };
 
         const els = {
@@ -491,6 +506,9 @@
             jobList: document.getElementById('jobList'),
             emptyQueueState: document.getElementById('emptyQueueState'),
             queueCount: document.getElementById('queueCount'),
+            artifactList: document.getElementById('artifactList'),
+            artifactMeta: document.getElementById('artifactMeta'),
+            emptyArtifactState: document.getElementById('emptyArtifactState'),
             logPane: document.getElementById('logPane'),
             logStatusIndicator: document.getElementById('logStatusIndicator'),
             clearLogsBtn: document.getElementById('clearLogsBtn'),
@@ -564,14 +582,18 @@
             if (els.rememberApiKey) els.rememberApiKey.checked = Boolean(localValue);
         }
 
-        function _buildAuthHeaders(base = {}) {
-            const headers = { ...base };
-            const token = _normalizeApiToken(
+        function _currentApiToken() {
+            return _normalizeApiToken(
                 (els.apiKeyInput && els.apiKeyInput.value) ||
                 sessionStorage.getItem(API_KEY_STORAGE_KEY) ||
                 localStorage.getItem(API_KEY_STORAGE_KEY) ||
                 ''
             );
+        }
+
+        function _buildAuthHeaders(base = {}) {
+            const headers = { ...base };
+            const token = _currentApiToken();
             if (token) {
                 headers['Authorization'] = `Bearer ${token}`;
                 headers['x-api-key'] = token;
@@ -611,6 +633,83 @@
             }
         }
 
+        function getReadableError(errorObj) {
+            if (!errorObj || typeof errorObj !== 'object') return '';
+            const code = typeof errorObj.code === 'string' ? errorObj.code.trim() : '';
+            const message = typeof errorObj.message === 'string' ? errorObj.message.trim() : '';
+            if (code && message) return `[${code}] ${message}`;
+            return message || code || '';
+        }
+
+        function normalizeArtifactItems(artifactsContainer) {
+            if (!artifactsContainer || typeof artifactsContainer !== 'object') return [];
+            const items = Array.isArray(artifactsContainer.items) ? artifactsContainer.items : [];
+            return items
+                .filter((item) => item && typeof item.path === 'string')
+                .map((item) => ({
+                    artifact_type: String(item.artifact_type || 'file'),
+                    path: String(item.path),
+                    relative_path: String(item.relative_path || item.path),
+                    size_bytes: typeof item.size_bytes === 'number' ? item.size_bytes : null
+                }));
+        }
+
+        function upsertArtifact(job, artifact) {
+            if (!job || !artifact || !artifact.path) return;
+            if (!Array.isArray(job.artifacts)) job.artifacts = [];
+            const existing = job.artifacts.find((entry) => entry.path === artifact.path);
+            if (existing) {
+                existing.artifact_type = artifact.artifact_type || existing.artifact_type;
+                existing.relative_path = artifact.relative_path || existing.relative_path;
+                existing.size_bytes = artifact.size_bytes ?? existing.size_bytes;
+                return;
+            }
+            job.artifacts.push(artifact);
+        }
+
+        function renderArtifactPanel() {
+            if (!els.artifactList || !els.artifactMeta) return;
+            const selected = state.jobs.find((item) => item.id === state.selectedJobId);
+            const artifacts = Array.isArray(selected?.artifacts) ? selected.artifacts : [];
+
+            if (!selected) {
+                els.artifactMeta.textContent = 'No job selected';
+                els.artifactList.innerHTML = '';
+                if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'block';
+                return;
+            }
+
+            const errorText = getReadableError(selected.error);
+            els.artifactMeta.textContent = `${artifacts.length} artifacts${errorText ? ` • ${errorText}` : ''}`;
+
+            if (artifacts.length === 0) {
+                els.artifactList.innerHTML = '';
+                if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'block';
+                return;
+            }
+
+            if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'none';
+            const fragment = document.createDocumentFragment();
+            artifacts.forEach((artifact) => {
+                const li = document.createElement('li');
+                li.className = 'rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 bg-slate-50 dark:bg-slate-800/40';
+
+                const title = document.createElement('div');
+                title.className = 'text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400 font-semibold';
+                title.textContent = String(artifact.artifact_type || 'file');
+                li.appendChild(title);
+
+                const pathLine = document.createElement('div');
+                pathLine.className = 'mt-1 text-[11px] font-mono text-slate-700 dark:text-slate-200 break-all';
+                pathLine.textContent = String(artifact.relative_path || artifact.path || '');
+                li.appendChild(pathLine);
+
+                fragment.appendChild(li);
+            });
+            els.artifactList.innerHTML = '';
+            els.artifactList.appendChild(fragment);
+        }
+
         function selectJob(jobId) {
             state.selectedJobId = jobId;
             const job = state.jobs.find((item) => item.id === jobId);
@@ -618,7 +717,23 @@
                 els.logPane.textContent = job.logs.join('\n') + (job.logs.length ? '\n' : '');
                 els.logPane.scrollTop = els.logPane.scrollHeight;
             }
+            renderArtifactPanel();
             scheduleRenderJobQueue();
+        }
+
+        function hydrateJobFromServer(rawJob) {
+            if (!rawJob || !rawJob.id) return null;
+            return {
+                id: String(rawJob.id),
+                pipeline: String(rawJob.pipeline || 'unknown'),
+                state: String(rawJob.state || 'queued'),
+                progress: Math.max(0, Math.min(100, Number(rawJob.progress) || 0)),
+                logs: Array.isArray(rawJob.logs_tail) ? rawJob.logs_tail.slice(-MAX_JOB_LOG_LINES) : [],
+                artifacts: normalizeArtifactItems(rawJob.artifacts),
+                error: rawJob.error || null,
+                eventSource: null,
+                mockInterval: null
+            };
         }
 
         function stopJobActivity(job) {
@@ -669,6 +784,80 @@
             return value;
         }
 
+        function seedPresetFallbacks() {
+            if (!els.presetSelect) return;
+            const fallback = [...els.presetSelect.options]
+                .map((opt) => ({
+                    name: String(opt.value || '').trim(),
+                    label: String(opt.textContent || opt.value || '').trim(),
+                    stability: 'unknown'
+                }))
+                .filter((item) => item.name);
+            if (fallback.length > 0) {
+                state.presetsByPipeline['lux-depth-v3'] = fallback;
+            }
+        }
+
+        function applyPipelinePresetOptions(pipelineName) {
+            if (!els.presetSelect || pipelineName !== 'lux-depth-v3') return;
+            const presets = state.presetsByPipeline[pipelineName];
+            if (!Array.isArray(presets) || presets.length === 0) return;
+
+            const selectedBefore = state.config.preset;
+            els.presetSelect.innerHTML = '';
+            presets.forEach((preset) => {
+                if (!preset || !preset.name) return;
+                const option = document.createElement('option');
+                option.value = String(preset.name);
+                option.textContent = String(preset.label || preset.name);
+                els.presetSelect.appendChild(option);
+            });
+
+            const names = presets.map((preset) => String(preset.name));
+            if (names.includes(selectedBefore)) {
+                els.presetSelect.value = selectedBefore;
+            } else {
+                const first = names[0] || 'premium';
+                els.presetSelect.value = first;
+                state.config.preset = first;
+            }
+        }
+
+        function parsePresetsResponse(payload, pipelineName) {
+            if (!payload || typeof payload !== 'object' || payload.success !== true || !payload.data) return [];
+            if (Array.isArray(payload.data.presets)) return payload.data.presets;
+            if (Array.isArray(payload.data.pipelines)) {
+                const found = payload.data.pipelines.find((item) => item && item.pipeline === pipelineName);
+                if (found && Array.isArray(found.presets)) return found.presets;
+            }
+            return [];
+        }
+
+        async function fetchPresetsForPipeline(pipelineName, silent = false) {
+            if (!pipelineName || pipelineName !== 'lux-depth-v3' || !state.backendOk) return;
+            try {
+                const headers = _buildAuthHeaders({ 'Accept': 'application/json' });
+                const res = await fetch(`${API_BASE}/v1/presets?pipeline=${encodeURIComponent(pipelineName)}`, { headers });
+                if (!res.ok) throw new Error(`preset fetch failed (${res.status})`);
+                const payload = await res.json();
+                const presets = parsePresetsResponse(payload, pipelineName)
+                    .filter((preset) => preset && typeof preset.name === 'string')
+                    .map((preset) => ({
+                        name: String(preset.name),
+                        label: String(preset.label || preset.name),
+                        stability: String(preset.stability || 'unknown'),
+                        description: String(preset.description || '')
+                    }));
+                if (presets.length > 0) {
+                    state.presetsByPipeline[pipelineName] = presets;
+                    applyPipelinePresetOptions(pipelineName);
+                    renderCLI();
+                }
+            } catch (err) {
+                if (!silent) createToast('Failed to refresh presets from backend.', 'error');
+            }
+        }
+
         function updateUIFromState() {
             if (!els.pipelineSelect) return;
             els.pipelineSelect.value = state.pipeline;
@@ -683,6 +872,7 @@
 
             const c = state.config;
             c.depthBackend = canonicalDepthBackend(c.depthBackend);
+            applyPipelinePresetOptions(state.pipeline);
             if (els.presetSelect) els.presetSelect.value = c.preset;
             if (els.inputDir) els.inputDir.value = c.inputDir;
             if (els.outputDir) els.outputDir.value = c.outputDir;
@@ -816,7 +1006,10 @@
                     if (category) state.config[category][key] = e.target.value;
                     else if (key in state.config) state.config[key] = e.target.value;
                     else state[key] = e.target.value;
-                    if (key === 'pipeline') updateUIFromState();
+                    if (key === 'pipeline') {
+                        updateUIFromState();
+                        void fetchPresetsForPipeline(state.pipeline, true);
+                    }
                     else renderCLI();
                 });
             };
@@ -897,6 +1090,7 @@
             if (state.jobs.length === 0) {
                 if (els.emptyQueueState) els.emptyQueueState.style.display = 'flex';
                 els.jobList.innerHTML = '';
+                renderArtifactPanel();
                 return;
             }
             if (els.emptyQueueState) els.emptyQueueState.style.display = 'none';
@@ -977,6 +1171,7 @@
 
             els.jobList.innerHTML = '';
             els.jobList.appendChild(fragment);
+            renderArtifactPanel();
         }
 
         function logToPane(jobId, line) {
@@ -993,6 +1188,7 @@
             if (!force && (healthCheckInFlight || (now - lastHealthCheckAt) < HEALTH_CHECK_MIN_GAP_MS)) {
                 return;
             }
+            const wasOnline = state.backendOk;
             healthCheckInFlight = true;
             lastHealthCheckAt = now;
             try {
@@ -1001,6 +1197,10 @@
                     state.backendOk = true;
                     if (els.healthIndicator) els.healthIndicator.className = 'status-dot ready';
                     if (els.healthText) els.healthText.textContent = 'Backend Online';
+                    if (!wasOnline) {
+                        void fetchPresetsForPipeline(state.pipeline, true);
+                        void recoverJobs();
+                    }
                 } else {
                     throw new Error('backend not ready');
                 }
@@ -1010,6 +1210,144 @@
                 if (els.healthText) els.healthText.textContent = 'Offline / Mock Mode';
             } finally {
                 healthCheckInFlight = false;
+            }
+        }
+
+        async function extractApiError(res) {
+            const raw = await res.text();
+            let payload = null;
+            try {
+                payload = raw ? JSON.parse(raw) : null;
+            } catch {
+                payload = null;
+            }
+
+            if (payload && payload.error && payload.error.message) {
+                const code = payload.error.code ? `[${payload.error.code}] ` : '';
+                return { message: `${code}${payload.error.message}`, error: payload.error };
+            }
+            if (payload && typeof payload.detail === 'string') {
+                return { message: payload.detail, error: null };
+            }
+            return { message: raw || `Request failed (${res.status})`, error: null };
+        }
+
+        function _eventSourceUrl(eventsUrl) {
+            const token = _currentApiToken();
+            const baseUrl = `${API_BASE}${eventsUrl}`;
+            if (!token) return baseUrl;
+            if (!/\/v1\/jobs\/[^/]+\/events(?:\?|$)/.test(eventsUrl)) return baseUrl;
+            const separator = baseUrl.includes('?') ? '&' : '?';
+            return `${baseUrl}${separator}api_key=${encodeURIComponent(token)}`;
+        }
+
+        function startJobEventStream(job, eventsUrl) {
+            if (!job || !eventsUrl) return;
+            stopJobActivity(job);
+            const es = new EventSource(_eventSourceUrl(eventsUrl));
+            job.eventSource = es;
+
+            es.addEventListener('log', (e) => {
+                const parsed = JSON.parse(e.data);
+                const line = String(parsed.line || '');
+                appendJobLog(job, line);
+                logToPane(job.id, line);
+            });
+            es.addEventListener('progress', (e) => {
+                const parsed = JSON.parse(e.data);
+                job.progress = Math.max(0, Math.min(100, Number(parsed.progress) || 0));
+                scheduleRenderJobQueue();
+            });
+            es.addEventListener('state', (e) => {
+                const parsed = JSON.parse(e.data);
+                job.state = String(parsed.state || job.state || 'running');
+                scheduleRenderJobQueue();
+            });
+            es.addEventListener('artifact', (e) => {
+                const parsed = JSON.parse(e.data);
+                upsertArtifact(job, {
+                    artifact_type: String(parsed.artifact_type || 'file'),
+                    path: String(parsed.path || ''),
+                    relative_path: String(parsed.relative_path || parsed.path || ''),
+                    size_bytes: typeof parsed.size_bytes === 'number' ? parsed.size_bytes : null
+                });
+                renderArtifactPanel();
+            });
+            es.addEventListener('done', (e) => {
+                const parsed = JSON.parse(e.data);
+                job.state = String(parsed.state || job.state || 'failed');
+                job.progress = job.state === 'succeeded' ? 100 : job.progress;
+                if (parsed.error) {
+                    job.error = parsed.error;
+                    const readable = getReadableError(parsed.error);
+                    if (readable) {
+                        const line = `[ERROR] ${readable}`;
+                        appendJobLog(job, line);
+                        logToPane(job.id, line);
+                    }
+                }
+                if (parsed.artifacts && parsed.artifacts.items) {
+                    job.artifacts = normalizeArtifactItems(parsed.artifacts);
+                }
+                const endLine = `[SYSTEM] Stream closed. Exit code: ${parsed.exit_code}`;
+                appendJobLog(job, endLine);
+                logToPane(job.id, endLine);
+                stopJobActivity(job);
+                scheduleRenderJobQueue();
+                renderArtifactPanel();
+                createToast(`Job ${job.state}.`, job.state === 'succeeded' ? 'success' : 'error');
+                if (state.selectedJobId === job.id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
+            });
+            es.onerror = () => {};
+        }
+
+        async function recoverJobs() {
+            if (!state.backendOk) return;
+            try {
+                const headers = _buildAuthHeaders({ 'Accept': 'application/json' });
+                const res = await fetch(`${API_BASE}/v1/jobs`, { headers });
+                if (!res.ok) return;
+                const payload = await res.json();
+                const jobsFromServer = Array.isArray(payload?.data?.jobs) ? payload.data.jobs : [];
+                if (jobsFromServer.length === 0) return;
+
+                const byId = new Map(state.jobs.map((job) => [job.id, job]));
+                [...jobsFromServer].reverse().forEach((rawJob) => {
+                    const id = String(rawJob.id || '');
+                    if (!id) return;
+                    const hydrated = hydrateJobFromServer(rawJob);
+                    if (!hydrated) return;
+                    const existing = byId.get(id);
+                    if (existing) {
+                        existing.pipeline = hydrated.pipeline;
+                        existing.state = hydrated.state;
+                        existing.progress = hydrated.progress;
+                        existing.logs = hydrated.logs;
+                        existing.error = hydrated.error;
+                        existing.artifacts = hydrated.artifacts;
+                    } else {
+                        state.jobs.push(hydrated);
+                        byId.set(id, hydrated);
+                    }
+                });
+
+                if (!state.selectedJobId && state.jobs.length > 0) {
+                    const newest = state.jobs[state.jobs.length - 1];
+                    state.selectedJobId = newest.id;
+                }
+
+                state.jobs.forEach((job) => {
+                    if ((job.state === 'running' || job.state === 'queued') && !job.eventSource) {
+                        startJobEventStream(job, `/v1/jobs/${job.id}/events`);
+                    }
+                });
+                if (state.selectedJobId) selectJob(state.selectedJobId);
+                else {
+                    scheduleRenderJobQueue();
+                    renderArtifactPanel();
+                }
+            } catch (err) {
+                // best-effort only
             }
         }
 
@@ -1026,6 +1364,7 @@
             fetch(`${API_BASE}/v1/jobs/${id}/cancel`, { method: 'POST', headers }).catch(() => {});
 
             scheduleRenderJobQueue();
+            renderArtifactPanel();
             if (state.selectedJobId === id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
             createToast("Job canceled.", "error");
         }
@@ -1060,12 +1399,23 @@
             const randomId = window.crypto?.randomUUID ? window.crypto.randomUUID().replace(/-/g, '').slice(0, 8) : Math.random().toString(36).slice(2, 8);
             const localId = `job_${randomId}`;
 
-            const job = { id: localId, pipeline: payload.pipeline, state: 'running', progress: 0, logs: [], eventSource: null, mockInterval: null };
+            const job = {
+                id: localId,
+                pipeline: payload.pipeline,
+                state: 'running',
+                progress: 0,
+                logs: [],
+                artifacts: [],
+                error: null,
+                eventSource: null,
+                mockInterval: null
+            };
             state.jobs.push(job);
             state.selectedJobId = job.id;
             if (els.logPane) els.logPane.textContent = '';
             if (els.logStatusIndicator) els.logStatusIndicator.classList.remove('hidden');
             scheduleRenderJobQueue();
+            renderArtifactPanel();
             const initLine = `[INFO] Initializing ${payload.pipeline}...`;
             appendJobLog(job, initLine);
             logToPane(job.id, initLine);
@@ -1078,7 +1428,11 @@
                         headers,
                         body: JSON.stringify(payload)
                     });
-                    if (!res.ok) throw new Error(await res.text());
+                    if (!res.ok) {
+                        const parsedError = await extractApiError(res);
+                        if (parsedError.error) job.error = parsedError.error;
+                        throw new Error(parsedError.message);
+                    }
                     const data = await res.json();
 
                     job.id = data.data.id;
@@ -1086,40 +1440,13 @@
                     scheduleRenderJobQueue();
                     createToast(`Job dispatched: ${job.id}`, 'success');
 
-                    const es = new EventSource(`${API_BASE}${data.data.events_url}`);
-                    job.eventSource = es;
-
-                    es.addEventListener('log', (e) => {
-                        const line = JSON.parse(e.data).line;
-                        appendJobLog(job, line);
-                        logToPane(job.id, line);
-                    });
-                    es.addEventListener('progress', (e) => {
-                        job.progress = JSON.parse(e.data).progress;
-                        scheduleRenderJobQueue();
-                    });
-                    es.addEventListener('state', (e) => {
-                        job.state = JSON.parse(e.data).state;
-                        scheduleRenderJobQueue();
-                    });
-                    es.addEventListener('done', (e) => {
-                        const parsed = JSON.parse(e.data);
-                        job.state = parsed.state;
-                        job.progress = job.state === 'succeeded' ? 100 : job.progress;
-                        const endLine = `[SYSTEM] Stream closed. Exit code: ${parsed.exit_code}`;
-                        appendJobLog(job, endLine);
-                        logToPane(job.id, endLine);
-                        stopJobActivity(job);
-                        scheduleRenderJobQueue();
-                        createToast(`Job ${job.state}.`, job.state === 'succeeded' ? 'success' : 'error');
-                        if (state.selectedJobId === job.id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
-                    });
-                    es.onerror = () => {};
+                    startJobEventStream(job, data.data.events_url);
                 } catch (err) {
                     const errorMessage = err instanceof Error ? err.message : String(err);
                     job.state = 'failed';
                     appendJobLog(job, `[ERROR] ${errorMessage}`);
                     scheduleRenderJobQueue();
+                    renderArtifactPanel();
                     createToast("Backend submission failed.", "error");
                     if (state.selectedJobId === job.id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
                 } finally {
@@ -1156,6 +1483,7 @@
                         if (state.selectedJobId === job.id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
                     }
                     scheduleRenderJobQueue();
+                    renderArtifactPanel();
                 }, 800);
             }
         }
@@ -1192,6 +1520,7 @@
                 state.pipeline = profiles[name].pipeline;
                 state.config = JSON.parse(JSON.stringify(profiles[name].config));
                 updateUIFromState();
+                void fetchPresetsForPipeline(state.pipeline, true);
                 createToast(`Profile ${name} loaded.`);
             }
         });
@@ -1240,6 +1569,7 @@
                     c.gate.sign = data.args.sign ?? c.gate.sign;
                 }
                 updateUIFromState();
+                void fetchPresetsForPipeline(state.pipeline, true);
                 createToast("Configuration imported.", "success");
             } catch (err) {
                 createToast("Invalid JSON file.", "error");
@@ -1321,7 +1651,7 @@
                 stopHealthPolling();
                 return;
             }
-            checkBackend(true);
+            void checkBackend(true);
             startHealthPolling();
         });
 
@@ -1337,11 +1667,13 @@
             });
 
             _loadApiKeyIntoInputs();
+            seedPresetFallbacks();
             refreshProfileDropdown();
             updateUIFromState();
             bindInputs();
             renderJobQueue();
-            checkBackend();
+            renderArtifactPanel();
+            void checkBackend(true);
             startHealthPolling();
         }
 

@@ -6,8 +6,10 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import json
 import os
 import sys
+from pathlib import Path
 from typing import Dict
 
 import pytest
@@ -32,7 +34,11 @@ def _flag_value(argv: list[str], flag: str) -> str:
 
 
 def _build_request(
-    method: str, path: str, headers: Dict[str, str] | None = None, client_host: str = "127.0.0.1"
+    method: str,
+    path: str,
+    headers: Dict[str, str] | None = None,
+    client_host: str = "127.0.0.1",
+    query_string: str = "",
 ) -> StarletteRequest:
     raw_headers = []
     for key, value in (headers or {}).items():
@@ -44,7 +50,7 @@ def _build_request(
         "method": method,
         "path": path,
         "raw_path": path.encode("utf-8"),
-        "query_string": b"",
+        "query_string": query_string.encode("utf-8"),
         "headers": raw_headers,
         "client": (client_host, 12345),
         "server": ("testserver", 80),
@@ -438,3 +444,110 @@ def test_rate_limiting_returns_true_after_threshold() -> None:
 def test_client_ip_prefers_peer_by_default() -> None:
     request = _build_request("GET", "/ready", headers={"x-forwarded-for": "203.0.113.9, 127.0.0.1"}, client_host="10.0.0.1")
     assert orchestrator_app._extract_client_ip(request) == "10.0.0.1"
+
+
+def test_api_key_validation_accepts_query_param() -> None:
+    previous_key = orchestrator_app.API_KEY_SECRET
+    try:
+        orchestrator_app.API_KEY_SECRET = "query-secret"
+        request = _build_request("GET", "/v1/jobs/job_1/events", query_string="api_key=query-secret")
+        assert orchestrator_app._has_valid_api_key(request) is True
+    finally:
+        orchestrator_app.API_KEY_SECRET = previous_key
+
+
+def test_api_key_query_param_is_rejected_for_non_event_endpoints() -> None:
+    previous_key = orchestrator_app.API_KEY_SECRET
+    try:
+        orchestrator_app.API_KEY_SECRET = "query-secret"
+        request = _build_request("GET", "/v1/jobs", query_string="api_key=query-secret")
+        assert orchestrator_app._has_valid_api_key(request) is False
+    finally:
+        orchestrator_app.API_KEY_SECRET = previous_key
+
+
+def test_protected_job_route_detection() -> None:
+    assert orchestrator_app._is_protected_job_endpoint("/v1/jobs") is True
+    assert orchestrator_app._is_protected_job_endpoint("/v1/jobs/job_123") is True
+    assert orchestrator_app._is_protected_job_endpoint("/v1/jobs/job_123/events") is True
+    assert orchestrator_app._is_protected_job_endpoint("/ready") is False
+
+
+def test_index_job_artifacts_populates_job_payload(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "manifest.json").write_text("{}", encoding="utf-8")
+    (output_dir / "render.png").write_bytes(b"png")
+
+    job = orchestrator_app.Job(
+        id="job_artifacts",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+    indexed = orchestrator_app._index_job_artifacts(job)
+
+    assert len(indexed) == 2
+    assert job.artifacts["output_dir"] == str(output_dir)
+    assert {item["artifact_type"] for item in indexed} == {"metadata", "image"}
+    assert {item["path"] for item in indexed} == {"manifest.json", "render.png"}
+
+
+def test_create_job_validation_uses_typed_error_envelope() -> None:
+    response = asyncio.run(orchestrator_app.create_job({"pipeline": "unsupported", "args": {}}))
+    body = json.loads(response.body.decode("utf-8"))
+
+    assert response.status_code == 400
+    assert body["success"] is False
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+
+
+def test_list_presets_filters_pipeline() -> None:
+    response = asyncio.run(orchestrator_app.list_presets("lux-depth-v3"))
+    body = json.loads(response.body.decode("utf-8"))
+
+    assert response.status_code == 200
+    assert body["success"] is True
+    assert body["data"]["pipeline"] == "lux-depth-v3"
+    assert any(item["name"] == "premium" for item in body["data"]["presets"])
+
+
+def test_list_jobs_includes_error_and_artifacts() -> None:
+    job = orchestrator_app.Job(
+        id="job_summary",
+        created_at=orchestrator_app._now(),
+        state="failed",
+        progress=72,
+        request={"pipeline": "lux-depth-v3"},
+        logs_tail=["line-1", "line-2"],
+        artifacts={"output_dir": "/tmp/out", "items": [{"artifact_type": "metadata", "path": "/tmp/out/manifest.json"}]},
+        error={"code": "RUNNER_ERROR", "message": "boom", "details": {}},
+    )
+    orchestrator_app.JOBS[job.id] = job
+
+    response = asyncio.run(orchestrator_app.list_jobs())
+    body = json.loads(response.body.decode("utf-8"))
+    first = body["data"]["jobs"][0]
+
+    assert response.status_code == 200
+    assert first["id"] == "job_summary"
+    assert first["error"]["code"] == "RUNNER_ERROR"
+    assert first["artifacts"]["items"][0]["path"].endswith("manifest.json")
+
+
+def test_get_job_includes_artifacts_and_error() -> None:
+    job = orchestrator_app.Job(
+        id="job_details",
+        created_at=orchestrator_app._now(),
+        state="failed",
+        request={"pipeline": "lux-depth-v3"},
+        artifacts={"output_dir": "/tmp/out", "items": []},
+        error={"code": "RUNNER_ERROR", "message": "boom", "details": {}},
+    )
+    orchestrator_app.JOBS[job.id] = job
+
+    response = asyncio.run(orchestrator_app.get_job(job.id))
+    body = json.loads(response.body.decode("utf-8"))
+
+    assert response.status_code == 200
+    assert body["data"]["artifacts"]["output_dir"] == "/tmp/out"
+    assert body["data"]["error"]["code"] == "RUNNER_ERROR"
