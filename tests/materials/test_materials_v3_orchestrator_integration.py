@@ -4,6 +4,9 @@ Tests that Materials V3 Engine is properly wired into the orchestrator
 and processes images when enabled.
 """
 
+# pytest fixture injection uses function args that match fixture names.
+# pylint: disable=redefined-outer-name
+
 from unittest.mock import MagicMock, patch
 
 import numpy as np

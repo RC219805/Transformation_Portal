@@ -828,19 +828,30 @@ jobs:
           # If full suite was required, enforce all jobs
           if [ "${{ needs.preflight.outputs.run_full }}" = "true" ]; then
             ok="true"
+            lint_result="${{ needs.lint.result }}"
+            test_result="${{ needs.test.result }}"
+            manifest_result="${{ needs['generate-manifest'].result }}"
 
-            if [ "${{ needs.lint.result }}" != "success" ]; then
-              echo "❌ lint did not succeed"
+            if [ "${lint_result}" != "success" ]; then
+              echo "❌ lint did not succeed (result=${lint_result})"
               ok="false"
             fi
 
-            if [ "${{ needs.test.result }}" != "success" ]; then
-              echo "❌ test matrix did not succeed"
+            if [ "${test_result}" != "success" ]; then
+              if [ "${test_result}" = "skipped" ] && [ "${lint_result}" != "success" ]; then
+                echo "ℹ️ test matrix skipped due failed dependency (lint=${lint_result})"
+              else
+                echo "❌ test matrix did not succeed (result=${test_result})"
+              fi
               ok="false"
             fi
 
-            if [ "${{ needs['generate-manifest'].result }}" != "success" ]; then
-              echo "❌ generate-manifest did not succeed"
+            if [ "${manifest_result}" != "success" ]; then
+              if [ "${manifest_result}" = "skipped" ] && [ "${test_result}" != "success" ]; then
+                echo "ℹ️ generate-manifest skipped due failed dependency (test=${test_result})"
+              else
+                echo "❌ generate-manifest did not succeed (result=${manifest_result})"
+              fi
               ok="false"
             fi
 

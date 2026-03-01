@@ -180,7 +180,7 @@ class TestErrorHandling:
         This test requires mocking module-level imports which is complex.
         Functionality verified manually by uninstalling torch.
         """
-        pass
+        pytest.skip("Requires module-level import mocking, tested manually")
 
     @patch("transformation_portal.lux_depth_v3.inference.TORCH_AVAILABLE", True)
     @patch("transformation_portal.lux_depth_v3.inference.torch")
