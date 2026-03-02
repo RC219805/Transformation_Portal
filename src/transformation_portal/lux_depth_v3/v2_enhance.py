@@ -46,6 +46,32 @@ class V2EnhancementError(Exception):
     pass
 
 
+_DERIVED_STEM_SUFFIXES = (
+    "_materials_v3_enhanced",
+    "_materials_v3",
+    "_enhanced",
+    "_pbr",
+)
+
+
+def canonical_asset_stem(input_path_or_stem: str) -> str:
+    """Normalize derived V2 stems back to canonical source asset stem."""
+    stem = Path(str(input_path_or_stem)).stem
+    normalized = stem
+
+    # Repeated stripping handles multi-derived names like *_materials_v3_enhanced.
+    changed = True
+    while changed:
+        changed = False
+        for suffix in _DERIVED_STEM_SUFFIXES:
+            if normalized.endswith(suffix) and len(normalized) > len(suffix):
+                normalized = normalized[: -len(suffix)]
+                changed = True
+                break
+
+    return normalized
+
+
 def find_depth_map(depth_dir: Path, image_stem: str) -> Optional[Path]:
     """Find depth map for input image in depth directory.
 
@@ -64,21 +90,30 @@ def find_depth_map(depth_dir: Path, image_stem: str) -> Optional[Path]:
     if not depth_dir or not depth_dir.exists():
         return None
 
-    # Try common depth map naming patterns
-    patterns = [
-        f"{image_stem}_depth.png",
-        f"{image_stem}_depth_u16.png",
-        f"{image_stem}_depth_f32.png",
-        f"{image_stem}.png",
-    ]
+    canonical_stem = canonical_asset_stem(image_stem)
+    candidate_stems = [canonical_stem]
+    if image_stem not in candidate_stems:
+        candidate_stems.append(image_stem)
 
-    for pattern in patterns:
-        depth_path = depth_dir / pattern
-        if depth_path.exists():
-            logger.debug(f"Found depth map: {depth_path}")
-            return depth_path
+    for stem in candidate_stems:
+        patterns = [
+            f"{stem}_depth.png",
+            f"{stem}_depth_u16.png",
+            f"{stem}_depth_f32.png",
+            f"{stem}.png",
+        ]
+        for pattern in patterns:
+            depth_path = depth_dir / pattern
+            if depth_path.exists():
+                logger.debug(f"Found depth map: {depth_path}")
+                return depth_path
 
-    logger.warning(f"No depth map found for '{image_stem}' in {depth_dir}")
+    logger.warning(
+        "No depth map found for '%s' (canonical='%s') in %s",
+        image_stem,
+        canonical_stem,
+        depth_dir,
+    )
     return None
 
 
