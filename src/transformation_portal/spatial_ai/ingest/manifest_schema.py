@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
+from ...ingest.canonical_json import dump_json
 from .exceptions import ManifestError, SchemaVersionError
 from .validators import CURRENT_SCHEMA_VERSION, validate_schema_version
 
@@ -368,8 +369,15 @@ class ManifestSchema:
             # Update timestamp
             data["dataset"]["updated_at"] = datetime.now(timezone.utc).isoformat()
 
-            with open(output_path, "w") as f:
-                json.dump(data, f, indent=indent)
+            with open(output_path, "w", encoding="utf-8") as f:
+                dump_json(
+                    data,
+                    f,
+                    indent=indent,
+                    sort_keys=True,
+                    ensure_ascii=False,
+                    allow_nan=False,
+                )
 
             logger.info(f"Wrote manifest: {output_path}")
 

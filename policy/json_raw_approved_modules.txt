@@ -1,0 +1,42 @@
+# Modules temporarily approved to call raw json.dump/json.dumps directly.
+# New modules should not be added without governance review.
+# Prefer transformation_portal.ingest.canonical_json.dump_json/dumps_json.
+
+src/tp/phase4/canonicalize_capture_metadata.py
+src/tp/phase4/hash_capture_metadata.py
+src/transformation_portal/analyzers/decision_decay_dashboard.py
+src/transformation_portal/comfyui/custom_nodes.py
+src/transformation_portal/comfyui/workflow_builder.py
+src/transformation_portal/core/batch/job.py
+src/transformation_portal/core/config/preset_health.py
+src/transformation_portal/core/observability/integration.py
+src/transformation_portal/core/validation/report.py
+src/transformation_portal/depth/backends/cache.py
+src/transformation_portal/determinism/jcs.py
+src/transformation_portal/enhancers/board_material_aerial_enhancer.py
+src/transformation_portal/enhancers/enhance_aerial.py
+src/transformation_portal/enhancers/update_enhance_aerial.py
+src/transformation_portal/events/store.py
+src/transformation_portal/foundation/performance_monitor.py
+src/transformation_portal/hardening/universal.py
+src/transformation_portal/ingest/canonical_json.py
+src/transformation_portal/ingest/machine_output.py
+src/transformation_portal/ingest/provenance.py
+src/transformation_portal/lux_depth_v3/manifest.py
+src/transformation_portal/lux_depth_v3/orchestrator.py
+src/transformation_portal/lux_depth_v3/pbr_cli.py
+src/transformation_portal/metrics/contracts.py
+src/transformation_portal/metrics/ledger.py
+src/transformation_portal/metrics/performance_capsule.py
+src/transformation_portal/perceptual/baseline.py
+src/transformation_portal/perceptual/tracker.py
+src/transformation_portal/pipeline_unified.py
+src/transformation_portal/pipelines/quality_feedback_bridge.py
+src/transformation_portal/pipelines/rendering_4k_pipeline.py
+src/transformation_portal/pipelines/unified_luxury_pipeline.py
+src/transformation_portal/spatial_ai/ingest/linear_decoder.py
+src/transformation_portal/spatial_ai/orchestration/graph/artifact_store.py
+src/transformation_portal/spatial_ai/orchestration/pipeline.py
+src/transformation_portal/spatial_ai/reconstruction/mesh_exporter.py
+src/transformation_portal/stage_graph/stage.py
+src/transformation_portal/streaming/checkpoint.py

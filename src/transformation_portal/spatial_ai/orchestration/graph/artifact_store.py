@@ -97,6 +97,8 @@ from typing import Any, Dict, Generator, List, Optional
 
 import numpy as np
 
+from ....ingest.canonical_json import dump_json
+
 # Platform-specific imports (guarded for cross-platform safety)
 try:
     import fcntl
@@ -696,7 +698,14 @@ class ArtifactStore:
                 # Write provenance (JSON)
                 with tempfile.NamedTemporaryFile(mode="w", dir=artifact_path.parent, delete=False, suffix=".json") as tmp_prov:
                     tmp_prov_path = Path(tmp_prov.name)
-                    json.dump(asdict(provenance), tmp_prov, indent=2)
+                    dump_json(
+                        asdict(provenance),
+                        tmp_prov,
+                        indent=2,
+                        sort_keys=True,
+                        ensure_ascii=False,
+                        allow_nan=False,
+                    )
                     tmp_prov.flush()
                     os.fsync(tmp_prov.fileno())
 

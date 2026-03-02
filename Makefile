@@ -17,7 +17,7 @@ FAST_TESTS := \
 	tests/test_golden_hour_courtyard_workflow.py
 
 .PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract venv setup clean \
-        lint ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs \
+        lint ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization \
         lock lock-prod lock-ci lock-dev install-core install-ml docs docs-clean
 
 help:
@@ -42,6 +42,7 @@ help:
 	@echo "  pre-commit         Run pre-commit checks manually"
 	@echo "  install-hooks      Install git pre-commit hook"
 	@echo "  quality-check      Run all quality checks (lint + structure + tests)"
+	@echo "  check-json-serialization  Fail on raw json.dump/json.dumps outside approved modules"
 	@echo "  fix-quality        Auto-fix common quality issues"
 	@echo "  validate-ci        Validate GitHub Actions workflow configs"
 	@echo "  organize-docs      Organize markdown files to docs/ subdirectories"
@@ -133,7 +134,7 @@ lint:
 	@echo "Running pylint (non-blocking)..."
 	@$(PY) -m pylint $(shell git ls-files '*.py' | grep -v -e '/deprecated/' -e 'src/transformation_portal/' -e 'src/luxury_tiff_batch_processor/' -e 'scripts/' -e 'examples/' || echo '') || true
 
-ci: lint test-fast test-orchestrator-contract
+ci: lint check-json-serialization test-fast test-orchestrator-contract
 	@echo "✅ Local CI checks completed successfully."
 
 # Comprehensive CI simulation
@@ -184,6 +185,10 @@ check-quality:
 validate-ci:
 	@echo "Validating GitHub Actions workflows..."
 	@"$(PY)" scripts/validate_ci_config.py
+
+check-json-serialization:
+	@echo "Checking JSON serialization guardrails..."
+	@"$(PY)" scripts/validation/check_raw_json_usage.py
 
 # Organize documentation
 organize-docs:

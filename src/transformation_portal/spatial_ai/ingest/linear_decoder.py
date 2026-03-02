@@ -41,6 +41,7 @@ from typing import Any, Dict, Optional, Tuple
 import numpy as np
 from PIL import Image
 
+from ...ingest.canonical_json import dump_json
 from .exceptions import BitDepthViolationError, ColorSpaceError, UnsupportedFormatError
 from .provenance import ProvenanceCapture
 from .telemetry import IngestTelemetry, NullTelemetry
@@ -969,8 +970,15 @@ class LinearDecoder:
             Path to saved JSON file.
         """
         output_path = output_dir / f"{stem}_provenance.json"
-        with open(output_path, "w") as f:
-            json.dump(provenance, f, indent=2)
+        with open(output_path, "w", encoding="utf-8") as f:
+            dump_json(
+                provenance,
+                f,
+                indent=2,
+                sort_keys=True,
+                ensure_ascii=False,
+                allow_nan=False,
+            )
 
         logger.debug(f"Saved provenance: {output_path}")
         return output_path

@@ -23,6 +23,8 @@ from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, validator
 
+from .canonical_json import dumps_json
+
 
 class ToolchainVersion(BaseModel):
     """Toolchain version metadata for reproducibility.
@@ -327,14 +329,13 @@ class ProvenanceSidecar(BaseModel):
         Returns:
             JSON string with sorted keys and 2-space indentation
         """
-        import json
-
-        return json.dumps(
+        return dumps_json(
             self.model_dump(),
             sort_keys=True,
             indent=2,
             separators=(",", ": "),
             ensure_ascii=False,
+            allow_nan=False,
         )
 
 
@@ -389,12 +390,11 @@ class IngestManifest(BaseModel):
         Returns:
             JSON string with sorted keys and 2-space indentation
         """
-        import json
-
-        return json.dumps(
+        return dumps_json(
             self.model_dump(),
             sort_keys=True,
             indent=2,
             separators=(",", ": "),
             ensure_ascii=False,
+            allow_nan=False,
         )

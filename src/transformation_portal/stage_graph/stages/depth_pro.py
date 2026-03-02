@@ -19,6 +19,7 @@ from typing import Any, Dict, Optional, Tuple
 import numpy as np
 from PIL import Image
 
+from ...ingest.canonical_json import dump_json
 from ..stage import Stage, StageContext, StageResult, StageStatus
 
 # Try importing torch, fail gracefully if not available
@@ -361,8 +362,15 @@ class DepthProStage(Stage):
 
             # Save provenance JSON
             json_path = output_dir / "depth_depthpro_provenance.json"
-            with open(json_path, "w") as f:
-                json.dump(artifacts["depth_provenance"], f, indent=2)
+            with open(json_path, "w", encoding="utf-8") as f:
+                dump_json(
+                    artifacts["depth_provenance"],
+                    f,
+                    indent=2,
+                    sort_keys=True,
+                    ensure_ascii=False,
+                    allow_nan=False,
+                )
 
         return artifacts
 

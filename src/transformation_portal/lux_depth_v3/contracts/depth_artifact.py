@@ -32,6 +32,8 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
+from ...ingest.canonical_json import dump_json
+
 logger = logging.getLogger(__name__)
 
 # Contract version for schema compatibility
@@ -421,8 +423,15 @@ class DepthArtifactWriter:
             # Add output paths to sidecar
             sidecar_data["outputs"] = {k: str(v) for k, v in paths.items()}
 
-            with open(sidecar_path, "w") as f:
-                json.dump(sidecar_data, f, indent=2)
+            with open(sidecar_path, "w", encoding="utf-8") as f:
+                dump_json(
+                    sidecar_data,
+                    f,
+                    indent=2,
+                    sort_keys=True,
+                    ensure_ascii=False,
+                    allow_nan=False,
+                )
             paths["sidecar"] = sidecar_path
 
         logger.info("Wrote DepthArtifact: %s", stem)

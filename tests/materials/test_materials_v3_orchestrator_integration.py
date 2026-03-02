@@ -7,12 +7,14 @@ and processes images when enabled.
 # pytest fixture injection uses function args that match fixture names.
 # pylint: disable=redefined-outer-name
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
 from transformation_portal.lux_depth_v3.config import EnhanceConfig
+from transformation_portal.lux_depth_v3.input_manager import ImageInput
 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 
 
@@ -307,6 +309,127 @@ def test_apex_strict_gate_not_applied_outside_apex(tmp_path, mock_depth_backend,
 
     # Should not raise outside apex tier
     orchestrator._enforce_apex_materials_gate({"materials": {}})
+
+
+def test_apex_v2_preflight_rejects_non_canonical_fastpath(tmp_path, mock_depth_backend, mock_da3_available):
+    """APEX strict mode should fail before V2 when cached fast-path drifts from canonical stem."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        enable_materials_v3=True,
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        strict_backend=True,
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    depth_path = tmp_path / "depth" / "image_depth.png"
+    depth_path.parent.mkdir(parents=True, exist_ok=True)
+    depth_path.write_bytes(b"depth")
+
+    non_canonical_input = tmp_path / "input" / "image.png"
+    non_canonical_input.parent.mkdir(parents=True, exist_ok=True)
+    non_canonical_input.write_bytes(b"raw")
+
+    with pytest.raises(RuntimeError, match="fast-path stem divergence"):
+        orchestrator._enforce_apex_v2_canonical_input_preflight(
+            depth_path=depth_path,
+            output_key=Path("image_01"),
+            v2_input_path=non_canonical_input,
+            enhanced_image_path=None,
+            materials_v3_result={"materials_v3_metadata": {"version": "3.1"}},
+        )
+
+
+def test_apex_v2_preflight_accepts_canonical_handoff(tmp_path, mock_depth_backend, mock_da3_available):
+    """APEX strict mode should allow V2 preflight only with canonical enhanced input + masks."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        enable_materials_v3=True,
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        strict_backend=True,
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    output_key = Path("image_01")
+    depth_path = tmp_path / "depth" / "image_depth.png"
+    depth_path.parent.mkdir(parents=True, exist_ok=True)
+    depth_path.write_bytes(b"depth")
+
+    expected_path = orchestrator._expected_materials_v3_enhanced_path(output_key)
+    expected_path.parent.mkdir(parents=True, exist_ok=True)
+    expected_path.write_bytes(b"enhanced")
+
+    orchestrator._enforce_apex_v2_canonical_input_preflight(
+        depth_path=depth_path,
+        output_key=output_key,
+        v2_input_path=expected_path,
+        enhanced_image_path=expected_path,
+        materials_v3_result={"material_masks": {"glass": np.ones((2, 2), dtype=np.float32)}},
+    )
+
+
+def test_apex_cached_depth_recomputes_materials_for_canonical_handoff(tmp_path, mock_depth_backend, mock_da3_available):
+    """APEX strict mode should recompute Materials V3 when cached depth lacks canonical handoff artifacts."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        enable_materials_v3=True,
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        strict_backend=True,
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+
+    input_path = tmp_path / "inputs" / "image.png"
+    input_path.parent.mkdir(parents=True, exist_ok=True)
+    input_path.write_bytes(b"input")
+
+    output_key = Path("image_01")
+    depth_path = tmp_path / "depth" / "image_01_depth.png"
+    depth_path.parent.mkdir(parents=True, exist_ok=True)
+    depth_path.write_bytes(b"depth")
+    float_depth_path = tmp_path / "depth" / "image_01_depth.npy"
+    np.save(float_depth_path, np.ones((4, 4), dtype=np.float32))
+
+    expected_path = orchestrator._expected_materials_v3_enhanced_path(output_key)
+    expected_path.parent.mkdir(parents=True, exist_ok=True)
+
+    recomputed_result = {
+        "material_masks": {"glass": np.ones((4, 4), dtype=np.float32)},
+        "materials_v3_metadata": {"version": "3.1"},
+    }
+
+    def _run_stage(*, preprocessed_array, depth_map, output_key):  # noqa: ARG001
+        expected_path.write_bytes(b"enhanced")
+        return recomputed_result, 0.321, expected_path
+
+    with patch("transformation_portal.lux_depth_v3.preprocessing.validate_image_format", return_value=input_path):
+        with patch(
+            "transformation_portal.lux_depth_v3.preprocessing.preprocess_image",
+            return_value=(np.zeros((4, 4, 3), dtype=np.float32), (4, 4)),
+        ):
+            with patch.object(orchestrator, "_load_cached_depth", return_value=np.ones((4, 4), dtype=np.float32)):
+                with patch.object(orchestrator, "_run_materials_v3_stage", side_effect=_run_stage) as run_stage:
+                    result, runtime_s, enhanced_path = orchestrator._ensure_apex_canonical_materials_execution(
+                        image_input=ImageInput(path=input_path),
+                        output_key=output_key,
+                        depth_path=depth_path,
+                        float_depth_path=float_depth_path,
+                        materials_v3_result={"materials_v3_metadata": {"version": "3.1"}},
+                        materials_v3_runtime_s=0.0,
+                        enhanced_image_path=None,
+                    )
+
+    assert result is recomputed_result
+    assert runtime_s == pytest.approx(0.321, rel=1e-6, abs=1e-6)
+    assert enhanced_path == expected_path
+    assert run_stage.call_count == 1
 
 
 def test_apex_depth_validity_gate_rejects_upper_quartile_plateau(tmp_path, mock_depth_backend, mock_da3_available):

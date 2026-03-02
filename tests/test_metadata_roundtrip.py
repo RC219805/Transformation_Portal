@@ -11,6 +11,9 @@ These tests prevent silent corruption bugs by verifying that:
 
 from __future__ import annotations
 
+import json
+
+import numpy as np
 import pytest
 
 from src.transformation_portal.lux_depth_v3.manifest import (
@@ -18,6 +21,7 @@ from src.transformation_portal.lux_depth_v3.manifest import (
     ConfigFingerprint,
     DepthMetadata,
     InputMetadata,
+    MaterialsV3Metadata,
     ReproMetadata,
     TimingMetadata,
     V2Metadata,
@@ -361,6 +365,34 @@ class TestCombinedManifestRoundtrip:
             # Verify load works
             restored = CombinedManifest.load(manifest_path)
             assert restored.input == manifest.input
+
+    def test_save_normalizes_numpy_scalars_in_nested_metadata(self):
+        """Verify nested NumPy scalar/array values are normalized before JSON write."""
+        import tempfile
+        from pathlib import Path
+
+        manifest = CombinedManifest(
+            materials_v3=MaterialsV3Metadata(
+                enabled=True,
+                segmentation_metadata={
+                    "mask_count": np.int64(4),
+                    "coverage": np.float32(0.75),
+                    "strict": np.bool_(True),
+                    "indices": np.array([1, 3, 7], dtype=np.int64),
+                },
+            )
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest_path = Path(tmpdir) / "manifest.json"
+            manifest.save(manifest_path)
+
+            saved = json.loads(manifest_path.read_text(encoding="utf-8"))
+            segmentation = saved["materials_v3"]["segmentation_metadata"]
+            assert segmentation["mask_count"] == 4
+            assert segmentation["coverage"] == pytest.approx(0.75, rel=1e-6, abs=1e-6)
+            assert segmentation["strict"] is True
+            assert segmentation["indices"] == [1, 3, 7]
 
 
 # Edge case tests for robustness

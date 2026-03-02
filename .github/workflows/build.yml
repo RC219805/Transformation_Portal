@@ -431,6 +431,10 @@ jobs:
 
           echo "Pylint passed (exit code: $PYLINT_EXIT)"
 
+      - name: JSON serialization guardrails
+        run: |
+          python scripts/validation/check_raw_json_usage.py
+
   test:
     needs: [preflight, lint]
     if: needs.preflight.outputs.run_full == 'true'

@@ -9,7 +9,16 @@ the machine-mode wire serializer: machine-mode rendering intentionally uses
 from __future__ import annotations
 
 import json
-from typing import Any
+from collections.abc import Mapping
+from dataclasses import asdict, is_dataclass
+from enum import Enum
+from pathlib import Path
+from typing import Any, TextIO
+
+try:
+    import numpy as np
+except Exception:  # pragma: no cover - numpy is expected but keep helper import-safe
+    np = None  # type: ignore[assignment]
 
 TP_CANONICAL_JSON_PROFILE = "tp.canonical.json.v1"
 _CANONICAL_JSON_KWARGS: dict[str, Any] = {
@@ -20,6 +29,66 @@ _CANONICAL_JSON_KWARGS: dict[str, Any] = {
 }
 
 
+def _set_sort_key(value: Any) -> str:
+    """Build a deterministic key for sorting set/frozenset values."""
+    try:
+        return json.dumps(value, **_CANONICAL_JSON_KWARGS)
+    except (TypeError, ValueError):
+        return f"{type(value).__name__}:{value!r}"
+
+
+def to_jsonable(payload: Any) -> Any:
+    """Recursively normalize payload to JSON-safe primitive/container types."""
+    if payload is None or isinstance(payload, (str, int, float, bool)):
+        return payload
+
+    if isinstance(payload, bytes):
+        return payload.decode("utf-8", errors="replace")
+
+    if isinstance(payload, Path):
+        return str(payload)
+
+    if isinstance(payload, Enum):
+        return to_jsonable(payload.value)
+
+    if np is not None:
+        if isinstance(payload, np.ndarray):
+            return [to_jsonable(item) for item in payload.tolist()]
+        if isinstance(payload, np.generic):
+            return to_jsonable(payload.item())
+
+    if is_dataclass(payload) and not isinstance(payload, type):
+        return to_jsonable(asdict(payload))
+
+    if hasattr(payload, "to_dict") and callable(payload.to_dict):
+        return to_jsonable(payload.to_dict())
+
+    if isinstance(payload, Mapping):
+        return {str(key): to_jsonable(value) for key, value in payload.items()}
+
+    if isinstance(payload, (list, tuple)):
+        return [to_jsonable(item) for item in payload]
+
+    if isinstance(payload, (set, frozenset)):
+        normalized = [to_jsonable(item) for item in payload]
+        return sorted(normalized, key=_set_sort_key)
+
+    if hasattr(payload, "__dict__"):
+        return {str(key): to_jsonable(value) for key, value in vars(payload).items() if not str(key).startswith("_")}
+
+    return payload
+
+
+def dumps_json(payload: Any, **kwargs: Any) -> str:
+    """Serialize payload after JSON-safe normalization."""
+    return json.dumps(to_jsonable(payload), **kwargs)
+
+
+def dump_json(payload: Any, fp: TextIO, **kwargs: Any) -> None:
+    """Write payload as JSON after JSON-safe normalization."""
+    json.dump(to_jsonable(payload), fp, **kwargs)
+
+
 def canonicalize_json(payload: Any) -> bytes:
     """Serialize payload deterministically under ``tp.canonical.json.v1``."""
-    return json.dumps(payload, **_CANONICAL_JSON_KWARGS).encode("utf-8")
+    return dumps_json(payload, **_CANONICAL_JSON_KWARGS).encode("utf-8")
