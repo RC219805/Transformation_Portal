@@ -22,7 +22,7 @@ anyio==4.12.1
     # via
     #   httpx
     #   starlette
-astroid==4.0.3
+astroid==4.0.4
     # via pylint
 attrs==25.4.0
     # via
@@ -30,34 +30,35 @@ attrs==25.4.0
     #   coremltools
     #   jsonschema
     #   referencing
+authlib==1.6.9
+    # via safety
 autopep8==2.3.2
     # via -r dev.in
 backports-tarfile==1.2.0
     # via jaraco-context
-bandit==1.9.3
+bandit==1.9.4
     # via -r ci.in
 black==26.1.0
     # via -r dev.in
 build==1.4.0
     # via -r ci.in
-cachetools==7.0.1
+cachetools==7.0.2
     # via tox
-cattrs==25.3.0
+cattrs==26.1.0
     # via coremltools
-certifi==2026.1.4
+certifi==2026.2.25
     # via
     #   httpcore
     #   httpx
     #   requests
 cffi==2.0.0
     # via cryptography
-chardet==5.2.0
-    # via tox
 charset-normalizer==3.4.4
     # via requests
 click==8.3.1
     # via
     #   black
+    #   nltk
     #   safety
     #   typer
     #   uvicorn
@@ -69,10 +70,12 @@ controlnet-aux==0.0.10
     # via -r ml.in
 coremltools==9.0
     # via -r ml.in
-coverage[toml]==7.13.2
+coverage[toml]==7.13.4
     # via pytest-cov
 cryptography==46.0.5
-    # via -r dev.in
+    # via
+    #   -r dev.in
+    #   authlib
 diffusers==0.36.0
     # via -r ml.in
 dill==0.4.1
@@ -82,25 +85,28 @@ distlib==0.4.0
 docutils==0.22.4
     # via readme-renderer
 dparse==0.6.4
-    # via safety
+    # via
+    #   safety
+    #   safety-schemas
 efficientsam==1.0.0
     # via -r ml.in
 einops==0.8.2
     # via controlnet-aux
 fastapi==0.121.0
     # via -r base.in
-filelock==3.24.2
+filelock==3.25.0
     # via
     #   controlnet-aux
     #   diffusers
     #   huggingface-hub
+    #   python-discovery
+    #   safety
     #   torch
     #   tox
-    #   transformers
     #   virtualenv
 flake8==7.3.0
     # via -r dev.in
-fsspec==2026.1.0
+fsspec==2026.2.0
     # via
     #   huggingface-hub
     #   torch
@@ -110,7 +116,7 @@ h11==0.16.0
     # via
     #   httpcore
     #   uvicorn
-hf-xet==1.2.0
+hf-xet==1.3.2
     # via huggingface-hub
 httpcore==1.0.9
     # via httpx
@@ -119,7 +125,9 @@ httpx==0.28.1
     #   -r ci.in
     #   -r dev.in
     #   diffusers
-huggingface-hub==0.36.1
+    #   huggingface-hub
+    #   safety
+huggingface-hub==1.5.0
     # via
     #   -r ml.in
     #   accelerate
@@ -132,8 +140,10 @@ huggingface-hub==0.36.1
     #   transformers
 hydra-core==1.3.2
     # via sam2
-hypothesis==6.151.5
+hypothesis==6.151.9
     # via -r dev.in
+id==1.6.1
+    # via twine
 idna==3.11
     # via
     #   anyio
@@ -148,7 +158,6 @@ importlib-metadata==8.7.1
     #   controlnet-aux
     #   diffusers
     #   keyring
-    #   twine
 iniconfig==2.3.0
     # via pytest
 iopath==0.1.10
@@ -164,9 +173,13 @@ jaraco-context==6.1.0
 jaraco-functools==4.4.0
     # via keyring
 jinja2==3.1.6
-    # via torch
+    # via
+    #   safety
+    #   torch
 joblib==1.5.3
-    # via scikit-learn
+    # via
+    #   nltk
+    #   scikit-learn
 jsonschema==4.26.0
     # via
     #   -r base.in
@@ -179,12 +192,14 @@ lazy-loader==0.4
     # via scikit-image
 libcst==1.8.6
     # via -r dev.in
-librt==0.7.8
+librt==0.8.1
     # via mypy
 markdown-it-py==4.0.0
     # via rich
 markupsafe==3.0.3
     # via jinja2
+marshmallow==4.2.2
+    # via safety
 mccabe==0.7.0
     # via
     #   flake8
@@ -209,9 +224,11 @@ networkx==3.6.1
     # via
     #   scikit-image
     #   torch
-nh3==0.3.2
+nh3==0.3.3
     # via readme-renderer
-numpy==2.2.6
+nltk==3.9.3
+    # via safety
+numpy==2.4.2
     # via
     #   -r base.in
     #   accelerate
@@ -240,7 +257,7 @@ open-clip-torch==3.2.0
     # via -r ml.in
 opencv-python==4.13.0.92
     # via -r base.in
-opencv-python-headless==4.13.0.90
+opencv-python-headless==4.13.0.92
     # via controlnet-aux
 packaging==26.0
     # via
@@ -256,9 +273,11 @@ packaging==26.0
     #   pytest
     #   pytest-rerunfailures
     #   safety
+    #   safety-schemas
     #   scikit-image
     #   tox
     #   transformers
+    #   twine
 pathspec==1.0.4
     # via
     #   black
@@ -272,12 +291,11 @@ pillow==12.1.1
     #   sam2
     #   scikit-image
     #   torchvision
-pkginfo==1.12.1.2
-    # via twine
 platformdirs==4.9.2
     # via
     #   black
     #   pylint
+    #   python-discovery
     #   tox
     #   virtualenv
 pluggy==1.6.0
@@ -289,14 +307,14 @@ plyfile==1.1.3
     # via -r ml.in
 portalocker==3.2.0
     # via iopath
-protobuf==6.33.5
+protobuf==7.34.0
     # via coremltools
 psutil==7.2.2
     # via
     #   -r ml.in
     #   accelerate
     #   memory-profiler
-pyaml==25.7.0
+pyaml==26.2.1
     # via coremltools
 pycodestyle==2.14.0
     # via
@@ -308,6 +326,8 @@ pydantic==2.12.5
     # via
     #   -r base.in
     #   fastapi
+    #   safety
+    #   safety-schemas
 pydantic-core==2.41.5
     # via pydantic
 pyflakes==3.4.0
@@ -317,9 +337,9 @@ pygments==2.19.2
     #   pytest
     #   readme-renderer
     #   rich
-pylint==4.0.4
+pylint==4.0.5
     # via -r dev.in
-pypdf==6.7.4
+pypdf==6.7.5
     # via -r ci.in
 pyproject-api==1.10.0
     # via tox
@@ -342,6 +362,8 @@ pytest-metadata==3.1.1
     # via pytest-json-report
 pytest-rerunfailures==16.1
     # via -r dev.in
+python-discovery==1.1.0
+    # via virtualenv
 pytokens==0.4.1
     # via black
 pyyaml==6.0.3
@@ -363,24 +385,23 @@ referencing==0.37.0
     # via
     #   jsonschema
     #   jsonschema-specifications
-regex==2026.1.15
+regex==2026.2.28
     # via
     #   diffusers
+    #   nltk
     #   open-clip-torch
     #   transformers
 requests==2.32.5
     # via
     #   diffusers
-    #   huggingface-hub
     #   requests-toolbelt
     #   safety
-    #   transformers
     #   twine
 requests-toolbelt==1.0.0
     # via twine
 rfc3986==2.0.0
     # via twine
-rich==14.3.2
+rich==14.3.3
     # via
     #   bandit
     #   twine
@@ -390,7 +411,9 @@ rpds-py==0.30.0
     #   jsonschema
     #   referencing
 ruamel-yaml==0.19.1
-    # via safety
+    # via
+    #   safety
+    #   safety-schemas
 safetensors==0.7.0
     # via
     #   accelerate
@@ -398,8 +421,10 @@ safetensors==0.7.0
     #   open-clip-torch
     #   timm
     #   transformers
-safety==2.3.4
+safety==3.7.0
     # via -r ci.in
+safety-schemas==0.0.16
+    # via safety
 sam2==1.1.0
     # via -r ml.in
 scikit-image==0.26.0
@@ -410,14 +435,14 @@ scikit-learn==1.8.0
     # via
     #   -r base.in
     #   sentence-transformers
-scipy==1.17.0
+scipy==1.17.1
     # via
     #   -r base.in
     #   controlnet-aux
     #   scikit-image
     #   scikit-learn
     #   sentence-transformers
-sentence-transformers==5.2.2
+sentence-transformers==5.2.3
     # via -r ml.in
 shellingham==1.5.4
     # via typer
@@ -427,26 +452,30 @@ starlette==0.49.1
     # via
     #   -r base.in
     #   fastapi
-stevedore==5.6.0
+stevedore==5.7.0
     # via bandit
 sympy==1.14.0
     # via
     #   coremltools
     #   torch
+tenacity==9.1.4
+    # via safety
 threadpoolctl==3.6.0
     # via scikit-learn
-tifffile==2024.12.12
+tifffile==2026.2.24
     # via
     #   -r base.in
     #   scikit-image
-timm==1.0.24
+timm==1.0.25
     # via
     #   controlnet-aux
     #   open-clip-torch
 tokenizers==0.22.2
     # via transformers
 tomlkit==0.14.0
-    # via pylint
+    # via
+    #   pylint
+    #   safety
 torch==2.10.0
     # via
     #   -r ml.in
@@ -466,7 +495,7 @@ torchvision==0.25.0
     #   open-clip-torch
     #   sam2
     #   timm
-tox==4.39.0
+tox==4.47.0
     # via -r ci.in
 tqdm==4.67.3
     # via
@@ -474,18 +503,25 @@ tqdm==4.67.3
     #   coremltools
     #   huggingface-hub
     #   iopath
+    #   nltk
     #   open-clip-torch
     #   sam2
     #   sentence-transformers
     #   transformers
-transformers==4.57.6
+transformers==5.2.0
     # via
     #   -r ml.in
     #   sentence-transformers
-twine==4.0.2
+twine==6.2.0
     # via -r ci.in
-typer==0.24.0
-    # via -r base.in
+typer==0.24.1
+    # via
+    #   -r base.in
+    #   huggingface-hub
+    #   safety
+    #   typer-slim
+typer-slim==0.24.0
+    # via transformers
 types-pyyaml==6.0.12.20250915
     # via -r dev.in
 typing-extensions==4.15.0
@@ -499,6 +535,8 @@ typing-extensions==4.15.0
     #   pydantic
     #   pydantic-core
     #   referencing
+    #   safety
+    #   safety-schemas
     #   sentence-transformers
     #   starlette
     #   torch
@@ -507,16 +545,14 @@ typing-inspection==0.4.2
     # via pydantic
 urllib3==2.6.3
     # via
+    #   id
     #   requests
     #   twine
 uvicorn==0.29.0
     # via -r base.in
-virtualenv==20.36.1
+virtualenv==21.1.0
     # via tox
 wcwidth==0.6.0
     # via ftfy
 zipp==3.23.0
     # via importlib-metadata
-
-# The following packages are considered to be unsafe in a requirements file:
-# setuptools
