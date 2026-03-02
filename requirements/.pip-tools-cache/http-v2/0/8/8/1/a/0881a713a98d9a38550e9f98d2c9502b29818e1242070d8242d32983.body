@@ -1,0 +1,124 @@
+Metadata-Version: 2.4
+Name: efficientsam
+Version: 1.0.0
+Summary: EfficientViT-SAM: Accelerated Segment Anything Model Without Accuracy Loss
+License-Expression: Apache-2.0
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: torch
+Requires-Dist: torchvision
+Requires-Dist: numpy
+Provides-Extra: opencv
+Requires-Dist: opencv-python; extra == "opencv"
+Provides-Extra: requests
+Requires-Dist: requests; extra == "requests"
+Dynamic: license-file
+
+# EfficientViT-SAM: Accelerated Segment Anything Model Without Accuracy Loss
+
+[[paper](https://arxiv.org/abs/2402.05008)] [[online demo](https://evitsam.hanlab.ai/)]
+
+<p align="left">
+<img src="https://huggingface.co/mit-han-lab/efficientvit-sam/resolve/main/sam_zero_shot_coco_mAP.png"  width="500">
+</p>
+
+## Abstract
+We present EfficientViT-SAM, a new family of accelerated segment anything models. We retain SAM's lightweight prompt encoder and mask decoder while replacing the heavy image encoder with EfficientViT. For the training, we begin with the knowledge distillation from the SAM-ViT-H image encoder to EfficientViT. Subsequently, we conduct end-to-end training on the SA-1B dataset. Benefiting from EfficientViT's efficiency and capacity, EfficientViT-SAM delivers 48.9x measured TensorRT speedup on A100 GPU over SAM-ViT-H without sacrificing performance.
+
+## Datasets
+
+[SA-1B](https://ai.meta.com/datasets/segment-anything-downloads/), [COCO2017](https://cocodataset.org/#download), and [LVIS annotations](https://www.lvisdataset.org/dataset).
+
+To conduct box-prompted instance segmentation, you must first obtain the *source_json_file* of detected bounding boxes. Follow the instructions of [ViTDet](https://github.com/facebookresearch/detectron2/tree/main/projects/ViTDet), [YOLOv8](https://github.com/ultralytics/ultralytics), and [GroundingDINO](https://github.com/IDEA-Research/GroundingDINO) to get the *source_json_file*. You can also download our [pre-generated files](https://huggingface.co/mit-han-lab/efficientvit-sam/tree/main/source_json_file).
+
+<details>
+<summary>Expected directory structure:</summary>
+
+```bash
+coco
+├── train2017
+├── val2017
+├── annotations
+│   ├── instances_val2017.json
+│   ├── lvis_v1_val.json
+|── source_json_file
+│   ├── coco_groundingdino.json
+│   ├── coco_vitdet.json
+│   ├── coco_yolov8.json
+│   ├── lvis_vitdet.json
+sam
+├── images
+├── masks
+├── sa_images_ids.txt
+```
+
+</details>
+
+## Pretrained EfficientViT-SAM Models
+
+Latency/Throughput is measured on NVIDIA Jetson AGX Orin, and NVIDIA A100 GPU with TensorRT, fp16. Data transfer time is included. Please put the downloaded checkpoints under *${efficientvit_repo}/assets/checkpoints/efficientvit_sam/*
+
+| Model         |  Resolution | COCO mAP | LVIS mAP | Params |  MACs | Jetson Orin Latency (bs1) | A100 Throughput (bs16) | Checkpoint |
+|----------------------|:----------:|:----------:|:---------:|:------------:|:---------:|:---------:|:------------:|:------------:|
+| EfficientViT-SAM-L0 | 512x512 | 45.7 | 41.8 | 34.8M  | 35G | 8.2ms  | 762 images/s | [link](https://huggingface.co/mit-han-lab/efficientvit-sam/resolve/main/efficientvit_sam_l0.pt) |
+| EfficientViT-SAM-L1 | 512x512 | 46.2 | 42.1 | 47.7M | 49G |  10.2ms | 638 images/s | [link](https://huggingface.co/mit-han-lab/efficientvit-sam/resolve/main/efficientvit_sam_l1.pt) |
+| EfficientViT-SAM-L2 | 512x512 | 46.6 | 42.7 | 61.3M | 69G |  12.9ms | 538 images/s  | [link](https://huggingface.co/mit-han-lab/efficientvit-sam/resolve/main/efficientvit_sam_l2.pt) |
+| EfficientViT-SAM-XL0 | 1024x1024 | 47.5 | 43.9 | 117.0M | 185G | 22.5ms  | 278 images/s | [link](https://huggingface.co/mit-han-lab/efficientvit-sam/resolve/main/efficientvit_sam_xl0.pt) |
+| EfficientViT-SAM-XL1 | 1024x1024 | 47.8 | 44.4 | 203.3M | 322G | 37.2ms  | 182 images/s | [link](https://huggingface.co/mit-han-lab/efficientvit-sam/resolve/main/efficientvit_sam_xl1.pt) |
+
+<p align="center">
+<b> Table1: Summary of All EfficientViT-SAM Variants.</b> COCO mAP and LVIS mAP are measured using ViTDet's predicted bounding boxes as the prompt. End-to-end Jetson Orin latency and A100 throughput are measured with TensorRT and fp16.
+</p>
+
+## Usage
+
+```python
+# segment anything
+from efficientvit.sam_model_zoo import create_efficientvit_sam_model
+
+efficientvit_sam = create_efficientvit_sam_model(name="efficientvit-sam-xl1", pretrained=True)
+efficientvit_sam = efficientvit_sam.cuda().eval()
+```
+
+```python
+from efficientvit.models.efficientvit.sam import EfficientViTSamPredictor
+
+efficientvit_sam_predictor = EfficientViTSamPredictor(efficientvit_sam)
+```
+
+```python
+from efficientvit.models.efficientvit.sam import EfficientViTSamAutomaticMaskGenerator
+
+efficientvit_mask_generator = EfficientViTSamAutomaticMaskGenerator(efficientvit_sam)
+```
+
+## Reference
+
+If EfficientViT or EfficientViT-SAM is useful or relevant to your research, please kindly recognize our contributions by citing our papers:
+
+```bibtex
+@inproceedings{cai2023efficientvit,
+  title={Efficientvit: Lightweight multi-scale attention for high-resolution dense prediction},
+  author={Cai, Han and Li, Junyan and Hu, Muyan and Gan, Chuang and Han, Song},
+  booktitle={Proceedings of the IEEE/CVF International Conference on Computer Vision},
+  pages={17302--17313},
+  year={2023}
+}
+
+@article{zhang2024efficientvit,
+  title={EfficientViT-SAM: Accelerated Segment Anything Model Without Performance Loss},
+  author={Zhang, Zhuoyang and Cai, Han and Han, Song},
+  journal={arXiv preprint arXiv:2402.05008},
+  year={2024}
+}
+```
+
+## Publishing on PyPI
+
+The package is published on PyPI using the following commands.
+
+```bash
+uv build
+uv publish --token PYPI_TOKEN
+```

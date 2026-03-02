@@ -1,0 +1,532 @@
+Metadata-Version: 2.4
+Name: imagecodecs
+Version: 2026.1.14
+Summary: Image transformation, compression, and decompression codecs
+Home-page: https://www.cgohlke.com
+Author: Christoph Gohlke
+Author-email: cgohlke@cgohlke.com
+License: BSD-3-Clause
+Project-URL: Bug Tracker, https://github.com/cgohlke/imagecodecs/issues
+Project-URL: Source Code, https://github.com/cgohlke/imagecodecs
+Platform: any
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Science/Research
+Classifier: Intended Audience :: Developers
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: C
+Classifier: Programming Language :: Cython
+Classifier: Programming Language :: Python :: 3 :: Only
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Programming Language :: Python :: 3.13
+Classifier: Programming Language :: Python :: 3.14
+Classifier: Programming Language :: Python :: Implementation :: CPython
+Requires-Python: >=3.11
+Description-Content-Type: text/x-rst
+License-File: LICENSE
+Requires-Dist: numpy
+Provides-Extra: all
+Requires-Dist: matplotlib; extra == "all"
+Requires-Dist: tifffile; extra == "all"
+Requires-Dist: numcodecs; extra == "all"
+Provides-Extra: test
+Requires-Dist: pytest; extra == "test"
+Requires-Dist: pytest-run-parallel; extra == "test"
+Requires-Dist: tifffile; extra == "test"
+Requires-Dist: czifile; extra == "test"
+Requires-Dist: liffile; extra == "test"
+Requires-Dist: backports.zstd; extra == "test"
+Requires-Dist: blosc; extra == "test"
+Requires-Dist: blosc2; extra == "test"
+Requires-Dist: brotli; extra == "test"
+Requires-Dist: lz4; extra == "test"
+Requires-Dist: pyliblzfse; extra == "test"
+Requires-Dist: python-lzf; extra == "test"
+Requires-Dist: python-snappy; extra == "test"
+Requires-Dist: bitshuffle; extra == "test"
+Requires-Dist: zopflipy; extra == "test"
+Requires-Dist: zarr; extra == "test"
+Requires-Dist: numcodecs; extra == "test"
+Requires-Dist: kerchunk; extra == "test"
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: license
+Dynamic: license-file
+Dynamic: platform
+Dynamic: project-url
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
+Image transformation, compression, and decompression codecs
+===========================================================
+
+Imagecodecs is a Python library that provides block-oriented, in-memory buffer
+transformation, compression, and decompression functions for use in tifffile,
+liffile, czifile, zarr, and other scientific image input/output packages.
+
+Decode and/or encode functions are implemented for
+Zlib (DEFLATE), GZIP, LZMA, ZStandard (ZSTD), Blosc, Brotli, Snappy,
+BZ2, LZ4, LZ4F, LZ4HC, LZ4H5, LZW, LZO, LZF, LZFSE, LZHAM,
+PGLZ (PostgreSQL LZ), RCOMP (Rice), ZFP, SZ3, Meshopt, Pcodec, SPERR,
+AEC, SZIP, LERC, EER, NPY, BCn, DDS, BMP, PNG, APNG, GIF, TIFF, WebP,
+JPEG (2 to 16-bit), Lossless JPEG (LJPEG, LJ92, JPEGLL), JPEG 2000 (JP2, J2K),
+High-throughput JPEG 2000 (HTJ2K, JPH), JPEG LS, JPEG XL, JPEG XS,
+JPEG XR (WDP, HD Photo), Ultra HDR (JPEG_R), MOZJPEG, AVIF, HEIF, QOI,
+RGBE (HDR), Jetraw, DICOM RLE, PackBits, Packed Integers, Delta, XOR Delta,
+Floating Point Predictor, Bitorder reversal, Byteshuffle, Bitshuffle,
+Float24 (24-bit floating point), Bfloat16 (brain floating point),
+Quantize (Scale, BitGroom, BitRound, GranularBR), and
+CMS (color space transformations).
+Checksum functions are implemented for CRC-32, Adler-32, Fletcher-32, and
+Jenkins lookup3.
+
+:Author: `Christoph Gohlke <https://www.cgohlke.com>`_
+:License: BSD-3-Clause
+:Version: 2026.1.14
+:DOI: `10.5281/zenodo.6915978 <https://doi.org/10.5281/zenodo.6915978>`_
+
+Quickstart
+----------
+
+Install the imagecodecs package and all dependencies from the
+`Python Package Index <https://pypi.org/project/imagecodecs/>`_::
+
+    python -m pip install -U "imagecodecs[all]"
+
+Imagecodecs is also available in other package repositories such as
+`Anaconda <https://anaconda.org/conda-forge/imagecodecs>`_,
+`MSYS2 <https://packages.msys2.org/base/mingw-w64-python-imagecodecs>`_, and
+`MacPorts <https://ports.macports.org/port/py-imagecodecs/summary>`_.
+
+See `Requirements`_ and `Notes`_ for building from source.
+
+See `Examples`_ for using the programming interface.
+
+Source code and support are available on
+`GitHub <https://github.com/cgohlke/imagecodecs>`_.
+
+Requirements
+------------
+
+This revision was tested with the following requirements and dependencies
+(other versions may work):
+
+- `CPython <https://www.python.org>`_ 3.11.9, 3.12.10, 3.13.11, 3.14.2 64-bit
+- `numpy <https://pypi.org/project/numpy>`_ 2.4.1
+- `numcodecs <https://pypi.org/project/numcodecs/>`_ 0.16.5
+  (optional, for Zarr file format 2 compatible codecs)
+
+Build requirements:
+
+- `cython <https://github.com/cython/cython>`_ 3.2.4
+- `brotli <https://github.com/google/brotli>`_ 1.2.0
+- `bzip2 <https://gitlab.com/bzip2/bzip2>`_ 1.0.8
+- `c-blosc <https://github.com/Blosc/c-blosc>`_ 1.21.6
+- `c-blosc2 <https://github.com/Blosc/c-blosc2>`_ 2.22.0
+- `charls <https://github.com/team-charls/charls>`_ 2.4.2
+- `giflib <https://sourceforge.net/projects/giflib/>`_ 5.2.2
+- `jxrlib <https://github.com/cgohlke/jxrlib>`_ 1.2
+- `lcms2 <https://github.com/mm2/Little-CMS>`_ 2.18
+- `lerc <https://github.com/Esri/lerc>`_ 4.0.4
+- `libaec <https://gitlab.dkrz.de/k202009/libaec>`_ 1.1.4
+- `libavif <https://github.com/AOMediaCodec/libavif>`_ 1.3.0
+  (`aom <https://aomedia.googlesource.com/aom>`_ 3.13.1,
+  `dav1d <https://github.com/videolan/dav1d>`_ 1.5.3,
+  `rav1e <https://github.com/xiph/rav1e>`_ 0.8.1,
+  `svt-av1 <https://gitlab.com/AOMediaCodec/SVT-AV1>`_ 3.1.2,
+  `libyuv <https://chromium.googlesource.com/libyuv/libyuv>`_ main,
+  `libxml2 <https://gitlab.gnome.org/GNOME/libxml2>`_ 2.15.1)
+- `libdeflate <https://github.com/ebiggers/libdeflate>`_ 1.25
+- `libheif <https://github.com/strukturag/libheif>`_ 1.21.1
+  (`libde265 <https://github.com/strukturag/libde265>`_ 1.0.16,
+  `x265 <https://bitbucket.org/multicoreware/x265_git/src/master/>`_ 4.1)
+- `libjpeg-turbo <https://github.com/libjpeg-turbo/libjpeg-turbo>`_ 3.1.3
+- `libjxl <https://github.com/libjxl/libjxl>`_ 0.11.1
+- `libjxs <https://jpeg.org/jpegxs/software.html>`_ 2.0.2
+- `liblzma <https://github.com/tukaani-project/xz>`_ 5.8.2
+- `libpng <https://github.com/glennrp/libpng>`_ 1.6.53
+- `libpng-apng <https://sourceforge.net/projects/libpng-apng/>`_ 1.6.53
+- `libtiff <https://gitlab.com/libtiff/libtiff>`_ 4.7.1
+- `libultrahdr <https://github.com/google/libultrahdr>`_ 1.4.0
+- `libwebp <https://github.com/webmproject/libwebp>`_ 1.6.0
+- `lz4 <https://github.com/lz4/lz4>`_ 1.10.0
+- `meshoptimizer <https://github.com/zeux/meshoptimizer>`_ 1.0
+- `openjpeg <https://github.com/uclouvain/openjpeg>`_ 2.5.4
+- `openjph <https://github.com/aous72/OpenJPH>`_ 0.26.0
+- `pcodec <https://github.com/mwlon/pcodec>`_ 0.4.9 (unstable)
+- `snappy <https://github.com/google/snappy>`_ 1.2.2
+- `sperr <https://github.com/NCAR/SPERR>`_ 0.8.4
+- `sz3 <https://github.com/szcompressor/SZ3>`_ 3.3.2
+- `zfp <https://github.com/LLNL/zfp>`_ 1.0.1
+- `zlib <https://github.com/madler/zlib>`_ 1.3.1.2
+- `zlib-ng <https://github.com/zlib-ng/zlib-ng>`_ 2.3.2
+- `zstd <https://github.com/facebook/zstd>`_ 1.5.7
+
+Unmaintained or discontinued build requirements:
+
+- `brunsli <https://github.com/google/brunsli>`_ 0.1
+- `jetraw <https://github.com/Jetraw>`_ 23.03.16.4
+- `lzfse <https://github.com/lzfse/lzfse/>`_ 1.0
+- `lzham_codec <https://github.com/richgel999/lzham_codec/>`_ 1.0
+- `lzokay <https://github.com/AxioDL/lzokay>`_ db2df1f
+- `mozjpeg <https://github.com/mozilla/mozjpeg>`_ 4.1.5
+- `zopfli <https://github.com/google/zopfli>`_ 1.0.3
+
+Vendored requirements:
+
+- `bcdec.h <https://github.com/iOrange/bcdec>`_ 93628fe
+- `bitshuffle <https://github.com/kiyo-masui/bitshuffle>`_ 0.5.2
+- `cfitsio ricecomp.c <https://heasarc.gsfc.nasa.gov/fitsio/>`_ modified
+- `h5checksum.c <https://github.com/HDFGroup/hdf5/>`_ modified
+- `jpg_0XC3.cpp
+  <https://github.com/rordenlab/dcm2niix/blob/master/console/jpg_0XC3.cpp>`_
+  modified
+- `liblj92
+  <https://bitbucket.org/baldand/mlrawviewer/src/master/liblj92/>`_ modified
+- `liblzf <http://oldhome.schmorp.de/marc/liblzf.html>`_ 3.6
+- `libspng <https://github.com/randy408/libspng>`_ 0.7.4
+- `nc4var.c <https://github.com/Unidata/netcdf-c/blob/main/libsrc4/nc4var.c>`_
+  modified
+- `pg_lzcompress.c <https://github.com/postgres/postgres>`_ modified
+- `qoi.h <https://github.com/phoboslab/qoi/>`_ 4461cc3
+- `rgbe.c <https://www.graphics.cornell.edu/~bjw/rgbe/rgbe.c>`_ modified
+
+Test requirements:
+
+- `tifffile <https://github.com/cgohlke/tifffile>`_ 2025.12.20
+- `czifile <https://github.com/cgohlke/czifile>`_ 2019.7.2.1
+- `liffile <https://github.com/cgohlke/liffile>`_ 2025.12.12
+- `zarr <https://github.com/zarr-developers/zarr-python>`_ 3.1.5
+- `python-blosc <https://github.com/Blosc/python-blosc>`_ 1.11.3
+- `python-blosc2 <https://github.com/Blosc/python-blosc2>`_ 3.11.2
+- `python-brotli <https://github.com/google/brotli/tree/master/python>`_ 1.2.0
+- `python-lz4 <https://github.com/python-lz4/python-lz4>`_ 4.4.5
+- `python-lzf <https://github.com/teepark/python-lzf>`_ 0.2.6
+- `python-snappy <https://github.com/andrix/python-snappy>`_ 0.7.3
+- `pyliblzfse <https://github.com/ydkhatri/pyliblzfse>`_ 0.4.1
+- `backports.zstd <https://github.com/rogdham/backports.zstd>`_ 1.3.0
+- `zopflipy <https://github.com/hattya/zopflipy>`_ 1.12
+
+Revisions
+---------
+
+2026.1.14
+
+- Pass 8281 tests.
+- Add tiff_encode function.
+- Add extra options for HTJ2K (#134).
+- Add linear RGB option to cms_profile.
+- Change ZSTD default compression level to 3.
+
+2026.1.1
+
+- Enforce positional-only and keyword-only parameters (breaking).
+- Base numcodecs.Jpeg on JPEG8 codec (breaking).
+- Add HTJ2K codec based on OpenJPH library (#125).
+- Add MESHOPT codec based on meshoptimizer library.
+- Fix decoding concatenated ZStandard frames.
+- Fix potential issues in TIFF and WEBP codecs.
+- Fix pyi stub file.
+- Change default Brotli compression level to 4.
+- Use Brotli streaming API for decoding.
+- Enable decoding UltraHDR to uint16.
+- Tweak memory allocation and reallocation strategies.
+- Use fused types.
+- Improve code quality.
+
+2025.11.11
+
+- Fix EER superresolution decoding (breaking; see tifffile #313).
+- Add option to eer_decode to add to uint16 array.
+- Add option to specify CICP/NCLX parameters in avif_encode (#131).
+- Add BFLOAT16 codec.
+- Build ABI3 wheels.
+- Require Cython >= 3.2.
+- Deprecate Python 3.11.
+
+2025.8.2
+
+- Fix szip_encode default output buffer might be too small (#128).
+- Fix minor bugs in LZ4H5 codec (#127).
+- Avoid grayscale-to-RGB conversions in AVIF codecs.
+- Improve AVIF error messages.
+- Add flag for free-threading compatibility (#113).
+- Do not use zlib uncompress2, which is not available on manylinux.
+- Do not build unstable BRUNSLI, PCODEC, SPERR, and SZ3 codecs.
+- Require libavif >= 1.3 and Cython >= 3.1.
+- Support Python 3.14 and 3.14t.
+- Drop support for Python 3.10 and PyPy.
+
+2025.3.30
+
+- Fix some codecs for use with Zarr 3, zarr_format=2 (#123).
+- Fix LZ4H5 codec when block size is less than compressed size (#126).
+- Fix pglz_compress is not thread-safe.
+- Set __module__ attribute on public objects.
+- Drop support for Python 3.9, deprecate Python 3.10.
+
+2024.12.30
+
+- …
+
+Refer to the CHANGES file for older revisions.
+
+Objectives
+----------
+
+Many scientific image storage formats, such as TIFF, CZI, XLIF, DICOM, HDF,
+and Zarr are containers that store numerous small data segments (chunks,
+tiles, stripes). These segments are encoded using various compression and
+pre-filtering methods. Metadata common to all data segments are typically
+stored separately from the segments.
+
+The purpose of the Imagecodecs library is to support Python modules in
+encoding and decoding such data segments. The specific aims are:
+
+- Provide functions for encoding and decoding small image data segments
+  in-memory (as opposed to in-file) from and to bytes or numpy arrays for
+  many compression and filtering methods.
+- Support image formats and compression methods that are not available
+  elsewhere in the Python ecosystem.
+- Reduce the runtime dependency on numerous, large, inapt, or unmaintained
+  Python packages. The Imagecodecs package only depends on numpy.
+- Implement codecs as Cython wrappers of third-party libraries with a C API
+  and permissive license if available; otherwise use own C library.
+  Provide Cython definition files for the wrapped C libraries.
+- Release the Python global interpreter lock (GIL) during extended native/C
+  function calls for multi-threaded use.
+
+Accessing parts of large data segments and reading metadata from segments
+are outside the scope of this library.
+
+Notes
+-----
+
+This library is largely a work in progress.
+
+The API is not stable yet and might change between revisions.
+
+Python <= 3.10 is no longer supported. 32-bit versions are deprecated.
+
+Works on little-endian platforms only.
+
+Supported platforms are ``win_amd64``, ``win_arm64``, ``win32``,
+``macosx_x86_64``, ``macosx_arm64``, ``manylinux_x86_64``, and
+``manylinux_aarch64``.
+
+Wheels may not be available for all platforms and all releases.
+
+Not all features are available on all platforms.
+
+The ``bcn``, ``dds``, ``dicomrle``, ``eer``, ``lzo``, ``packints``,
+and ``jpegsof3`` codecs are currently decode-only.
+
+The ``brunsli`` and ``pcodec`` codecs are distributed as source code only
+because the underlying libraries are unstable.
+
+The ``heif``, ``jetraw``, and ``jpegxs`` codecs are distributed as source
+code only due to license and possible patent usage issues.
+
+The latest `Microsoft Visual C++ Redistributable for Visual Studio 2017-2026
+<https://docs.microsoft.com/en-US/cpp/windows/latest-supported-vc-redist>`_
+is required on Windows.
+
+Refer to the imagecodecs/licenses folder for 3rd-party library licenses.
+
+This software is based in part on the work of the Independent JPEG Group.
+
+Update pip and setuptools to the latest version before installing imagecodecs::
+
+    python -m pip install -U pip setuptools wheel Cython.
+
+When building against libjpeg or libjpeg_turbo < 3, set the environment
+variable ``IMAGECODECS_JPEG8_LEGACY=1`` to enable legacy API support.
+
+Before building imagecodecs from source code, install required tools and
+libraries. For example, on latest Ubuntu Linux distributions:
+
+    ``sudo apt-get install build-essential python3-dev cython3 python3-pip
+    python3-setuptools python3-wheel python3-numpy libdeflate-dev libjpeg-dev
+    libjxr-dev liblcms2-dev liblz4-dev liblerc-dev liblzma-dev libopenjp2-7-dev
+    libpng-dev libtiff-dev libwebp-dev libz-dev libzstd-dev``
+
+To build and install imagecodecs from source code, run::
+
+    python -m pip install .
+
+Many extensions are disabled by default when building from source.
+
+To define which extensions are built, or to modify build settings such as
+library names and compiler arguments, provide a
+``imagecodecs_distributor_setup.customize_build`` function, which is
+imported and executed during setup.
+See ``setup.py`` for pre-defined ``customize_build`` functions.
+
+Other projects providing imaging or compression codecs:
+`stdlib-zlib <https://docs.python.org/3/library/zlib.html>`_,
+`stdlib-bz2 <https://docs.python.org/3/library/bz2.html>`_,
+`stdlib-lzma <https://docs.python.org/3/library/lzma.html>`_,
+`backports.lzma <https://github.com/peterjc/backports.lzma>`_,
+`python-lzo <https://bitbucket.org/james_taylor/python-lzo-static>`_,
+`python-lzw <https://github.com/joeatwork/python-lzw>`_,
+`python-lerc <https://pypi.org/project/lerc/>`_,
+`wavpack-numcodecs
+<https://github.com/AllenNeuralDynamics/wavpack-numcodecs>`_,
+`packbits <https://github.com/psd-tools/packbits>`_,
+`isa-l.igzip <https://github.com/intel/isa-l>`_,
+`fpzip <https://github.com/seung-lab/fpzip>`_,
+`libmng <https://sourceforge.net/projects/libmng/>`_,
+`openexr <https://github.com/AcademySoftwareFoundation/openexr>`_,
+`openzl <https://github.com/facebook/openzl>`_,
+`openhtj2k <https://github.com/osamu620/OpenHTJ2K>`_,
+`pyjetraw <https://github.com/Jetraw/pyJetraw>`_,
+`tinyexr <https://github.com/syoyo/tinyexr>`_,
+`pytinyexr <https://github.com/syoyo/pytinyexr>`_,
+`pyroexr <https://github.com/dragly/pyroexr>`_,
+`jasper <https://github.com/jasper-software/jasper>`_,
+`libjpeg <https://github.com/thorfdbg/libjpeg>`_ (gpl),
+`pylibjpeg <https://github.com/pydicom/pylibjpeg>`_,
+`pylibjpeg-libjpeg <https://github.com/pydicom/pylibjpeg-libjpeg>`_ (gpl),
+`pylibjpeg-openjpeg <https://github.com/pydicom/pylibjpeg-openjpeg>`_,
+`pylibjpeg-rle <https://github.com/pydicom/pylibjpeg-rle>`_,
+`glymur <https://github.com/quintusdias/glymur>`_,
+`pyheif <https://github.com/carsales/pyheif>`_,
+`pyrus-cramjam <https://github.com/milesgranger/pyrus-cramjam>`_,
+`pylzham <https://github.com/Galaxy1036/pylzham>`_,
+`brieflz <https://github.com/jibsen/brieflz>`_,
+`quicklz <http://www.quicklz.com/>`_ (gpl),
+`lzo <http://www.oberhumer.com/opensource/lzo/>`_ (gpl),
+`nvjpeg <https://developer.nvidia.com/nvjpeg>`_,
+`nvjpeg2k <https://developer.nvidia.com/nvjpeg>`_,
+`pyturbojpeg <https://github.com/lilohuang/PyTurboJPEG>`_,
+`ccsds123 <https://github.com/drowzie/CCSDS123-Issue-2>`_,
+`lpc-rice <https://sourceforge.net/projects/lpcrice/>`_,
+`compression-algorithms <https://github.com/glampert/compression-algorithms>`_,
+`compressonator <https://github.com/GPUOpen-Tools/Compressonator>`_,
+`wuffs <https://github.com/google/wuffs>`_,
+`tinydng <https://github.com/syoyo/tinydng>`_,
+`grok <https://github.com/GrokImageCompression/grok>`_ (agpl),
+`mafisc
+<https://wr.informatik.uni-hamburg.de/research/projects/icomex/mafisc>`_,
+`b3d <https://github.com/balintbalazs/B3D>`_,
+`fo-dicom.codecs <https://github.com/Efferent-Health/fo-dicom.Codecs>`_,
+`jpegli <https://github.com/google/jpegli>`_,
+`hdf5plugin <https://github.com/silx-kit/hdf5plugin>`_.
+
+Examples
+--------
+Import the JPEG2K codec:
+
+>>> from imagecodecs import (
+...     jpeg2k_encode,
+...     jpeg2k_decode,
+...     jpeg2k_check,
+...     jpeg2k_version,
+...     JPEG2K,
+... )
+
+Check that the JPEG2K codec is available in the imagecodecs build:
+
+>>> JPEG2K.available
+True
+
+Print the version of the JPEG2K codec's underlying OpenJPEG library:
+
+>>> jpeg2k_version()
+'openjpeg 2.5.4'
+
+Encode a numpy array in lossless JP2 format:
+
+>>> import numpy
+>>> array = numpy.random.randint(100, 200, (256, 256, 3), numpy.uint8)
+>>> encoded = jpeg2k_encode(array, level=0)
+>>> bytes(encoded[:12])
+b'\x00\x00\x00\x0cjP  \r\n\x87\n'
+
+Check that the encoded bytes likely contain a JPEG 2000 stream:
+
+>>> jpeg2k_check(encoded)
+True
+
+Decode the JP2 encoded bytes to a numpy array:
+
+>>> decoded = jpeg2k_decode(encoded)
+>>> numpy.array_equal(decoded, array)
+True
+
+Decode the JP2 encoded bytes to an existing numpy array:
+
+>>> out = numpy.empty_like(array)
+>>> _ = jpeg2k_decode(encoded, out=out)
+>>> numpy.array_equal(out, array)
+True
+
+Not all codecs are fully implemented, raising exceptions at runtime:
+
+>>> from imagecodecs import packints_encode
+>>> packints_encode(array, 8)
+Traceback (most recent call last):
+ ...
+NotImplementedError: packints_encode
+
+Write the numpy array to a JP2 file:
+
+>>> from imagecodecs import imwrite, imread
+>>> imwrite('_test.jp2', array)
+
+Read the image from the JP2 file as numpy array:
+
+>>> image = imread('_test.jp2')
+>>> numpy.array_equal(image, array)
+True
+
+Create a JPEG 2000 compressed Zarr array:
+
+>>> import zarr
+>>> import numcodecs
+>>> from imagecodecs.numcodecs import Jpeg2k
+>>> numcodecs.register_codec(Jpeg2k)
+>>> zarr.zeros(
+...     (4, 5, 512, 512, 3),
+...     chunks=(1, 1, 256, 256, 3),
+...     dtype='u1',
+...     compressor=Jpeg2k(),
+...     zarr_format=2,
+... )
+<...Array ...(4, 5, 512, 512, 3) ...uint8>
+
+Access image data in a sequence of JP2 files via tifffile.FileSequence and
+dask.array:
+
+>>> import tifffile
+>>> import dask.array
+>>> def jp2_read(filename):
+...     with open(filename, 'rb') as fh:
+...         data = fh.read()
+...     return jpeg2k_decode(data)
+...
+>>> with tifffile.FileSequence(jp2_read, '*.jp2') as ims:
+...     with ims.aszarr() as store:
+...         dask.array.from_zarr(store)
+...
+dask.array<from-zarr, shape=(1, 256, 256, 3)...chunksize=(1, 256, 256, 3)...
+
+Write the Zarr store to a fsspec ReferenceFileSystem in JSON format
+and open it as a Zarr array:
+
+>>> store.write_fsspec(
+...     'temp.json', url='file://', codec_id='imagecodecs_jpeg2k'
+... )
+>>> from kerchunk.utils import refs_as_store
+>>> zarr.open(refs_as_store('temp.json'), mode='r')
+<Array <FsspecStore(ReferenceFileSystem, /)> shape=(1, 256, 256, 3) dtype=uint8>
+
+View the image in the JP2 file from the command line::
+
+    python -m imagecodecs _test.jp2
