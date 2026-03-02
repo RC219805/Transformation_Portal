@@ -22,6 +22,7 @@ src/transformation_portal/hardening/universal.py
 src/transformation_portal/ingest/canonical_json.py
 src/transformation_portal/ingest/machine_output.py
 src/transformation_portal/ingest/provenance.py
+src/transformation_portal/ingest/schemas.py
 src/transformation_portal/lux_depth_v3/manifest.py
 src/transformation_portal/lux_depth_v3/orchestrator.py
 src/transformation_portal/lux_depth_v3/pbr_cli.py
