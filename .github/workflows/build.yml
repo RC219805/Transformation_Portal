@@ -452,8 +452,8 @@ jobs:
           - python-version: "3.11"
             device: cpu
             test-type: ml
-            # Preferred intent: run ML-marked tests, but never slow integration or benchmarks in PR gating.
-            markexpr: "ml and not slow and not benchmark"
+            # PR ML tier: fast ML unit coverage only (exclude slow/integration/benchmark suites).
+            markexpr: "ml and not slow and not integration and not benchmark"
 
     name: test (${{ matrix.python-version }}, ${{ matrix.device }}, ${{ matrix.test-type }})
 
