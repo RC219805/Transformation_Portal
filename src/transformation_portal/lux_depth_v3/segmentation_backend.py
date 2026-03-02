@@ -43,6 +43,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+from contextvars import ContextVar
 from functools import lru_cache
 from pathlib import Path
 from types import SimpleNamespace
@@ -55,7 +56,10 @@ from .protocols.segmentation_backend import SegmentationBackend, SegmentationBac
 
 logger = logging.getLogger(__name__)
 
-_LAST_SEGMENTATION_RUNTIME_METADATA: Optional[Dict[str, Any]] = None
+_LAST_SEGMENTATION_RUNTIME_METADATA: ContextVar[Optional[Dict[str, Any]]] = ContextVar(
+    "_LAST_SEGMENTATION_RUNTIME_METADATA",
+    default=None,
+)
 
 # Lazy imports for ML dependencies
 try:
@@ -1270,8 +1274,7 @@ def segment_materials(
         RuntimeError: If strict_backend=True and backend fails to load
         ValueError: If image format is invalid
     """
-    global _LAST_SEGMENTATION_RUNTIME_METADATA
-    _LAST_SEGMENTATION_RUNTIME_METADATA = None
+    _LAST_SEGMENTATION_RUNTIME_METADATA.set(None)
 
     # Check if segmentation is enabled
     enable_segmentation = getattr(config, "enable_material_segmentation", False)
@@ -1314,7 +1317,7 @@ def segment_materials(
                 logger.debug("Failed to query segmentation runtime metadata: %s", exc)
                 runtime_metadata = None
             if isinstance(runtime_metadata, dict):
-                _LAST_SEGMENTATION_RUNTIME_METADATA = runtime_metadata
+                _LAST_SEGMENTATION_RUNTIME_METADATA.set(dict(runtime_metadata))
 
         # Extract masks from (mask, confidence) tuples for backward compatibility
         # The public API returns Dict[str, np.ndarray] while backends return Dict[str, Tuple[np.ndarray, float]]
@@ -1342,6 +1345,7 @@ def segment_materials(
 
 def get_last_segmentation_runtime_metadata() -> Optional[Dict[str, Any]]:
     """Return last segmentation runtime metadata captured by segment_materials()."""
-    if _LAST_SEGMENTATION_RUNTIME_METADATA is None:
+    metadata = _LAST_SEGMENTATION_RUNTIME_METADATA.get()
+    if metadata is None:
         return None
-    return dict(_LAST_SEGMENTATION_RUNTIME_METADATA)
+    return dict(metadata)

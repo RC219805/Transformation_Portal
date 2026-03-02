@@ -31,6 +31,16 @@ class TestFindDepthMap:
         stem = "750Picacho_Pool_master16__tiff_eb4924f8_materials_v3_enhanced"
         assert canonical_asset_stem(stem) == "750Picacho_Pool_master16__tiff_eb4924f8"
 
+    def test_canonical_asset_stem_preserves_dotted_stem_segments(self):
+        """Dot-containing stems should remain intact when already stem-like."""
+        stem = "image.v1_materials_v3_enhanced"
+        assert canonical_asset_stem(stem) == "image.v1"
+
+    def test_canonical_asset_stem_strips_extension_for_path_like_input(self):
+        """Path-like filename inputs should strip extension then derived suffixes."""
+        stem = "/tmp/image.v1_materials_v3_enhanced.png"
+        assert canonical_asset_stem(stem) == "image.v1"
+
     def test_find_depth_map_standard_naming(self, tmp_path):
         """Test finding depth map with standard naming convention."""
         depth_dir = tmp_path / "depth"

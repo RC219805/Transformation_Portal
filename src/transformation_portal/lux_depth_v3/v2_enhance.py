@@ -53,10 +53,42 @@ _DERIVED_STEM_SUFFIXES = (
     "_pbr",
 )
 
+_KNOWN_IMAGE_EXTENSIONS = (
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".tif",
+    ".tiff",
+    ".bmp",
+    ".webp",
+    ".npy",
+    ".exr",
+)
+
+
+def _coerce_to_stem_preserving_dots(input_path_or_stem: str) -> str:
+    """Treat value as a stem by default; only strip extensions for path-like inputs."""
+    raw = str(input_path_or_stem).strip()
+    if not raw:
+        return ""
+
+    # Real paths should use pathlib stem extraction.
+    if "/" in raw or "\\" in raw:
+        return Path(raw).stem
+
+    # If value looks like a filename with a known extension, strip extension only.
+    lowered = raw.lower()
+    for extension in _KNOWN_IMAGE_EXTENSIONS:
+        if lowered.endswith(extension):
+            return raw[: -len(extension)]
+
+    # Already-stem values may legitimately include dots (e.g., image.v1_materials_v3_enhanced).
+    return raw
+
 
 def canonical_asset_stem(input_path_or_stem: str) -> str:
     """Normalize derived V2 stems back to canonical source asset stem."""
-    stem = Path(str(input_path_or_stem)).stem
+    stem = _coerce_to_stem_preserving_dots(input_path_or_stem)
     normalized = stem
 
     # Repeated stripping handles multi-derived names like *_materials_v3_enhanced.
