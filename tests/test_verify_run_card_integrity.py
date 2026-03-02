@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -39,6 +40,15 @@ def _valid_run_card_payload(module) -> dict:
             "sha256": "b" * 64,
         },
     ]
+    canonical_json = (
+        '{"apex_strict_mode":false,"backend_requested":"da3","backend_resolved":"da3",'
+        '"depth_device":"cpu","depth_quantization":"u16","device_requested":"cpu","device_resolved":"cpu",'
+        '"model_variant":"METRIC_LARGE","preset":"premium","preset_requested":"premium","preset_resolved":"premium",'
+        '"quality_tier":"premium","strict_inputs":false,"strict_segmentation":false,'
+        '"v2_device":"cpu","v2_preset":"premium","v2_upscaler_backend":"realesrgan"}'
+    )
+    fingerprint_sha = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+
     return {
         "batch_id": "2026-02-28_120000",
         "start_time": "2026-02-28T12:00:00Z",
@@ -48,10 +58,22 @@ def _valid_run_card_payload(module) -> dict:
             "depth_quantization": "u16",
             "depth_device": "cpu",
             "preset": "premium",
+            "preset_requested": "premium",
+            "preset_resolved": "premium",
+            "backend_requested": "da3",
+            "backend_resolved": "da3",
+            "device_requested": "cpu",
+            "device_resolved": "cpu",
+            "quality_tier": "premium",
+            "strict_inputs": False,
+            "strict_segmentation": False,
+            "apex_strict_mode": False,
             "v2_preset": "premium",
             "v2_device": "cpu",
             "v2_upscaler_backend": "realesrgan",
-            "sha256": "c" * 64,
+            "hash_algorithm": "sha256",
+            "canonical_json": canonical_json,
+            "sha256": fingerprint_sha,
         },
         "backend_selection": {
             "requested": "da3",
@@ -61,6 +83,7 @@ def _valid_run_card_payload(module) -> dict:
         },
         "backend_summary": {
             "requested_backend": "da3",
+            "primary_backend": "da3",
             "final_backends_used": ["da3"],
             "fallback_images": 0,
             "semantic_fallback_images": 0,
@@ -163,6 +186,40 @@ def test_verify_run_card_integrity_detects_canonical_json_drift(tmp_path: Path):
 
     errors = module.verify_run_card_integrity(run_card_path, check_canonical_json=True)
     assert any("canonical serialization drift" in error for error in errors)
+
+
+def test_verify_run_card_integrity_rejects_backend_semantic_mismatch(tmp_path: Path):
+    module = _load_script_module("verify_run_card_integrity_script_backend", "scripts/verify_run_card_integrity.py")
+    run_card_path = tmp_path / "run_card_backend_mismatch.json"
+    payload = _valid_run_card_payload(module)
+    payload["backend_selection"]["resolved"] = "depth_pro"
+    _write_json(run_card_path, payload)
+
+    errors = module.verify_run_card_integrity(run_card_path)
+    assert any("backend_selection.resolved must match backend_summary.final_backends_used[0]" in error for error in errors)
+
+
+def test_verify_run_card_integrity_accepts_wrapper_semantics(tmp_path: Path):
+    module = _load_script_module("verify_run_card_integrity_script_wrapper", "scripts/verify_run_card_integrity.py")
+    run_card_path = tmp_path / "run_card_wrapper.json"
+    payload = _valid_run_card_payload(module)
+    payload["backend_selection"]["logical_backend"] = "depth_pro"
+    payload["backend_selection"]["resolved_engine"] = "da3"
+    _write_json(run_card_path, payload)
+
+    errors = module.verify_run_card_integrity(run_card_path)
+    assert errors == []
+
+
+def test_verify_run_card_integrity_rejects_config_fingerprint_hash_mismatch(tmp_path: Path):
+    module = _load_script_module("verify_run_card_integrity_script_fingerprint", "scripts/verify_run_card_integrity.py")
+    run_card_path = tmp_path / "run_card_fingerprint_mismatch.json"
+    payload = _valid_run_card_payload(module)
+    payload["config_fingerprint"]["sha256"] = "f" * 64
+    _write_json(run_card_path, payload)
+
+    errors = module.verify_run_card_integrity(run_card_path)
+    assert any("config_fingerprint.sha256 mismatch" in error for error in errors)
 
 
 def test_verify_run_card_integrity_reports_invalid_json(tmp_path: Path):

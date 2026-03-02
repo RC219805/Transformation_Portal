@@ -15,13 +15,35 @@
     "requested": "da3",
     "resolved": "da3"
   },
+  "backend_summary": {
+    "fallback_images": 0,
+    "final_backends_used": [
+      "da3"
+    ],
+    "operational_fallback_images": 0,
+    "primary_backend": "da3",
+    "requested_backend": "da3",
+    "semantic_fallback_images": 0
+  },
   "batch_id": "2026-02-28_120000",
   "config_fingerprint": {
+    "apex_strict_mode": false,
+    "backend_requested": "da3",
+    "backend_resolved": "da3",
+    "canonical_json": "{\"apex_strict_mode\":false,\"backend_requested\":\"da3\",\"backend_resolved\":\"da3\",\"depth_device\":\"cpu\",\"depth_quantization\":\"u16\",\"device_requested\":\"cpu\",\"device_resolved\":\"cpu\",\"model_variant\":\"METRIC_LARGE\",\"preset\":\"premium\",\"preset_requested\":\"premium\",\"preset_resolved\":\"premium\",\"quality_tier\":\"premium\",\"strict_inputs\":false,\"strict_segmentation\":false,\"v2_device\":\"cpu\",\"v2_preset\":\"premium\",\"v2_upscaler_backend\":\"realesrgan\"}",
     "depth_device": "cpu",
     "depth_quantization": "u16",
+    "device_requested": "cpu",
+    "device_resolved": "cpu",
+    "hash_algorithm": "sha256",
     "model_variant": "METRIC_LARGE",
     "preset": "premium",
-    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "preset_requested": "premium",
+    "preset_resolved": "premium",
+    "quality_tier": "premium",
+    "sha256": "73289cbf58bb71088bfd5cc13feac9b800be9716e24702ed5b55c3f7e92b355d",
+    "strict_inputs": false,
+    "strict_segmentation": false,
     "v2_device": "cpu",
     "v2_preset": "premium",
     "v2_upscaler_backend": "realesrgan"

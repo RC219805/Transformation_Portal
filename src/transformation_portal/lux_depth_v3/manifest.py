@@ -235,6 +235,7 @@ class MaterialsV3Metadata:
     version: str = "3.1"
     response_plan: Optional[Dict[str, Any]] = None
     pixel_ops: Optional[Dict[str, Any]] = None
+    segmentation_metadata: Optional[Dict[str, Any]] = None
     runtime_seconds: Optional[float] = None
     output_bit_depth: Optional[int] = None  # 8 or 16, added in schema v1.1
     schema_version: str = "1.1"
@@ -258,6 +259,7 @@ class MaterialsV3Metadata:
             version=data.get("version", "3.1"),
             response_plan=data.get("response_plan"),
             pixel_ops=data.get("pixel_ops"),
+            segmentation_metadata=data.get("segmentation_metadata"),
             runtime_seconds=data.get("runtime_seconds"),
             output_bit_depth=data.get("output_bit_depth"),  # v1.1+, defaults to None for v1.0
             schema_version=schema_version,

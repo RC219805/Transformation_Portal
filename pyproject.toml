@@ -43,12 +43,16 @@ classifiers = [
 # ML dependencies. Note: `realesrgan` is BANNED (unmaintained).
 # Enforcement: requirements/constraints.txt hard-block pins + scripts/security/verify_banned_dependencies.py
 ml = [
-    "torch>=2.0,<3",
+    # Known-good pinned segmentation stack (SAM2 + CLIP) to avoid drift.
+    "torch==2.10.0",
     "diffusers>=0.20,<1",
     "controlnet-aux>=0.0.6,<1",
     "transformers>=4.35.0,<6",
     "huggingface-hub>=0.19.0,<2",
-    "torchvision>=0.15.0,<1",
+    "torchvision==0.25.0",
+    "sam2==1.1.0",
+    "efficientsam==1.0.0",
+    "open-clip-torch==3.2.0",
     # opencv-python moved to core dependencies (required for depth_writer)
     "scikit-image>=0.21.0,<1",
     "PyYAML>=6.0",

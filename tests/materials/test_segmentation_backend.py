@@ -16,6 +16,9 @@ Note: Tests marked with @pytest.mark.ml require torch/torchvision.
 
 from __future__ import annotations
 
+import socket
+import sys
+import types
 from types import SimpleNamespace
 
 import numpy as np
@@ -28,6 +31,7 @@ from transformation_portal.lux_depth_v3.segmentation_backend import (
     SAM2SegmentationBackend,
     StubBackend,
     _get_backend_instance,
+    get_last_segmentation_runtime_metadata,
     segment_materials,
 )
 
@@ -100,6 +104,17 @@ def fixture_config_strict():
         strict_backend=True,
         depth_device="cpu",
     )
+
+
+@pytest.fixture(name="efficientsam_heuristic_backend")
+def fixture_efficientsam_heuristic_backend(monkeypatch):
+    """Fast unit-test backend: force heuristic path to avoid real SAM inference."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    monkeypatch.setattr(seg_module, "EFFICIENTVIT_AVAILABLE", False)
+    backend = EfficientSAMBackend()
+    backend.load(device="cpu")
+    return backend
 
 
 # =============================================================================
@@ -178,13 +193,174 @@ def test_stub_backend_shape_contract(sample_image):
     assert len(masks) == 0
 
 
-@pytest.mark.ml
-def test_efficientsam_backend_shape_contract(sample_image):
-    """Test that EfficientSAMBackend returns correct output shapes."""
-    backend = EfficientSAMBackend()
-    backend.load(device="cpu")
+def test_clip_loader_prefers_cached_checkpoint_path(monkeypatch, tmp_path):
+    """CLIP loader should use local cached checkpoint path before tag-based resolution."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
 
-    results = backend.segment(sample_image)
+    cached_checkpoint = tmp_path / "open_clip_model.safetensors"
+    cached_checkpoint.write_bytes(b"checkpoint")
+    calls = {}
+
+    def fake_get_pretrained_cfg(model_name, pretrained_tag):
+        calls["cfg"] = (model_name, pretrained_tag)
+        return {"hf_hub": "timm/vit_base_patch32_clip_224.openai/"}
+
+    def fake_create_model_and_transforms(model_name, pretrained, device):
+        calls["create"] = (model_name, pretrained, device)
+        return object(), None, (lambda image: image)
+
+    def fake_get_tokenizer(model_name):
+        calls["tokenizer"] = model_name
+        return lambda prompts: prompts
+
+    def fake_try_to_load_from_cache(repo_id, filename):
+        calls.setdefault("cache_queries", []).append((repo_id, filename))
+        if filename == "open_clip_model.safetensors":
+            return str(cached_checkpoint)
+        return None
+
+    fake_hf_module = types.ModuleType("huggingface_hub")
+    fake_hf_module.try_to_load_from_cache = fake_try_to_load_from_cache
+
+    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf_module)
+    monkeypatch.setattr(seg_module, "OPEN_CLIP_AVAILABLE", True)
+    monkeypatch.setattr(
+        seg_module,
+        "open_clip",
+        SimpleNamespace(
+            get_pretrained_cfg=fake_get_pretrained_cfg,
+            create_model_and_transforms=fake_create_model_and_transforms,
+            get_tokenizer=fake_get_tokenizer,
+        ),
+    )
+
+    backend = seg_module.EfficientSAMBackend()
+    backend._device = "cpu"
+    backend._load_clip_runtime()
+
+    assert calls["cfg"] == ("ViT-B-32", "openai")
+    assert calls["cache_queries"][0] == ("timm/vit_base_patch32_clip_224.openai", "open_clip_model.safetensors")
+    assert calls["create"][1] == str(cached_checkpoint)
+
+
+def test_clip_loader_offline_mode_missing_cache_fails_fast(monkeypatch):
+    """Offline mode must fail before tag-based model resolution if cache is missing."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    create_calls = {"count": 0}
+
+    def fake_get_pretrained_cfg(_model_name, _pretrained_tag):
+        return {"hf_hub": "timm/vit_base_patch32_clip_224.openai/"}
+
+    def fake_create_model_and_transforms(*_args, **_kwargs):
+        create_calls["count"] += 1
+        return object(), None, (lambda image: image)
+
+    def fake_try_to_load_from_cache(_repo_id, _filename):
+        return None
+
+    fake_hf_module = types.ModuleType("huggingface_hub")
+    fake_hf_module.try_to_load_from_cache = fake_try_to_load_from_cache
+
+    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf_module)
+    monkeypatch.setenv("HF_HUB_OFFLINE", "1")
+    monkeypatch.setattr(seg_module, "OPEN_CLIP_AVAILABLE", True)
+    monkeypatch.setattr(
+        seg_module,
+        "open_clip",
+        SimpleNamespace(
+            get_pretrained_cfg=fake_get_pretrained_cfg,
+            create_model_and_transforms=fake_create_model_and_transforms,
+            get_tokenizer=lambda _model_name: (lambda prompts: prompts),
+        ),
+    )
+
+    backend = seg_module.EfficientSAMBackend()
+    backend._device = "cpu"
+
+    with pytest.raises(RuntimeError, match="offline mode is enabled"):
+        backend._load_clip_runtime()
+
+    assert create_calls["count"] == 0
+
+
+def test_clip_loader_with_cache_does_not_touch_network(monkeypatch, tmp_path):
+    """With cache present, CLIP loader should succeed even if network APIs are blocked."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    cached_checkpoint = tmp_path / "open_clip_model.safetensors"
+    cached_checkpoint.write_bytes(b"checkpoint")
+    calls = {"create": 0}
+
+    def fake_get_pretrained_cfg(_model_name, _pretrained_tag):
+        return {"hf_hub": "timm/vit_base_patch32_clip_224.openai/"}
+
+    def fake_create_model_and_transforms(*_args, **_kwargs):
+        calls["create"] += 1
+        return object(), None, (lambda image: image)
+
+    def fake_try_to_load_from_cache(_repo_id, filename):
+        if filename == "open_clip_model.safetensors":
+            return str(cached_checkpoint)
+        return None
+
+    def fail_getaddrinfo(*_args, **_kwargs):
+        raise AssertionError("Network lookup attempted in offline-cache path")
+
+    fake_hf_module = types.ModuleType("huggingface_hub")
+    fake_hf_module.try_to_load_from_cache = fake_try_to_load_from_cache
+    fake_hf_module.hf_hub_download = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+        AssertionError("hf_hub_download should not be called when cache exists")
+    )
+
+    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf_module)
+    monkeypatch.setattr(socket, "getaddrinfo", fail_getaddrinfo)
+    monkeypatch.setattr(seg_module, "OPEN_CLIP_AVAILABLE", True)
+    monkeypatch.setattr(
+        seg_module,
+        "open_clip",
+        SimpleNamespace(
+            get_pretrained_cfg=fake_get_pretrained_cfg,
+            create_model_and_transforms=fake_create_model_and_transforms,
+            get_tokenizer=lambda _model_name: (lambda prompts: prompts),
+        ),
+    )
+
+    backend = seg_module.EfficientSAMBackend()
+    backend._device = "cpu"
+    backend._load_clip_runtime()
+    assert calls["create"] == 1
+
+
+def test_segment_materials_exposes_runtime_metadata(monkeypatch, sample_image):
+    """segment_materials should expose backend runtime metadata for manifest attestation."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    class _FakeBackend:
+        def __init__(self):
+            self.info = SimpleNamespace(name="fake")
+
+        def segment(self, _image):
+            return {"glass": (np.ones((2, 2), dtype=np.float32), 0.9)}
+
+        def get_runtime_metadata(self):
+            return {"clip_runtime": {"offline_mode": True, "weights_source": "cache_path"}}
+
+    monkeypatch.setattr(seg_module, "_get_backend_instance", lambda *_args, **_kwargs: _FakeBackend())
+
+    config = EnhanceConfig(enable_material_segmentation=True, material_segmentation_backend="efficientsam", depth_device="cpu")
+    masks = segment_materials(sample_image, config)
+
+    assert "glass" in masks
+    metadata = get_last_segmentation_runtime_metadata()
+    assert metadata is not None
+    assert metadata["clip_runtime"]["weights_source"] == "cache_path"
+
+
+@pytest.mark.ml
+def test_efficientsam_backend_shape_contract(sample_image, efficientsam_heuristic_backend):
+    """Test that EfficientSAMBackend returns correct output shapes."""
+    results = efficientsam_heuristic_backend.segment(sample_image)
 
     # Check output type
     assert isinstance(results, dict)
@@ -204,22 +380,19 @@ def test_efficientsam_backend_shape_contract(sample_image):
 
 
 @pytest.mark.ml
-def test_efficientsam_backend_invalid_input():
+def test_efficientsam_backend_invalid_input(efficientsam_heuristic_backend):
     """Test that EfficientSAMBackend validates input format."""
-    backend = EfficientSAMBackend()
-    backend.load(device="cpu")
-
     # Test invalid shape (grayscale)
     with pytest.raises(ValueError, match="Expected RGB image"):
-        backend.segment(np.zeros((64, 64), dtype=np.uint8))
+        efficientsam_heuristic_backend.segment(np.zeros((64, 64), dtype=np.uint8))
 
     # Test invalid dtype (float32)
     with pytest.raises(ValueError, match="Expected uint8"):
-        backend.segment(np.zeros((64, 64, 3), dtype=np.float32))
+        efficientsam_heuristic_backend.segment(np.zeros((64, 64, 3), dtype=np.float32))
 
     # Test invalid shape (4 channels)
     with pytest.raises(ValueError, match="Expected RGB image"):
-        backend.segment(np.zeros((64, 64, 4), dtype=np.uint8))
+        efficientsam_heuristic_backend.segment(np.zeros((64, 64, 4), dtype=np.uint8))
 
 
 # =============================================================================
@@ -340,8 +513,10 @@ def test_segment_materials_passes_sky_knobs_without_mutating_backend(sample_imag
 
 
 @pytest.mark.ml
+@pytest.mark.integration
+@pytest.mark.slow
 def test_segment_materials_efficientsam_backend(sample_image, config_efficientsam):
-    """Test that EfficientSAM backend returns masks."""
+    """Integration: real EfficientSAM backend returns masks."""
     masks = segment_materials(sample_image, config_efficientsam)
 
     # Should return some masks (heuristic segmentation)
@@ -500,7 +675,7 @@ def test_backend_caching_sam2(monkeypatch):
 
 
 @pytest.mark.ml
-def test_heuristic_segmentation_detects_materials():
+def test_heuristic_segmentation_detects_materials(efficientsam_heuristic_backend):
     """Test that heuristic segmentation detects expected materials."""
     # Create an image with clear material signatures
     image = np.zeros((128, 128, 3), dtype=np.uint8)
@@ -517,9 +692,7 @@ def test_heuristic_segmentation_detects_materials():
     # Bright glass region
     image[70:120, 70:120] = [180, 190, 210]  # High brightness + blue tint
 
-    backend = EfficientSAMBackend()
-    backend.load(device="cpu")
-    results = backend.segment(image)
+    results = efficientsam_heuristic_backend.segment(image)
 
     # Should detect multiple materials
     assert len(results) > 0
@@ -645,12 +818,9 @@ def test_stub_backend_confidence_scores(sample_image):
 
 
 @pytest.mark.ml
-def test_confidence_scores_in_valid_range(sample_image):
+def test_confidence_scores_in_valid_range(sample_image, efficientsam_heuristic_backend):
     """Verify all confidence scores are in [0.0-1.0] range."""
-    backend = EfficientSAMBackend()
-    backend.load(device="cpu")
-
-    results = backend.segment(sample_image)
+    results = efficientsam_heuristic_backend.segment(sample_image)
 
     # Check each material's confidence
     for material, (mask, confidence) in results.items():
@@ -684,31 +854,78 @@ def test_heuristic_fallback_returns_medium_confidence(sample_image, monkeypatch)
 
 
 @pytest.mark.ml
-def test_confidence_logged_in_output(sample_image, caplog):
-    """Verify confidence scores appear in logs when using real CLIP model."""
+def test_confidence_logged_in_output(sample_image, monkeypatch, caplog):
+    """Verify fallback confidence logging contract without real model inference."""
     backend = EfficientSAMBackend()
-    backend.load(device="cpu")
+    backend._device = "cpu"
+
+    def _raise_clip_load_error():
+        raise RuntimeError("offline cache miss")
+
+    monkeypatch.setattr(backend, "_load_clip_runtime", _raise_clip_load_error)
+
+    seg_mask = np.zeros(sample_image.shape[:2], dtype=bool)
+    seg_mask[0:32, 0:32] = True
+    segments = [{"segmentation": seg_mask, "bbox": [0, 0, 32, 32], "area": int(seg_mask.sum())}]
 
     import logging
 
     with caplog.at_level(logging.INFO):
-        results = backend.segment(sample_image)
+        results = backend._classify_segments_with_clip(sample_image, segments)
 
     # Check log contains confidence percentages (from CLIP classification)
     log_text = caplog.text
 
-    # If materials were detected and we're using the real model (CLIP), expect % in logs
-    # In heuristic mode, confidence is fixed at 0.5 and may not show % formatting
-    if len(results) > 0 and backend._use_real_model:
-        # Look for percentage format in logs (e.g., "glass (87%)")
-        assert any("%" in line for line in log_text.split("\n")), "Logs should contain confidence percentages for CLIP mode"
-    elif len(results) > 0:
-        # Heuristic mode - just verify "confidence" is mentioned somewhere
-        assert "confidence" in log_text.lower() or "0.5" in log_text, "Logs should reference confidence scoring"
+    # Runtime contract:
+    # - If CLIP succeeds, summary line must include percentage confidences.
+    # - If CLIP fails (offline cache miss, etc.), fallback warning must be present.
+    assert "falling back to heuristics" in log_text.lower()
+    assert "CLIP classification failed" in log_text
+    assert isinstance(results, dict)
 
 
 @pytest.mark.ml
-def test_multiple_materials_different_confidences():
+def test_clip_success_logging_emits_percentages(sample_image, monkeypatch, caplog):
+    """Deterministic unit test: successful CLIP path emits % confidence summaries."""
+    if not TORCH_AVAILABLE:
+        pytest.skip("torch not available")
+
+    backend = EfficientSAMBackend()
+    backend._device = "cpu"
+
+    class _FakeModel:
+        def encode_text(self, _tokens):
+            # 4 prompts x 4-dim embedding (glass, water, foliage, stone)
+            return torch.eye(4, dtype=torch.float32)
+
+        def encode_image(self, _tensor):
+            # Most similar to "water" prompt.
+            return torch.tensor([[0.10, 0.95, 0.10, 0.10]], dtype=torch.float32)
+
+    def _fake_preprocess(_region):
+        return torch.ones((3, 16, 16), dtype=torch.float32)
+
+    def _fake_tokenizer(prompts):
+        return torch.ones((len(prompts), 4), dtype=torch.float32)
+
+    monkeypatch.setattr(backend, "_load_clip_runtime", lambda: (_FakeModel(), _fake_preprocess, _fake_tokenizer))
+
+    seg_mask = np.zeros(sample_image.shape[:2], dtype=bool)
+    seg_mask[0:32, 0:32] = True  # 1024px > 500px coverage threshold
+    segments = [{"segmentation": seg_mask, "bbox": [0, 0, 32, 32], "area": int(seg_mask.sum()), "heuristic_label": "water"}]
+
+    import logging
+
+    with caplog.at_level(logging.INFO):
+        results = backend._classify_segments_with_clip(sample_image, segments)
+
+    assert "water" in results
+    assert "CLIP classified" in caplog.text
+    assert "%" in caplog.text
+
+
+@pytest.mark.ml
+def test_multiple_materials_different_confidences(efficientsam_heuristic_backend):
     """Test that different materials can have different confidence scores."""
     # Create image with distinct material regions
     image = np.zeros((128, 128, 3), dtype=np.uint8)
@@ -722,9 +939,7 @@ def test_multiple_materials_different_confidences():
     # Grayish region (stone)
     image[10:60, 70:120] = [120, 125, 120]
 
-    backend = EfficientSAMBackend()
-    backend.load(device="cpu")
-    results = backend.segment(image)
+    results = efficientsam_heuristic_backend.segment(image)
 
     if len(results) >= 2:
         # Extract confidence scores
@@ -740,16 +955,14 @@ def test_multiple_materials_different_confidences():
 
 
 @pytest.mark.ml
-def test_confidence_filtering_example():
+def test_confidence_filtering_example(efficientsam_heuristic_backend):
     """Demonstrate how users can filter by confidence threshold."""
     # Create test image
     image = np.zeros((128, 128, 3), dtype=np.uint8)
     image[10:60, 10:60] = [50, 120, 200]  # Water
     image[70:120, 10:60] = [80, 140, 90]  # Foliage
 
-    backend = EfficientSAMBackend()
-    backend.load(device="cpu")
-    results = backend.segment(image)
+    results = efficientsam_heuristic_backend.segment(image)
 
     # Filter by confidence threshold
     min_confidence = 0.4

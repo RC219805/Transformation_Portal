@@ -268,6 +268,90 @@ def _validate_run_card_payload(payload: Dict[str, Any], schema_path: Path) -> No
     raise RuntimeError("Run card schema validation failed: " + "; ".join(formatted))
 
 
+def _validate_run_card_backend_semantics(payload: Dict[str, Any]) -> None:
+    """Validate backend resolution semantics for run-card transparency."""
+    backend_selection = payload.get("backend_selection")
+    backend_summary = payload.get("backend_summary")
+    if not isinstance(backend_selection, dict) or not isinstance(backend_summary, dict):
+        return
+
+    final_backends_used = backend_summary.get("final_backends_used")
+    if not isinstance(final_backends_used, list):
+        return
+
+    success_count = payload.get("success_count")
+    if not isinstance(success_count, int):
+        success_count = 0
+
+    if not final_backends_used:
+        if success_count > 0:
+            raise RuntimeError(
+                "Run card backend semantics validation failed: "
+                "backend_summary.final_backends_used must be non-empty when success_count > 0."
+            )
+        return
+
+    primary_backend = final_backends_used[0]
+    if not isinstance(primary_backend, str) or not primary_backend:
+        raise RuntimeError(
+            "Run card backend semantics validation failed: "
+            "backend_summary.final_backends_used[0] must be a non-empty string."
+        )
+
+    summary_primary = backend_summary.get("primary_backend")
+    if summary_primary != primary_backend:
+        raise RuntimeError(
+            "Run card backend semantics validation failed: "
+            "backend_summary.primary_backend must equal backend_summary.final_backends_used[0]."
+        )
+
+    resolved = backend_selection.get("resolved")
+    if not isinstance(resolved, str) or not resolved:
+        raise RuntimeError(
+            "Run card backend semantics validation failed: " "backend_selection.resolved must be a non-empty string."
+        )
+
+    if resolved != primary_backend:
+        raise RuntimeError(
+            "Run card backend semantics validation failed: "
+            "backend_selection.resolved must match backend_summary.final_backends_used[0]."
+        )
+
+    logical_backend = backend_selection.get("logical_backend")
+    resolved_engine = backend_selection.get("resolved_engine")
+    wrapper_declared = logical_backend is not None or resolved_engine is not None
+    if not wrapper_declared:
+        return
+
+    if not isinstance(logical_backend, str) or not logical_backend:
+        raise RuntimeError(
+            "Run card backend semantics validation failed: "
+            "backend_selection.logical_backend must be a non-empty string when wrapper semantics are declared."
+        )
+    if not isinstance(resolved_engine, str) or not resolved_engine:
+        raise RuntimeError(
+            "Run card backend semantics validation failed: "
+            "backend_selection.resolved_engine must be a non-empty string when wrapper semantics are declared."
+        )
+    if logical_backend == resolved_engine:
+        raise RuntimeError(
+            "Run card backend semantics validation failed: "
+            "backend_selection.logical_backend and backend_selection.resolved_engine must differ."
+        )
+    if resolved_engine != primary_backend:
+        raise RuntimeError(
+            "Run card backend semantics validation failed: "
+            "backend_selection.resolved_engine must match backend_summary.final_backends_used[0]."
+        )
+
+    fallback_images = backend_summary.get("fallback_images")
+    if isinstance(fallback_images, int) and fallback_images != 0:
+        raise RuntimeError(
+            "Run card backend semantics validation failed: "
+            "wrapper semantics are only valid when backend_summary.fallback_images == 0."
+        )
+
+
 def _infer_artifact_type(relative_path: str) -> str:
     """Infer canonical artifact type from output-root relative path."""
     rel = relative_path.lower()
@@ -309,6 +393,14 @@ def _infer_artifact_type(relative_path: str) -> str:
         return "pbr_aux"
 
     return "artifact"
+
+
+def _v2_log_filename(output_key_name: str, batch_id: Optional[str] = None) -> str:
+    """Build deterministic, batch-scoped V2 log filename."""
+    filename = f"v2_{output_key_name}"
+    if batch_id:
+        filename += f"__{sanitize_path_component_nonlossy(str(batch_id))}"
+    return f"{filename}.log"
 
 
 def _build_artifact_index(output_root: Path, artifact_paths: List[Path]) -> List[Dict[str, Any]]:
@@ -699,6 +791,113 @@ class EnhanceOrchestrator:
             v2_device=self.config.v2_device,
             v2_upscaler_backend=self.config.v2_upscaler_backend,
         )
+
+    def _build_run_card_config_fingerprint(self) -> Dict[str, Any]:
+        """Build run-card config fingerprint from effective user intent + resolution."""
+        base = self.compute_config_fingerprint()
+
+        preset_requested = getattr(self.config, "preset_requested", None) or (
+            self.config.preset.value if self.config.preset else None
+        )
+        preset_resolved = self.config.preset.value if self.config.preset else f"quality_tier:{self.config.quality_tier}"
+
+        requested_backend = self._backend_metadata.requested_backend or "auto"
+        resolved_backend = self._backend_metadata.resolved_backend
+        requested_device = self.config.depth_device
+        resolved_device = self._backend_metadata.device
+
+        payload = {
+            "model_variant": base.model_variant,
+            "depth_quantization": base.depth_quantization,
+            "depth_device": base.depth_device,
+            "preset": base.preset,
+            "v2_preset": base.v2_preset,
+            "v2_device": base.v2_device,
+            "v2_upscaler_backend": base.v2_upscaler_backend,
+            "preset_requested": preset_requested,
+            "preset_resolved": preset_resolved,
+            "backend_requested": requested_backend,
+            "backend_resolved": resolved_backend,
+            "device_requested": requested_device,
+            "device_resolved": resolved_device,
+            "quality_tier": self.config.quality_tier,
+            "strict_inputs": bool(self.config.strict_inputs),
+            "strict_segmentation": bool(self.config.strict_backend),
+            "apex_strict_mode": self._is_apex_tier(),
+        }
+        canonical_json = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        return {
+            **payload,
+            "hash_algorithm": "sha256",
+            "canonical_json": canonical_json,
+            "sha256": hashlib.sha256(canonical_json.encode("utf-8")).hexdigest(),
+        }
+
+    def _extract_v2_depth_handoff_status(
+        self,
+        v2_result: Optional[Dict[str, Any]],
+        v2_report_path: Optional[Path],
+    ) -> Optional[bool]:
+        """Return whether V2 consumed depth-map input (True/False) when determinable."""
+        if isinstance(v2_result, dict):
+            if isinstance(v2_result.get("depth_consumed"), bool):
+                return bool(v2_result.get("depth_consumed"))
+            stage_metadata = v2_result.get("stage_metadata")
+            if isinstance(stage_metadata, dict) and "has_depth" in stage_metadata:
+                return bool(stage_metadata.get("has_depth"))
+            if isinstance(v2_result.get("depth_map"), str):
+                return True
+            if "depth_map" in v2_result and v2_result.get("depth_map") is None:
+                return False
+
+        if v2_report_path and v2_report_path.exists():
+            try:
+                with open(v2_report_path, "r", encoding="utf-8") as report_file:
+                    report_payload = json.load(report_file)
+            except Exception as exc:
+                logger.debug(f"Failed to parse V2 report for depth handoff check ({v2_report_path}): {exc}")
+            else:
+                if isinstance(report_payload.get("depth_consumed"), bool):
+                    return bool(report_payload.get("depth_consumed"))
+                stage_metadata = report_payload.get("stage_metadata")
+                if isinstance(stage_metadata, dict) and "has_depth" in stage_metadata:
+                    return bool(stage_metadata.get("has_depth"))
+                if isinstance(report_payload.get("depth_map"), str):
+                    return True
+                if "depth_map" in report_payload and report_payload.get("depth_map") is None:
+                    return False
+
+        return None
+
+    def _enforce_v2_depth_handoff(
+        self,
+        *,
+        depth_path: Optional[Path],
+        v2_result: Optional[Dict[str, Any]],
+        v2_report_path: Optional[Path],
+    ) -> None:
+        """Enforce that V2 consumes depth when depth artifacts were produced."""
+        if not depth_path or not depth_path.exists():
+            return
+
+        depth_consumed = self._extract_v2_depth_handoff_status(v2_result=v2_result, v2_report_path=v2_report_path)
+        if depth_consumed is None:
+            return
+        if depth_consumed:
+            return
+
+        message = (
+            "V2 depth handoff failed: depth artifact exists but V2 reported depth_consumed=false. "
+            "This indicates stem-resolution drift."
+        )
+        details = {
+            "depth_path": str(depth_path),
+            "v2_report_path": str(v2_report_path) if v2_report_path else None,
+            "depth_consumed": depth_consumed,
+        }
+        if self._is_apex_tier():
+            raise ApexStrictGateError("APEX_V2_DEPTH_HANDOFF_MISSING", message, details=details)
+        logger.warning("%s details=%s", message, details)
 
     def _capture_backend_metadata(self) -> BackendSelectionMetadata:
         """Capture backend selection decision for manifest (ADR-019).
@@ -1221,11 +1420,14 @@ class EnhanceOrchestrator:
                         # Material segmentation (configurable backend)
                         # Current: stub backend (returns empty masks)
                         # Future: EfficientSAM integration for real material detection
-                        from .segmentation_backend import segment_materials
+                        from .segmentation_backend import get_last_segmentation_runtime_metadata, segment_materials
 
                         # Convert preprocessed float32 [0,1] to uint8 [0,255] for segmentation backend
                         preprocessed_uint8_for_seg = (np.clip(preprocessed_array, 0, 1) * 255).astype(np.uint8)
                         segmentation_result = {"materials": segment_materials(preprocessed_uint8_for_seg, self.config)}
+                        segmentation_runtime = get_last_segmentation_runtime_metadata()
+                        if segmentation_runtime:
+                            segmentation_result["segmentation_metadata"] = segmentation_runtime
                         self._enforce_apex_materials_gate(segmentation_result)
 
                         # Log segmentation result if materials were detected
@@ -1636,6 +1838,7 @@ class EnhanceOrchestrator:
 
         if skip_v2:
             logger.info("V2 outputs valid, skipping.")
+            self._enforce_v2_depth_handoff(depth_path=depth_path, v2_result=None, v2_report_path=v2_report_path)
             return {"status": "ok"}, 0.0, v2_report_path
 
         # Serialize material masks to disk for V2 subprocess (if available)
@@ -1669,7 +1872,13 @@ class EnhanceOrchestrator:
                 masks_file=masks_path,  # Pass explicit NPZ file path (Option B: eliminates naming coupling)
             )
             v2_runtime_s = v2_result.get("runtime_s", 0.0)
-            v2_report_path = find_v2_report(self.v2_dir, output_key.name)
+            report_path_value = v2_result.get("report_path")
+            if isinstance(report_path_value, str) and report_path_value:
+                v2_report_path = Path(report_path_value)
+            else:
+                v2_report_path = find_v2_report(self.v2_dir, output_key.name)
+
+            self._enforce_v2_depth_handoff(depth_path=depth_path, v2_result=v2_result, v2_report_path=v2_report_path)
 
             return v2_result, v2_runtime_s, v2_report_path
 
@@ -1775,13 +1984,25 @@ class EnhanceOrchestrator:
             16 if (self.config.emit_master16 or self.config.emit_upscaled16) and materials_v3_enhanced_image is not None else 8
         )
         v2_output_bit_depth = 16 if (self.config.emit_master16 or self.config.emit_upscaled16) else 8
+        v2_report_path_value = str(v2_report_path) if v2_report_path else v2_result.get("report_path", "")
+        v2_output_paths = []
+        v2_output_value = v2_result.get("output")
+        if isinstance(v2_output_value, str) and v2_output_value:
+            v2_output_paths.append(v2_output_value)
+        depth_handoff_state = self._extract_v2_depth_handoff_status(v2_result=v2_result, v2_report_path=v2_report_path)
 
         v2_metadata = V2Metadata(
             preset=self.config.v2_preset,
-            strict_depth=depth_metadata is not None,
+            strict_depth=(
+                bool(depth_handoff_state)
+                if depth_handoff_state is not None
+                else bool(depth_metadata is not None and Path(depth_metadata.depth_path).exists())
+            ),
             output_dir="v2/",
-            report_path=str(v2_report_path) if v2_report_path else "",
+            report_path=v2_report_path_value,
             status=v2_result["status"],
+            runtime_seconds=v2_runtime_s,
+            output_paths=v2_output_paths or None,
             error_message=v2_result.get("error"),
             input_bit_depth=v2_input_bit_depth,
             output_bit_depth=v2_output_bit_depth,
@@ -1802,6 +2023,7 @@ class EnhanceOrchestrator:
                 version=materials_v3_result.get("materials_v3_metadata", {}).get("version", "3.1"),
                 response_plan=materials_v3_result.get("materials_v3_response_plan"),
                 pixel_ops=materials_v3_result.get("materials_v3_pixel_ops"),
+                segmentation_metadata=materials_v3_result.get("materials_v3_metadata", {}).get("segmentation_metadata"),
                 runtime_seconds=materials_v3_runtime_s,
                 output_bit_depth=materials_v3_bit_depth,
             )
@@ -1904,7 +2126,8 @@ class EnhanceOrchestrator:
 
         # Always compute these paths (not part of skip logic)
         float_depth_path = self.depth_dir / output_key.parent / f"{output_key.name}_depth.npy"
-        v2_log_path = self.logs_dir / output_key.parent / f"v2_{output_key.name}.log"
+        active_batch_id = getattr(self, "_active_batch_id", None)
+        v2_log_path = self.logs_dir / output_key.parent / _v2_log_filename(output_key.name, active_batch_id)
 
         # Ensure output directories exist
         for p in [depth_path, manifest_path, v2_log_path]:
@@ -1976,6 +2199,13 @@ class EnhanceOrchestrator:
             skip_depth=skip_depth,
             materials_v3_result=materials_v3_result,
         )
+        v2_output_path = v2_result.get("output") if isinstance(v2_result, dict) else None
+        if not isinstance(v2_output_path, str) or not v2_output_path:
+            v2_output_path = None
+        if not v2_report_path:
+            report_path_value = v2_result.get("report_path") if isinstance(v2_result, dict) else None
+            if isinstance(report_path_value, str) and report_path_value:
+                v2_report_path = Path(report_path_value)
 
         # Capture end time for accurate timestamps
         pipeline_end_time = time.time()
@@ -2021,6 +2251,9 @@ class EnhanceOrchestrator:
                 else None
             ),
             "manifest": str(manifest_path),
+            "v2_log_path": str(v2_log_path) if v2_log_path.exists() else None,
+            "v2_report_path": str(v2_report_path) if v2_report_path else None,
+            "v2_output_path": v2_output_path,
             "runtime_s": pipeline_end_time - pipeline_start_time,
         }
 
@@ -2510,6 +2743,7 @@ class EnhanceOrchestrator:
         batch_start_utc = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(batch_start_time))
 
         batch_id = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        self._active_batch_id = batch_id
         logger.info(f"Batch {batch_id}: Scanning {input_dir}")
 
         # ADR-023 Phase 3: Capture backend selection metadata and log truth line
@@ -2618,11 +2852,22 @@ class EnhanceOrchestrator:
     ) -> List[Path]:
         """Collect deterministic artifact paths associated with the current batch."""
         artifact_paths: List[Path] = []
+        batch_id: Optional[str] = None
 
         if batch_manifest_path and batch_manifest_path.exists():
             artifact_paths.append(batch_manifest_path)
+            batch_name = batch_manifest_path.stem
+            if batch_name.startswith("batch_"):
+                batch_id = batch_name[len("batch_") :]
 
         for result in results:
+            for direct_path_key in ("v2_log_path", "v2_report_path", "v2_output_path"):
+                direct_path_value = result.get(direct_path_key)
+                if isinstance(direct_path_value, str) and direct_path_value:
+                    candidate = Path(direct_path_value)
+                    if candidate.exists():
+                        artifact_paths.append(candidate)
+
             manifest_value = result.get("manifest")
             if manifest_value:
                 manifest_path = Path(manifest_value)
@@ -2637,10 +2882,10 @@ class EnhanceOrchestrator:
                     manifest_name = manifest_path.stem
                     output_key_name = manifest_name.removesuffix("_combined")
                     try:
-                        manifest_relative = manifest_path.resolve().relative_to(self.manifests_dir.resolve())
-                        v2_log_path = self.logs_dir / manifest_relative.parent / f"v2_{output_key_name}.log"
+                        manifest_relative_parent = manifest_path.resolve().relative_to(self.manifests_dir.resolve()).parent
                     except ValueError:
-                        v2_log_path = self.logs_dir / f"v2_{output_key_name}.log"
+                        manifest_relative_parent = Path(".")
+                    v2_log_path = self.logs_dir / manifest_relative_parent / _v2_log_filename(output_key_name, batch_id)
 
                     if v2_log_path.exists():
                         artifact_paths.append(v2_log_path)
@@ -2689,9 +2934,17 @@ class EnhanceOrchestrator:
     def _compute_backend_summary(self, results: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Compute concise backend fallback summary for run-card telemetry."""
         requested_backend = self._backend_metadata.requested_backend or "auto"
-        final_backends_used = sorted(
-            {str(result.get("backend")) for result in results if result.get("status") == "ok" and result.get("backend")}
-        )
+        observed_ok_backends = {
+            str(result.get("backend")) for result in results if result.get("status") == "ok" and result.get("backend")
+        }
+        preferred_backend = self._backend_metadata.resolved_backend
+        final_backends_used: List[str] = []
+        if preferred_backend in observed_ok_backends:
+            final_backends_used.append(preferred_backend)
+            final_backends_used.extend(sorted(observed_ok_backends - {preferred_backend}))
+        else:
+            final_backends_used.extend(sorted(observed_ok_backends))
+        primary_backend = final_backends_used[0] if final_backends_used else None
 
         fallback_images = 0
         semantic_fallback_images = 0
@@ -2716,6 +2969,7 @@ class EnhanceOrchestrator:
 
         return {
             "requested_backend": requested_backend,
+            "primary_backend": primary_backend,
             "final_backends_used": final_backends_used,
             "fallback_images": fallback_images,
             "semantic_fallback_images": semantic_fallback_images,
@@ -2747,19 +3001,32 @@ class EnhanceOrchestrator:
         artifact_paths = self._collect_run_card_artifact_paths(results, batch_manifest_path=batch_manifest_path)
         artifact_index = _build_artifact_index(self.output_root, artifact_paths)
         artifact_merkle_root = _compute_artifact_merkle_root(artifact_index)
+        backend_summary = self._compute_backend_summary(results)
+        requested_backend = self._backend_metadata.requested_backend or "auto"
+        backend_selection_resolved = (
+            backend_summary["final_backends_used"][0]
+            if backend_summary["final_backends_used"]
+            else (self._backend_metadata.resolved_backend)
+        )
+
+        backend_selection: Dict[str, Any] = {
+            "requested": requested_backend,
+            "resolved": backend_selection_resolved,
+            "device": self._backend_metadata.device,
+            "model_id": self._backend_metadata.model_id,
+        }
+        # Explicit wrapper semantics when logical backend delegates to a different runtime engine.
+        if self._backend_metadata.resolved_backend != backend_selection_resolved and backend_summary["fallback_images"] == 0:
+            backend_selection["logical_backend"] = self._backend_metadata.resolved_backend
+            backend_selection["resolved_engine"] = backend_selection_resolved
 
         run_card = {
             "batch_id": batch_id,
             "start_time": start_time,
             "end_time": end_time,
-            "config_fingerprint": self.compute_config_fingerprint(),
-            "backend_selection": {
-                "requested": self._backend_metadata.requested_backend or "auto",
-                "resolved": self._backend_metadata.resolved_backend,
-                "device": self._backend_metadata.device,
-                "model_id": self._backend_metadata.model_id,
-            },
-            "backend_summary": self._compute_backend_summary(results),
+            "config_fingerprint": self._build_run_card_config_fingerprint(),
+            "backend_selection": backend_selection,
+            "backend_summary": backend_summary,
             "environment": self.environment,
             "git_revision": {
                 "v3": self.v3_git,
@@ -2777,7 +3044,7 @@ class EnhanceOrchestrator:
         def _json_default(obj: Any):
             # --- ConfigFingerprint ---
             if isinstance(obj, ConfigFingerprint):
-                return {
+                fingerprint_payload = {
                     "model_variant": obj.model_variant,
                     "depth_quantization": obj.depth_quantization,
                     "depth_device": obj.depth_device,
@@ -2785,7 +3052,13 @@ class EnhanceOrchestrator:
                     "v2_preset": obj.v2_preset,
                     "v2_device": obj.v2_device,
                     "v2_upscaler_backend": obj.v2_upscaler_backend,
-                    "sha256": obj.to_sha256(),
+                }
+                canonical_json = json.dumps(fingerprint_payload, sort_keys=True, separators=(",", ":"))
+                return {
+                    **fingerprint_payload,
+                    "hash_algorithm": "sha256",
+                    "canonical_json": canonical_json,
+                    "sha256": hashlib.sha256(canonical_json.encode("utf-8")).hexdigest(),
                 }
 
             # --- Enum handling ---
@@ -2823,6 +3096,7 @@ class EnhanceOrchestrator:
         try:
             serialized_run_card = json.loads(json.dumps(run_card, default=_json_default, sort_keys=True))
             _validate_run_card_payload(serialized_run_card, schema_path)
+            _validate_run_card_backend_semantics(serialized_run_card)
 
             with open(run_card_path, "w", encoding="utf-8") as f:
                 json.dump(

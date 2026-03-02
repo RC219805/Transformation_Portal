@@ -46,6 +46,64 @@ class V2EnhancementError(Exception):
     pass
 
 
+_DERIVED_STEM_SUFFIXES = (
+    "_materials_v3_enhanced",
+    "_materials_v3",
+    "_enhanced",
+    "_pbr",
+)
+
+_KNOWN_IMAGE_EXTENSIONS = (
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".tif",
+    ".tiff",
+    ".bmp",
+    ".webp",
+    ".npy",
+    ".exr",
+)
+
+
+def _coerce_to_stem_preserving_dots(input_path_or_stem: str) -> str:
+    """Treat value as a stem by default; only strip extensions for path-like inputs."""
+    raw = str(input_path_or_stem).strip()
+    if not raw:
+        return ""
+
+    # Real paths should use pathlib stem extraction.
+    if "/" in raw or "\\" in raw:
+        return Path(raw).stem
+
+    # If value looks like a filename with a known extension, strip extension only.
+    lowered = raw.lower()
+    for extension in _KNOWN_IMAGE_EXTENSIONS:
+        if lowered.endswith(extension):
+            return raw[: -len(extension)]
+
+    # Already-stem values may legitimately include dots (e.g., image.v1_materials_v3_enhanced).
+    return raw
+
+
+def canonical_asset_stem(input_path_or_stem: str) -> str:
+    """Normalize derived V2 stems back to canonical source asset stem."""
+    stem = _coerce_to_stem_preserving_dots(input_path_or_stem)
+    normalized = stem
+
+    # Repeated stripping handles multi-derived names like *_materials_v3_enhanced.
+    changed = True
+    while changed:
+        changed = False
+        for suffix in _DERIVED_STEM_SUFFIXES:
+            if normalized.endswith(suffix) and len(normalized) > len(suffix):
+                normalized = normalized[: -len(suffix)]
+                changed = True
+                break
+
+    return normalized
+
+
 def find_depth_map(depth_dir: Path, image_stem: str) -> Optional[Path]:
     """Find depth map for input image in depth directory.
 
@@ -64,21 +122,30 @@ def find_depth_map(depth_dir: Path, image_stem: str) -> Optional[Path]:
     if not depth_dir or not depth_dir.exists():
         return None
 
-    # Try common depth map naming patterns
-    patterns = [
-        f"{image_stem}_depth.png",
-        f"{image_stem}_depth_u16.png",
-        f"{image_stem}_depth_f32.png",
-        f"{image_stem}.png",
-    ]
+    canonical_stem = canonical_asset_stem(image_stem)
+    candidate_stems = [canonical_stem]
+    if image_stem not in candidate_stems:
+        candidate_stems.append(image_stem)
 
-    for pattern in patterns:
-        depth_path = depth_dir / pattern
-        if depth_path.exists():
-            logger.debug(f"Found depth map: {depth_path}")
-            return depth_path
+    for stem in candidate_stems:
+        patterns = [
+            f"{stem}_depth.png",
+            f"{stem}_depth_u16.png",
+            f"{stem}_depth_f32.png",
+            f"{stem}.png",
+        ]
+        for pattern in patterns:
+            depth_path = depth_dir / pattern
+            if depth_path.exists():
+                logger.debug(f"Found depth map: {depth_path}")
+                return depth_path
 
-    logger.warning(f"No depth map found for '{image_stem}' in {depth_dir}")
+    logger.warning(
+        "No depth map found for '%s' (canonical='%s') in %s",
+        image_stem,
+        canonical_stem,
+        depth_dir,
+    )
     return None
 
 
@@ -324,6 +391,7 @@ def enhance_image(
             - input: Input image path
             - output: Output image path
             - depth_map: Depth map path (if provided)
+            - depth_consumed: Whether depth was actually consumed by enhancement stage
             - preset: Preset name
             - runtime_s: Processing time in seconds
             - metadata: Enhancement metadata from stage
@@ -362,6 +430,7 @@ def enhance_image(
             "input": str(input_path),
             "output": str(output_path),
             "depth_map": str(depth_map_path) if depth_map_path else None,
+            "depth_consumed": False,
             "preset": config.preset,
             "runtime_s": time.perf_counter() - start_time,
             "timestamp": time.time(),
@@ -565,6 +634,12 @@ def enhance_image(
 
         runtime_s = time.perf_counter() - start_time
 
+        stage_metadata = result.metadata if isinstance(result.metadata, dict) else {}
+        if "has_depth" in stage_metadata and stage_metadata["has_depth"] is not None:
+            depth_consumed = bool(stage_metadata["has_depth"])
+        else:
+            depth_consumed = depth_map is not None
+
         # Build metadata report with bit-depth information
         return {
             "status": "success",
@@ -572,11 +647,12 @@ def enhance_image(
             "input": str(input_path),
             "output": str(output_path),
             "depth_map": str(depth_map_path) if depth_map_path else None,
+            "depth_consumed": depth_consumed,
             "preset": config.preset,
             "config": config.to_dict(),
             "runtime_s": runtime_s,
             "timestamp": time.time(),
-            "stage_metadata": result.metadata,
+            "stage_metadata": stage_metadata,
             "enhancement_metadata": result.artifacts.get("enhancement_metadata", {}),
             # BIT-DEPTH METADATA (Quality Firewall contract)
             "bit_depth": {

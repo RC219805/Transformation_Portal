@@ -282,6 +282,16 @@ class TestFindV2Report:
 
         assert found == report_path
 
+    def test_finds_prefixed_derived_report(self, tmp_path):
+        """Derived report names should match by image-key prefix."""
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+        report_path = output_dir / "image_materials_v3_enhanced_report.json"
+        report_path.write_text("{}")
+
+        found = find_v2_report(output_dir, "image")
+        assert found == report_path
+
     def test_returns_none_when_not_found(self, tmp_path):
         """Test returns None when report doesn't exist."""
         output_dir = tmp_path / "output"
