@@ -8,7 +8,7 @@ This script downloads required models for depth-aware processing:
 - Alternative depth models for non-Apple platforms
 
 Usage:
-    python scripts/download_depth_models.py [--model MODEL_NAME] [--output-dir DIR]
+    python scripts/download_depth_models.py [--model depth] [--output-dir DIR] [--verify-only]
 
 Examples:
     # Download default Depth Anything V2 Small model
@@ -224,7 +224,6 @@ def verify_models(model_dir: Path) -> dict:
     """
     status = {
         "depth_anything_coreml": (model_dir / DEPTH_ANYTHING_V2_COREML_FILENAME).exists(),
-        "realesrgan": (model_dir / REALESRGAN_MODEL_FILENAME).exists(),
     }
 
     print("\n" + "=" * 70)
@@ -241,22 +240,16 @@ def verify_models(model_dir: Path) -> dict:
 
 def main():
     """Main entry point for model download script."""
-    parser = argparse.ArgumentParser(description="Download depth estimation and upscaling models for Transformation Portal")
+    parser = argparse.ArgumentParser(description="Depth model setup and verification utility for Transformation Portal")
     parser.add_argument(
         "--model",
         type=str,
-        choices=["depth", "realesrgan", "all"],
-        default="all",
-        help="Which model to download (default: all)",
+        choices=["depth"],
+        default="depth",
+        help="Which model to download (default: depth)",
     )
     parser.add_argument("--output-dir", type=str, default="./weights", help="Output directory for models (default: ./weights)")
     parser.add_argument("--verify-only", action="store_true", help="Only verify model status, don't download")
-    parser.add_argument(
-        "--realesrgan-sha256",
-        type=str,
-        default=REALESRGAN_MODEL_SHA256,
-        help="Trusted SHA256 for Real-ESRGAN weights (defaults to known-good digest)",
-    )
 
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
@@ -272,14 +265,9 @@ def main():
 
     success = True
 
-    if args.model in ["depth", "all"]:
+    if args.model == "depth":
         # Depth Anything V2 CoreML (manual instructions)
         download_depth_anything_v2_coreml(output_dir)
-
-    if args.model in ["realesrgan", "all"]:
-        # Real-ESRGAN weights
-        if not download_realesrgan_weights(output_dir, args.realesrgan_sha256):
-            success = False
 
     # Verify final status
     print("\n")
@@ -292,10 +280,8 @@ def main():
     print("   pip install -r requirements.txt")
     print("\n2. For depth processing, install transformers:")
     print("   pip install transformers torch")
-    print("\n3. For Real-ESRGAN, install the package:")
-    print("   pip install realesrgan")
-    print("\n4. Test your installation:")
-    print("   python scripts/verify_setup.py")
+    print("\n3. Test your installation:")
+    print("   python scripts/verification/verify_core.py")
 
     return 0 if success else 1
 
