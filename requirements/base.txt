@@ -67,7 +67,7 @@ mdurl==0.1.2
     # via
     #   -c all.txt
     #   markdown-it-py
-numpy==2.2.6
+numpy==2.4.2
     # via
     #   -c all.txt
     #   -r base.in
@@ -102,7 +102,7 @@ referencing==0.37.0
     #   -c all.txt
     #   jsonschema
     #   jsonschema-specifications
-rich==14.3.2
+rich==14.3.3
     # via
     #   -c all.txt
     #   typer
@@ -115,7 +115,7 @@ scikit-learn==1.8.0
     # via
     #   -c all.txt
     #   -r base.in
-scipy==1.17.0
+scipy==1.17.1
     # via
     #   -c all.txt
     #   -r base.in
@@ -133,7 +133,7 @@ threadpoolctl==3.6.0
     # via
     #   -c all.txt
     #   scikit-learn
-tifffile==2024.12.12
+tifffile==2026.2.24
     # via
     #   -c all.txt
     #   -r base.in
@@ -141,7 +141,7 @@ tqdm==4.67.3
     # via
     #   -c all.txt
     #   -r base.in
-typer==0.24.0
+typer==0.24.1
     # via
     #   -c all.txt
     #   -r base.in
