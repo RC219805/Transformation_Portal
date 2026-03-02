@@ -696,7 +696,14 @@ class ArtifactStore:
                     os.fsync(tmp_artifact.fileno())
 
                 # Write provenance (JSON)
-                with tempfile.NamedTemporaryFile(mode="w", dir=artifact_path.parent, delete=False, suffix=".json") as tmp_prov:
+                with tempfile.NamedTemporaryFile(
+                    mode="w",
+                    dir=artifact_path.parent,
+                    delete=False,
+                    suffix=".json",
+                    encoding="utf-8",
+                    newline="\n",
+                ) as tmp_prov:
                     tmp_prov_path = Path(tmp_prov.name)
                     dump_json(
                         asdict(provenance),

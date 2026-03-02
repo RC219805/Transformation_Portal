@@ -41,6 +41,14 @@ def test_canonicalize_json_accepts_numpy_payload() -> None:
     assert parsed == {"x": 9, "y": [4, 5]}
 
 
+def test_to_jsonable_raises_on_unsupported_type() -> None:
+    class _Unsupported:
+        __slots__ = ()
+
+    with pytest.raises(TypeError, match="Unsupported type for canonical JSON serialization"):
+        to_jsonable(_Unsupported())
+
+
 @settings(max_examples=120, deadline=None)
 @given(
     payload=st.recursive(

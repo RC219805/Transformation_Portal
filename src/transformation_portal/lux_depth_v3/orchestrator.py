@@ -55,6 +55,7 @@ from .depth_cache import DepthCache
 from .depth_writer import atomic_write_depth_u16_png_with_stats
 from .input_discovery import DiscoveryConfig, discover_images
 from .input_manager import ImageInput
+from .io_atomic import atomic_temp_file, atomic_write_pil_png
 from .manifest import (
     BackendSelectionMetadata,
     BatchManifest,
@@ -1697,13 +1698,14 @@ class EnhanceOrchestrator:
                         import tifffile
 
                         enhanced_uint16 = (np.clip(enhanced_image, 0, 1) * 65535 + 0.5).astype(np.uint16)
-                        tifffile.imwrite(
-                            enhanced_image_path,
-                            enhanced_uint16,
-                            photometric="rgb",
-                            compression="lzw",
-                            metadata={"software": "Transformation Portal v3"},
-                        )
+                        with atomic_temp_file(enhanced_image_path, suffix=".tif", create_file=False) as temp_path:
+                            tifffile.imwrite(
+                                temp_path,
+                                enhanced_uint16,
+                                photometric="rgb",
+                                compression="lzw",
+                                metadata={"software": "Transformation Portal v3"},
+                            )
                         logger.info(
                             f"Materials V3 enhanced image with "
                             f"{len(materials_v3_result.get('materials_v3_pixel_ops', {}).get('applied', []))} "
@@ -1711,7 +1713,9 @@ class EnhanceOrchestrator:
                         )
                     else:
                         enhanced_uint8 = (np.clip(enhanced_image, 0, 1) * 255).astype(np.uint8)
-                        PILImage.fromarray(enhanced_uint8).save(enhanced_image_path)
+                        enhanced_image_path = atomic_write_pil_png(
+                            enhanced_image_path, PILImage.fromarray(enhanced_uint8), optimize=True
+                        )
                         logger.info(
                             f"Materials V3 enhanced image with "
                             f"{len(materials_v3_result.get('materials_v3_pixel_ops', {}).get('applied', []))} "
@@ -3245,7 +3249,15 @@ class EnhanceOrchestrator:
             return
 
         try:
-            serialized_run_card = json.loads(dumps_json(run_card, default=_json_default, sort_keys=True))
+            serialized_run_card = json.loads(
+                dumps_json(
+                    run_card,
+                    default=_json_default,
+                    sort_keys=True,
+                    ensure_ascii=False,
+                    allow_nan=False,
+                )
+            )
             _validate_run_card_payload(serialized_run_card, schema_path)
             _validate_run_card_backend_semantics(serialized_run_card)
 

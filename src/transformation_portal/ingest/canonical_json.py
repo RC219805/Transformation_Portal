@@ -76,7 +76,10 @@ def to_jsonable(payload: Any) -> Any:
     if hasattr(payload, "__dict__"):
         return {str(key): to_jsonable(value) for key, value in vars(payload).items() if not str(key).startswith("_")}
 
-    return payload
+    payload_repr = repr(payload)
+    if len(payload_repr) > 256:
+        payload_repr = payload_repr[:253] + "..."
+    raise TypeError("Unsupported type for canonical JSON serialization: " f"{type(payload).__name__} ({payload_repr})")
 
 
 def dumps_json(payload: Any, **kwargs: Any) -> str:
