@@ -118,6 +118,14 @@ else
     FAILED=1
 fi
 
+echo -e "${YELLOW}→ Checking for tracked pip-tools cache artifacts...${NC}"
+if "$PYTHON" scripts/validation/check_piptools_cache_tracked.py; then
+    echo -e "${GREEN}✓ pip-tools cache guardrails passed${NC}"
+else
+    echo -e "${RED}✗ pip-tools cache guardrails failed${NC}"
+    FAILED=1
+fi
+
 # ============================================================================
 # 4. PYLINT
 # ============================================================================
