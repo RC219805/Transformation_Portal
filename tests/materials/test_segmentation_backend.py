@@ -853,7 +853,7 @@ def test_heuristic_fallback_returns_medium_confidence(sample_image, monkeypatch)
 
 @pytest.mark.ml
 def test_confidence_logged_in_output(sample_image, caplog):
-    """Verify confidence scores appear in logs when using real CLIP model."""
+    """Verify confidence logging contract for both CLIP and fallback paths."""
     backend = EfficientSAMBackend()
     backend.load(device="cpu")
 
@@ -865,14 +865,55 @@ def test_confidence_logged_in_output(sample_image, caplog):
     # Check log contains confidence percentages (from CLIP classification)
     log_text = caplog.text
 
-    # If materials were detected and we're using the real model (CLIP), expect % in logs
-    # In heuristic mode, confidence is fixed at 0.5 and may not show % formatting
-    if len(results) > 0 and backend._use_real_model:
-        # Look for percentage format in logs (e.g., "glass (87%)")
-        assert any("%" in line for line in log_text.split("\n")), "Logs should contain confidence percentages for CLIP mode"
+    # Runtime contract:
+    # - If CLIP succeeds, summary line must include percentage confidences.
+    # - If CLIP fails (offline cache miss, etc.), fallback warning must be present.
+    if "CLIP classified" in log_text:
+        assert "%" in log_text, "CLIP success logs must contain percentage confidence formatting"
+    elif "falling back to heuristics" in log_text.lower():
+        assert "CLIP classification failed" in log_text, "CLIP fallback path must emit failure reason"
     elif len(results) > 0:
-        # Heuristic mode - just verify "confidence" is mentioned somewhere
+        # Heuristic-only path (no CLIP classification attempted)
         assert "confidence" in log_text.lower() or "0.5" in log_text, "Logs should reference confidence scoring"
+
+
+@pytest.mark.ml
+def test_clip_success_logging_emits_percentages(sample_image, monkeypatch, caplog):
+    """Deterministic unit test: successful CLIP path emits % confidence summaries."""
+    import torch
+
+    backend = EfficientSAMBackend()
+    backend._device = "cpu"
+
+    class _FakeModel:
+        def encode_text(self, _tokens):
+            # 4 prompts x 4-dim embedding (glass, water, foliage, stone)
+            return torch.eye(4, dtype=torch.float32)
+
+        def encode_image(self, _tensor):
+            # Most similar to "water" prompt.
+            return torch.tensor([[0.10, 0.95, 0.10, 0.10]], dtype=torch.float32)
+
+    def _fake_preprocess(_region):
+        return torch.ones((3, 16, 16), dtype=torch.float32)
+
+    def _fake_tokenizer(prompts):
+        return torch.ones((len(prompts), 4), dtype=torch.float32)
+
+    monkeypatch.setattr(backend, "_load_clip_runtime", lambda: (_FakeModel(), _fake_preprocess, _fake_tokenizer))
+
+    seg_mask = np.zeros(sample_image.shape[:2], dtype=bool)
+    seg_mask[0:32, 0:32] = True  # 1024px > 500px coverage threshold
+    segments = [{"segmentation": seg_mask, "bbox": [0, 0, 32, 32], "area": int(seg_mask.sum()), "heuristic_label": "water"}]
+
+    import logging
+
+    with caplog.at_level(logging.INFO):
+        results = backend._classify_segments_with_clip(sample_image, segments)
+
+    assert "water" in results
+    assert "CLIP classified" in caplog.text
+    assert "%" in caplog.text
 
 
 @pytest.mark.ml
