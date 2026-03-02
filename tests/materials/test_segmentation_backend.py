@@ -887,7 +887,8 @@ def test_confidence_logged_in_output(sample_image, monkeypatch, caplog):
 @pytest.mark.ml
 def test_clip_success_logging_emits_percentages(sample_image, monkeypatch, caplog):
     """Deterministic unit test: successful CLIP path emits % confidence summaries."""
-    import torch
+    if not TORCH_AVAILABLE:
+        pytest.skip("torch not available")
 
     backend = EfficientSAMBackend()
     backend._device = "cpu"
