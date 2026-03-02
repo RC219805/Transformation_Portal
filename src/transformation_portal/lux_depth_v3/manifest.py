@@ -15,6 +15,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from transformation_portal.ingest.canonical_json import dump_json, to_jsonable
+
 logger = logging.getLogger(__name__)
 
 # Phase 3: MessagePack support (optional dependency)
@@ -331,8 +333,8 @@ class BatchManifest:
     def write(self, path: Path):
         """Write batch manifest to JSON file."""
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w") as f:
-            json.dump(asdict(self), f, indent=2)
+        with open(path, "w", encoding="utf-8") as f:
+            dump_json(asdict(self), f, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False)
 
     @classmethod
     def load(cls, path: Path) -> BatchManifest:
@@ -408,8 +410,8 @@ class CombinedManifest:
         if self.end_time:
             data["end_time"] = self.end_time
 
-        with open(path, "w") as f:
-            json.dump(data, f, indent=2)
+        with open(path, "w", encoding="utf-8") as f:
+            dump_json(data, f, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False)
 
     @classmethod
     def load(cls, path: Path) -> CombinedManifest:
@@ -502,7 +504,7 @@ class CombinedManifest:
         temp_path = path.with_suffix(path.suffix + ".tmp")
         try:
             with open(temp_path, "wb") as f:
-                msgpack.pack(data, f, use_bin_type=True)
+                msgpack.pack(to_jsonable(data), f, use_bin_type=True)
 
             temp_path.replace(path)
             logger.debug(f"Wrote MessagePack manifest: {path}")

@@ -73,7 +73,7 @@ FAILED=0
 # ============================================================================
 # 1. ENVIRONMENT SETUP
 # ============================================================================
-echo -e "\n${BLUE}[1/6] Environment Setup${NC}"
+echo -e "\n${BLUE}[1/7] Environment Setup${NC}"
 echo -e "${YELLOW}→ Checking required tools...${NC}"
 
 # Check for required commands
@@ -95,7 +95,7 @@ fi
 # ============================================================================
 # 2. FLAKE8 LINTING
 # ============================================================================
-echo -e "\n${BLUE}[2/6] Flake8 (Critical Errors)${NC}"
+echo -e "\n${BLUE}[2/7] Flake8 (Critical Errors)${NC}"
 echo -e "${YELLOW}→ Running flake8 with CI configuration...${NC}"
 echo -e "${YELLOW}   Checks: E9 (syntax), F63 (invalid), F7 (syntax), F82 (undefined)${NC}"
 
@@ -107,9 +107,21 @@ else
 fi
 
 # ============================================================================
-# 3. PYLINT
+# 3. JSON SERIALIZATION GUARDRAILS
 # ============================================================================
-echo -e "\n${BLUE}[3/6] Pylint (Changed Files)${NC}"
+echo -e "\n${BLUE}[3/7] JSON Serialization Guardrails${NC}"
+echo -e "${YELLOW}→ Checking for raw json.dump/json.dumps usage outside approved modules...${NC}"
+if "$PYTHON" scripts/validation/check_raw_json_usage.py; then
+    echo -e "${GREEN}✓ JSON serialization guardrails passed${NC}"
+else
+    echo -e "${RED}✗ JSON serialization guardrails failed${NC}"
+    FAILED=1
+fi
+
+# ============================================================================
+# 4. PYLINT
+# ============================================================================
+echo -e "\n${BLUE}[4/7] Pylint (Changed Files)${NC}"
 echo -e "${YELLOW}→ Running pylint on changed files...${NC}"
 
 # Get changed Python files (exclude deprecated, src/transformation_portal, scripts)
@@ -142,9 +154,9 @@ else
 fi
 
 # ============================================================================
-# 4. DOCUMENTATION STRUCTURE
+# 5. DOCUMENTATION STRUCTURE
 # ============================================================================
-echo -e "\n${BLUE}[4/6] Documentation Structure${NC}"
+echo -e "\n${BLUE}[5/7] Documentation Structure${NC}"
 echo -e "${YELLOW}→ Checking markdown file count in root...${NC}"
 
 MD_COUNT=$(find . -maxdepth 1 -name "*.md" -type f | wc -l | tr -d ' ')
@@ -159,9 +171,9 @@ else
 fi
 
 # ============================================================================
-# 5. PYTEST (TESTS)
+# 6. PYTEST (TESTS)
 # ============================================================================
-echo -e "\n${BLUE}[5/6] Test Suite${NC}"
+echo -e "\n${BLUE}[6/7] Test Suite${NC}"
 
 if [ $QUICK_MODE -eq 1 ]; then
     echo -e "${YELLOW}→ Running fast tests only (--quick mode)...${NC}"
@@ -196,9 +208,9 @@ else
 fi
 
 # ============================================================================
-# 6. ADDITIONAL CHECKS
+# 7. ADDITIONAL CHECKS
 # ============================================================================
-echo -e "\n${BLUE}[6/6] Additional Quality Checks${NC}"
+echo -e "\n${BLUE}[7/7] Additional Quality Checks${NC}"
 
 # Check for debugging statements
 echo -e "${YELLOW}→ Checking for debugging statements...${NC}"

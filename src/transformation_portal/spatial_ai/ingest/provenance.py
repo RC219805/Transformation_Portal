@@ -25,6 +25,7 @@ import numpy as np
 from PIL import Image
 from PIL.ExifTags import TAGS
 
+from ...ingest.canonical_json import dump_json
 from .exceptions import ProvenanceError
 from .validators import CURRENT_SCHEMA_VERSION
 
@@ -270,8 +271,15 @@ class ProvenanceCapture:
         try:
             output_path.parent.mkdir(parents=True, exist_ok=True)
 
-            with open(output_path, "w") as f:
-                json.dump(provenance.to_dict(), f, indent=indent)
+            with open(output_path, "w", encoding="utf-8") as f:
+                dump_json(
+                    provenance.to_dict(),
+                    f,
+                    indent=indent,
+                    sort_keys=True,
+                    ensure_ascii=False,
+                    allow_nan=False,
+                )
 
             logger.debug(f"Wrote provenance sidecar: {output_path}")
 

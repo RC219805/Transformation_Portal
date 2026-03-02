@@ -38,6 +38,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from ..ingest.canonical_json import dumps_json
+
 logger = logging.getLogger(__name__)
 
 # Schema version for provenance records
@@ -374,11 +376,13 @@ class ProvenanceMetadata:
         Returns:
             JSON string
         """
-        return json.dumps(
+        return dumps_json(
             self.to_dict(),
             indent=indent,
             sort_keys=True,  # Deterministic key ordering
             separators=(",", ": "),  # Normalized separators
+            ensure_ascii=False,
+            allow_nan=False,
         )
 
     def write_sidecar(self, sidecar_path: Path) -> None:

@@ -46,6 +46,7 @@ from ..depth.backends.protocol import LicenseRestrictionError
 
 # Backend registry for depth estimation
 from ..depth.backends.registry import DepthBackendRegistry
+from ..ingest.canonical_json import dump_json, dumps_json
 from .batch_stats import compute_batch_runtime_stats, detect_runtime_outliers
 
 # Note: Imports adjusted to relative for package context compatibility
@@ -54,6 +55,7 @@ from .depth_cache import DepthCache
 from .depth_writer import atomic_write_depth_u16_png_with_stats
 from .input_discovery import DiscoveryConfig, discover_images
 from .input_manager import ImageInput
+from .io_atomic import atomic_temp_file, atomic_write_pil_png
 from .manifest import (
     BackendSelectionMetadata,
     BatchManifest,
@@ -1180,9 +1182,6 @@ class EnhanceOrchestrator:
 
             preprocessed_array, original_shape = preprocess_image(validated_path)
 
-            # Initialize working_image - this will be updated by Materials V3 if enabled
-            working_image = preprocessed_array
-
             logger.info(f"Stage A: Generating depth for {output_key}...")
             t0 = time.time()
             try:
@@ -1408,108 +1407,16 @@ class EnhanceOrchestrator:
                 self._active_selected_attempt_index = selected_attempt_index
 
                 # 2c. Materials V3 Processing (if enabled)
-                materials_v3_result = None
-                materials_v3_runtime_s = 0.0
                 if self.materials_v3_engine:
-                    logger.info("Running Materials V3 surface-aware finishing...")
-                    t_materials_start = time.time()
-                    try:
-                        # APEX strict gate: enforce segmentation prerequisites before running Materials V3
-                        self._enforce_apex_materials_gate()
-
-                        # Material segmentation (configurable backend)
-                        # Current: stub backend (returns empty masks)
-                        # Future: EfficientSAM integration for real material detection
-                        from .segmentation_backend import get_last_segmentation_runtime_metadata, segment_materials
-
-                        # Convert preprocessed float32 [0,1] to uint8 [0,255] for segmentation backend
-                        preprocessed_uint8_for_seg = (np.clip(preprocessed_array, 0, 1) * 255).astype(np.uint8)
-                        segmentation_result = {"materials": segment_materials(preprocessed_uint8_for_seg, self.config)}
-                        segmentation_runtime = get_last_segmentation_runtime_metadata()
-                        if segmentation_runtime:
-                            segmentation_result["segmentation_metadata"] = segmentation_runtime
-                        self._enforce_apex_materials_gate(segmentation_result)
-
-                        # Log segmentation result if materials were detected
-                        if segmentation_result.get("materials"):
-                            logger.info(
-                                f"Material segmentation: {len(segmentation_result['materials'])} "
-                                f"materials detected using {self.config.material_segmentation_backend} backend"
-                            )
-
-                        materials_v3_result = self.materials_v3_engine.process(
-                            image=preprocessed_array, segmentation_result=segmentation_result, depth_map=depth_map
-                        )
-                        materials_v3_runtime_s = time.time() - t_materials_start
-                        if materials_v3_result:
-                            # CRITICAL FIX: Use enhanced_image from Materials V3 for downstream processing
-                            enhanced_image = materials_v3_result.get("enhanced_image")
-                            if enhanced_image is not None:
-                                working_image = enhanced_image
-
-                                # Write enhanced image to temporary file for V2 stage
-                                # V2 subprocess requires a file path, not an array
-                                #
-                                # NOTE: 8-bit PNG conversion is intentional:
-                                # - V2 subprocess expects standard image formats (PNG/JPG, not 16-bit TIFF)
-                                # - working_image is already tone-mapped/perceptually encoded (not linear)
-                                # - V2 operates in perceptual color space, not linear
-                                # - This matches what V2 receives when Materials V3 is disabled (original 8-bit input)
-                                # - Temporary file is cleaned up after V2 completes (see line ~1352)
-                                import tempfile
-
-                                from PIL import Image as PILImage
-
-                                # Create temp file in output directory to avoid cross-filesystem issues
-                                temp_dir = self.output_root / "temp"
-                                temp_dir.mkdir(parents=True, exist_ok=True)
-
-                                # Save enhanced image for V2 handoff
-                                # 16-bit TIFF when emit flags enabled, 8-bit PNG otherwise (Golden Path)
-                                if self.config.emit_master16 or self.config.emit_upscaled16:
-                                    # 16-bit TIFF path for archival quality
-                                    import tifffile
-
-                                    enhanced_uint16 = (np.clip(working_image, 0, 1) * 65535 + 0.5).astype(np.uint16)
-                                    enhanced_image_path = temp_dir / f"{output_key.stem}_materials_v3_enhanced.tif"
-                                    tifffile.imwrite(
-                                        enhanced_image_path,
-                                        enhanced_uint16,
-                                        photometric="rgb",
-                                        compression="lzw",
-                                        metadata={"software": "Transformation Portal v3"},
-                                    )
-                                    logger.info(
-                                        f"Materials V3 enhanced image with "
-                                        f"{len(materials_v3_result.get('materials_v3_pixel_ops', {}).get('applied', []))} "
-                                        f"pixel operations - saved to {enhanced_image_path} (16-bit TIFF) for V2 stage"
-                                    )
-                                else:
-                                    # 8-bit PNG path (Golden Path, existing behavior)
-                                    enhanced_uint8 = (np.clip(working_image, 0, 1) * 255).astype(np.uint8)
-                                    enhanced_pil = PILImage.fromarray(enhanced_uint8)
-                                    enhanced_image_path = temp_dir / f"{output_key.stem}_materials_v3_enhanced.png"
-                                    enhanced_pil.save(enhanced_image_path)
-                                    logger.info(
-                                        f"Materials V3 enhanced image with "
-                                        f"{len(materials_v3_result.get('materials_v3_pixel_ops', {}).get('applied', []))} "
-                                        f"pixel operations - saved to {enhanced_image_path} (8-bit PNG) for V2 stage"
-                                    )
-                            else:
-                                logger.debug("Materials V3 did not return enhanced_image, using original image")
-
-                            logger.info(
-                                f"Materials V3 completed in {materials_v3_runtime_s:.3f}s: "
-                                f"{len(materials_v3_result.get('materials_v3_pixel_ops', {}).get('applied', []))} "
-                                f"operations applied"
-                            )
-                    except ApexStrictGateError:
-                        # Hard-fail in apex strict mode: do not silently continue with no-op Materials V3
-                        raise
-                    except Exception as e:
-                        logger.warning(f"Materials V3 processing failed: {e}", exc_info=True)
-                        materials_v3_result = None
-                        materials_v3_runtime_s = time.time() - t_materials_start
+                    (
+                        materials_v3_result,
+                        materials_v3_runtime_s,
+                        enhanced_image_path,
+                    ) = self._run_materials_v3_stage(
+                        preprocessed_array=preprocessed_array,
+                        depth_map=depth_map,
+                        output_key=output_key,
+                    )
 
                 # 3. Write quantized depth (PNG 16-bit)
                 _, _, depth_stats = atomic_write_depth_u16_png_with_stats(
@@ -1576,8 +1483,8 @@ class EnhanceOrchestrator:
 
                 # 4. Write depth metadata JSON
                 depth_metadata_path = depth_path.parent / f"{depth_path.stem}_metadata.json"
-                with open(depth_metadata_path, "w") as f:
-                    json.dump(
+                with open(depth_metadata_path, "w", encoding="utf-8") as f:
+                    dump_json(
                         {
                             "model": depth_metadata.model,
                             "depth_path": depth_metadata.depth_path,
@@ -1587,6 +1494,9 @@ class EnhanceOrchestrator:
                         },
                         f,
                         indent=2,
+                        sort_keys=True,
+                        ensure_ascii=False,
+                        allow_nan=False,
                     )
                 logger.debug(f"Wrote depth metadata: {depth_metadata_path}")
 
@@ -1725,6 +1635,229 @@ class EnhanceOrchestrator:
         except Exception as pbr_error:
             logger.warning(f"PBR generation failed (non-blocking): {pbr_error}")
             return None
+
+    def _expected_materials_v3_enhanced_path(self, output_key: Path) -> Path:
+        """Return canonical Materials V3 enhanced-image handoff path for V2."""
+        temp_dir = self.output_root / "temp"
+        extension = ".tif" if (self.config.emit_master16 or self.config.emit_upscaled16) else ".png"
+        return temp_dir / f"{output_key.stem}_materials_v3_enhanced{extension}"
+
+    def _run_materials_v3_stage(
+        self,
+        *,
+        preprocessed_array: np.ndarray,
+        depth_map: np.ndarray,
+        output_key: Path,
+    ) -> tuple[Optional[dict], float, Optional[Path]]:
+        """Run Materials V3 stage and persist canonical enhanced-image handoff artifact."""
+        if not self.materials_v3_engine:
+            return None, 0.0, None
+
+        logger.info("Running Materials V3 surface-aware finishing...")
+        t_materials_start = time.time()
+        materials_v3_result: Optional[dict] = None
+        enhanced_image_path: Optional[Path] = None
+
+        try:
+            # APEX strict gate: enforce segmentation prerequisites before running Materials V3.
+            self._enforce_apex_materials_gate()
+
+            from .segmentation_backend import get_last_segmentation_runtime_metadata, segment_materials
+
+            # Convert preprocessed float32 [0,1] to uint8 [0,255] for segmentation backend.
+            preprocessed_uint8_for_seg = (np.clip(preprocessed_array, 0, 1) * 255).astype(np.uint8)
+            segmentation_result = {"materials": segment_materials(preprocessed_uint8_for_seg, self.config)}
+            segmentation_runtime = get_last_segmentation_runtime_metadata()
+            if segmentation_runtime:
+                segmentation_result["segmentation_metadata"] = segmentation_runtime
+            self._enforce_apex_materials_gate(segmentation_result)
+
+            if segmentation_result.get("materials"):
+                logger.info(
+                    f"Material segmentation: {len(segmentation_result['materials'])} "
+                    f"materials detected using {self.config.material_segmentation_backend} backend"
+                )
+
+            materials_v3_result = self.materials_v3_engine.process(
+                image=preprocessed_array,
+                segmentation_result=segmentation_result,
+                depth_map=depth_map,
+            )
+            runtime_s = time.time() - t_materials_start
+
+            if materials_v3_result:
+                enhanced_image = materials_v3_result.get("enhanced_image")
+                if enhanced_image is not None:
+                    from PIL import Image as PILImage
+
+                    temp_dir = self.output_root / "temp"
+                    temp_dir.mkdir(parents=True, exist_ok=True)
+                    enhanced_image_path = self._expected_materials_v3_enhanced_path(output_key)
+
+                    if self.config.emit_master16 or self.config.emit_upscaled16:
+                        import tifffile
+
+                        enhanced_uint16 = (np.clip(enhanced_image, 0, 1) * 65535 + 0.5).astype(np.uint16)
+                        with atomic_temp_file(enhanced_image_path, suffix=".tif", create_file=False) as temp_path:
+                            tifffile.imwrite(
+                                temp_path,
+                                enhanced_uint16,
+                                photometric="rgb",
+                                compression="lzw",
+                                metadata={"software": "Transformation Portal v3"},
+                            )
+                        logger.info(
+                            f"Materials V3 enhanced image with "
+                            f"{len(materials_v3_result.get('materials_v3_pixel_ops', {}).get('applied', []))} "
+                            f"pixel operations - saved to {enhanced_image_path} (16-bit TIFF) for V2 stage"
+                        )
+                    else:
+                        enhanced_uint8 = (np.clip(enhanced_image, 0, 1) * 255).astype(np.uint8)
+                        enhanced_image_path = atomic_write_pil_png(
+                            enhanced_image_path, PILImage.fromarray(enhanced_uint8), optimize=True
+                        )
+                        logger.info(
+                            f"Materials V3 enhanced image with "
+                            f"{len(materials_v3_result.get('materials_v3_pixel_ops', {}).get('applied', []))} "
+                            f"pixel operations - saved to {enhanced_image_path} (8-bit PNG) for V2 stage"
+                        )
+                else:
+                    logger.debug("Materials V3 did not return enhanced_image, using original image")
+
+                logger.info(
+                    f"Materials V3 completed in {runtime_s:.3f}s: "
+                    f"{len(materials_v3_result.get('materials_v3_pixel_ops', {}).get('applied', []))} "
+                    f"operations applied"
+                )
+
+            return materials_v3_result, runtime_s, enhanced_image_path
+
+        except ApexStrictGateError:
+            # Hard-fail in apex strict mode: do not silently continue with no-op Materials V3.
+            raise
+        except Exception as e:
+            logger.warning(f"Materials V3 processing failed: {e}", exc_info=True)
+            return None, time.time() - t_materials_start, None
+
+    def _ensure_apex_canonical_materials_execution(
+        self,
+        *,
+        image_input: ImageInput,
+        output_key: Path,
+        depth_path: Path,
+        float_depth_path: Path,
+        materials_v3_result: Optional[dict],
+        materials_v3_runtime_s: float,
+        enhanced_image_path: Optional[Path],
+    ) -> tuple[Optional[dict], float, Optional[Path]]:
+        """Ensure APEX strict mode has canonical Materials->V2 handoff artifacts."""
+        if not self._is_apex_materials_gate_enabled():
+            return materials_v3_result, materials_v3_runtime_s, enhanced_image_path
+
+        if not depth_path.exists():
+            return materials_v3_result, materials_v3_runtime_s, enhanced_image_path
+
+        expected_path = self._expected_materials_v3_enhanced_path(output_key)
+        expected_path_resolved = expected_path.resolve()
+        enhanced_resolved = enhanced_image_path.resolve() if enhanced_image_path else None
+        has_canonical_enhanced = bool(
+            enhanced_image_path and enhanced_image_path.exists() and enhanced_resolved == expected_path_resolved
+        )
+        has_masks = bool(materials_v3_result and materials_v3_result.get("material_masks"))
+
+        if has_canonical_enhanced and has_masks:
+            return materials_v3_result, materials_v3_runtime_s, enhanced_image_path
+
+        logger.info(
+            "APEX strict mode: depth was reused but canonical Materials V3 handoff was incomplete; "
+            "recomputing Materials V3 stage from cached depth."
+        )
+
+        if self.materials_v3_engine is None:
+            raise ApexStrictGateError(
+                "APEX_MATERIALS_ENGINE_MISSING",
+                "APEX strict mode requires Materials V3 engine for canonical cached-depth handoff.",
+            )
+
+        from .preprocessing import preprocess_image, validate_image_format
+
+        validated_path = validate_image_format(image_input.path)
+        preprocessed_array, _ = preprocess_image(validated_path)
+        depth_for_materials = self._load_cached_depth(depth_path, float_depth_path)
+        if depth_for_materials is None:
+            raise ApexStrictGateError(
+                "APEX_MATERIALS_CACHED_DEPTH_MISSING",
+                "APEX strict mode could not reload cached depth required for Materials V3 recomputation.",
+                details={
+                    "depth_path": str(depth_path),
+                    "float_depth_path": str(float_depth_path),
+                },
+            )
+
+        (
+            recomputed_result,
+            recomputed_runtime,
+            recomputed_enhanced_path,
+        ) = self._run_materials_v3_stage(
+            preprocessed_array=preprocessed_array,
+            depth_map=np.asarray(depth_for_materials, dtype=np.float32),
+            output_key=output_key,
+        )
+
+        has_recomputed_masks = bool(recomputed_result and recomputed_result.get("material_masks"))
+        has_recomputed_enhanced = bool(recomputed_enhanced_path and recomputed_enhanced_path.exists())
+        resolved_recomputed = recomputed_enhanced_path.resolve() if recomputed_enhanced_path else None
+
+        if not has_recomputed_masks or not has_recomputed_enhanced or resolved_recomputed != expected_path_resolved:
+            raise ApexStrictGateError(
+                "APEX_V2_CANONICAL_STEM_DIVERGENCE",
+                "APEX strict mode could not establish canonical Materials V3 handoff for V2.",
+                details={
+                    "expected_v2_input": str(expected_path),
+                    "recomputed_v2_input": str(recomputed_enhanced_path) if recomputed_enhanced_path else None,
+                    "has_material_masks": has_recomputed_masks,
+                    "has_enhanced_image": has_recomputed_enhanced,
+                },
+            )
+
+        return recomputed_result, recomputed_runtime, recomputed_enhanced_path
+
+    def _enforce_apex_v2_canonical_input_preflight(
+        self,
+        *,
+        depth_path: Optional[Path],
+        output_key: Path,
+        v2_input_path: Path,
+        enhanced_image_path: Optional[Path],
+        materials_v3_result: Optional[dict],
+    ) -> None:
+        """Fail early when APEX strict cached fast-path would violate canonical handoff."""
+        if not self._is_apex_materials_gate_enabled():
+            return
+        if not depth_path or not depth_path.exists():
+            return
+
+        expected_path = self._expected_materials_v3_enhanced_path(output_key)
+        expected_path_resolved = expected_path.resolve()
+        actual_path_resolved = Path(v2_input_path).resolve()
+        enhanced_path_resolved = enhanced_image_path.resolve() if enhanced_image_path else None
+        has_masks = bool(materials_v3_result and materials_v3_result.get("material_masks"))
+
+        if actual_path_resolved == expected_path_resolved and expected_path.exists() and has_masks:
+            return
+
+        raise ApexStrictGateError(
+            "APEX_V2_CANONICAL_STEM_DIVERGENCE",
+            "APEX strict mode forbids fast-path stem divergence before V2 handoff.",
+            details={
+                "expected_v2_input": str(expected_path),
+                "actual_v2_input": str(v2_input_path),
+                "enhanced_image_path": str(enhanced_image_path) if enhanced_image_path else None,
+                "enhanced_image_matches_expected": bool(enhanced_path_resolved == expected_path_resolved),
+                "expected_input_exists": expected_path.exists(),
+                "has_material_masks": has_masks,
+            },
+        )
 
     def _serialize_material_masks(self, masks: Dict[str, np.ndarray], output_key: Path, temp_dir: Path) -> Optional[Path]:
         """Serialize material masks to compressed NPZ file.
@@ -2184,11 +2317,33 @@ class EnhanceOrchestrator:
                     "Depth attempt invariant violated: selected attempt backend does not match resolved backend."
                 )
 
+        (
+            materials_v3_result,
+            materials_v3_runtime_s,
+            enhanced_image_path,
+        ) = self._ensure_apex_canonical_materials_execution(
+            image_input=image_input,
+            output_key=output_key,
+            depth_path=depth_path,
+            float_depth_path=float_depth_path,
+            materials_v3_result=materials_v3_result,
+            materials_v3_runtime_s=materials_v3_runtime_s,
+            enhanced_image_path=enhanced_image_path,
+        )
+
         # --- STAGE B: V2 ENHANCEMENT ---
         # Use enhanced image from Materials V3 if available, otherwise use original
         v2_input_path = enhanced_image_path if enhanced_image_path else image_input.path
         if enhanced_image_path:
             logger.info(f"V2 stage using Materials V3 enhanced image: {enhanced_image_path}")
+
+        self._enforce_apex_v2_canonical_input_preflight(
+            depth_path=depth_path if depth_metadata else None,
+            output_key=output_key,
+            v2_input_path=v2_input_path,
+            enhanced_image_path=enhanced_image_path,
+            materials_v3_result=materials_v3_result,
+        )
 
         v2_result, v2_runtime_s, v2_report_path = self._run_v2_stage(
             image_input=ImageInput(path=v2_input_path) if enhanced_image_path else image_input,
@@ -3094,17 +3249,27 @@ class EnhanceOrchestrator:
             return
 
         try:
-            serialized_run_card = json.loads(json.dumps(run_card, default=_json_default, sort_keys=True))
+            serialized_run_card = json.loads(
+                dumps_json(
+                    run_card,
+                    default=_json_default,
+                    sort_keys=True,
+                    ensure_ascii=False,
+                    allow_nan=False,
+                )
+            )
             _validate_run_card_payload(serialized_run_card, schema_path)
             _validate_run_card_backend_semantics(serialized_run_card)
 
             with open(run_card_path, "w", encoding="utf-8") as f:
-                json.dump(
+                dump_json(
                     run_card,
                     f,
                     indent=2,
                     default=_json_default,
                     sort_keys=True,
+                    ensure_ascii=False,
+                    allow_nan=False,
                 )
         except Exception:
             logger.exception(
