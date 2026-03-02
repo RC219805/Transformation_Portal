@@ -88,7 +88,7 @@ rawpy==0.26.0               # Deterministic RAW demosaic (LibRaw wrapper)
 
 **Examples:**
 ```
-numpy>=1.24,<2.3.0         # Upper bound for opencv compatibility
+numpy>=1.24,<2.5.0         # Upper bound for opencv compatibility
 Pillow>=10.0.0,<13         # Standard range for stable API
 pydantic>=2.0,<3           # Major version boundary
 ```
@@ -98,6 +98,7 @@ pydantic>=2.0,<3           # Major version boundary
 - Upper bound: next major version (for semver) or known incompatibility
 - Must test against both bounds before committing
 - Security minimum overrides developer preference
+- The enforced `.in` constraint is the policy source of truth; ADR examples must mirror it.
 
 #### C) **Lower-Bound-Only** (`package>=X.Y`)
 

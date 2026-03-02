@@ -518,7 +518,7 @@ Transformation Portal uses `pip-compile` for dependency management. All dependen
 
 | Style              | Format          | Use Case                                          | Example                                  |
 |--------------------|-----------------|---------------------------------------------------|------------------------------------------|
-| **Range Pin**      | `>=X.Y,<Z`      | Production dependencies (base.in, ml.in)          | `numpy>=1.24,<2.3.0`                     |
+| **Range Pin**      | `>=X.Y,<Z`      | Production dependencies (base.in, ml.in)          | `numpy>=1.24,<2.5.0`                     |
 | **Strict Pin**     | `==X.Y.Z`       | Deterministic builds, known incompatibilities     | `rawpy==0.26.0  # RAW demosaic`          |
 | **Lower-bound**    | `>=X.Y`         | Dev tools with stable CLI (dev.in, ci.in only)    | `black>=24.8  # Formatter`               |
 | **Unpinned**       | (none)          | **NEVER ALLOWED** (causes non-deterministic builds) | ❌                                       |
