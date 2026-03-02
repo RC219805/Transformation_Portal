@@ -324,6 +324,7 @@ def enhance_image(
             - input: Input image path
             - output: Output image path
             - depth_map: Depth map path (if provided)
+            - depth_consumed: Whether depth was actually consumed by enhancement stage
             - preset: Preset name
             - runtime_s: Processing time in seconds
             - metadata: Enhancement metadata from stage
@@ -362,6 +363,7 @@ def enhance_image(
             "input": str(input_path),
             "output": str(output_path),
             "depth_map": str(depth_map_path) if depth_map_path else None,
+            "depth_consumed": False,
             "preset": config.preset,
             "runtime_s": time.perf_counter() - start_time,
             "timestamp": time.time(),
@@ -565,6 +567,12 @@ def enhance_image(
 
         runtime_s = time.perf_counter() - start_time
 
+        stage_metadata = result.metadata if isinstance(result.metadata, dict) else {}
+        if "has_depth" in stage_metadata and stage_metadata["has_depth"] is not None:
+            depth_consumed = bool(stage_metadata["has_depth"])
+        else:
+            depth_consumed = depth_map is not None
+
         # Build metadata report with bit-depth information
         return {
             "status": "success",
@@ -572,11 +580,12 @@ def enhance_image(
             "input": str(input_path),
             "output": str(output_path),
             "depth_map": str(depth_map_path) if depth_map_path else None,
+            "depth_consumed": depth_consumed,
             "preset": config.preset,
             "config": config.to_dict(),
             "runtime_s": runtime_s,
             "timestamp": time.time(),
-            "stage_metadata": result.metadata,
+            "stage_metadata": stage_metadata,
             "enhancement_metadata": result.artifacts.get("enhancement_metadata", {}),
             # BIT-DEPTH METADATA (Quality Firewall contract)
             "bit_depth": {

@@ -224,6 +224,10 @@ twine==4.0.2
     # via
     #   -c all.txt
     #   -r ci.in
+typing-extensions==4.15.0
+    # via
+    #   -c all.txt
+    #   anyio
 urllib3==2.6.3
     # via
     #   -c all.txt

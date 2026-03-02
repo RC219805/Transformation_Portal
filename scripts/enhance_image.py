@@ -151,7 +151,7 @@ def configure_logging(verbose: bool, quiet: bool, log_file: Path | None) -> None
     if log_file:
         log_file = _resolve_path(log_file)
         log_file.parent.mkdir(parents=True, exist_ok=True)
-        fh = logging.FileHandler(log_file, encoding="utf-8")
+        fh = logging.FileHandler(log_file, mode="w", encoding="utf-8")
         fh.setLevel(logging.DEBUG)
         handlers.append(fh)
 

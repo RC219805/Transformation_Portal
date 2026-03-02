@@ -238,8 +238,16 @@ def find_v2_report(output_dir: Path, image_key: str) -> Optional[Path]:
 
     # Try recursive search (handles nested output structures)
     # Limit depth to avoid excessive scanning
+    prefixed_matches = []
     for report_path in output_dir.glob("**/*_report.json"):
-        if report_path.stem == f"{image_key}_report":
+        stem = report_path.stem
+        if stem == f"{image_key}_report":
             return report_path
+        if stem.startswith(f"{image_key}_") and stem.endswith("_report"):
+            prefixed_matches.append(report_path)
+
+    # Deterministic fallback for derived stems (e.g., *_materials_v3_enhanced_report.json)
+    if prefixed_matches:
+        return sorted(prefixed_matches)[0]
 
     return None

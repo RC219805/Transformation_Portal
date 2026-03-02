@@ -170,6 +170,7 @@ class TestEnhanceImage:
             assert report["input"] == str(input_path)
             assert report["output"] == str(output_path)
             assert report["preset"] == "default"
+            assert report["depth_consumed"] is False
             assert "runtime_s" in report
             assert output_path.exists()
 
@@ -203,11 +204,39 @@ class TestEnhanceImage:
 
             # Verify depth map was passed to stage
             assert report["depth_map"] == str(depth_path)
+            assert report["depth_consumed"] is True
 
             # Check that compute was called with depth_map in context
             call_args = mock_stage.compute.call_args
             context = call_args[0][0]
             assert context.get_artifact("depth_map") is not None
+
+    def test_enhance_image_depth_consumed_prefers_stage_metadata(self, tmp_path):
+        """Test that depth_consumed follows stage metadata when present."""
+        input_path = tmp_path / "input.png"
+        test_image = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
+        Image.fromarray(test_image, mode="RGB").save(input_path)
+
+        depth_path = tmp_path / "depth.png"
+        depth_data = np.random.randint(0, 256, (100, 100), dtype=np.uint8)
+        Image.fromarray(depth_data, mode="L").save(depth_path)
+
+        output_path = tmp_path / "output.png"
+
+        with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as mock_stage_cls:
+            mock_stage = Mock()
+            mock_stage_cls.return_value = mock_stage
+
+            mock_result = Mock()
+            mock_result.status = StageStatus.COMPLETED
+            mock_result.artifacts = {"enhanced_image": test_image}
+            mock_result.metadata = {"has_depth": False}
+            mock_stage.compute.return_value = mock_result
+
+            report = enhance_image(input_path, output_path, depth_map_path=depth_path)
+
+            assert report["depth_map"] == str(depth_path)
+            assert report["depth_consumed"] is False
 
     def test_enhance_image_with_custom_config(self, tmp_path):
         """Test enhancement with custom configuration."""
@@ -261,6 +290,7 @@ class TestEnhanceImage:
             # Verify passthrough
             assert report["status"] == "passthrough"
             assert report["preset"] == "none"
+            assert report["depth_consumed"] is False
             assert "enhancement skipped" in report["message"]
 
             # Verify EnhancementStage was NOT called

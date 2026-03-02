@@ -6,7 +6,9 @@ Checks:
 2. Each artifact entry includes a valid lowercase SHA256 digest.
 3. artifact_merkle_root matches recomputed value from artifact_index.
 4. artifact_index ordering is lexicographically sorted by relative_path.
-5. Optional canonical JSON serialization check (sorted keys + indent=2).
+5. backend_selection/resolution semantics are internally consistent.
+6. config_fingerprint canonical JSON + SHA256 are internally consistent.
+7. Optional canonical JSON serialization check (sorted keys + indent=2).
 """
 
 from __future__ import annotations
@@ -59,6 +61,113 @@ def compute_artifact_merkle_root(artifact_index: list[dict[str, Any]]) -> str:
     sorted_artifacts = sorted(artifact_index, key=lambda item: item["relative_path"])
     leaf_hashes = [bytes.fromhex(item["sha256"]) for item in sorted_artifacts]
     return hashlib.sha256(b"".join(leaf_hashes)).hexdigest()
+
+
+def _verify_backend_semantics(run_card_payload: dict[str, Any], errors: list[str]) -> None:
+    backend_selection = run_card_payload.get("backend_selection")
+    backend_summary = run_card_payload.get("backend_summary")
+    if not isinstance(backend_selection, dict) or not isinstance(backend_summary, dict):
+        return
+
+    final_backends_used = backend_summary.get("final_backends_used")
+    if not isinstance(final_backends_used, list):
+        errors.append("backend_summary.final_backends_used must be an array")
+        return
+
+    success_count = run_card_payload.get("success_count")
+    if not isinstance(success_count, int):
+        success_count = 0
+
+    if not final_backends_used:
+        if success_count > 0:
+            errors.append("backend_summary.final_backends_used must be non-empty when success_count > 0")
+        return
+
+    primary_backend = final_backends_used[0]
+    if not isinstance(primary_backend, str) or not primary_backend:
+        errors.append("backend_summary.final_backends_used[0] must be a non-empty string")
+        return
+
+    summary_primary = backend_summary.get("primary_backend")
+    if summary_primary != primary_backend:
+        errors.append("backend_summary.primary_backend must equal backend_summary.final_backends_used[0]")
+
+    resolved = backend_selection.get("resolved")
+    if not isinstance(resolved, str) or not resolved:
+        errors.append("backend_selection.resolved must be a non-empty string")
+        return
+    if resolved != primary_backend:
+        errors.append("backend_selection.resolved must match backend_summary.final_backends_used[0]")
+
+    logical_backend = backend_selection.get("logical_backend")
+    resolved_engine = backend_selection.get("resolved_engine")
+    wrapper_declared = logical_backend is not None or resolved_engine is not None
+    if not wrapper_declared:
+        return
+
+    if not isinstance(logical_backend, str) or not logical_backend:
+        errors.append("backend_selection.logical_backend must be a non-empty string when wrapper semantics are declared")
+    if not isinstance(resolved_engine, str) or not resolved_engine:
+        errors.append("backend_selection.resolved_engine must be a non-empty string when wrapper semantics are declared")
+    if isinstance(logical_backend, str) and isinstance(resolved_engine, str):
+        if logical_backend == resolved_engine:
+            errors.append("backend_selection.logical_backend and backend_selection.resolved_engine must differ")
+        if resolved_engine != primary_backend:
+            errors.append("backend_selection.resolved_engine must match backend_summary.final_backends_used[0]")
+
+    fallback_images = backend_summary.get("fallback_images")
+    if isinstance(fallback_images, int) and fallback_images != 0:
+        errors.append("wrapper semantics are only valid when backend_summary.fallback_images == 0")
+
+
+def _verify_config_fingerprint(run_card_payload: dict[str, Any], errors: list[str]) -> None:
+    config_fingerprint = run_card_payload.get("config_fingerprint")
+    if not isinstance(config_fingerprint, dict):
+        return
+
+    canonical_json = config_fingerprint.get("canonical_json")
+    hash_algorithm = config_fingerprint.get("hash_algorithm")
+    sha256_hex = config_fingerprint.get("sha256")
+    if not isinstance(canonical_json, str) or not canonical_json:
+        errors.append("config_fingerprint.canonical_json must be a non-empty string")
+        return
+    if hash_algorithm != "sha256":
+        errors.append("config_fingerprint.hash_algorithm must be 'sha256'")
+        return
+    if not isinstance(sha256_hex, str) or not SHA256_HEX_RE.fullmatch(sha256_hex):
+        errors.append("config_fingerprint.sha256 must be a lowercase 64-char hex digest")
+        return
+
+    fields = (
+        "model_variant",
+        "depth_quantization",
+        "depth_device",
+        "preset",
+        "v2_preset",
+        "v2_device",
+        "v2_upscaler_backend",
+        "preset_requested",
+        "preset_resolved",
+        "backend_requested",
+        "backend_resolved",
+        "device_requested",
+        "device_resolved",
+        "quality_tier",
+        "strict_inputs",
+        "strict_segmentation",
+        "apex_strict_mode",
+    )
+    expected_canonical_json = json.dumps(
+        {field: config_fingerprint.get(field) for field in fields},
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    if canonical_json != expected_canonical_json:
+        errors.append("config_fingerprint.canonical_json does not match canonicalized config fingerprint fields")
+
+    recomputed_sha = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+    if recomputed_sha != sha256_hex:
+        errors.append("config_fingerprint.sha256 mismatch: " f"expected={sha256_hex}, recomputed={recomputed_sha}")
 
 
 def verify_run_card_integrity(
@@ -126,6 +235,9 @@ def verify_run_card_integrity(
             errors.append(
                 "artifact_merkle_root mismatch: " f"expected={expected_merkle_root}, recomputed={recomputed_merkle_root}"
             )
+
+    _verify_backend_semantics(run_card_payload, errors)
+    _verify_config_fingerprint(run_card_payload, errors)
 
     if check_canonical_json:
         raw_text = run_card_path.read_text(encoding="utf-8")

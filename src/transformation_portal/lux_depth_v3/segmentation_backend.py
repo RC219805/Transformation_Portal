@@ -40,7 +40,9 @@ For usage examples, see docs/materials_v3_quick_reference.md
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import os
 from functools import lru_cache
 from pathlib import Path
 from types import SimpleNamespace
@@ -52,6 +54,8 @@ from .config import EnhanceConfig
 from .protocols.segmentation_backend import SegmentationBackend, SegmentationBackendInfo
 
 logger = logging.getLogger(__name__)
+
+_LAST_SEGMENTATION_RUNTIME_METADATA: Optional[Dict[str, Any]] = None
 
 # Lazy imports for ML dependencies
 try:
@@ -161,6 +165,9 @@ class EfficientSAMBackend:
     Memory: ~50MB model + ~200MB inference overhead
     """
 
+    _CLIP_MODEL_NAME = "ViT-B-32"
+    _CLIP_PRETRAINED_TAG = "openai"
+
     def __init__(
         self,
         sky_top_region_fraction: float = 0.5,
@@ -176,9 +183,128 @@ class EfficientSAMBackend:
         self._clip_model = None
         self._clip_preprocess = None
         self._clip_tokenizer = None
+        self._clip_runtime_metadata: Optional[Dict[str, Any]] = None
         self._sky_top_region_fraction = float(sky_top_region_fraction)
         self._sky_gradient_threshold = float(sky_gradient_threshold)
         self._sky_brightness_threshold = float(sky_brightness_threshold)
+
+    @staticmethod
+    def _hf_offline_mode_enabled() -> bool:
+        """Return True when HuggingFace/Transformers offline flags are enabled."""
+        return os.getenv("HF_HUB_OFFLINE") == "1" or os.getenv("TRANSFORMERS_OFFLINE") == "1"
+
+    @classmethod
+    def _resolve_cached_clip_checkpoint_path(
+        cls,
+        model_name: str = _CLIP_MODEL_NAME,
+        pretrained_tag: str = _CLIP_PRETRAINED_TAG,
+    ) -> Optional[str]:
+        """Resolve a local cached OpenCLIP checkpoint path without network access."""
+        if not OPEN_CLIP_AVAILABLE:
+            return None
+
+        try:
+            from huggingface_hub import try_to_load_from_cache
+        except Exception:
+            return None
+
+        try:
+            cfg = open_clip.get_pretrained_cfg(model_name, pretrained_tag)
+        except Exception:
+            return None
+        if not cfg:
+            return None
+
+        hf_hub_ref = str(cfg.get("hf_hub", "")).strip()
+        if not hf_hub_ref:
+            return None
+
+        repo_id, explicit_filename = os.path.split(hf_hub_ref)
+        repo_id = repo_id.rstrip("/")
+        candidates = []
+        if explicit_filename:
+            candidates.append(explicit_filename)
+            if explicit_filename.endswith(".bin"):
+                candidates.append(explicit_filename[:-4] + ".safetensors")
+        else:
+            # OpenCLIP defaults to binary filename; prefer safetensors first.
+            candidates.extend(["open_clip_model.safetensors", "open_clip_pytorch_model.bin"])
+
+        for filename in dict.fromkeys(candidates):
+            try:
+                cached_path = try_to_load_from_cache(repo_id=repo_id, filename=filename)
+            except Exception:
+                continue
+            if isinstance(cached_path, str) and Path(cached_path).is_file():
+                return cached_path
+        return None
+
+    @staticmethod
+    def _compute_sha256(file_path: Path) -> str:
+        """Compute SHA-256 for a local file path using streaming reads."""
+        digest = hashlib.sha256()
+        with file_path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    def _record_clip_runtime_metadata(self, weights_source: str, weights_path: Optional[str]) -> None:
+        """Capture machine-parseable CLIP runtime provenance."""
+        metadata: Dict[str, Any] = {
+            "offline_mode": self._hf_offline_mode_enabled(),
+            "weights_source": weights_source,
+            "weights_path": weights_path,
+            "weights_sha256": None,
+        }
+        if weights_path:
+            try:
+                metadata["weights_sha256"] = self._compute_sha256(Path(weights_path))
+            except Exception as exc:
+                logger.debug("Failed to hash CLIP weights file for provenance (%s): %s", weights_path, exc)
+        self._clip_runtime_metadata = metadata
+
+    def get_runtime_metadata(self) -> Optional[Dict[str, Any]]:
+        """Expose runtime metadata for governance/attestation reports."""
+        if self._clip_runtime_metadata is None:
+            return None
+        return {"clip_runtime": dict(self._clip_runtime_metadata)}
+
+    def _load_clip_runtime(self):
+        """Load CLIP model/tokenizer with cache-first offline-safe resolution."""
+        if self._clip_model is not None:
+            return self._clip_model, self._clip_preprocess, self._clip_tokenizer
+
+        if not OPEN_CLIP_AVAILABLE:
+            raise RuntimeError("open_clip is unavailable")
+
+        pretrained_source: str = self._CLIP_PRETRAINED_TAG
+        cached_path = self._resolve_cached_clip_checkpoint_path(
+            model_name=self._CLIP_MODEL_NAME,
+            pretrained_tag=self._CLIP_PRETRAINED_TAG,
+        )
+        if cached_path is not None:
+            pretrained_source = cached_path
+            logger.info("Using cached CLIP checkpoint (offline-safe): %s", Path(cached_path).name)
+            self._record_clip_runtime_metadata(weights_source="cache_path", weights_path=cached_path)
+        elif self._hf_offline_mode_enabled():
+            raise RuntimeError(
+                "HF offline mode is enabled but cached CLIP checkpoint was not found for "
+                f"{self._CLIP_MODEL_NAME}/{self._CLIP_PRETRAINED_TAG}"
+            )
+        else:
+            self._record_clip_runtime_metadata(weights_source="tag_resolution", weights_path=None)
+
+        model, _, preprocess = open_clip.create_model_and_transforms(
+            self._CLIP_MODEL_NAME,
+            pretrained=pretrained_source,
+            device=self._device,
+        )
+        tokenizer = open_clip.get_tokenizer(self._CLIP_MODEL_NAME)
+
+        self._clip_model = model
+        self._clip_preprocess = preprocess
+        self._clip_tokenizer = tokenizer
+        return model, preprocess, tokenizer
 
     @property
     def info(self) -> SegmentationBackendInfo:
@@ -539,36 +665,19 @@ class EfficientSAMBackend:
             return self._heuristic_segmentation(image)
 
         # Allow disabling CLIP for faster tests
-        import os
-
         if os.getenv("SKIP_CLIP_INFERENCE", "").lower() in ("1", "true", "yes"):
             logger.debug("SKIP_CLIP_INFERENCE set, using heuristics instead of CLIP")
             return self._heuristic_segmentation(image)
 
         try:
-            import open_clip
             import torch
             from PIL import Image
 
-            # Load CLIP model (cached at instance level to avoid repeated loading)
             if self._clip_model is None:
                 logger.debug("Loading CLIP model for segment classification...")
-                model, _, preprocess = open_clip.create_model_and_transforms(
-                    "ViT-B-32",
-                    pretrained="openai",
-                    device=self._device,
-                )
-                tokenizer = open_clip.get_tokenizer("ViT-B-32")
-
-                # Cache for future calls
-                self._clip_model = model
-                self._clip_preprocess = preprocess
-                self._clip_tokenizer = tokenizer
             else:
                 logger.debug("Using cached CLIP model")
-                model = self._clip_model
-                preprocess = self._clip_preprocess
-                tokenizer = self._clip_tokenizer
+            model, preprocess, tokenizer = self._load_clip_runtime()
 
             # Define material text prompts
             material_prompts = {
@@ -1161,6 +1270,9 @@ def segment_materials(
         RuntimeError: If strict_backend=True and backend fails to load
         ValueError: If image format is invalid
     """
+    global _LAST_SEGMENTATION_RUNTIME_METADATA
+    _LAST_SEGMENTATION_RUNTIME_METADATA = None
+
     # Check if segmentation is enabled
     enable_segmentation = getattr(config, "enable_material_segmentation", False)
 
@@ -1195,6 +1307,14 @@ def segment_materials(
 
         # Run segmentation
         results = backend.segment(image)
+        if hasattr(backend, "get_runtime_metadata"):
+            try:
+                runtime_metadata = backend.get_runtime_metadata()
+            except Exception as exc:
+                logger.debug("Failed to query segmentation runtime metadata: %s", exc)
+                runtime_metadata = None
+            if isinstance(runtime_metadata, dict):
+                _LAST_SEGMENTATION_RUNTIME_METADATA = runtime_metadata
 
         # Extract masks from (mask, confidence) tuples for backward compatibility
         # The public API returns Dict[str, np.ndarray] while backends return Dict[str, Tuple[np.ndarray, float]]
@@ -1218,3 +1338,10 @@ def segment_materials(
             f"To debug, set strict_backend=True in config."
         )
         return {}
+
+
+def get_last_segmentation_runtime_metadata() -> Optional[Dict[str, Any]]:
+    """Return last segmentation runtime metadata captured by segment_materials()."""
+    if _LAST_SEGMENTATION_RUNTIME_METADATA is None:
+        return None
+    return dict(_LAST_SEGMENTATION_RUNTIME_METADATA)

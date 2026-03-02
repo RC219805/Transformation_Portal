@@ -75,7 +75,16 @@ def test_materials_v3_process_integration(tmp_path, mock_depth_backend, mock_da3
 
     # Create mock inputs
     image = np.ones((256, 256, 3), dtype=np.uint8) * 128
-    segmentation_result = {"materials": {}}
+    segmentation_result = {
+        "materials": {},
+        "segmentation_metadata": {
+            "clip_runtime": {
+                "offline_mode": True,
+                "weights_source": "cache_path",
+                "weights_sha256": "a" * 64,
+            }
+        },
+    }
     depth_map = np.ones((256, 256), dtype=np.float32) * 0.5
 
     # Call the Materials V3 engine directly
@@ -91,6 +100,7 @@ def test_materials_v3_process_integration(tmp_path, mock_depth_backend, mock_da3
 
     # Verify metadata
     assert result["materials_v3_metadata"]["version"] == "3.1"
+    assert result["materials_v3_metadata"]["segmentation_metadata"]["clip_runtime"]["weights_source"] == "cache_path"
 
     # Verify pixel ops structure (should be telemetry even with empty materials)
     pixel_ops = result["materials_v3_pixel_ops"]
@@ -110,6 +120,7 @@ def test_materials_v3_manifest_integration(tmp_path, mock_depth_backend, mock_da
         version="3.1",
         response_plan={"per_class": {}},
         pixel_ops={"enabled": True, "applied": [], "blocked": []},
+        segmentation_metadata={"clip_runtime": {"offline_mode": True, "weights_source": "cache_path"}},
         runtime_seconds=0.123,
     )
 
@@ -126,6 +137,8 @@ def test_materials_v3_manifest_integration(tmp_path, mock_depth_backend, mock_da
     assert loaded_manifest.materials_v3.enabled is True
     assert loaded_manifest.materials_v3.version == "3.1"
     assert loaded_manifest.materials_v3.runtime_seconds == 0.123
+    assert loaded_manifest.materials_v3.segmentation_metadata is not None
+    assert loaded_manifest.materials_v3.segmentation_metadata["clip_runtime"]["offline_mode"] is True
     assert loaded_manifest.materials_v3.schema_version == "1.1"  # Updated to 1.1 for bit depth tracking
 
 

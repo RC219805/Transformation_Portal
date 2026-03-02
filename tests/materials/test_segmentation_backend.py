@@ -16,6 +16,9 @@ Note: Tests marked with @pytest.mark.ml require torch/torchvision.
 
 from __future__ import annotations
 
+import socket
+import sys
+import types
 from types import SimpleNamespace
 
 import numpy as np
@@ -28,6 +31,7 @@ from transformation_portal.lux_depth_v3.segmentation_backend import (
     SAM2SegmentationBackend,
     StubBackend,
     _get_backend_instance,
+    get_last_segmentation_runtime_metadata,
     segment_materials,
 )
 
@@ -176,6 +180,170 @@ def test_stub_backend_shape_contract(sample_image):
     # Stub returns empty dict
     assert isinstance(masks, dict)
     assert len(masks) == 0
+
+
+def test_clip_loader_prefers_cached_checkpoint_path(monkeypatch, tmp_path):
+    """CLIP loader should use local cached checkpoint path before tag-based resolution."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    cached_checkpoint = tmp_path / "open_clip_model.safetensors"
+    cached_checkpoint.write_bytes(b"checkpoint")
+    calls = {}
+
+    def fake_get_pretrained_cfg(model_name, pretrained_tag):
+        calls["cfg"] = (model_name, pretrained_tag)
+        return {"hf_hub": "timm/vit_base_patch32_clip_224.openai/"}
+
+    def fake_create_model_and_transforms(model_name, pretrained, device):
+        calls["create"] = (model_name, pretrained, device)
+        return object(), None, (lambda image: image)
+
+    def fake_get_tokenizer(model_name):
+        calls["tokenizer"] = model_name
+        return lambda prompts: prompts
+
+    def fake_try_to_load_from_cache(repo_id, filename):
+        calls.setdefault("cache_queries", []).append((repo_id, filename))
+        if filename == "open_clip_model.safetensors":
+            return str(cached_checkpoint)
+        return None
+
+    fake_hf_module = types.ModuleType("huggingface_hub")
+    fake_hf_module.try_to_load_from_cache = fake_try_to_load_from_cache
+
+    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf_module)
+    monkeypatch.setattr(seg_module, "OPEN_CLIP_AVAILABLE", True)
+    monkeypatch.setattr(
+        seg_module,
+        "open_clip",
+        SimpleNamespace(
+            get_pretrained_cfg=fake_get_pretrained_cfg,
+            create_model_and_transforms=fake_create_model_and_transforms,
+            get_tokenizer=fake_get_tokenizer,
+        ),
+    )
+
+    backend = seg_module.EfficientSAMBackend()
+    backend._device = "cpu"
+    backend._load_clip_runtime()
+
+    assert calls["cfg"] == ("ViT-B-32", "openai")
+    assert calls["cache_queries"][0] == ("timm/vit_base_patch32_clip_224.openai", "open_clip_model.safetensors")
+    assert calls["create"][1] == str(cached_checkpoint)
+
+
+def test_clip_loader_offline_mode_missing_cache_fails_fast(monkeypatch):
+    """Offline mode must fail before tag-based model resolution if cache is missing."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    create_calls = {"count": 0}
+
+    def fake_get_pretrained_cfg(_model_name, _pretrained_tag):
+        return {"hf_hub": "timm/vit_base_patch32_clip_224.openai/"}
+
+    def fake_create_model_and_transforms(*_args, **_kwargs):
+        create_calls["count"] += 1
+        return object(), None, (lambda image: image)
+
+    def fake_try_to_load_from_cache(_repo_id, _filename):
+        return None
+
+    fake_hf_module = types.ModuleType("huggingface_hub")
+    fake_hf_module.try_to_load_from_cache = fake_try_to_load_from_cache
+
+    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf_module)
+    monkeypatch.setenv("HF_HUB_OFFLINE", "1")
+    monkeypatch.setattr(seg_module, "OPEN_CLIP_AVAILABLE", True)
+    monkeypatch.setattr(
+        seg_module,
+        "open_clip",
+        SimpleNamespace(
+            get_pretrained_cfg=fake_get_pretrained_cfg,
+            create_model_and_transforms=fake_create_model_and_transforms,
+            get_tokenizer=lambda _model_name: (lambda prompts: prompts),
+        ),
+    )
+
+    backend = seg_module.EfficientSAMBackend()
+    backend._device = "cpu"
+
+    with pytest.raises(RuntimeError, match="offline mode is enabled"):
+        backend._load_clip_runtime()
+
+    assert create_calls["count"] == 0
+
+
+def test_clip_loader_with_cache_does_not_touch_network(monkeypatch, tmp_path):
+    """With cache present, CLIP loader should succeed even if network APIs are blocked."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    cached_checkpoint = tmp_path / "open_clip_model.safetensors"
+    cached_checkpoint.write_bytes(b"checkpoint")
+    calls = {"create": 0}
+
+    def fake_get_pretrained_cfg(_model_name, _pretrained_tag):
+        return {"hf_hub": "timm/vit_base_patch32_clip_224.openai/"}
+
+    def fake_create_model_and_transforms(*_args, **_kwargs):
+        calls["create"] += 1
+        return object(), None, (lambda image: image)
+
+    def fake_try_to_load_from_cache(_repo_id, filename):
+        if filename == "open_clip_model.safetensors":
+            return str(cached_checkpoint)
+        return None
+
+    def fail_getaddrinfo(*_args, **_kwargs):
+        raise AssertionError("Network lookup attempted in offline-cache path")
+
+    fake_hf_module = types.ModuleType("huggingface_hub")
+    fake_hf_module.try_to_load_from_cache = fake_try_to_load_from_cache
+    fake_hf_module.hf_hub_download = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+        AssertionError("hf_hub_download should not be called when cache exists")
+    )
+
+    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf_module)
+    monkeypatch.setattr(socket, "getaddrinfo", fail_getaddrinfo)
+    monkeypatch.setattr(seg_module, "OPEN_CLIP_AVAILABLE", True)
+    monkeypatch.setattr(
+        seg_module,
+        "open_clip",
+        SimpleNamespace(
+            get_pretrained_cfg=fake_get_pretrained_cfg,
+            create_model_and_transforms=fake_create_model_and_transforms,
+            get_tokenizer=lambda _model_name: (lambda prompts: prompts),
+        ),
+    )
+
+    backend = seg_module.EfficientSAMBackend()
+    backend._device = "cpu"
+    backend._load_clip_runtime()
+    assert calls["create"] == 1
+
+
+def test_segment_materials_exposes_runtime_metadata(monkeypatch, sample_image):
+    """segment_materials should expose backend runtime metadata for manifest attestation."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    class _FakeBackend:
+        def __init__(self):
+            self.info = SimpleNamespace(name="fake")
+
+        def segment(self, _image):
+            return {"glass": (np.ones((2, 2), dtype=np.float32), 0.9)}
+
+        def get_runtime_metadata(self):
+            return {"clip_runtime": {"offline_mode": True, "weights_source": "cache_path"}}
+
+    monkeypatch.setattr(seg_module, "_get_backend_instance", lambda *_args, **_kwargs: _FakeBackend())
+
+    config = EnhanceConfig(enable_material_segmentation=True, material_segmentation_backend="efficientsam", depth_device="cpu")
+    masks = segment_materials(sample_image, config)
+
+    assert "glass" in masks
+    metadata = get_last_segmentation_runtime_metadata()
+    assert metadata is not None
+    assert metadata["clip_runtime"]["weights_source"] == "cache_path"
 
 
 @pytest.mark.ml
