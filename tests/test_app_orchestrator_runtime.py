@@ -8,9 +8,11 @@ import asyncio
 import importlib
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Dict
 
 import pytest
@@ -32,6 +34,101 @@ class _FakeRequest:
 def _flag_value(argv: list[str], flag: str) -> str:
     idx = argv.index(flag)
     return argv[idx + 1]
+
+
+def _extract_js_function_body(content: str, function_name: str) -> str:
+    marker = f"function {function_name}("
+    start = content.find(marker)
+    if start < 0:
+        raise AssertionError(f"{function_name} not found")
+    brace_start = content.find("{", start)
+    if brace_start < 0:
+        raise AssertionError(f"{function_name} opening brace not found")
+
+    depth = 0
+    for idx in range(brace_start, len(content)):
+        char = content[idx]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return content[brace_start + 1 : idx]
+    raise AssertionError(f"{function_name} closing brace not found")
+
+
+def _extract_portal_canonical_lux_arg_keys(content: str) -> set[str]:
+    body = _extract_js_function_body(content, "buildCanonicalLuxDepthArgs")
+    args_match = re.search(r"const args = \{(.*?)\n\s*\};", body, flags=re.DOTALL)
+    if args_match is None:
+        raise AssertionError("buildCanonicalLuxDepthArgs args object not found")
+    args_body = args_match.group(1)
+    explicit_keys = set(re.findall(r"^\s*([a-z_][a-z0-9_]*)\s*:", args_body, flags=re.MULTILINE))
+    shorthand_keys = set(re.findall(r"^\s*([a-z_][a-z0-9_]*)\s*,?\s*$", args_body, flags=re.MULTILINE))
+    conditional_keys = set(re.findall(r"\bargs\.([a-z_][a-z0-9_]*)\s*=", body))
+    return explicit_keys | shorthand_keys | conditional_keys
+
+
+def _extract_portal_lux_cli_flags(content: str) -> set[str]:
+    body = _extract_js_function_body(content, "renderCLI")
+    lux_block = re.search(
+        r"if \(payload\.pipeline === 'lux-depth-v3'\) \{(.*?)\n\s*\} else \{",
+        body,
+        flags=re.DOTALL,
+    )
+    if lux_block is None:
+        raise AssertionError("renderCLI lux-depth-v3 block not found")
+    return set(re.findall(r"--[a-z0-9-]+", lux_block.group(1)))
+
+
+def _capture_lux_cli_config_from_args(cli_args: list[str]) -> object:
+    from unittest.mock import MagicMock, patch
+
+    from typer.testing import CliRunner
+
+    from transformation_portal.lux_depth_v3.__main__ import app as lux_cli_app
+
+    captured: Dict[str, object] = {}
+
+    def _mock_orchestrator_init(config, output_root):
+        del output_root
+        captured["config"] = config
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.enhance_batch.return_value = [{"status": "ok"}]
+        return mock_orchestrator
+
+    with patch(
+        "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+        side_effect=_mock_orchestrator_init,
+    ):
+        result = CliRunner().invoke(lux_cli_app, cli_args)
+    assert result.exit_code == 0, result.stdout
+    assert "config" in captured
+    return captured["config"]
+
+
+def _run_card_fingerprint_from_config(config: object) -> Dict[str, object]:
+    from transformation_portal.lux_depth_v3.config import ModelVariant
+    from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+    if getattr(config, "model_variant", None) is None:
+        setattr(config, "model_variant", ModelVariant.METRIC_LARGE)
+
+    orch = object.__new__(EnhanceOrchestrator)
+    orch.config = config
+    requested_backend = getattr(config, "depth_backend", None) or "da3"
+    resolved_backend = (
+        "da3"
+        if str(requested_backend).strip().lower() in {"depth-anything-v3", "depth_anything_v3"}
+        else str(requested_backend).strip().lower()
+    )
+    orch._backend_metadata = SimpleNamespace(
+        requested_backend=str(requested_backend).strip().lower(),
+        resolved_backend=resolved_backend,
+        device=getattr(config, "depth_device", "cpu"),
+    )
+    orch._is_apex_tier = lambda: str(getattr(config, "quality_tier", "standard")).strip().lower() == "apex"
+    return orch._build_run_card_config_fingerprint()
 
 
 def _build_request(
@@ -158,6 +255,252 @@ def test_argv_normalization_depth_backend_is_case_insensitive() -> None:
 
     argv = orchestrator_app._argv_from_request(payload)
     assert _flag_value(argv, "--depth-backend") == "da3"
+
+
+def test_argv_normalization_trims_and_normalizes_string_values() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+            "preset": " premium ",
+            "quality_tier": " APEX ",
+            "depth_backend": " Depth_Pro ",
+            "depth_device": "  cpu  ",
+            "materials_v3": "on",
+            "pbr": "false",
+            "cache_depth": "off",
+            "enable_v2": "off",
+            "emit_master16": "true",
+            "emit_upscaled16": "1",
+            "emit_marketing": "0",
+            "emit_report": "yes",
+            "emit_run_card": "no",
+        },
+    }
+
+    argv = orchestrator_app._argv_from_request(payload)
+
+    assert _flag_value(argv, "--preset") == "premium"
+    assert _flag_value(argv, "--quality-tier") == "apex"
+    assert _flag_value(argv, "--depth-backend") == "depth_pro"
+    assert _flag_value(argv, "--depth-device") == "cpu"
+    assert _flag_value(argv, "--materials-v3") == "on"
+    assert _flag_value(argv, "--pbr") == "off"
+    assert _flag_value(argv, "--cache-depth") == "off"
+    assert _flag_value(argv, "--enable-v2") == "off"
+    assert "--v2-preset" not in argv
+    assert _flag_value(argv, "--emit-marketing") == "off"
+    assert _flag_value(argv, "--emit-report") == "on"
+    assert _flag_value(argv, "--emit-run-card") == "off"
+
+
+def test_portal_cli_template_excludes_unsupported_lux_flags() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    assert "--emit-manifest" not in content
+    assert "--emit-provenance" not in content
+    assert "--enable-segmentation" in content
+    assert "--segmentation-backend" in content
+    assert "--sam2-model-size" in content
+    assert "--strict-segmentation" in content
+
+
+def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    canonical_keys = _extract_portal_canonical_lux_arg_keys(content)
+    portal_cli_flags = _extract_portal_lux_cli_flags(content)
+
+    arg_to_flag = {
+        "preset": "--preset",
+        "quality_tier": "--quality-tier",
+        "depth_backend": "--depth-backend",
+        "depth_device": "--depth-device",
+        "enable_segmentation": "--enable-segmentation",
+        "segmentation_backend": "--segmentation-backend",
+        "sam2_model_size": "--sam2-model-size",
+        "strict_segmentation": "--strict-segmentation",
+        "materials_v3": "--materials-v3",
+        "pbr": "--pbr",
+        "cache_depth": "--cache-depth",
+        "enable_v2": "--enable-v2",
+        "v2_preset": "--v2-preset",
+        "emit_master16": "--emit-master16",
+        "emit_upscaled16": "--emit-upscaled16",
+        "emit_marketing": "--emit-marketing",
+        "emit_report": "--emit-report",
+        "emit_run_card": "--emit-run-card",
+        "non_commercial_ok": "--non-commercial-ok",
+        "accept_apple_depth_pro_research_license": "--accept-apple-depth-pro-research-license",
+    }
+
+    for key, flag in arg_to_flag.items():
+        assert key in canonical_keys, f"portal canonical args missing key '{key}'"
+        assert flag in portal_cli_flags, f"portal CLI preview missing flag '{flag}'"
+
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output/lux_depth_v3_apex_verify",
+            "preset": "depth-anything-v3.1-research-m4",
+            "quality_tier": "apex",
+            "depth_backend": "depth_pro",
+            "depth_device": "cpu",
+            "enable_segmentation": True,
+            "segmentation_backend": "sam2",
+            "sam2_model_size": "large",
+            "strict_segmentation": True,
+            "materials_v3": True,
+            "pbr": True,
+            "cache_depth": False,
+            "emit_master16": True,
+            "emit_upscaled16": False,
+            "emit_marketing": False,
+            "emit_report": True,
+            "emit_run_card": True,
+            "enable_v2": True,
+            "v2_preset": "default",
+            "non_commercial_ok": True,
+            "accept_apple_depth_pro_research_license": True,
+        },
+    }
+    argv = orchestrator_app._argv_from_request(payload)
+
+    for flag in arg_to_flag.values():
+        assert flag in argv, f"backend argv missing flag '{flag}'"
+
+    assert _flag_value(argv, "--preset") == "depth-anything-v3.1-research-m4"
+    assert _flag_value(argv, "--quality-tier") == "apex"
+    assert _flag_value(argv, "--depth-backend") == "depth_pro"
+    assert _flag_value(argv, "--depth-device") == "cpu"
+    assert _flag_value(argv, "--enable-segmentation") == "on"
+    assert _flag_value(argv, "--segmentation-backend") == "sam2"
+    assert _flag_value(argv, "--sam2-model-size") == "large"
+    assert "--strict-segmentation" in argv
+    assert _flag_value(argv, "--materials-v3") == "on"
+    assert _flag_value(argv, "--pbr") == "on"
+    assert _flag_value(argv, "--cache-depth") == "off"
+    assert _flag_value(argv, "--emit-master16") == "on"
+    assert _flag_value(argv, "--emit-upscaled16") == "off"
+    assert _flag_value(argv, "--emit-marketing") == "off"
+    assert _flag_value(argv, "--emit-report") == "on"
+    assert _flag_value(argv, "--emit-run-card") == "on"
+    assert _flag_value(argv, "--enable-v2") == "on"
+    assert _flag_value(argv, "--v2-preset") == "default"
+    assert _flag_value(argv, "--non-commercial-ok") == "true"
+    assert _flag_value(argv, "--accept-apple-depth-pro-research-license") == "true"
+
+
+def test_lux_ui_backend_and_direct_cli_paths_share_config_fingerprint(tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    input_dir.mkdir(parents=True, exist_ok=True)
+    (input_dir / "frame.jpg").touch()
+
+    portal_payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": str(input_dir),
+            "output_dir": str(tmp_path / "output_ui"),
+            "preset": "depth-anything-v3.1-research-m4",
+            "quality_tier": "apex",
+            "depth_backend": "depth_pro",
+            "depth_device": "cpu",
+            "enable_segmentation": True,
+            "segmentation_backend": "sam2",
+            "sam2_model_size": "large",
+            "strict_segmentation": True,
+            "materials_v3": True,
+            "pbr": True,
+            "cache_depth": False,
+            "emit_master16": True,
+            "emit_upscaled16": False,
+            "emit_marketing": False,
+            "emit_report": True,
+            "emit_run_card": True,
+            "enable_v2": True,
+            "v2_preset": "default",
+            "non_commercial_ok": True,
+            "accept_apple_depth_pro_research_license": True,
+        },
+    }
+    portal_argv = orchestrator_app._argv_from_request(portal_payload)
+    assert portal_argv[0] == "lux-depth-v3"
+
+    portal_path_config = _capture_lux_cli_config_from_args(portal_argv[1:])
+    portal_path_fingerprint = _run_card_fingerprint_from_config(portal_path_config)
+
+    direct_cli_args = [
+        "--input-dir",
+        str(input_dir),
+        "--output-dir",
+        str(tmp_path / "output_cli"),
+        "--preset",
+        "depth-anything-v3.1-research-m4",
+        "--quality-tier",
+        "apex",
+        "--depth-backend",
+        "depth_pro",
+        "--depth-device",
+        "cpu",
+        "--materials-v3",
+        "yes",
+        "--enable-segmentation",
+        "on",
+        "--segmentation-backend",
+        "sam2",
+        "--sam2-model-size",
+        "large",
+        "--strict-segmentation",
+        "--pbr",
+        "true",
+        "--cache-depth",
+        "0",
+        "--emit-master16",
+        "1",
+        "--emit-upscaled16",
+        "off",
+        "--emit-marketing",
+        "false",
+        "--emit-report",
+        "on",
+        "--emit-run-card",
+        "on",
+        "--enable-v2",
+        "on",
+        "--v2-preset",
+        "default",
+        "--non-commercial-ok",
+        "true",
+        "--accept-apple-depth-pro-research-license",
+        "true",
+    ]
+    direct_cli_config = _capture_lux_cli_config_from_args(direct_cli_args)
+    direct_cli_fingerprint = _run_card_fingerprint_from_config(direct_cli_config)
+
+    assert portal_path_fingerprint["canonical_json"] == direct_cli_fingerprint["canonical_json"]
+    assert portal_path_fingerprint["sha256"] == direct_cli_fingerprint["sha256"]
+
+
+def test_argv_normalization_includes_segmentation_controls() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+            "enable_segmentation": True,
+            "segmentation_backend": "sam2",
+            "sam2_model_size": "large",
+            "strict_segmentation": True,
+        },
+    }
+
+    argv = orchestrator_app._argv_from_request(payload)
+    assert _flag_value(argv, "--enable-segmentation") == "on"
+    assert _flag_value(argv, "--segmentation-backend") == "sam2"
+    assert _flag_value(argv, "--sam2-model-size") == "large"
+    assert "--strict-segmentation" in argv
 
 
 def test_argv_archive_gate_a_defaults_to_fixity_scan_runner() -> None:

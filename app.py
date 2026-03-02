@@ -209,6 +209,8 @@ ARCHIVE_GATE_ALLOWED_COMMANDS = {
 }
 ALLOWED_QUALITY = {"standard", "premium", "apex"}
 ALLOWED_BACKENDS = {"da3", "depth_pro"}
+ALLOWED_SEGMENTATION_BACKENDS = {"stub", "efficientsam", "sam2"}
+ALLOWED_SAM2_MODEL_SIZES = {"base", "large"}
 DEPTH_BACKEND_ALIASES = {
     "depth_anything_v3": "da3",
     "depth-anything-v3": "da3",
@@ -218,6 +220,8 @@ VALIDATION_REASON_CODES = {
     "input_dir and output_dir are required": "missing_required_paths",
     "Invalid quality_tier": "invalid_quality_tier",
     "Invalid depth_backend": "invalid_depth_backend",
+    "Invalid segmentation_backend": "invalid_segmentation_backend",
+    "Invalid sam2_model_size": "invalid_sam2_model_size",
     "Archive governance runner unavailable": "archive_runner_unavailable",
     "Invalid archive_command": "invalid_archive_command",
     "Invalid archive integer option": "invalid_archive_integer_option",
@@ -979,15 +983,26 @@ def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
 
     # Pipeline-specific argument building
     if pipeline == "lux-depth-v3":
-        quality = _pick(args, "quality_tier", "qualityTier", default="standard")
+        quality = str(_pick(args, "quality_tier", "qualityTier", default="standard") or "standard").strip().lower()
         backend = _canonical_depth_backend(_pick(args, "depth_backend", "depthBackend", default="da3"))
-        preset = _pick(args, "preset", default="premium")
-        depth_device = _pick(args, "depth_device", "depthDevice")
+        preset = str(_pick(args, "preset", default="premium") or "premium").strip() or "premium"
+        depth_device_raw = _pick(args, "depth_device", "depthDevice")
+        depth_device = str(depth_device_raw).strip() if depth_device_raw is not None else ""
+        segmentation_backend = (
+            str(_pick(args, "segmentation_backend", "segmentationBackend", default="stub") or "stub").strip().lower()
+        )
+        sam2_model_size = str(_pick(args, "sam2_model_size", "sam2ModelSize", default="base") or "base").strip().lower()
+        enable_segmentation = _pick(args, "enable_segmentation", "enableSegmentation", default=False)
+        strict_segmentation = _pick(args, "strict_segmentation", "strictSegmentation", default=False)
 
         if quality not in ALLOWED_QUALITY:
             raise ValueError("Invalid quality_tier")
         if backend not in ALLOWED_BACKENDS:
             raise ValueError("Invalid depth_backend")
+        if segmentation_backend not in ALLOWED_SEGMENTATION_BACKENDS:
+            raise ValueError("Invalid segmentation_backend")
+        if sam2_model_size not in ALLOWED_SAM2_MODEL_SIZES:
+            raise ValueError("Invalid sam2_model_size")
 
         argv.extend(
             [
@@ -997,6 +1012,10 @@ def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
                 quality,
                 "--depth-backend",
                 backend,
+                "--enable-segmentation",
+                onoff(enable_segmentation),
+                "--segmentation-backend",
+                segmentation_backend,
                 "--materials-v3",
                 onoff(_pick(args, "materials_v3", "materials", default=False)),
                 "--pbr",
@@ -1005,6 +1024,10 @@ def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
                 onoff(_pick(args, "cache_depth", "cacheDepth", default=False)),
             ]
         )
+        if segmentation_backend == "sam2":
+            argv.extend(["--sam2-model-size", sam2_model_size])
+        if _as_bool(strict_segmentation, default=False):
+            argv.append("--strict-segmentation")
 
         if depth_device:
             argv.extend(["--depth-device", str(depth_device)])

@@ -210,6 +210,39 @@
                                 <option value="depth_pro">depth_pro (Research-Only)</option>
                             </select>
                         </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                            <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 px-4 py-3.5 cursor-pointer group transition-colors">
+                                <span class="text-[12px] font-medium select-none text-slate-700 dark:text-slate-300">Enable Segmentation</span>
+                                <div class="relative inline-flex items-center">
+                                    <input type="checkbox" id="enableSegmentation" role="switch" class="sr-only peer" checked />
+                                    <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
+                                    <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
+                                </div>
+                            </label>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="segmentationBackend">Segmentation Backend</label>
+                                <select id="segmentationBackend" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                    <option value="sam2" selected>sam2</option>
+                                    <option value="efficientsam">efficientsam</option>
+                                    <option value="stub">stub</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="sam2ModelSize">SAM2 Model Size</label>
+                                <select id="sam2ModelSize" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                    <option value="base">base</option>
+                                    <option value="large" selected>large</option>
+                                </select>
+                            </div>
+                            <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 px-4 py-3.5 cursor-pointer group transition-colors">
+                                <span class="text-[12px] font-medium select-none text-slate-700 dark:text-slate-300">Strict Segmentation</span>
+                                <div class="relative inline-flex items-center">
+                                    <input type="checkbox" id="strictSegmentation" role="switch" class="sr-only peer" checked />
+                                    <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
+                                    <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
+                                </div>
+                            </label>
+                        </div>
                     </div>
 
                     <!-- Archive Gate Fields -->
@@ -437,6 +470,12 @@
                 qualityTier: 'apex',
                 depthBackend: 'da3',
                 depthDevice: 'cpu',
+                segmentation: {
+                    enable: true,
+                    backend: 'sam2',
+                    sam2ModelSize: 'large',
+                    strict: true
+                },
                 flags: {
                     materials: true, pbr: true, cache: true, overwrite: false, enableV2: false
                 },
@@ -467,6 +506,12 @@
             qualityTier: document.getElementById('qualityTier'),
             depthBackend: document.getElementById('depthBackend'),
             depthDevice: document.getElementById('depthDevice'),
+            segmentation: {
+                enable: document.getElementById('enableSegmentation'),
+                backend: document.getElementById('segmentationBackend'),
+                sam2ModelSize: document.getElementById('sam2ModelSize'),
+                strict: document.getElementById('strictSegmentation')
+            },
 
             flags: {
                 materials: document.getElementById('flagMaterials'),
@@ -778,10 +823,161 @@
             }
         }
 
+        const TRUTHY_VALUES = new Set(['1', 'true', 'yes', 'on']);
+        const FALSY_VALUES = new Set(['0', 'false', 'no', 'off']);
+        const LUX_QUALITY_TIERS = new Set(['standard', 'premium', 'apex']);
+        const LUX_DEPTH_BACKENDS = new Set(['da3', 'depth_pro']);
+        const LUX_SEGMENTATION_BACKENDS = new Set(['stub', 'efficientsam', 'sam2']);
+        const SAM2_MODEL_SIZES = new Set(['base', 'large']);
+
+        function parseBoolLike(value, defaultValue = false) {
+            if (value === null || value === undefined) return defaultValue;
+            if (typeof value === 'boolean') return value;
+            if (typeof value === 'number') return value !== 0;
+            const normalized = String(value).trim().toLowerCase();
+            if (!normalized) return defaultValue;
+            if (TRUTHY_VALUES.has(normalized)) return true;
+            if (FALSY_VALUES.has(normalized)) return false;
+            return defaultValue;
+        }
+
         function canonicalDepthBackend(value) {
-            if (!value) return 'da3';
-            if (value === 'depth_anything_v3' || value === 'depth-anything-v3') return 'da3';
-            return value;
+            const backend = String(value || '').trim().toLowerCase();
+            if (!backend) return 'da3';
+            if (backend === 'depth_anything_v3' || backend === 'depth-anything-v3') return 'da3';
+            return backend;
+        }
+
+        function _textOrFallback(value, fallback = '') {
+            const text = String(value ?? '').trim();
+            if (text) return text;
+            return String(fallback ?? '').trim();
+        }
+
+        function _resolveQualityTier(value) {
+            const normalized = String(value || '').trim().toLowerCase();
+            if (LUX_QUALITY_TIERS.has(normalized)) return normalized;
+            return 'standard';
+        }
+
+        function _resolveDepthBackend(value) {
+            const normalized = canonicalDepthBackend(value);
+            if (LUX_DEPTH_BACKENDS.has(normalized)) return normalized;
+            return 'da3';
+        }
+
+        function _resolveSegmentationBackend(value) {
+            const normalized = String(value || '').trim().toLowerCase();
+            if (LUX_SEGMENTATION_BACKENDS.has(normalized)) return normalized;
+            return 'stub';
+        }
+
+        function _resolveSam2ModelSize(value) {
+            const normalized = String(value || '').trim().toLowerCase();
+            if (SAM2_MODEL_SIZES.has(normalized)) return normalized;
+            return 'base';
+        }
+
+        function syncSegmentationControlState(config) {
+            if (!els.segmentation.sam2ModelSize || !els.segmentation.backend) return;
+            const backend = _resolveSegmentationBackend(config.segmentation?.backend);
+            els.segmentation.sam2ModelSize.disabled = backend !== 'sam2';
+        }
+
+        function buildCanonicalLuxDepthArgs(config) {
+            const preset = _textOrFallback(
+                els.presetSelect ? els.presetSelect.value : config.preset,
+                config.preset || 'premium'
+            ) || 'premium';
+            const qualityTier = _resolveQualityTier(
+                _textOrFallback(els.qualityTier ? els.qualityTier.value : config.qualityTier, config.qualityTier || 'standard')
+            );
+            const depthBackend = _resolveDepthBackend(
+                _textOrFallback(els.depthBackend ? els.depthBackend.value : config.depthBackend, config.depthBackend || 'da3')
+            );
+            const depthDevice = _textOrFallback(
+                els.depthDevice ? els.depthDevice.value : config.depthDevice,
+                config.depthDevice || ''
+            );
+            const segmentationEnable = els.segmentation.enable
+                ? Boolean(els.segmentation.enable.checked)
+                : parseBoolLike(config.segmentation?.enable, false);
+            const segmentationBackend = _resolveSegmentationBackend(
+                _textOrFallback(
+                    els.segmentation.backend ? els.segmentation.backend.value : config.segmentation?.backend,
+                    config.segmentation?.backend || 'stub'
+                )
+            );
+            const sam2ModelSize = _resolveSam2ModelSize(
+                _textOrFallback(
+                    els.segmentation.sam2ModelSize ? els.segmentation.sam2ModelSize.value : config.segmentation?.sam2ModelSize,
+                    config.segmentation?.sam2ModelSize || 'base'
+                )
+            );
+            const strictSegmentation = els.segmentation.strict
+                ? Boolean(els.segmentation.strict.checked)
+                : parseBoolLike(config.segmentation?.strict, false);
+            const v2Preset = _textOrFallback(els.v2Preset ? els.v2Preset.value : config.v2Preset, config.v2Preset || 'default');
+
+            const materialsV3 = els.flags.materials
+                ? Boolean(els.flags.materials.checked)
+                : parseBoolLike(config.flags?.materials, false);
+            const pbr = els.flags.pbr
+                ? Boolean(els.flags.pbr.checked)
+                : parseBoolLike(config.flags?.pbr, false);
+            const cacheDepth = els.flags.cache
+                ? Boolean(els.flags.cache.checked)
+                : parseBoolLike(config.flags?.cache, false);
+            const enableV2 = els.flags.enableV2
+                ? Boolean(els.flags.enableV2.checked)
+                : parseBoolLike(config.flags?.enableV2, false);
+
+            const emitMaster16 = els.emits.master16
+                ? Boolean(els.emits.master16.checked)
+                : parseBoolLike(config.emits?.master16, true);
+            const emitUpscaled16 = els.emits.upscaled16
+                ? Boolean(els.emits.upscaled16.checked)
+                : parseBoolLike(config.emits?.upscaled16, true);
+            const emitMarketing = els.emits.marketing
+                ? Boolean(els.emits.marketing.checked)
+                : parseBoolLike(config.emits?.marketing, false);
+            const emitReport = els.emits.report
+                ? Boolean(els.emits.report.checked)
+                : parseBoolLike(config.emits?.report, true);
+            const emitRunCard = els.emits.runCard
+                ? Boolean(els.emits.runCard.checked)
+                : parseBoolLike(config.emits?.runCard, true);
+
+            const nonCommercialOk = els.licenses.nonCommercialOk
+                ? Boolean(els.licenses.nonCommercialOk.checked)
+                : parseBoolLike(config.licenses?.nonCommercialOk, false);
+            const acceptApple = els.licenses.acceptApple
+                ? Boolean(els.licenses.acceptApple.checked)
+                : parseBoolLike(config.licenses?.acceptApple, false);
+
+            const args = {
+                preset,
+                quality_tier: qualityTier,
+                depth_backend: depthBackend,
+                enable_segmentation: segmentationEnable,
+                segmentation_backend: segmentationBackend,
+                sam2_model_size: sam2ModelSize,
+                strict_segmentation: strictSegmentation,
+                materials_v3: materialsV3,
+                pbr,
+                cache_depth: cacheDepth,
+                enable_v2: enableV2,
+                v2_preset: v2Preset,
+                emit_master16: emitMaster16,
+                emit_upscaled16: emitUpscaled16,
+                emit_marketing: emitMarketing,
+                emit_report: emitReport,
+                emit_run_card: emitRunCard,
+                non_commercial_ok: nonCommercialOk,
+                accept_apple_depth_pro_research_license: acceptApple
+            };
+            if (depthDevice) args.depth_device = depthDevice;
+            return args;
         }
 
         function seedPresetFallbacks() {
@@ -871,7 +1067,26 @@
             }
 
             const c = state.config;
-            c.depthBackend = canonicalDepthBackend(c.depthBackend);
+            c.depthBackend = _resolveDepthBackend(c.depthBackend);
+            c.segmentation = c.segmentation || {};
+            c.segmentation.enable = parseBoolLike(c.segmentation.enable, false);
+            c.segmentation.backend = _resolveSegmentationBackend(c.segmentation.backend);
+            c.segmentation.sam2ModelSize = _resolveSam2ModelSize(c.segmentation.sam2ModelSize);
+            c.segmentation.strict = parseBoolLike(c.segmentation.strict, false);
+            c.flags.materials = parseBoolLike(c.flags.materials, false);
+            c.flags.pbr = parseBoolLike(c.flags.pbr, false);
+            c.flags.cache = parseBoolLike(c.flags.cache, false);
+            c.flags.overwrite = parseBoolLike(c.flags.overwrite, false);
+            c.flags.enableV2 = parseBoolLike(c.flags.enableV2, false);
+            c.emits.master16 = parseBoolLike(c.emits.master16, true);
+            c.emits.upscaled16 = parseBoolLike(c.emits.upscaled16, true);
+            c.emits.marketing = parseBoolLike(c.emits.marketing, false);
+            c.emits.report = parseBoolLike(c.emits.report, true);
+            c.emits.runCard = parseBoolLike(c.emits.runCard, true);
+            c.gate.dedup = parseBoolLike(c.gate.dedup, true);
+            c.gate.sign = parseBoolLike(c.gate.sign, true);
+            c.licenses.nonCommercialOk = parseBoolLike(c.licenses.nonCommercialOk, false);
+            c.licenses.acceptApple = parseBoolLike(c.licenses.acceptApple, false);
             applyPipelinePresetOptions(state.pipeline);
             if (els.presetSelect) els.presetSelect.value = c.preset;
             if (els.inputDir) els.inputDir.value = c.inputDir;
@@ -879,6 +1094,8 @@
             if (els.qualityTier) els.qualityTier.value = c.qualityTier;
             if (els.depthBackend) els.depthBackend.value = c.depthBackend;
             if (els.depthDevice) els.depthDevice.value = c.depthDevice;
+            if (els.segmentation.backend) els.segmentation.backend.value = c.segmentation.backend;
+            if (els.segmentation.sam2ModelSize) els.segmentation.sam2ModelSize.value = c.segmentation.sam2ModelSize;
             if (els.v2Preset) {
                 els.v2Preset.value = c.v2Preset;
                 els.v2Preset.disabled = !c.flags.enableV2;
@@ -898,6 +1115,8 @@
             safeSyncCheck(els.flags.cache, c.flags.cache);
             safeSyncCheck(els.flags.overwrite, c.flags.overwrite);
             safeSyncCheck(els.flags.enableV2, c.flags.enableV2);
+            safeSyncCheck(els.segmentation.enable, c.segmentation.enable);
+            safeSyncCheck(els.segmentation.strict, c.segmentation.strict);
 
             safeSyncCheck(els.emits.master16, c.emits.master16);
             safeSyncCheck(els.emits.upscaled16, c.emits.upscaled16);
@@ -910,6 +1129,7 @@
 
             safeSyncCheck(els.licenses.nonCommercialOk, c.licenses.nonCommercialOk);
             safeSyncCheck(els.licenses.acceptApple, c.licenses.acceptApple);
+            syncSegmentationControlState(c);
 
             renderCLI();
         }
@@ -919,34 +1139,28 @@
             const c = state.config;
 
             let args = {
-                input_dir: c.inputDir,
-                output_dir: c.outputDir,
-                overwrite: c.flags.overwrite
+                input_dir: _textOrFallback(els.inputDir ? els.inputDir.value : c.inputDir, c.inputDir),
+                output_dir: _textOrFallback(els.outputDir ? els.outputDir.value : c.outputDir, c.outputDir),
+                overwrite: els.flags.overwrite
+                    ? Boolean(els.flags.overwrite.checked)
+                    : parseBoolLike(c.flags.overwrite, false)
             };
 
             if (p === 'lux-depth-v3') {
-                const depthBackend = canonicalDepthBackend(c.depthBackend);
                 args = {
                     ...args,
-                    preset: c.preset,
-                    quality_tier: c.qualityTier,
-                    depth_backend: depthBackend,
-                    depth_device: c.depthDevice,
-                    materials_v3: c.flags.materials,
-                    pbr: c.flags.pbr,
-                    cache_depth: c.flags.cache,
-                    enable_v2: c.flags.enableV2,
-                    v2_preset: c.v2Preset,
-                    emit_master16: c.emits.master16,
-                    emit_upscaled16: c.emits.upscaled16,
-                    emit_marketing: c.emits.marketing,
-                    emit_report: c.emits.report,
-                    emit_run_card: c.emits.runCard,
-                    non_commercial_ok: c.licenses.nonCommercialOk,
-                    accept_apple_depth_pro_research_license: c.licenses.acceptApple
+                    ...buildCanonicalLuxDepthArgs(c)
                 };
             } else {
-                args = { ...args, dedup: c.gate.dedup, sign: c.gate.sign };
+                args = {
+                    ...args,
+                    dedup: els.gateDedup
+                        ? Boolean(els.gateDedup.checked)
+                        : parseBoolLike(c.gate.dedup, true),
+                    sign: els.gateSign
+                        ? Boolean(els.gateSign.checked)
+                        : parseBoolLike(c.gate.sign, true)
+                };
             }
 
             return { pipeline: p, args };
@@ -956,7 +1170,7 @@
             if (!els.cliPreview) return;
             const payload = generatePayload();
             const q = (v) => `"${String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
-            const onoff = (v) => (v ? '"on"' : '"off"');
+            const onoff = (v) => (parseBoolLike(v, false) ? '"on"' : '"off"');
 
             const cliLines = [
                 `${payload.pipeline}`,
@@ -964,33 +1178,43 @@
                 `  --output-dir ${q(payload.args.output_dir)}`
             ];
 
-            if (payload.pipeline === 'lux-depth-v3') {
-                cliLines.push(`  --preset ${q(payload.args.preset)}`);
-                cliLines.push(`  --quality-tier ${q(payload.args.quality_tier)}`);
-                cliLines.push(`  --depth-backend ${q(payload.args.depth_backend)}`);
-                cliLines.push(`  --depth-device ${q(payload.args.depth_device)}`);
-                cliLines.push(`  --materials-v3 ${onoff(payload.args.materials_v3)}`);
-                cliLines.push(`  --pbr ${onoff(payload.args.pbr)}`);
-                cliLines.push(`  --cache-depth ${onoff(payload.args.cache_depth)}`);
-                cliLines.push(`  --emit-master16 ${onoff(payload.args.emit_master16)}`);
+                if (payload.pipeline === 'lux-depth-v3') {
+                    cliLines.push(`  --preset ${q(payload.args.preset)}`);
+                    cliLines.push(`  --quality-tier ${q(payload.args.quality_tier)}`);
+                    cliLines.push(`  --depth-backend ${q(payload.args.depth_backend)}`);
+                    if (payload.args.depth_device) {
+                        cliLines.push(`  --depth-device ${q(payload.args.depth_device)}`);
+                    }
+                    cliLines.push(`  --materials-v3 ${onoff(payload.args.materials_v3)}`);
+                    cliLines.push(`  --enable-segmentation ${onoff(payload.args.enable_segmentation)}`);
+                    cliLines.push(`  --segmentation-backend ${q(payload.args.segmentation_backend)}`);
+                    if (payload.args.segmentation_backend === 'sam2') {
+                        cliLines.push(`  --sam2-model-size ${q(payload.args.sam2_model_size)}`);
+                    }
+                    if (parseBoolLike(payload.args.strict_segmentation, false)) {
+                        cliLines.push(`  --strict-segmentation`);
+                    }
+                    cliLines.push(`  --pbr ${onoff(payload.args.pbr)}`);
+                    cliLines.push(`  --cache-depth ${onoff(payload.args.cache_depth)}`);
+                    cliLines.push(`  --emit-master16 ${onoff(payload.args.emit_master16)}`);
                 cliLines.push(`  --emit-upscaled16 ${onoff(payload.args.emit_upscaled16)}`);
                 cliLines.push(`  --emit-marketing ${onoff(payload.args.emit_marketing)}`);
                 cliLines.push(`  --emit-report ${onoff(payload.args.emit_report)}`);
                 cliLines.push(`  --emit-run-card ${onoff(payload.args.emit_run_card)}`);
+                cliLines.push(`  --enable-v2 ${onoff(payload.args.enable_v2)}`);
 
-                if (payload.args.enable_v2) {
-                    cliLines.push(`  --enable-v2 "on"`);
+                if (parseBoolLike(payload.args.enable_v2, false) && payload.args.v2_preset) {
                     cliLines.push(`  --v2-preset ${q(payload.args.v2_preset)}`);
                 }
-                if (payload.args.depth_backend === 'depth_pro') {
-                    if (payload.args.non_commercial_ok) cliLines.push(`  --non-commercial-ok "true"`);
-                    if (payload.args.accept_apple_depth_pro_research_license) cliLines.push(`  --accept-apple-depth-pro-research-license "true"`);
+                if (parseBoolLike(payload.args.non_commercial_ok, false)) cliLines.push(`  --non-commercial-ok "true"`);
+                if (parseBoolLike(payload.args.accept_apple_depth_pro_research_license, false)) {
+                    cliLines.push(`  --accept-apple-depth-pro-research-license "true"`);
                 }
             } else {
-                if (payload.args.dedup) cliLines.push(`  --dedup "on"`);
-                if (payload.args.sign) cliLines.push(`  --sign "true"`);
+                if (parseBoolLike(payload.args.dedup, false)) cliLines.push(`  --dedup "on"`);
+                if (parseBoolLike(payload.args.sign, false)) cliLines.push(`  --sign "true"`);
             }
-            if (payload.args.overwrite) cliLines.push(`  --overwrite`);
+            if (parseBoolLike(payload.args.overwrite, false)) cliLines.push(`  --overwrite`);
 
             const cli = cliLines.map((line, idx) =>
                 idx === cliLines.length - 1 ? line : `${line} \\`
@@ -1040,6 +1264,8 @@
             safeBindText(els.qualityTier, null, 'qualityTier');
             safeBindText(els.depthBackend, null, 'depthBackend');
             safeBindText(els.depthDevice, null, 'depthDevice');
+            safeBindText(els.segmentation.backend, 'segmentation', 'backend');
+            safeBindText(els.segmentation.sam2ModelSize, 'segmentation', 'sam2ModelSize');
             safeBindInput(els.v2Preset, null, 'v2Preset');
 
             safeBindCheck(els.flags.materials, 'flags', 'materials');
@@ -1047,6 +1273,8 @@
             safeBindCheck(els.flags.cache, 'flags', 'cache');
             safeBindCheck(els.flags.overwrite, 'flags', 'overwrite');
             safeBindCheck(els.flags.enableV2, 'flags', 'enableV2');
+            safeBindCheck(els.segmentation.enable, 'segmentation', 'enable');
+            safeBindCheck(els.segmentation.strict, 'segmentation', 'strict');
 
             safeBindCheck(els.emits.master16, 'emits', 'master16');
             safeBindCheck(els.emits.upscaled16, 'emits', 'upscaled16');
@@ -1059,6 +1287,13 @@
 
             safeBindCheck(els.licenses.nonCommercialOk, 'licenses', 'nonCommercialOk');
             safeBindCheck(els.licenses.acceptApple, 'licenses', 'acceptApple');
+
+            if (els.segmentation.backend) {
+                els.segmentation.backend.addEventListener('change', () => {
+                    syncSegmentationControlState(state.config);
+                    renderCLI();
+                });
+            }
 
             if (els.apiKeyInput) {
                 els.apiKeyInput.addEventListener('input', _persistApiKeyFromInputs);
@@ -1383,10 +1618,31 @@
         }
 
         async function submitJob() {
-            if (state.pipeline === 'lux-depth-v3' && canonicalDepthBackend(state.config.depthBackend) === 'depth_pro') {
-                if (!state.config.licenses.nonCommercialOk || !state.config.licenses.acceptApple) {
+            const payload = generatePayload();
+
+            if (payload.pipeline === 'lux-depth-v3') {
+                const args = payload.args;
+                if (args.depth_backend === 'depth_pro' && (!parseBoolLike(args.non_commercial_ok, false) || !parseBoolLike(args.accept_apple_depth_pro_research_license, false))) {
                     createToast('Depth Pro requires acknowledgment of research/non-commercial licenses.', 'error');
                     return;
+                }
+                if (String(args.preset || '').toLowerCase().includes('v3.1') && !parseBoolLike(args.non_commercial_ok, false)) {
+                    createToast('v3.1 research preset requires non-commercial acknowledgment.', 'error');
+                    return;
+                }
+                if (args.quality_tier === 'apex' && parseBoolLike(args.materials_v3, false)) {
+                    if (!parseBoolLike(args.enable_segmentation, false)) {
+                        createToast('APEX + Materials V3 requires segmentation to be enabled.', 'error');
+                        return;
+                    }
+                    if (args.segmentation_backend === 'stub') {
+                        createToast('APEX + Materials V3 cannot use stub segmentation backend.', 'error');
+                        return;
+                    }
+                    if (!parseBoolLike(args.strict_segmentation, false)) {
+                        createToast('APEX + Materials V3 requires strict segmentation.', 'error');
+                        return;
+                    }
                 }
             }
 
@@ -1395,7 +1651,6 @@
                 els.runJobBtn.textContent = "Dispatching...";
             }
 
-            const payload = generatePayload();
             const randomId = window.crypto?.randomUUID ? window.crypto.randomUUID().replace(/-/g, '').slice(0, 8) : Math.random().toString(36).slice(2, 8);
             const localId = `job_${randomId}`;
 
@@ -1548,25 +1803,38 @@
                     c.inputDir = data.args.input_dir || c.inputDir;
                     c.outputDir = data.args.output_dir || c.outputDir;
                     c.preset = data.args.preset || c.preset;
-                    c.qualityTier = data.args.quality_tier || c.qualityTier;
-                    c.depthBackend = canonicalDepthBackend(data.args.depth_backend || c.depthBackend);
+                    c.qualityTier = _resolveQualityTier(data.args.quality_tier || c.qualityTier);
+                    c.depthBackend = _resolveDepthBackend(data.args.depth_backend || c.depthBackend);
                     c.depthDevice = data.args.depth_device || c.depthDevice;
+                    c.segmentation = c.segmentation || {};
+                    c.segmentation.enable = parseBoolLike(data.args.enable_segmentation, c.segmentation.enable);
+                    c.segmentation.backend = _resolveSegmentationBackend(data.args.segmentation_backend || c.segmentation.backend);
+                    c.segmentation.sam2ModelSize = _resolveSam2ModelSize(data.args.sam2_model_size || c.segmentation.sam2ModelSize);
+                    c.segmentation.strict = parseBoolLike(data.args.strict_segmentation, c.segmentation.strict);
 
-                    c.flags.materials = data.args.materials_v3 ?? c.flags.materials;
-                    c.flags.pbr = data.args.pbr ?? c.flags.pbr;
-                    c.flags.cache = data.args.cache_depth ?? c.flags.cache;
-                    c.flags.overwrite = !!data.args.overwrite;
-                    c.flags.enableV2 = !!data.args.enable_v2;
+                    c.flags.materials = parseBoolLike(data.args.materials_v3, c.flags.materials);
+                    c.flags.pbr = parseBoolLike(data.args.pbr, c.flags.pbr);
+                    c.flags.cache = parseBoolLike(data.args.cache_depth, c.flags.cache);
+                    c.flags.overwrite = parseBoolLike(data.args.overwrite, c.flags.overwrite);
+                    c.flags.enableV2 = parseBoolLike(data.args.enable_v2, c.flags.enableV2);
                     c.v2Preset = data.args.v2_preset || c.v2Preset;
 
-                    c.emits.master16 = data.args.emit_master16 ?? c.emits.master16;
-                    c.emits.upscaled16 = data.args.emit_upscaled16 ?? c.emits.upscaled16;
-                    c.emits.marketing = data.args.emit_marketing ?? c.emits.marketing;
-                    c.emits.report = data.args.emit_report ?? c.emits.report;
-                    c.emits.runCard = data.args.emit_run_card ?? c.emits.runCard;
+                    c.emits.master16 = parseBoolLike(data.args.emit_master16, c.emits.master16);
+                    c.emits.upscaled16 = parseBoolLike(data.args.emit_upscaled16, c.emits.upscaled16);
+                    c.emits.marketing = parseBoolLike(data.args.emit_marketing, c.emits.marketing);
+                    c.emits.report = parseBoolLike(data.args.emit_report, c.emits.report);
+                    c.emits.runCard = parseBoolLike(data.args.emit_run_card, c.emits.runCard);
 
-                    c.gate.dedup = data.args.dedup ?? c.gate.dedup;
-                    c.gate.sign = data.args.sign ?? c.gate.sign;
+                    c.gate.dedup = parseBoolLike(data.args.dedup, c.gate.dedup);
+                    c.gate.sign = parseBoolLike(data.args.sign, c.gate.sign);
+                    c.licenses.nonCommercialOk = parseBoolLike(
+                        data.args.non_commercial_ok,
+                        c.licenses.nonCommercialOk
+                    );
+                    c.licenses.acceptApple = parseBoolLike(
+                        data.args.accept_apple_depth_pro_research_license,
+                        c.licenses.acceptApple
+                    );
                 }
                 updateUIFromState();
                 void fetchPresetsForPipeline(state.pipeline, true);
