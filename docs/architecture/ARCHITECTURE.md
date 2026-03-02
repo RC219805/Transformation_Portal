@@ -41,16 +41,20 @@ Each module has a single, well-defined responsibility:
 ### Top-Level Organization
 
 ```
-transformation_portal/
-├── src/transformation_portal/    # Main package
-├── scripts/                      # Standalone utilities
-├── data/                         # Data files (gitignored)
+transformation_portal/              # Repository root
+├── src/                          # Installable package source
+│   ├── transformation_portal/    # Main package
+│   ├── tp/                       # Short alias package
+│   └── luxury_tiff_batch_processor/  # TIFF batch processor
+├── scripts/                      # Operational scripts and pipeline runners
+├── config/                       # YAML presets and configuration
+├── assets/                       # LUTs, branding, look assets
 ├── docs/                         # Documentation
-├── tests/                        # Test suite
-├── depth_pipeline/               # Existing depth processing
-├── luxury_tiff_batch_processor/  # Existing TIFF processor
-├── tools/                        # Editorial tools
-└── [LUT directories]/           # Film emulation & location LUTs
+├── tests/                        # Pytest suite
+├── tools/                        # Dev/ops tools (manifests, audits)
+├── workflows/                    # Workflow artifacts / ComfyUI workflows
+├── requirements/                 # Layered dependency sources (pip-tools)
+└── schemas/                      # JSON schemas for contracts
 ```
 
 ### Package Organization (src/transformation_portal/)
@@ -58,43 +62,30 @@ transformation_portal/
 ```
 transformation_portal/
 ├── __init__.py                   # Package root with lazy imports
+├── lux_depth_v3/                 # 🔑 Main depth processing pipeline
+│   ├── __main__.py               # CLI entry point
+│   ├── orchestrator.py           # Pipeline orchestration
+│   ├── config.py                 # Configuration management
+│   └── ...                       # Preprocessing, postprocessing, etc.
+├── depth/                        # Depth estimation backends
+│   ├── backends/                 # DA3, Depth Pro backends
+│   └── registry.py               # Backend selection
 ├── pipelines/                    # High-level workflows
-│   ├── __init__.py
-│   ├── lux_render_pipeline.py   # AI-powered render refinement
-│   ├── depth_tools.py            # Depth processing utilities
-│   └── dreaming_pipeline.py     # Visualization pipeline
+│   ├── lux_render_pipeline.py    # AI-powered render refinement
+│   └── depth_tools.py            # Depth processing utilities
 ├── processors/                   # Core processing engines
-│   ├── __init__.py
 │   ├── luxury_video_master_grader.py  # Video color grading
-│   └── material_response/             # Material-aware processing
-│       ├── __init__.py
-│       ├── core.py                    # Main MaterialResponse class
-│       └── optimizer.py               # Optimization algorithms
+│   └── material_response/        # Material-aware processing
 ├── enhancers/                    # Specialized enhancement
-│   ├── __init__.py
-│   ├── enhance_aerial.py         # Aerial photography enhancement
-│   ├── enhance_pool_aerial.py    # Pool-specific enhancement
-│   ├── board_material_aerial_enhancer.py  # Material palette assignment
-│   └── update_enhance_aerial.py  # Updated aerial enhancement
 ├── analyzers/                    # Analysis & monitoring
-│   ├── __init__.py
-│   ├── decision_decay_dashboard.py      # Code philosophy dashboard
-│   ├── codebase_philosophy_auditor.py   # Philosophy auditing
-│   └── parse_workflows.py               # Workflow parser
 ├── rendering/                    # Rendering workflows
-│   ├── __init__.py
-│   ├── coastal_estate_render.py         # Coastal estate preset
-│   ├── golden_hour_courtyard_workflow.py  # Golden hour preset
-│   └── process_renderings_750.py        # Batch rendering
+├── ingest/                       # RAW/TIFF ingest with provenance
+├── attestation/                  # Archive attestation CLI
+├── comfyui/                      # ComfyUI workflow integration
+├── spatial_ai/                   # Spatial AI features
+├── determinism/                  # Cross-ISA determinism tools
 ├── utils/                        # Shared utilities
-│   ├── __init__.py
-│   ├── color_science.py          # Color space operations
-│   └── helpers.py                # General helpers
 └── cli/                          # CLI entry points
-    ├── __init__.py
-    ├── render.py                 # Rendering CLI
-    ├── process.py                # Processing CLI
-    └── analyze.py                # Analysis CLI
 ```
 
 ## Module Responsibilities
@@ -437,23 +428,26 @@ def old_function():
 
 ## Future Architecture Goals
 
-### Short Term (v0.2.0)
-- [ ] Complete import migration
-- [ ] Remove root-level duplicates
-- [ ] Unified CLI interface
-- [ ] Comprehensive type hints
+### Completed (v2.0.0 - Current)
+- [x] Stable public API contracts (schema-aligned payloads)
+- [x] Preset stability taxonomy (stable / canary / experimental)
+- [x] Service hardening with `/ready` readiness checks
+- [x] Context-aware rendering workflows
+- [x] Unified CLI interface (`lux-depth-v3`)
+- [x] Backend registry with automatic fallback
+- [x] Performance monitoring (APEX System)
 
-### Medium Term (v0.3.0)
-- [ ] Plugin architecture
-- [ ] Async processing support
+### Near Term (v2.1.x)
+- [ ] Enhanced plugin architecture
+- [ ] Additional depth backend integrations
+- [ ] Async batch processing support
+- [ ] Extended RAW format support
+
+### Future (v3.0.0)
 - [ ] Distributed processing
-- [ ] Web API
-
-### Long Term (v1.0.0)
-- [ ] Stable public API
-- [ ] Comprehensive documentation
-- [ ] Performance optimizations
+- [ ] Web API improvements
 - [ ] Enterprise features
+- [ ] CoreML optimization for Apple Silicon
 
 ## Contributing
 
@@ -478,6 +472,6 @@ def old_function():
 
 ## Questions?
 
-- See [REFACTORING_2025.md](REFACTORING_2025.md) for migration guide
-- See [PERFORMANCE_OPTIMIZATION.md](PERFORMANCE_OPTIMIZATION.md) for performance tips
+- See [CONTRIBUTING.md](../CONTRIBUTING.md) for contribution guidelines
+- See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for common issues
 - Open an issue on GitHub for specific questions

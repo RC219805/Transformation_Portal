@@ -12,7 +12,7 @@
 | Topic | Canonical Document | Purpose |
 |-------|-------------------|---------|
 | **First Steps** | [README.md](../../README.md) | Project overview, installation, quick start |
-| **Setup & Installation** | [docs/SETUP_GUIDE.md](../SETUP_GUIDE.md) | Detailed installation for all tiers |
+| **Setup & Installation** | [docs/guides/SETUP_GUIDE.md](../guides/SETUP_GUIDE.md) | Detailed installation for all tiers |
 | **Contributing** | [CONTRIBUTING.md](../../CONTRIBUTING.md) | How to contribute code, docs, issues |
 | **Security** | [SECURITY.md](../../SECURITY.md) | Security policy, reporting vulnerabilities |
 | **Security Hardening Report** | [security_best_practices_report.md](../../security_best_practices_report.md) | Security findings and remediation status |
@@ -25,7 +25,7 @@
 
 | Topic | Canonical Document | Status |
 |-------|-------------------|--------|
-| **Architecture Overview** | [docs/ARCHITECTURE.md](../ARCHITECTURE.md) | ✅ Stable |
+| **Architecture Overview** | [docs/architecture/ARCHITECTURE.md](../architecture/ARCHITECTURE.md) | ✅ Stable |
 | **Ingest Determinism Policy (ADR-030)** | [docs/architecture/ADR-030-phase2-deterministic-raw-ingest.md](../architecture/ADR-030-phase2-deterministic-raw-ingest.md) | ✅ Implemented (Phase II) |
 | **Determinism Harness Spec (SPEC-DH-001)** | [docs/architecture/specifications/SPEC-DH-001.md](../architecture/specifications/SPEC-DH-001.md) | ✅ LOCKED (Phase II) |
 | **Certified Bounded Determinism Analysis (ANALYSIS-DH-001)** | [docs/architecture/analysis/ANALYSIS-DH-001.md](../architecture/analysis/ANALYSIS-DH-001.md) | ✅ Informative (Phase II) |
@@ -105,7 +105,8 @@ docs/
 
 The following docs are **deprecated** and will be removed:
 
-### Duplicate Architecture Docs → Use [docs/ARCHITECTURE.md](../ARCHITECTURE.md)
+### Duplicate Architecture Docs → Use [docs/architecture/ARCHITECTURE.md](../architecture/ARCHITECTURE.md)
+- ~~docs/ARCHITECTURE.md~~ (legacy root-level location)
 - ~~docs/ARCHITECTURE_PHILOSOPHY.md~~ (merged into ARCHITECTURE.md)
 - ~~docs/ARCHITECTURAL_CONTEXT_INTEGRATION.md~~ (superseded)
 - ~~docs/ARCHITECTURAL_WORKFLOW.md~~ (moved to ci/)
