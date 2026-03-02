@@ -205,7 +205,7 @@ make compile  # After editing .in files
 - Prevents version conflicts between layers
 
 ### Version Constraints
-- `.in` files use ranges (e.g., `numpy>=1.24,<2.3.0`)
+- `.in` files use ranges (e.g., `numpy>=1.24,<2.5.0`)
 - `.txt` files have exact pins (e.g., `numpy==2.2.6`)
 - Constraints balance flexibility (library users) vs reproducibility (deployments)
 

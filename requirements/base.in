@@ -3,7 +3,7 @@
 # Run `make compile` in this directory to generate pinned base.txt
 
 # Core array and image processing
-numpy>=1.24,<2.5.0         # upper bound aligned with current opencv compatibility policy
+numpy>=1.24,<2.5.0         # upper bound for OpenCV compatibility; see ADR-032
 Pillow>=10.0.0,<13
 scipy>=1.15,<2
 scikit-learn>=1.8.0,<2       # classical ML (used in core features)
