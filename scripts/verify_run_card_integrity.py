@@ -167,7 +167,7 @@ def _verify_config_fingerprint(run_card_payload: dict[str, Any], errors: list[st
 
     recomputed_sha = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
     if recomputed_sha != sha256_hex:
-        errors.append("config_fingerprint.sha256 mismatch: " f"expected={sha256_hex}, recomputed={recomputed_sha}")
+        errors.append("config_fingerprint.sha256 mismatch: " f"got={sha256_hex}, expected={recomputed_sha}")
 
 
 def verify_run_card_integrity(
