@@ -407,14 +407,21 @@ class DepthProStage(Stage):
 
     def _compute_depth_stats(self, depth: np.ndarray) -> Dict[str, Any]:
         """Compute depth statistics (non-invasive sanity check)."""
-        d = depth.astype(np.float32, copy=False)
-        finite = np.isfinite(d)
-        finite_pct = float(finite.mean() * 100.0)
+        d = np.asarray(depth, dtype=np.float32)
+        if d.size == 0:
+            return {"finite_pct": 0.0, "min": None, "median": None, "p95": None}
 
-        if not finite.any():
+        finite = np.isfinite(d)
+        finite_count = int(np.count_nonzero(finite))
+        finite_pct = float(finite_count * 100.0 / finite.size)
+
+        if finite_count == 0:
             return {"finite_pct": finite_pct, "min": None, "median": None, "p95": None}
 
         vals = d[finite]
+        if vals.size == 0:
+            return {"finite_pct": finite_pct, "min": None, "median": None, "p95": None}
+
         return {
             "finite_pct": round(finite_pct, 6),
             "min": float(np.min(vals)),
