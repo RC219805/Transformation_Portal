@@ -98,6 +98,7 @@ pydantic>=2.0,<3           # Major version boundary
 - Upper bound: next major version (for semver) or known incompatibility
 - Must test against both bounds before committing
 - Security minimum overrides developer preference
+- The enforced `.in` constraint is the policy source of truth; ADR examples must mirror it.
 
 #### C) **Lower-Bound-Only** (`package>=X.Y`)
 
