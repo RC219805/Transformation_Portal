@@ -246,8 +246,8 @@ def main():
         "--model",
         type=str,
         choices=["depth", "realesrgan", "all"],
-        default="all",
-        help="Which model to download (default: all)",
+        default="depth",
+        help="Which model to download (default: depth)",
     )
     parser.add_argument("--output-dir", type=str, default="./weights", help="Output directory for models (default: ./weights)")
     parser.add_argument("--verify-only", action="store_true", help="Only verify model status, don't download")
