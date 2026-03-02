@@ -113,6 +113,11 @@ jobs:
           echo "  run_full: ${{ needs.preflight.outputs.run_full }}"
           echo "  reason:   ${{ needs.preflight.outputs.reason }}"
 
+      - name: pip-tools cache guardrails
+        run: |
+          set -euo pipefail
+          python3 scripts/validation/check_piptools_cache_tracked.py
+
       - name: Enforce documentation structure
         run: |
           set -euo pipefail

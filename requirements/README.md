@@ -187,7 +187,9 @@ Example CI workflow step:
 
 - **GPU vs CPU**: The current `ml.txt` uses CPU-only PyTorch for compatibility. For GPU environments, torch should be installed from the CUDA index before installing other ML dependencies.
 
-- **Python version**: All requirements are compiled with Python 3.12 but should work with Python 3.10+ as specified in `pyproject.toml`.
+- **Python version**: All layered requirements are compiled with Python 3.11 (`requirements/Makefile: LOCK_PYTHON_VERSION`) and should work with Python 3.10+ as specified in `pyproject.toml`.
+
+- **pip-tools cache**: `requirements/.pip-tools-cache/` is a local ephemeral cache directory and must never be tracked in git.
 
 ## 🆘 Troubleshooting
 

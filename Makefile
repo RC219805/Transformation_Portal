@@ -17,7 +17,7 @@ FAST_TESTS := \
 	tests/test_golden_hour_courtyard_workflow.py
 
 .PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract venv setup clean \
-        lint ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization \
+        lint ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         lock lock-prod lock-ci lock-dev install-core install-ml docs docs-clean
 
 help:
@@ -43,6 +43,7 @@ help:
 	@echo "  install-hooks      Install git pre-commit hook"
 	@echo "  quality-check      Run all quality checks (lint + structure + tests)"
 	@echo "  check-json-serialization  Fail on raw json.dump/json.dumps outside approved modules"
+	@echo "  check-piptools-cache  Fail if requirements/.pip-tools-cache is tracked in git"
 	@echo "  fix-quality        Auto-fix common quality issues"
 	@echo "  validate-ci        Validate GitHub Actions workflow configs"
 	@echo "  organize-docs      Organize markdown files to docs/ subdirectories"
@@ -134,7 +135,7 @@ lint:
 	@echo "Running pylint (non-blocking)..."
 	@$(PY) -m pylint $(shell git ls-files '*.py' | grep -v -e '/deprecated/' -e 'src/transformation_portal/' -e 'src/luxury_tiff_batch_processor/' -e 'scripts/' -e 'examples/' || echo '') || true
 
-ci: lint check-json-serialization test-fast test-orchestrator-contract
+ci: lint check-json-serialization check-piptools-cache test-fast test-orchestrator-contract
 	@echo "✅ Local CI checks completed successfully."
 
 # Comprehensive CI simulation
@@ -189,6 +190,10 @@ validate-ci:
 check-json-serialization:
 	@echo "Checking JSON serialization guardrails..."
 	@"$(PY)" scripts/validation/check_raw_json_usage.py
+
+check-piptools-cache:
+	@echo "Checking pip-tools cache guardrails..."
+	@"$(PY)" scripts/validation/check_piptools_cache_tracked.py
 
 # Organize documentation
 organize-docs:
