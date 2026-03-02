@@ -25,15 +25,15 @@ black==26.1.0
     # via
     #   -c all.txt
     #   -r dev.in
-cffi==2.0.0
-    # via
-    #   -c all.txt
-    #   cryptography
 certifi==2026.1.4
     # via
     #   -c all.txt
     #   httpcore
     #   httpx
+cffi==2.0.0
+    # via
+    #   -c all.txt
+    #   cryptography
 click==8.3.1
     # via
     #   -c all.txt
@@ -213,5 +213,6 @@ types-pyyaml==6.0.12.20250915
 typing-extensions==4.15.0
     # via
     #   -c all.txt
+    #   anyio
     #   mypy
     #   referencing

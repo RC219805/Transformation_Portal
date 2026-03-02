@@ -4,7 +4,9 @@
 # Run `make compile` in this directory to generate pinned ml.txt
 
 # ML and deep learning libraries (optional)
-torch>=2.10.0,<3
+# Known-good pinned inference stack for SAM2 + CLIP determinism:
+# torch==2.10.0, torchvision==0.25.0, sam2==1.1.0, open-clip-torch==3.2.0
+torch==2.10.0               # Pinned for known-good SAM2/CLIP determinism stack
 diffusers>=0.36.0,<1
 controlnet-aux>=0.0.6,<1
 # realesrgan>=0.3.0,<1  # BANNED: Unmaintained, use local implementation
@@ -15,7 +17,7 @@ rawpy==0.26.1               # Pinned for deterministic RAW demosaic (LibRaw wrap
 # HuggingFace ecosystem and vision utilities
 transformers>=4.57.0,<6
 huggingface-hub>=0.19.0,<2
-torchvision>=0.25.0,<1
+torchvision==0.25.0         # Pinned to torch 2.10.0/SAM2 stack for deterministic vision ops
 # opencv-python>=4.8.0,<5  # MOVED TO BASE: Required for depth_writer (core pipeline)
 scikit-image>=0.21.0,<1
 
@@ -40,10 +42,13 @@ accelerate>=0.20.0,<2      # improves model loading speed
 # Activate v2 with: pip install efficientsam open-clip-torch
 
 # EfficientSAM - lightweight Segment Anything Model variant (Apache 2.0 license, commercial-safe)
-efficientsam>=1.0.0,<2       # EfficientVIT SAM model zoo (~133MB weights on first load)
+efficientsam==1.0.0       # EfficientVIT SAM model zoo (~133MB weights on first load)
+
+# SAM2 segmentation backend (Meta Segment Anything 2)
+sam2==1.1.0                 # Pinned with torch==2.10.0/open-clip==3.2.0 for deterministic SAM2 masks
 
 # CLIP - material classification via text embeddings (MIT license, commercial-safe)
-open-clip-torch>=3.2.0,<4    # OpenCLIP for zero-shot material classification
+open-clip-torch==3.2.0    # OpenCLIP for zero-shot material classification
 
 # Note: V1 (heuristic-based) works without these dependencies
 # V2 (model-backed) auto-activates when dependencies installed

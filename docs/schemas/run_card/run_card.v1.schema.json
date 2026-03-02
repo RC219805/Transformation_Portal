@@ -8,6 +8,7 @@
     "artifact_index",
     "artifact_merkle_root",
     "backend_selection",
+    "backend_summary",
     "batch_id",
     "config_fingerprint",
     "end_time",
@@ -36,11 +37,23 @@
     "config_fingerprint": {
       "type": "object",
       "required": [
+        "apex_strict_mode",
+        "backend_requested",
+        "backend_resolved",
+        "canonical_json",
+        "device_requested",
+        "device_resolved",
         "depth_device",
         "depth_quantization",
+        "hash_algorithm",
         "model_variant",
         "preset",
+        "preset_requested",
+        "preset_resolved",
+        "quality_tier",
         "sha256",
+        "strict_inputs",
+        "strict_segmentation",
         "v2_device",
         "v2_preset",
         "v2_upscaler_backend"
@@ -64,6 +77,45 @@
             "null"
           ]
         },
+        "preset_requested": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "preset_resolved": {
+          "type": "string",
+          "minLength": 1
+        },
+        "backend_requested": {
+          "type": "string",
+          "minLength": 1
+        },
+        "backend_resolved": {
+          "type": "string",
+          "minLength": 1
+        },
+        "device_requested": {
+          "type": "string",
+          "minLength": 1
+        },
+        "device_resolved": {
+          "type": "string",
+          "minLength": 1
+        },
+        "quality_tier": {
+          "type": "string",
+          "minLength": 1
+        },
+        "strict_inputs": {
+          "type": "boolean"
+        },
+        "strict_segmentation": {
+          "type": "boolean"
+        },
+        "apex_strict_mode": {
+          "type": "boolean"
+        },
         "v2_preset": {
           "type": [
             "string",
@@ -81,6 +133,14 @@
             "string",
             "null"
           ]
+        },
+        "hash_algorithm": {
+          "type": "string",
+          "const": "sha256"
+        },
+        "canonical_json": {
+          "type": "string",
+          "minLength": 2
         },
         "sha256": {
           "type": "string",
@@ -115,6 +175,18 @@
             "string",
             "null"
           ]
+        },
+        "logical_backend": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resolved_engine": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false
@@ -122,16 +194,23 @@
     "backend_summary": {
       "type": "object",
       "required": [
-        "requested_backend",
-        "final_backends_used",
         "fallback_images",
+        "final_backends_used",
         "semantic_fallback_images",
-        "operational_fallback_images"
+        "operational_fallback_images",
+        "primary_backend",
+        "requested_backend"
       ],
       "properties": {
         "requested_backend": {
           "type": "string",
           "minLength": 1
+        },
+        "primary_backend": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "final_backends_used": {
           "type": "array",

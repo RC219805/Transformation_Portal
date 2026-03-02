@@ -97,7 +97,7 @@ class SAM2Backend:
 
     # Checkpoint SHA-256 digests (must match downloaded artifacts exactly)
     CHECKPOINT_SHA256 = {
-        "base": "2257ced71f65bfccb444f4b5c0f4af95a64c865503748e42edee0e40ab36a312",
+        "base": "d0bb7f236400a49669ffdd1be617959a8b1d1065081789d7bbff88eded3a8071",
         "large": "7442e4e9b732a508f80e141e7c2913437a3610ee0c77381a66658c3a445df87b",
     }
 

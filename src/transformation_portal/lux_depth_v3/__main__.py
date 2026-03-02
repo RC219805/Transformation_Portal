@@ -413,6 +413,7 @@ def main(
 
     config = EnhanceConfig(
         preset=preset_enum,
+        preset_requested=preset,
         depth_device=depth_device,
         depth_backend=depth_backend,
         non_commercial_ok=enable_non_commercial,

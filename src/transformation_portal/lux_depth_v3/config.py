@@ -159,6 +159,8 @@ class EnhanceConfig:
     # Depth configuration
     model_variant: Optional[ModelVariant] = None
     preset: Optional[Preset] = None
+    # Raw preset string from CLI/user input (captured even when preset does not map to Preset enum)
+    preset_requested: Optional[str] = None
     depth_device: str = "cpu"
     depth_quantization: str = "none"
 

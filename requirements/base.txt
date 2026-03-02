@@ -11,6 +11,7 @@ aiofiles==23.2.1
 annotated-doc==0.0.4
     # via
     #   -c all.txt
+    #   fastapi
     #   typer
 annotated-types==0.7.0
     # via
@@ -152,6 +153,7 @@ typing-extensions==4.15.0
     #   pydantic
     #   pydantic-core
     #   referencing
+    #   starlette
     #   typing-inspection
 typing-inspection==0.4.2
     # via

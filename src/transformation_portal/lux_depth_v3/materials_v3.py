@@ -43,6 +43,7 @@ class MaterialsV3Engine:
 
         # 1. Stats
         materials = segmentation_result.get("materials") or segmentation_result.get("material_masks") or {}
+        segmentation_metadata = segmentation_result.get("segmentation_metadata")
         segmentation_result = {"materials": materials}
 
         per_class_stats = {}
@@ -67,6 +68,9 @@ class MaterialsV3Engine:
             "enhanced_image": enhanced_image,  # Modified image with pixel ops applied
             "materials_v3_response_plan": response_plan,
             "materials_v3_pixel_ops": pixel_ops,
-            "materials_v3_metadata": {"version": "3.1"},
+            "materials_v3_metadata": {
+                "version": "3.1",
+                "segmentation_metadata": segmentation_metadata if isinstance(segmentation_metadata, dict) else None,
+            },
             "material_masks": segmentation_result.get("materials", {}),
         }
