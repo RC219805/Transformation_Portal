@@ -15,7 +15,7 @@ Each module has a single, well-defined responsibility:
 - **Utils**: Shared functionality with no business logic
 
 ### 2. Explicit Over Implicit
-- Clear import paths: `from transformation_portal.processors.material_response.core import MaterialResponse`
+- Clear import paths: `from transformation_portal.processors.material_response.engine import MaterialResponseEngine`
 - Explicit dependencies listed in each module
 - No magic imports or hidden behavior
 
@@ -103,7 +103,7 @@ transformation_portal/
 **Example**:
 ```python
 # lux_render_pipeline.py
-from transformation_portal.processors.material_response.core import MaterialResponse
+from transformation_portal.processors.material_response.engine import MaterialResponseEngine
 from transformation_portal.utils.color_science import apply_lut
 
 def process_render(image_path, config):
@@ -116,8 +116,10 @@ def process_render(image_path, config):
 
     # 3. Material response
     if config.material_response:
-        mr = MaterialResponse()
-        enhanced = mr.enhance(enhanced)
+        material_engine = MaterialResponseEngine.from_config(
+            {"profile": "luxury_interior"}
+        )
+        enhanced = material_engine.apply(enhanced)
 
     # 4. Color grading
     result = apply_lut(enhanced, config.lut)
@@ -137,17 +139,13 @@ def process_render(image_path, config):
 
 **Example**:
 ```python
-# material_response/core.py
-class MaterialResponse:
-    """Physics-based surface enhancement."""
+# material_response/engine.py
+from transformation_portal.processors.material_response.engine import MaterialResponseEngine
 
-    def __init__(self, config=None):
-        self.config = config or default_config()
-
-    def enhance(self, image, surfaces=None):
-        """Enhance materials in image."""
-        # Material-aware processing
-        return enhanced_image
+engine = MaterialResponseEngine.from_config(
+    {"profile": "luxury_interior", "texture_boost": 0.25}
+)
+enhanced_image = engine.apply(image)
 ```
 
 ### Enhancers
@@ -472,6 +470,6 @@ def old_function():
 
 ## Questions?
 
-- See [CONTRIBUTING.md](../CONTRIBUTING.md) for contribution guidelines
-- See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for common issues
+- See [CONTRIBUTING.md](../../CONTRIBUTING.md) for contribution guidelines
+- See [TROUBLESHOOTING.md](../TROUBLESHOOTING.md) for common issues
 - Open an issue on GitHub for specific questions

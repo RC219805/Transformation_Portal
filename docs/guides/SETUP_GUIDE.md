@@ -23,11 +23,12 @@ cd Transformation_Portal
 python3 -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-# 3. Install core dependencies
+# 3. Install core dependencies and CLI
 pip install -r requirements.txt
+pip install -e .
 
 # 4. Verify installation
-python scripts/verify_setup.py
+python scripts/verification/verify_core.py
 ```
 
 ---
@@ -53,8 +54,7 @@ This installs:
 - **numpy**: Numerical processing
 - **Pillow**: Image I/O and manipulation
 - **scipy**: Scientific computing
-- **typer**: CLI framework
-- **accelerate**: Fast model loading (reduces memory by 30-40%)
+- **typer**: CLI framework and other pinned core utilities
 
 ### Step 2: ML Dependencies (Optional)
 
@@ -104,14 +104,15 @@ pip install coremltools  # macOS only
 
 ### Automatic Download Script
 
-Use the provided script to download depth models:
+Use the provided script to print Depth Anything CoreML setup instructions and verify local artifact status:
 
 ```bash
-python scripts/download_depth_models.py
+python scripts/download_depth_models.py --model depth
 ```
 
 Options:
-- `--model depth`: Download depth models
+- `--model depth`: Depth model setup/verification workflow
+- `--verify-only`: Verify local model artifact status without setup steps
 - `--output-dir PATH`: Custom output directory (default: ./weights)
 
 ### Depth Anything (HuggingFace)
@@ -121,10 +122,15 @@ Transformation Portal uses Depth Anything for depth estimation. The transformers
 ```python
 from transformers import pipeline
 
-# Model downloads automatically (~400MB)
-# Note: "Depth Anything V3" in this repo is based on the commercial Depth Anything V2 weights
-depth_estimator = pipeline("depth-estimation", model="depth-anything/Depth-Anything-V2-Small")
+# Transformers-compatible IDs use the "-hf" suffix.
+depth_estimator = pipeline(
+    "depth-estimation",
+    model="depth-anything/Depth-Anything-V2-Small-hf",
+)
 ```
+
+For the `lux-depth-v3` pipeline, V3 metric model IDs are attempted first and automatically
+fallback to V2 metric `*-hf` IDs when the V3 variant is unavailable.
 
 ### Depth Anything (CoreML - Apple Silicon)
 
@@ -135,7 +141,7 @@ For optimal performance on M-series chips, convert the model to CoreML:
 import coremltools as ct
 from transformers import AutoModel
 
-model = AutoModel.from_pretrained("depth-anything/Depth-Anything-V2-Small")
+model = AutoModel.from_pretrained("depth-anything/Depth-Anything-V2-Small-hf")
 # ... conversion code (see CoreML documentation)
 ```
 
@@ -176,7 +182,8 @@ ZoeD_M12_N.pt: 0% | 703k/1.44G [00:30<10:48:36, 37.1kB/s]
 
 **Solutions:**
 - Use a faster internet connection
-- Pre-download models using `scripts/download_depth_models.py`
+- Use `python scripts/download_depth_models.py --verify-only` to verify local artifacts
+- HuggingFace models are still downloaded automatically on first model use
 - Use cached models: Set `TRANSFORMERS_CACHE` environment variable
   ```bash
   export TRANSFORMERS_CACHE=/path/to/cache
@@ -209,16 +216,18 @@ FileNotFoundError: [Errno 2] No such file or directory: 'depth_pipeline/pipeline
 **Explanation**: The depth pipeline is now part of the Lux Depth V3 module. Use the current implementation:
 
 **Current usage:**
-```python
+```bash
 # Use the lux-depth-v3 CLI
 lux-depth-v3 --input-dir ./input --output-dir ./output
+```
 
+```python
 # Or use the Python API
 from transformation_portal.lux_depth_v3 import EnhanceConfig
 from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
 ```
 
-See [Lux Depth V3 CLI Guide](LUX_DEPTH_V3_CLI_GUIDE.md) for detailed usage.
+See [Lux Depth V3 CLI Guide](../LUX_DEPTH_V3_CLI_GUIDE.md) for detailed usage.
 
 ---
 
@@ -244,18 +253,18 @@ TRANSFORMATION PORTAL - INSTALLATION VERIFICATION
 
 Required Packages:
 ----------------------------------------------------------------------
-✓ numpy               1.24.3
-✓ Pillow              10.0.0
-✓ scipy               1.15.0
-✓ typer               0.12.0
+✓ numpy
+✓ Pillow
+✓ scipy
+✓ typer
 
 Optional ML Packages:
 ----------------------------------------------------------------------
-✓ torch               2.10.0
-✓ diffusers           0.36.0
-✓ transformers        4.57.6
-✓ controlnet-aux      0.0.7
-✓ accelerate          0.24.1
+✓ torch
+✓ diffusers
+✓ transformers
+✓ controlnet-aux
+✓ accelerate
 
 PyTorch Backends:
 ----------------------------------------------------------------------
@@ -326,7 +335,7 @@ lux-depth-v3 --list-stable
 
 ### CPU Only
 
-1. **Use smaller models**: Depth-Anything-V2-Small vs Large
+1. **Use smaller models**: Depth-Anything-V2-Small-hf vs Large-hf
 2. **Reduce dimensions**: 512×512 instead of 1024×768
 3. **Be patient**: CPU inference is 10-20x slower than GPU
 
