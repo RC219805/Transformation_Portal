@@ -1001,7 +1001,7 @@ def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
             raise ValueError("Invalid depth_backend")
         if segmentation_backend not in ALLOWED_SEGMENTATION_BACKENDS:
             raise ValueError("Invalid segmentation_backend")
-        if sam2_model_size not in ALLOWED_SAM2_MODEL_SIZES:
+        if segmentation_backend == "sam2" and sam2_model_size not in ALLOWED_SAM2_MODEL_SIZES:
             raise ValueError("Invalid sam2_model_size")
 
         argv.extend(

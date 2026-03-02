@@ -503,6 +503,31 @@ def test_argv_normalization_includes_segmentation_controls() -> None:
     assert "--strict-segmentation" in argv
 
 
+def test_argv_normalization_ignores_sam2_model_size_when_backend_is_not_sam2() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+            "segmentation_backend": "stub",
+            "sam2_model_size": "tiny",
+        },
+    }
+
+    argv = orchestrator_app._argv_from_request(payload)
+    assert _flag_value(argv, "--segmentation-backend") == "stub"
+    assert "--sam2-model-size" not in argv
+
+
+def test_portal_segmentation_defaults_align_with_cli_defaults() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    assert "enable: false," in content
+    assert "backend: 'stub'," in content
+    assert "sam2ModelSize: 'base'," in content
+    assert "strict: false" in content
+
+
 def test_argv_archive_gate_a_defaults_to_fixity_scan_runner() -> None:
     payload: Dict[str, object] = {
         "pipeline": "archive-gate-a",

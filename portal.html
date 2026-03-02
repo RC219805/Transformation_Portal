@@ -214,7 +214,7 @@
                             <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 px-4 py-3.5 cursor-pointer group transition-colors">
                                 <span class="text-[12px] font-medium select-none text-slate-700 dark:text-slate-300">Enable Segmentation</span>
                                 <div class="relative inline-flex items-center">
-                                    <input type="checkbox" id="enableSegmentation" role="switch" class="sr-only peer" checked />
+                                    <input type="checkbox" id="enableSegmentation" role="switch" class="sr-only peer" />
                                     <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
                                     <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
                                 </div>
@@ -222,22 +222,22 @@
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="segmentationBackend">Segmentation Backend</label>
                                 <select id="segmentationBackend" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
-                                    <option value="sam2" selected>sam2</option>
+                                    <option value="sam2">sam2</option>
                                     <option value="efficientsam">efficientsam</option>
-                                    <option value="stub">stub</option>
+                                    <option value="stub" selected>stub</option>
                                 </select>
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="sam2ModelSize">SAM2 Model Size</label>
                                 <select id="sam2ModelSize" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
-                                    <option value="base">base</option>
-                                    <option value="large" selected>large</option>
+                                    <option value="base" selected>base</option>
+                                    <option value="large">large</option>
                                 </select>
                             </div>
                             <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 px-4 py-3.5 cursor-pointer group transition-colors">
                                 <span class="text-[12px] font-medium select-none text-slate-700 dark:text-slate-300">Strict Segmentation</span>
                                 <div class="relative inline-flex items-center">
-                                    <input type="checkbox" id="strictSegmentation" role="switch" class="sr-only peer" checked />
+                                    <input type="checkbox" id="strictSegmentation" role="switch" class="sr-only peer" />
                                     <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
                                     <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
                                 </div>
@@ -471,10 +471,10 @@
                 depthBackend: 'da3',
                 depthDevice: 'cpu',
                 segmentation: {
-                    enable: true,
-                    backend: 'sam2',
-                    sam2ModelSize: 'large',
-                    strict: true
+                    enable: false,
+                    backend: 'stub',
+                    sam2ModelSize: 'base',
+                    strict: false
                 },
                 flags: {
                     materials: true, pbr: true, cache: true, overwrite: false, enableV2: false
