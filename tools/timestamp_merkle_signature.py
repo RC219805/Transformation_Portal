@@ -35,6 +35,14 @@ class TimestampVerificationError(ValueError):
     """Raised when cryptographic timestamp verification fails."""
 
 
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Reject redirects to prevent silent transport downgrades."""
+
+    # Returning ``None`` tells urllib to treat redirects as errors.
+    def redirect_request(self, _req, _fp, _code, _msg, _headers, _newurl):  # type: ignore[override]
+        return None
+
+
 def atomic_write(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
@@ -328,7 +336,7 @@ def main() -> int:
 
     parsed_tsa_url = urlparse(args.tsa_url)
     if parsed_tsa_url.scheme not in {"http", "https"} or not parsed_tsa_url.netloc:
-        print("Timestamp request failed: --tsa-url must be an absolute https URL")
+        print("Timestamp request failed: --tsa-url must be an absolute http(s) URL")
         return EXIT_TIMESTAMP_FAILURE
     if parsed_tsa_url.scheme == "http" and not args.allow_insecure_http:
         print("Timestamp request failed: --tsa-url must use https unless --allow-insecure-http is set")
@@ -363,7 +371,8 @@ def main() -> int:
                 "User-Agent": "transformation-portal-phase3.2-timestamp-cli/1",
             },
         )
-        with urllib.request.urlopen(http_request, timeout=args.timeout_seconds) as response:
+        opener = urllib.request.build_opener(_NoRedirectHandler())
+        with opener.open(http_request, timeout=args.timeout_seconds) as response:
             response_bytes = response.read()
             content_type = response.headers.get("Content-Type", "")
             media_type = content_type.split(";", maxsplit=1)[0].strip().lower()

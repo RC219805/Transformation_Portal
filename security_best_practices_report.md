@@ -6,62 +6,57 @@ Scope: API (`app.py`), runtime modules (`src/`), and operational tooling (`scrip
 
 ## Executive Summary
 
-This review found **5 actionable findings**:
-- **2 High**
+This review found **3 actionable findings**:
+- **0 High**
 - **2 Medium**
 - **1 Low**
 
-The highest-risk issues are:
-1. RFC3161 timestamp handling accepts unsigned/untrusted trust chains in practice (structure checked, cryptographic trust not verified).
-2. Multiple runtime and install paths still load remote HuggingFace artifacts without immutable revision pinning, while the lock manifest remains placeholder-based and strict enforcement is opt-in.
+High-severity items H-001 and H-002 are remediated as of 2026-03-03:
+1. RFC3161 timestamp handling now enforces HTTPS by default and verifies responses cryptographically via `openssl ts -verify` against trusted CA inputs.
+2. Runtime/install paths for CLIP, FLUX, and LLaVA now require immutable pinned revisions resolved through model-lock controls, and manifest placeholders were replaced with pinned SHAs.
 
 The API layer itself has good hardening progress (path root allowlists, request size limits, API-key enforcement, default rate limit and concurrency caps).
 
 ## Findings
 
-## High Severity
+## High Severity (Remediated)
 
-### H-001: RFC3161 timestamp trust is not cryptographically verified end-to-end
+### H-001: RFC3161 timestamp trust is cryptographically verified end-to-end (Remediated 2026-03-03)
 
 **Evidence**
-- `tools/timestamp_merkle_signature.py:160-184` parses DER structure + status only.
-- `tools/timestamp_merkle_signature.py:268-277` accepts response and writes `.tsr` without CMS signature/certificate chain verification.
-- `tools/timestamp_merkle_signature.py:225-227` allows both `http://` and `https://` TSA URLs.
-- `tools/verify_evidence_bundle_manifest.py:84-86` later validates only hash equality of the `.tsr` blob, not token authenticity.
+- `tools/timestamp_merkle_signature.py` enforces `https://` TSA URLs by default, with explicit `--allow-insecure-http` for local test endpoints.
+- `tools/timestamp_merkle_signature.py` performs OpenSSL-backed RFC3161 verification (`openssl ts -verify`) against the original query and a trusted CA file/path or system trust store.
+- `tests/test_merkle_timestamp_cli.py` now covers cryptographic verification failure and redirect rejection behavior in addition to HTTPS gating.
 
 **Impact**
-An attacker controlling network path or TSA endpoint can provide a forged or untrusted timestamp token that still passes local workflow checks, undermining notarization evidence quality.
+Risk materially reduced for default flows. Remaining risk is operational: trust-store provisioning must stay controlled and `--allow-insecure-http` should remain test-only.
 
-**Secure-by-default improvements**
-1. Require `https://` TSA URLs by default; keep explicit `--allow-insecure-http` only for local testing.
-2. Verify RFC3161 CMS signature, TSA cert chain, EKU (`timeStamping`), message imprint, and nonce before accepting a token.
-3. Pin trusted TSA cert(s) or root set in configuration for deterministic verification.
-4. Add negative tests: wrong nonce, wrong imprint, expired/untrusted cert, bad CMS signature.
+**Remediation delivered**
+1. HTTPS-by-default TSA transport policy.
+2. Cryptographic verification of TSA responses prior to writing detached `.tsr`.
+3. Negative tests for invalid cryptographic responses.
 
 ---
 
-### H-002: Remote model supply chain is not fail-closed by default
+### H-002: Remote model supply chain controls are fail-closed for targeted loaders (Remediated 2026-03-03)
 
 **Evidence**
-- Runtime loading without immutable revisions:
-  - `src/transformation_portal/style_transfer/ip_adapter.py:101-108`
-  - `src/transformation_portal/vlm/llava.py:126,145`
-  - `src/transformation_portal/segmentation/clip_classifier.py:149-151`
-- Setup/install flows download snapshots without revision pinning:
-  - `scripts/install_models_auto.py:193,246,275`
-- Model lock manifest entries are placeholders (not 40-char SHAs):
-  - `config/model_lock_manifest.yaml:9-39`
-- Strict lock mode is opt-in (`False` unless env set):
-  - `src/transformation_portal/core/security/model_lock.py:66-70`
+- Runtime loaders now resolve and apply pinned revisions for:
+  - `src/transformation_portal/style_transfer/ip_adapter.py`
+  - `src/transformation_portal/vlm/llava.py`
+  - `src/transformation_portal/segmentation/clip_classifier.py`
+- Installer checks now resolve strict pinned revisions before HuggingFace snapshot/model access:
+  - `scripts/install_models_auto.py`
+- Previously added CLIP/FLUX/LLaVA manifest placeholders are replaced with pinned 40-char SHAs:
+  - `config/model_lock_manifest.yaml`
 
 **Impact**
-Model revisions can drift or be replaced upstream; compromised remote artifacts can be consumed without deterministic pinning, increasing supply-chain risk.
+Supply-chain drift risk is materially reduced for covered model paths through immutable revision selection and strict lock resolution.
 
-**Secure-by-default improvements**
-1. Require revision SHA pins for every `from_pretrained` / `snapshot_download` call in production paths.
-2. Replace placeholder lock entries with verified commit SHAs.
-3. Enable strict model lock mode in CI and production (`TP_STRICT_MODEL_LOCK=1`) and fail builds/runtime on unpinned models.
-4. Add CI lint rule that blocks new unpinned HuggingFace loads in `src/` and release scripts.
+**Remediation delivered**
+1. Pinned revision enforcement in targeted runtime loaders and installer checks.
+2. Placeholder lock entries for CLIP/FLUX/LLaVA replaced with immutable SHAs.
+3. Existing CI controls continue to validate HuggingFace revision hygiene.
 
 ## Medium Severity
 
@@ -123,8 +118,6 @@ If any XSS path appears in the UI surface, inline allowances increase exploitabi
 
 ## Recommended Fix Order
 
-1. H-001 (RFC3161 trust verification + HTTPS enforcement)
-2. H-002 (complete revision pinning + strict model lock enablement)
-3. M-001 (mandatory sample checksums; fail-closed)
-4. M-002 (centralized secure downloader policy)
-5. L-001 (CSP nonce/hash hardening)
+1. M-001 (mandatory sample checksums; fail-closed)
+2. M-002 (centralized secure downloader policy)
+3. L-001 (CSP nonce/hash hardening)

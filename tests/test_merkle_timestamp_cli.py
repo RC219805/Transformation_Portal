@@ -437,6 +437,62 @@ def _tsa_server(
         server.server_close()
 
 
+@contextlib.contextmanager
+def _tsa_redirect_server(*, final_response_factory):
+    state: dict[str, str | bytes] = {
+        "initial_request_body": b"",
+        "followup_request_body": b"",
+    }
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:  # noqa: N802
+            content_length = int(self.headers.get("Content-Length", "0"))
+            request_body = self.rfile.read(content_length)
+
+            if self.path == "/tsa":
+                state["initial_request_body"] = request_body
+                self.send_response(302)
+                self.send_header("Location", "/final")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+
+            if self.path == "/final":
+                state["followup_request_body"] = request_body
+                body = final_response_factory(request_body)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/timestamp-reply")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
+            self.send_response(404)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def log_message(self, format: str, *args: object) -> None:  # pylint: disable=redefined-builtin
+            return
+
+    try:
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    except PermissionError as exc:
+        pytest.skip(f"Local HTTP server bind not permitted in this environment: {exc}")
+    except OSError as exc:
+        if exc.errno in {errno.EPERM, errno.EACCES}:
+            pytest.skip(f"Local HTTP server bind not permitted in this environment: {exc}")
+        raise
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{server.server_port}/tsa"
+    try:
+        yield url, state
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+        server.server_close()
+
+
 def test_timestamp_roots_success_writes_detached_tsr(tmp_path: Path, local_tsa_signer: _LocalTsaSigner) -> None:
     roots_path = tmp_path / "merkle_roots.json"
     tsr_path = tmp_path / "merkle_roots.tsr"
@@ -669,6 +725,46 @@ def test_timestamp_rejects_http_tsa_url_without_insecure_flag(tmp_path: Path) ->
 
     assert result.returncode == 8
     assert "must use https unless --allow-insecure-http is set" in result.stdout
+
+
+def test_timestamp_rejects_non_absolute_tsa_url(tmp_path: Path) -> None:
+    roots_path = tmp_path / "merkle_roots.json"
+    tsr_path = tmp_path / "out.tsr"
+    _write_roots(roots_path)
+
+    result = _timestamp(
+        target_flag="--roots",
+        target_path=roots_path,
+        tsa_url="/tsa",
+        out_path=tsr_path,
+        nonce=1,
+    )
+
+    assert result.returncode == 8
+    assert "--tsa-url must be an absolute http(s) URL" in result.stdout
+
+
+def test_timestamp_rejects_redirect_response(tmp_path: Path, local_tsa_signer: _LocalTsaSigner) -> None:
+    roots_path = tmp_path / "merkle_roots.json"
+    tsr_path = tmp_path / "out.tsr"
+    _write_roots(roots_path)
+
+    with _tsa_redirect_server(final_response_factory=local_tsa_signer.sign_query) as (tsa_url, state):
+        result = _timestamp(
+            target_flag="--roots",
+            target_path=roots_path,
+            tsa_url=tsa_url,
+            out_path=tsr_path,
+            tsa_ca_file=local_tsa_signer.ca_cert,
+            allow_insecure_http=True,
+            nonce=1,
+        )
+
+    assert result.returncode == 8
+    assert "HTTP 302" in result.stdout
+    assert state["initial_request_body"]
+    assert state["followup_request_body"] == b""
+    assert not tsr_path.exists()
 
 
 def test_timestamp_fails_when_cryptographic_verification_fails(tmp_path: Path, local_tsa_signer: _LocalTsaSigner) -> None:
