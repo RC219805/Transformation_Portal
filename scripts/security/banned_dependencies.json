@@ -3,7 +3,7 @@
     {
       "name": "realesrgan",
       "reason": "Unmaintained, use local implementation",
-      "migration": "Use local implementation in src/transformation_portal/spatial_ai/reconstruction/"
+      "migration": "Use local implementation in src/transformation_portal/upscaling/ (e.g. upscaling/backends/realesrgan.py)"
     },
     {
       "name": "gfpgan",

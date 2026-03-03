@@ -42,15 +42,17 @@ load_banned_packages() {
         exit 1
     fi
 
-    while IFS='|' read -r package reason migration; do
-        [[ -z "$package" ]] && continue
-        BANNED_PACKAGE_ENTRIES+=("${package}|${reason}|${migration}")
-    done < <(
-        python3 << 'PY'
+    local parsed_registry
+    local parse_error
+    parsed_registry="$(mktemp)"
+    parse_error="$(mktemp)"
+
+    if ! BANNED_REGISTRY="$BANNED_REGISTRY" python3 << 'PY' >"$parsed_registry" 2>"$parse_error"
 import json
+import os
 from pathlib import Path
 
-registry = Path("scripts/security/banned_dependencies.json")
+registry = Path(os.environ["BANNED_REGISTRY"])
 data = json.loads(registry.read_text(encoding="utf-8"))
 for entry in data.get("packages", []):
     name = str(entry.get("name", "")).strip().lower()
@@ -60,7 +62,20 @@ for entry in data.get("packages", []):
         continue
     print(f"{name}|{reason}|{migration}")
 PY
-    )
+    then
+        echo -e "${RED}❌ Failed to parse banned registry: $BANNED_REGISTRY${NC}"
+        cat "$parse_error" >&2
+        rm -f "$parsed_registry" "$parse_error"
+        exit 1
+    fi
+
+    rm -f "$parse_error"
+
+    while IFS='|' read -r package reason migration; do
+        [[ -z "$package" ]] && continue
+        BANNED_PACKAGE_ENTRIES+=("${package}|${reason}|${migration}")
+    done < "$parsed_registry"
+    rm -f "$parsed_registry"
 
     if [[ ${#BANNED_PACKAGE_ENTRIES[@]} -eq 0 ]]; then
         echo -e "${RED}❌ No banned package entries loaded from $BANNED_REGISTRY${NC}"

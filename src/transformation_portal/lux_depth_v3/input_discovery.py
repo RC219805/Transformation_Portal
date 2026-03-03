@@ -102,8 +102,12 @@ def discover_images(
     output_dir_resolved: Optional[Path] = None
     if output_dir:
         try:
-            output_dir_resolved = output_dir.expanduser().resolve()
-            logger.debug(f"Output directory to exclude: {output_dir_resolved}")
+            resolved_candidate = output_dir.expanduser().resolve()
+            if not resolved_candidate.is_dir():
+                logger.warning(f"Output directory exclusion skipped: {resolved_candidate} is not a directory")
+            else:
+                output_dir_resolved = resolved_candidate
+                logger.debug(f"Output directory to exclude: {output_dir_resolved}")
         except Exception as e:
             logger.warning(f"Failed to normalize output_dir: {e}")
 
@@ -122,7 +126,7 @@ def discover_images(
         if output_dir_resolved:
             try:
                 candidate_resolved = candidate.resolve()
-                if candidate_resolved == output_dir_resolved or candidate_resolved.is_relative_to(output_dir_resolved):
+                if candidate_resolved.is_relative_to(output_dir_resolved):
                     reason = "in output directory"
                     excluded_artifacts.append((candidate, reason))
                     logger.debug(f"Skipped artifact: {candidate.name} (matched: {reason})")
