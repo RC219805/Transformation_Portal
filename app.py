@@ -75,7 +75,10 @@ ARCHIVE_GOVERNANCE_SCRIPT = REPO_ROOT / "tools" / "archive_governance.py"
 
 
 def _normalize_root_path(value: str | Path) -> Path:
-    candidate = Path(value).expanduser()
+    raw = str(value or "").strip()
+    if not raw or raw.startswith("~") or "\x00" in raw:
+        raise ValueError("Invalid path root")
+    candidate = Path(raw)
     if not candidate.is_absolute():
         candidate = REPO_ROOT / candidate
     return Path(os.path.realpath(candidate))
@@ -89,7 +92,16 @@ def _env_path_roots(name: str, default: List[Path]) -> List[Path]:
     for value in values:
         try:
             root = _normalize_root_path(value)
-        except (OSError, RuntimeError):
+        except (OSError, RuntimeError, ValueError):
+            continue
+        if root not in roots:
+            roots.append(root)
+    if roots:
+        return roots
+    for value in default:
+        try:
+            root = _normalize_root_path(value)
+        except (OSError, RuntimeError, ValueError):
             continue
         if root not in roots:
             roots.append(root)
