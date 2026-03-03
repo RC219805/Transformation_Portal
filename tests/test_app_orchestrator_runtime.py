@@ -1168,6 +1168,18 @@ def test_argv_rejects_paths_outside_allowed_roots(tmp_path: Path) -> None:
         orchestrator_app.ALLOWED_PATH_ROOTS = previous_path_roots
 
 
+def test_argv_rejects_tilde_prefixed_paths() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "~/.ssh",
+            "output_dir": "./output",
+        },
+    }
+    with pytest.raises(ValueError, match="Invalid path value"):
+        orchestrator_app._argv_from_request(payload)
+
+
 def test_create_job_rejects_paths_outside_allowed_roots_with_typed_error(tmp_path: Path) -> None:
     previous_input_roots = orchestrator_app.ALLOWED_INPUT_ROOTS
     previous_output_roots = orchestrator_app.ALLOWED_OUTPUT_ROOTS
@@ -1196,6 +1208,23 @@ def test_create_job_rejects_paths_outside_allowed_roots_with_typed_error(tmp_pat
     assert response.status_code == 400
     assert body["error"]["code"] == "INVALID_ARGUMENT"
     assert body["error"]["details"]["reason"] == "path_outside_allowed_roots"
+    assert orchestrator_app.JOBS == {}
+
+
+def test_create_job_rejects_tilde_prefixed_paths_with_typed_error() -> None:
+    response = asyncio.run(
+        orchestrator_app.create_job(
+            {
+                "pipeline": "lux-depth-v3",
+                "args": {"input_dir": "~/.ssh", "output_dir": "./output"},
+            }
+        )
+    )
+    body = json.loads(response.body.decode("utf-8"))
+
+    assert response.status_code == 400
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["reason"] == "invalid_path_value"
     assert orchestrator_app.JOBS == {}
 
 

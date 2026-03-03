@@ -74,11 +74,11 @@ REPO_ROOT = Path(__file__).resolve().parent
 ARCHIVE_GOVERNANCE_SCRIPT = REPO_ROOT / "tools" / "archive_governance.py"
 
 
-def _normalize_config_path(value: str | Path) -> Path:
+def _normalize_root_path(value: str | Path) -> Path:
     candidate = Path(value).expanduser()
     if not candidate.is_absolute():
         candidate = REPO_ROOT / candidate
-    return candidate.resolve(strict=False)
+    return Path(os.path.realpath(candidate))
 
 
 def _env_path_roots(name: str, default: List[Path]) -> List[Path]:
@@ -88,7 +88,7 @@ def _env_path_roots(name: str, default: List[Path]) -> List[Path]:
     roots: List[Path] = []
     for value in values:
         try:
-            root = _normalize_config_path(value)
+            root = _normalize_root_path(value)
         except (OSError, RuntimeError):
             continue
         if root not in roots:
@@ -96,19 +96,33 @@ def _env_path_roots(name: str, default: List[Path]) -> List[Path]:
     return roots
 
 
+def _resolve_untrusted_request_path(path_value: str) -> Path:
+    raw = str(path_value or "").strip()
+    if not raw or raw.startswith("~") or "\x00" in raw:
+        raise ValueError("Invalid path value")
+    candidate = Path(raw)
+    if not candidate.is_absolute():
+        candidate = REPO_ROOT / candidate
+    return Path(os.path.realpath(candidate))
+
+
 def _is_within_allowed_roots(candidate: Path, allowed_roots: List[Path]) -> bool:
+    candidate_real = os.path.realpath(candidate)
     for root in allowed_roots:
-        if candidate.is_relative_to(root):
-            return True
+        root_real = os.path.realpath(root)
+        try:
+            if os.path.commonpath([candidate_real, root_real]) == root_real:
+                return True
+        except ValueError:
+            # Mixed absolute/relative or drive mismatch on non-POSIX platforms.
+            continue
     return False
 
 
 def _validate_path_against_roots(path_value: str, allowed_roots: List[Path]) -> str:
-    if not path_value:
-        raise ValueError("Invalid path value")
     try:
-        resolved = _normalize_config_path(path_value)
-    except (OSError, RuntimeError) as exc:
+        resolved = _resolve_untrusted_request_path(path_value)
+    except (OSError, RuntimeError, ValueError) as exc:
         raise ValueError("Invalid path value") from exc
 
     if not _is_within_allowed_roots(resolved, allowed_roots):
