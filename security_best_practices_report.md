@@ -1,163 +1,132 @@
 # Security Best Practices Report
 
-Date: 2026-02-20
-Repository: Transformation_Portal
-Scope: Python application code (`src/`), operational scripts (`scripts/`), dependency/install flows, and GitHub Actions release workflow.
+Date: 2026-03-03  
+Repository: `Transformation_Portal`  
+Scope: API service (`app.py`), core runtime (`src/`), and operational tooling (`scripts/`, `tools/`).
 
 ## Executive Summary
 
-This review found 7 security findings: 2 High, 4 Medium, and 1 Low.
+This review found **6 actionable security findings**:
+- **2 High**
+- **3 Medium**
+- **1 Low**
 
-The highest-risk issues are:
-1. Dynamic plugin loading that executes Python from user/environment-controlled paths.
-2. `pickle.load()` deserialization in runtime code paths.
+The two highest-priority issues are:
+1. Resource-exhaustion exposure in the job API (no default rate limit and no concurrency cap).
+2. Unrestricted filesystem paths accepted from job API payloads.
 
-Most findings are secure-by-default hardening opportunities (supply chain integrity, trust boundaries, and least privilege) rather than confirmed in-the-wild exploitation.
+The codebase also has several strong controls already in place (API key enforcement on job routes, request size limits, trusted host/CORS defaults, and use of `hmac.compare_digest`).
 
 ## Findings
 
 ## High Severity
 
-### H-001: Dynamic plugin discovery executes code from user/env-controlled paths
+### H-001: Job API is vulnerable to resource exhaustion by default
 **Evidence**
-- `src/transformation_portal/plugins/loader.py:149`
-- `src/transformation_portal/plugins/loader.py:157`
-- `src/transformation_portal/plugins/loader.py:415`
-- `src/transformation_portal/plugins/registry.py:212`
-- `src/transformation_portal/plugins/registry.py:220`
-- `src/transformation_portal/plugins/registry.py:177`
+- `app.py:95` (`RATE_LIMIT_PER_MINUTE` defaults to `0`)
+- `app.py:401-402` (rate limiting disabled when value is `<= 0`)
+- `app.py:1268-1287` (each accepted job immediately spawns a subprocess task, no concurrency ceiling)
 
 **Why this matters**
-Plugin discovery can load and execute arbitrary Python modules from `~/.transformation_portal/plugins` and `TRANSFORMATION_PORTAL_PLUGINS`. If these locations are writable by an attacker (or misconfigured), code execution occurs as soon as discovery is run.
+An authenticated client can enqueue unlimited expensive jobs and exhaust CPU/RAM/process limits, causing denial of service.
 
 **Secure-by-default improvements**
-1. Default discovery to built-in plugins only; require explicit opt-in for user/env plugin paths.
-2. Add signed plugin manifests (or hash allowlist) and refuse unsigned plugins by default.
-3. Isolate plugin execution in a subprocess with reduced privileges.
-4. Emit high-visibility audit logs when external plugin paths are enabled.
+1. Set a non-zero default rate limit (for example, `TP_RATE_LIMIT_PER_MINUTE=60`).
+2. Add `TP_MAX_CONCURRENT_JOBS` and queue overflow protection (`429` / `503` when saturated).
+3. Add per-API-key quotas and global process budget enforcement.
+4. Add tests for abuse scenarios (burst job creation, long-running process floods).
 
 ---
 
-### H-002: Unsafe deserialization via `pickle.load()` in runtime paths
+### H-002: `/v1/jobs` accepts unrestricted filesystem paths from request payloads
 **Evidence**
-- `src/transformation_portal/style_transfer/reference_encoder.py:243`
-- `src/transformation_portal/depth/utils/cache.py:321`
-- `src/transformation_portal/depth/utils/cache.py:368`
+- `app.py:684-687` (`_path_arg` returns arbitrary path strings)
+- `app.py:703-760` (archive command arguments consume those paths without root allowlisting)
+- `app.py:981-989` (`input_dir` and `output_dir` copied directly into command args)
 
 **Why this matters**
-`pickle.load()` can execute attacker-controlled code during deserialization. Current comments assume files are self-generated, but this is not a cryptographic trust guarantee.
+With valid API credentials, a caller can direct the pipeline to read/write arbitrary locations accessible to the service account. This increases blast radius for credential compromise and weakens least-privilege boundaries.
 
 **Secure-by-default improvements**
-1. Replace pickle artifacts with safer formats (`.npz`, JSON + typed arrays, or `safetensors` where applicable).
-2. If legacy pickle must remain, require integrity verification (HMAC/signature) before load.
-3. Restrict cache directories to owner-only permissions (`0700`) and reject symlinks/hardlinks.
-4. Add explicit trust-boundary documentation: never load external/untrusted files.
+1. Introduce explicit allowed roots (`TP_ALLOWED_INPUT_ROOTS`, `TP_ALLOWED_OUTPUT_ROOTS`).
+2. Canonicalize and validate all user-provided paths against allowlisted roots before command construction.
+3. Reject symlink escapes and parent traversal after path resolution.
+4. Add contract tests that assert rejection of `/etc`, home-directory escapes, and symlink pivots.
 
 ## Medium Severity
 
-### M-001: SQL query assembly interpolates `LIMIT` directly
+### M-001: SQL uses interpolated `LIMIT` values instead of strict parameterization
 **Evidence**
-- `src/transformation_portal/metrics/ledger.py:327`
-- `src/transformation_portal/metrics/ledger.py:329`
-- `src/transformation_portal/metrics/comparator.py:237`
-- `src/transformation_portal/metrics/comparator.py:242`
+- `src/transformation_portal/metrics/ledger.py:327-329`
+- `src/transformation_portal/metrics/comparator.py:237-243`
 
 **Why this matters**
-Current call sites pass integers, but APIs allow direct string interpolation into SQL for `LIMIT`. This creates future misuse risk if inputs expand to less-trusted sources.
+Current call sites mostly pass integers, but interpolation leaves a latent SQL-injection footgun if these functions are reused with less-trusted inputs.
 
 **Secure-by-default improvements**
-1. Enforce strict type/range validation for `limit` (`int`, `>=1`, upper bound).
-2. Use parameterized `LIMIT ?` for SQLite.
-3. Keep SQL fragments from fixed internal allowlists only.
+1. Force `limit` to `int` and clamp to a safe range (for example, `1..1000`).
+2. Use `LIMIT ?` with SQLite parameter binding.
+3. Add tests that verify non-integer values are rejected.
 
 ---
 
-### M-002: Model download paths do not consistently enforce checksum verification
+### M-002: Timestamp CLI allows insecure `http://` TSA endpoints
 **Evidence**
-- `scripts/download_depth_models.py:91`
-- `scripts/download_sam2_checkpoint.py:41`
-- `scripts/install_models.py:72`
-- `scripts/install_models.py:79`
-- `scripts/install_models.py:190`
-- `scripts/install_models.py:191`
-- `src/transformation_portal/spatial_ai/segmentation/sam2_backend.py:979`
+- `tools/timestamp_merkle_signature.py:225-227` (`http` and `https` are both accepted)
 
 **Why this matters**
-HTTPS and host allowlists reduce risk but do not guarantee artifact integrity. Without mandatory digest/signature checks, compromised upstream assets can be accepted.
+Timestamp requests over plaintext HTTP are vulnerable to interception and tampering.
 
 **Secure-by-default improvements**
-1. Require SHA-256 (or signature) for every downloaded artifact; fail closed if absent.
-2. Keep checksum manifest under version control and rotate only via reviewed PRs.
-3. Verify checksum before atomic replace and log expected/actual digest.
-4. Prefer signed release provenance (e.g., Sigstore/TUF-style trust metadata).
+1. Require `https://` by default.
+2. Add explicit `--allow-insecure-http` escape hatch for local test-only workflows.
+3. Emit a high-visibility warning when insecure mode is used.
 
 ---
 
-### M-003: PyPI release workflow relies on long-lived API token secrets
+### M-003: Model loading/downloading is not consistently revision-pinned and fail-closed
 **Evidence**
-- `.github/workflows/submit-pypi.yml:95`
-- `.github/workflows/submit-pypi.yml:96`
-- `.github/workflows/submit-pypi.yml:137`
-- `.github/workflows/submit-pypi.yml:138`
+- `src/transformation_portal/style_transfer/reference_encoder.py:83,87`
+- `src/transformation_portal/style_transfer/ip_adapter.py:101-109`
+- `src/transformation_portal/vlm/llava.py:126,145`
+- `scripts/install_models_auto.py:246`
+- `scripts/download_samples.py:147-148`
 
 **Why this matters**
-If CI secrets are exposed, attackers can publish compromised packages. Trusted Publishing (OIDC) removes persistent publish secrets and is the safer default.
+Unpinned model revisions and optional checksum verification increase supply-chain risk (silent model drift or compromised upstream artifacts).
 
 **Secure-by-default improvements**
-1. Migrate to PyPI Trusted Publishing (OIDC) and remove `PYPI_API_TOKEN`/`TEST_PYPI_API_TOKEN`.
-2. Add `id-token: write` only for publish jobs.
-3. Gate publish jobs with protected environments and required approvals.
-
----
-
-### M-004: Security helper modules exist but are not enforced across command/path call sites
-**Evidence**
-- `src/transformation_portal/utils/security.py:46`
-- `src/transformation_portal/utils/security.py:234`
-- `src/transformation_portal/core/security/path.py:44`
-
-No direct usage found in code search for these helpers.
-
-**Why this matters**
-Security controls implemented but not adopted create a false sense of coverage; high-risk call sites can bypass intended protections.
-
-**Secure-by-default improvements**
-1. Make security wrappers the default entry path for file and subprocess operations.
-2. Add lint/check to block new raw `subprocess.run()`/path usage in sensitive modules.
-3. Add targeted tests proving traversal/injection rejection behavior.
+1. Require immutable model revisions (commit SHA pins) for all `from_pretrained`/snapshot pulls.
+2. Centralize trusted model IDs + revisions + digests in a lock manifest.
+3. Fail closed on missing checksum/digest in all downloader scripts.
+4. Add CI enforcement to block unpinned model sources in runtime code paths.
 
 ## Low Severity
 
-### L-001: Atomic write helpers force world-readable file permissions (`0644`)
+### L-001: Default CSP still allows inline script/style execution
 **Evidence**
-- `src/transformation_portal/lux_depth_v3/io_atomic.py:79`
-- `src/transformation_portal/lux_depth_v3/io_atomic.py:218`
+- `app.py:101-103` (`'unsafe-inline'` in `script-src` and `style-src`)
 
 **Why this matters**
-Generated artifacts may be readable by other local users on shared systems. This is a confidentiality hardening gap.
+If an XSS vector is introduced elsewhere, inline allowances increase exploitability.
 
 **Secure-by-default improvements**
-1. Default to `0600` and provide explicit opt-in for shared outputs.
-2. Make output permission mode configurable via environment/config.
-3. Document deployment guidance for multi-user hosts.
+1. Move to nonce/hash-based CSP for scripts/styles.
+2. Self-host frontend assets where possible and remove inline exceptions.
+3. Add CSP regression tests for production configuration.
 
 ## Positive Controls Observed
 
-1. YAML parsing predominantly uses `yaml.safe_load()` (good deserialization practice).
-2. Several download paths enforce HTTPS and host allowlists.
-3. Banned dependency constraints are present for known-risk packages (`basicsr`, `realesrgan`, etc.).
-4. Workflows generally define `permissions:` blocks rather than relying on broad defaults.
+1. Job endpoints enforce API key auth by default (`app.py:90`, `app.py:1168-1178`).
+2. Request body size protections exist at header and stream levels (`app.py:440-497`).
+3. Constant-time API key comparison is used (`app.py:434`).
+4. Security headers and TrustedHost middleware are configured (`app.py:1097`, `app.py:111-119`).
 
 ## Recommended Fix Order
 
-1. H-001 (plugin trust boundary hardening).
-2. H-002 (`pickle` replacement or cryptographic integrity gate).
-3. M-002 (mandatory artifact verification for downloads).
-4. M-003 (PyPI Trusted Publishing migration).
-5. M-001 and M-004 (defense-in-depth and consistency hardening).
-6. L-001 (permission defaults).
-
-## Notes and Assumptions
-
-1. Some risky code paths may be CLI/admin-only; severities assume realistic shared-dev/CI environments.
-2. SQL interpolation findings are currently low exploitability in observed call paths but are still best-practice violations worth fixing before interfaces expand.
+1. H-001 (rate/concurrency guards for job execution)
+2. H-002 (filesystem root restrictions for all job path arguments)
+3. M-001 (parameterize and bound SQL `LIMIT`)
+4. M-002 (HTTPS-only timestamp transport by default)
+5. M-003 (model revision pinning + fail-closed artifact verification)
+6. L-001 (CSP hardening)

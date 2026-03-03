@@ -602,8 +602,10 @@ def test_argv_archive_gate_a_defaults_to_fixity_scan_runner() -> None:
     assert argv[1].endswith("tools/archive_governance.py")
     assert argv[2] == "--json"
     assert argv[3] == "fixity-scan"
-    assert _flag_value(argv, "--archive-root") == "./archive_root"
-    assert _flag_value(argv, "--out-dir") == "./archive_reports"
+    expected_archive_root = str((orchestrator_app.REPO_ROOT / "archive_root").resolve())
+    expected_out_dir = str((orchestrator_app.REPO_ROOT / "archive_reports").resolve())
+    assert _flag_value(argv, "--archive-root") == expected_archive_root
+    assert _flag_value(argv, "--out-dir") == expected_out_dir
 
 
 def test_argv_archive_gate_b_allows_command_override_and_sign_maps_to_bagit_validation() -> None:
@@ -620,7 +622,8 @@ def test_argv_archive_gate_b_allows_command_override_and_sign_maps_to_bagit_vali
     argv = orchestrator_app._argv_from_request(payload)
 
     assert argv[3] == "bag-validate"
-    assert _flag_value(argv, "--bag-dir") == "archive_reports/bag"
+    expected_bag_dir = str((orchestrator_app.REPO_ROOT / "archive_reports" / "bag").resolve())
+    assert _flag_value(argv, "--bag-dir") == expected_bag_dir
     assert "--validate-with-bagit-python" in argv
 
 
@@ -637,7 +640,8 @@ def test_argv_archive_gate_fixity_verify_uses_canonical_default_report_filename(
     argv = orchestrator_app._argv_from_request(payload)
 
     assert argv[3] == "fixity-verify"
-    assert _flag_value(argv, "--report-path") == "archive_reports/verification_report.json"
+    expected_report_path = str((orchestrator_app.REPO_ROOT / "archive_reports" / "verification_report.json").resolve())
+    assert _flag_value(argv, "--report-path") == expected_report_path
 
 
 def test_argv_archive_gate_rejects_workers_below_minimum() -> None:
@@ -1135,6 +1139,159 @@ def test_create_job_archive_gate_invalid_integer_option_uses_typed_error_envelop
     assert body["error"]["code"] == "INVALID_ARGUMENT"
     assert body["error"]["details"]["reason"] == "invalid_archive_integer_option"
     assert orchestrator_app.JOBS == {}
+
+
+def test_argv_rejects_paths_outside_allowed_roots(tmp_path: Path) -> None:
+    previous_input_roots = orchestrator_app.ALLOWED_INPUT_ROOTS
+    previous_output_roots = orchestrator_app.ALLOWED_OUTPUT_ROOTS
+    previous_path_roots = orchestrator_app.ALLOWED_PATH_ROOTS
+    try:
+        allowed_root = (tmp_path / "allowed").resolve()
+        allowed_root.mkdir(parents=True, exist_ok=True)
+        orchestrator_app.ALLOWED_INPUT_ROOTS = [allowed_root]
+        orchestrator_app.ALLOWED_OUTPUT_ROOTS = [allowed_root]
+        orchestrator_app.ALLOWED_PATH_ROOTS = [allowed_root]
+
+        payload: Dict[str, object] = {
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": "./input_images",
+                "output_dir": "./output",
+            },
+        }
+
+        with pytest.raises(ValueError, match="Path outside allowed roots"):
+            orchestrator_app._argv_from_request(payload)
+    finally:
+        orchestrator_app.ALLOWED_INPUT_ROOTS = previous_input_roots
+        orchestrator_app.ALLOWED_OUTPUT_ROOTS = previous_output_roots
+        orchestrator_app.ALLOWED_PATH_ROOTS = previous_path_roots
+
+
+def test_argv_archive_gate_rejects_output_path_under_input_root(tmp_path: Path) -> None:
+    previous_input_roots = orchestrator_app.ALLOWED_INPUT_ROOTS
+    previous_output_roots = orchestrator_app.ALLOWED_OUTPUT_ROOTS
+    previous_path_roots = orchestrator_app.ALLOWED_PATH_ROOTS
+    try:
+        input_root = (tmp_path / "input_root").resolve()
+        output_root = (tmp_path / "output_root").resolve()
+        input_root.mkdir(parents=True, exist_ok=True)
+        output_root.mkdir(parents=True, exist_ok=True)
+        orchestrator_app.ALLOWED_INPUT_ROOTS = [input_root]
+        orchestrator_app.ALLOWED_OUTPUT_ROOTS = [output_root]
+        orchestrator_app.ALLOWED_PATH_ROOTS = [input_root, output_root]
+
+        payload: Dict[str, object] = {
+            "pipeline": "archive-gate-a",
+            "args": {
+                "input_dir": str(input_root),
+                "output_dir": str(output_root),
+                "archive_command": "fixity-scan",
+                "out_dir": str(input_root / "reports"),
+            },
+        }
+        with pytest.raises(ValueError, match="Path outside allowed roots"):
+            orchestrator_app._argv_from_request(payload)
+    finally:
+        orchestrator_app.ALLOWED_INPUT_ROOTS = previous_input_roots
+        orchestrator_app.ALLOWED_OUTPUT_ROOTS = previous_output_roots
+        orchestrator_app.ALLOWED_PATH_ROOTS = previous_path_roots
+
+
+def test_env_path_roots_rejects_invalid_configured_allowlist(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TP_ALLOWED_INPUT_ROOTS", "~")
+    with pytest.raises(RuntimeError, match="contains no valid roots"):
+        orchestrator_app._env_path_roots("TP_ALLOWED_INPUT_ROOTS", [orchestrator_app.REPO_ROOT])
+
+
+def test_argv_rejects_tilde_prefixed_paths() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "~/.ssh",
+            "output_dir": "./output",
+        },
+    }
+    with pytest.raises(ValueError, match="Invalid path value"):
+        orchestrator_app._argv_from_request(payload)
+
+
+def test_create_job_rejects_paths_outside_allowed_roots_with_typed_error(tmp_path: Path) -> None:
+    previous_input_roots = orchestrator_app.ALLOWED_INPUT_ROOTS
+    previous_output_roots = orchestrator_app.ALLOWED_OUTPUT_ROOTS
+    previous_path_roots = orchestrator_app.ALLOWED_PATH_ROOTS
+    try:
+        allowed_root = (tmp_path / "allowed").resolve()
+        allowed_root.mkdir(parents=True, exist_ok=True)
+        orchestrator_app.ALLOWED_INPUT_ROOTS = [allowed_root]
+        orchestrator_app.ALLOWED_OUTPUT_ROOTS = [allowed_root]
+        orchestrator_app.ALLOWED_PATH_ROOTS = [allowed_root]
+
+        response = asyncio.run(
+            orchestrator_app.create_job(
+                {
+                    "pipeline": "lux-depth-v3",
+                    "args": {"input_dir": "./input_images", "output_dir": "./output"},
+                }
+            )
+        )
+        body = json.loads(response.body.decode("utf-8"))
+    finally:
+        orchestrator_app.ALLOWED_INPUT_ROOTS = previous_input_roots
+        orchestrator_app.ALLOWED_OUTPUT_ROOTS = previous_output_roots
+        orchestrator_app.ALLOWED_PATH_ROOTS = previous_path_roots
+
+    assert response.status_code == 400
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["reason"] == "path_outside_allowed_roots"
+    assert orchestrator_app.JOBS == {}
+
+
+def test_create_job_rejects_tilde_prefixed_paths_with_typed_error() -> None:
+    response = asyncio.run(
+        orchestrator_app.create_job(
+            {
+                "pipeline": "lux-depth-v3",
+                "args": {"input_dir": "~/.ssh", "output_dir": "./output"},
+            }
+        )
+    )
+    body = json.loads(response.body.decode("utf-8"))
+
+    assert response.status_code == 400
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["reason"] == "invalid_path_value"
+    assert orchestrator_app.JOBS == {}
+
+
+def test_create_job_rejects_when_concurrency_limit_is_reached() -> None:
+    previous_limit = orchestrator_app.MAX_CONCURRENT_JOBS
+    try:
+        orchestrator_app.MAX_CONCURRENT_JOBS = 1
+        orchestrator_app.JOBS["job_running"] = orchestrator_app.Job(
+            id="job_running",
+            created_at=orchestrator_app._now(),
+            state="running",
+            request={"pipeline": "lux-depth-v3", "args": {"input_dir": "./input_images", "output_dir": "./output"}},
+        )
+
+        response = asyncio.run(
+            orchestrator_app.create_job(
+                {
+                    "pipeline": "lux-depth-v3",
+                    "args": {"input_dir": "./input_images", "output_dir": "./output"},
+                }
+            )
+        )
+        body = json.loads(response.body.decode("utf-8"))
+    finally:
+        orchestrator_app.MAX_CONCURRENT_JOBS = previous_limit
+        orchestrator_app.JOBS.clear()
+
+    assert response.status_code == 429
+    assert body["error"]["code"] == "RATE_LIMITED"
+    assert body["error"]["details"]["active_jobs"] == 1
+    assert body["error"]["details"]["max_concurrent_jobs"] == 1
 
 
 def test_importing_lux_depth_main_does_not_eagerly_import_depth_models() -> None:

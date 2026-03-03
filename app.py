@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import sys
+import tempfile
 import time
 import uuid
 from bisect import bisect_left
@@ -71,6 +72,75 @@ def _env_float(name: str, default: float, minimum: float = 0.0) -> float:
 PORTAL_HTML = Path(__file__).resolve().parent / "portal.html"
 REPO_ROOT = Path(__file__).resolve().parent
 ARCHIVE_GOVERNANCE_SCRIPT = REPO_ROOT / "tools" / "archive_governance.py"
+
+
+def _normalize_root_path(value: str | Path) -> Path:
+    raw = str(value or "").strip()
+    if not raw or raw.startswith("~") or "\x00" in raw:
+        raise ValueError("Invalid path root")
+    candidate = Path(raw)
+    if not candidate.is_absolute():
+        candidate = REPO_ROOT / candidate
+    return Path(os.path.realpath(candidate))
+
+
+def _env_path_roots(name: str, default: List[Path]) -> List[Path]:
+    raw = os.getenv(name)
+    values = [str(path) for path in default] if raw is None else [item.strip() for item in raw.split(",") if item.strip()]
+
+    roots: List[Path] = []
+    invalid_values: List[str] = []
+    for value in values:
+        try:
+            root = _normalize_root_path(value)
+        except (OSError, RuntimeError, ValueError):
+            invalid_values.append(value)
+            continue
+        if root not in roots:
+            roots.append(root)
+    if invalid_values:
+        LOGGER.warning("%s ignored invalid roots: %s", name, ", ".join(sorted(set(invalid_values))))
+    if raw is not None and not roots:
+        raise RuntimeError(f"{name} is set but contains no valid roots")
+    if not roots:
+        raise RuntimeError(f"{name} resolved to an empty root allowlist")
+    return roots
+
+
+def _resolve_untrusted_request_path(path_value: str) -> Path:
+    raw = str(path_value or "").strip()
+    if not raw or raw.startswith("~") or "\x00" in raw:
+        raise ValueError("Invalid path value")
+    candidate = Path(raw)
+    if not candidate.is_absolute():
+        candidate = REPO_ROOT / candidate
+    return Path(os.path.realpath(candidate))
+
+
+def _is_within_allowed_roots(candidate: Path, allowed_roots: List[Path]) -> bool:
+    candidate_real = os.path.realpath(candidate)
+    for root in allowed_roots:
+        root_real = os.path.realpath(root)
+        try:
+            if os.path.commonpath([candidate_real, root_real]) == root_real:
+                return True
+        except ValueError:
+            # Mixed absolute/relative or drive mismatch on non-POSIX platforms.
+            continue
+    return False
+
+
+def _validate_path_against_roots(path_value: str, allowed_roots: List[Path]) -> str:
+    try:
+        resolved = _resolve_untrusted_request_path(path_value)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise ValueError("Invalid path value") from exc
+
+    if not _is_within_allowed_roots(resolved, allowed_roots):
+        raise ValueError("Path outside allowed roots")
+    return str(resolved)
+
+
 LOG_TAIL_LIMIT = 2000
 STATUS_LOG_LIMIT = 250
 EVENT_QUEUE_MAXSIZE = 512
@@ -92,8 +162,16 @@ ALLOW_SSE_QUERY_API_KEY = _env_bool("TP_ALLOW_SSE_QUERY_API_KEY", False)
 TRUST_X_FORWARDED_FOR = _env_bool("TP_TRUST_X_FORWARDED_FOR", False)
 TRUSTED_PROXY_IPS = set(_env_csv("TP_TRUSTED_PROXY_IPS", []))
 MAX_REQUEST_BYTES = _env_int("TP_MAX_REQUEST_BYTES", 1024 * 1024, minimum=1024)
-RATE_LIMIT_PER_MINUTE = _env_int("TP_RATE_LIMIT_PER_MINUTE", 0, minimum=0)
+RATE_LIMIT_PER_MINUTE = _env_int("TP_RATE_LIMIT_PER_MINUTE", 60, minimum=0)
+MAX_CONCURRENT_JOBS = _env_int("TP_MAX_CONCURRENT_JOBS", 4, minimum=1)
 RATE_LIMIT_WINDOW_SECONDS = 60.0
+DEFAULT_ALLOWED_PATH_ROOTS = [
+    REPO_ROOT,
+    Path(tempfile.gettempdir()).resolve(),
+]
+ALLOWED_INPUT_ROOTS = _env_path_roots("TP_ALLOWED_INPUT_ROOTS", DEFAULT_ALLOWED_PATH_ROOTS)
+ALLOWED_OUTPUT_ROOTS = _env_path_roots("TP_ALLOWED_OUTPUT_ROOTS", DEFAULT_ALLOWED_PATH_ROOTS)
+ALLOWED_PATH_ROOTS = list(dict.fromkeys([*ALLOWED_INPUT_ROOTS, *ALLOWED_OUTPUT_ROOTS]))
 ENABLE_API_DOCS = _env_bool("TP_ENABLE_API_DOCS", False)
 READY_VERBOSE = _env_bool("TP_READY_VERBOSE", False)
 DEFAULT_CSP = (
@@ -199,6 +277,7 @@ class Job:
 JOBS: Dict[str, Job] = {}
 EVENT_SUBSCRIBERS: Dict[str, Dict[str, "asyncio.Queue[Dict[str, Any]]"]] = {}
 RATE_LIMIT_BUCKETS: Dict[str, Deque[float]] = {}
+JOB_ADMISSION_LOCK = asyncio.Lock()
 
 # Gate pipelines integrated directly
 ARCHIVE_GATE_PIPELINES = {"archive-gate-a", "archive-gate-b", "archive-gate-c"}
@@ -224,6 +303,8 @@ DEPTH_BACKEND_ALIASES = {
 VALIDATION_REASON_CODES = {
     "Unsupported pipeline": "unsupported_pipeline",
     "input_dir and output_dir are required": "missing_required_paths",
+    "Invalid path value": "invalid_path_value",
+    "Path outside allowed roots": "path_outside_allowed_roots",
     "Invalid quality_tier": "invalid_quality_tier",
     "Invalid depth_backend": "invalid_depth_backend",
     "Invalid segmentation_backend": "invalid_segmentation_backend",
@@ -299,6 +380,10 @@ def _cleanup_expired_jobs(now: float) -> None:
     for job_id in expired:
         JOBS.pop(job_id, None)
         EVENT_SUBSCRIBERS.pop(job_id, None)
+
+
+def _active_job_count() -> int:
+    return sum(1 for job in JOBS.values() if job.state in {"queued", "running"})
 
 
 def _cleanup_rate_limit_buckets(now: float) -> None:
@@ -681,10 +766,10 @@ def _serialize_job(job: Job, *, include_logs: bool = True) -> Dict[str, Any]:
     return data
 
 
-def _path_arg(args: Dict[str, Any], *keys: str, default: str) -> str:
+def _path_arg(args: Dict[str, Any], *keys: str, default: str, allowed_roots: List[Path]) -> str:
     value = _pick(args, *keys, default=default)
     text = str(value or "").strip()
-    return text or default
+    return _validate_path_against_roots(text or default, allowed_roots)
 
 
 def _int_arg(args: Dict[str, Any], *keys: str, default: int, minimum: int = 0) -> int:
@@ -715,10 +800,14 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
 
     if command == "fixity-scan":
         archive_index = _path_arg(
-            args, "archive_index", "archiveIndex", default=str(Path(input_dir) / "archive_index_normalized.csv.gz")
+            args,
+            "archive_index",
+            "archiveIndex",
+            default=str(Path(input_dir) / "archive_index_normalized.csv.gz"),
+            allowed_roots=ALLOWED_INPUT_ROOTS,
         )
-        archive_root = _path_arg(args, "archive_root", "archiveRoot", default=input_dir)
-        out_dir = _path_arg(args, "out_dir", "outDir", default=output_dir)
+        archive_root = _path_arg(args, "archive_root", "archiveRoot", default=input_dir, allowed_roots=ALLOWED_INPUT_ROOTS)
+        out_dir = _path_arg(args, "out_dir", "outDir", default=output_dir, allowed_roots=ALLOWED_OUTPUT_ROOTS)
         workers = _int_arg(args, "workers", default=1, minimum=1)
 
         argv.extend(
@@ -745,14 +834,19 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
 
     elif command == "fixity-verify":
         hash_manifest = _path_arg(
-            args, "hash_manifest", "hashManifest", default=str(Path(output_dir) / "hash_manifest.csv.gz")
+            args,
+            "hash_manifest",
+            "hashManifest",
+            default=str(Path(output_dir) / "hash_manifest.csv.gz"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
         )
-        archive_root = _path_arg(args, "archive_root", "archiveRoot", default=input_dir)
+        archive_root = _path_arg(args, "archive_root", "archiveRoot", default=input_dir, allowed_roots=ALLOWED_INPUT_ROOTS)
         report_path = _path_arg(
             args,
             "report_path",
             "reportPath",
             default=str(Path(output_dir) / "verification_report.json"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
         )
         verify_sample = _int_arg(args, "verify_sample", "verifySample", default=0, minimum=0)
         workers = _int_arg(args, "workers", default=1, minimum=1)
@@ -774,15 +868,27 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
 
     elif command == "manifest-build":
         archive_index = _path_arg(
-            args, "archive_index", "archiveIndex", default=str(Path(input_dir) / "archive_index_normalized.csv.gz")
+            args,
+            "archive_index",
+            "archiveIndex",
+            default=str(Path(input_dir) / "archive_index_normalized.csv.gz"),
+            allowed_roots=ALLOWED_INPUT_ROOTS,
         )
         hash_manifest = _path_arg(
-            args, "hash_manifest", "hashManifest", default=str(Path(output_dir) / "hash_manifest.csv.gz")
+            args,
+            "hash_manifest",
+            "hashManifest",
+            default=str(Path(output_dir) / "hash_manifest.csv.gz"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
         )
-        archive_root = _path_arg(args, "archive_root", "archiveRoot", default=input_dir)
-        out_jsonl = _path_arg(args, "out_jsonl", "outJsonl", default=manifest_default)
+        archive_root = _path_arg(args, "archive_root", "archiveRoot", default=input_dir, allowed_roots=ALLOWED_INPUT_ROOTS)
+        out_jsonl = _path_arg(args, "out_jsonl", "outJsonl", default=manifest_default, allowed_roots=ALLOWED_OUTPUT_ROOTS)
         out_summary = _path_arg(
-            args, "out_summary", "outSummary", default=str(Path(output_dir) / "archive_manifest_v2.summary.json")
+            args,
+            "out_summary",
+            "outSummary",
+            default=str(Path(output_dir) / "archive_manifest_v2.summary.json"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
         )
         collection_id = str(_pick(args, "collection_id", "collectionId", default="UNSPECIFIED") or "UNSPECIFIED").strip()
         owner = str(_pick(args, "owner", default="UNSPECIFIED") or "UNSPECIFIED").strip()
@@ -807,18 +913,37 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
         )
         rights_jsonl = _pick(args, "rights_jsonl", "rightsJsonl")
         if rights_jsonl:
-            argv.extend(["--rights-jsonl", str(rights_jsonl)])
+            argv.extend(["--rights-jsonl", _validate_path_against_roots(str(rights_jsonl), ALLOWED_INPUT_ROOTS)])
 
     elif command == "rights-apply":
-        manifest_jsonl = _path_arg(args, "manifest_jsonl", "manifestJsonl", default=manifest_default)
+        manifest_jsonl = _path_arg(
+            args,
+            "manifest_jsonl",
+            "manifestJsonl",
+            default=manifest_default,
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
         policy_yaml = _path_arg(
             args,
             "policy_yaml",
             "policyYaml",
             default=str(REPO_ROOT / "policy" / "archive" / "rights_flags.yml"),
+            allowed_roots=ALLOWED_INPUT_ROOTS,
         )
-        out_jsonl = _path_arg(args, "out_jsonl", "outJsonl", default=rights_manifest_default)
-        out_summary = _path_arg(args, "out_summary", "outSummary", default=str(Path(output_dir) / "asset_rights.summary.json"))
+        out_jsonl = _path_arg(
+            args,
+            "out_jsonl",
+            "outJsonl",
+            default=rights_manifest_default,
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
+        out_summary = _path_arg(
+            args,
+            "out_summary",
+            "outSummary",
+            default=str(Path(output_dir) / "asset_rights.summary.json"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
 
         argv.extend(
             [
@@ -834,10 +959,28 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
         )
 
     elif command == "bag-build":
-        manifest_jsonl = _path_arg(args, "manifest_jsonl", "manifestJsonl", default=rights_manifest_default)
-        archive_root = _path_arg(args, "archive_root", "archiveRoot", default=input_dir)
-        bag_dir = _path_arg(args, "bag_dir", "bagDir", default=str(Path(output_dir) / "bag"))
-        report_json = _path_arg(args, "report_json", "reportJson", default=str(Path(output_dir) / "bag_build_report.json"))
+        manifest_jsonl = _path_arg(
+            args,
+            "manifest_jsonl",
+            "manifestJsonl",
+            default=rights_manifest_default,
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
+        archive_root = _path_arg(args, "archive_root", "archiveRoot", default=input_dir, allowed_roots=ALLOWED_INPUT_ROOTS)
+        bag_dir = _path_arg(
+            args,
+            "bag_dir",
+            "bagDir",
+            default=str(Path(output_dir) / "bag"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
+        report_json = _path_arg(
+            args,
+            "report_json",
+            "reportJson",
+            default=str(Path(output_dir) / "bag_build_report.json"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
         source_organization = str(
             _pick(args, "source_organization", "sourceOrganization", default="UNSPECIFIED") or "UNSPECIFIED"
         ).strip()
@@ -863,8 +1006,20 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
             argv.append("--validate-with-bagit-python")
 
     elif command == "bag-validate":
-        bag_dir = _path_arg(args, "bag_dir", "bagDir", default=str(Path(output_dir) / "bag"))
-        report_json = _path_arg(args, "report_json", "reportJson", default=str(Path(output_dir) / "bag_validate_report.json"))
+        bag_dir = _path_arg(
+            args,
+            "bag_dir",
+            "bagDir",
+            default=str(Path(output_dir) / "bag"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
+        report_json = _path_arg(
+            args,
+            "report_json",
+            "reportJson",
+            default=str(Path(output_dir) / "bag_validate_report.json"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
         validate_with_bagit = _pick(args, "validate_with_bagit_python", "validateWithBagitPython")
         if validate_with_bagit is None:
             validate_with_bagit = _pick(args, "sign")
@@ -874,9 +1029,27 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
             argv.append("--validate-with-bagit-python")
 
     elif command == "dedup-plan":
-        manifest_jsonl = _path_arg(args, "manifest_jsonl", "manifestJsonl", default=rights_manifest_default)
-        out_ledger = _path_arg(args, "out_ledger", "outLedger", default=str(Path(output_dir) / "dedup_ledger.csv"))
-        out_summary = _path_arg(args, "out_summary", "outSummary", default=str(Path(output_dir) / "dedup_summary.json"))
+        manifest_jsonl = _path_arg(
+            args,
+            "manifest_jsonl",
+            "manifestJsonl",
+            default=rights_manifest_default,
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
+        out_ledger = _path_arg(
+            args,
+            "out_ledger",
+            "outLedger",
+            default=str(Path(output_dir) / "dedup_ledger.csv"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
+        out_summary = _path_arg(
+            args,
+            "out_summary",
+            "outSummary",
+            default=str(Path(output_dir) / "dedup_summary.json"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
         approver = str(_pick(args, "approver", default="UNSPECIFIED") or "UNSPECIFIED").strip()
 
         argv.extend(
@@ -893,9 +1066,27 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
         )
 
     elif command == "mets-export":
-        manifest_jsonl = _path_arg(args, "manifest_jsonl", "manifestJsonl", default=rights_manifest_default)
-        out_xml = _path_arg(args, "out_xml", "outXml", default=str(Path(output_dir) / "mets_export.xml"))
-        out_summary = _path_arg(args, "out_summary", "outSummary", default=str(Path(output_dir) / "mets_summary.json"))
+        manifest_jsonl = _path_arg(
+            args,
+            "manifest_jsonl",
+            "manifestJsonl",
+            default=rights_manifest_default,
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
+        out_xml = _path_arg(
+            args,
+            "out_xml",
+            "outXml",
+            default=str(Path(output_dir) / "mets_export.xml"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
+        out_summary = _path_arg(
+            args,
+            "out_summary",
+            "outSummary",
+            default=str(Path(output_dir) / "mets_summary.json"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
         href_prefix = str(_pick(args, "href_prefix", "hrefPrefix", default="data") or "data").strip()
 
         argv.extend(
@@ -912,9 +1103,27 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
         )
 
     elif command == "prov-export":
-        manifest_jsonl = _path_arg(args, "manifest_jsonl", "manifestJsonl", default=rights_manifest_default)
-        out_prov_jsonld = _path_arg(args, "out_prov_jsonld", "outProvJsonld", default=str(Path(output_dir) / "prov.jsonld"))
-        out_summary = _path_arg(args, "out_summary", "outSummary", default=str(Path(output_dir) / "prov_summary.json"))
+        manifest_jsonl = _path_arg(
+            args,
+            "manifest_jsonl",
+            "manifestJsonl",
+            default=rights_manifest_default,
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
+        out_prov_jsonld = _path_arg(
+            args,
+            "out_prov_jsonld",
+            "outProvJsonld",
+            default=str(Path(output_dir) / "prov.jsonld"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
+        out_summary = _path_arg(
+            args,
+            "out_summary",
+            "outSummary",
+            default=str(Path(output_dir) / "prov_summary.json"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
         datetime_field = str(_pick(args, "datetime_field", "datetimeField", default="modified_utc") or "modified_utc").strip()
 
         argv.extend(
@@ -931,15 +1140,41 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
         )
 
     elif command == "stac-export":
-        manifest_jsonl = _path_arg(args, "manifest_jsonl", "manifestJsonl", default=rights_manifest_default)
-        out_prov_jsonld = _path_arg(args, "out_prov_jsonld", "outProvJsonld", default=str(Path(output_dir) / "prov.jsonld"))
+        manifest_jsonl = _path_arg(
+            args,
+            "manifest_jsonl",
+            "manifestJsonl",
+            default=rights_manifest_default,
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
+        out_prov_jsonld = _path_arg(
+            args,
+            "out_prov_jsonld",
+            "outProvJsonld",
+            default=str(Path(output_dir) / "prov.jsonld"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
         out_stac_catalog = _path_arg(
-            args, "out_stac_catalog", "outStacCatalog", default=str(Path(output_dir) / "catalog.json")
+            args,
+            "out_stac_catalog",
+            "outStacCatalog",
+            default=str(Path(output_dir) / "catalog.json"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
         )
         out_stac_items_dir = _path_arg(
-            args, "out_stac_items_dir", "outStacItemsDir", default=str(Path(output_dir) / "stac_items")
+            args,
+            "out_stac_items_dir",
+            "outStacItemsDir",
+            default=str(Path(output_dir) / "stac_items"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
         )
-        out_summary = _path_arg(args, "out_summary", "outSummary", default=str(Path(output_dir) / "stac_summary.json"))
+        out_summary = _path_arg(
+            args,
+            "out_summary",
+            "outSummary",
+            default=str(Path(output_dir) / "stac_summary.json"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
         datetime_field = str(_pick(args, "datetime_field", "datetimeField", default="modified_utc") or "modified_utc").strip()
         require_stac = _pick(args, "require_stac", "requireStac")
 
@@ -978,10 +1213,12 @@ def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
     if pipeline not in ALLOWED_PIPELINES:
         raise ValueError("Unsupported pipeline")
 
-    input_dir = str(_pick(args, "input_dir", "inputDir", default="")).strip()
-    output_dir = str(_pick(args, "output_dir", "outputDir", default="")).strip()
-    if not input_dir or not output_dir:
+    input_dir_raw = str(_pick(args, "input_dir", "inputDir", default="")).strip()
+    output_dir_raw = str(_pick(args, "output_dir", "outputDir", default="")).strip()
+    if not input_dir_raw or not output_dir_raw:
         raise ValueError("input_dir and output_dir are required")
+    input_dir = _validate_path_against_roots(input_dir_raw, ALLOWED_INPUT_ROOTS)
+    output_dir = _validate_path_against_roots(output_dir_raw, ALLOWED_OUTPUT_ROOTS)
 
     def onoff(b: Any) -> str:
         return "on" if _as_bool(b) else "off"
@@ -1222,16 +1459,19 @@ async def ready() -> Dict[str, Any]:
             "python": sys.version.split()[0],
         }
         response["jobs"] = {
-            "active": sum(1 for job in JOBS.values() if job.state in {"queued", "running"}),
+            "active": _active_job_count(),
             "total": len(JOBS),
         }
         response["security"] = {
             "api_key_enforced_for_jobs": _job_api_key_enforced(),
             "rate_limit_per_minute": RATE_LIMIT_PER_MINUTE,
+            "max_concurrent_jobs": MAX_CONCURRENT_JOBS,
             "max_request_bytes": MAX_REQUEST_BYTES,
             "trusted_hosts_enabled": ENABLE_TRUSTED_HOSTS,
             "trust_x_forwarded_for": TRUST_X_FORWARDED_FOR,
             "trusted_proxy_ips_count": len(TRUSTED_PROXY_IPS),
+            "allowed_input_roots_count": len(ALLOWED_INPUT_ROOTS),
+            "allowed_output_roots_count": len(ALLOWED_OUTPUT_ROOTS),
             "allow_sse_query_api_key": ALLOW_SSE_QUERY_API_KEY,
             "docs_enabled": ENABLE_API_DOCS,
         }
@@ -1278,11 +1518,20 @@ async def create_job(payload: Dict[str, Any]) -> JSONResponse:
             details={"field": "payload", "reason": reason_code},
         )
 
-    _cleanup_expired_jobs(_now())
-    jid = "job_" + uuid.uuid4().hex[:8]
-    job = Job(id=jid, created_at=_now(), request=payload)
-    JOBS[jid] = job
-    EVENT_SUBSCRIBERS[jid] = {}
+    async with JOB_ADMISSION_LOCK:
+        _cleanup_expired_jobs(_now())
+        active_jobs = _active_job_count()
+        if active_jobs >= MAX_CONCURRENT_JOBS:
+            return _error_response(
+                429,
+                code="RATE_LIMITED",
+                message="too many active jobs; try again later",
+                details={"active_jobs": active_jobs, "max_concurrent_jobs": MAX_CONCURRENT_JOBS},
+            )
+        jid = "job_" + uuid.uuid4().hex[:8]
+        job = Job(id=jid, created_at=_now(), request=payload)
+        JOBS[jid] = job
+        EVENT_SUBSCRIBERS[jid] = {}
 
     asyncio.create_task(_run_job(job, argv))
 

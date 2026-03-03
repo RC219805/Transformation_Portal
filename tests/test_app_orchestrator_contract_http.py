@@ -40,6 +40,7 @@ def _reset_orchestrator_globals() -> None:
     previous_max_request_bytes = orchestrator_app.MAX_REQUEST_BYTES
     previous_max_indexed_artifacts = orchestrator_app.MAX_INDEXED_ARTIFACTS
     previous_rate_limit_per_minute = orchestrator_app.RATE_LIMIT_PER_MINUTE
+    previous_max_concurrent_jobs = orchestrator_app.MAX_CONCURRENT_JOBS
     orchestrator_app.API_KEY_SECRET = "contract-secret"
     orchestrator_app.ENFORCE_JOB_API_KEY = True
     orchestrator_app.ALLOW_SSE_QUERY_API_KEY = False
@@ -55,6 +56,7 @@ def _reset_orchestrator_globals() -> None:
         orchestrator_app.MAX_REQUEST_BYTES = previous_max_request_bytes
         orchestrator_app.MAX_INDEXED_ARTIFACTS = previous_max_indexed_artifacts
         orchestrator_app.RATE_LIMIT_PER_MINUTE = previous_rate_limit_per_minute
+        orchestrator_app.MAX_CONCURRENT_JOBS = previous_max_concurrent_jobs
         orchestrator_app.JOBS.clear()
         orchestrator_app.EVENT_SUBSCRIBERS.clear()
         orchestrator_app.RATE_LIMIT_BUCKETS.clear()
@@ -208,6 +210,63 @@ def test_oversized_v1_request_returns_typed_413_envelope(client: TestClient) -> 
     assert body["schema"] == "tp.orchestrator.error.v1"
     assert body["success"] is False
     assert body["error"]["code"] == "REQUEST_TOO_LARGE"
+
+
+def test_v1_jobs_rejects_requests_outside_allowed_roots(client: TestClient, tmp_path) -> None:
+    previous_input_roots = orchestrator_app.ALLOWED_INPUT_ROOTS
+    previous_output_roots = orchestrator_app.ALLOWED_OUTPUT_ROOTS
+    previous_path_roots = orchestrator_app.ALLOWED_PATH_ROOTS
+    try:
+        allowed_root = (tmp_path / "allowed").resolve()
+        allowed_root.mkdir(parents=True, exist_ok=True)
+        orchestrator_app.ALLOWED_INPUT_ROOTS = [allowed_root]
+        orchestrator_app.ALLOWED_OUTPUT_ROOTS = [allowed_root]
+        orchestrator_app.ALLOWED_PATH_ROOTS = [allowed_root]
+
+        response = client.post(
+            "/v1/jobs",
+            json={
+                "pipeline": "lux-depth-v3",
+                "args": {"input_dir": "./input", "output_dir": "./output"},
+            },
+        )
+        body = response.json()
+    finally:
+        orchestrator_app.ALLOWED_INPUT_ROOTS = previous_input_roots
+        orchestrator_app.ALLOWED_OUTPUT_ROOTS = previous_output_roots
+        orchestrator_app.ALLOWED_PATH_ROOTS = previous_path_roots
+
+    assert response.status_code == 400
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["reason"] == "path_outside_allowed_roots"
+
+
+def test_v1_jobs_rejects_when_max_concurrent_jobs_reached(client: TestClient) -> None:
+    previous_limit = orchestrator_app.MAX_CONCURRENT_JOBS
+    try:
+        orchestrator_app.MAX_CONCURRENT_JOBS = 1
+        orchestrator_app.JOBS["job_busy"] = orchestrator_app.Job(
+            id="job_busy",
+            created_at=orchestrator_app._now(),
+            state="running",
+            request={"pipeline": "lux-depth-v3", "args": {"input_dir": "./input", "output_dir": "./output"}},
+        )
+        response = client.post(
+            "/v1/jobs",
+            json={
+                "pipeline": "lux-depth-v3",
+                "args": {"input_dir": "./input", "output_dir": "./output"},
+            },
+        )
+        body = response.json()
+    finally:
+        orchestrator_app.MAX_CONCURRENT_JOBS = previous_limit
+        orchestrator_app.JOBS.clear()
+
+    assert response.status_code == 429
+    assert body["error"]["code"] == "RATE_LIMITED"
+    assert body["error"]["details"]["active_jobs"] == 1
+    assert body["error"]["details"]["max_concurrent_jobs"] == 1
 
 
 def test_unknown_v1_route_returns_typed_not_found_envelope(client: TestClient) -> None:
