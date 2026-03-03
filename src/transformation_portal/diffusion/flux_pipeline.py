@@ -19,6 +19,8 @@ import numpy as np
 import torch
 from PIL import Image
 
+from transformation_portal.core.security.model_lock import resolve_model_lock_revision
+
 try:
     from diffusers import (  # noqa: F401
         FlowMatchEulerDiscreteScheduler,
@@ -77,6 +79,9 @@ class FLUXPipeline:
         enable_cpu_offload: bool = False,
         enable_attention_slicing: bool = True,
         cache_dir: Optional[Path] = None,
+        *,
+        model_revision: Optional[str] = None,
+        strict_model_lock: Optional[bool] = None,
     ):
         """Initialize FLUX pipeline.
 
@@ -87,6 +92,9 @@ class FLUXPipeline:
             enable_cpu_offload: Enable CPU offload for memory efficiency
             enable_attention_slicing: Reduce memory usage
             cache_dir: Model cache directory
+            model_revision: Optional immutable revision for FLUX model artifacts
+            strict_model_lock: Enforce pinned revisions for remote model loads.
+                If None, uses ``TP_STRICT_MODEL_LOCK`` environment variable.
 
         Raises:
             ImportError: If FLUX dependencies not available
@@ -104,11 +112,23 @@ class FLUXPipeline:
         self.model_id = self.VARIANTS[variant]
         self.device = device or self._detect_device()
         self.torch_dtype = torch_dtype
+        self.strict_model_lock = strict_model_lock
+        self.model_revision = resolve_model_lock_revision(
+            self.model_id,
+            model_revision,
+            strict=self.strict_model_lock,
+            context="FLUXPipeline",
+        )
 
         logger.info(f"Initializing FLUX.1-{variant} on {self.device}")
 
         # Load pipeline
-        self.pipe = FluxPipeline.from_pretrained(self.model_id, torch_dtype=torch_dtype, cache_dir=cache_dir)  # nosec B615
+        self.pipe = FluxPipeline.from_pretrained(  # nosec B615
+            self.model_id,
+            revision=self.model_revision,
+            torch_dtype=torch_dtype,
+            cache_dir=cache_dir,
+        )
 
         # Optimize for memory/speed
         if enable_cpu_offload and self.device == "cuda":

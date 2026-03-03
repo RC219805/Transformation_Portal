@@ -195,18 +195,44 @@ def resize_to_multiple(
 class Preprocessor:
     """Generate ControlNet conditioning maps (Canny edges + optional depth)."""
 
-    def __init__(self, canny_low: int = 100, canny_high: int = 200, use_depth: bool = True):
+    def __init__(
+        self,
+        canny_low: int = 100,
+        canny_high: int = 200,
+        use_depth: bool = True,
+        strict_model_lock: Optional[bool] = None,
+    ):
         """Create detectors for edge and depth guidance."""
 
         self.canny = CannyDetector(low_threshold=canny_low, high_threshold=canny_high)
-        self.depth = self._load_depth_model() if use_depth else None
+        self.strict_model_lock = strict_model_lock
+        self.depth = self._load_depth_model(strict_model_lock=self.strict_model_lock) if use_depth else None
 
     @staticmethod
-    def _load_depth_model(model_type: str = "dpt_hybrid") -> Optional[MidasDetector]:
+    def _load_depth_model(
+        model_type: str = "dpt_hybrid",
+        strict_model_lock: Optional[bool] = None,
+    ) -> Optional[MidasDetector]:
         """Load a MiDaS depth model if available, otherwise return ``None``."""
 
         try:
-            return MidasDetector.from_pretrained("lllyasviel/ControlNet", model_type=model_type)  # nosec B615
+            model_id = "lllyasviel/ControlNet"
+            model_revision = resolve_model_lock_revision(
+                model_id,
+                requested_revision=None,
+                strict=strict_model_lock,
+                context="LuxuryRenderPipeline(PreprocessorDepth)",
+            )
+            try:
+                return MidasDetector.from_pretrained(  # nosec B615
+                    model_id,
+                    model_type=model_type,
+                    revision=model_revision,
+                )
+            except TypeError:
+                if model_revision and strict_model_lock:
+                    raise
+                return MidasDetector.from_pretrained(model_id, model_type=model_type)  # nosec B615
         except Exception as exc:  # pragma: no cover - best effort optional dependency
             print(f"[Warn] Depth estimator unavailable ({exc}). Continuing without depth guidance.")
             return None
@@ -764,6 +790,7 @@ class LuxuryRenderPipeline:
             )
 
         self.model_ids = model_ids
+        self.strict_model_lock = strict_model_lock
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.dtype = torch.float16 if (fp16 and torch.cuda.is_available()) else torch.float32
         self._use_depth = use_depth
@@ -891,7 +918,7 @@ class LuxuryRenderPipeline:
             )
 
         # Preprocessor
-        self.pre = Preprocessor(use_depth=self._use_depth)
+        self.pre = Preprocessor(use_depth=self._use_depth, strict_model_lock=self.strict_model_lock)
 
     @torch.inference_mode()
     def enhance(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-branches
