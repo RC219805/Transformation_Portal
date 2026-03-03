@@ -16,8 +16,31 @@ jobs:
       contents: read  # Security: lock down permissions
 
     steps:
-      - name: Checkout code
+      - name: Checkout code (attempt 1)
+        id: checkout_validate_1
+        continue-on-error: true
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          lfs: false
+          submodules: false
+
+      - name: Checkout code (attempt 2)
+        id: checkout_validate_2
+        if: steps.checkout_validate_1.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          lfs: false
+          submodules: false
+
+      - name: Enforce checkout success
+        if: steps.checkout_validate_1.outcome == 'failure' && steps.checkout_validate_2.outcome == 'failure'
+        run: |
+          echo "Repository checkout failed after two attempts."
+          echo "This is often a transient GitHub fetch/API issue; retry the workflow."
+          exit 1
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -57,13 +80,33 @@ jobs:
       contents: read  # Security: lock down permissions
 
     steps:
-      - name: Checkout PR branch
+      - name: Checkout PR branch (attempt 1)
+        id: checkout_schema_1
+        continue-on-error: true
         uses: actions/checkout@v6
         with:
           ref: ${{ github.head_ref }}
           fetch-depth: 1
           lfs: false
           submodules: false
+
+      - name: Checkout PR branch (attempt 2)
+        id: checkout_schema_2
+        if: steps.checkout_schema_1.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 1
+          lfs: false
+          submodules: false
+
+      - name: Enforce checkout success
+        if: steps.checkout_schema_1.outcome == 'failure' && steps.checkout_schema_2.outcome == 'failure'
+        run: |
+          echo "Repository checkout failed after two attempts."
+          echo "This is often a transient GitHub fetch/API issue; retry the workflow."
+          exit 1
 
       - name: Set up Python
         uses: actions/setup-python@v6
