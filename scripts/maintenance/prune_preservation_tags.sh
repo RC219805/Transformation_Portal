@@ -21,7 +21,8 @@ Options:
   --help                  Show this help text
 
 Notes:
-  - Candidate tags are selected by tag creator date (%(creatordate:unix)).
+  - Candidate tags are selected by annotated tagger date (%(taggerdate:unix)).
+  - Non-annotated tags under the managed prefix are rejected (fail-fast).
   - Without --apply, this script only prints candidates.
 EOF
 }
@@ -79,17 +80,36 @@ echo "cutoff_epoch=${cutoff_epoch}"
 echo "mode=$([[ "${APPLY}" == "true" ]] && echo apply || echo dry-run)"
 
 CANDIDATES=()
-while IFS= read -r tag_name; do
+NON_ANNOTATED=()
+while IFS='|' read -r tag_name object_type tagger_unix; do
   [[ -n "${tag_name}" ]] || continue
-  CANDIDATES+=("${tag_name}")
+
+  if [[ "${object_type}" != "tag" ]]; then
+    NON_ANNOTATED+=("${tag_name}")
+    continue
+  fi
+
+  if ! [[ "${tagger_unix}" =~ ^[0-9]+$ ]]; then
+    NON_ANNOTATED+=("${tag_name}")
+    continue
+  fi
+
+  if [[ "${tagger_unix}" -le "${cutoff_epoch}" ]]; then
+    CANDIDATES+=("${tag_name}")
+  fi
 done < <(
   git for-each-ref \
-    --format='%(refname:short)|%(creatordate:unix)' \
-    "refs/tags/${PREFIX}*" \
-  | awk -F'|' -v cutoff="${cutoff_epoch}" '
-      $2 ~ /^[0-9]+$/ && $2 <= cutoff { print $1 }
-    '
+    --format='%(refname:short)|%(objecttype)|%(taggerdate:unix)' \
+    "refs/tags/${PREFIX}*"
 )
+
+if [[ "${#NON_ANNOTATED[@]}" -gt 0 ]]; then
+  echo "error=non_annotated_tags_detected"
+  printf '%s\n' "${NON_ANNOTATED[@]}"
+  echo "Refusing to prune prefix '${PREFIX}' because non-annotated tags were found." >&2
+  echo "Convert these tags to annotated tags before pruning." >&2
+  exit 3
+fi
 
 if [[ "${#CANDIDATES[@]}" -eq 0 ]]; then
   echo "candidates=0"
