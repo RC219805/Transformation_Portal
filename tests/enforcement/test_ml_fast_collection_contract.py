@@ -263,11 +263,44 @@ def _parse_selected_count(output: str, stderr: str, json_report_file: Path | Non
                 f"stdout:\n{output}\n"
                 f"stderr:\n{stderr}"
             )
+        total = summary.get("total")
+        deselected = summary.get("deselected", 0)
         collected = summary.get("collected")
         if isinstance(collected, int):
-            return collected
+            if not isinstance(deselected, int):
+                raise AssertionError(
+                    "Pytest JSON report had non-integer deselected count.\n"
+                    f"json_report_file={json_report_file}\n"
+                    f"summary={summary!r}\n"
+                    f"stdout:\n{output}\n"
+                    f"stderr:\n{stderr}"
+                )
+            selected = collected - deselected
+            if selected < 0:
+                raise AssertionError(
+                    "Pytest JSON report invariant violated for collection counts.\n"
+                    f"Expected collected - deselected >= 0, got {collected} - {deselected}\n"
+                    f"json_report_file={json_report_file}\n"
+                    f"summary={summary!r}\n"
+                    f"stdout:\n{output}\n"
+                    f"stderr:\n{stderr}"
+                )
+            # In collect-only mode, some pytest-json-report versions emit total=0.
+            # In other modes/versions, total may equal selected.
+            if isinstance(total, int) and total not in {0, selected}:
+                raise AssertionError(
+                    "Pytest JSON report invariant violated for selected count.\n"
+                    f"Expected total in {{0, selected}}, got total={total}, selected={selected}\n"
+                    f"json_report_file={json_report_file}\n"
+                    f"summary={summary!r}\n"
+                    f"stdout:\n{output}\n"
+                    f"stderr:\n{stderr}"
+                )
+            return selected
+        if isinstance(total, int):
+            return total
         raise AssertionError(
-            "Pytest JSON report summary did not include integer 'collected' count.\n"
+            "Pytest JSON report summary did not include collection counters.\n"
             f"json_report_file={json_report_file}\n"
             f"summary={summary!r}\n"
             f"stdout:\n{output}\n"
@@ -299,8 +332,11 @@ def test_selected_count_parser_prefers_json_report():
     """When JSON report is available, parser should source count from JSON payload."""
     with tempfile.TemporaryDirectory(prefix="ml_fast_collect_json_parser_") as tmpdir:
         report_file = Path(tmpdir) / "report.json"
-        report_file.write_text('{"summary": {"collected": 42}}', encoding="utf-8")
-        assert _parse_selected_count(output="", stderr="", json_report_file=report_file) == 42
+        report_file.write_text(
+            '{"summary": {"collected": 106, "deselected": 39, "total": 0}}',
+            encoding="utf-8",
+        )
+        assert _parse_selected_count(output="", stderr="", json_report_file=report_file) == 67
 
 
 def _format_subprocess_failure(result: subprocess.CompletedProcess[str], markexpr: str, target: str, context: str) -> str:
