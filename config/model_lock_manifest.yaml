@@ -6,37 +6,37 @@ description: >
 
 repositories:
   depth-anything/Depth-Anything-V2-Small-hf:
-    revision: "NEEDS_VERIFICATION_DEPTH_ANYTHING_V2_SMALL_20260228"
+    revision: "5426e4f0f36572d16453bbda7a8389317b1bef99"
     owner: "depth pipeline"
   depth-anything/Depth-Anything-V2-Base-hf:
-    revision: "NEEDS_VERIFICATION_DEPTH_ANYTHING_V2_BASE_20260228"
+    revision: "b1958afc87fb45a9e3746cb387596094de553ed8"
     owner: "depth pipeline"
   depth-anything/Depth-Anything-V2-Large-hf:
-    revision: "NEEDS_VERIFICATION_DEPTH_ANYTHING_V2_LARGE_20260228"
+    revision: "7581137eff8d4e94f6e796d3baea0e9fa79b22d2"
     owner: "depth pipeline"
   onnx/Depth-Anything-V2:
     revision: "NEEDS_VERIFICATION_ONNX_DEPTH_ANYTHING_V2_20260228"
     owner: "depth pipeline"
   apple/coreml-depth-anything-v2-small:
-    revision: "NEEDS_VERIFICATION_COREML_DEPTH_ANYTHING_V2_SMALL_20260228"
+    revision: "cfef6f6f2a70783dedc0bfae40cecbc2052285d3"
     owner: "depth pipeline"
   apple/coreml-depth-anything-v2-base:
     revision: "NEEDS_VERIFICATION_COREML_DEPTH_ANYTHING_V2_BASE_20260228"
     owner: "depth pipeline"
   runwayml/stable-diffusion-v1-5:
-    revision: "NEEDS_VERIFICATION_SD15_BASE_MODEL_20260228"
+    revision: "451f4fe16113bff5a5d2269ed5ad43b0592e9a14"
     owner: "lux render pipeline"
   lllyasviel/sd-controlnet-canny:
-    revision: "NEEDS_VERIFICATION_CONTROLNET_CANNY_20260228"
+    revision: "7f2f69197050967007f6bbd23ab5e52f0384162a"
     owner: "lux render pipeline"
   lllyasviel/sd-controlnet-depth:
-    revision: "NEEDS_VERIFICATION_CONTROLNET_DEPTH_20260228"
+    revision: "35e42a3ea49845b3c76f202f145f257b9fb1b7d4"
     owner: "lux render pipeline"
   stabilityai/sd-x2-latent-upscaler:
-    revision: "NEEDS_VERIFICATION_SD_X2_LATENT_UPSCALER_20260228"
+    revision: "416b1f2c11d0abe15a73e2f30c697c408dfdb2a9"
     owner: "lux render pipeline"
   stabilityai/stable-diffusion-xl-refiner-1.0:
-    revision: "NEEDS_VERIFICATION_SDXL_REFINER_20260228"
+    revision: "5d4cfe854c9a9a87939ff3653551c2b3c99a4356"
     owner: "lux render pipeline"
   openai/clip-vit-large-patch14:
     revision: "32bd64288804d66eefd0ccbe215aa642df71cc41"
