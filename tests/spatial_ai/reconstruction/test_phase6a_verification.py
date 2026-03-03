@@ -142,9 +142,11 @@ class TestPhase6AVerification:
         assert "loss_history" in scene1.splats.metadata
         assert "loss_history" in scene2.splats.metadata
 
-    def test_optimizer_parameters_include_all_types(self):
+    def test_optimizer_parameters_include_all_types(self, seed_all_rngs, device_tolerance):
         """Verify all 5 parameter types are in the optimizer."""
+        seed_all_rngs(42)
         backend = GaussianBackend(tier="apex_research")
+        tolerance = device_tolerance.get(backend.device, device_tolerance["cpu"])
 
         # This is implicitly tested by checking that all parameters change during optimization
         images = [np.ones((60, 80, 3), dtype=np.float32) * 0.5 for _ in range(2)]
@@ -171,10 +173,38 @@ class TestPhase6AVerification:
         # Check that parameters changed (optimizer is working)
         # Note: Some parameters might not change much depending on scene, but at least one should
         params_changed = []
-        params_changed.append(not np.allclose(scene_initial.splats.positions, scene_optimized.splats.positions, atol=1e-4))
-        params_changed.append(not np.allclose(scene_initial.splats.colors, scene_optimized.splats.colors, atol=1e-4))
-        params_changed.append(not np.allclose(scene_initial.splats.scales, scene_optimized.splats.scales, atol=1e-4))
-        params_changed.append(not np.allclose(scene_initial.splats.opacities, scene_optimized.splats.opacities, atol=1e-4))
+        params_changed.append(
+            not np.allclose(
+                scene_initial.splats.positions,
+                scene_optimized.splats.positions,
+                rtol=tolerance["rtol"],
+                atol=tolerance["atol"],
+            )
+        )
+        params_changed.append(
+            not np.allclose(
+                scene_initial.splats.colors,
+                scene_optimized.splats.colors,
+                rtol=tolerance["rtol"],
+                atol=tolerance["atol"],
+            )
+        )
+        params_changed.append(
+            not np.allclose(
+                scene_initial.splats.scales,
+                scene_optimized.splats.scales,
+                rtol=tolerance["rtol"],
+                atol=tolerance["atol"],
+            )
+        )
+        params_changed.append(
+            not np.allclose(
+                scene_initial.splats.opacities,
+                scene_optimized.splats.opacities,
+                rtol=tolerance["rtol"],
+                atol=tolerance["atol"],
+            )
+        )
 
         # At least 2 parameter types should change (colors and positions are most likely)
         assert sum(params_changed) >= 2, f"Expected at least 2 parameter types to change, got {sum(params_changed)}"

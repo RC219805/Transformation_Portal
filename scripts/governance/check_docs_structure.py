@@ -64,6 +64,7 @@ ALLOWED_DOCS_TOP_LEVEL_DIRS = {
     "spatial_ai",
     "status",
     "summaries",
+    "testing",
     "validation",
     "verification",
     "version_history",

@@ -73,7 +73,8 @@ class TestGaussianBackend:
         backend = GaussianBackend(tier="apex_research", device=None)
         assert backend.device in {"cuda", "mps", "cpu"}
 
-    def test_optimization_seed_deterministic(self):
+    def test_optimization_seed_deterministic(self, seed_all_rngs):
+        seed_all_rngs(7)
         backend = GaussianBackend(
             tier="apex_research",
             device="cpu",
@@ -125,7 +126,8 @@ class TestGaussianBackendReconstruction:
         cameras = [CameraParams(intrinsics, np.eye(4, dtype=np.float32), w, h) for _ in range(views)]
         return images, cameras
 
-    def test_multiview_reconstruction_smoke(self):
+    def test_multiview_reconstruction_smoke(self, seed_all_rngs):
+        seed_all_rngs(42)
         backend = GaussianBackend(tier="apex_research")
         images, cameras = self._build_basic_input(3)
 
@@ -144,7 +146,8 @@ class TestGaussianBackendReconstruction:
         assert scene.splats.num_gaussians > 0
         assert len(scene.cameras) == 3
 
-    def test_render_view(self):
+    def test_render_view(self, seed_all_rngs):
+        seed_all_rngs(42)
         backend = GaussianBackend(tier="apex_research")
         images, cameras = self._build_basic_input(2)
 
