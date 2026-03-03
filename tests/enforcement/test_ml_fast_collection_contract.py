@@ -7,9 +7,12 @@ Baseline rationale (March 3, 2026):
   "ml and not slow and not integration and not benchmark"
 - Post-marker baseline: 67 selected tests after marking
   tests/spatial_ai/reconstruction/test_integration_phase23.py as integration
+- Current baseline: 69 selected tests after adding
+  deterministic reconstruction golden state snapshot + byte-stability tests
+  in tests/spatial_ai/reconstruction/test_reconstruction_golden_snapshot.py
 
 Contract:
-- fast-ML selected count must remain <= 67
+- fast-ML selected count must remain <= 69
 - integration-marked Phase 2.3 tests must stay out of fast-ML selection
 
 Design notes:
@@ -33,7 +36,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FAST_ML_MARKEXPR = "ml and not slow and not integration and not benchmark"
 INTEGRATION_MARKEXPR = "ml and integration and not slow and not benchmark"
-FAST_ML_SELECTED_CEILING = 67
+FAST_ML_SELECTED_CEILING = 69
 TORCH_BLOCK_MESSAGE = "Torch import blocked during fast-ML contract collect"
 
 _COLLECT_SUMMARY = re.compile(
@@ -380,7 +383,7 @@ def _assert_no_torch_boundary_violation(result: subprocess.CompletedProcess[str]
 
 
 def test_fast_ml_collection_contract():
-    """Fast-ML lane must remain at or under the strict 67-test ceiling."""
+    """Fast-ML lane must remain at or under the strict 69-test ceiling."""
     result, selected = _run_collect_with_torch_stub(FAST_ML_MARKEXPR, "tests/spatial_ai/reconstruction")
     assert result.returncode == 0, _format_subprocess_failure(
         result=result,
