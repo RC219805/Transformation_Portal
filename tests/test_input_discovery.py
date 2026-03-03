@@ -265,3 +265,23 @@ class TestInputDiscovery:
         # Only source image should be discovered
         assert len(images) == 1
         assert images[0].name == "source.jpg"
+
+    def test_output_dir_prefix_false_positive(self, tmp_path: Path):
+        """Verify output_dir exclusion does not over-match sibling directories with common prefixes."""
+        input_dir = tmp_path / "input"
+        output_dir = input_dir / "out"
+        sibling_dir = input_dir / "out2"
+        output_dir.mkdir(parents=True)
+        sibling_dir.mkdir(parents=True)
+
+        # Should be excluded because it is in output_dir.
+        (output_dir / "artifact.jpg").touch()
+        # Should remain discoverable because it is not inside output_dir.
+        keep = sibling_dir / "valid.jpg"
+        keep.touch()
+
+        config = DiscoveryConfig(strict_mode=False)
+        images = discover_images(input_dir, config, image_extensions=[".jpg"], output_dir=output_dir)
+
+        assert keep in images
+        assert all(not path.resolve().is_relative_to(output_dir.resolve()) for path in images)

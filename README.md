@@ -8,7 +8,7 @@
 
 Professional image and video processing toolkit for luxury real estate rendering, architectural visualization, and editorial post-production.
 
-**📊 [Performance Dashboard](https://rc219805.github.io/Transformation_Portal/apex/)** | **📈 [Latest Metrics](https://rc219805.github.io/Transformation_Portal/apex/latest.html)**
+**📊 [Performance Dashboard](https://rc219805.github.io/Transformation_Portal/)** | **📈 [Latest Metrics](https://rc219805.github.io/Transformation_Portal/latest.html)**
 
 ---
 
@@ -23,12 +23,10 @@ Key improvements in v2.0.0:
 
 Quick discovery:
 ```bash
-lux-depth-v2 --list-stable
-lux-depth-v2 --describe-preset interior_luxury
+lux-depth-v3 --help
 
 # If console scripts aren't on PATH, run as module:
-python -m lux_depth_v2 --list-stable
-python -m lux_depth_v2 --describe-preset interior_luxury
+python -m transformation_portal.lux_depth_v3 --help
 ```
 
 Install the release:

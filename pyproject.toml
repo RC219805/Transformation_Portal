@@ -12,9 +12,9 @@ authors = [{ name = "RC219805" }]
 # Core dependencies - see requirements/base.in for pinned versions
 dependencies = [
     # Keep broad runtime ranges in pyproject and enforce tested combos via lockfiles/CI.
-    # This project metadata currently keeps NumPy constrained below 2.
-    "numpy>=1.24,<3",
-    "Pillow>=10.0.0,<12",
+    # Keep ranges compatible with requirements/base.in lockfile policy (ADR-032).
+    "numpy>=1.24,<2.5.0",
+    "Pillow>=10.0.0,<13",
     "scipy>=1.15,<2",
     "scikit-learn>=1.0,<2",
     "opencv-python>=4.8.0,<5",  # required for depth_writer (core pipeline)
@@ -59,7 +59,7 @@ ml = [
     "colour-science>=0.4.2",
     "psutil>=5.9.0",
     "memory-profiler>=0.61.0",
-    "sentence-transformers>=5.2.2,<6",
+    "sentence-transformers>=3.1.0,<6",
     "accelerate>=0.20.0,<2",
 ]
 # CoreML acceleration (optional, Apple Silicon only)

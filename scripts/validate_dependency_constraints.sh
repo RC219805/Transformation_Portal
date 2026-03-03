@@ -33,15 +33,59 @@ if [[ "${1:-}" == "--verbose" ]]; then
     VERBOSE=1
 fi
 
+BANNED_REGISTRY="scripts/security/banned_dependencies.json"
+BANNED_PACKAGE_ENTRIES=()
+
+load_banned_packages() {
+    if [[ ! -f "$BANNED_REGISTRY" ]]; then
+        echo -e "${RED}❌ Missing banned registry: $BANNED_REGISTRY${NC}"
+        exit 1
+    fi
+
+    while IFS='|' read -r package reason migration; do
+        [[ -z "$package" ]] && continue
+        BANNED_PACKAGE_ENTRIES+=("${package}|${reason}|${migration}")
+    done < <(
+        python3 << 'PY'
+import json
+from pathlib import Path
+
+registry = Path("scripts/security/banned_dependencies.json")
+data = json.loads(registry.read_text(encoding="utf-8"))
+for entry in data.get("packages", []):
+    name = str(entry.get("name", "")).strip().lower()
+    reason = str(entry.get("reason", "")).strip()
+    migration = str(entry.get("migration", "")).strip()
+    if not name or not reason:
+        continue
+    print(f"{name}|{reason}|{migration}")
+PY
+    )
+
+    if [[ ${#BANNED_PACKAGE_ENTRIES[@]} -eq 0 ]]; then
+        echo -e "${RED}❌ No banned package entries loaded from $BANNED_REGISTRY${NC}"
+        exit 1
+    fi
+}
+
 # Function: Check if package is banned
 is_banned_package() {
     local package="$1"
-    case "$package" in
-        "realesrgan")
-            echo "Unmaintained (no updates since 2022)|Use local implementation in src/spatial_ai/reconstruction/"
+    local key
+    key=$(printf "%s" "$package" | tr '[:upper:]' '[:lower:]')
+    local entry=""
+    local name=""
+    local reason=""
+    local migration=""
+
+    for entry in "${BANNED_PACKAGE_ENTRIES[@]}"; do
+        IFS='|' read -r name reason migration <<< "$entry"
+        if [[ "$name" == "$key" ]]; then
+            [[ -z "$migration" ]] && migration="Use approved alternatives and repository-native implementations."
+            echo "${reason}|${migration}"
             return 0
-            ;;
-    esac
+        fi
+    done
     return 1
 }
 
@@ -88,6 +132,7 @@ get_approved_exception() {
 PRODUCTION_FILES=("base.in" "ml.in")
 
 echo -e "${BLUE}${BOLD}🔍 Validating dependency constraints...${NC}\n"
+load_banned_packages
 
 # Function: Extract package name from dependency line
 extract_package_name() {
