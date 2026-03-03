@@ -87,11 +87,15 @@ TRUSTED_HOSTS = _env_csv("TP_TRUSTED_HOSTS", ["localhost", "127.0.0.1", "::1", "
 ENABLE_TRUSTED_HOSTS = _env_bool("TP_ENABLE_TRUSTED_HOSTS", True)
 API_KEY_HEADER = os.getenv("TP_API_KEY_HEADER", "x-api-key").strip().lower() or "x-api-key"
 API_KEY_SECRET = os.getenv("TP_API_KEY", "").strip()
+ENFORCE_JOB_API_KEY = _env_bool("TP_ENFORCE_JOB_API_KEY", True)
+ALLOW_SSE_QUERY_API_KEY = _env_bool("TP_ALLOW_SSE_QUERY_API_KEY", False)
 TRUST_X_FORWARDED_FOR = _env_bool("TP_TRUST_X_FORWARDED_FOR", False)
 TRUSTED_PROXY_IPS = set(_env_csv("TP_TRUSTED_PROXY_IPS", []))
 MAX_REQUEST_BYTES = _env_int("TP_MAX_REQUEST_BYTES", 1024 * 1024, minimum=1024)
-RATE_LIMIT_PER_MINUTE = _env_int("TP_RATE_LIMIT_PER_MINUTE", 0, minimum=0)
+RATE_LIMIT_PER_MINUTE = _env_int("TP_RATE_LIMIT_PER_MINUTE", 120, minimum=0)
 RATE_LIMIT_WINDOW_SECONDS = 60.0
+ENABLE_API_DOCS = _env_bool("TP_ENABLE_API_DOCS", False)
+READY_VERBOSE = _env_bool("TP_READY_VERBOSE", False)
 DEFAULT_CSP = (
     "default-src 'self'; "
     "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; "
@@ -110,6 +114,8 @@ SECURITY_HEADERS = {
     "Referrer-Policy": "no-referrer",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
     "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Resource-Policy": "same-origin",
+    "X-Permitted-Cross-Domain-Policies": "none",
     "Content-Security-Policy": os.getenv("TP_CSP", DEFAULT_CSP).strip() or DEFAULT_CSP,
 }
 
@@ -371,6 +377,10 @@ def _is_protected_job_endpoint(path: str) -> bool:
     return path == "/v1/jobs" or path.startswith("/v1/jobs/")
 
 
+def _job_api_key_enforced() -> bool:
+    return ENFORCE_JOB_API_KEY or bool(API_KEY_SECRET)
+
+
 def _extract_client_ip(request: Request) -> str:
     peer_ip = request.client.host if request.client and request.client.host else None
     trust_forwarded = TRUST_X_FORWARDED_FOR or (peer_ip in TRUSTED_PROXY_IPS if peer_ip else False)
@@ -416,7 +426,7 @@ def _has_valid_api_key(request: Request) -> bool:
         authorization = request.headers.get("authorization", "")
         if authorization.lower().startswith("bearer "):
             provided = authorization[7:].strip()
-    if not provided and _is_job_events_endpoint(request.url.path):
+    if not provided and ALLOW_SSE_QUERY_API_KEY and _is_job_events_endpoint(request.url.path):
         provided = request.query_params.get("api_key", "").strip()
 
     if not provided:
@@ -1074,7 +1084,13 @@ def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
     return argv
 
 
-app = FastAPI(title="Transformation Portal Orchestrator", version="0.3.0")
+app = FastAPI(
+    title="Transformation Portal Orchestrator",
+    version="0.3.0",
+    docs_url="/docs" if ENABLE_API_DOCS else None,
+    redoc_url="/redoc" if ENABLE_API_DOCS else None,
+    openapi_url="/openapi.json" if ENABLE_API_DOCS else None,
+)
 app.state.cleanup_task = None
 
 if ENABLE_TRUSTED_HOSTS:
@@ -1120,6 +1136,10 @@ async def request_validation_handler(request: Request, exc: RequestValidationErr
 
 @app.on_event("startup")
 async def startup() -> None:
+    if _job_api_key_enforced() and not API_KEY_SECRET:
+        LOGGER.warning(
+            "TP_ENFORCE_JOB_API_KEY is enabled but TP_API_KEY is unset; /v1/jobs endpoints will return AUTH_CONFIGURATION_ERROR."
+        )
     cleanup_task = getattr(app.state, "cleanup_task", None)
     if cleanup_task is None or cleanup_task.done():
         app.state.cleanup_task = asyncio.create_task(_cleanup_loop())
@@ -1145,13 +1165,21 @@ async def security_layer(request: Request, call_next):
 
     _install_stream_body_limit(request)
 
-    if API_KEY_SECRET and _is_protected_job_endpoint(request.url.path) and not _has_valid_api_key(request):
-        return _error_response(
-            401,
-            code="UNAUTHORIZED",
-            message="invalid or missing API key",
-            details={"path": request.url.path},
-        )
+    if _is_protected_job_endpoint(request.url.path) and _job_api_key_enforced():
+        if not API_KEY_SECRET:
+            return _error_response(
+                503,
+                code="AUTH_CONFIGURATION_ERROR",
+                message="job endpoint authentication is enforced but TP_API_KEY is not configured",
+                details={"path": request.url.path, "env": "TP_API_KEY"},
+            )
+        if not _has_valid_api_key(request):
+            return _error_response(
+                401,
+                code="UNAUTHORIZED",
+                message="invalid or missing API key",
+                details={"path": request.url.path},
+            )
 
     client_ip = _extract_client_ip(request)
     if _is_rate_limited(client_ip, _now()):
@@ -1180,31 +1208,34 @@ async def serve_ui():
 
 @app.get("/ready")
 async def ready() -> Dict[str, Any]:
-    from shutil import which
-
-    return {
+    response: Dict[str, Any] = {
         "ok": True,
         "time": _now(),
         "version": "0.3.0",
-        "cli": {
+    }
+    if READY_VERBOSE:
+        from shutil import which
+
+        response["cli"] = {
             "lux-depth-v3": bool(which("lux-depth-v3")),
             "archive-governance": ARCHIVE_GOVERNANCE_SCRIPT.is_file(),
             "python": sys.version.split()[0],
-        },
-        "jobs": {
+        }
+        response["jobs"] = {
             "active": sum(1 for job in JOBS.values() if job.state in {"queued", "running"}),
             "total": len(JOBS),
-        },
-        "security": {
-            "api_key_required_for_mutations": bool(API_KEY_SECRET),
+        }
+        response["security"] = {
+            "api_key_enforced_for_jobs": _job_api_key_enforced(),
             "rate_limit_per_minute": RATE_LIMIT_PER_MINUTE,
             "max_request_bytes": MAX_REQUEST_BYTES,
             "trusted_hosts_enabled": ENABLE_TRUSTED_HOSTS,
             "trust_x_forwarded_for": TRUST_X_FORWARDED_FOR,
             "trusted_proxy_ips_count": len(TRUSTED_PROXY_IPS),
-            "api_key_protects_job_reads": bool(API_KEY_SECRET),
-        },
-    }
+            "allow_sse_query_api_key": ALLOW_SSE_QUERY_API_KEY,
+            "docs_enabled": ENABLE_API_DOCS,
+        }
+    return response
 
 
 @app.get("/v1/presets")
