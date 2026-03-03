@@ -98,12 +98,16 @@ def discover_images(
     logger.debug(f"Exclude path patterns: {config.exclude_path_patterns}")
     logger.debug(f"Exclude stem suffixes: {config.exclude_stem_suffixes}")
 
-    # ROBUSTNESS FIX (#6): Explicitly exclude output directory if it's a subdirectory of input
-    output_dir_normalized = None
+    # Exclude only true descendants of output_dir (avoid prefix false positives such as out vs out2)
+    output_dir_resolved: Optional[Path] = None
     if output_dir:
         try:
-            output_dir_normalized = output_dir.resolve().as_posix().lower()
-            logger.debug(f"Output directory to exclude: {output_dir_normalized}")
+            resolved_candidate = output_dir.expanduser().resolve()
+            if not resolved_candidate.is_dir():
+                logger.warning(f"Output directory exclusion skipped: {resolved_candidate} is not a directory")
+            else:
+                output_dir_resolved = resolved_candidate
+                logger.debug(f"Output directory to exclude: {output_dir_resolved}")
         except Exception as e:
             logger.warning(f"Failed to normalize output_dir: {e}")
 
@@ -118,11 +122,11 @@ def discover_images(
         if not candidate.is_file():
             continue
 
-        # CRITICAL FIX (#6): Check if file is in output directory before other checks
-        if output_dir_normalized:
+        # Check if file is in output directory before other checks
+        if output_dir_resolved:
             try:
-                candidate_normalized = candidate.resolve().as_posix().lower()
-                if candidate_normalized.startswith(output_dir_normalized):
+                candidate_resolved = candidate.resolve()
+                if candidate_resolved.is_relative_to(output_dir_resolved):
                     reason = "in output directory"
                     excluded_artifacts.append((candidate, reason))
                     logger.debug(f"Skipped artifact: {candidate.name} (matched: {reason})")

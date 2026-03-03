@@ -1,0 +1,29 @@
+{
+  "packages": [
+    {
+      "name": "realesrgan",
+      "reason": "Unmaintained, use local implementation",
+      "migration": "Use local implementation in src/transformation_portal/upscaling/ (e.g. upscaling/backends/realesrgan.py)"
+    },
+    {
+      "name": "gfpgan",
+      "reason": "Unstable dependencies, use alternative",
+      "migration": "Avoid runtime dependency; use approved internal restoration pipelines."
+    },
+    {
+      "name": "basicsr",
+      "reason": "CVE-2024-27763 command injection risk via SLURM_NODELIST",
+      "migration": "Use vetted internal alternatives and keep constraints hard-block in place."
+    },
+    {
+      "name": "apache-iceberg",
+      "reason": "Java interop supply-chain risk not yet approved (ADR-024 pending controls)",
+      "migration": "Do not introduce until ADR-024 controls and review are fully completed."
+    },
+    {
+      "name": "pyiceberg",
+      "reason": "Wrapper inherits apache-iceberg supply-chain risk profile",
+      "migration": "Do not introduce until upstream apache-iceberg controls are approved."
+    }
+  ]
+}

@@ -373,7 +373,33 @@ jobs:
           path: _site
 
       - name: Deploy to GitHub Pages
+        id: deploy_pages
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
+
+      - name: Dashboard smoke check (warn-only)
+        if: always()
+        run: |
+          set +e
+          PAGE_URL="${{ steps.deploy_pages.outputs.page_url }}"
+          if [ -z "${PAGE_URL}" ]; then
+            echo "::warning::Dashboard smoke check skipped: deploy-pages did not expose page_url output."
+            exit 0
+          fi
+
+          check_url() {
+            url="$1"
+            label="$2"
+            status=$(curl -fsSL -o /dev/null -w "%{http_code}" "$url" || echo "000")
+            if [ "$status" != "200" ]; then
+              echo "::warning::${label} returned HTTP ${status}: ${url}"
+            else
+              echo "✅ ${label} returned HTTP 200: ${url}"
+            fi
+          }
+
+          check_url "${PAGE_URL}" "Dashboard index"
+          check_url "${PAGE_URL%/}/latest.html" "Dashboard latest metrics"
+          exit 0
 
   weekly_backup:
     name: Weekly Ledger Backup

@@ -541,7 +541,8 @@ jobs:
         if: matrix.test-type == 'core'
         run: |
           set -euo pipefail
-          python -m pip install -e .
+          python -m pip install -e . --no-deps
+          python -m pip check
 
       - name: Install archive report test dependencies (core legs only)
         if: matrix.test-type == 'core'
