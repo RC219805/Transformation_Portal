@@ -488,7 +488,28 @@ jobs:
           echo "Disk usage after cleanup:"
           df -h
 
-      - uses: actions/checkout@v6
+      - name: Checkout (attempt 1)
+        id: checkout1
+        uses: actions/checkout@v6
+        continue-on-error: true
+        with:
+          fetch-depth: 1
+          submodules: false
+
+      - name: Checkout (attempt 2)
+        id: checkout2
+        if: steps.checkout1.outcome == 'failure'
+        uses: actions/checkout@v6
+        continue-on-error: true
+        with:
+          fetch-depth: 1
+          submodules: false
+
+      - name: Fail clearly if checkout is down
+        if: steps.checkout1.outcome == 'failure' && steps.checkout2.outcome == 'failure'
+        run: |
+          echo "::error::GitHub checkout failed twice (transient GitHub infra / HTTP 500 / packfile). Re-run workflow."
+          exit 1
 
       - uses: actions/setup-python@v6
         with:

@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 pytest.importorskip("torch", reason="torch required for reconstruction integration")
-pytestmark = pytest.mark.ml
+pytestmark = [pytest.mark.ml, pytest.mark.integration]
 
 from transformation_portal.spatial_ai.reconstruction import (  # pylint: disable=wrong-import-position
     CameraParams,

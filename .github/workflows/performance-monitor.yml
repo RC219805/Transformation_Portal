@@ -141,8 +141,10 @@ jobs:
 
       - name: Comment on PR
         if: github.event_name == 'pull_request'
+        continue-on-error: true
         uses: actions/github-script@v8
         with:
+          retries: 3
           script: |
             const fs = require('fs');
 
@@ -166,9 +168,13 @@ jobs:
               summary += '\n## Memory Profile\n```\n' + memReport.slice(0, 500) + '\n```\n';
             }
 
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: summary
-            });
+            try {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: summary
+              });
+            } catch (error) {
+              core.warning(`Performance PR comment failed: ${error.message}`);
+            }
