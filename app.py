@@ -89,22 +89,21 @@ def _env_path_roots(name: str, default: List[Path]) -> List[Path]:
     values = [str(path) for path in default] if raw is None else [item.strip() for item in raw.split(",") if item.strip()]
 
     roots: List[Path] = []
+    invalid_values: List[str] = []
     for value in values:
         try:
             root = _normalize_root_path(value)
         except (OSError, RuntimeError, ValueError):
+            invalid_values.append(value)
             continue
         if root not in roots:
             roots.append(root)
-    if roots:
-        return roots
-    for value in default:
-        try:
-            root = _normalize_root_path(value)
-        except (OSError, RuntimeError, ValueError):
-            continue
-        if root not in roots:
-            roots.append(root)
+    if invalid_values:
+        LOGGER.warning("%s ignored invalid roots: %s", name, ", ".join(sorted(set(invalid_values))))
+    if raw is not None and not roots:
+        raise RuntimeError(f"{name} is set but contains no valid roots")
+    if not roots:
+        raise RuntimeError(f"{name} resolved to an empty root allowlist")
     return roots
 
 
@@ -278,6 +277,7 @@ class Job:
 JOBS: Dict[str, Job] = {}
 EVENT_SUBSCRIBERS: Dict[str, Dict[str, "asyncio.Queue[Dict[str, Any]]"]] = {}
 RATE_LIMIT_BUCKETS: Dict[str, Deque[float]] = {}
+JOB_ADMISSION_LOCK = asyncio.Lock()
 
 # Gate pipelines integrated directly
 ARCHIVE_GATE_PIPELINES = {"archive-gate-a", "archive-gate-b", "archive-gate-c"}
@@ -766,10 +766,10 @@ def _serialize_job(job: Job, *, include_logs: bool = True) -> Dict[str, Any]:
     return data
 
 
-def _path_arg(args: Dict[str, Any], *keys: str, default: str) -> str:
+def _path_arg(args: Dict[str, Any], *keys: str, default: str, allowed_roots: List[Path]) -> str:
     value = _pick(args, *keys, default=default)
     text = str(value or "").strip()
-    return _validate_path_against_roots(text or default, ALLOWED_PATH_ROOTS)
+    return _validate_path_against_roots(text or default, allowed_roots)
 
 
 def _int_arg(args: Dict[str, Any], *keys: str, default: int, minimum: int = 0) -> int:
@@ -800,10 +800,14 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
 
     if command == "fixity-scan":
         archive_index = _path_arg(
-            args, "archive_index", "archiveIndex", default=str(Path(input_dir) / "archive_index_normalized.csv.gz")
+            args,
+            "archive_index",
+            "archiveIndex",
+            default=str(Path(input_dir) / "archive_index_normalized.csv.gz"),
+            allowed_roots=ALLOWED_INPUT_ROOTS,
         )
-        archive_root = _path_arg(args, "archive_root", "archiveRoot", default=input_dir)
-        out_dir = _path_arg(args, "out_dir", "outDir", default=output_dir)
+        archive_root = _path_arg(args, "archive_root", "archiveRoot", default=input_dir, allowed_roots=ALLOWED_INPUT_ROOTS)
+        out_dir = _path_arg(args, "out_dir", "outDir", default=output_dir, allowed_roots=ALLOWED_OUTPUT_ROOTS)
         workers = _int_arg(args, "workers", default=1, minimum=1)
 
         argv.extend(
@@ -830,14 +834,19 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
 
     elif command == "fixity-verify":
         hash_manifest = _path_arg(
-            args, "hash_manifest", "hashManifest", default=str(Path(output_dir) / "hash_manifest.csv.gz")
+            args,
+            "hash_manifest",
+            "hashManifest",
+            default=str(Path(output_dir) / "hash_manifest.csv.gz"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
         )
-        archive_root = _path_arg(args, "archive_root", "archiveRoot", default=input_dir)
+        archive_root = _path_arg(args, "archive_root", "archiveRoot", default=input_dir, allowed_roots=ALLOWED_INPUT_ROOTS)
         report_path = _path_arg(
             args,
             "report_path",
             "reportPath",
             default=str(Path(output_dir) / "verification_report.json"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
         )
         verify_sample = _int_arg(args, "verify_sample", "verifySample", default=0, minimum=0)
         workers = _int_arg(args, "workers", default=1, minimum=1)
@@ -859,15 +868,27 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
 
     elif command == "manifest-build":
         archive_index = _path_arg(
-            args, "archive_index", "archiveIndex", default=str(Path(input_dir) / "archive_index_normalized.csv.gz")
+            args,
+            "archive_index",
+            "archiveIndex",
+            default=str(Path(input_dir) / "archive_index_normalized.csv.gz"),
+            allowed_roots=ALLOWED_INPUT_ROOTS,
         )
         hash_manifest = _path_arg(
-            args, "hash_manifest", "hashManifest", default=str(Path(output_dir) / "hash_manifest.csv.gz")
+            args,
+            "hash_manifest",
+            "hashManifest",
+            default=str(Path(output_dir) / "hash_manifest.csv.gz"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
         )
-        archive_root = _path_arg(args, "archive_root", "archiveRoot", default=input_dir)
-        out_jsonl = _path_arg(args, "out_jsonl", "outJsonl", default=manifest_default)
+        archive_root = _path_arg(args, "archive_root", "archiveRoot", default=input_dir, allowed_roots=ALLOWED_INPUT_ROOTS)
+        out_jsonl = _path_arg(args, "out_jsonl", "outJsonl", default=manifest_default, allowed_roots=ALLOWED_OUTPUT_ROOTS)
         out_summary = _path_arg(
-            args, "out_summary", "outSummary", default=str(Path(output_dir) / "archive_manifest_v2.summary.json")
+            args,
+            "out_summary",
+            "outSummary",
+            default=str(Path(output_dir) / "archive_manifest_v2.summary.json"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
         )
         collection_id = str(_pick(args, "collection_id", "collectionId", default="UNSPECIFIED") or "UNSPECIFIED").strip()
         owner = str(_pick(args, "owner", default="UNSPECIFIED") or "UNSPECIFIED").strip()
@@ -892,18 +913,37 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
         )
         rights_jsonl = _pick(args, "rights_jsonl", "rightsJsonl")
         if rights_jsonl:
-            argv.extend(["--rights-jsonl", _validate_path_against_roots(str(rights_jsonl), ALLOWED_PATH_ROOTS)])
+            argv.extend(["--rights-jsonl", _validate_path_against_roots(str(rights_jsonl), ALLOWED_INPUT_ROOTS)])
 
     elif command == "rights-apply":
-        manifest_jsonl = _path_arg(args, "manifest_jsonl", "manifestJsonl", default=manifest_default)
+        manifest_jsonl = _path_arg(
+            args,
+            "manifest_jsonl",
+            "manifestJsonl",
+            default=manifest_default,
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
         policy_yaml = _path_arg(
             args,
             "policy_yaml",
             "policyYaml",
             default=str(REPO_ROOT / "policy" / "archive" / "rights_flags.yml"),
+            allowed_roots=ALLOWED_INPUT_ROOTS,
         )
-        out_jsonl = _path_arg(args, "out_jsonl", "outJsonl", default=rights_manifest_default)
-        out_summary = _path_arg(args, "out_summary", "outSummary", default=str(Path(output_dir) / "asset_rights.summary.json"))
+        out_jsonl = _path_arg(
+            args,
+            "out_jsonl",
+            "outJsonl",
+            default=rights_manifest_default,
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
+        out_summary = _path_arg(
+            args,
+            "out_summary",
+            "outSummary",
+            default=str(Path(output_dir) / "asset_rights.summary.json"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
 
         argv.extend(
             [
@@ -919,10 +959,28 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
         )
 
     elif command == "bag-build":
-        manifest_jsonl = _path_arg(args, "manifest_jsonl", "manifestJsonl", default=rights_manifest_default)
-        archive_root = _path_arg(args, "archive_root", "archiveRoot", default=input_dir)
-        bag_dir = _path_arg(args, "bag_dir", "bagDir", default=str(Path(output_dir) / "bag"))
-        report_json = _path_arg(args, "report_json", "reportJson", default=str(Path(output_dir) / "bag_build_report.json"))
+        manifest_jsonl = _path_arg(
+            args,
+            "manifest_jsonl",
+            "manifestJsonl",
+            default=rights_manifest_default,
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
+        archive_root = _path_arg(args, "archive_root", "archiveRoot", default=input_dir, allowed_roots=ALLOWED_INPUT_ROOTS)
+        bag_dir = _path_arg(
+            args,
+            "bag_dir",
+            "bagDir",
+            default=str(Path(output_dir) / "bag"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
+        report_json = _path_arg(
+            args,
+            "report_json",
+            "reportJson",
+            default=str(Path(output_dir) / "bag_build_report.json"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
         source_organization = str(
             _pick(args, "source_organization", "sourceOrganization", default="UNSPECIFIED") or "UNSPECIFIED"
         ).strip()
@@ -948,8 +1006,20 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
             argv.append("--validate-with-bagit-python")
 
     elif command == "bag-validate":
-        bag_dir = _path_arg(args, "bag_dir", "bagDir", default=str(Path(output_dir) / "bag"))
-        report_json = _path_arg(args, "report_json", "reportJson", default=str(Path(output_dir) / "bag_validate_report.json"))
+        bag_dir = _path_arg(
+            args,
+            "bag_dir",
+            "bagDir",
+            default=str(Path(output_dir) / "bag"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
+        report_json = _path_arg(
+            args,
+            "report_json",
+            "reportJson",
+            default=str(Path(output_dir) / "bag_validate_report.json"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
         validate_with_bagit = _pick(args, "validate_with_bagit_python", "validateWithBagitPython")
         if validate_with_bagit is None:
             validate_with_bagit = _pick(args, "sign")
@@ -959,9 +1029,27 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
             argv.append("--validate-with-bagit-python")
 
     elif command == "dedup-plan":
-        manifest_jsonl = _path_arg(args, "manifest_jsonl", "manifestJsonl", default=rights_manifest_default)
-        out_ledger = _path_arg(args, "out_ledger", "outLedger", default=str(Path(output_dir) / "dedup_ledger.csv"))
-        out_summary = _path_arg(args, "out_summary", "outSummary", default=str(Path(output_dir) / "dedup_summary.json"))
+        manifest_jsonl = _path_arg(
+            args,
+            "manifest_jsonl",
+            "manifestJsonl",
+            default=rights_manifest_default,
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
+        out_ledger = _path_arg(
+            args,
+            "out_ledger",
+            "outLedger",
+            default=str(Path(output_dir) / "dedup_ledger.csv"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
+        out_summary = _path_arg(
+            args,
+            "out_summary",
+            "outSummary",
+            default=str(Path(output_dir) / "dedup_summary.json"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
         approver = str(_pick(args, "approver", default="UNSPECIFIED") or "UNSPECIFIED").strip()
 
         argv.extend(
@@ -978,9 +1066,27 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
         )
 
     elif command == "mets-export":
-        manifest_jsonl = _path_arg(args, "manifest_jsonl", "manifestJsonl", default=rights_manifest_default)
-        out_xml = _path_arg(args, "out_xml", "outXml", default=str(Path(output_dir) / "mets_export.xml"))
-        out_summary = _path_arg(args, "out_summary", "outSummary", default=str(Path(output_dir) / "mets_summary.json"))
+        manifest_jsonl = _path_arg(
+            args,
+            "manifest_jsonl",
+            "manifestJsonl",
+            default=rights_manifest_default,
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
+        out_xml = _path_arg(
+            args,
+            "out_xml",
+            "outXml",
+            default=str(Path(output_dir) / "mets_export.xml"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
+        out_summary = _path_arg(
+            args,
+            "out_summary",
+            "outSummary",
+            default=str(Path(output_dir) / "mets_summary.json"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
         href_prefix = str(_pick(args, "href_prefix", "hrefPrefix", default="data") or "data").strip()
 
         argv.extend(
@@ -997,9 +1103,27 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
         )
 
     elif command == "prov-export":
-        manifest_jsonl = _path_arg(args, "manifest_jsonl", "manifestJsonl", default=rights_manifest_default)
-        out_prov_jsonld = _path_arg(args, "out_prov_jsonld", "outProvJsonld", default=str(Path(output_dir) / "prov.jsonld"))
-        out_summary = _path_arg(args, "out_summary", "outSummary", default=str(Path(output_dir) / "prov_summary.json"))
+        manifest_jsonl = _path_arg(
+            args,
+            "manifest_jsonl",
+            "manifestJsonl",
+            default=rights_manifest_default,
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
+        out_prov_jsonld = _path_arg(
+            args,
+            "out_prov_jsonld",
+            "outProvJsonld",
+            default=str(Path(output_dir) / "prov.jsonld"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
+        out_summary = _path_arg(
+            args,
+            "out_summary",
+            "outSummary",
+            default=str(Path(output_dir) / "prov_summary.json"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
         datetime_field = str(_pick(args, "datetime_field", "datetimeField", default="modified_utc") or "modified_utc").strip()
 
         argv.extend(
@@ -1016,15 +1140,41 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
         )
 
     elif command == "stac-export":
-        manifest_jsonl = _path_arg(args, "manifest_jsonl", "manifestJsonl", default=rights_manifest_default)
-        out_prov_jsonld = _path_arg(args, "out_prov_jsonld", "outProvJsonld", default=str(Path(output_dir) / "prov.jsonld"))
+        manifest_jsonl = _path_arg(
+            args,
+            "manifest_jsonl",
+            "manifestJsonl",
+            default=rights_manifest_default,
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
+        out_prov_jsonld = _path_arg(
+            args,
+            "out_prov_jsonld",
+            "outProvJsonld",
+            default=str(Path(output_dir) / "prov.jsonld"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
         out_stac_catalog = _path_arg(
-            args, "out_stac_catalog", "outStacCatalog", default=str(Path(output_dir) / "catalog.json")
+            args,
+            "out_stac_catalog",
+            "outStacCatalog",
+            default=str(Path(output_dir) / "catalog.json"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
         )
         out_stac_items_dir = _path_arg(
-            args, "out_stac_items_dir", "outStacItemsDir", default=str(Path(output_dir) / "stac_items")
+            args,
+            "out_stac_items_dir",
+            "outStacItemsDir",
+            default=str(Path(output_dir) / "stac_items"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
         )
-        out_summary = _path_arg(args, "out_summary", "outSummary", default=str(Path(output_dir) / "stac_summary.json"))
+        out_summary = _path_arg(
+            args,
+            "out_summary",
+            "outSummary",
+            default=str(Path(output_dir) / "stac_summary.json"),
+            allowed_roots=ALLOWED_OUTPUT_ROOTS,
+        )
         datetime_field = str(_pick(args, "datetime_field", "datetimeField", default="modified_utc") or "modified_utc").strip()
         require_stac = _pick(args, "require_stac", "requireStac")
 
@@ -1368,19 +1518,20 @@ async def create_job(payload: Dict[str, Any]) -> JSONResponse:
             details={"field": "payload", "reason": reason_code},
         )
 
-    _cleanup_expired_jobs(_now())
-    active_jobs = _active_job_count()
-    if active_jobs >= MAX_CONCURRENT_JOBS:
-        return _error_response(
-            429,
-            code="RATE_LIMITED",
-            message="too many active jobs; try again later",
-            details={"active_jobs": active_jobs, "max_concurrent_jobs": MAX_CONCURRENT_JOBS},
-        )
-    jid = "job_" + uuid.uuid4().hex[:8]
-    job = Job(id=jid, created_at=_now(), request=payload)
-    JOBS[jid] = job
-    EVENT_SUBSCRIBERS[jid] = {}
+    async with JOB_ADMISSION_LOCK:
+        _cleanup_expired_jobs(_now())
+        active_jobs = _active_job_count()
+        if active_jobs >= MAX_CONCURRENT_JOBS:
+            return _error_response(
+                429,
+                code="RATE_LIMITED",
+                message="too many active jobs; try again later",
+                details={"active_jobs": active_jobs, "max_concurrent_jobs": MAX_CONCURRENT_JOBS},
+            )
+        jid = "job_" + uuid.uuid4().hex[:8]
+        job = Job(id=jid, created_at=_now(), request=payload)
+        JOBS[jid] = job
+        EVENT_SUBSCRIBERS[jid] = {}
 
     asyncio.create_task(_run_job(job, argv))
 

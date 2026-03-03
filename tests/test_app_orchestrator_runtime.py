@@ -1168,6 +1168,42 @@ def test_argv_rejects_paths_outside_allowed_roots(tmp_path: Path) -> None:
         orchestrator_app.ALLOWED_PATH_ROOTS = previous_path_roots
 
 
+def test_argv_archive_gate_rejects_output_path_under_input_root(tmp_path: Path) -> None:
+    previous_input_roots = orchestrator_app.ALLOWED_INPUT_ROOTS
+    previous_output_roots = orchestrator_app.ALLOWED_OUTPUT_ROOTS
+    previous_path_roots = orchestrator_app.ALLOWED_PATH_ROOTS
+    try:
+        input_root = (tmp_path / "input_root").resolve()
+        output_root = (tmp_path / "output_root").resolve()
+        input_root.mkdir(parents=True, exist_ok=True)
+        output_root.mkdir(parents=True, exist_ok=True)
+        orchestrator_app.ALLOWED_INPUT_ROOTS = [input_root]
+        orchestrator_app.ALLOWED_OUTPUT_ROOTS = [output_root]
+        orchestrator_app.ALLOWED_PATH_ROOTS = [input_root, output_root]
+
+        payload: Dict[str, object] = {
+            "pipeline": "archive-gate-a",
+            "args": {
+                "input_dir": str(input_root),
+                "output_dir": str(output_root),
+                "archive_command": "fixity-scan",
+                "out_dir": str(input_root / "reports"),
+            },
+        }
+        with pytest.raises(ValueError, match="Path outside allowed roots"):
+            orchestrator_app._argv_from_request(payload)
+    finally:
+        orchestrator_app.ALLOWED_INPUT_ROOTS = previous_input_roots
+        orchestrator_app.ALLOWED_OUTPUT_ROOTS = previous_output_roots
+        orchestrator_app.ALLOWED_PATH_ROOTS = previous_path_roots
+
+
+def test_env_path_roots_rejects_invalid_configured_allowlist(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TP_ALLOWED_INPUT_ROOTS", "~")
+    with pytest.raises(RuntimeError, match="contains no valid roots"):
+        orchestrator_app._env_path_roots("TP_ALLOWED_INPUT_ROOTS", [orchestrator_app.REPO_ROOT])
+
+
 def test_argv_rejects_tilde_prefixed_paths() -> None:
     payload: Dict[str, object] = {
         "pipeline": "lux-depth-v3",
