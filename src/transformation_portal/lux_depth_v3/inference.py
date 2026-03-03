@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 import numpy as np
 from PIL import Image
 
-from transformation_portal.core.security.model_lock import resolve_model_lock_revision
+from transformation_portal.core.security.model_lock import is_model_lock_strict_enabled, resolve_model_lock_revision
 
 from .config import DA3Config, ModelVariant  # noqa: F401 - Used in docstring examples
 from .raw_loader import is_raw_file, load_raw_as_pil
@@ -383,10 +383,11 @@ class DA3InferenceEngine:
                 raise ImportError(error_msg) from e
 
         logger.info(f"Loading DA3 model: {model_id} (using depth-anything-3 library)")
+        strict_enabled = is_model_lock_strict_enabled(None)
         model_revision = resolve_model_lock_revision(
             model_id,
             requested_revision=None,
-            strict=None,
+            strict=strict_enabled,
             context="DA3InferenceEngine(da3_model)",
         )
 
@@ -394,6 +395,8 @@ class DA3InferenceEngine:
             try:
                 self.model = DepthAnything3.from_pretrained(model_id, revision=model_revision)
             except TypeError:
+                if model_revision and strict_enabled:
+                    raise
                 self.model = DepthAnything3.from_pretrained(model_id)
             self.model.to(self.device)
             self.model.eval()

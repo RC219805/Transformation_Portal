@@ -18,7 +18,7 @@ import numpy as np
 import torch
 from PIL import Image
 
-from transformation_portal.core.security.model_lock import resolve_model_lock_revision
+from transformation_portal.core.security.model_lock import is_model_lock_strict_enabled, resolve_model_lock_revision
 
 try:
     from controlnet_aux import CannyDetector, MidasDetector
@@ -90,7 +90,7 @@ class FLUXControlNet:
         self.control_types = control_types
         self.device = device or self._detect_device()
         self.torch_dtype = torch_dtype
-        self.strict_model_lock = strict_model_lock
+        self.strict_model_lock = is_model_lock_strict_enabled(strict_model_lock)
         self.depth_model_id = "lllyasviel/Annotators"
         self.depth_model_revision = resolve_model_lock_revision(
             self.depth_model_id,

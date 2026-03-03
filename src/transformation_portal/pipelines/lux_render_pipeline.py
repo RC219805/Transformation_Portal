@@ -78,7 +78,7 @@ from PIL import Image, ImageDraw, ImageFont
 from scipy.ndimage import gaussian_filter, sobel
 from torch import Generator
 
-from transformation_portal.core.security.model_lock import resolve_model_lock_revision
+from transformation_portal.core.security.model_lock import is_model_lock_strict_enabled, resolve_model_lock_revision
 
 # SDXL (optional). Imported lazily only if used.
 try:
@@ -217,10 +217,11 @@ class Preprocessor:
 
         try:
             model_id = "lllyasviel/ControlNet"
+            effective_strict = is_model_lock_strict_enabled(strict_model_lock)
             model_revision = resolve_model_lock_revision(
                 model_id,
                 requested_revision=None,
-                strict=strict_model_lock,
+                strict=effective_strict,
                 context="LuxuryRenderPipeline(PreprocessorDepth)",
             )
             try:
@@ -230,7 +231,7 @@ class Preprocessor:
                     revision=model_revision,
                 )
             except TypeError:
-                if model_revision and strict_model_lock:
+                if model_revision and effective_strict:
                     raise
                 return MidasDetector.from_pretrained(model_id, model_type=model_type)  # nosec B615
         except Exception as exc:  # pragma: no cover - best effort optional dependency
