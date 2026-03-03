@@ -72,11 +72,28 @@ jobs:
           echo ""
           echo "Available space: $(df -h / | awk 'NR==2 {print $4}')"
 
-      - name: Checkout repository
+      - name: Checkout repository (attempt 1)
+        id: checkout_attempt_1
+        continue-on-error: true
         uses: actions/checkout@v6
         with:
           # Shallow clone to save space
           fetch-depth: 1
+
+      - name: Checkout repository (attempt 2)
+        id: checkout_attempt_2
+        if: steps.checkout_attempt_1.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Enforce checkout success
+        if: steps.checkout_attempt_1.outcome == 'failure' && steps.checkout_attempt_2.outcome == 'failure'
+        run: |
+          echo "Repository checkout failed after two attempts."
+          echo "This is often a transient GitHub fetch/API issue; retry the workflow."
+          exit 1
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -200,7 +217,7 @@ jobs:
           echo "=== Final disk usage ==="
           df -h
           echo ""
-          echo "Dependency submission completed successfully!"
+          echo "Dependency submission cleanup completed."
 
       - name: Report status
         if: failure()
@@ -211,6 +228,7 @@ jobs:
           echo "1. Out of disk space - check cleanup steps"
           echo "2. Network timeout - retry the workflow"
           echo "3. Invalid requirements file - check syntax"
+          echo "4. GitHub checkout fetch 500 - infrastructure transient; rerun job"
           echo ""
           echo "Current disk usage:"
           df -h
