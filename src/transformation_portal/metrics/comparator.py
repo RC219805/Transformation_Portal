@@ -46,6 +46,7 @@ import logging
 from typing import Dict, Literal, Optional
 
 from transformation_portal.metrics.contracts import BucketStats, RegressionReport
+from transformation_portal.metrics.sql_safety import normalize_query_limit
 
 __version__ = "1.0.0"
 
@@ -217,6 +218,10 @@ def query_baseline_stats(
     """
     import sqlite3
 
+    safe_limit = normalize_query_limit(limit)
+    if safe_limit is None:
+        raise ValueError("limit must be an integer in range 1..1000")
+
     where_clauses = ["workflow_version = ?"]
     params = [workflow_version]
 
@@ -239,9 +244,10 @@ def query_baseline_stats(
             FROM apex_runs
             WHERE {where_sql}
             ORDER BY timestamp DESC
-            LIMIT {limit}
+            LIMIT ?
         """
-        cursor = conn.execute(run_query, params)
+        run_params = [*params, safe_limit]
+        cursor = conn.execute(run_query, run_params)
         latest_run = cursor.fetchone()
 
         if not latest_run:

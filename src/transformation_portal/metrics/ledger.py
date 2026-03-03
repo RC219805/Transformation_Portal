@@ -57,6 +57,7 @@ from transformation_portal.metrics.performance_capsule import (
     PerformanceCapsule,
     get_bucket_for_capsule,
 )
+from transformation_portal.metrics.sql_safety import normalize_query_limit
 
 __version__ = "3.0.0"
 
@@ -287,6 +288,8 @@ class PerformanceLedger:
         Returns:
             List of matching performance capsules
         """
+        safe_limit = normalize_query_limit(limit)
+
         where_clauses = []
         params = []
 
@@ -325,8 +328,9 @@ class PerformanceLedger:
         where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 
         query = f"SELECT capsule_json FROM performance_capsules WHERE {where_sql} ORDER BY captured_at DESC"
-        if limit is not None:
-            query += f" LIMIT {limit}"
+        if safe_limit is not None:
+            query += " LIMIT ?"
+            params.append(safe_limit)
 
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(query, params)
