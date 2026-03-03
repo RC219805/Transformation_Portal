@@ -195,6 +195,13 @@ class DepthAnythingV2Model:
         }.get(variant)
 
     @staticmethod
+    def _coreml_filename_for_variant(variant: ModelVariant) -> Optional[str]:
+        return {
+            ModelVariant.SMALL: "DepthAnythingV2SmallF16.mlpackage",
+            ModelVariant.SMALL_COREML: "DepthAnythingV2SmallF16.mlpackage",
+        }.get(variant)
+
+    @staticmethod
     def _onnx_source_for_variant(variant: ModelVariant) -> Optional[dict[str, object]]:
         return ONNX_MODEL_SOURCES.get(variant)
 
@@ -472,9 +479,15 @@ class DepthAnythingV2Model:
                 "Use SMALL/SMALL_COREML only; Base CoreML repo is not published on Hugging Face."
             )
 
+        filename = self._coreml_filename_for_variant(self.variant)
+        if not filename:
+            raise ValueError(
+                f"CoreML filename not available for variant {self.variant}. "
+                "Use SMALL/SMALL_COREML only; Base CoreML repo is not published on Hugging Face."
+            )
+
         # Download model package
         # Production deployments should pin specific model revisions
-        filename = f"DepthAnythingV2{self.variant.name.title()}F16.mlpackage"
         model_path = hf_hub_download(  # nosec B615
             repo_id=coreml_variant,
             filename=filename,

@@ -224,17 +224,22 @@ class DepthAnythingV2Model:
             ModelVariant.SMALL: "apple/coreml-depth-anything-v2-small",
             ModelVariant.SMALL_COREML: "apple/coreml-depth-anything-v2-small",
         }.get(self.variant)
+        coreml_filename = {
+            ModelVariant.SMALL: "DepthAnythingV2SmallF16.mlpackage",
+            ModelVariant.SMALL_COREML: "DepthAnythingV2SmallF16.mlpackage",
+        }.get(self.variant)
 
-        if not coreml_variant:
+        if not coreml_variant or not coreml_filename:
             raise ValueError(
                 f"CoreML model not available for variant {self.variant}. "
                 "Use SMALL/SMALL_COREML only; Base CoreML repo is not published on Hugging Face."
             )
 
         # Download model package
-        filename = f"DepthAnythingV2{self.variant.name.title()}F16.mlpackage"
         model_path = hf_hub_download(
-            repo_id=coreml_variant, filename=filename, cache_dir=Path.home() / ".cache" / "depth_anything_v2"
+            repo_id=coreml_variant,
+            filename=coreml_filename,
+            cache_dir=Path.home() / ".cache" / "depth_anything_v2",
         )
 
         return Path(model_path)

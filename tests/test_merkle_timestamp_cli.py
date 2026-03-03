@@ -596,6 +596,34 @@ def test_timestamp_omits_cert_req_with_no_cert_req_flag(tmp_path: Path, local_ts
         response_body=b"",
         response_factory=lambda query: (200, "application/timestamp-reply", local_tsa_signer.sign_query(query)),
     ) as (tsa_url, state):
+        _timestamp(
+            target_flag="--roots",
+            target_path=roots_path,
+            tsa_url=tsa_url,
+            out_path=tsr_path,
+            tsa_ca_file=local_tsa_signer.ca_cert,
+            allow_insecure_http=True,
+            nonce=2718,
+            cert_req=False,
+        )
+
+    _, digest, nonce, cert_req = _decode_timestamp_query(state["request_body"])  # type: ignore[arg-type]
+    assert digest == hashlib.sha256(roots_path.read_bytes()).digest()
+    assert nonce == 2718
+    assert cert_req is False
+
+
+def test_timestamp_no_cert_req_fails_strict_verification_without_embedded_signer_cert(
+    tmp_path: Path, local_tsa_signer: _LocalTsaSigner
+) -> None:
+    roots_path = tmp_path / "merkle_roots.json"
+    tsr_path = tmp_path / "merkle_roots.tsr"
+    _write_roots(roots_path)
+
+    with _tsa_server(
+        response_body=b"",
+        response_factory=lambda query: (200, "application/timestamp-reply", local_tsa_signer.sign_query(query)),
+    ) as (tsa_url, _):
         result = _timestamp(
             target_flag="--roots",
             target_path=roots_path,
@@ -607,11 +635,8 @@ def test_timestamp_omits_cert_req_with_no_cert_req_flag(tmp_path: Path, local_ts
             cert_req=False,
         )
 
-    assert result.returncode == 0, result.stderr
-    _, digest, nonce, cert_req = _decode_timestamp_query(state["request_body"])  # type: ignore[arg-type]
-    assert digest == hashlib.sha256(roots_path.read_bytes()).digest()
-    assert nonce == 2718
-    assert cert_req is False
+    assert result.returncode == 9
+    assert "signer certificate not found" in result.stdout
 
 
 def test_timestamp_fails_when_target_filename_is_invalid(tmp_path: Path) -> None:
