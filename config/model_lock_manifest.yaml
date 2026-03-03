@@ -44,6 +44,9 @@ repositories:
   openai/clip-vit-large-patch14:
     revision: "32bd64288804d66eefd0ccbe215aa642df71cc41"
     owner: "segmentation + style-transfer"
+  openai/clip-vit-base-patch32:
+    revision: "3d74acf9a28c67741b2f4f2ea7635f0aaf6f0268"
+    owner: "segmentation"
   black-forest-labs/FLUX.1-dev:
     revision: "3de623fc3c33e44ffbe2bad470d0f45bccf2eb21"
     owner: "style-transfer"

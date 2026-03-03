@@ -89,7 +89,7 @@ def _resolve_required_revision(repo_id: str, context: str) -> str:
         reason = (
             f"{type(MODEL_LOCK_IMPORT_ERROR).__name__}: {MODEL_LOCK_IMPORT_ERROR}" if MODEL_LOCK_IMPORT_ERROR else "unknown"
         )
-        raise RuntimeError(f"Model lock helpers unavailable ({reason})")
+        raise SecureModelLockCheckError(f"Model lock helpers unavailable ({reason})")
 
     revision = resolve_model_lock_revision(
         repo_id,
@@ -240,7 +240,7 @@ def check_depth_anything() -> bool:
         AutoImageProcessor.from_pretrained(model_id, revision=revision)  # nosec B615
         print("  ✓ Depth Anything V2 ready")
         return True
-    except (ModelLockError, RuntimeError) as e:
+    except (ModelLockError, SecureModelLockCheckError) as e:
         print(f"  ❌ Secure model lock check failed: {e}")
         raise SecureModelLockCheckError(f"Depth Anything lock check failed: {e}") from e
     except Exception as e:
@@ -303,7 +303,7 @@ def check_controlnet() -> bool:
                     allow_patterns=["*.json"],
                 )
                 print(f"  ✓ {model_id}")
-            except (ModelLockError, RuntimeError) as e:
+            except (ModelLockError, SecureModelLockCheckError) as e:
                 print(f"  ❌ {model_id} - secure model lock check failed: {e}")
                 raise SecureModelLockCheckError(f"ControlNet lock check failed for {model_id}: {e}") from e
             except Exception:
@@ -345,7 +345,7 @@ def check_stable_diffusion(skip_optional: bool = False) -> bool:
         )
         print("  ✓ Stable Diffusion v1.5 cached")
         return True
-    except (ModelLockError, RuntimeError) as e:
+    except (ModelLockError, SecureModelLockCheckError) as e:
         print(f"  ❌ Secure model lock check failed: {e}")
         raise SecureModelLockCheckError(f"Stable Diffusion lock check failed: {e}") from e
     except Exception:

@@ -229,6 +229,14 @@ def _resolve_trust_store_args(tsa_ca_file: str | None, tsa_ca_path: str | None) 
     raise ValueError("No trusted TSA CA store detected. Provide --tsa-ca-file and/or --tsa-ca-path for RFC3161 verification.")
 
 
+def _resolve_verification_prereqs(tsa_ca_file: str | None, tsa_ca_path: str | None) -> tuple[str, list[str]]:
+    openssl_bin = shutil.which("openssl")
+    if not openssl_bin:
+        raise ValueError("OpenSSL executable is required for RFC3161 response verification but was not found in PATH")
+    trust_store_args = _resolve_trust_store_args(tsa_ca_file, tsa_ca_path)
+    return openssl_bin, trust_store_args
+
+
 def _verify_timestamp_response(
     *,
     timestamp_query: bytes,
@@ -237,11 +245,7 @@ def _verify_timestamp_response(
     tsa_ca_path: str | None,
     timeout_seconds: float,
 ) -> None:
-    openssl_bin = shutil.which("openssl")
-    if not openssl_bin:
-        raise ValueError("OpenSSL executable is required for RFC3161 response verification but was not found in PATH")
-
-    trust_store_args = _resolve_trust_store_args(tsa_ca_file, tsa_ca_path)
+    openssl_bin, trust_store_args = _resolve_verification_prereqs(tsa_ca_file, tsa_ca_path)
     if timeout_seconds <= 0:
         raise ValueError("--timeout-seconds must be > 0")
 
@@ -355,6 +359,9 @@ def main() -> int:
         if target_path.name != expected_name:
             print(f"Timestamp request failed: --{target_kind} must reference {expected_name}")
             return EXIT_TIMESTAMP_FAILURE
+
+        # Fail fast before opening any TSA network connection when verification prerequisites are missing.
+        _resolve_verification_prereqs(args.tsa_ca_file, args.tsa_ca_path)
 
         target_bytes = target_path.read_bytes()
         digest_bytes = hashlib.sha256(target_bytes).digest()

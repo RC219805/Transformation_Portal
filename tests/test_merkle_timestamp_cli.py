@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import errno
 import hashlib
+import os
 import shutil
 import subprocess
 import sys
@@ -21,13 +22,14 @@ SHA256_OID = "2.16.840.1.101.3.4.2.1"
 pytestmark = [pytest.mark.regression]
 
 
-def _run_cli(command: list[str]) -> subprocess.CompletedProcess[str]:
+def _run_cli(command: list[str], *, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         command,
         cwd=str(PROJECT_ROOT),
         capture_output=True,
         text=True,
         check=False,
+        env=env,
     )
 
 
@@ -42,6 +44,7 @@ def _timestamp(
     allow_insecure_http: bool = False,
     nonce: int | None = None,
     cert_req: bool = True,
+    env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     command = [
         sys.executable,
@@ -65,7 +68,7 @@ def _timestamp(
         command.append("--cert-req")
     else:
         command.append("--no-cert-req")
-    return _run_cli(command)
+    return _run_cli(command, env=env)
 
 
 def _write_roots(path: Path) -> None:
@@ -392,6 +395,7 @@ def _tsa_server(
         "request_body": b"",
         "request_content_type": "",
         "request_accept": "",
+        "response_body": b"",
     }
 
     class Handler(BaseHTTPRequestHandler):
@@ -406,6 +410,7 @@ def _tsa_server(
             body = response_body
             if response_factory is not None:
                 status, content_type, body = response_factory(state["request_body"])  # type: ignore[arg-type]
+            state["response_body"] = body
 
             self.send_response(status)
             if content_type:
@@ -514,6 +519,7 @@ def test_timestamp_roots_success_writes_detached_tsr(tmp_path: Path, local_tsa_s
 
     assert result.returncode == 0, result.stderr
     assert tsr_path.exists()
+    assert tsr_path.read_bytes() == state["response_body"]
     assert "Timestamp response written" in result.stdout
     assert state["request_content_type"] == "application/timestamp-query"
     assert state["request_accept"] == "application/timestamp-reply"
@@ -546,6 +552,7 @@ def test_timestamp_signature_success_hashes_signature_bytes(tmp_path: Path, loca
 
     assert result.returncode == 0, result.stderr
     assert tsr_path.exists()
+    assert tsr_path.read_bytes() == state["response_body"]
 
     _, digest, nonce, cert_req = _decode_timestamp_query(state["request_body"])  # type: ignore[arg-type]
     assert digest == hashlib.sha256(signature_path.read_bytes()).digest()
@@ -580,6 +587,33 @@ def test_timestamp_includes_cert_req_when_flag_set(tmp_path: Path, local_tsa_sig
     assert cert_req is True
 
 
+def test_timestamp_omits_cert_req_with_no_cert_req_flag(tmp_path: Path, local_tsa_signer: _LocalTsaSigner) -> None:
+    roots_path = tmp_path / "merkle_roots.json"
+    tsr_path = tmp_path / "merkle_roots.tsr"
+    _write_roots(roots_path)
+
+    with _tsa_server(
+        response_body=b"",
+        response_factory=lambda query: (200, "application/timestamp-reply", local_tsa_signer.sign_query(query)),
+    ) as (tsa_url, state):
+        result = _timestamp(
+            target_flag="--roots",
+            target_path=roots_path,
+            tsa_url=tsa_url,
+            out_path=tsr_path,
+            tsa_ca_file=local_tsa_signer.ca_cert,
+            allow_insecure_http=True,
+            nonce=2718,
+            cert_req=False,
+        )
+
+    assert result.returncode == 0, result.stderr
+    _, digest, nonce, cert_req = _decode_timestamp_query(state["request_body"])  # type: ignore[arg-type]
+    assert digest == hashlib.sha256(roots_path.read_bytes()).digest()
+    assert nonce == 2718
+    assert cert_req is False
+
+
 def test_timestamp_fails_when_target_filename_is_invalid(tmp_path: Path) -> None:
     invalid_roots_path = tmp_path / "other_roots.json"
     invalid_roots_path.write_text("{}\n", encoding="utf-8")
@@ -609,6 +643,27 @@ def test_timestamp_fails_with_missing_target_file(tmp_path: Path) -> None:
 
     assert result.returncode == 8
     assert "Timestamp request failed" in result.stdout
+
+
+def test_timestamp_fails_fast_when_openssl_unavailable(tmp_path: Path) -> None:
+    roots_path = tmp_path / "merkle_roots.json"
+    tsr_path = tmp_path / "out.tsr"
+    _write_roots(roots_path)
+
+    env = os.environ.copy()
+    env["PATH"] = ""
+
+    result = _timestamp(
+        target_flag="--roots",
+        target_path=roots_path,
+        tsa_url="https://tsa.example.invalid/ts",
+        out_path=tsr_path,
+        nonce=1,
+        env=env,
+    )
+
+    assert result.returncode == 8
+    assert "OpenSSL executable is required" in result.stdout
 
 
 def test_timestamp_fails_on_http_error(tmp_path: Path) -> None:

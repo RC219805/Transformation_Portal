@@ -43,6 +43,7 @@ try:
     TRANSFORMERS_AVAILABLE = True
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
+    pipeline = None  # type: ignore[assignment]
     DepthEstimationPipeline = Any  # type: ignore
 
 try:
