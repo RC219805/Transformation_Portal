@@ -22,6 +22,7 @@ Design notes:
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -35,9 +36,11 @@ INTEGRATION_MARKEXPR = "ml and integration and not slow and not benchmark"
 FAST_ML_SELECTED_CEILING = 67
 TORCH_BLOCK_MESSAGE = "Torch import blocked during fast-ML contract collect"
 
-_RATIO_SUMMARY = re.compile(r"(?P<selected>\d+)/(?P<collected>\d+) tests collected")
-_TOTAL_ONLY_SUMMARY = re.compile(r"(?P<selected>\d+) tests collected")
-_NO_TESTS = re.compile(r"no tests collected")
+_COLLECT_SUMMARY = re.compile(
+    r"(?:collected\s+(?P<collected>\d+)\s+items?|(?P<selected>\d+)(?:/\d+)?\s+test[s]?\s+collected)",
+    re.IGNORECASE,
+)
+_NO_TESTS = re.compile(r"no tests collected", re.IGNORECASE)
 
 
 def _write_torch_stub(stub_root: Path) -> None:
@@ -121,7 +124,12 @@ def _write_torch_blocker(sitecustomize_path: Path) -> None:
     )
 
 
-def _run_collect(markexpr: str, target: str, pythonpath_prefix: list[str]) -> subprocess.CompletedProcess[str]:
+def _run_collect(
+    markexpr: str,
+    target: str,
+    pythonpath_prefix: list[str],
+    json_report_file: Path | None = None,
+) -> tuple[subprocess.CompletedProcess[str], bool]:
     """Run pytest --collect-only in a subprocess with an adjusted PYTHONPATH."""
     env = os.environ.copy()
     existing_pythonpath = env.get("PYTHONPATH", "")
@@ -130,17 +138,21 @@ def _run_collect(markexpr: str, target: str, pythonpath_prefix: list[str]) -> su
         merged.append(existing_pythonpath)
     env["PYTHONPATH"] = os.pathsep.join(merged)
 
-    return subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pytest",
-            "--collect-only",
-            "-q",
-            "-m",
-            markexpr,
-            target,
-        ],
+    base_args = [
+        sys.executable,
+        "-m",
+        "pytest",
+        "--collect-only",
+        "-q",
+        "-m",
+        markexpr,
+        target,
+    ]
+    if json_report_file is not None:
+        base_args.extend(["--json-report", f"--json-report-file={json_report_file}"])
+
+    result = subprocess.run(
+        base_args,
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -149,34 +161,146 @@ def _run_collect(markexpr: str, target: str, pythonpath_prefix: list[str]) -> su
         check=False,
     )
 
+    # Local developer environments may not have pytest-json-report installed.
+    # Fall back to text parsing so this contract remains runnable outside CI.
+    if (
+        json_report_file is not None
+        and result.returncode != 0
+        and "--json-report" in result.stderr
+        and "unrecognized arguments" in result.stderr
+    ):
+        fallback_result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "--collect-only",
+                "-q",
+                "-m",
+                markexpr,
+                target,
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=90,
+            env=env,
+            check=False,
+        )
+        return fallback_result, False
 
-def _run_collect_with_torch_stub(markexpr: str, target: str) -> subprocess.CompletedProcess[str]:
+    return result, json_report_file is not None
+
+
+def _run_collect_with_torch_stub(markexpr: str, target: str) -> tuple[subprocess.CompletedProcess[str], int]:
     """Run collection with temporary torch shim for stable count accounting."""
     with tempfile.TemporaryDirectory(prefix="ml_fast_collect_stub_") as tmpdir:
         stub_root = Path(tmpdir)
         _write_torch_stub(stub_root)
-        return _run_collect(markexpr=markexpr, target=target, pythonpath_prefix=[str(stub_root)])
+        report_file = stub_root / "collect_report.json"
+        result, used_json_report = _run_collect(
+            markexpr=markexpr,
+            target=target,
+            pythonpath_prefix=[str(stub_root)],
+            json_report_file=report_file,
+        )
+        selected = _parse_selected_count(
+            output=result.stdout,
+            stderr=result.stderr,
+            json_report_file=report_file if used_json_report else None,
+        )
+        return result, selected
 
 
-def _run_collect_with_torch_blocker(markexpr: str, target: str) -> subprocess.CompletedProcess[str]:
+def _run_collect_with_torch_blocker(markexpr: str, target: str) -> tuple[subprocess.CompletedProcess[str], int]:
     """Run collection with explicit torch import blocking for boundary checks."""
     with tempfile.TemporaryDirectory(prefix="ml_fast_collect_blocker_") as tmpdir:
         blocker_root = Path(tmpdir)
         _write_torch_blocker(blocker_root / "sitecustomize.py")
-        return _run_collect(markexpr=markexpr, target=target, pythonpath_prefix=[str(blocker_root)])
+        report_file = blocker_root / "collect_report.json"
+        result, used_json_report = _run_collect(
+            markexpr=markexpr,
+            target=target,
+            pythonpath_prefix=[str(blocker_root)],
+            json_report_file=report_file,
+        )
+        selected = _parse_selected_count(
+            output=result.stdout,
+            stderr=result.stderr,
+            json_report_file=report_file if used_json_report else None,
+        )
+        return result, selected
 
 
-def _parse_selected_count(output: str) -> int:
-    """Parse selected test count from pytest collect output."""
-    match = _RATIO_SUMMARY.search(output)
+def _parse_selected_count(output: str, stderr: str, json_report_file: Path | None = None) -> int:
+    """Parse selected count from JSON report when available, else resilient text fallback."""
+    if json_report_file is not None:
+        if not json_report_file.exists():
+            raise AssertionError(
+                "Expected pytest JSON report file for collection count but file was missing.\n"
+                f"json_report_file={json_report_file}\n"
+                f"stdout:\n{output}\n"
+                f"stderr:\n{stderr}"
+            )
+
+        try:
+            payload = json.loads(json_report_file.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise AssertionError(
+                "Unable to parse pytest JSON report for collection count.\n"
+                f"json_report_file={json_report_file}\n"
+                f"error={exc}\n"
+                f"stdout:\n{output}\n"
+                f"stderr:\n{stderr}"
+            ) from exc
+
+        summary = payload.get("summary")
+        if not isinstance(summary, dict):
+            raise AssertionError(
+                "Pytest JSON report missing summary payload for collection count.\n"
+                f"json_report_file={json_report_file}\n"
+                f"summary_type={type(summary).__name__}\n"
+                f"stdout:\n{output}\n"
+                f"stderr:\n{stderr}"
+            )
+        collected = summary.get("collected")
+        if isinstance(collected, int):
+            return collected
+        raise AssertionError(
+            "Pytest JSON report summary did not include integer 'collected' count.\n"
+            f"json_report_file={json_report_file}\n"
+            f"summary={summary!r}\n"
+            f"stdout:\n{output}\n"
+            f"stderr:\n{stderr}"
+        )
+
+    match = _COLLECT_SUMMARY.search(output)
     if match:
-        return int(match.group("selected"))
-    total_match = _TOTAL_ONLY_SUMMARY.search(output)
-    if total_match:
-        return int(total_match.group("selected"))
+        count = match.group("collected") or match.group("selected")
+        if count is not None:
+            return int(count)
     if _NO_TESTS.search(output):
         return 0
-    raise AssertionError(f"Unable to parse selected count from output:\n{output}")
+    raise AssertionError(f"Unable to parse selected count from output:\n{output}\nstderr:\n{stderr}")
+
+
+def test_selected_count_parser_handles_singular_and_plural_text_forms():
+    """Fallback parser should handle pytest singular/plural variants robustly."""
+    assert _parse_selected_count("1 test collected", stderr="") == 1
+    assert _parse_selected_count("1/1 test collected", stderr="") == 1
+    assert _parse_selected_count("1/1 tests collected", stderr="") == 1
+    assert _parse_selected_count("collected 1 item", stderr="") == 1
+    assert _parse_selected_count("collected 67 items", stderr="") == 67
+    assert _parse_selected_count("67/106 tests collected", stderr="") == 67
+    assert _parse_selected_count("no tests collected", stderr="") == 0
+
+
+def test_selected_count_parser_prefers_json_report():
+    """When JSON report is available, parser should source count from JSON payload."""
+    with tempfile.TemporaryDirectory(prefix="ml_fast_collect_json_parser_") as tmpdir:
+        report_file = Path(tmpdir) / "report.json"
+        report_file.write_text('{"summary": {"collected": 42}}', encoding="utf-8")
+        assert _parse_selected_count(output="", stderr="", json_report_file=report_file) == 42
 
 
 def _format_subprocess_failure(result: subprocess.CompletedProcess[str], markexpr: str, target: str, context: str) -> str:
@@ -221,7 +345,7 @@ def _assert_no_torch_boundary_violation(result: subprocess.CompletedProcess[str]
 
 def test_fast_ml_collection_contract():
     """Fast-ML lane must remain at or under the strict 67-test ceiling."""
-    result = _run_collect_with_torch_stub(FAST_ML_MARKEXPR, "tests/spatial_ai/reconstruction")
+    result, selected = _run_collect_with_torch_stub(FAST_ML_MARKEXPR, "tests/spatial_ai/reconstruction")
     assert result.returncode == 0, _format_subprocess_failure(
         result=result,
         markexpr=FAST_ML_MARKEXPR,
@@ -229,7 +353,6 @@ def test_fast_ml_collection_contract():
         context="Fast-ML collection-count check failed unexpectedly.",
     )
 
-    selected = _parse_selected_count(result.stdout)
     assert selected <= FAST_ML_SELECTED_CEILING, (
         "Fast-ML collection contract violated: selected test count exceeded ceiling.\n"
         f"markexpr={FAST_ML_MARKEXPR!r}\n"
@@ -240,7 +363,7 @@ def test_fast_ml_collection_contract():
 
 def test_fast_ml_collection_torch_boundary_contract():
     """Collection should not rely on unguarded import-time torch imports."""
-    result = _run_collect_with_torch_blocker(FAST_ML_MARKEXPR, "tests/spatial_ai/reconstruction")
+    result, _ = _run_collect_with_torch_blocker(FAST_ML_MARKEXPR, "tests/spatial_ai/reconstruction")
     _assert_no_torch_boundary_violation(
         result=result,
         markexpr=FAST_ML_MARKEXPR,
@@ -250,7 +373,7 @@ def test_fast_ml_collection_torch_boundary_contract():
 
 def test_phase23_integration_marker_contract():
     """Phase 2.3 integration tests must be in integration lane, not fast-ML."""
-    integration_result = _run_collect_with_torch_stub(
+    integration_result, integration_selected = _run_collect_with_torch_stub(
         INTEGRATION_MARKEXPR,
         "tests/spatial_ai/reconstruction/test_integration_phase23.py",
     )
@@ -260,14 +383,13 @@ def test_phase23_integration_marker_contract():
         target="tests/spatial_ai/reconstruction/test_integration_phase23.py",
         context="Integration selection check failed unexpectedly.",
     )
-    integration_selected = _parse_selected_count(integration_result.stdout)
     assert integration_selected > 0, (
         "Expected integration tests to be selected for test_integration_phase23.py.\n"
         f"markexpr={INTEGRATION_MARKEXPR!r}\n"
         f"stdout:\n{integration_result.stdout}"
     )
 
-    fast_result = _run_collect_with_torch_stub(
+    fast_result, fast_selected = _run_collect_with_torch_stub(
         FAST_ML_MARKEXPR,
         "tests/spatial_ai/reconstruction/test_integration_phase23.py",
     )
@@ -277,7 +399,6 @@ def test_phase23_integration_marker_contract():
         target="tests/spatial_ai/reconstruction/test_integration_phase23.py",
         context="Fast-ML probe for Phase 2.3 integration tests failed unexpectedly.",
     )
-    fast_selected = _parse_selected_count(fast_result.stdout)
     assert fast_selected == 0, (
         "Phase 2.3 integration tests leaked into fast-ML selection.\n"
         f"markexpr={FAST_ML_MARKEXPR!r}\n"
