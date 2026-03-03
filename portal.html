@@ -653,6 +653,21 @@
             return headers;
         }
 
+        function resumeBlockedJobStreamsAfterAuthUpdate() {
+            const token = _currentApiToken();
+            if (!token) return;
+            state.jobs.forEach((job) => {
+                if (!job) return;
+                _ensureJobStreamState(job);
+                if (!job.reconnectBlocked) return;
+                if (!_isJobStreamRecoverable(job)) return;
+                if (_jobHasActiveStream(job)) return;
+                appendJobLog(job, '[INFO] API key updated. Reconnecting event stream...');
+                logToPane(job.id, '[INFO] API key updated. Reconnecting event stream...');
+                startJobEventStream(job, job.eventStreamUrl);
+            });
+        }
+
         async function copyToClipboard(text) {
             try {
                 if (navigator.clipboard && window.isSecureContext) {
@@ -789,6 +804,7 @@
                 eventStreamUrl: String(rawJob.events_url || `/v1/jobs/${id}/events`),
                 usesFetchSse: false,
                 sseRetry: { attempt: 0, timer: null },
+                reconnectBlocked: false,
                 lastEventAt: 0,
                 mockInterval: null
             };
@@ -810,6 +826,7 @@
             }
             if (typeof job.lastEventAt !== 'number') job.lastEventAt = 0;
             if (typeof job.usesFetchSse !== 'boolean') job.usesFetchSse = false;
+            if (typeof job.reconnectBlocked !== 'boolean') job.reconnectBlocked = false;
             if (typeof job.eventStreamUrl !== 'string' || !job.eventStreamUrl.trim()) {
                 const fallbackId = encodeURIComponent(String(job.id || ''));
                 job.eventStreamUrl = `/v1/jobs/${fallbackId}/events`;
@@ -869,6 +886,7 @@
             }
             _ensureJobStreamState(existing);
             if (!_isJobStreamRecoverable(existing)) {
+                existing.reconnectBlocked = false;
                 _clearSseRetry(existing, true);
                 _teardownJobEventStream(existing);
             }
@@ -904,6 +922,7 @@
         function scheduleSseReconnect(job) {
             if (!_isJobStreamRecoverable(job)) return;
             _ensureJobStreamState(job);
+            if (job.reconnectBlocked) return;
             if (job.sseRetry.timer || _jobHasActiveStream(job)) return;
 
             const attempt = job.sseRetry.attempt + 1;
@@ -941,6 +960,7 @@
             _teardownJobEventStream(job);
             job.lastEventAt = 0;
             job.usesFetchSse = false;
+            job.reconnectBlocked = false;
             if (job.mockInterval) {
                 clearInterval(job.mockInterval);
                 job.mockInterval = null;
@@ -1450,6 +1470,10 @@
 
             if (els.apiKeyInput) {
                 els.apiKeyInput.addEventListener('input', _persistApiKeyFromInputs);
+                els.apiKeyInput.addEventListener('change', () => {
+                    _persistApiKeyFromInputs();
+                    resumeBlockedJobStreamsAfterAuthUpdate();
+                });
             }
             if (els.rememberApiKey) {
                 els.rememberApiKey.addEventListener('change', _persistApiKeyFromInputs);
@@ -1685,6 +1709,7 @@
             const headers = _buildAuthHeaders({ 'Accept': 'text/event-stream' });
             const streamUrl = `${API_BASE}${eventsUrl}`;
             let sawDoneEvent = false;
+            let shouldReconnect = true;
             try {
                 const res = await fetch(streamUrl, {
                     method: 'GET',
@@ -1695,14 +1720,30 @@
                 if (!res.ok) {
                     const parsedError = await extractApiError(res);
                     if (parsedError.error) job.error = parsedError.error;
-                    const line = `[WARN] Event stream subscribe failed (${res.status}). ${parsedError.message}`;
-                    appendJobLog(job, line);
-                    logToPane(job.id, line);
+                    const status = Number(res.status) || 0;
+                    const isAuthError = status === 401 || status === 403;
+                    const isRetryableStatus = status === 429 || status >= 500;
+                    shouldReconnect = isRetryableStatus;
+                    if (!isRetryableStatus) {
+                        job.reconnectBlocked = true;
+                        _clearSseRetry(job, true);
+                    }
+                    if (isAuthError) {
+                        const line = `[ERROR] Event stream authorization failed (${status}). Update API key to resume live job events.`;
+                        appendJobLog(job, line);
+                        logToPane(job.id, line);
+                        createToast('Event stream authorization failed. Update API key to resume live logs.', 'error');
+                    } else {
+                        const line = `[WARN] Event stream subscribe failed (${status}). ${parsedError.message}`;
+                        appendJobLog(job, line);
+                        logToPane(job.id, line);
+                    }
                     scheduleRenderJobQueue();
                     renderArtifactPanel();
                     return;
                 }
                 if (!res.body) return;
+                job.reconnectBlocked = false;
                 _markJobEventActivity(job);
 
                 const reader = res.body.getReader();
@@ -1769,7 +1810,7 @@
                 if (job.fetchAbortController === controller) {
                     job.fetchAbortController = null;
                 }
-                if (!sawDoneEvent && !controller.signal.aborted && _isJobStreamRecoverable(job)) {
+                if (shouldReconnect && !sawDoneEvent && !controller.signal.aborted && _isJobStreamRecoverable(job)) {
                     scheduleSseReconnect(job);
                 }
             }
@@ -1785,6 +1826,7 @@
                 stopJobActivity(job);
                 return;
             }
+            job.reconnectBlocked = false;
             _clearSseRetry(job, false);
             if (_jobHasActiveStream(job)) return;
 
@@ -1935,6 +1977,7 @@
                 eventStreamUrl: null,
                 usesFetchSse: false,
                 sseRetry: { attempt: 0, timer: null },
+                reconnectBlocked: false,
                 lastEventAt: 0,
                 mockInterval: null
             };
@@ -2025,6 +2068,7 @@
                     if (!job) return;
                     _ensureJobStreamState(job);
                     if (!job.usesFetchSse) return;
+                    if (job.reconnectBlocked) return;
 
                     if (!_isJobStreamRecoverable(job)) {
                         _clearSseRetry(job, true);

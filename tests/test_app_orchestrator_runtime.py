@@ -312,6 +312,7 @@ def test_portal_fetch_sse_reconnect_scheduler_has_terminal_guard_and_backoff() -
     body = _extract_js_function_body(content, "scheduleSseReconnect")
 
     assert "_isJobStreamRecoverable(job)" in body
+    assert "if (job.reconnectBlocked) return;" in body
     assert "if (job.sseRetry.timer || _jobHasActiveStream(job)) return;" in body
     assert "SSE_RECONNECT_BASE_DELAY_MS" in body
     assert "setTimeout" in body
@@ -324,7 +325,11 @@ def test_portal_fetch_sse_reconnect_schedules_on_unexpected_disconnect_only() ->
     body = _extract_js_function_body(content, "_startAuthorizedFetchSse")
 
     assert "let sawDoneEvent = false;" in body
-    assert "if (!sawDoneEvent && !controller.signal.aborted && _isJobStreamRecoverable(job)) {" in body
+    assert "let shouldReconnect = true;" in body
+    assert "const isAuthError = status === 401 || status === 403;" in body
+    assert "const isRetryableStatus = status === 429 || status >= 500;" in body
+    assert "job.reconnectBlocked = true;" in body
+    assert "if (shouldReconnect && !sawDoneEvent && !controller.signal.aborted && _isJobStreamRecoverable(job)) {" in body
     assert "scheduleSseReconnect(job);" in body
 
 
@@ -334,6 +339,7 @@ def test_portal_fetch_sse_watchdog_reconnects_stalled_streams() -> None:
     body = _extract_js_function_body(content, "startSseWatchdog")
 
     assert "if (!job.usesFetchSse) return;" in body
+    assert "if (job.reconnectBlocked) return;" in body
     assert "SSE_STALL_THRESHOLD_MS" in body
     assert "_teardownJobEventStream(job);" in body
     assert "scheduleSseReconnect(job);" in body
@@ -346,6 +352,17 @@ def test_portal_start_job_stream_avoids_duplicate_readers() -> None:
 
     assert "_clearSseRetry(job, false);" in body
     assert "if (_jobHasActiveStream(job)) return;" in body
+
+
+def test_portal_resumes_blocked_streams_after_api_key_update() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    helper_body = _extract_js_function_body(content, "resumeBlockedJobStreamsAfterAuthUpdate")
+    bind_body = _extract_js_function_body(content, "bindInputs")
+
+    assert "if (!job.reconnectBlocked) return;" in helper_body
+    assert "startJobEventStream(job, job.eventStreamUrl);" in helper_body
+    assert "resumeBlockedJobStreamsAfterAuthUpdate();" in bind_body
 
 
 def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
