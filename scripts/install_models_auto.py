@@ -76,6 +76,10 @@ MAX_RETRIES = 3
 RETRY_DELAY = 2  # seconds
 
 
+class SecureModelLockCheckError(RuntimeError):
+    """Raised when strict model-lock checks fail in installer preflight."""
+
+
 def _resolve_required_revision(repo_id: str, context: str) -> str:
     """Resolve pinned revision for secure model downloads.
 
@@ -238,7 +242,7 @@ def check_depth_anything() -> bool:
         return True
     except (ModelLockError, RuntimeError) as e:
         print(f"  ❌ Secure model lock check failed: {e}")
-        return False
+        raise SecureModelLockCheckError(f"Depth Anything lock check failed: {e}") from e
     except Exception as e:
         print(f"  ⚠️  Will download on first use: {e}")
         return False
@@ -301,7 +305,7 @@ def check_controlnet() -> bool:
                 print(f"  ✓ {model_id}")
             except (ModelLockError, RuntimeError) as e:
                 print(f"  ❌ {model_id} - secure model lock check failed: {e}")
-                success = False
+                raise SecureModelLockCheckError(f"ControlNet lock check failed for {model_id}: {e}") from e
             except Exception:
                 print(f"  ⚠️  {model_id} - will download on first use")
                 success = False
@@ -343,7 +347,7 @@ def check_stable_diffusion(skip_optional: bool = False) -> bool:
         return True
     except (ModelLockError, RuntimeError) as e:
         print(f"  ❌ Secure model lock check failed: {e}")
-        return False
+        raise SecureModelLockCheckError(f"Stable Diffusion lock check failed: {e}") from e
     except Exception:
         print("  ⚠️  Will download on first use (~4GB)")
         return False

@@ -13,7 +13,7 @@ This review found **3 actionable findings**:
 
 High-severity items H-001 and H-002 are remediated as of 2026-03-03:
 1. RFC3161 timestamp handling now enforces HTTPS by default and verifies responses cryptographically via `openssl ts -verify` against trusted CA inputs.
-2. Runtime/install paths for CLIP, FLUX, and LLaVA now require immutable pinned revisions resolved through model-lock controls, and manifest placeholders were replaced with pinned SHAs.
+2. Runtime/install paths for CLIP, FLUX, and LLaVA now resolve immutable pinned revisions from the model-lock manifest, and placeholders were replaced with pinned SHAs.
 
 The API layer itself has good hardening progress (path root allowlists, request size limits, API-key enforcement, default rate limit and concurrency caps).
 
@@ -38,7 +38,7 @@ Risk materially reduced for default flows. Remaining risk is operational: trust-
 
 ---
 
-### H-002: Remote model supply chain controls are fail-closed for targeted loaders (Remediated 2026-03-03)
+### H-002: Remote model supply chain controls are substantially hardened for targeted loaders (Remediated 2026-03-03)
 
 **Evidence**
 - Runtime loaders now resolve and apply pinned revisions for:
@@ -51,7 +51,7 @@ Risk materially reduced for default flows. Remaining risk is operational: trust-
   - `config/model_lock_manifest.yaml`
 
 **Impact**
-Supply-chain drift risk is materially reduced for covered model paths through immutable revision selection and strict lock resolution.
+Supply-chain drift risk is materially reduced for covered model paths through immutable revision resolution, installer strict checks, and pinned manifest state.
 
 **Remediation delivered**
 1. Pinned revision enforcement in targeted runtime loaders and installer checks.

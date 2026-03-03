@@ -373,11 +373,11 @@ class _LocalTsaSigner:
         return response_path.read_bytes()
 
 
-@pytest.fixture(name="local_tsa_signer")
-def fixture_local_tsa_signer(tmp_path: Path) -> _LocalTsaSigner:
+@pytest.fixture(scope="module", name="local_tsa_signer")
+def fixture_local_tsa_signer(tmp_path_factory: pytest.TempPathFactory) -> _LocalTsaSigner:
     if shutil.which("openssl") is None:
         pytest.skip("OpenSSL not available in test environment")
-    return _LocalTsaSigner(tmp_path / "local_tsa")
+    return _LocalTsaSigner(tmp_path_factory.mktemp("local_tsa"))
 
 
 @contextlib.contextmanager

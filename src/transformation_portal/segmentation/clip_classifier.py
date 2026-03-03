@@ -126,7 +126,7 @@ class CLIPClassifier:
         cache_dir: Optional[Path] = None,
         *,
         model_revision: Optional[str] = None,
-        strict_model_lock: Optional[bool] = True,
+        strict_model_lock: Optional[bool] = None,
     ):
         """Initialize CLIP classifier.
 
@@ -136,7 +136,7 @@ class CLIPClassifier:
             cache_dir: Model cache directory
             model_revision: Optional immutable revision for CLIP model assets
             strict_model_lock: Enforce pinned revisions for remote model loads.
-                Defaults to ``True`` for secure-by-default behavior.
+                If None, uses ``TP_STRICT_MODEL_LOCK`` environment variable.
 
         Raises:
             ImportError: If transformers not available

@@ -80,7 +80,7 @@ class IPAdapterStyleTransfer:
         *,
         clip_vision_revision: Optional[str] = None,
         flux_model_revision: Optional[str] = None,
-        strict_model_lock: Optional[bool] = True,
+        strict_model_lock: Optional[bool] = None,
     ):
         """Initialize IP-Adapter style transfer.
 
@@ -91,7 +91,7 @@ class IPAdapterStyleTransfer:
             clip_vision_revision: Optional immutable revision for CLIP vision model
             flux_model_revision: Optional immutable revision for FLUX model
             strict_model_lock: Enforce pinned revisions for remote model loads.
-                Defaults to ``True`` for secure-by-default behavior.
+                If None, uses ``TP_STRICT_MODEL_LOCK`` environment variable.
 
         Raises:
             ImportError: If required dependencies not available
