@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 import numpy as np
 from PIL import Image
 
+from transformation_portal.core.security.model_lock import resolve_model_lock_revision
+
 from .config import DA3Config, ModelVariant  # noqa: F401 - Used in docstring examples
 from .raw_loader import is_raw_file, load_raw_as_pil
 
@@ -243,6 +245,12 @@ class DA3InferenceEngine:
 
         # Get HuggingFace model ID from config
         model_id = self.config.model_variant.value.huggingface_id
+        model_revision = resolve_model_lock_revision(
+            model_id,
+            requested_revision=None,
+            strict=None,
+            context="DA3InferenceEngine(primary_model)",
+        )
 
         # Provenance
         self._requested_model_id = model_id
@@ -275,6 +283,7 @@ class DA3InferenceEngine:
             self.model = pipeline(
                 task="depth-estimation",
                 model=model_id,
+                revision=model_revision,
                 device=device_arg,
                 torch_dtype=torch_dtype,
             )
@@ -292,6 +301,12 @@ class DA3InferenceEngine:
             if fallback_model:
                 logger.warning("V3 model %s not available, falling back to V2: %s", model_id, fallback_model)
                 try:
+                    fallback_revision = resolve_model_lock_revision(
+                        fallback_model,
+                        requested_revision=None,
+                        strict=None,
+                        context="DA3InferenceEngine(fallback_model)",
+                    )
                     device_arg = self.device if self.device != "mps" else 0
 
                     # Determine dtype for FP16 optimization
@@ -303,6 +318,7 @@ class DA3InferenceEngine:
                     self.model = pipeline(
                         task="depth-estimation",
                         model=fallback_model,
+                        revision=fallback_revision,
                         device=device_arg,
                         torch_dtype=torch_dtype,
                     )
@@ -367,9 +383,18 @@ class DA3InferenceEngine:
                 raise ImportError(error_msg) from e
 
         logger.info(f"Loading DA3 model: {model_id} (using depth-anything-3 library)")
+        model_revision = resolve_model_lock_revision(
+            model_id,
+            requested_revision=None,
+            strict=None,
+            context="DA3InferenceEngine(da3_model)",
+        )
 
         try:
-            self.model = DepthAnything3.from_pretrained(model_id)
+            try:
+                self.model = DepthAnything3.from_pretrained(model_id, revision=model_revision)
+            except TypeError:
+                self.model = DepthAnything3.from_pretrained(model_id)
             self.model.to(self.device)
             self.model.eval()
             logger.info("✓ DA3 model loaded successfully")
