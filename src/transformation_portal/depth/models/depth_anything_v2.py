@@ -90,7 +90,6 @@ class ModelVariant(Enum):
 
     # CoreML optimized versions
     SMALL_COREML = "apple/coreml-depth-anything-v2-small"
-    BASE_COREML = "apple/coreml-depth-anything-v2-base"
 
 
 # ONNX model filename mapping for HuggingFace Hub downloads
@@ -182,7 +181,7 @@ class DepthAnythingV2Model:
     def _coreml_repo_for_variant(variant: ModelVariant) -> Optional[str]:
         return {
             ModelVariant.SMALL: "apple/coreml-depth-anything-v2-small",
-            ModelVariant.BASE: "apple/coreml-depth-anything-v2-base",
+            ModelVariant.SMALL_COREML: "apple/coreml-depth-anything-v2-small",
         }.get(variant)
 
     def _resolve_remote_artifact_revisions(self) -> None:
@@ -221,7 +220,10 @@ class DepthAnythingV2Model:
         if self.backend == ModelBackend.COREML:
             coreml_repo = self._coreml_repo_for_variant(self.variant)
             if not coreml_repo:
-                raise ValueError(f"CoreML model not available for variant {self.variant}. " "Use SMALL or BASE.")
+                raise ValueError(
+                    f"CoreML model not available for variant {self.variant}. "
+                    "Use SMALL/SMALL_COREML only; Base CoreML repo is not published on Hugging Face."
+                )
             self.coreml_revision = resolve_model_lock_revision(
                 coreml_repo,
                 self.coreml_revision,
@@ -440,7 +442,10 @@ class DepthAnythingV2Model:
         coreml_variant = self._coreml_repo_for_variant(self.variant)
 
         if not coreml_variant:
-            raise ValueError(f"CoreML model not available for variant {self.variant}. " "Use SMALL or BASE.")
+            raise ValueError(
+                f"CoreML model not available for variant {self.variant}. "
+                "Use SMALL/SMALL_COREML only; Base CoreML repo is not published on Hugging Face."
+            )
 
         # Download model package
         # Production deployments should pin specific model revisions

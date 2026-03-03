@@ -136,6 +136,14 @@ def test_depth_anything_coreml_large_variant_fails_with_unsupported_message() ->
         )
 
 
+def test_depth_anything_coreml_base_variant_fails_with_unpublished_repo_message() -> None:
+    with pytest.raises(ValueError, match="Base CoreML repo is not published on Hugging Face"):
+        DepthAnythingV2Model(
+            variant=ModelVariant.BASE,
+            backend=ModelBackend.COREML,
+        )
+
+
 def test_is_pinned_revision_and_strict_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert is_pinned_revision("e" * 40)
     assert not is_pinned_revision("main")

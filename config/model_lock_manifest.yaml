@@ -1,5 +1,5 @@
 version: 1
-updated_at: "2026-02-28"
+updated_at: "2026-03-03"
 description: >
   Repository-wide HuggingFace model lock manifest. Replace placeholders with
   verified 40-character commit SHAs before enabling strict model lock in CI/production.
@@ -19,9 +19,6 @@ repositories:
     owner: "depth pipeline"
   apple/coreml-depth-anything-v2-small:
     revision: "cfef6f6f2a70783dedc0bfae40cecbc2052285d3"
-    owner: "depth pipeline"
-  apple/coreml-depth-anything-v2-base:
-    revision: "NEEDS_VERIFICATION_COREML_DEPTH_ANYTHING_V2_BASE_20260228"
     owner: "depth pipeline"
   runwayml/stable-diffusion-v1-5:
     revision: "451f4fe16113bff5a5d2269ed5ad43b0592e9a14"
