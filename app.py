@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import sys
+import tempfile
 import time
 import uuid
 from bisect import bisect_left
@@ -71,6 +72,50 @@ def _env_float(name: str, default: float, minimum: float = 0.0) -> float:
 PORTAL_HTML = Path(__file__).resolve().parent / "portal.html"
 REPO_ROOT = Path(__file__).resolve().parent
 ARCHIVE_GOVERNANCE_SCRIPT = REPO_ROOT / "tools" / "archive_governance.py"
+
+
+def _normalize_config_path(value: str | Path) -> Path:
+    candidate = Path(value).expanduser()
+    if not candidate.is_absolute():
+        candidate = REPO_ROOT / candidate
+    return candidate.resolve(strict=False)
+
+
+def _env_path_roots(name: str, default: List[Path]) -> List[Path]:
+    raw = os.getenv(name)
+    values = [str(path) for path in default] if raw is None else [item.strip() for item in raw.split(",") if item.strip()]
+
+    roots: List[Path] = []
+    for value in values:
+        try:
+            root = _normalize_config_path(value)
+        except (OSError, RuntimeError):
+            continue
+        if root not in roots:
+            roots.append(root)
+    return roots
+
+
+def _is_within_allowed_roots(candidate: Path, allowed_roots: List[Path]) -> bool:
+    for root in allowed_roots:
+        if candidate.is_relative_to(root):
+            return True
+    return False
+
+
+def _validate_path_against_roots(path_value: str, allowed_roots: List[Path]) -> str:
+    if not path_value:
+        raise ValueError("Invalid path value")
+    try:
+        resolved = _normalize_config_path(path_value)
+    except (OSError, RuntimeError) as exc:
+        raise ValueError("Invalid path value") from exc
+
+    if not _is_within_allowed_roots(resolved, allowed_roots):
+        raise ValueError("Path outside allowed roots")
+    return str(resolved)
+
+
 LOG_TAIL_LIMIT = 2000
 STATUS_LOG_LIMIT = 250
 EVENT_QUEUE_MAXSIZE = 512
@@ -92,8 +137,16 @@ ALLOW_SSE_QUERY_API_KEY = _env_bool("TP_ALLOW_SSE_QUERY_API_KEY", False)
 TRUST_X_FORWARDED_FOR = _env_bool("TP_TRUST_X_FORWARDED_FOR", False)
 TRUSTED_PROXY_IPS = set(_env_csv("TP_TRUSTED_PROXY_IPS", []))
 MAX_REQUEST_BYTES = _env_int("TP_MAX_REQUEST_BYTES", 1024 * 1024, minimum=1024)
-RATE_LIMIT_PER_MINUTE = _env_int("TP_RATE_LIMIT_PER_MINUTE", 0, minimum=0)
+RATE_LIMIT_PER_MINUTE = _env_int("TP_RATE_LIMIT_PER_MINUTE", 60, minimum=0)
+MAX_CONCURRENT_JOBS = _env_int("TP_MAX_CONCURRENT_JOBS", 4, minimum=1)
 RATE_LIMIT_WINDOW_SECONDS = 60.0
+DEFAULT_ALLOWED_PATH_ROOTS = [
+    REPO_ROOT,
+    Path(tempfile.gettempdir()).resolve(),
+]
+ALLOWED_INPUT_ROOTS = _env_path_roots("TP_ALLOWED_INPUT_ROOTS", DEFAULT_ALLOWED_PATH_ROOTS)
+ALLOWED_OUTPUT_ROOTS = _env_path_roots("TP_ALLOWED_OUTPUT_ROOTS", DEFAULT_ALLOWED_PATH_ROOTS)
+ALLOWED_PATH_ROOTS = list(dict.fromkeys([*ALLOWED_INPUT_ROOTS, *ALLOWED_OUTPUT_ROOTS]))
 ENABLE_API_DOCS = _env_bool("TP_ENABLE_API_DOCS", False)
 READY_VERBOSE = _env_bool("TP_READY_VERBOSE", False)
 DEFAULT_CSP = (
@@ -224,6 +277,8 @@ DEPTH_BACKEND_ALIASES = {
 VALIDATION_REASON_CODES = {
     "Unsupported pipeline": "unsupported_pipeline",
     "input_dir and output_dir are required": "missing_required_paths",
+    "Invalid path value": "invalid_path_value",
+    "Path outside allowed roots": "path_outside_allowed_roots",
     "Invalid quality_tier": "invalid_quality_tier",
     "Invalid depth_backend": "invalid_depth_backend",
     "Invalid segmentation_backend": "invalid_segmentation_backend",
@@ -299,6 +354,10 @@ def _cleanup_expired_jobs(now: float) -> None:
     for job_id in expired:
         JOBS.pop(job_id, None)
         EVENT_SUBSCRIBERS.pop(job_id, None)
+
+
+def _active_job_count() -> int:
+    return sum(1 for job in JOBS.values() if job.state in {"queued", "running"})
 
 
 def _cleanup_rate_limit_buckets(now: float) -> None:
@@ -684,7 +743,7 @@ def _serialize_job(job: Job, *, include_logs: bool = True) -> Dict[str, Any]:
 def _path_arg(args: Dict[str, Any], *keys: str, default: str) -> str:
     value = _pick(args, *keys, default=default)
     text = str(value or "").strip()
-    return text or default
+    return _validate_path_against_roots(text or default, ALLOWED_PATH_ROOTS)
 
 
 def _int_arg(args: Dict[str, Any], *keys: str, default: int, minimum: int = 0) -> int:
@@ -807,7 +866,7 @@ def _archive_gate_argv(pipeline: str, args: Dict[str, Any], input_dir: str, outp
         )
         rights_jsonl = _pick(args, "rights_jsonl", "rightsJsonl")
         if rights_jsonl:
-            argv.extend(["--rights-jsonl", str(rights_jsonl)])
+            argv.extend(["--rights-jsonl", _validate_path_against_roots(str(rights_jsonl), ALLOWED_PATH_ROOTS)])
 
     elif command == "rights-apply":
         manifest_jsonl = _path_arg(args, "manifest_jsonl", "manifestJsonl", default=manifest_default)
@@ -978,10 +1037,12 @@ def _argv_from_request(payload: Dict[str, Any]) -> List[str]:
     if pipeline not in ALLOWED_PIPELINES:
         raise ValueError("Unsupported pipeline")
 
-    input_dir = str(_pick(args, "input_dir", "inputDir", default="")).strip()
-    output_dir = str(_pick(args, "output_dir", "outputDir", default="")).strip()
-    if not input_dir or not output_dir:
+    input_dir_raw = str(_pick(args, "input_dir", "inputDir", default="")).strip()
+    output_dir_raw = str(_pick(args, "output_dir", "outputDir", default="")).strip()
+    if not input_dir_raw or not output_dir_raw:
         raise ValueError("input_dir and output_dir are required")
+    input_dir = _validate_path_against_roots(input_dir_raw, ALLOWED_INPUT_ROOTS)
+    output_dir = _validate_path_against_roots(output_dir_raw, ALLOWED_OUTPUT_ROOTS)
 
     def onoff(b: Any) -> str:
         return "on" if _as_bool(b) else "off"
@@ -1222,16 +1283,19 @@ async def ready() -> Dict[str, Any]:
             "python": sys.version.split()[0],
         }
         response["jobs"] = {
-            "active": sum(1 for job in JOBS.values() if job.state in {"queued", "running"}),
+            "active": _active_job_count(),
             "total": len(JOBS),
         }
         response["security"] = {
             "api_key_enforced_for_jobs": _job_api_key_enforced(),
             "rate_limit_per_minute": RATE_LIMIT_PER_MINUTE,
+            "max_concurrent_jobs": MAX_CONCURRENT_JOBS,
             "max_request_bytes": MAX_REQUEST_BYTES,
             "trusted_hosts_enabled": ENABLE_TRUSTED_HOSTS,
             "trust_x_forwarded_for": TRUST_X_FORWARDED_FOR,
             "trusted_proxy_ips_count": len(TRUSTED_PROXY_IPS),
+            "allowed_input_roots_count": len(ALLOWED_INPUT_ROOTS),
+            "allowed_output_roots_count": len(ALLOWED_OUTPUT_ROOTS),
             "allow_sse_query_api_key": ALLOW_SSE_QUERY_API_KEY,
             "docs_enabled": ENABLE_API_DOCS,
         }
@@ -1279,6 +1343,14 @@ async def create_job(payload: Dict[str, Any]) -> JSONResponse:
         )
 
     _cleanup_expired_jobs(_now())
+    active_jobs = _active_job_count()
+    if active_jobs >= MAX_CONCURRENT_JOBS:
+        return _error_response(
+            429,
+            code="RATE_LIMITED",
+            message="too many active jobs; try again later",
+            details={"active_jobs": active_jobs, "max_concurrent_jobs": MAX_CONCURRENT_JOBS},
+        )
     jid = "job_" + uuid.uuid4().hex[:8]
     job = Job(id=jid, created_at=_now(), request=payload)
     JOBS[jid] = job
