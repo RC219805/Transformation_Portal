@@ -14,8 +14,14 @@ repositories:
   depth-anything/Depth-Anything-V2-Large-hf:
     revision: "7581137eff8d4e94f6e796d3baea0e9fa79b22d2"
     owner: "depth pipeline"
-  onnx/Depth-Anything-V2:
-    revision: "NEEDS_VERIFICATION_ONNX_DEPTH_ANYTHING_V2_20260228"
+  onnx-community/depth-anything-v2-small:
+    revision: "NEEDS_VERIFICATION_ONNX_DEPTH_ANYTHING_V2_SMALL_20260303"
+    owner: "depth pipeline"
+  onnx-community/depth-anything-v2-base:
+    revision: "NEEDS_VERIFICATION_ONNX_DEPTH_ANYTHING_V2_BASE_20260303"
+    owner: "depth pipeline"
+  onnx-community/depth-anything-v2-large:
+    revision: "NEEDS_VERIFICATION_ONNX_DEPTH_ANYTHING_V2_LARGE_20260303"
     owner: "depth pipeline"
   apple/coreml-depth-anything-v2-small:
     revision: "cfef6f6f2a70783dedc0bfae40cecbc2052285d3"

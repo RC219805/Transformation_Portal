@@ -144,6 +144,27 @@ def test_depth_anything_coreml_base_variant_fails_with_unpublished_repo_message(
         )
 
 
+def test_depth_anything_onnx_small_uses_variant_specific_model_lock_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest_path = tmp_path / "model_lock.yaml"
+    pinned = "d" * 40
+    _write_manifest(
+        manifest_path,
+        {"onnx-community/depth-anything-v2-small": {"revision": pinned}},
+    )
+    monkeypatch.setenv("TP_MODEL_LOCK_MANIFEST", str(manifest_path))
+    monkeypatch.setenv("TP_STRICT_MODEL_LOCK", "1")
+    monkeypatch.setattr(DepthAnythingV2Model, "_load_model", lambda self: None)
+
+    model = DepthAnythingV2Model(
+        variant=ModelVariant.SMALL,
+        backend=ModelBackend.ONNX,
+        strict_model_lock=True,
+    )
+    assert model.onnx_revision == pinned
+
+
 def test_is_pinned_revision_and_strict_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert is_pinned_revision("e" * 40)
     assert not is_pinned_revision("main")

@@ -92,11 +92,21 @@ class ModelVariant(Enum):
     SMALL_COREML = "apple/coreml-depth-anything-v2-small"
 
 
-# ONNX model filename mapping for HuggingFace Hub downloads
-ONNX_MODEL_FILENAMES = {
-    ModelVariant.SMALL: "depth_anything_v2_vits.onnx",
-    ModelVariant.BASE: "depth_anything_v2_vitb.onnx",
-    ModelVariant.LARGE: "depth_anything_v2_vitl.onnx",
+# ONNX model repository and filename candidates for HuggingFace Hub downloads.
+# File naming can differ across repos; try deterministic candidates in order.
+ONNX_MODEL_SOURCES = {
+    ModelVariant.SMALL: {
+        "repo_id": "onnx-community/depth-anything-v2-small",
+        "filenames": ("depth_anything_v2_vits.onnx", "model.onnx"),
+    },
+    ModelVariant.BASE: {
+        "repo_id": "onnx-community/depth-anything-v2-base",
+        "filenames": ("depth_anything_v2_vitb.onnx", "model.onnx"),
+    },
+    ModelVariant.LARGE: {
+        "repo_id": "onnx-community/depth-anything-v2-large",
+        "filenames": ("depth_anything_v2_vitl.onnx", "model.onnx"),
+    },
 }
 
 
@@ -184,6 +194,10 @@ class DepthAnythingV2Model:
             ModelVariant.SMALL_COREML: "apple/coreml-depth-anything-v2-small",
         }.get(variant)
 
+    @staticmethod
+    def _onnx_source_for_variant(variant: ModelVariant) -> Optional[dict[str, object]]:
+        return ONNX_MODEL_SOURCES.get(variant)
+
     def _resolve_remote_artifact_revisions(self) -> None:
         """Resolve effective revisions from explicit args + model lock manifest."""
         if self.model_path is not None:
@@ -204,8 +218,12 @@ class DepthAnythingV2Model:
                 )
 
         if self.backend == ModelBackend.ONNX:
+            onnx_source = self._onnx_source_for_variant(self.variant)
+            if not onnx_source:
+                raise ValueError(f"ONNX model not available for variant {self.variant}. " "Use SMALL, BASE, or LARGE.")
+            onnx_repo = str(onnx_source["repo_id"])
             self.onnx_revision = resolve_model_lock_revision(
-                "onnx/Depth-Anything-V2",
+                onnx_repo,
                 self.onnx_revision,
                 strict=self.strict_model_lock,
                 context="DepthAnythingV2Model(ONNX)",
@@ -393,24 +411,31 @@ class DepthAnythingV2Model:
         """Download ONNX model from HuggingFace Hub."""
         from huggingface_hub import hf_hub_download  # pylint: disable=import-outside-toplevel
 
-        # Depth Anything V2 ONNX models are available from various sources
-        onnx_repo = "onnx/Depth-Anything-V2"
-
-        # Get filename from module-level constant
-        onnx_filename = ONNX_MODEL_FILENAMES.get(self.variant)
-
-        if not onnx_filename:
+        onnx_source = self._onnx_source_for_variant(self.variant)
+        if not onnx_source:
             raise ValueError(f"ONNX model not available for variant {self.variant}. " "Use SMALL, BASE, or LARGE.")
 
-        # Production deployments should pin specific model revisions
-        model_path = hf_hub_download(  # nosec B615
-            repo_id=onnx_repo,
-            filename=onnx_filename,
-            cache_dir=Path.home() / ".cache" / "depth_anything_v2",
-            revision=self.onnx_revision,
-        )
+        onnx_repo = str(onnx_source["repo_id"])
+        filenames = tuple(str(name) for name in onnx_source["filenames"])
+        last_error: Optional[Exception] = None
 
-        return Path(model_path)
+        for onnx_filename in filenames:
+            try:
+                # Production deployments should pin specific model revisions
+                model_path = hf_hub_download(  # nosec B615
+                    repo_id=onnx_repo,
+                    filename=onnx_filename,
+                    cache_dir=Path.home() / ".cache" / "depth_anything_v2",
+                    revision=self.onnx_revision,
+                )
+                return Path(model_path)
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                last_error = exc
+
+        raise RuntimeError(
+            f"Failed to download ONNX model for variant {self.variant} from '{onnx_repo}' "
+            f"using filenames {filenames}: {last_error}"
+        ) from last_error
 
     def _load_coreml_model(self) -> None:
         """Load CoreML model for Apple Neural Engine."""
