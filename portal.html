@@ -149,9 +149,9 @@
                         </div>
                     </div>
                     <div class="mt-4">
-                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="apiKeyInput">API Key (optional)</label>
+                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="apiKeyInput">API Key</label>
                         <div class="flex flex-col sm:flex-row gap-2 sm:items-center">
-                            <input type="password" id="apiKeyInput" class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="Token for protected mutations" autocomplete="off" spellcheck="false" />
+                            <input type="password" id="apiKeyInput" class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="Bearer token for /v1/jobs endpoints" autocomplete="off" spellcheck="false" />
                             <label class="flex items-center gap-2 text-[12px] text-slate-600 dark:text-slate-400">
                                 <input type="checkbox" id="rememberApiKey" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
                                 Remember in local storage
@@ -454,10 +454,17 @@
         const HEALTH_CHECK_INTERVAL_MS = 15000;
         const HEALTH_CHECK_TIMEOUT_MS = 2000;
         const HEALTH_CHECK_MIN_GAP_MS = 10000;
+        const SSE_RECONNECT_BASE_DELAY_MS = 1000;
+        const SSE_RECONNECT_MAX_DELAY_MS = 30000;
+        const SSE_RECONNECT_MAX_EXPONENT = 5;
+        const SSE_RECONNECT_JITTER_MS = 250;
+        const SSE_STALL_CHECK_INTERVAL_MS = 10000;
+        const SSE_STALL_THRESHOLD_MS = 45000;
         const SAFE_JOB_STATES = new Set(['queued', 'running', 'succeeded', 'failed', 'canceled', 'ready', 'offline']);
 
         let queueRenderScheduled = false;
         let healthPollIntervalId = null;
+        let sseWatchdogIntervalId = null;
         let healthCheckInFlight = false;
         let lastHealthCheckAt = 0;
 
@@ -646,6 +653,21 @@
             return headers;
         }
 
+        function resumeBlockedJobStreamsAfterAuthUpdate() {
+            const token = _currentApiToken();
+            if (!token) return;
+            state.jobs.forEach((job) => {
+                if (!job) return;
+                _ensureJobStreamState(job);
+                if (!job.reconnectBlocked) return;
+                if (!_isJobStreamRecoverable(job)) return;
+                if (_jobHasActiveStream(job)) return;
+                appendJobLog(job, '[INFO] API key updated. Reconnecting event stream...');
+                logToPane(job.id, '[INFO] API key updated. Reconnecting event stream...');
+                startJobEventStream(job, job.eventStreamUrl);
+            });
+        }
+
         async function copyToClipboard(text) {
             try {
                 if (navigator.clipboard && window.isSecureContext) {
@@ -768,8 +790,9 @@
 
         function hydrateJobFromServer(rawJob) {
             if (!rawJob || !rawJob.id) return null;
+            const id = String(rawJob.id);
             return {
-                id: String(rawJob.id),
+                id,
                 pipeline: String(rawJob.pipeline || 'unknown'),
                 state: String(rawJob.state || 'queued'),
                 progress: Math.max(0, Math.min(100, Number(rawJob.progress) || 0)),
@@ -777,15 +800,167 @@
                 artifacts: normalizeArtifactItems(rawJob.artifacts),
                 error: rawJob.error || null,
                 eventSource: null,
+                fetchAbortController: null,
+                eventStreamUrl: String(rawJob.events_url || `/v1/jobs/${id}/events`),
+                usesFetchSse: false,
+                sseRetry: { attempt: 0, timer: null },
+                reconnectBlocked: false,
+                lastEventAt: 0,
                 mockInterval: null
             };
         }
 
-        function stopJobActivity(job) {
+        function _isJobStreamRecoverable(job) {
+            if (!job) return false;
+            return job.state === 'running' || job.state === 'queued';
+        }
+
+        function _ensureJobStreamState(job) {
+            if (!job) return;
+            if (!job.sseRetry || typeof job.sseRetry !== 'object') {
+                job.sseRetry = { attempt: 0, timer: null };
+            } else {
+                const attempt = Number(job.sseRetry.attempt) || 0;
+                job.sseRetry.attempt = Math.max(0, attempt);
+                if (!job.sseRetry.timer) job.sseRetry.timer = null;
+            }
+            if (typeof job.lastEventAt !== 'number') job.lastEventAt = 0;
+            if (typeof job.usesFetchSse !== 'boolean') job.usesFetchSse = false;
+            if (typeof job.reconnectBlocked !== 'boolean') job.reconnectBlocked = false;
+            if (typeof job.eventStreamUrl !== 'string' || !job.eventStreamUrl.trim()) {
+                const fallbackId = encodeURIComponent(String(job.id || ''));
+                job.eventStreamUrl = `/v1/jobs/${fallbackId}/events`;
+            }
+            if (!Object.prototype.hasOwnProperty.call(job, 'fetchAbortController')) {
+                job.fetchAbortController = null;
+            }
+        }
+
+        function _jobHasActiveStream(job) {
+            if (!job) return false;
+            return Boolean(job.eventSource || job.fetchAbortController);
+        }
+
+        function _clearSseRetry(job, resetAttempt = true) {
+            if (!job || !job.sseRetry) return;
+            if (job.sseRetry.timer) {
+                clearTimeout(job.sseRetry.timer);
+                job.sseRetry.timer = null;
+            }
+            if (resetAttempt) job.sseRetry.attempt = 0;
+        }
+
+        function _teardownJobEventStream(job) {
+            if (!job) return;
             if (job.eventSource) {
                 job.eventSource.close();
                 job.eventSource = null;
             }
+            if (job.fetchAbortController) {
+                job.fetchAbortController.abort();
+                job.fetchAbortController = null;
+            }
+        }
+
+        function _markJobEventActivity(job) {
+            if (!job) return;
+            _ensureJobStreamState(job);
+            job.lastEventAt = Date.now();
+            if (job.sseRetry && job.sseRetry.attempt > 0) {
+                job.sseRetry.attempt = 0;
+            }
+        }
+
+        function _syncHydratedJob(existing, hydrated, rawJob = null) {
+            if (!existing || !hydrated) return;
+            existing.pipeline = hydrated.pipeline;
+            existing.state = hydrated.state;
+            existing.progress = hydrated.progress;
+            existing.logs = hydrated.logs;
+            existing.error = hydrated.error;
+            existing.artifacts = hydrated.artifacts;
+            if (rawJob && typeof rawJob.events_url === 'string' && rawJob.events_url.trim()) {
+                existing.eventStreamUrl = rawJob.events_url.trim();
+            } else if (!existing.eventStreamUrl) {
+                existing.eventStreamUrl = hydrated.eventStreamUrl;
+            }
+            _ensureJobStreamState(existing);
+            if (!_isJobStreamRecoverable(existing)) {
+                existing.reconnectBlocked = false;
+                _clearSseRetry(existing, true);
+                _teardownJobEventStream(existing);
+            }
+        }
+
+        async function refreshJobStatus(job) {
+            if (!job || !job.id) return;
+            try {
+                const headers = _buildAuthHeaders({ 'Accept': 'application/json' });
+                const encodedId = encodeURIComponent(String(job.id));
+                const res = await fetch(`${API_BASE}/v1/jobs/${encodedId}`, { headers, cache: 'no-store' });
+                if (!res.ok) return;
+                const payload = await res.json();
+                const rawJob = payload?.data;
+                if (!rawJob || String(rawJob.id || '') !== String(job.id)) return;
+                const hydrated = hydrateJobFromServer(rawJob);
+                if (!hydrated) return;
+                _syncHydratedJob(job, hydrated, rawJob);
+                if (state.selectedJobId === job.id && els.logPane) {
+                    els.logPane.textContent = job.logs.join('\n') + (job.logs.length ? '\n' : '');
+                    els.logPane.scrollTop = els.logPane.scrollHeight;
+                    if (!_isJobStreamRecoverable(job) && els.logStatusIndicator) {
+                        els.logStatusIndicator.classList.add('hidden');
+                    }
+                }
+                scheduleRenderJobQueue();
+                renderArtifactPanel();
+            } catch {
+                // best-effort refresh for reconnect convergence
+            }
+        }
+
+        function scheduleSseReconnect(job) {
+            if (!_isJobStreamRecoverable(job)) return;
+            _ensureJobStreamState(job);
+            if (job.reconnectBlocked) return;
+            if (job.sseRetry.timer || _jobHasActiveStream(job)) return;
+
+            const attempt = job.sseRetry.attempt + 1;
+            const exponent = Math.min(attempt, SSE_RECONNECT_MAX_EXPONENT);
+            const backoff = SSE_RECONNECT_BASE_DELAY_MS * (2 ** exponent);
+            const delayMs = Math.min(SSE_RECONNECT_MAX_DELAY_MS, backoff) + Math.floor(Math.random() * SSE_RECONNECT_JITTER_MS);
+
+            job.sseRetry.attempt = attempt;
+            appendJobLog(job, `[WARN] Event stream disconnected. Reconnecting in ${Math.ceil(delayMs / 1000)}s (attempt ${attempt}).`);
+            logToPane(job.id, `[WARN] Event stream disconnected. Reconnecting in ${Math.ceil(delayMs / 1000)}s (attempt ${attempt}).`);
+            scheduleRenderJobQueue();
+
+            job.sseRetry.timer = setTimeout(() => {
+                job.sseRetry.timer = null;
+                void (async () => {
+                    if (!_isJobStreamRecoverable(job)) {
+                        _clearSseRetry(job, true);
+                        return;
+                    }
+                    _teardownJobEventStream(job);
+                    await refreshJobStatus(job);
+                    if (!_isJobStreamRecoverable(job)) {
+                        _clearSseRetry(job, true);
+                        return;
+                    }
+                    startJobEventStream(job, job.eventStreamUrl);
+                })();
+            }, delayMs);
+        }
+
+        function stopJobActivity(job) {
+            if (!job) return;
+            _ensureJobStreamState(job);
+            _clearSseRetry(job, true);
+            _teardownJobEventStream(job);
+            job.lastEventAt = 0;
+            job.usesFetchSse = false;
+            job.reconnectBlocked = false;
             if (job.mockInterval) {
                 clearInterval(job.mockInterval);
                 job.mockInterval = null;
@@ -794,10 +969,8 @@
 
         function cleanupActiveJobHandles() {
             state.jobs.forEach(stopJobActivity);
-            if (healthPollIntervalId !== null) {
-                clearInterval(healthPollIntervalId);
-                healthPollIntervalId = null;
-            }
+            if (healthPollIntervalId !== null) stopHealthPolling();
+            if (sseWatchdogIntervalId !== null) stopSseWatchdog();
         }
 
         function scheduleRenderJobQueue() {
@@ -1297,6 +1470,10 @@
 
             if (els.apiKeyInput) {
                 els.apiKeyInput.addEventListener('input', _persistApiKeyFromInputs);
+                els.apiKeyInput.addEventListener('change', () => {
+                    _persistApiKeyFromInputs();
+                    resumeBlockedJobStreamsAfterAuthUpdate();
+                });
             }
             if (els.rememberApiKey) {
                 els.rememberApiKey.addEventListener('change', _persistApiKeyFromInputs);
@@ -1467,39 +1644,26 @@
             return { message: raw || `Request failed (${res.status})`, error: null };
         }
 
-        function _eventSourceUrl(eventsUrl) {
-            const token = _currentApiToken();
-            const baseUrl = `${API_BASE}${eventsUrl}`;
-            if (!token) return baseUrl;
-            if (!/\/v1\/jobs\/[^/]+\/events(?:\?|$)/.test(eventsUrl)) return baseUrl;
-            const separator = baseUrl.includes('?') ? '&' : '?';
-            return `${baseUrl}${separator}api_key=${encodeURIComponent(token)}`;
-        }
-
-        function startJobEventStream(job, eventsUrl) {
-            if (!job || !eventsUrl) return;
-            stopJobActivity(job);
-            const es = new EventSource(_eventSourceUrl(eventsUrl));
-            job.eventSource = es;
-
-            es.addEventListener('log', (e) => {
-                const parsed = JSON.parse(e.data);
+        function _applyJobStreamEvent(job, eventName, parsed) {
+            if (!job) return;
+            _markJobEventActivity(job);
+            if (eventName === 'log') {
                 const line = String(parsed.line || '');
                 appendJobLog(job, line);
                 logToPane(job.id, line);
-            });
-            es.addEventListener('progress', (e) => {
-                const parsed = JSON.parse(e.data);
+                return;
+            }
+            if (eventName === 'progress') {
                 job.progress = Math.max(0, Math.min(100, Number(parsed.progress) || 0));
                 scheduleRenderJobQueue();
-            });
-            es.addEventListener('state', (e) => {
-                const parsed = JSON.parse(e.data);
+                return;
+            }
+            if (eventName === 'state') {
                 job.state = String(parsed.state || job.state || 'running');
                 scheduleRenderJobQueue();
-            });
-            es.addEventListener('artifact', (e) => {
-                const parsed = JSON.parse(e.data);
+                return;
+            }
+            if (eventName === 'artifact') {
                 upsertArtifact(job, {
                     artifact_type: String(parsed.artifact_type || 'file'),
                     path: String(parsed.path || ''),
@@ -1507,9 +1671,9 @@
                     size_bytes: typeof parsed.size_bytes === 'number' ? parsed.size_bytes : null
                 });
                 renderArtifactPanel();
-            });
-            es.addEventListener('done', (e) => {
-                const parsed = JSON.parse(e.data);
+                return;
+            }
+            if (eventName === 'done') {
                 job.state = String(parsed.state || job.state || 'failed');
                 job.progress = job.state === 'succeeded' ? 100 : job.progress;
                 if (parsed.error) {
@@ -1532,7 +1696,158 @@
                 renderArtifactPanel();
                 createToast(`Job ${job.state}.`, job.state === 'succeeded' ? 'success' : 'error');
                 if (state.selectedJobId === job.id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
-            });
+            }
+        }
+
+        async function _startAuthorizedFetchSse(job, eventsUrl) {
+            if (!job || !eventsUrl || !_isJobStreamRecoverable(job)) return;
+            _ensureJobStreamState(job);
+            const controller = new AbortController();
+            const handle = { close: () => controller.abort() };
+            job.fetchAbortController = controller;
+            job.eventSource = handle;
+            const headers = _buildAuthHeaders({ 'Accept': 'text/event-stream' });
+            const streamUrl = `${API_BASE}${eventsUrl}`;
+            let sawDoneEvent = false;
+            let shouldReconnect = true;
+            try {
+                const res = await fetch(streamUrl, {
+                    method: 'GET',
+                    headers,
+                    signal: controller.signal,
+                    cache: 'no-store'
+                });
+                if (!res.ok) {
+                    const parsedError = await extractApiError(res);
+                    if (parsedError.error) job.error = parsedError.error;
+                    const status = Number(res.status) || 0;
+                    const isAuthError = status === 401 || status === 403;
+                    const isRetryableStatus = status === 429 || status >= 500;
+                    shouldReconnect = isRetryableStatus;
+                    if (!isRetryableStatus) {
+                        job.reconnectBlocked = true;
+                        _clearSseRetry(job, true);
+                    }
+                    if (isAuthError) {
+                        const line = `[ERROR] Event stream authorization failed (${status}). Update API key to resume live job events.`;
+                        appendJobLog(job, line);
+                        logToPane(job.id, line);
+                        createToast('Event stream authorization failed. Update API key to resume live logs.', 'error');
+                    } else {
+                        const line = `[WARN] Event stream subscribe failed (${status}). ${parsedError.message}`;
+                        appendJobLog(job, line);
+                        logToPane(job.id, line);
+                    }
+                    scheduleRenderJobQueue();
+                    renderArtifactPanel();
+                    return;
+                }
+                if (!res.body) return;
+                job.reconnectBlocked = false;
+                _markJobEventActivity(job);
+
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let currentEvent = '';
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+
+                    let newlineIndex = buffer.indexOf('\n');
+                    while (newlineIndex !== -1) {
+                        const rawLine = buffer.slice(0, newlineIndex);
+                        buffer = buffer.slice(newlineIndex + 1);
+                        const line = rawLine.replace(/\r$/, '');
+
+                        if (line.startsWith(':')) {
+                            _markJobEventActivity(job);
+                            newlineIndex = buffer.indexOf('\n');
+                            continue;
+                        }
+                        if (line.startsWith('event: ')) {
+                            currentEvent = line.slice(7).trim();
+                            newlineIndex = buffer.indexOf('\n');
+                            continue;
+                        }
+                        if (line.startsWith('data: ')) {
+                            const dataText = line.slice(6).trim();
+                            if (!dataText) {
+                                newlineIndex = buffer.indexOf('\n');
+                                continue;
+                            }
+                            try {
+                                const parsed = JSON.parse(dataText);
+                                _applyJobStreamEvent(job, currentEvent, parsed);
+                                if (currentEvent === 'done') {
+                                    sawDoneEvent = true;
+                                    return;
+                                }
+                            } catch {
+                                // Ignore malformed stream lines and continue processing.
+                            }
+                            newlineIndex = buffer.indexOf('\n');
+                            continue;
+                        }
+                        if (!line) currentEvent = '';
+                        newlineIndex = buffer.indexOf('\n');
+                    }
+                }
+            } catch (err) {
+                if (!controller.signal.aborted) {
+                    const line = `[WARN] Event stream error: ${err instanceof Error ? err.message : String(err)}`;
+                    appendJobLog(job, line);
+                    logToPane(job.id, line);
+                    scheduleRenderJobQueue();
+                    renderArtifactPanel();
+                }
+            } finally {
+                if (job.eventSource === handle) {
+                    job.eventSource = null;
+                }
+                if (job.fetchAbortController === controller) {
+                    job.fetchAbortController = null;
+                }
+                if (shouldReconnect && !sawDoneEvent && !controller.signal.aborted && _isJobStreamRecoverable(job)) {
+                    scheduleSseReconnect(job);
+                }
+            }
+        }
+
+        function startJobEventStream(job, eventsUrl) {
+            if (!job) return;
+            _ensureJobStreamState(job);
+            if (typeof eventsUrl === 'string' && eventsUrl.trim()) {
+                job.eventStreamUrl = eventsUrl.trim();
+            }
+            if (!_isJobStreamRecoverable(job)) {
+                stopJobActivity(job);
+                return;
+            }
+            job.reconnectBlocked = false;
+            _clearSseRetry(job, false);
+            if (_jobHasActiveStream(job)) return;
+
+            const token = _currentApiToken();
+            const streamPath = job.eventStreamUrl;
+            const streamUrl = `${API_BASE}${streamPath}`;
+            job.lastEventAt = Date.now();
+            if (token) {
+                job.usesFetchSse = true;
+                void _startAuthorizedFetchSse(job, streamPath);
+                return;
+            }
+
+            job.usesFetchSse = false;
+            const es = new EventSource(streamUrl);
+            job.eventSource = es;
+            es.addEventListener('log', (e) => _applyJobStreamEvent(job, 'log', JSON.parse(e.data)));
+            es.addEventListener('progress', (e) => _applyJobStreamEvent(job, 'progress', JSON.parse(e.data)));
+            es.addEventListener('state', (e) => _applyJobStreamEvent(job, 'state', JSON.parse(e.data)));
+            es.addEventListener('artifact', (e) => _applyJobStreamEvent(job, 'artifact', JSON.parse(e.data)));
+            es.addEventListener('done', (e) => _applyJobStreamEvent(job, 'done', JSON.parse(e.data)));
             es.onerror = () => {};
         }
 
@@ -1554,12 +1869,7 @@
                     if (!hydrated) return;
                     const existing = byId.get(id);
                     if (existing) {
-                        existing.pipeline = hydrated.pipeline;
-                        existing.state = hydrated.state;
-                        existing.progress = hydrated.progress;
-                        existing.logs = hydrated.logs;
-                        existing.error = hydrated.error;
-                        existing.artifacts = hydrated.artifacts;
+                        _syncHydratedJob(existing, hydrated, rawJob);
                     } else {
                         state.jobs.push(hydrated);
                         byId.set(id, hydrated);
@@ -1572,8 +1882,8 @@
                 }
 
                 state.jobs.forEach((job) => {
-                    if ((job.state === 'running' || job.state === 'queued') && !job.eventSource) {
-                        startJobEventStream(job, `/v1/jobs/${job.id}/events`);
+                    if (_isJobStreamRecoverable(job) && !_jobHasActiveStream(job)) {
+                        startJobEventStream(job, job.eventStreamUrl);
                     }
                 });
                 if (state.selectedJobId) selectJob(state.selectedJobId);
@@ -1663,6 +1973,12 @@
                 artifacts: [],
                 error: null,
                 eventSource: null,
+                fetchAbortController: null,
+                eventStreamUrl: null,
+                usesFetchSse: false,
+                sseRetry: { attempt: 0, timer: null },
+                reconnectBlocked: false,
+                lastEventAt: 0,
                 mockInterval: null
             };
             state.jobs.push(job);
@@ -1743,8 +2059,46 @@
             }
         }
 
+        function startSseWatchdog() {
+            if (sseWatchdogIntervalId !== null) return;
+            sseWatchdogIntervalId = setInterval(() => {
+                if (document.hidden) return;
+                const now = Date.now();
+                state.jobs.forEach((job) => {
+                    if (!job) return;
+                    _ensureJobStreamState(job);
+                    if (!job.usesFetchSse) return;
+                    if (job.reconnectBlocked) return;
+
+                    if (!_isJobStreamRecoverable(job)) {
+                        _clearSseRetry(job, true);
+                        return;
+                    }
+                    if (job.sseRetry.timer) return;
+
+                    if (!_jobHasActiveStream(job)) {
+                        scheduleSseReconnect(job);
+                        return;
+                    }
+
+                    if (job.lastEventAt > 0 && (now - job.lastEventAt) <= SSE_STALL_THRESHOLD_MS) return;
+                    appendJobLog(job, '[WARN] Event stream stalled. Reconnecting...');
+                    logToPane(job.id, '[WARN] Event stream stalled. Reconnecting...');
+                    _teardownJobEventStream(job);
+                    scheduleSseReconnect(job);
+                });
+            }, SSE_STALL_CHECK_INTERVAL_MS);
+        }
+
+        function stopSseWatchdog() {
+            if (sseWatchdogIntervalId === null) return;
+            clearInterval(sseWatchdogIntervalId);
+            sseWatchdogIntervalId = null;
+        }
+
         function startHealthPolling() {
             if (healthPollIntervalId !== null) return;
+            startSseWatchdog();
             healthPollIntervalId = setInterval(() => {
                 if (!document.hidden) checkBackend();
             }, HEALTH_CHECK_INTERVAL_MS);
@@ -1754,6 +2108,7 @@
             if (healthPollIntervalId === null) return;
             clearInterval(healthPollIntervalId);
             healthPollIntervalId = null;
+            stopSseWatchdog();
         }
 
         if (els.saveProfileBtn) els.saveProfileBtn.addEventListener('click', () => {

@@ -35,9 +35,14 @@ def _collect_sse_events(response) -> List[Tuple[str, Dict[str, Any]]]:
 @pytest.fixture(autouse=True)
 def _reset_orchestrator_globals() -> None:
     previous_api_key = orchestrator_app.API_KEY_SECRET
+    previous_enforce_job_api_key = orchestrator_app.ENFORCE_JOB_API_KEY
+    previous_allow_sse_query_api_key = orchestrator_app.ALLOW_SSE_QUERY_API_KEY
     previous_max_request_bytes = orchestrator_app.MAX_REQUEST_BYTES
     previous_max_indexed_artifacts = orchestrator_app.MAX_INDEXED_ARTIFACTS
     previous_rate_limit_per_minute = orchestrator_app.RATE_LIMIT_PER_MINUTE
+    orchestrator_app.API_KEY_SECRET = "contract-secret"
+    orchestrator_app.ENFORCE_JOB_API_KEY = True
+    orchestrator_app.ALLOW_SSE_QUERY_API_KEY = False
     orchestrator_app.JOBS.clear()
     orchestrator_app.EVENT_SUBSCRIBERS.clear()
     orchestrator_app.RATE_LIMIT_BUCKETS.clear()
@@ -45,6 +50,8 @@ def _reset_orchestrator_globals() -> None:
         yield
     finally:
         orchestrator_app.API_KEY_SECRET = previous_api_key
+        orchestrator_app.ENFORCE_JOB_API_KEY = previous_enforce_job_api_key
+        orchestrator_app.ALLOW_SSE_QUERY_API_KEY = previous_allow_sse_query_api_key
         orchestrator_app.MAX_REQUEST_BYTES = previous_max_request_bytes
         orchestrator_app.MAX_INDEXED_ARTIFACTS = previous_max_indexed_artifacts
         orchestrator_app.RATE_LIMIT_PER_MINUTE = previous_rate_limit_per_minute
@@ -55,7 +62,7 @@ def _reset_orchestrator_globals() -> None:
 
 @pytest.fixture(name="client")
 def _client_fixture() -> TestClient:
-    with TestClient(orchestrator_app.app) as test_client:
+    with TestClient(orchestrator_app.app, headers={"x-api-key": "contract-secret"}) as test_client:
         yield test_client
 
 
@@ -129,7 +136,7 @@ def test_v1_routes_enforce_api_key_for_reads_and_events(client: TestClient) -> N
     orchestrator_app.JOBS[finished_job.id] = finished_job
     orchestrator_app.EVENT_SUBSCRIBERS[finished_job.id] = {}
 
-    list_unauthorized = client.get("/v1/jobs")
+    list_unauthorized = client.get("/v1/jobs", headers={"x-api-key": "wrong"})
     assert list_unauthorized.status_code == 401
     assert list_unauthorized.json()["error"]["code"] == "UNAUTHORIZED"
 
@@ -137,14 +144,25 @@ def test_v1_routes_enforce_api_key_for_reads_and_events(client: TestClient) -> N
     assert list_authorized.status_code == 200
     assert list_authorized.json()["success"] is True
 
-    events_unauthorized = client.get(f"/v1/jobs/{finished_job.id}/events")
+    events_unauthorized = client.get(f"/v1/jobs/{finished_job.id}/events", headers={"x-api-key": "wrong"})
     assert events_unauthorized.status_code == 401
     assert events_unauthorized.json()["error"]["code"] == "UNAUTHORIZED"
 
-    events_authorized = client.get(f"/v1/jobs/{finished_job.id}/events?api_key=contract-secret")
+    events_authorized = client.get(f"/v1/jobs/{finished_job.id}/events", headers={"x-api-key": "contract-secret"})
     assert events_authorized.status_code == 200
     assert "event: state" in events_authorized.text
     assert "event: done" in events_authorized.text
+
+
+def test_v1_routes_fail_closed_when_auth_enforced_without_secret(client: TestClient) -> None:
+    orchestrator_app.ENFORCE_JOB_API_KEY = True
+    orchestrator_app.API_KEY_SECRET = ""
+
+    response = client.get("/v1/jobs", headers={"x-api-key": "irrelevant"})
+    assert response.status_code == 503
+    body = response.json()
+    assert body["error"]["code"] == "AUTH_CONFIGURATION_ERROR"
+    assert body["error"]["details"]["env"] == "TP_API_KEY"
 
 
 def test_invalid_job_payload_returns_typed_invalid_argument(client: TestClient) -> None:

@@ -306,6 +306,65 @@ def test_portal_cli_template_excludes_unsupported_lux_flags() -> None:
     assert "--strict-segmentation" in content
 
 
+def test_portal_fetch_sse_reconnect_scheduler_has_terminal_guard_and_backoff() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    body = _extract_js_function_body(content, "scheduleSseReconnect")
+
+    assert "_isJobStreamRecoverable(job)" in body
+    assert "if (job.reconnectBlocked) return;" in body
+    assert "if (job.sseRetry.timer || _jobHasActiveStream(job)) return;" in body
+    assert "SSE_RECONNECT_BASE_DELAY_MS" in body
+    assert "setTimeout" in body
+    assert "startJobEventStream(job, job.eventStreamUrl);" in body
+
+
+def test_portal_fetch_sse_reconnect_schedules_on_unexpected_disconnect_only() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    body = _extract_js_function_body(content, "_startAuthorizedFetchSse")
+
+    assert "let sawDoneEvent = false;" in body
+    assert "let shouldReconnect = true;" in body
+    assert "const isAuthError = status === 401 || status === 403;" in body
+    assert "const isRetryableStatus = status === 429 || status >= 500;" in body
+    assert "job.reconnectBlocked = true;" in body
+    assert "if (shouldReconnect && !sawDoneEvent && !controller.signal.aborted && _isJobStreamRecoverable(job)) {" in body
+    assert "scheduleSseReconnect(job);" in body
+
+
+def test_portal_fetch_sse_watchdog_reconnects_stalled_streams() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    body = _extract_js_function_body(content, "startSseWatchdog")
+
+    assert "if (!job.usesFetchSse) return;" in body
+    assert "if (job.reconnectBlocked) return;" in body
+    assert "SSE_STALL_THRESHOLD_MS" in body
+    assert "_teardownJobEventStream(job);" in body
+    assert "scheduleSseReconnect(job);" in body
+
+
+def test_portal_start_job_stream_avoids_duplicate_readers() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    body = _extract_js_function_body(content, "startJobEventStream")
+
+    assert "_clearSseRetry(job, false);" in body
+    assert "if (_jobHasActiveStream(job)) return;" in body
+
+
+def test_portal_resumes_blocked_streams_after_api_key_update() -> None:
+    portal_html = Path(__file__).resolve().parents[1] / "portal.html"
+    content = portal_html.read_text(encoding="utf-8")
+    helper_body = _extract_js_function_body(content, "resumeBlockedJobStreamsAfterAuthUpdate")
+    bind_body = _extract_js_function_body(content, "bindInputs")
+
+    assert "if (!job.reconnectBlocked) return;" in helper_body
+    assert "startJobEventStream(job, job.eventStreamUrl);" in helper_body
+    assert "resumeBlockedJobStreamsAfterAuthUpdate();" in bind_body
+
+
 def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
     portal_html = Path(__file__).resolve().parents[1] / "portal.html"
     content = portal_html.read_text(encoding="utf-8")
@@ -942,14 +1001,30 @@ def test_client_ip_prefers_peer_by_default() -> None:
     assert orchestrator_app._extract_client_ip(request) == "10.0.0.1"
 
 
-def test_api_key_validation_accepts_query_param() -> None:
+def test_api_key_validation_rejects_query_param_by_default() -> None:
     previous_key = orchestrator_app.API_KEY_SECRET
+    previous_flag = orchestrator_app.ALLOW_SSE_QUERY_API_KEY
     try:
         orchestrator_app.API_KEY_SECRET = "query-secret"
+        orchestrator_app.ALLOW_SSE_QUERY_API_KEY = False
+        request = _build_request("GET", "/v1/jobs/job_1/events", query_string="api_key=query-secret")
+        assert orchestrator_app._has_valid_api_key(request) is False
+    finally:
+        orchestrator_app.API_KEY_SECRET = previous_key
+        orchestrator_app.ALLOW_SSE_QUERY_API_KEY = previous_flag
+
+
+def test_api_key_validation_accepts_query_param_when_explicitly_enabled() -> None:
+    previous_key = orchestrator_app.API_KEY_SECRET
+    previous_flag = orchestrator_app.ALLOW_SSE_QUERY_API_KEY
+    try:
+        orchestrator_app.API_KEY_SECRET = "query-secret"
+        orchestrator_app.ALLOW_SSE_QUERY_API_KEY = True
         request = _build_request("GET", "/v1/jobs/job_1/events", query_string="api_key=query-secret")
         assert orchestrator_app._has_valid_api_key(request) is True
     finally:
         orchestrator_app.API_KEY_SECRET = previous_key
+        orchestrator_app.ALLOW_SSE_QUERY_API_KEY = previous_flag
 
 
 def test_api_key_query_param_is_rejected_for_non_event_endpoints() -> None:
