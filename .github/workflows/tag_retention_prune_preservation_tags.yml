@@ -1,0 +1,40 @@
+name: Tag Retention (Preservation Tags)
+
+on:
+  schedule:
+    - cron: "17 8 * * 1"
+  workflow_dispatch:
+    inputs:
+      retention_days:
+        description: "Delete preserve/branch-cleanup tags older than N days"
+        required: false
+        default: "30"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tag-retention-preservation-tags
+  cancel-in-progress: false
+
+jobs:
+  prune-preservation-tags:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch all tags
+        run: git fetch --force --tags origin
+
+      - name: Prune old preservation tags
+        env:
+          RETENTION_DAYS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.retention_days || '30' }}
+        run: |
+          bash scripts/maintenance/prune_preservation_tags.sh \
+            --prefix "preserve/branch-cleanup-" \
+            --days "${RETENTION_DAYS}" \
+            --remote origin \
+            --apply
