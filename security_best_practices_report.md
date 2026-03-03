@@ -2,131 +2,122 @@
 
 Date: 2026-03-03  
 Repository: `Transformation_Portal`  
-Scope: API service (`app.py`), core runtime (`src/`), and operational tooling (`scripts/`, `tools/`).
+Scope: API (`app.py`), runtime modules (`src/`), and operational tooling (`scripts/`, `tools/`).
 
 ## Executive Summary
 
-This review found **6 actionable security findings**:
-- **2 High**
-- **3 Medium**
+This review found **3 actionable findings**:
+- **0 High**
+- **2 Medium**
 - **1 Low**
 
-The two highest-priority issues are:
-1. Resource-exhaustion exposure in the job API (no default rate limit and no concurrency cap).
-2. Unrestricted filesystem paths accepted from job API payloads.
+High-severity items H-001 and H-002 are remediated as of 2026-03-03:
+1. RFC3161 timestamp handling now enforces HTTPS by default and verifies responses cryptographically via `openssl ts -verify` against trusted CA inputs.
+2. Runtime/install paths for CLIP, FLUX, and LLaVA now resolve immutable pinned revisions from the model-lock manifest, and placeholders were replaced with pinned SHAs.
 
-The codebase also has several strong controls already in place (API key enforcement on job routes, request size limits, trusted host/CORS defaults, and use of `hmac.compare_digest`).
+The API layer itself has good hardening progress (path root allowlists, request size limits, API-key enforcement, default rate limit and concurrency caps).
 
 ## Findings
 
-## High Severity
+## High Severity (Remediated)
 
-### H-001: Job API is vulnerable to resource exhaustion by default
+### H-001: RFC3161 timestamp trust is cryptographically verified end-to-end (Remediated 2026-03-03)
+
 **Evidence**
-- `app.py:95` (`RATE_LIMIT_PER_MINUTE` defaults to `0`)
-- `app.py:401-402` (rate limiting disabled when value is `<= 0`)
-- `app.py:1268-1287` (each accepted job immediately spawns a subprocess task, no concurrency ceiling)
+- `tools/timestamp_merkle_signature.py` enforces `https://` TSA URLs by default, with explicit `--allow-insecure-http` for local test endpoints.
+- `tools/timestamp_merkle_signature.py` performs OpenSSL-backed RFC3161 verification (`openssl ts -verify`) against the original query and a trusted CA file/path or system trust store.
+- `tests/test_merkle_timestamp_cli.py` now covers cryptographic verification failure and redirect rejection behavior in addition to HTTPS gating.
 
-**Why this matters**
-An authenticated client can enqueue unlimited expensive jobs and exhaust CPU/RAM/process limits, causing denial of service.
+**Impact**
+Risk materially reduced for default flows. Remaining risk is operational: trust-store provisioning must stay controlled and `--allow-insecure-http` should remain test-only.
 
-**Secure-by-default improvements**
-1. Set a non-zero default rate limit (for example, `TP_RATE_LIMIT_PER_MINUTE=60`).
-2. Add `TP_MAX_CONCURRENT_JOBS` and queue overflow protection (`429` / `503` when saturated).
-3. Add per-API-key quotas and global process budget enforcement.
-4. Add tests for abuse scenarios (burst job creation, long-running process floods).
+**Remediation delivered**
+1. HTTPS-by-default TSA transport policy.
+2. Cryptographic verification of TSA responses prior to writing detached `.tsr`.
+3. Negative tests for invalid cryptographic responses.
 
 ---
 
-### H-002: `/v1/jobs` accepts unrestricted filesystem paths from request payloads
+### H-002: Remote model supply chain controls are substantially hardened for targeted loaders (Remediated 2026-03-03)
+
 **Evidence**
-- `app.py:684-687` (`_path_arg` returns arbitrary path strings)
-- `app.py:703-760` (archive command arguments consume those paths without root allowlisting)
-- `app.py:981-989` (`input_dir` and `output_dir` copied directly into command args)
+- Runtime loaders now resolve and apply pinned revisions for:
+  - `src/transformation_portal/style_transfer/ip_adapter.py`
+  - `src/transformation_portal/vlm/llava.py`
+  - `src/transformation_portal/segmentation/clip_classifier.py`
+- Installer checks now resolve strict pinned revisions before HuggingFace snapshot/model access:
+  - `scripts/install_models_auto.py`
+- Previously added CLIP/FLUX/LLaVA manifest placeholders are replaced with pinned 40-char SHAs:
+  - `config/model_lock_manifest.yaml`
 
-**Why this matters**
-With valid API credentials, a caller can direct the pipeline to read/write arbitrary locations accessible to the service account. This increases blast radius for credential compromise and weakens least-privilege boundaries.
+**Impact**
+Supply-chain drift risk is materially reduced for covered model paths through immutable revision resolution, installer strict checks, and pinned manifest state.
 
-**Secure-by-default improvements**
-1. Introduce explicit allowed roots (`TP_ALLOWED_INPUT_ROOTS`, `TP_ALLOWED_OUTPUT_ROOTS`).
-2. Canonicalize and validate all user-provided paths against allowlisted roots before command construction.
-3. Reject symlink escapes and parent traversal after path resolution.
-4. Add contract tests that assert rejection of `/etc`, home-directory escapes, and symlink pivots.
+**Remediation delivered**
+1. Pinned revision enforcement in targeted runtime loaders and installer checks.
+2. Placeholder lock entries for CLIP/FLUX/LLaVA replaced with immutable SHAs.
+3. Existing CI controls continue to validate HuggingFace revision hygiene.
 
 ## Medium Severity
 
-### M-001: SQL uses interpolated `LIMIT` values instead of strict parameterization
-**Evidence**
-- `src/transformation_portal/metrics/ledger.py:327-329`
-- `src/transformation_portal/metrics/comparator.py:237-243`
+### M-001: Sample downloader bypasses integrity checks when checksum is absent
 
-**Why this matters**
-Current call sites mostly pass integers, but interpolation leaves a latent SQL-injection footgun if these functions are reused with less-trusted inputs.
+**Evidence**
+- All current sample registry entries lack checksums:
+  - `scripts/download_samples.py:63,71,82,90,101,109`
+- Verification logic explicitly skips validation when checksum is missing:
+  - `scripts/download_samples.py:145-148`
+
+**Impact**
+Downloaded sample artifacts are accepted without tamper detection when checksum metadata is missing (which is the current default state).
 
 **Secure-by-default improvements**
-1. Force `limit` to `int` and clamp to a safe range (for example, `1..1000`).
-2. Use `LIMIT ?` with SQLite parameter binding.
-3. Add tests that verify non-integer values are rejected.
+1. Make `sha256` mandatory for every downloadable sample entry.
+2. Fail closed when checksum is missing or malformed.
+3. Optionally sign the sample manifest itself and verify signature before download.
 
 ---
 
-### M-002: Timestamp CLI allows insecure `http://` TSA endpoints
-**Evidence**
-- `tools/timestamp_merkle_signature.py:225-227` (`http` and `https` are both accepted)
+### M-002: URL fetchers rely on `urlretrieve` without centralized scheme/host policy
 
-**Why this matters**
-Timestamp requests over plaintext HTTP are vulnerable to interception and tampering.
+**Evidence**
+- `scripts/download_samples.py:171`
+- `scripts/download_depth_models.py:120`
+- `scripts/install_models.py:237`
+- `scripts/download_sam2_checkpoint.py:83`
+
+**Impact**
+While most current URLs are HTTPS constants, the project lacks a shared, explicit allowlist policy (scheme/host) for download endpoints, increasing future misconfiguration risk.
 
 **Secure-by-default improvements**
-1. Require `https://` by default.
-2. Add explicit `--allow-insecure-http` escape hatch for local test-only workflows.
-3. Emit a high-visibility warning when insecure mode is used.
-
----
-
-### M-003: Model loading/downloading is not consistently revision-pinned and fail-closed
-**Evidence**
-- `src/transformation_portal/style_transfer/reference_encoder.py:83,87`
-- `src/transformation_portal/style_transfer/ip_adapter.py:101-109`
-- `src/transformation_portal/vlm/llava.py:126,145`
-- `scripts/install_models_auto.py:246`
-- `scripts/download_samples.py:147-148`
-
-**Why this matters**
-Unpinned model revisions and optional checksum verification increase supply-chain risk (silent model drift or compromised upstream artifacts).
-
-**Secure-by-default improvements**
-1. Require immutable model revisions (commit SHA pins) for all `from_pretrained`/snapshot pulls.
-2. Centralize trusted model IDs + revisions + digests in a lock manifest.
-3. Fail closed on missing checksum/digest in all downloader scripts.
-4. Add CI enforcement to block unpinned model sources in runtime code paths.
+1. Centralize download policy helper: enforce `https` and optional allowed-host list.
+2. Reject non-HTTPS URLs unless explicitly overridden with a test-only flag.
+3. Reuse one hardened downloader utility across scripts.
 
 ## Low Severity
 
-### L-001: Default CSP still allows inline script/style execution
-**Evidence**
-- `app.py:101-103` (`'unsafe-inline'` in `script-src` and `style-src`)
+### L-001: Default CSP still permits inline scripts/styles
 
-**Why this matters**
-If an XSS vector is introduced elsewhere, inline allowances increase exploitability.
+**Evidence**
+- `app.py:177-180` includes `'unsafe-inline'` in `script-src` and `style-src`.
+
+**Impact**
+If any XSS path appears in the UI surface, inline allowances increase exploitability and reduce CSP value.
 
 **Secure-by-default improvements**
-1. Move to nonce/hash-based CSP for scripts/styles.
-2. Self-host frontend assets where possible and remove inline exceptions.
-3. Add CSP regression tests for production configuration.
+1. Move to nonce/hash-based CSP for scripts and styles.
+2. Reduce inline usage in `portal.html` and self-host assets where possible.
+3. Add CSP regression checks in tests/CI for production config.
 
 ## Positive Controls Observed
 
-1. Job endpoints enforce API key auth by default (`app.py:90`, `app.py:1168-1178`).
-2. Request body size protections exist at header and stream levels (`app.py:440-497`).
-3. Constant-time API key comparison is used (`app.py:434`).
-4. Security headers and TrustedHost middleware are configured (`app.py:1097`, `app.py:111-119`).
+1. API path arguments are validated against allowed roots (`app.py:133-141`, `app.py:172-174`, `app.py:1220-1222`).
+2. Job API key auth is enforced by default (`app.py:160`, `app.py:1405-1419`).
+3. Request size enforcement is present at both header and stream layers (`app.py:522-553`, `app.py:556-581`).
+4. Job admission now includes default rate-limit and concurrency protections (`app.py:165-167`, `app.py:1521-1530`).
 
 ## Recommended Fix Order
 
-1. H-001 (rate/concurrency guards for job execution)
-2. H-002 (filesystem root restrictions for all job path arguments)
-3. M-001 (parameterize and bound SQL `LIMIT`)
-4. M-002 (HTTPS-only timestamp transport by default)
-5. M-003 (model revision pinning + fail-closed artifact verification)
-6. L-001 (CSP hardening)
+1. M-001 (mandatory sample checksums; fail-closed)
+2. M-002 (centralized secure downloader policy)
+3. L-001 (CSP nonce/hash hardening)

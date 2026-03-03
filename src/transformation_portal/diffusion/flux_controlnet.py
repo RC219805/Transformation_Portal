@@ -13,10 +13,12 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
-import cv2
+import cv2 as _cv2
 import numpy as np
 import torch
 from PIL import Image
+
+from transformation_portal.core.security.model_lock import is_model_lock_strict_enabled, resolve_model_lock_revision
 
 try:
     from controlnet_aux import CannyDetector, MidasDetector
@@ -61,6 +63,9 @@ class FLUXControlNet:
         device: Optional[str] = None,
         torch_dtype: torch.dtype = torch.bfloat16,
         cache_dir: Optional[Path] = None,
+        *,
+        depth_model_revision: Optional[str] = None,
+        strict_model_lock: Optional[bool] = None,
     ):
         """Initialize FLUX ControlNet pipeline.
 
@@ -69,6 +74,9 @@ class FLUXControlNet:
             device: Computation device
             torch_dtype: Tensor dtype
             cache_dir: Model cache directory
+            depth_model_revision: Optional immutable revision for MiDaS depth annotator
+            strict_model_lock: Enforce pinned revisions for remote model loads.
+                If None, uses ``TP_STRICT_MODEL_LOCK`` environment variable.
 
         Note:
             FLUX ControlNet models are experimental. This implementation
@@ -82,6 +90,14 @@ class FLUXControlNet:
         self.control_types = control_types
         self.device = device or self._detect_device()
         self.torch_dtype = torch_dtype
+        self.strict_model_lock = is_model_lock_strict_enabled(strict_model_lock)
+        self.depth_model_id = "lllyasviel/Annotators"
+        self.depth_model_revision = resolve_model_lock_revision(
+            self.depth_model_id,
+            depth_model_revision,
+            strict=self.strict_model_lock,
+            context="FLUXControlNet(depth_annotator)",
+        )
 
         logger.info(f"Initializing FLUX ControlNet with controls: {control_types}")
 
@@ -90,7 +106,15 @@ class FLUXControlNet:
         if "canny" in control_types:
             self.processors["canny"] = CannyDetector()
         if "depth" in control_types:
-            self.processors["depth"] = MidasDetector.from_pretrained("lllyasviel/Annotators")  # nosec B615
+            try:
+                self.processors["depth"] = MidasDetector.from_pretrained(  # nosec B615
+                    self.depth_model_id,
+                    revision=self.depth_model_revision,
+                )
+            except TypeError:
+                if self.depth_model_revision and self.strict_model_lock:
+                    raise
+                self.processors["depth"] = MidasDetector.from_pretrained(self.depth_model_id)  # nosec B615
 
         logger.info("FLUX ControlNet initialized")
 
@@ -147,8 +171,8 @@ class FLUXControlNet:
         else:
             # Fallback to OpenCV
             image_np = np.array(image)
-            gray = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)
-            edges = cv2.Canny(gray, low_threshold, high_threshold)
+            gray = _cv2.cvtColor(image_np, _cv2.COLOR_RGB2GRAY)
+            edges = _cv2.Canny(gray, low_threshold, high_threshold)
             canny_image = Image.fromarray(edges)
 
         return canny_image

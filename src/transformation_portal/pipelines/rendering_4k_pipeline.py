@@ -126,6 +126,7 @@ except ImportError:
     create_rag_indexing_callback = None
 
 # Import internal utilities
+from ..core.security.model_lock import resolve_model_lock_revision
 from ..utils.image_utils import load_image, np_to_pil, pil_to_np
 
 logger = logging.getLogger(__name__)
@@ -1375,14 +1376,22 @@ class Rendering4KPipeline:
         ),
     }
 
-    def __init__(self, config: PipelineConfig):
+    def __init__(
+        self,
+        config: PipelineConfig,
+        *,
+        strict_model_lock: Optional[bool] = None,
+    ):
         """
         Initialize pipeline with configuration.
 
         Args:
             config: Pipeline configuration
+            strict_model_lock: Enforce pinned revisions for remote model loads.
+                If None, uses ``TP_STRICT_MODEL_LOCK`` environment variable.
         """
         self.config = config
+        self.strict_model_lock = strict_model_lock
         self.quality_assessor = QualityAssessor(config.quality_feedback)
         # Use OrderedDict for true LRU cache behavior
         self._depth_cache: OrderedDict[str, np.ndarray] = OrderedDict()
@@ -1826,15 +1835,26 @@ class Rendering4KPipeline:
             from transformers import pipeline as hf_pipeline
 
             model_map = {
-                "small": "depth-anything/Depth-Anything-V2-Small",
-                "base": "depth-anything/Depth-Anything-V2-Base",
-                "large": "depth-anything/Depth-Anything-V2-Large",
+                "small": "depth-anything/Depth-Anything-V2-Small-hf",
+                "base": "depth-anything/Depth-Anything-V2-Base-hf",
+                "large": "depth-anything/Depth-Anything-V2-Large-hf",
             }
             model_id = model_map.get(self.config.depth.model_variant, model_map["small"])
+            model_revision = resolve_model_lock_revision(
+                model_id,
+                requested_revision=None,
+                strict=self.strict_model_lock,
+                context="Rendering4KPipeline(depth_estimation)",
+            )
             device_id = 0 if self.device != DeviceType.CPU else -1
 
             logger.info(f"Loading Depth Anything V2 ({self.config.depth.model_variant})...")
-            self._depth_model = hf_pipeline("depth-estimation", model=model_id, device=device_id)
+            self._depth_model = hf_pipeline(
+                "depth-estimation",
+                model=model_id,
+                revision=model_revision,
+                device=device_id,
+            )
             logger.info("✓ Depth Anything V2 loaded")
         except Exception as e:
             logger.warning(f"Depth Anything V2 unavailable: {e}. Using fallback.")
@@ -1924,18 +1944,35 @@ class Rendering4KPipeline:
             logger.info("Loading ControlNet pipeline...")
             controlnets = []
             dtype = torch.float16 if self.device != DeviceType.CPU else torch.float32
+            strict_model_lock = self.strict_model_lock
 
             if self.config.ai_enhancement.use_controlnet:
+                canny_model_id = "lllyasviel/sd-controlnet-canny"
+                canny_revision = resolve_model_lock_revision(
+                    canny_model_id,
+                    requested_revision=None,
+                    strict=strict_model_lock,
+                    context="Rendering4KPipeline(controlnet_canny)",
+                )
                 controlnets.append(
                     ControlNetModel.from_pretrained(  # nosec B615
-                        "lllyasviel/sd-controlnet-canny",
+                        canny_model_id,
+                        revision=canny_revision,
                         torch_dtype=dtype,
                     )
                 )
             if self.config.ai_enhancement.use_depth_guidance:
+                depth_model_id = "lllyasviel/sd-controlnet-depth"
+                depth_revision = resolve_model_lock_revision(
+                    depth_model_id,
+                    requested_revision=None,
+                    strict=strict_model_lock,
+                    context="Rendering4KPipeline(controlnet_depth)",
+                )
                 controlnets.append(
                     ControlNetModel.from_pretrained(  # nosec B615
-                        "lllyasviel/sd-controlnet-depth",
+                        depth_model_id,
+                        revision=depth_revision,
                         torch_dtype=dtype,
                     )
                 )
@@ -1946,8 +1983,16 @@ class Rendering4KPipeline:
                 self._controlnet_initialized = True
                 return None
 
+            base_model_id = "runwayml/stable-diffusion-v1-5"
+            base_model_revision = resolve_model_lock_revision(
+                base_model_id,
+                requested_revision=None,
+                strict=strict_model_lock,
+                context="Rendering4KPipeline(base_model)",
+            )
             self._controlnet_pipe = StableDiffusionControlNetImg2ImgPipeline.from_pretrained(  # nosec B615
-                "runwayml/stable-diffusion-v1-5",
+                base_model_id,
+                revision=base_model_revision,
                 controlnet=controlnets if len(controlnets) > 1 else controlnets[0],
                 torch_dtype=dtype,
                 safety_checker=None,

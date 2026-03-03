@@ -17,6 +17,7 @@ import numpy as np
 import torch
 from PIL import Image
 
+from transformation_portal.core.security.model_lock import resolve_model_lock_revision
 from transformation_portal.core.security.serialization import safe_pickle_load
 
 try:
@@ -58,6 +59,9 @@ class ReferenceImageEncoder:
         device: Optional[str] = None,
         torch_dtype: torch.dtype = torch.float32,
         cache_dir: Optional[Path] = None,
+        *,
+        model_revision: Optional[str] = None,
+        strict_model_lock: Optional[bool] = None,
     ):
         """Initialize reference image encoder.
 
@@ -65,6 +69,9 @@ class ReferenceImageEncoder:
             device: Computation device
             torch_dtype: Tensor dtype
             cache_dir: Directory for caching features
+            model_revision: Optional immutable revision for CLIP vision model assets
+            strict_model_lock: Enforce pinned revisions for remote model loads.
+                If None, uses ``TP_STRICT_MODEL_LOCK`` environment variable.
         """
         if not ENCODER_AVAILABLE:
             raise ImportError("Reference encoder requires transformers. " "Install with: pip install transformers>=4.38.0")
@@ -72,6 +79,13 @@ class ReferenceImageEncoder:
         self.device = device or self._detect_device()
         self.torch_dtype = torch_dtype
         self.cache_dir = Path(cache_dir) if cache_dir else None
+        self.strict_model_lock = strict_model_lock
+        self.model_revision = resolve_model_lock_revision(
+            self.MODEL_NAME,
+            model_revision,
+            strict=self.strict_model_lock,
+            context="ReferenceImageEncoder",
+        )
 
         if self.cache_dir:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -79,12 +93,16 @@ class ReferenceImageEncoder:
         logger.info(f"Initializing reference encoder on {self.device}")
 
         # Load CLIP vision model
-        # Production deployments should pin specific model revisions
-        self.model = CLIPVisionModelWithProjection.from_pretrained(self.MODEL_NAME, torch_dtype=torch_dtype).to(  # nosec B615
-            self.device
-        )
+        self.model = CLIPVisionModelWithProjection.from_pretrained(  # nosec B615
+            self.MODEL_NAME,
+            revision=self.model_revision,
+            torch_dtype=torch_dtype,
+        ).to(self.device)
 
-        self.processor = CLIPImageProcessor.from_pretrained(self.MODEL_NAME)  # nosec B615
+        self.processor = CLIPImageProcessor.from_pretrained(  # nosec B615
+            self.MODEL_NAME,
+            revision=self.model_revision,
+        )
 
         logger.info("Reference encoder initialized")
 

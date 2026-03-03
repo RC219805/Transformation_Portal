@@ -8,6 +8,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import secrets
+import shutil
+import ssl
+import subprocess
+import tempfile
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -25,6 +29,18 @@ TIMESTAMP_REPLY_CONTENT_TYPE = "application/timestamp-reply"
 
 class DerParseError(ValueError):
     """Raised when DER parsing fails for TSA responses."""
+
+
+class TimestampVerificationError(ValueError):
+    """Raised when cryptographic timestamp verification fails."""
+
+
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Reject redirects to prevent silent transport downgrades."""
+
+    # Returning ``None`` tells urllib to treat redirects as errors.
+    def redirect_request(self, _req, _fp, _code, _msg, _headers, _newurl):  # type: ignore[override]
+        return None
 
 
 def atomic_write(path: Path, data: bytes) -> None:
@@ -96,7 +112,7 @@ def _encode_octet_string(data: bytes) -> bytes:
 
 
 def _encode_boolean(value: bool) -> bytes:
-    return _encode_tlv(0x01, b"\xFF" if value else b"\x00")
+    return _encode_tlv(0x01, b"\xff" if value else b"\x00")
 
 
 def _read_length(data: bytes, offset: int) -> tuple[int, int]:
@@ -184,6 +200,90 @@ def _parse_timestamp_status(response_bytes: bytes) -> tuple[int, bool]:
     return status_code, has_token
 
 
+def _resolve_trust_store_args(tsa_ca_file: str | None, tsa_ca_path: str | None) -> list[str]:
+    args: list[str] = []
+
+    if tsa_ca_file:
+        ca_file = Path(tsa_ca_file).expanduser()
+        if not ca_file.is_file():
+            raise ValueError(f"--tsa-ca-file does not exist: {ca_file}")
+        args.extend(["-CAfile", str(ca_file)])
+
+    if tsa_ca_path:
+        ca_path = Path(tsa_ca_path).expanduser()
+        if not ca_path.is_dir():
+            raise ValueError(f"--tsa-ca-path is not a directory: {ca_path}")
+        args.extend(["-CApath", str(ca_path)])
+
+    if args:
+        return args
+
+    defaults = ssl.get_default_verify_paths()
+    if defaults.cafile and Path(defaults.cafile).is_file():
+        args.extend(["-CAfile", defaults.cafile])
+    if defaults.capath and Path(defaults.capath).is_dir():
+        args.extend(["-CApath", defaults.capath])
+    if args:
+        return args
+
+    raise ValueError("No trusted TSA CA store detected. Provide --tsa-ca-file and/or --tsa-ca-path for RFC3161 verification.")
+
+
+def _resolve_verification_prereqs(tsa_ca_file: str | None, tsa_ca_path: str | None) -> tuple[str, list[str]]:
+    openssl_bin = shutil.which("openssl")
+    if not openssl_bin:
+        raise ValueError("OpenSSL executable is required for RFC3161 response verification but was not found in PATH")
+    trust_store_args = _resolve_trust_store_args(tsa_ca_file, tsa_ca_path)
+    return openssl_bin, trust_store_args
+
+
+def _verify_timestamp_response(
+    *,
+    timestamp_query: bytes,
+    timestamp_response: bytes,
+    tsa_ca_file: str | None,
+    tsa_ca_path: str | None,
+    timeout_seconds: float,
+) -> None:
+    openssl_bin, trust_store_args = _resolve_verification_prereqs(tsa_ca_file, tsa_ca_path)
+    if timeout_seconds <= 0:
+        raise ValueError("--timeout-seconds must be > 0")
+
+    with tempfile.TemporaryDirectory(prefix="tp_timestamp_verify_") as temp_dir:
+        query_path = Path(temp_dir) / "request.tsq"
+        response_path = Path(temp_dir) / "response.tsr"
+        query_path.write_bytes(timestamp_query)
+        response_path.write_bytes(timestamp_response)
+
+        cmd = [
+            openssl_bin,
+            "ts",
+            "-verify",
+            "-queryfile",
+            str(query_path),
+            "-in",
+            str(response_path),
+            *trust_store_args,
+        ]
+
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=timeout_seconds,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise TimestampVerificationError(f"timestamp verification timed out after {timeout_seconds:.1f}s") from exc
+
+    if proc.returncode != 0:
+        diagnostic = (proc.stderr or proc.stdout or "").strip()
+        if diagnostic:
+            raise TimestampVerificationError(f"cryptographic timestamp verification failed: {diagnostic}")
+        raise TimestampVerificationError("cryptographic timestamp verification failed")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     target_group = parser.add_mutually_exclusive_group(required=True)
@@ -191,6 +291,21 @@ def main() -> int:
     target_group.add_argument("--signature", help="Path to merkle_roots.sig.json to timestamp")
     parser.add_argument("--tsa-url", required=True, help="RFC 3161 TSA endpoint URL")
     parser.add_argument("--out", required=True, help="Output path for detached .tsr response")
+    parser.add_argument(
+        "--tsa-ca-file",
+        default=None,
+        help="Path to trusted CA bundle used to verify RFC3161 TSA signatures (defaults to system trust store when available).",
+    )
+    parser.add_argument(
+        "--tsa-ca-path",
+        default=None,
+        help="Path to trusted CA directory used to verify RFC3161 TSA signatures.",
+    )
+    parser.add_argument(
+        "--allow-insecure-http",
+        action="store_true",
+        help="Allow plaintext HTTP TSA URLs (insecure; intended only for local testing).",
+    )
     parser.add_argument(
         "--nonce",
         type=int,
@@ -205,8 +320,9 @@ def main() -> int:
     )
     parser.add_argument(
         "--cert-req",
-        action="store_true",
-        help="Set RFC 3161 certReq=true in the request",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Include certReq=true in RFC 3161 request (default: true).",
     )
     args = parser.parse_args()
 
@@ -226,6 +342,9 @@ def main() -> int:
     if parsed_tsa_url.scheme not in {"http", "https"} or not parsed_tsa_url.netloc:
         print("Timestamp request failed: --tsa-url must be an absolute http(s) URL")
         return EXIT_TIMESTAMP_FAILURE
+    if parsed_tsa_url.scheme == "http" and not args.allow_insecure_http:
+        print("Timestamp request failed: --tsa-url must use https unless --allow-insecure-http is set")
+        return EXIT_TIMESTAMP_FAILURE
 
     if args.timeout_seconds <= 0:
         print("Timestamp request failed: --timeout-seconds must be > 0")
@@ -240,6 +359,9 @@ def main() -> int:
         if target_path.name != expected_name:
             print(f"Timestamp request failed: --{target_kind} must reference {expected_name}")
             return EXIT_TIMESTAMP_FAILURE
+
+        # Fail fast before opening any TSA network connection when verification prerequisites are missing.
+        _resolve_verification_prereqs(args.tsa_ca_file, args.tsa_ca_path)
 
         target_bytes = target_path.read_bytes()
         digest_bytes = hashlib.sha256(target_bytes).digest()
@@ -256,7 +378,8 @@ def main() -> int:
                 "User-Agent": "transformation-portal-phase3.2-timestamp-cli/1",
             },
         )
-        with urllib.request.urlopen(http_request, timeout=args.timeout_seconds) as response:
+        opener = urllib.request.build_opener(_NoRedirectHandler())
+        with opener.open(http_request, timeout=args.timeout_seconds) as response:
             response_bytes = response.read()
             content_type = response.headers.get("Content-Type", "")
             media_type = content_type.split(";", maxsplit=1)[0].strip().lower()
@@ -273,6 +396,14 @@ def main() -> int:
             print("Invalid timestamp response: granted status without timeStampToken")
             return EXIT_INVALID_TIMESTAMP_RESPONSE
 
+        _verify_timestamp_response(
+            timestamp_query=timestamp_request,
+            timestamp_response=response_bytes,
+            tsa_ca_file=args.tsa_ca_file,
+            tsa_ca_path=args.tsa_ca_path,
+            timeout_seconds=args.timeout_seconds,
+        )
+
         atomic_write(Path(args.out), response_bytes)
         print(f"Timestamp response written to {args.out} (target={target_kind}, sha256={digest_hex}, nonce={nonce})")
         return 0
@@ -286,6 +417,9 @@ def main() -> int:
         print(f"Timestamp request failed: {exc}")
         return EXIT_TIMESTAMP_FAILURE
     except DerParseError as exc:
+        print(f"Invalid timestamp response: {exc}")
+        return EXIT_INVALID_TIMESTAMP_RESPONSE
+    except TimestampVerificationError as exc:
         print(f"Invalid timestamp response: {exc}")
         return EXIT_INVALID_TIMESTAMP_RESPONSE
     except ValueError as exc:

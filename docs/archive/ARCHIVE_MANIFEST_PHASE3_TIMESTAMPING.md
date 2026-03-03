@@ -70,7 +70,7 @@ The CLI emits an RFC 3161 `TimeStampReq` with:
 - `messageImprint.hashAlgorithm = sha256`
 - `messageImprint.hashedMessage = sha256(target_bytes)`
 - `nonce` (user-supplied or random 128-bit)
-- optional `certReq = true` when `--cert-req` is set
+- `certReq = true` by default (`--no-cert-req` disables it)
 
 Requests are posted as:
 
@@ -88,6 +88,12 @@ The CLI enforces:
 - success only for `pkiStatus` in `{0, 1}`
 - granted responses must include a `timeStampToken`
 - media type must be `application/timestamp-reply` when present
+- cryptographic RFC3161 verification via `openssl ts -verify` against:
+  - `queryfile` (imprint + nonce binding)
+  - trusted CA inputs (`--tsa-ca-file` / `--tsa-ca-path`) or system trust when available
+
+By default, `--tsa-url` must use `https://`. Use `--allow-insecure-http` only for
+local test endpoints.
 
 The raw response bytes are written directly to the detached output `.tsr` path.
 
@@ -132,13 +138,14 @@ python tools/timestamp_merkle_signature.py \
   --out /path/to/merkle_roots.sig.tsr
 ```
 
-Optional deterministic nonce and cert request:
+Optional deterministic nonce with explicit CA bundle:
 
 ```bash
 python tools/timestamp_merkle_signature.py \
   --signature /path/to/merkle_roots.sig.json \
   --tsa-url https://tsa.example.com \
   --out /path/to/merkle_roots.sig.tsr \
+  --tsa-ca-file /path/to/trusted_tsa_ca.pem \
   --nonce 42 \
   --cert-req
 ```
@@ -158,8 +165,6 @@ python tools/timestamp_merkle_signature.py \
 Phase 3.2 does not include:
 
 - automatic CI timestamping
-- TSA trust policy management
-- certificate path validation of TSA signer
 - transparency log anchoring
 - evidence bundle canonicalization (Phase 3.4 scope)
 

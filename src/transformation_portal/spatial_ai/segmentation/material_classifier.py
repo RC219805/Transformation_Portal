@@ -32,6 +32,8 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 
+from transformation_portal.core.security.model_lock import resolve_model_lock_revision
+
 logger = logging.getLogger(__name__)
 
 
@@ -70,12 +72,16 @@ class MaterialClassifier:
         "ceramic tile",
         "porcelain surface",
     ]
+    CLIP_MODEL_ID = "openai/clip-vit-base-patch32"
 
     def __init__(
         self,
         device: str = "cuda",
         confidence_threshold: float = 0.3,
         material_classes: Optional[List[str]] = None,
+        *,
+        model_revision: Optional[str] = None,
+        strict_model_lock: Optional[bool] = None,
     ):
         """Initialize material classifier.
 
@@ -83,6 +89,9 @@ class MaterialClassifier:
             device: Compute device.
             confidence_threshold: Minimum confidence [0, 1] to assign label.
             material_classes: Custom material classes (or None for defaults).
+            model_revision: Optional immutable revision for CLIP model assets.
+            strict_model_lock: Enforce pinned revisions for remote model loads.
+                If None, uses ``TP_STRICT_MODEL_LOCK`` environment variable.
         """
         if not 0.0 <= confidence_threshold <= 1.0:
             raise ValueError(f"confidence_threshold must be in [0, 1], got {confidence_threshold}")
@@ -90,6 +99,13 @@ class MaterialClassifier:
         self.device = device
         self.confidence_threshold = confidence_threshold
         self.material_classes = material_classes or self.DEFAULT_MATERIAL_CLASSES
+        self.strict_model_lock = strict_model_lock
+        self.model_revision = resolve_model_lock_revision(
+            self.CLIP_MODEL_ID,
+            model_revision,
+            strict=self.strict_model_lock,
+            context="MaterialClassifier",
+        )
 
         self._model = None
         self._processor = None
@@ -142,11 +158,14 @@ class MaterialClassifier:
 
         try:
             # Use OpenAI's CLIP ViT-B/32 (good balance of speed/quality)
-            # B615: public model, revision pinning tracked in ADR-027
-            model_id = "openai/clip-vit-base-patch32"
-
-            self._processor = CLIPProcessor.from_pretrained(model_id)  # nosec B615
-            self._model = CLIPModel.from_pretrained(model_id)  # nosec B615
+            self._processor = CLIPProcessor.from_pretrained(  # nosec B615
+                self.CLIP_MODEL_ID,
+                revision=self.model_revision,
+            )
+            self._model = CLIPModel.from_pretrained(  # nosec B615
+                self.CLIP_MODEL_ID,
+                revision=self.model_revision,
+            )
 
             # Move to device
             if self.device == "cuda" and torch.cuda.is_available():

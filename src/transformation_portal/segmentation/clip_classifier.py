@@ -21,6 +21,8 @@ import torch
 import torch.nn.functional as F
 from PIL import Image
 
+from transformation_portal.core.security.model_lock import resolve_model_lock_revision
+
 try:
     from transformers import CLIPModel, CLIPProcessor
 
@@ -122,6 +124,9 @@ class CLIPClassifier:
         model_name: str = "openai/clip-vit-large-patch14",
         device: Optional[str] = None,
         cache_dir: Optional[Path] = None,
+        *,
+        model_revision: Optional[str] = None,
+        strict_model_lock: Optional[bool] = None,
     ):
         """Initialize CLIP classifier.
 
@@ -129,6 +134,9 @@ class CLIPClassifier:
             model_name: HuggingFace CLIP model name
             device: Computation device (auto-detected if None)
             cache_dir: Model cache directory
+            model_revision: Optional immutable revision for CLIP model assets
+            strict_model_lock: Enforce pinned revisions for remote model loads.
+                If None, uses ``TP_STRICT_MODEL_LOCK`` environment variable.
 
         Raises:
             ImportError: If transformers not available
@@ -141,14 +149,30 @@ class CLIPClassifier:
         self.model_name = model_name
         self.device = device or self._detect_device()
         self.cache_dir = cache_dir
+        self.model_revision = model_revision
+        self.strict_model_lock = strict_model_lock
+
+        self.model_revision = resolve_model_lock_revision(
+            self.model_name,
+            self.model_revision,
+            strict=self.strict_model_lock,
+            context="CLIPClassifier",
+        )
 
         logger.info(f"Initializing CLIP on {self.device}")
 
         # Load model and processor
-        # Production deployments should pin specific model revisions
-        self.processor = CLIPProcessor.from_pretrained(model_name, cache_dir=cache_dir)  # nosec B615
+        self.processor = CLIPProcessor.from_pretrained(  # nosec B615
+            model_name,
+            revision=self.model_revision,
+            cache_dir=cache_dir,
+        )
 
-        self.model = CLIPModel.from_pretrained(model_name, cache_dir=cache_dir)  # nosec B615
+        self.model = CLIPModel.from_pretrained(  # nosec B615
+            model_name,
+            revision=self.model_revision,
+            cache_dir=cache_dir,
+        )
 
         self.model.to(self.device)
         self.model.eval()

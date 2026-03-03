@@ -5,6 +5,8 @@ from __future__ import annotations
 import contextlib
 import errno
 import hashlib
+import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -20,13 +22,14 @@ SHA256_OID = "2.16.840.1.101.3.4.2.1"
 pytestmark = [pytest.mark.regression]
 
 
-def _run_cli(command: list[str]) -> subprocess.CompletedProcess[str]:
+def _run_cli(command: list[str], *, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         command,
         cwd=str(PROJECT_ROOT),
         capture_output=True,
         text=True,
         check=False,
+        env=env,
     )
 
 
@@ -36,8 +39,12 @@ def _timestamp(
     target_path: Path,
     tsa_url: str,
     out_path: Path,
+    tsa_ca_file: Path | None = None,
+    tsa_ca_path: Path | None = None,
+    allow_insecure_http: bool = False,
     nonce: int | None = None,
-    cert_req: bool = False,
+    cert_req: bool = True,
+    env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     command = [
         sys.executable,
@@ -49,11 +56,19 @@ def _timestamp(
         "--out",
         str(out_path),
     ]
+    if tsa_ca_file is not None:
+        command.extend(["--tsa-ca-file", str(tsa_ca_file)])
+    if tsa_ca_path is not None:
+        command.extend(["--tsa-ca-path", str(tsa_ca_path)])
+    if allow_insecure_http:
+        command.append("--allow-insecure-http")
     if nonce is not None:
         command.extend(["--nonce", str(nonce)])
     if cert_req:
         command.append("--cert-req")
-    return _run_cli(command)
+    else:
+        command.append("--no-cert-req")
+    return _run_cli(command, env=env)
 
 
 def _write_roots(path: Path) -> None:
@@ -229,17 +244,158 @@ def _decode_timestamp_query(query_bytes: bytes) -> tuple[str, bytes, int, bool]:
     return SHA256_OID, digest_value, nonce, cert_req
 
 
+class _LocalTsaSigner:
+    """Minimal local RFC3161 TSA signer powered by openssl."""
+
+    def __init__(self, workspace: Path):
+        self.workspace = workspace
+        self.workspace.mkdir(parents=True, exist_ok=True)
+        self.ca_cert = self.workspace / "ca.crt"
+        self.openssl_config = self.workspace / "openssl_tsa.cnf"
+        self._counter = 0
+        self._init_signing_material()
+
+    @staticmethod
+    def _run(cmd: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(cmd, cwd=str(cwd), check=True, capture_output=True, text=True)
+
+    def _init_signing_material(self) -> None:
+        self._run(["openssl", "genrsa", "-out", "ca.key", "2048"], cwd=self.workspace)
+        self._run(
+            [
+                "openssl",
+                "req",
+                "-x509",
+                "-new",
+                "-key",
+                "ca.key",
+                "-sha256",
+                "-days",
+                "3650",
+                "-subj",
+                "/CN=TP Test CA",
+                "-out",
+                "ca.crt",
+            ],
+            cwd=self.workspace,
+        )
+        self._run(["openssl", "genrsa", "-out", "tsa.key", "2048"], cwd=self.workspace)
+        (self.workspace / "tsa_ext.cnf").write_text(
+            "\n".join(
+                [
+                    "basicConstraints=CA:FALSE",
+                    "keyUsage = digitalSignature, nonRepudiation",
+                    "extendedKeyUsage = critical,timeStamping",
+                    "subjectKeyIdentifier=hash",
+                    "authorityKeyIdentifier=keyid,issuer",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        self._run(
+            ["openssl", "req", "-new", "-key", "tsa.key", "-subj", "/CN=TP Test TSA", "-out", "tsa.csr"],
+            cwd=self.workspace,
+        )
+        self._run(
+            [
+                "openssl",
+                "x509",
+                "-req",
+                "-in",
+                "tsa.csr",
+                "-CA",
+                "ca.crt",
+                "-CAkey",
+                "ca.key",
+                "-CAcreateserial",
+                "-out",
+                "tsa.crt",
+                "-days",
+                "3650",
+                "-sha256",
+                "-extfile",
+                "tsa_ext.cnf",
+            ],
+            cwd=self.workspace,
+        )
+
+        tsa_dir = self.workspace / "tsa"
+        tsa_dir.mkdir(parents=True, exist_ok=True)
+        (tsa_dir / "tsaserial").write_text("01\n", encoding="utf-8")
+        for filename in ("tsa.crt", "ca.crt", "tsa.key"):
+            (tsa_dir / filename).write_bytes((self.workspace / filename).read_bytes())
+
+        self.openssl_config.write_text(
+            "\n".join(
+                [
+                    "[ tsa ]",
+                    "default_tsa = tsa_config1",
+                    "",
+                    "[ tsa_config1 ]",
+                    "dir = ./tsa",
+                    "serial = $dir/tsaserial",
+                    "crypto_device = builtin",
+                    "signer_cert = $dir/tsa.crt",
+                    "certs = $dir/ca.crt",
+                    "signer_key = $dir/tsa.key",
+                    "signer_digest = sha256",
+                    "default_policy = 1.2.3.4.1",
+                    "other_policies = 1.2.3.4.5.6",
+                    "digests = sha256",
+                    "accuracy = secs:1, millisecs:500, microsecs:100",
+                    "clock_precision_digits = 0",
+                    "ordering = yes",
+                    "tsa_name = yes",
+                    "ess_cert_id_chain = no",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+    def sign_query(self, query_bytes: bytes) -> bytes:
+        self._counter += 1
+        query_path = self.workspace / f"query_{self._counter}.tsq"
+        response_path = self.workspace / f"response_{self._counter}.tsr"
+        query_path.write_bytes(query_bytes)
+        self._run(
+            [
+                "openssl",
+                "ts",
+                "-reply",
+                "-queryfile",
+                str(query_path),
+                "-config",
+                str(self.openssl_config),
+                "-out",
+                str(response_path),
+            ],
+            cwd=self.workspace,
+        )
+        return response_path.read_bytes()
+
+
+@pytest.fixture(scope="module", name="local_tsa_signer")
+def fixture_local_tsa_signer(tmp_path_factory: pytest.TempPathFactory) -> _LocalTsaSigner:
+    if shutil.which("openssl") is None:
+        pytest.skip("OpenSSL not available in test environment")
+    return _LocalTsaSigner(tmp_path_factory.mktemp("local_tsa"))
+
+
 @contextlib.contextmanager
 def _tsa_server(
     *,
     response_body: bytes,
     response_status: int = 200,
     response_content_type: str = "application/timestamp-reply",
+    response_factory=None,
 ):
     state: dict[str, str | bytes] = {
         "request_body": b"",
         "request_content_type": "",
         "request_accept": "",
+        "response_body": b"",
     }
 
     class Handler(BaseHTTPRequestHandler):
@@ -249,13 +405,20 @@ def _tsa_server(
             state["request_content_type"] = self.headers.get("Content-Type", "")
             state["request_accept"] = self.headers.get("Accept", "")
 
-            self.send_response(response_status)
-            if response_content_type:
-                self.send_header("Content-Type", response_content_type)
-            self.send_header("Content-Length", str(len(response_body)))
+            status = response_status
+            content_type = response_content_type
+            body = response_body
+            if response_factory is not None:
+                status, content_type, body = response_factory(state["request_body"])  # type: ignore[arg-type]
+            state["response_body"] = body
+
+            self.send_response(status)
+            if content_type:
+                self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
             self.end_headers()
-            if response_body:
-                self.wfile.write(response_body)
+            if body:
+                self.wfile.write(body)
 
         def log_message(self, format: str, *args: object) -> None:  # pylint: disable=redefined-builtin
             return
@@ -279,23 +442,84 @@ def _tsa_server(
         server.server_close()
 
 
-def test_timestamp_roots_success_writes_detached_tsr(tmp_path: Path) -> None:
+@contextlib.contextmanager
+def _tsa_redirect_server(*, final_response_factory):
+    state: dict[str, str | bytes] = {
+        "initial_request_body": b"",
+        "followup_request_body": b"",
+    }
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:  # noqa: N802
+            content_length = int(self.headers.get("Content-Length", "0"))
+            request_body = self.rfile.read(content_length)
+
+            if self.path == "/tsa":
+                state["initial_request_body"] = request_body
+                self.send_response(302)
+                self.send_header("Location", "/final")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+
+            if self.path == "/final":
+                state["followup_request_body"] = request_body
+                body = final_response_factory(request_body)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/timestamp-reply")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
+            self.send_response(404)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def log_message(self, format: str, *args: object) -> None:  # pylint: disable=redefined-builtin
+            return
+
+    try:
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    except PermissionError as exc:
+        pytest.skip(f"Local HTTP server bind not permitted in this environment: {exc}")
+    except OSError as exc:
+        if exc.errno in {errno.EPERM, errno.EACCES}:
+            pytest.skip(f"Local HTTP server bind not permitted in this environment: {exc}")
+        raise
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{server.server_port}/tsa"
+    try:
+        yield url, state
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+        server.server_close()
+
+
+def test_timestamp_roots_success_writes_detached_tsr(tmp_path: Path, local_tsa_signer: _LocalTsaSigner) -> None:
     roots_path = tmp_path / "merkle_roots.json"
     tsr_path = tmp_path / "merkle_roots.tsr"
     _write_roots(roots_path)
 
-    response = _build_timestamp_response(0, include_token=True)
-    with _tsa_server(response_body=response) as (tsa_url, state):
+    with _tsa_server(
+        response_body=b"",
+        response_factory=lambda query: (200, "application/timestamp-reply", local_tsa_signer.sign_query(query)),
+    ) as (tsa_url, state):
         result = _timestamp(
             target_flag="--roots",
             target_path=roots_path,
             tsa_url=tsa_url,
             out_path=tsr_path,
+            tsa_ca_file=local_tsa_signer.ca_cert,
+            allow_insecure_http=True,
             nonce=42,
         )
 
     assert result.returncode == 0, result.stderr
-    assert tsr_path.read_bytes() == response
+    assert tsr_path.exists()
+    assert tsr_path.read_bytes() == state["response_body"]
     assert "Timestamp response written" in result.stdout
     assert state["request_content_type"] == "application/timestamp-query"
     assert state["request_accept"] == "application/timestamp-reply"
@@ -304,45 +528,54 @@ def test_timestamp_roots_success_writes_detached_tsr(tmp_path: Path) -> None:
     assert oid == SHA256_OID
     assert digest == hashlib.sha256(roots_path.read_bytes()).digest()
     assert nonce == 42
-    assert cert_req is False
+    assert cert_req is True
 
 
-def test_timestamp_signature_success_hashes_signature_bytes(tmp_path: Path) -> None:
+def test_timestamp_signature_success_hashes_signature_bytes(tmp_path: Path, local_tsa_signer: _LocalTsaSigner) -> None:
     signature_path = tmp_path / "merkle_roots.sig.json"
     tsr_path = tmp_path / "nested" / "timestamps" / "merkle_roots.sig.tsr"
     _write_signature(signature_path)
 
-    response = _build_timestamp_response(0, include_token=True)
-    with _tsa_server(response_body=response) as (tsa_url, state):
+    with _tsa_server(
+        response_body=b"",
+        response_factory=lambda query: (200, "application/timestamp-reply", local_tsa_signer.sign_query(query)),
+    ) as (tsa_url, state):
         result = _timestamp(
             target_flag="--signature",
             target_path=signature_path,
             tsa_url=tsa_url,
             out_path=tsr_path,
+            tsa_ca_file=local_tsa_signer.ca_cert,
+            allow_insecure_http=True,
             nonce=7,
         )
 
     assert result.returncode == 0, result.stderr
     assert tsr_path.exists()
+    assert tsr_path.read_bytes() == state["response_body"]
 
     _, digest, nonce, cert_req = _decode_timestamp_query(state["request_body"])  # type: ignore[arg-type]
     assert digest == hashlib.sha256(signature_path.read_bytes()).digest()
     assert nonce == 7
-    assert cert_req is False
+    assert cert_req is True
 
 
-def test_timestamp_includes_cert_req_when_flag_set(tmp_path: Path) -> None:
+def test_timestamp_includes_cert_req_when_flag_set(tmp_path: Path, local_tsa_signer: _LocalTsaSigner) -> None:
     roots_path = tmp_path / "merkle_roots.json"
     tsr_path = tmp_path / "merkle_roots.tsr"
     _write_roots(roots_path)
 
-    response = _build_timestamp_response(0, include_token=True)
-    with _tsa_server(response_body=response) as (tsa_url, state):
+    with _tsa_server(
+        response_body=b"",
+        response_factory=lambda query: (200, "application/timestamp-reply", local_tsa_signer.sign_query(query)),
+    ) as (tsa_url, state):
         result = _timestamp(
             target_flag="--roots",
             target_path=roots_path,
             tsa_url=tsa_url,
             out_path=tsr_path,
+            tsa_ca_file=local_tsa_signer.ca_cert,
+            allow_insecure_http=True,
             nonce=314159,
             cert_req=True,
         )
@@ -352,6 +585,58 @@ def test_timestamp_includes_cert_req_when_flag_set(tmp_path: Path) -> None:
     assert digest == hashlib.sha256(roots_path.read_bytes()).digest()
     assert nonce == 314159
     assert cert_req is True
+
+
+def test_timestamp_omits_cert_req_with_no_cert_req_flag(tmp_path: Path, local_tsa_signer: _LocalTsaSigner) -> None:
+    roots_path = tmp_path / "merkle_roots.json"
+    tsr_path = tmp_path / "merkle_roots.tsr"
+    _write_roots(roots_path)
+
+    with _tsa_server(
+        response_body=b"",
+        response_factory=lambda query: (200, "application/timestamp-reply", local_tsa_signer.sign_query(query)),
+    ) as (tsa_url, state):
+        _timestamp(
+            target_flag="--roots",
+            target_path=roots_path,
+            tsa_url=tsa_url,
+            out_path=tsr_path,
+            tsa_ca_file=local_tsa_signer.ca_cert,
+            allow_insecure_http=True,
+            nonce=2718,
+            cert_req=False,
+        )
+
+    _, digest, nonce, cert_req = _decode_timestamp_query(state["request_body"])  # type: ignore[arg-type]
+    assert digest == hashlib.sha256(roots_path.read_bytes()).digest()
+    assert nonce == 2718
+    assert cert_req is False
+
+
+def test_timestamp_no_cert_req_fails_strict_verification_without_embedded_signer_cert(
+    tmp_path: Path, local_tsa_signer: _LocalTsaSigner
+) -> None:
+    roots_path = tmp_path / "merkle_roots.json"
+    tsr_path = tmp_path / "merkle_roots.tsr"
+    _write_roots(roots_path)
+
+    with _tsa_server(
+        response_body=b"",
+        response_factory=lambda query: (200, "application/timestamp-reply", local_tsa_signer.sign_query(query)),
+    ) as (tsa_url, _):
+        result = _timestamp(
+            target_flag="--roots",
+            target_path=roots_path,
+            tsa_url=tsa_url,
+            out_path=tsr_path,
+            tsa_ca_file=local_tsa_signer.ca_cert,
+            allow_insecure_http=True,
+            nonce=2718,
+            cert_req=False,
+        )
+
+    assert result.returncode == 9
+    assert "signer certificate not found" in result.stdout
 
 
 def test_timestamp_fails_when_target_filename_is_invalid(tmp_path: Path) -> None:
@@ -385,6 +670,27 @@ def test_timestamp_fails_with_missing_target_file(tmp_path: Path) -> None:
     assert "Timestamp request failed" in result.stdout
 
 
+def test_timestamp_fails_fast_when_openssl_unavailable(tmp_path: Path) -> None:
+    roots_path = tmp_path / "merkle_roots.json"
+    tsr_path = tmp_path / "out.tsr"
+    _write_roots(roots_path)
+
+    env = os.environ.copy()
+    env["PATH"] = ""
+
+    result = _timestamp(
+        target_flag="--roots",
+        target_path=roots_path,
+        tsa_url="https://tsa.example.invalid/ts",
+        out_path=tsr_path,
+        nonce=1,
+        env=env,
+    )
+
+    assert result.returncode == 8
+    assert "OpenSSL executable is required" in result.stdout
+
+
 def test_timestamp_fails_on_http_error(tmp_path: Path) -> None:
     roots_path = tmp_path / "merkle_roots.json"
     tsr_path = tmp_path / "out.tsr"
@@ -396,6 +702,7 @@ def test_timestamp_fails_on_http_error(tmp_path: Path) -> None:
             target_path=roots_path,
             tsa_url=tsa_url,
             out_path=tsr_path,
+            allow_insecure_http=True,
             nonce=1,
         )
 
@@ -414,6 +721,7 @@ def test_timestamp_fails_on_malformed_tsa_response(tmp_path: Path) -> None:
             target_path=roots_path,
             tsa_url=tsa_url,
             out_path=tsr_path,
+            allow_insecure_http=True,
             nonce=1,
         )
 
@@ -433,6 +741,7 @@ def test_timestamp_fails_on_rejected_tsa_status(tmp_path: Path) -> None:
             target_path=roots_path,
             tsa_url=tsa_url,
             out_path=tsr_path,
+            allow_insecure_http=True,
             nonce=1,
         )
 
@@ -452,6 +761,7 @@ def test_timestamp_fails_when_granted_response_omits_token(tmp_path: Path) -> No
             target_path=roots_path,
             tsa_url=tsa_url,
             out_path=tsr_path,
+            allow_insecure_http=True,
             nonce=1,
         )
 
@@ -471,8 +781,89 @@ def test_timestamp_fails_on_unexpected_content_type(tmp_path: Path) -> None:
             target_path=roots_path,
             tsa_url=tsa_url,
             out_path=tsr_path,
+            allow_insecure_http=True,
             nonce=1,
         )
 
     assert result.returncode == 9
     assert "unexpected Content-Type" in result.stdout
+
+
+def test_timestamp_rejects_http_tsa_url_without_insecure_flag(tmp_path: Path) -> None:
+    roots_path = tmp_path / "merkle_roots.json"
+    tsr_path = tmp_path / "out.tsr"
+    _write_roots(roots_path)
+
+    with _tsa_server(response_body=b"unused") as (tsa_url, _):
+        result = _timestamp(
+            target_flag="--roots",
+            target_path=roots_path,
+            tsa_url=tsa_url,
+            out_path=tsr_path,
+            nonce=1,
+        )
+
+    assert result.returncode == 8
+    assert "must use https unless --allow-insecure-http is set" in result.stdout
+
+
+def test_timestamp_rejects_non_absolute_tsa_url(tmp_path: Path) -> None:
+    roots_path = tmp_path / "merkle_roots.json"
+    tsr_path = tmp_path / "out.tsr"
+    _write_roots(roots_path)
+
+    result = _timestamp(
+        target_flag="--roots",
+        target_path=roots_path,
+        tsa_url="/tsa",
+        out_path=tsr_path,
+        nonce=1,
+    )
+
+    assert result.returncode == 8
+    assert "--tsa-url must be an absolute http(s) URL" in result.stdout
+
+
+def test_timestamp_rejects_redirect_response(tmp_path: Path, local_tsa_signer: _LocalTsaSigner) -> None:
+    roots_path = tmp_path / "merkle_roots.json"
+    tsr_path = tmp_path / "out.tsr"
+    _write_roots(roots_path)
+
+    with _tsa_redirect_server(final_response_factory=local_tsa_signer.sign_query) as (tsa_url, state):
+        result = _timestamp(
+            target_flag="--roots",
+            target_path=roots_path,
+            tsa_url=tsa_url,
+            out_path=tsr_path,
+            tsa_ca_file=local_tsa_signer.ca_cert,
+            allow_insecure_http=True,
+            nonce=1,
+        )
+
+    assert result.returncode == 8
+    assert "HTTP 302" in result.stdout
+    assert state["initial_request_body"]
+    assert state["followup_request_body"] == b""
+    assert not tsr_path.exists()
+
+
+def test_timestamp_fails_when_cryptographic_verification_fails(tmp_path: Path, local_tsa_signer: _LocalTsaSigner) -> None:
+    roots_path = tmp_path / "merkle_roots.json"
+    tsr_path = tmp_path / "out.tsr"
+    _write_roots(roots_path)
+
+    # Structurally valid enough for parser, but not a valid signed RFC3161 token.
+    response = _build_timestamp_response(0, include_token=True)
+    with _tsa_server(response_body=response) as (tsa_url, _):
+        result = _timestamp(
+            target_flag="--roots",
+            target_path=roots_path,
+            tsa_url=tsa_url,
+            out_path=tsr_path,
+            tsa_ca_file=local_tsa_signer.ca_cert,
+            allow_insecure_http=True,
+            nonce=1,
+        )
+
+    assert result.returncode == 9
+    assert "cryptographic timestamp verification failed" in result.stdout

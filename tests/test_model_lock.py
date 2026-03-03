@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -136,6 +138,35 @@ def test_depth_anything_coreml_large_variant_fails_with_unsupported_message() ->
         )
 
 
+def test_depth_anything_coreml_base_variant_fails_with_unpublished_repo_message() -> None:
+    with pytest.raises(ValueError, match="Base CoreML repo is not published on Hugging Face"):
+        DepthAnythingV2Model(
+            variant=ModelVariant.BASE,
+            backend=ModelBackend.COREML,
+        )
+
+
+def test_depth_anything_onnx_small_uses_variant_specific_model_lock_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest_path = tmp_path / "model_lock.yaml"
+    pinned = "d" * 40
+    _write_manifest(
+        manifest_path,
+        {"onnx-community/depth-anything-v2-small": {"revision": pinned}},
+    )
+    monkeypatch.setenv("TP_MODEL_LOCK_MANIFEST", str(manifest_path))
+    monkeypatch.setenv("TP_STRICT_MODEL_LOCK", "1")
+    monkeypatch.setattr(DepthAnythingV2Model, "_load_model", lambda self: None)
+
+    model = DepthAnythingV2Model(
+        variant=ModelVariant.SMALL,
+        backend=ModelBackend.ONNX,
+        strict_model_lock=True,
+    )
+    assert model.onnx_revision == pinned
+
+
 def test_is_pinned_revision_and_strict_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert is_pinned_revision("e" * 40)
     assert not is_pinned_revision("main")
@@ -181,3 +212,108 @@ def test_model_lock_manifest_path_falls_back_to_cwd(tmp_path: Path, monkeypatch:
     )
 
     assert model_lock_manifest_path() == manifest
+
+
+def test_da3_inference_pipeline_load_uses_pinned_revision_in_strict_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from transformation_portal.lux_depth_v3 import inference as da3_inference
+    from transformation_portal.lux_depth_v3.config import DA3Config, DeviceConfig
+    from transformation_portal.lux_depth_v3.config import ModelVariant as DA3ModelVariant
+
+    manifest_path = tmp_path / "model_lock.yaml"
+    model_id = "depth-anything/Depth-Anything-V3-Metric-Base-hf"
+    pinned = "7" * 40
+    _write_manifest(manifest_path, {model_id: {"revision": pinned}})
+
+    monkeypatch.setenv("TP_MODEL_LOCK_MANIFEST", str(manifest_path))
+    monkeypatch.setenv("TP_STRICT_MODEL_LOCK", "1")
+    monkeypatch.setattr(da3_inference, "TRANSFORMERS_AVAILABLE", True)
+    monkeypatch.setattr(da3_inference, "TORCH_AVAILABLE", True)
+    monkeypatch.setattr(
+        da3_inference.DA3InferenceEngine,
+        "_auto_detect_backend",
+        lambda self: da3_inference.ModelBackend.PYTORCH_CPU,
+    )
+
+    captured: dict[str, str | int | None] = {}
+
+    class _FakeModel:
+        pass
+
+    class _FakePipeline:
+        def __init__(self) -> None:
+            self.model = _FakeModel()
+
+    def _fake_pipeline(*, task: str, model: str, revision: str | None = None, **kwargs):
+        captured["task"] = task
+        captured["model"] = model
+        captured["revision"] = revision
+        captured["device"] = kwargs.get("device")
+        return _FakePipeline()
+
+    monkeypatch.setattr(da3_inference, "pipeline", _fake_pipeline)
+
+    config = DA3Config(
+        model_variant=DA3ModelVariant.METRIC_BASE,
+        device=DeviceConfig(device="cpu", use_fp16=False),
+    )
+    engine = da3_inference.DA3InferenceEngine(config)
+    engine._load_pytorch_model()
+
+    assert captured["task"] == "depth-estimation"
+    assert captured["model"] == model_id
+    assert captured["revision"] == pinned
+
+
+def test_da3_inference_strict_mode_rejects_revisionless_da3_fallback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from transformation_portal.lux_depth_v3 import inference as da3_inference
+    from transformation_portal.lux_depth_v3.config import DA3Config, DeviceConfig
+    from transformation_portal.lux_depth_v3.config import ModelVariant as DA3ModelVariant
+
+    manifest_path = tmp_path / "model_lock.yaml"
+    model_id = "depth-anything/DA3NESTED-GIANT-LARGE-1.1"
+    pinned = "8" * 40
+    _write_manifest(manifest_path, {model_id: {"revision": pinned}})
+
+    monkeypatch.setenv("TP_MODEL_LOCK_MANIFEST", str(manifest_path))
+    monkeypatch.setenv("TP_STRICT_MODEL_LOCK", "1")
+    monkeypatch.setattr(
+        da3_inference.DA3InferenceEngine,
+        "_auto_detect_backend",
+        lambda self: da3_inference.ModelBackend.PYTORCH_CPU,
+    )
+
+    fallback_used = {"called_without_revision": False}
+
+    class _FakeDA3Model:
+        def to(self, _device: str) -> "_FakeDA3Model":
+            return self
+
+        def eval(self) -> "_FakeDA3Model":
+            return self
+
+    class _FakeDepthAnything3:
+        @staticmethod
+        def from_pretrained(_model_id: str, **kwargs):
+            if "revision" in kwargs:
+                raise TypeError("revision unsupported by test stub")
+            fallback_used["called_without_revision"] = True
+            return _FakeDA3Model()
+
+    fake_pkg = types.ModuleType("depth_anything_3")
+    fake_api = types.ModuleType("depth_anything_3.api")
+    fake_api.DepthAnything3 = _FakeDepthAnything3
+    monkeypatch.setitem(sys.modules, "depth_anything_3", fake_pkg)
+    monkeypatch.setitem(sys.modules, "depth_anything_3.api", fake_api)
+
+    config = DA3Config(
+        model_variant=DA3ModelVariant.METRIC_LARGE,
+        device=DeviceConfig(device="cpu", use_fp16=False),
+    )
+    engine = da3_inference.DA3InferenceEngine(config)
+
+    with pytest.raises(RuntimeError, match="revision unsupported by test stub"):
+        engine._load_da3_model(model_id)
+
+    assert fallback_used["called_without_revision"] is False
