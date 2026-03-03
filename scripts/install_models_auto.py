@@ -24,6 +24,7 @@ Performance: ~5-10 minutes total for required models (depends on connection)
 Author: Transformation Portal Team
 License: Attribution (see LICENSE)
 """
+
 import argparse
 import hashlib
 import os
@@ -48,6 +49,21 @@ REPO_ROOT = Path(__file__).parent.parent
 WEIGHTS_DIR = REPO_ROOT / "weights"
 WEIGHTS_DIR.mkdir(exist_ok=True)
 
+# Import security helpers from local source tree (script can run before package install).
+SRC_DIR = REPO_ROOT / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+MODEL_LOCK_IMPORT_ERROR: Optional[Exception] = None
+try:
+    from transformation_portal.core.security.model_lock import ModelLockError, resolve_model_lock_revision
+
+    MODEL_LOCK_AVAILABLE = True
+except Exception as exc:  # pragma: no cover - defensive import guard for bootstrap environments
+    ModelLockError = RuntimeError  # type: ignore[assignment]
+    MODEL_LOCK_AVAILABLE = False
+    MODEL_LOCK_IMPORT_ERROR = exc
+
 # Real-ESRGAN model with checksum
 REALESRGAN_MODEL = {
     "name": "RealESRGAN_x4plus.pth",
@@ -58,6 +74,28 @@ REALESRGAN_MODEL = {
 
 MAX_RETRIES = 3
 RETRY_DELAY = 2  # seconds
+
+
+def _resolve_required_revision(repo_id: str, context: str) -> str:
+    """Resolve pinned revision for secure model downloads.
+
+    This installer is intentionally fail-closed for HuggingFace artifacts.
+    """
+    if not MODEL_LOCK_AVAILABLE:
+        reason = (
+            f"{type(MODEL_LOCK_IMPORT_ERROR).__name__}: {MODEL_LOCK_IMPORT_ERROR}" if MODEL_LOCK_IMPORT_ERROR else "unknown"
+        )
+        raise RuntimeError(f"Model lock helpers unavailable ({reason})")
+
+    revision = resolve_model_lock_revision(
+        repo_id,
+        requested_revision=None,
+        strict=True,
+        context=context,
+    )
+    if not revision:
+        raise ModelLockError(f"{context}: missing pinned revision for repo '{repo_id}'")
+    return revision
 
 
 def check_disk_space(required_mb: int = 1000) -> bool:
@@ -187,12 +225,20 @@ def check_depth_anything() -> bool:
         True if model can be loaded
     """
     print("\n[1/4] Checking Depth Anything V2...")
+    model_id = "depth-anything/Depth-Anything-V2-Small-hf"
     try:
         from transformers import AutoImageProcessor
 
-        AutoImageProcessor.from_pretrained("LiheYoung/depth-anything-small-h")
+        revision = _resolve_required_revision(
+            model_id,
+            context="install_models_auto.depth_anything",
+        )
+        AutoImageProcessor.from_pretrained(model_id, revision=revision)  # nosec B615
         print("  ✓ Depth Anything V2 ready")
         return True
+    except (ModelLockError, RuntimeError) as e:
+        print(f"  ❌ Secure model lock check failed: {e}")
+        return False
     except Exception as e:
         print(f"  ⚠️  Will download on first use: {e}")
         return False
@@ -243,8 +289,19 @@ def check_controlnet() -> bool:
 
         for model_id in models:
             try:
-                snapshot_download(repo_id=model_id, allow_patterns=["*.json"])
+                revision = _resolve_required_revision(
+                    model_id,
+                    context=f"install_models_auto.controlnet.{model_id}",
+                )
+                snapshot_download(  # nosec B615
+                    repo_id=model_id,
+                    revision=revision,
+                    allow_patterns=["*.json"],
+                )
                 print(f"  ✓ {model_id}")
+            except (ModelLockError, RuntimeError) as e:
+                print(f"  ❌ {model_id} - secure model lock check failed: {e}")
+                success = False
             except Exception:
                 print(f"  ⚠️  {model_id} - will download on first use")
                 success = False
@@ -269,12 +326,24 @@ def check_stable_diffusion(skip_optional: bool = False) -> bool:
         return True
 
     print("\n[4/4] Checking Stable Diffusion...")
+    model_id = "runwayml/stable-diffusion-v1-5"
     try:
         from huggingface_hub import snapshot_download
 
-        snapshot_download(repo_id="runwayml/stable-diffusion-v1-5", allow_patterns=["*.json"])
+        revision = _resolve_required_revision(
+            model_id,
+            context="install_models_auto.stable_diffusion",
+        )
+        snapshot_download(  # nosec B615
+            repo_id=model_id,
+            revision=revision,
+            allow_patterns=["*.json"],
+        )
         print("  ✓ Stable Diffusion v1.5 cached")
         return True
+    except (ModelLockError, RuntimeError) as e:
+        print(f"  ❌ Secure model lock check failed: {e}")
+        return False
     except Exception:
         print("  ⚠️  Will download on first use (~4GB)")
         return False

@@ -25,6 +25,8 @@ import numpy as np
 import torch
 from PIL import Image
 
+from transformation_portal.core.security.model_lock import resolve_model_lock_revision
+
 try:
     from diffusers import FluxPipeline
     from transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
@@ -75,6 +77,10 @@ class IPAdapterStyleTransfer:
         device: Optional[str] = None,
         torch_dtype: torch.dtype = torch.bfloat16,
         enable_cpu_offload: bool = False,
+        *,
+        clip_vision_revision: Optional[str] = None,
+        flux_model_revision: Optional[str] = None,
+        strict_model_lock: Optional[bool] = True,
     ):
         """Initialize IP-Adapter style transfer.
 
@@ -82,6 +88,10 @@ class IPAdapterStyleTransfer:
             device: Computation device (auto-detected if None)
             torch_dtype: Tensor dtype
             enable_cpu_offload: Enable CPU offload for memory efficiency
+            clip_vision_revision: Optional immutable revision for CLIP vision model
+            flux_model_revision: Optional immutable revision for FLUX model
+            strict_model_lock: Enforce pinned revisions for remote model loads.
+                Defaults to ``True`` for secure-by-default behavior.
 
         Raises:
             ImportError: If required dependencies not available
@@ -94,18 +104,32 @@ class IPAdapterStyleTransfer:
 
         self.device = device or self._detect_device()
         self.torch_dtype = torch_dtype
+        self.clip_vision_revision = clip_vision_revision
+        self.flux_model_revision = flux_model_revision
+        self.strict_model_lock = strict_model_lock
+
+        self._resolve_model_revisions()
 
         logger.info(f"Initializing IP-Adapter on {self.device}")
 
         # Load CLIP vision model for reference encoding
         self.image_encoder = CLIPVisionModelWithProjection.from_pretrained(  # nosec B615
-            self.CLIP_VISION_MODEL, torch_dtype=torch_dtype
+            self.CLIP_VISION_MODEL,
+            revision=self.clip_vision_revision,
+            torch_dtype=torch_dtype,
         ).to(self.device)
 
-        self.image_processor = CLIPImageProcessor.from_pretrained(self.CLIP_VISION_MODEL)  # nosec B615
+        self.image_processor = CLIPImageProcessor.from_pretrained(  # nosec B615
+            self.CLIP_VISION_MODEL,
+            revision=self.clip_vision_revision,
+        )
 
         # Load FLUX pipeline
-        self.flux_pipe = FluxPipeline.from_pretrained(self.FLUX_MODEL, torch_dtype=torch_dtype)
+        self.flux_pipe = FluxPipeline.from_pretrained(  # nosec B615
+            self.FLUX_MODEL,
+            revision=self.flux_model_revision,
+            torch_dtype=torch_dtype,
+        )
 
         if enable_cpu_offload and self.device == "cuda":
             self.flux_pipe.enable_model_cpu_offload()
@@ -113,6 +137,21 @@ class IPAdapterStyleTransfer:
             self.flux_pipe.to(self.device)
 
         logger.info("IP-Adapter initialized successfully")
+
+    def _resolve_model_revisions(self) -> None:
+        """Resolve effective model revisions from explicit args + lock manifest."""
+        self.clip_vision_revision = resolve_model_lock_revision(
+            self.CLIP_VISION_MODEL,
+            self.clip_vision_revision,
+            strict=self.strict_model_lock,
+            context="IPAdapterStyleTransfer(CLIP)",
+        )
+        self.flux_model_revision = resolve_model_lock_revision(
+            self.FLUX_MODEL,
+            self.flux_model_revision,
+            strict=self.strict_model_lock,
+            context="IPAdapterStyleTransfer(FLUX)",
+        )
 
     def _detect_device(self) -> str:
         """Auto-detect optimal device."""

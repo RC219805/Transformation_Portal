@@ -21,6 +21,8 @@ import numpy as np
 import torch
 from PIL import Image
 
+from transformation_portal.core.security.model_lock import resolve_model_lock_revision
+
 try:
     from transformers import AutoProcessor, BitsAndBytesConfig, LlavaForConditionalGeneration
 
@@ -80,6 +82,9 @@ Focus on luxury architectural materials."""
         device: Optional[str] = None,
         quantization: bool = True,
         cache_dir: Optional[Path] = None,
+        *,
+        model_revision: Optional[str] = None,
+        strict_model_lock: Optional[bool] = True,
     ):
         """Initialize LLaVA processor.
 
@@ -88,6 +93,9 @@ Focus on luxury architectural materials."""
             device: Device to use (auto-detected if None)
             quantization: Use 4-bit quantization (reduces 24GB to ~8GB VRAM)
             cache_dir: Model cache directory
+            model_revision: Optional immutable revision for model and processor
+            strict_model_lock: Enforce pinned revisions for remote model loads.
+                Defaults to ``True`` for secure-by-default behavior.
 
         Raises:
             ImportError: If LLaVA dependencies not available
@@ -102,9 +110,18 @@ Focus on luxury architectural materials."""
         self.device = device or self._detect_device()
         self.quantization = quantization
         self.cache_dir = cache_dir
+        self.model_revision = model_revision
+        self.strict_model_lock = strict_model_lock
 
         logger.info(f"Initializing LLaVA-1.5 on device: {self.device}")
         logger.info(f"Model: {model_id}, Quantization: {quantization}")
+
+        self.model_revision = resolve_model_lock_revision(
+            self.model_id,
+            self.model_revision,
+            strict=self.strict_model_lock,
+            context="LLaVAProcessor",
+        )
 
         self.processor = None
         self.model = None
@@ -122,8 +139,11 @@ Focus on luxury architectural materials."""
         """Load LLaVA model and processor."""
         try:
             # Load processor
-            # Production deployments should pin specific model revisions
-            self.processor = AutoProcessor.from_pretrained(self.model_id, cache_dir=self.cache_dir)  # nosec B615
+            self.processor = AutoProcessor.from_pretrained(  # nosec B615
+                self.model_id,
+                revision=self.model_revision,
+                cache_dir=self.cache_dir,
+            )
 
             # Configure quantization for memory efficiency
             model_kwargs = {"cache_dir": self.cache_dir}
@@ -142,7 +162,11 @@ Focus on luxury architectural materials."""
                 model_kwargs["torch_dtype"] = torch.float16 if self.device != "cpu" else torch.float32
 
             # Load model
-            self.model = LlavaForConditionalGeneration.from_pretrained(self.model_id, **model_kwargs)  # nosec B615
+            self.model = LlavaForConditionalGeneration.from_pretrained(  # nosec B615
+                self.model_id,
+                revision=self.model_revision,
+                **model_kwargs,
+            )
 
             # Move to device if not using device_map
             if "device_map" not in model_kwargs:
