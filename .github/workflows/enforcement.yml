@@ -20,7 +20,31 @@ jobs:
     name: Verify Action Pins
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout repository (attempt 1)
+        id: checkout_action_pins_1
+        continue-on-error: true
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          lfs: false
+          submodules: false
+
+      - name: Checkout repository (attempt 2)
+        id: checkout_action_pins_2
+        if: steps.checkout_action_pins_1.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          lfs: false
+          submodules: false
+
+      - name: Enforce checkout success
+        if: steps.checkout_action_pins_1.outcome == 'failure' && steps.checkout_action_pins_2.outcome == 'failure'
+        run: |
+          echo "Repository checkout failed after two attempts."
+          echo "This is often a transient GitHub fetch/API issue; retry the workflow."
+          exit 1
 
       - name: Check action pinning
         run: python scripts/ci/verify_action_pins.py
@@ -29,7 +53,31 @@ jobs:
     name: Verify No Banned Dependencies
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout repository (attempt 1)
+        id: checkout_banned_deps_1
+        continue-on-error: true
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          lfs: false
+          submodules: false
+
+      - name: Checkout repository (attempt 2)
+        id: checkout_banned_deps_2
+        if: steps.checkout_banned_deps_1.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          lfs: false
+          submodules: false
+
+      - name: Enforce checkout success
+        if: steps.checkout_banned_deps_1.outcome == 'failure' && steps.checkout_banned_deps_2.outcome == 'failure'
+        run: |
+          echo "Repository checkout failed after two attempts."
+          echo "This is often a transient GitHub fetch/API issue; retry the workflow."
+          exit 1
 
       - uses: actions/setup-python@v6
         with:
@@ -45,7 +93,31 @@ jobs:
     name: Validate HuggingFace Revisions
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout repository (attempt 1)
+        id: checkout_hf_policy_1
+        continue-on-error: true
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          lfs: false
+          submodules: false
+
+      - name: Checkout repository (attempt 2)
+        id: checkout_hf_policy_2
+        if: steps.checkout_hf_policy_1.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          lfs: false
+          submodules: false
+
+      - name: Enforce checkout success
+        if: steps.checkout_hf_policy_1.outcome == 'failure' && steps.checkout_hf_policy_2.outcome == 'failure'
+        run: |
+          echo "Repository checkout failed after two attempts."
+          echo "This is often a transient GitHub fetch/API issue; retry the workflow."
+          exit 1
 
       - uses: actions/setup-python@v6
         with:
@@ -61,7 +133,31 @@ jobs:
     name: Layer 1 Tests (Fast)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout repository (attempt 1)
+        id: checkout_layer1_1
+        continue-on-error: true
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          lfs: false
+          submodules: false
+
+      - name: Checkout repository (attempt 2)
+        id: checkout_layer1_2
+        if: steps.checkout_layer1_1.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          lfs: false
+          submodules: false
+
+      - name: Enforce checkout success
+        if: steps.checkout_layer1_1.outcome == 'failure' && steps.checkout_layer1_2.outcome == 'failure'
+        run: |
+          echo "Repository checkout failed after two attempts."
+          echo "This is often a transient GitHub fetch/API issue; retry the workflow."
+          exit 1
 
       - uses: actions/setup-python@v6
         with:
@@ -88,7 +184,31 @@ jobs:
       contains(github.event.head_commit.modified, 'requirements/ml.') ||
       github.event_name == 'schedule'
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout repository (attempt 1)
+        id: checkout_layer2_1
+        continue-on-error: true
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          lfs: false
+          submodules: false
+
+      - name: Checkout repository (attempt 2)
+        id: checkout_layer2_2
+        if: steps.checkout_layer2_1.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          lfs: false
+          submodules: false
+
+      - name: Enforce checkout success
+        if: steps.checkout_layer2_1.outcome == 'failure' && steps.checkout_layer2_2.outcome == 'failure'
+        run: |
+          echo "Repository checkout failed after two attempts."
+          echo "This is often a transient GitHub fetch/API issue; retry the workflow."
+          exit 1
 
       - uses: actions/setup-python@v6
         with:
@@ -113,7 +233,31 @@ jobs:
     name: Golden Regression Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout repository (attempt 1)
+        id: checkout_golden_1
+        continue-on-error: true
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          lfs: false
+          submodules: false
+
+      - name: Checkout repository (attempt 2)
+        id: checkout_golden_2
+        if: steps.checkout_golden_1.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          lfs: false
+          submodules: false
+
+      - name: Enforce checkout success
+        if: steps.checkout_golden_1.outcome == 'failure' && steps.checkout_golden_2.outcome == 'failure'
+        run: |
+          echo "Repository checkout failed after two attempts."
+          echo "This is often a transient GitHub fetch/API issue; retry the workflow."
+          exit 1
 
       - uses: actions/setup-python@v6
         with:
@@ -135,7 +279,31 @@ jobs:
     name: Verify Artifact Boundary
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout repository (attempt 1)
+        id: checkout_artifacts_1
+        continue-on-error: true
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          lfs: false
+          submodules: false
+
+      - name: Checkout repository (attempt 2)
+        id: checkout_artifacts_2
+        if: steps.checkout_artifacts_1.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          lfs: false
+          submodules: false
+
+      - name: Enforce checkout success
+        if: steps.checkout_artifacts_1.outcome == 'failure' && steps.checkout_artifacts_2.outcome == 'failure'
+        run: |
+          echo "Repository checkout failed after two attempts."
+          echo "This is often a transient GitHub fetch/API issue; retry the workflow."
+          exit 1
 
       - name: Check no artifacts in git
         run: |
