@@ -80,6 +80,21 @@ def _canon_f32(arr: np.ndarray) -> np.ndarray:
     return np.ascontiguousarray(np.round(np.asarray(arr, dtype=np.float32), 6))
 
 
+def _assert_scene_state_is_finite(scene) -> None:
+    """Fail early if reconstruction produced non-finite state values."""
+    for name, arr in [
+        ("positions", scene.splats.positions),
+        ("colors", scene.splats.colors),
+        ("scales", scene.splats.scales),
+        ("rotations", scene.splats.rotations),
+        ("opacities", scene.splats.opacities),
+    ]:
+        if not np.isfinite(arr).all():
+            raise AssertionError(f"Reconstruction scene contains non-finite values in {name}.")
+    if not np.isfinite(scene.rmse):
+        raise AssertionError(f"Reconstruction RMSE must be finite, got {scene.rmse!r}.")
+
+
 def _state_hash(scene) -> str:
     """Compute canonical state hash for reconstruction output."""
     digest = hashlib.sha256()
@@ -109,6 +124,8 @@ def _state_hash(scene) -> str:
 
 def _canonical_payload(scene, requested_iterations: int) -> dict[str, object]:
     """Build canonical golden payload from runtime output."""
+    _assert_scene_state_is_finite(scene)
+
     return {
         "schema": "reconstruction_golden.v1",
         "backend": str(scene.metadata.get("backend", "")),
@@ -131,6 +148,7 @@ def _canonical_json_bytes(payload: dict[str, object]) -> bytes:
         indent=2,
         separators=(",", ": "),
         ensure_ascii=False,
+        allow_nan=False,
     )
     return f"{text}\n".encode("utf-8")
 
