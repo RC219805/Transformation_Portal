@@ -20,10 +20,12 @@ from __future__ import annotations
 
 import datetime
 import hashlib
+import io
 import json
 import logging
 import os
 import time
+import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from enum import Enum
 from functools import lru_cache
@@ -75,6 +77,7 @@ from .pbr import generate_pbr_maps
 from .pbr_writer import write_pbr_maps
 from .postprocessing import Postprocessor
 from .provenance import ExiftoolNotFoundError, ProvenanceError, capture_provenance
+from .scene_groups import build_scene_groups
 from .security import HashMode, sanitize_file_stem, sanitize_path_component_nonlossy
 from .v2_runner import V2Runner, find_v2_report
 
@@ -88,6 +91,10 @@ class ApexStrictGateError(RuntimeError):
         self.code = code
         self.details = details or {}
         super().__init__(f"[{code}] {message}")
+
+
+class _MaskSerializationRejected(RuntimeError):
+    """Internal signal for non-fatal mask serialization rejection."""
 
 
 def _log_dependency_status() -> dict:
@@ -359,6 +366,11 @@ def _infer_artifact_type(relative_path: str) -> str:
     rel = relative_path.lower()
     name = Path(rel).name
 
+    if rel.startswith("segmentation/"):
+        if name.endswith(".npz"):
+            return "segmentation_mask_npz"
+        return "segmentation_aux"
+
     if rel.startswith("depth/"):
         if name.endswith("_metadata.json"):
             return "depth_metadata"
@@ -488,11 +500,12 @@ class EnhanceOrchestrator:
         self.v2_dir = self.output_root / "v2"
         self.manifests_dir = self.output_root / "manifests"
         self.logs_dir = self.output_root / "logs"
+        self.segmentation_dir = self.output_root / "segmentation"
         # zones/ directory reserved for future zone-based processing
         # Only created when zoning features are enabled
         self.zones_dir = self.output_root / "zones"
 
-        for d in [self.depth_dir, self.v2_dir, self.manifests_dir, self.logs_dir]:
+        for d in [self.depth_dir, self.v2_dir, self.manifests_dir, self.logs_dir, self.segmentation_dir]:
             d.mkdir(parents=True, exist_ok=True)
 
         # Note: zones_dir intentionally NOT created here
@@ -1642,6 +1655,18 @@ class EnhanceOrchestrator:
         extension = ".tif" if (self.config.emit_master16 or self.config.emit_upscaled16) else ".png"
         return temp_dir / f"{output_key.stem}_materials_v3_enhanced{extension}"
 
+    def _segmentation_mask_artifact_path(self, output_key: Path) -> Path:
+        """Return canonical persistent segmentation mask artifact path."""
+        return self.segmentation_dir / output_key.parent / f"{output_key.stem}_materials_v3_masks.npz"
+
+    def _persist_material_masks_artifact(self, masks: Dict[str, np.ndarray], output_key: Path) -> Optional[Path]:
+        """Persist material masks under segmentation/ as deterministic artifacts."""
+        if not masks:
+            return None
+        target_dir = self._segmentation_mask_artifact_path(output_key).parent
+        target_dir.mkdir(parents=True, exist_ok=True)
+        return self._serialize_material_masks(masks, output_key, target_dir)
+
     def _run_materials_v3_stage(
         self,
         *,
@@ -1686,6 +1711,17 @@ class EnhanceOrchestrator:
             runtime_s = time.time() - t_materials_start
 
             if materials_v3_result:
+                material_masks = materials_v3_result.get("material_masks")
+                if isinstance(material_masks, dict) and material_masks:
+                    mask_artifact_path = self._persist_material_masks_artifact(material_masks, output_key)
+                    if mask_artifact_path:
+                        materials_v3_metadata = materials_v3_result.setdefault("materials_v3_metadata", {})
+                        segmentation_metadata = materials_v3_metadata.get("segmentation_metadata")
+                        segmentation_metadata = dict(segmentation_metadata) if isinstance(segmentation_metadata, dict) else {}
+                        segmentation_metadata["mask_artifact_path"] = str(mask_artifact_path)
+                        segmentation_metadata["mask_artifact_format"] = "npz"
+                        materials_v3_metadata["segmentation_metadata"] = segmentation_metadata
+
                 enhanced_image = materials_v3_result.get("enhanced_image")
                 if enhanced_image is not None:
                     from PIL import Image as PILImage
@@ -1859,16 +1895,15 @@ class EnhanceOrchestrator:
             },
         )
 
-    def _serialize_material_masks(self, masks: Dict[str, np.ndarray], output_key: Path, temp_dir: Path) -> Optional[Path]:
+    def _serialize_material_masks(self, masks: Dict[str, np.ndarray], output_key: Path, output_dir: Path) -> Optional[Path]:
         """Serialize material masks to compressed NPZ file.
 
-        Masks are saved to temporary directory for V2 subprocess consumption.
         File format: {output_key.stem}_materials_v3_masks.npz
 
         Args:
             masks: Dictionary mapping material names to binary masks
             output_key: Output key for artifact naming
-            temp_dir: Temporary directory for mask files
+            output_dir: Directory where serialized mask files are written
 
         Returns:
             Path to serialized .npz file, or None on failure
@@ -1881,15 +1916,17 @@ class EnhanceOrchestrator:
             return None
 
         try:
-            # Ensure temp directory exists
-            temp_dir.mkdir(parents=True, exist_ok=True)
+            # Ensure output directory exists
+            output_dir.mkdir(parents=True, exist_ok=True)
 
             # Build mask file path
             mask_filename = f"{output_key.stem}_materials_v3_masks.npz"
-            mask_path = temp_dir / mask_filename
+            mask_path = output_dir / mask_filename
 
             # Validate mask data before serialization
-            for mat_name, mask in masks.items():
+            ordered_masks: Dict[str, np.ndarray] = {}
+            for mat_name in sorted(masks):
+                mask = masks[mat_name]
                 if not isinstance(mask, np.ndarray):
                     logger.warning(f"Invalid mask type for {mat_name}: {type(mask)}, skipping serialization")
                     return None
@@ -1899,42 +1936,76 @@ class EnhanceOrchestrator:
                 if mask.ndim != 2:
                     logger.warning(f"Invalid mask shape for {mat_name}: {mask.shape} (expected 2D), skipping")
                     return None
+                ordered_masks[mat_name] = mask
 
-            # Serialize to compressed NPZ with atomic write pattern
-            # Use temp + fsync + rename to ensure atomicity (matches ArtifactStore L1 invariant)
-            tmp_path = mask_path.with_suffix(".npz.tmp")
+            fixed_zip_datetime = (1980, 1, 1, 0, 0, 0)
+            with atomic_temp_file(mask_path, suffix=".npz", create_file=False) as temp_path:
+                with open(temp_path, "wb") as f:
+                    with zipfile.ZipFile(
+                        f,
+                        mode="w",
+                        compression=zipfile.ZIP_DEFLATED,
+                        compresslevel=9,
+                        strict_timestamps=True,
+                    ) as archive:
+                        for mat_name, mask in ordered_masks.items():
+                            payload = io.BytesIO()
+                            np.lib.format.write_array(payload, mask, allow_pickle=False)
 
-            # Write to temporary file
-            with open(tmp_path, "wb") as f:
-                np.savez_compressed(f, **masks)
-                f.flush()
-                os.fsync(f.fileno())
+                            # Use fixed entry metadata so NPZ bytes remain stable across runs.
+                            zip_info = zipfile.ZipInfo(filename=f"{mat_name}.npy", date_time=fixed_zip_datetime)
+                            zip_info.compress_type = zipfile.ZIP_DEFLATED
+                            zip_info.create_system = 0
+                            zip_info.external_attr = 0
+                            archive.writestr(zip_info, payload.getvalue(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+                    f.flush()
+                    os.fsync(f.fileno())
 
-            # Check size before rename
-            file_size_mb = tmp_path.stat().st_size / (1024 * 1024)
-            if file_size_mb > 100:
-                logger.warning(
-                    f"Mask file unexpectedly large: {file_size_mb:.1f}MB. " f"Rejecting for safety (size limit: 100MB)"
-                )
-                tmp_path.unlink()  # Clean up oversized temp file
-                return None
-
-            # Atomic rename (guarantees no partial reads)
-            os.replace(tmp_path, mask_path)
+                # Check size before atomic rename
+                file_size_mb = temp_path.stat().st_size / (1024 * 1024)
+                if file_size_mb > 100:
+                    logger.warning(
+                        f"Mask file unexpectedly large: {file_size_mb:.1f}MB. " f"Rejecting for safety (size limit: 100MB)"
+                    )
+                    raise _MaskSerializationRejected("mask_file_too_large")
 
             # Verify final file exists
             if not mask_path.exists():
                 logger.warning(f"Mask serialization failed: file not created at {mask_path}")
                 return None
 
-            logger.info(
-                f"Serialized {len(masks)} material masks to {mask_path.name} ({file_size_mb:.2f}MB) " f"for V2 subprocess"
-            )
+            logger.info(f"Serialized {len(ordered_masks)} material masks to {mask_path.name} ({file_size_mb:.2f}MB)")
             return mask_path
 
+        except _MaskSerializationRejected:
+            return None
         except Exception as e:
             logger.warning(f"Failed to serialize material masks: {e}", exc_info=True)
             return None
+
+    def _persisted_material_mask_artifact_path(self, materials_v3_result: Optional[dict]) -> Optional[Path]:
+        """Return persisted mask artifact path from Materials V3 metadata when available."""
+        if not isinstance(materials_v3_result, dict):
+            return None
+
+        materials_v3_metadata = materials_v3_result.get("materials_v3_metadata")
+        if not isinstance(materials_v3_metadata, dict):
+            return None
+
+        segmentation_metadata = materials_v3_metadata.get("segmentation_metadata")
+        if not isinstance(segmentation_metadata, dict):
+            return None
+
+        mask_artifact_path = segmentation_metadata.get("mask_artifact_path")
+        if not isinstance(mask_artifact_path, str) or not mask_artifact_path:
+            return None
+
+        artifact_path = Path(mask_artifact_path)
+        if artifact_path.exists():
+            return artifact_path
+
+        logger.warning(f"Persisted mask artifact path missing on disk, will fall back to temp serialization: {artifact_path}")
+        return None
 
     def _run_v2_stage(
         self,
@@ -1974,18 +2045,20 @@ class EnhanceOrchestrator:
             self._enforce_v2_depth_handoff(depth_path=depth_path, v2_result=None, v2_report_path=v2_report_path)
             return {"status": "ok"}, 0.0, v2_report_path
 
-        # Serialize material masks to disk for V2 subprocess (if available)
-        # Masks are saved to temp/ directory and cleaned up after V2 completes
-        masks_path = None
-        temp_dir = self.output_root / "temp"
-
-        if materials_v3_result and materials_v3_result.get("material_masks"):
+        # Use persisted segmentation artifact when available; otherwise serialize temp masks for V2 subprocess.
+        masks_path: Optional[Path] = self._persisted_material_mask_artifact_path(materials_v3_result)
+        cleanup_temp_masks = False
+        if masks_path:
+            logger.info(f"Reusing persisted material masks for V2 subprocess: {masks_path.name}")
+        elif materials_v3_result and materials_v3_result.get("material_masks"):
+            temp_dir = self.output_root / "temp"
             masks_path = self._serialize_material_masks(
                 materials_v3_result["material_masks"],
                 output_key,
                 temp_dir,
             )
             if masks_path:
+                cleanup_temp_masks = True
                 logger.info(f"Material masks serialized for V2 subprocess: {masks_path.name}")
             else:
                 logger.warning("Failed to serialize material masks, V2 will run without them")
@@ -2017,7 +2090,7 @@ class EnhanceOrchestrator:
 
         finally:
             # Clean up temporary mask file (guaranteed cleanup even if V2 fails)
-            if masks_path and masks_path.exists():
+            if cleanup_temp_masks and masks_path and masks_path.exists():
                 try:
                     masks_path.unlink()
                     logger.debug(f"Cleaned up temporary masks: {masks_path.name}")
@@ -2390,6 +2463,16 @@ class EnhanceOrchestrator:
             backend_selection_metadata=backend_selection_metadata,
         )
 
+        segmentation_mask_path: Optional[str] = None
+        if materials_v3_result:
+            materials_v3_metadata = materials_v3_result.get("materials_v3_metadata")
+            if isinstance(materials_v3_metadata, dict):
+                segmentation_metadata = materials_v3_metadata.get("segmentation_metadata")
+                if isinstance(segmentation_metadata, dict):
+                    mask_artifact_path = segmentation_metadata.get("mask_artifact_path")
+                    if isinstance(mask_artifact_path, str) and mask_artifact_path:
+                        segmentation_mask_path = mask_artifact_path
+
         return {
             "status": "ok",
             "image": str(image_input.path),
@@ -2409,6 +2492,7 @@ class EnhanceOrchestrator:
             "v2_log_path": str(v2_log_path) if v2_log_path.exists() else None,
             "v2_report_path": str(v2_report_path) if v2_report_path else None,
             "v2_output_path": v2_output_path,
+            "segmentation_mask_path": segmentation_mask_path,
             "runtime_s": pipeline_end_time - pipeline_start_time,
         }
 
@@ -2920,8 +3004,10 @@ class EnhanceOrchestrator:
         discovery_config = DiscoveryConfig(strict_mode=self.config.strict_inputs)
         images = discover_images(input_dir, discovery_config, image_extensions, output_dir=self.output_root)
 
-        # Phase 2: Use parallel batch processing if enabled
-        image_inputs = [ImageInput(img) for img in sorted(images)]
+        # Inert scene-group bridge: preserve existing per-image behavior and order.
+        sorted_images = sorted(images)
+        scene_groups = build_scene_groups(sorted_images)
+        image_inputs = [ImageInput(img) for scene in scene_groups for img in scene.images]
 
         if self._use_parallel and len(image_inputs) >= 4:
             logger.info(f"Using parallel batch processing for {len(image_inputs)} images")
@@ -3016,7 +3102,7 @@ class EnhanceOrchestrator:
                 batch_id = batch_name[len("batch_") :]
 
         for result in results:
-            for direct_path_key in ("v2_log_path", "v2_report_path", "v2_output_path"):
+            for direct_path_key in ("v2_log_path", "v2_report_path", "v2_output_path", "segmentation_mask_path"):
                 direct_path_value = result.get(direct_path_key)
                 if isinstance(direct_path_value, str) and direct_path_value:
                     candidate = Path(direct_path_value)
@@ -3072,6 +3158,13 @@ class EnhanceOrchestrator:
                             for key, value in combined_manifest.pbr_assets.items():
                                 if key.endswith("_path") and isinstance(value, str) and value:
                                     artifact_paths.append(Path(value))
+
+                        if combined_manifest.materials_v3 and isinstance(
+                            combined_manifest.materials_v3.segmentation_metadata, dict
+                        ):
+                            mask_artifact_path = combined_manifest.materials_v3.segmentation_metadata.get("mask_artifact_path")
+                            if isinstance(mask_artifact_path, str) and mask_artifact_path:
+                                artifact_paths.append(Path(mask_artifact_path))
 
             depth_value = result.get("depth_path")
             if depth_value:

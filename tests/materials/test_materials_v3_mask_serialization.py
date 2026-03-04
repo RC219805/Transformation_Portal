@@ -2,12 +2,16 @@
 
 Tests the complete flow:
 1. Orchestrator computes material masks via Materials V3
-2. Masks serialized to NPZ file in temp directory
+2. Masks serialized to NPZ file in the requested output directory
 3. V2 runner passes explicit masks_file path to subprocess
 4. enhance_image.py loads and uses masks
 5. Temporary masks cleaned up after V2 completes
 """
 
+# pytest fixture injection uses function args that match fixture names.
+# pylint: disable=redefined-outer-name
+
+import hashlib
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -85,6 +89,46 @@ class TestMaskSerialization:
         assert np.array_equal(loaded_masks["glass"], masks["glass"])
         assert np.array_equal(loaded_masks["water"], masks["water"])
 
+    def test_serialize_orders_npz_entries_deterministically(self, temp_output_dir, mock_depth_backend, mock_da3_available):
+        """NPZ entry ordering should be stable regardless of input dict insertion order."""
+        config = EnhanceConfig(enable_v2=False, depth_device="cpu")
+        orchestrator = EnhanceOrchestrator(config, temp_output_dir)
+
+        masks = {
+            "water": np.ones((4, 4), dtype=np.float32),
+            "glass": np.zeros((4, 4), dtype=np.float32),
+        }
+
+        output_key = Path("test_image_abc123")
+        output_dir = temp_output_dir / "temp"
+        mask_path = orchestrator._serialize_material_masks(masks, output_key, output_dir)
+
+        assert mask_path is not None
+        with np.load(mask_path) as data:
+            assert data.files == ["glass", "water"]
+
+    def test_serialize_mask_npz_bytes_are_deterministic(self, temp_output_dir, mock_depth_backend, mock_da3_available):
+        """Serializing the same masks repeatedly should produce identical NPZ bytes."""
+        config = EnhanceConfig(enable_v2=False, depth_device="cpu")
+        orchestrator = EnhanceOrchestrator(config, temp_output_dir)
+
+        masks = {
+            "water": np.ones((4, 4), dtype=np.float32),
+            "glass": np.zeros((4, 4), dtype=np.float32),
+        }
+        output_key = Path("test_image_abc123")
+        output_dir = temp_output_dir / "temp"
+
+        first_path = orchestrator._serialize_material_masks(masks, output_key, output_dir)
+        assert first_path is not None
+        first_digest = hashlib.sha256(first_path.read_bytes()).hexdigest()
+
+        second_path = orchestrator._serialize_material_masks(masks, output_key, output_dir)
+        assert second_path is not None
+        second_digest = hashlib.sha256(second_path.read_bytes()).hexdigest()
+
+        assert first_digest == second_digest
+
     def test_serialize_invalid_dtype_returns_none(self, temp_output_dir, mock_depth_backend, mock_da3_available):
         """Invalid mask dtype should return None with warning."""
         config = EnhanceConfig(enable_v2=False, depth_device="cpu")
@@ -122,7 +166,7 @@ class TestMaskSerialization:
         original_stat = Path.stat
 
         def mock_stat(self, *, follow_symlinks=True):
-            if self.suffix == ".tmp":
+            if self.suffix == ".npz" and self.name.startswith(".tmp_"):
                 # Report oversized temp file (150MB)
                 result = type("obj", (object,), {"st_size": 150 * 1024 * 1024})()
                 return result
@@ -140,9 +184,9 @@ class TestMaskSerialization:
         result = orchestrator._serialize_material_masks(masks, output_key, temp_dir)
         assert result is None
 
-        # Verify no .npz or .tmp files left behind
+        # Verify no .npz or temp files left behind
         if temp_dir.exists():
-            remaining_files = list(temp_dir.glob("*.npz")) + list(temp_dir.glob("*.tmp"))
+            remaining_files = list(temp_dir.glob("*.npz")) + list(temp_dir.glob(".tmp_*"))
             assert len(remaining_files) == 0, f"Cleanup failed: {remaining_files}"
 
 
@@ -330,6 +374,51 @@ class TestCleanupBehavior:
 
         # Verify cleanup happened despite failure
         assert not mask_path.exists(), "Temporary masks should be cleaned up even on V2 failure"
+
+    def test_reuses_persisted_mask_artifact_for_v2_without_cleanup(
+        self, temp_output_dir, mock_depth_backend, mock_da3_available
+    ):
+        """V2 should reuse persisted segmentation mask artifacts instead of re-serializing temp masks."""
+        config = EnhanceConfig(
+            enable_v2=True,
+            v2_preset="default",
+            enable_materials_v3=True,
+            enable_material_segmentation=True,
+            material_segmentation_backend="stub",
+            depth_device="cpu",
+        )
+        orchestrator = EnhanceOrchestrator(config, temp_output_dir)
+
+        masks = {"glass": np.random.rand(16, 16).astype(np.float32)}
+        output_key = Path("test_image_abc123")
+        persisted_dir = temp_output_dir / "segmentation"
+        persisted_path = orchestrator._serialize_material_masks(masks, output_key, persisted_dir)
+        assert persisted_path is not None
+        assert persisted_path.exists()
+
+        with patch.object(orchestrator.v2_runner, "run", return_value={"status": "success", "runtime_s": 1.0}) as run_mock:
+            from transformation_portal.lux_depth_v3.input_manager import ImageInput
+
+            test_input_path = temp_output_dir / "test.jpg"
+            test_input_path.write_text("mock")
+            image_input = ImageInput(path=test_input_path, metadata={"sha256": "abc123"})
+
+            orchestrator._run_v2_stage(
+                image_input=image_input,
+                depth_path=None,
+                output_key=output_key,
+                v2_log_path=temp_output_dir / "logs" / "test.log",
+                manifest_path=temp_output_dir / "manifests" / "test.json",
+                skip_depth=False,
+                materials_v3_result={
+                    "material_masks": masks,
+                    "materials_v3_metadata": {"segmentation_metadata": {"mask_artifact_path": str(persisted_path)}},
+                },
+            )
+
+        assert run_mock.call_count == 1
+        assert run_mock.call_args.kwargs["masks_file"] == persisted_path
+        assert persisted_path.exists(), "Persisted segmentation artifacts should not be removed during V2 cleanup"
 
 
 class TestBackwardCompatibility:
