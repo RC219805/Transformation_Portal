@@ -1,0 +1,142 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from unittest.mock import patch
+
+import numpy as np
+import pytest
+
+from transformation_portal.lux_depth_v3.reconstruction_runner import run_scene_reconstruction
+from transformation_portal.lux_depth_v3.scene_context import CameraProvenance, CameraWithProvenance, SceneContext
+from transformation_portal.lux_depth_v3.scene_groups import SceneGroup, compute_scene_id
+from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams, GaussianSplat, Scene3D
+
+
+def _camera_with_provenance(tx: float) -> CameraWithProvenance:
+    intrinsics = np.array(
+        [[1000.0, 0.0, 32.0], [0.0, 1000.0, 32.0], [0.0, 0.0, 1.0]],
+        dtype=np.float32,
+    )
+    extrinsics = np.eye(4, dtype=np.float32)
+    extrinsics[0, 3] = tx
+    return CameraWithProvenance(
+        params=CameraParams(
+            intrinsics=intrinsics,
+            extrinsics=extrinsics,
+            width=64,
+            height=64,
+        ),
+        provenance=CameraProvenance(
+            source="sidecar",
+            confidence="high",
+            file="/tmp/scene_cameras.json",
+        ),
+    )
+
+
+def _scene_from_cameras(cameras: list[CameraParams]) -> Scene3D:
+    splats = GaussianSplat(
+        positions=np.array([[2.0, 0.0, 0.0], [6.0, 0.0, 0.0]], dtype=np.float32),
+        colors=np.full((2, 3), 0.5, dtype=np.float32),
+        scales=np.ones((2, 3), dtype=np.float32),
+        rotations=np.tile(np.array([[1.0, 0.0, 0.0, 0.0]], dtype=np.float32), (2, 1)),
+        opacities=np.full((2, 1), 0.5, dtype=np.float32),
+        metadata={},
+    )
+    return Scene3D(
+        splats=splats,
+        cameras=cameras,
+        rmse=0.01,
+        iteration=12,
+        convergence="converged",
+        metadata={},
+    )
+
+
+def _context_with_cameras(tmp_path: Path, cameras: tuple[CameraWithProvenance, ...]) -> SceneContext:
+    dataset_root = tmp_path / "input"
+    first = dataset_root / "scene_a" / "view_1.jpg"
+    second = dataset_root / "scene_a" / "view_2.jpg"
+    second.parent.mkdir(parents=True, exist_ok=True)
+    first.write_bytes(b"a")
+    second.write_bytes(b"b")
+    images = (first, second)
+    scene = SceneGroup(scene_id=compute_scene_id(images, dataset_root), images=images)
+    return SceneContext.build(
+        scene=scene,
+        dataset_root=dataset_root,
+        cameras=cameras,
+    )
+
+
+def test_run_scene_reconstruction_normalizes_scale_and_writes_metadata(tmp_path: Path):
+    context = _context_with_cameras(
+        tmp_path,
+        cameras=(
+            _camera_with_provenance(2.0),
+            _camera_with_provenance(6.0),
+        ),
+    )
+    reconstructed_scene = _scene_from_cameras(
+        cameras=[_camera_with_provenance(2.0).params, _camera_with_provenance(6.0).params]
+    )
+
+    class FakeSceneBuilder:
+        def __init__(self, tier: str):
+            self.tier = tier
+
+        def build_from_images(self, **kwargs):  # noqa: ANN003
+            _ = kwargs
+            return reconstructed_scene
+
+    with patch("transformation_portal.spatial_ai.reconstruction.scene_builder.SceneBuilder", FakeSceneBuilder):
+        report_path = run_scene_reconstruction(
+            context=context,
+            output_dir=tmp_path / "out",
+            iterations=123,
+            tier="apex_research",
+        )
+
+    payload = json.loads(report_path.read_text(encoding="utf-8"))
+    assert payload["scene_scale"]["method"] == "median_baseline"
+    assert pytest.approx(payload["scene_scale"]["scale_factor"], rel=1e-6) == 0.25
+    assert pytest.approx(payload["scene_scale"]["baseline_before"], rel=1e-6) == 4.0
+    assert pytest.approx(payload["scene_scale"]["baseline_after"], rel=1e-6) == 1.0
+    assert 0.1 < payload["scene_scale"]["baseline_after"] < 10.0
+
+    assert pytest.approx(float(reconstructed_scene.splats.positions[0, 0]), rel=1e-6) == 0.5
+    assert pytest.approx(float(reconstructed_scene.cameras[0].extrinsics[0, 3]), rel=1e-6) == 0.5
+    assert pytest.approx(float(reconstructed_scene.cameras[1].extrinsics[0, 3]), rel=1e-6) == 1.5
+
+
+def test_run_scene_reconstruction_raises_on_degenerate_camera_baseline(tmp_path: Path):
+    context = _context_with_cameras(
+        tmp_path,
+        cameras=(
+            _camera_with_provenance(1.0),
+            _camera_with_provenance(1.0),
+        ),
+    )
+    reconstructed_scene = _scene_from_cameras(
+        cameras=[_camera_with_provenance(1.0).params, _camera_with_provenance(1.0).params]
+    )
+
+    class FakeSceneBuilder:
+        def __init__(self, tier: str):
+            self.tier = tier
+
+        def build_from_images(self, **kwargs):  # noqa: ANN003
+            _ = kwargs
+            return reconstructed_scene
+
+    with (
+        patch("transformation_portal.spatial_ai.reconstruction.scene_builder.SceneBuilder", FakeSceneBuilder),
+        pytest.raises(ValueError, match="median camera baseline"),
+    ):
+        run_scene_reconstruction(
+            context=context,
+            output_dir=tmp_path / "out",
+            iterations=50,
+            tier="apex_research",
+        )
