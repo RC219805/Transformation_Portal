@@ -129,14 +129,18 @@ def test_run_scene_reconstruction_normalizes_scale_and_writes_metadata(tmp_path:
     assert pytest.approx(payload["scene_scale"]["baseline_before"], rel=1e-6) == 4.0
     assert pytest.approx(payload["scene_scale"]["baseline_after"], rel=1e-6) == 1.0
     assert 0.1 < payload["scene_scale"]["baseline_after"] < 10.0
-    assert diagnostics_payload["schema"] == "tp.scene_diagnostics.v1"
-    assert diagnostics_payload["inputs"]["image_count"] == 2
-    assert diagnostics_payload["inputs"]["grouping_mode"] == "parent_dir"
-    assert diagnostics_payload["cameras"]["count"] == 2
-    assert pytest.approx(diagnostics_payload["cameras"]["baseline_median"], rel=1e-6) == 1.0
-    assert diagnostics_payload["geometry"]["point_count"] == 2
-    assert diagnostics_payload["scale"]["method"] == "median_baseline"
-    assert pytest.approx(diagnostics_payload["scale"]["scale_factor"], rel=1e-6) == 0.25
+    assert diagnostics_payload["schema"] == "tp.reconstruction_diagnostics.v1"
+    assert diagnostics_payload["scene_id"] == context.scene_id
+    assert diagnostics_payload["scene_fingerprint"] == "f" * 64
+    assert diagnostics_payload["camera_count"] == 2
+    assert diagnostics_payload["total_points"] == 2
+    assert pytest.approx(diagnostics_payload["global_rmse"], rel=1e-6) == 0.01
+    assert len(diagnostics_payload["cameras"]) == 2
+    first_camera = diagnostics_payload["cameras"][0]
+    assert "reprojection_p50" in first_camera
+    assert "reprojection_p95" in first_camera
+    assert "reprojection_p99" in first_camera
+    assert first_camera["points_observed"] >= 0
 
     assert pytest.approx(float(reconstructed_scene.splats.positions[0, 0]), rel=1e-6) == 0.5
     assert pytest.approx(float(reconstructed_scene.cameras[0].extrinsics[0, 3]), rel=1e-6) == 0.5

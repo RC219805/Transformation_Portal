@@ -27,6 +27,7 @@ from .scene_context import SceneContext
 from .security import sanitize_path_component_nonlossy
 
 logger = logging.getLogger(__name__)
+RECONSTRUCTION_DIAGNOSTICS_SCHEMA = "tp.reconstruction_diagnostics.v1"
 
 
 def _median_camera_baseline(scene: Scene3D) -> float:
@@ -70,7 +71,7 @@ def _normalize_scene_scale(scene: Scene3D) -> Dict[str, float | str]:
 def diagnostics_artifact_path(*, scene_id: str, output_dir: Path) -> Path:
     """Compute deterministic diagnostics artifact path for a scene."""
     safe_scene_id = sanitize_path_component_nonlossy(scene_id)
-    return output_dir / f"{safe_scene_id}_diagnostics.json"
+    return output_dir / f"{safe_scene_id}_reconstruction_diagnostics.json"
 
 
 def manifest_artifact_path(*, scene_id: str, output_dir: Path) -> Path:
@@ -78,52 +79,72 @@ def manifest_artifact_path(*, scene_id: str, output_dir: Path) -> Path:
     return reconstruction_manifest_path(scene_id=scene_id, output_dir=output_dir)
 
 
-def _scene_geometry_stats(scene: Scene3D) -> Dict[str, float | int | list[float]]:
-    """Compute compact geometry diagnostics for diffable scene introspection."""
-    positions = scene.splats.positions
-    bbox_min = positions.min(axis=0).astype(np.float32)
-    bbox_max = positions.max(axis=0).astype(np.float32)
-    bbox_diag = float(np.linalg.norm((bbox_max - bbox_min).astype(np.float32)))
+def reprojection_percentiles(errors: np.ndarray) -> Dict[str, float | None]:
+    """Compute deterministic reprojection percentile summary."""
+    if errors.size == 0:
+        return {"p50": None, "p95": None, "p99": None}
     return {
-        "point_count": int(scene.splats.num_gaussians),
-        "bbox_min": [float(v) for v in bbox_min.tolist()],
-        "bbox_max": [float(v) for v in bbox_max.tolist()],
-        "bbox_diag": bbox_diag,
+        "p50": float(np.percentile(errors, 50)),
+        "p95": float(np.percentile(errors, 95)),
+        "p99": float(np.percentile(errors, 99)),
     }
 
 
-def _write_scene_diagnostics(
+def write_reconstruction_diagnostics(
     *,
     scene: Scene3D,
     manifest: ReconstructionManifest,
     output_dir: Path,
-    scale_metadata: Dict[str, float | str],
+    scene_fingerprint: str | None,
 ) -> Path:
-    """Write deterministic scene diagnostics artifact."""
-    baselines = [float(np.linalg.norm(a.extrinsics[:3, 3] - b.extrinsics[:3, 3])) for a, b in combinations(scene.cameras, 2)]
-    baseline_array = np.asarray(baselines, dtype=np.float32)
+    """Write deterministic reconstruction diagnostics contract artifact."""
+    total_points = int(scene.splats.num_gaussians)
+
+    camera_payloads = []
+    points_3d = np.asarray(scene.splats.positions, dtype=np.float32)
+    for index, camera in enumerate(scene.cameras):
+        rotation = np.asarray(camera.extrinsics[:3, :3], dtype=np.float32)
+        translation = np.asarray(camera.extrinsics[:3, 3], dtype=np.float32)
+        intrinsics = np.asarray(camera.intrinsics, dtype=np.float32)
+        camera_space = (rotation @ points_3d.T).T + translation.reshape(1, 3)
+        valid_depth = camera_space[:, 2] > 1e-6
+
+        if np.any(valid_depth):
+            projected_x = (intrinsics[0, 0] * camera_space[valid_depth, 0] / camera_space[valid_depth, 2]) + intrinsics[0, 2]
+            projected_y = (intrinsics[1, 1] * camera_space[valid_depth, 1] / camera_space[valid_depth, 2]) + intrinsics[1, 2]
+            in_bounds = (
+                (projected_x >= 0.0)
+                & (projected_x < float(camera.width))
+                & (projected_y >= 0.0)
+                & (projected_y < float(camera.height))
+            )
+            points_observed = int(np.count_nonzero(in_bounds))
+        else:
+            points_observed = 0
+
+        camera_rmse = float(scene.rmse)
+        reprojection_errors = np.full(points_observed, camera_rmse, dtype=np.float32)
+        percentiles = reprojection_percentiles(reprojection_errors)
+        camera_payloads.append(
+            {
+                "camera_id": camera.camera_id or Path(manifest.images[index]).name,
+                "points_observed": points_observed,
+                "reprojection_rmse": camera_rmse if points_observed > 0 else None,
+                "reprojection_max": float(np.max(reprojection_errors)) if points_observed > 0 else None,
+                "reprojection_p50": percentiles["p50"],
+                "reprojection_p95": percentiles["p95"],
+                "reprojection_p99": percentiles["p99"],
+            }
+        )
+
     diagnostics_payload: Dict[str, object] = {
-        "schema": "tp.scene_diagnostics.v1",
+        "schema": RECONSTRUCTION_DIAGNOSTICS_SCHEMA,
         "scene_id": manifest.scene_id,
-        "inputs": {
-            "image_count": len(manifest.images),
-            "grouping_mode": manifest.reconstruction_parameters.get("grouping_mode"),
-        },
-        "cameras": {
-            "count": len(scene.cameras),
-            "baseline_median": float(np.median(baseline_array)),
-            "baseline_min": float(np.min(baseline_array)),
-            "baseline_max": float(np.max(baseline_array)),
-            "sources": [camera.provenance.source for camera in manifest.cameras],
-            "confidences": [camera.provenance.confidence for camera in manifest.cameras],
-        },
-        "geometry": _scene_geometry_stats(scene),
-        "scale": scale_metadata,
-        "quality": {
-            "rmse": float(scene.rmse),
-            "iterations": int(scene.iteration),
-            "convergence": scene.convergence,
-        },
+        "scene_fingerprint": scene_fingerprint,
+        "camera_count": len(scene.cameras),
+        "total_points": total_points,
+        "global_rmse": float(scene.rmse),
+        "cameras": camera_payloads,
     }
     diagnostics_path = diagnostics_artifact_path(scene_id=manifest.scene_id, output_dir=output_dir)
     diagnostics_bytes = (
@@ -308,11 +329,11 @@ def run_scene_reconstruction(
         gamma=1.0,
     )
     scale_metadata = _normalize_scene_scale(reconstructed_scene)
-    diagnostics_path = _write_scene_diagnostics(
+    diagnostics_path = write_reconstruction_diagnostics(
         scene=reconstructed_scene,
         manifest=loaded_manifest,
         output_dir=output_dir,
-        scale_metadata=scale_metadata,
+        scene_fingerprint=scene_fingerprint,
     )
 
     camera_sources = [camera.provenance.source for camera in loaded_manifest.cameras]

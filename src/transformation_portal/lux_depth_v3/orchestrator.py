@@ -444,6 +444,8 @@ def _infer_artifact_type(relative_path: str) -> str:
             return "reconstruction_report"
         if name.endswith("_preflight.json"):
             return "reconstruction_preflight_json"
+        if name.endswith("_reconstruction_diagnostics.json"):
+            return "reconstruction_diagnostics"
         if name.endswith("_diagnostics.json"):
             return "reconstruction_diagnostics_json"
         return "reconstruction_aux"

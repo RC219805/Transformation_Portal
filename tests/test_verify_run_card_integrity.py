@@ -379,6 +379,103 @@ def test_verify_run_card_integrity_rejects_reconstruction_scene_manifest_hash_dr
     assert any("Reconstruction scene manifest validation failed" in error for error in errors)
 
 
+def test_verify_run_card_integrity_validates_reconstruction_diagnostics(tmp_path: Path):
+    module = _load_script_module("verify_run_card_integrity_script_diagnostics", "scripts/verify_run_card_integrity.py")
+    output_root = tmp_path / "output"
+    run_card_path = output_root / "run_card_diagnostics.json"
+    reconstruction_dir = output_root / "reconstruction"
+    reconstruction_dir.mkdir(parents=True, exist_ok=True)
+
+    diagnostics_path = reconstruction_dir / "scene_a_reconstruction_diagnostics.json"
+    diagnostics_payload = {
+        "schema": "tp.reconstruction_diagnostics.v1",
+        "scene_id": "scene_a",
+        "scene_fingerprint": "f" * 64,
+        "camera_count": 2,
+        "total_points": 12,
+        "global_rmse": 0.25,
+        "cameras": [
+            {
+                "camera_id": "cam_00",
+                "points_observed": 6,
+                "reprojection_rmse": 0.25,
+                "reprojection_max": 0.25,
+                "reprojection_p50": 0.25,
+                "reprojection_p95": 0.25,
+                "reprojection_p99": 0.25,
+            },
+            {
+                "camera_id": "cam_01",
+                "points_observed": 6,
+                "reprojection_rmse": 0.25,
+                "reprojection_max": 0.25,
+                "reprojection_p50": 0.25,
+                "reprojection_p95": 0.25,
+                "reprojection_p99": 0.25,
+            },
+        ],
+    }
+    diagnostics_path.write_text(json.dumps(diagnostics_payload, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+
+    payload = _valid_run_card_payload(module)
+    artifact_index = sorted(
+        [
+            _artifact_entry(output_root=output_root, file_path=diagnostics_path, artifact_type="reconstruction_diagnostics"),
+        ],
+        key=lambda entry: entry["relative_path"],
+    )
+    payload["artifact_index"] = artifact_index
+    payload["artifact_merkle_root"] = module.compute_artifact_merkle_root(artifact_index)
+    _write_json(run_card_path, payload)
+
+    errors = module.verify_run_card_integrity(run_card_path)
+    assert errors == []
+
+
+def test_verify_run_card_integrity_rejects_reconstruction_diagnostics_missing_percentiles(tmp_path: Path):
+    module = _load_script_module(
+        "verify_run_card_integrity_script_diagnostics_missing", "scripts/verify_run_card_integrity.py"
+    )
+    output_root = tmp_path / "output"
+    run_card_path = output_root / "run_card_diagnostics_invalid.json"
+    reconstruction_dir = output_root / "reconstruction"
+    reconstruction_dir.mkdir(parents=True, exist_ok=True)
+
+    diagnostics_path = reconstruction_dir / "scene_a_reconstruction_diagnostics.json"
+    diagnostics_payload = {
+        "schema": "tp.reconstruction_diagnostics.v1",
+        "scene_id": "scene_a",
+        "scene_fingerprint": "f" * 64,
+        "camera_count": 1,
+        "total_points": 10,
+        "global_rmse": 0.2,
+        "cameras": [
+            {
+                "camera_id": "cam_00",
+                "points_observed": 10,
+                "reprojection_rmse": 0.2,
+                "reprojection_max": 0.2,
+                "reprojection_p50": 0.2,
+            }
+        ],
+    }
+    diagnostics_path.write_text(json.dumps(diagnostics_payload, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+
+    payload = _valid_run_card_payload(module)
+    artifact_index = sorted(
+        [
+            _artifact_entry(output_root=output_root, file_path=diagnostics_path, artifact_type="reconstruction_diagnostics"),
+        ],
+        key=lambda entry: entry["relative_path"],
+    )
+    payload["artifact_index"] = artifact_index
+    payload["artifact_merkle_root"] = module.compute_artifact_merkle_root(artifact_index)
+    _write_json(run_card_path, payload)
+
+    errors = module.verify_run_card_integrity(run_card_path)
+    assert any("missing reprojection_p95" in error or "missing reprojection_p99" in error for error in errors)
+
+
 pytestmark = [
     pytest.mark.unit,
     pytest.mark.regression,

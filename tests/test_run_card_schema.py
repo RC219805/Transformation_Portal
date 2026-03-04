@@ -322,7 +322,7 @@ def test_collect_run_card_artifacts_includes_reconstruction_diagnostics(tmp_path
     v2_dir.mkdir(parents=True, exist_ok=True)
     reconstruction_dir.mkdir(parents=True, exist_ok=True)
 
-    diagnostics_artifact = reconstruction_dir / "abc123_diagnostics.json"
+    diagnostics_artifact = reconstruction_dir / "abc123_reconstruction_diagnostics.json"
     diagnostics_artifact.write_text("{}", encoding="utf-8")
 
     orch = object.__new__(EnhanceOrchestrator)
@@ -338,8 +338,11 @@ def test_collect_run_card_artifacts_includes_reconstruction_diagnostics(tmp_path
     artifact_index = _build_artifact_index(output_root, artifact_paths)
     artifacts_by_path = {entry["relative_path"]: entry for entry in artifact_index}
 
-    assert "reconstruction/abc123_diagnostics.json" in artifacts_by_path
-    assert artifacts_by_path["reconstruction/abc123_diagnostics.json"]["artifact_type"] == "reconstruction_diagnostics_json"
+    assert "reconstruction/abc123_reconstruction_diagnostics.json" in artifacts_by_path
+    assert (
+        artifacts_by_path["reconstruction/abc123_reconstruction_diagnostics.json"]["artifact_type"]
+        == "reconstruction_diagnostics"
+    )
 
 
 def test_collect_run_card_artifacts_includes_reconstruction_preflight(tmp_path: Path):
