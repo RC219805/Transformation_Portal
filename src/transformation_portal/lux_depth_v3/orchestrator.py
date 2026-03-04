@@ -91,6 +91,10 @@ class ApexStrictGateError(RuntimeError):
         super().__init__(f"[{code}] {message}")
 
 
+class _MaskSerializationRejected(RuntimeError):
+    """Internal signal for non-fatal mask serialization rejection."""
+
+
 def _log_dependency_status() -> dict:
     """Log startup dependency availability report.
 
@@ -1889,16 +1893,15 @@ class EnhanceOrchestrator:
             },
         )
 
-    def _serialize_material_masks(self, masks: Dict[str, np.ndarray], output_key: Path, temp_dir: Path) -> Optional[Path]:
+    def _serialize_material_masks(self, masks: Dict[str, np.ndarray], output_key: Path, output_dir: Path) -> Optional[Path]:
         """Serialize material masks to compressed NPZ file.
 
-        Masks are saved to temporary directory for V2 subprocess consumption.
         File format: {output_key.stem}_materials_v3_masks.npz
 
         Args:
             masks: Dictionary mapping material names to binary masks
             output_key: Output key for artifact naming
-            temp_dir: Temporary directory for mask files
+            output_dir: Directory where serialized mask files are written
 
         Returns:
             Path to serialized .npz file, or None on failure
@@ -1911,15 +1914,17 @@ class EnhanceOrchestrator:
             return None
 
         try:
-            # Ensure temp directory exists
-            temp_dir.mkdir(parents=True, exist_ok=True)
+            # Ensure output directory exists
+            output_dir.mkdir(parents=True, exist_ok=True)
 
             # Build mask file path
             mask_filename = f"{output_key.stem}_materials_v3_masks.npz"
-            mask_path = temp_dir / mask_filename
+            mask_path = output_dir / mask_filename
 
             # Validate mask data before serialization
-            for mat_name, mask in masks.items():
+            ordered_masks: Dict[str, np.ndarray] = {}
+            for mat_name in sorted(masks):
+                mask = masks[mat_name]
                 if not isinstance(mask, np.ndarray):
                     logger.warning(f"Invalid mask type for {mat_name}: {type(mask)}, skipping serialization")
                     return None
@@ -1929,39 +1934,32 @@ class EnhanceOrchestrator:
                 if mask.ndim != 2:
                     logger.warning(f"Invalid mask shape for {mat_name}: {mask.shape} (expected 2D), skipping")
                     return None
+                ordered_masks[mat_name] = mask
 
-            # Serialize to compressed NPZ with atomic write pattern
-            # Use temp + fsync + rename to ensure atomicity (matches ArtifactStore L1 invariant)
-            tmp_path = mask_path.with_suffix(".npz.tmp")
+            with atomic_temp_file(mask_path, suffix=".npz", create_file=False) as temp_path:
+                with open(temp_path, "wb") as f:
+                    np.savez_compressed(f, **ordered_masks)
+                    f.flush()
+                    os.fsync(f.fileno())
 
-            # Write to temporary file
-            with open(tmp_path, "wb") as f:
-                np.savez_compressed(f, **masks)
-                f.flush()
-                os.fsync(f.fileno())
-
-            # Check size before rename
-            file_size_mb = tmp_path.stat().st_size / (1024 * 1024)
-            if file_size_mb > 100:
-                logger.warning(
-                    f"Mask file unexpectedly large: {file_size_mb:.1f}MB. " f"Rejecting for safety (size limit: 100MB)"
-                )
-                tmp_path.unlink()  # Clean up oversized temp file
-                return None
-
-            # Atomic rename (guarantees no partial reads)
-            os.replace(tmp_path, mask_path)
+                # Check size before atomic rename
+                file_size_mb = temp_path.stat().st_size / (1024 * 1024)
+                if file_size_mb > 100:
+                    logger.warning(
+                        f"Mask file unexpectedly large: {file_size_mb:.1f}MB. " f"Rejecting for safety (size limit: 100MB)"
+                    )
+                    raise _MaskSerializationRejected("mask_file_too_large")
 
             # Verify final file exists
             if not mask_path.exists():
                 logger.warning(f"Mask serialization failed: file not created at {mask_path}")
                 return None
 
-            logger.info(
-                f"Serialized {len(masks)} material masks to {mask_path.name} ({file_size_mb:.2f}MB) " f"for V2 subprocess"
-            )
+            logger.info(f"Serialized {len(ordered_masks)} material masks to {mask_path.name} ({file_size_mb:.2f}MB)")
             return mask_path
 
+        except _MaskSerializationRejected:
+            return None
         except Exception as e:
             logger.warning(f"Failed to serialize material masks: {e}", exc_info=True)
             return None

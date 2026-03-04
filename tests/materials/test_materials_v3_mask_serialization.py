@@ -2,7 +2,7 @@
 
 Tests the complete flow:
 1. Orchestrator computes material masks via Materials V3
-2. Masks serialized to NPZ file in temp directory
+2. Masks serialized to NPZ file in the requested output directory
 3. V2 runner passes explicit masks_file path to subprocess
 4. enhance_image.py loads and uses masks
 5. Temporary masks cleaned up after V2 completes
@@ -85,6 +85,24 @@ class TestMaskSerialization:
         assert np.array_equal(loaded_masks["glass"], masks["glass"])
         assert np.array_equal(loaded_masks["water"], masks["water"])
 
+    def test_serialize_orders_npz_entries_deterministically(self, temp_output_dir, mock_depth_backend, mock_da3_available):
+        """NPZ entry ordering should be stable regardless of input dict insertion order."""
+        config = EnhanceConfig(enable_v2=False, depth_device="cpu")
+        orchestrator = EnhanceOrchestrator(config, temp_output_dir)
+
+        masks = {
+            "water": np.ones((4, 4), dtype=np.float32),
+            "glass": np.zeros((4, 4), dtype=np.float32),
+        }
+
+        output_key = Path("test_image_abc123")
+        output_dir = temp_output_dir / "temp"
+        mask_path = orchestrator._serialize_material_masks(masks, output_key, output_dir)
+
+        assert mask_path is not None
+        with np.load(mask_path) as data:
+            assert data.files == ["glass", "water"]
+
     def test_serialize_invalid_dtype_returns_none(self, temp_output_dir, mock_depth_backend, mock_da3_available):
         """Invalid mask dtype should return None with warning."""
         config = EnhanceConfig(enable_v2=False, depth_device="cpu")
@@ -122,7 +140,7 @@ class TestMaskSerialization:
         original_stat = Path.stat
 
         def mock_stat(self, *, follow_symlinks=True):
-            if self.suffix == ".tmp":
+            if self.suffix == ".npz" and self.name.startswith(".tmp_"):
                 # Report oversized temp file (150MB)
                 result = type("obj", (object,), {"st_size": 150 * 1024 * 1024})()
                 return result
@@ -140,9 +158,9 @@ class TestMaskSerialization:
         result = orchestrator._serialize_material_masks(masks, output_key, temp_dir)
         assert result is None
 
-        # Verify no .npz or .tmp files left behind
+        # Verify no .npz or temp files left behind
         if temp_dir.exists():
-            remaining_files = list(temp_dir.glob("*.npz")) + list(temp_dir.glob("*.tmp"))
+            remaining_files = list(temp_dir.glob("*.npz")) + list(temp_dir.glob(".tmp_*"))
             assert len(remaining_files) == 0, f"Cleanup failed: {remaining_files}"
 
 
