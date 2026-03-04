@@ -11,22 +11,11 @@ import numpy as np
 
 from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams
 
-from .scene_groups import SceneGroup
+from .scene_groups import SceneGroup, _normalize_relative_path
 
 logger = logging.getLogger(__name__)
 
 SCENE_CAMERA_SCHEMA = "tp.scene_cameras.v1"
-
-
-def _normalize_relative_path(path: Path, dataset_root: Path) -> str:
-    """Normalize path to lowercase POSIX string relative to dataset root."""
-    root_resolved = dataset_root.resolve()
-    path_resolved = path.resolve()
-    try:
-        rel = path_resolved.relative_to(root_resolved)
-    except ValueError:
-        rel = path_resolved
-    return rel.as_posix().lower()
 
 
 def _normalize_sidecar_image(path_str: str) -> str:
@@ -113,10 +102,10 @@ def load_scene_cameras(
     normalized_entry_images = [_normalize_sidecar_image(str(p)) for p in entry_images]
     if normalized_entry_images != normalized_scene_images:
         logger.warning(
-            "Camera sidecar image ordering mismatch for scene %s (expected=%s, got=%s)",
+            "Camera sidecar image ordering mismatch for scene %s: sidecar_order=%s, required_order=%s",
             scene.scene_id,
-            normalized_scene_images,
             normalized_entry_images,
+            normalized_scene_images,
         )
         return None
 

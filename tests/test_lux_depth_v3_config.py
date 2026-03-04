@@ -84,6 +84,8 @@ class TestEnhanceConfig:
         assert config.cameras_sidecar_path is None
         assert hasattr(config, "reconstruction_iterations")
         assert config.reconstruction_iterations == 1000
+        assert hasattr(config, "reconstruction_tier")
+        assert config.reconstruction_tier == "apex_research"
 
     @pytest.mark.parametrize("mode", ["fail", "skip", "v2-auto"])
     def test_enhance_config_accepts_valid_depth_fallback(self, mode):

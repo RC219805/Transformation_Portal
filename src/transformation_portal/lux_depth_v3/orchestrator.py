@@ -49,6 +49,7 @@ from ..depth.backends.protocol import LicenseRestrictionError
 # Backend registry for depth estimation
 from ..depth.backends.registry import DepthBackendRegistry
 from ..ingest.canonical_json import dump_json, dumps_json
+from ..spatial_ai.reconstruction.contracts import LicenseRestrictionError as ReconstructionLicenseRestrictionError
 from .batch_stats import compute_batch_runtime_stats, detect_runtime_outliers
 from .camera_metadata_loader import load_scene_cameras
 
@@ -3133,6 +3134,7 @@ class EnhanceOrchestrator:
         """Run gated scene-level reconstruction for eligible grouped scenes."""
         sidecar_value = getattr(self.config, "cameras_sidecar_path", None)
         sidecar_path = Path(sidecar_value) if isinstance(sidecar_value, str) and sidecar_value else None
+        reconstruction_tier = str(getattr(self.config, "reconstruction_tier", "apex_research"))
 
         result_by_path: Dict[str, Dict[str, Any]] = {}
         for result in results:
@@ -3159,6 +3161,17 @@ class EnhanceOrchestrator:
                 logger.info("Skipping reconstruction for scene %s: cameras unavailable", scene.scene_id)
                 continue
 
+            if not bool(getattr(self.config, "non_commercial_ok", False)):
+                raise LicenseRestrictionError(
+                    "Scene reconstruction requires non_commercial_ok=True due to "
+                    "Inria 3D Gaussian Splatting non-commercial license terms."
+                )
+            if not bool(getattr(self.config, "accept_research_tools_license", False)):
+                raise LicenseRestrictionError(
+                    "Scene reconstruction requires accept_research_tools_license=True "
+                    "to acknowledge research-only tool licensing constraints."
+                )
+
             try:
                 report_path = self.run_scene_reconstruction_fn(
                     scene=scene,
@@ -3166,8 +3179,10 @@ class EnhanceOrchestrator:
                     dataset_root=dataset_root,
                     output_dir=self.reconstruction_dir,
                     iterations=int(getattr(self.config, "reconstruction_iterations", 1000)),
-                    tier=str(getattr(self.config, "reconstruction_tier", "apex_research")),
+                    tier=reconstruction_tier,
                 )
+            except (LicenseRestrictionError, ReconstructionLicenseRestrictionError):
+                raise
             except Exception as exc:
                 logger.warning("Scene reconstruction failed for %s: %s", scene.scene_id, exc)
                 continue
