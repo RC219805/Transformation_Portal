@@ -1,0 +1,37 @@
+# APEX Policy Schema Definitions (Compatibility Index)
+# Version: 1.1.0
+# Last Updated: 2026-03-04
+
+# This compatibility index preserves historical references to
+# docs/apex/policy/apex_policy_schema.yaml while delegating
+# actual schema definitions to single-document files in schemas/.
+
+schema_index:
+  schema_version: "1.1.0"
+  split_schema_dir: "docs/apex/policy/schemas"
+  schemas:
+    performance_budgets:
+      file: "schemas/performance_budgets_schema.yaml"
+      root: "schema_performance_budgets"
+    enforcement_policy:
+      file: "schemas/enforcement_policy_schema.yaml"
+      root: "schema_enforcement_policy"
+    governance_rules:
+      file: "schemas/governance_rules_schema.yaml"
+      root: "schema_governance_rules"
+    workload_suites:
+      file: "schemas/workload_suites_schema.yaml"
+      root: "schema_workload_suites"
+
+# Backward-compatible top-level schema keys.
+schema_performance_budgets:
+  $ref: "./schemas/performance_budgets_schema.yaml#/schema_performance_budgets"
+
+schema_enforcement_policy:
+  $ref: "./schemas/enforcement_policy_schema.yaml#/schema_enforcement_policy"
+
+schema_governance_rules:
+  $ref: "./schemas/governance_rules_schema.yaml#/schema_governance_rules"
+
+schema_workload_suites:
+  $ref: "./schemas/workload_suites_schema.yaml#/schema_workload_suites"
