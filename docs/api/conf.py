@@ -75,6 +75,13 @@ intersphinx_mapping = {
     "PIL": ("https://pillow.readthedocs.io/en/stable", None),
 }
 
+if os.environ.get("SPHINX_OFFLINE", "").strip() == "1":
+    # Local/offline docs builds cannot fetch
+    # inventory URLs; disable intersphinx
+    # to keep `-W` checks actionable.
+    extensions = [ext for ext in extensions if ext != "sphinx.ext.intersphinx"]
+    intersphinx_mapping = {}
+
 # Suppress warnings for missing references in external packages
 nitpicky = False
 
@@ -84,6 +91,7 @@ autodoc_mock_imports = [
     "lpips",
     "coremltools",
     "torch",
+    "torchvision",
     "transformers",
     "diffusers",
 ]

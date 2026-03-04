@@ -537,24 +537,19 @@ class DA3InferenceEngine:
         """Run depth inference on an image (main API).
 
         Accepts multiple input types for flexibility:
-        - np.ndarray: Direct numpy array
-          (HxWx3/HxWx4/HxW,
-          uint8/uint16/float32/float64)
-        - PIL.Image.Image: PIL Image object
-          (any mode)
-        - Path/str: File path
-          (delegates to infer_from_path)
-        - ImageInput: Path wrapper from
-          input_manager
+        - np.ndarray: Direct numpy array (HxWx3/HxWx4/HxW, uint8/uint16/float32/float64)
+        - PIL.Image.Image: PIL image object (any mode)
+        - Path/str: File path (delegates to :meth:`infer_from_path`)
+        - ImageInput: Path wrapper from input_manager
 
         Args:
-            image: Input image (numpy array, PIL Image, path, or ImageInput)
+            image: Input image (numpy array, PIL image, path, or ImageInput).
 
         Returns:
-            DepthResult with depth map and metadata
+            DepthResult with depth map and metadata.
 
         Raises:
-            TypeError: If image type is not supported
+            TypeError: If image type is not supported.
         """
         # Handle ImageInput (path wrapper)
         try:
@@ -579,22 +574,18 @@ class DA3InferenceEngine:
         """Run depth inference on an image.
 
         Accepts multiple input types:
-        - np.ndarray: Direct numpy array
-          (HxWx3/HxWx4/HxW,
-          uint8/uint16/float32/float64)
-        - PIL.Image.Image: PIL Image object
-          (any mode)
+        - np.ndarray: Direct numpy array (HxWx3/HxWx4/HxW, uint8/uint16/float32/float64)
+        - PIL.Image.Image: PIL image object (any mode)
 
         Args:
-            image: Input image as numpy array
-                or PIL Image
+            image: Input image as numpy array or PIL image.
 
         Returns:
-            DepthResult with depth map and metadata
+            DepthResult with depth map and metadata.
 
         Raises:
-            TypeError: If image type is not supported
-            ValueError: If array shape/dtype is invalid
+            TypeError: If image type is not supported.
+            ValueError: If array shape or dtype is invalid.
         """
         # Lazy load model on first inference
         if not self._model_loaded:

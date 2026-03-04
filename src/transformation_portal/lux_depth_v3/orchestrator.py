@@ -3983,12 +3983,19 @@ class EnhanceOrchestrator:
                     ),
                     "error": str(e),
                 }
-                _abm = getattr(
-                    self,
-                    "_active_backend_metadata",
-                    self._backend_metadata,
+                _abm = (
+                    getattr(
+                        self,
+                        "_active_backend_metadata",
+                        None,
+                    )
+                    or self._backend_metadata
                 )
-                error_payload["backend"] = _abm.resolved_backend
+                error_payload["backend"] = getattr(
+                    _abm,
+                    "resolved_backend",
+                    None,
+                )
                 error_payload["attempts"] = list(
                     getattr(
                         self,
@@ -4086,12 +4093,19 @@ class EnhanceOrchestrator:
                         ),
                         "error": str(e),
                     }
-                    _abm = getattr(
-                        self,
-                        "_active_backend_metadata",
-                        self._backend_metadata,
+                    _abm = (
+                        getattr(
+                            self,
+                            "_active_backend_metadata",
+                            None,
+                        )
+                        or self._backend_metadata
                     )
-                    error_payload["backend"] = _abm.resolved_backend
+                    error_payload["backend"] = getattr(
+                        _abm,
+                        "resolved_backend",
+                        None,
+                    )
                     error_payload["attempts"] = list(
                         getattr(
                             self,
