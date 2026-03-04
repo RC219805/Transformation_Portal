@@ -53,6 +53,35 @@ Grouping must preserve deterministic ordering:
 - grouping logic must not reorder image paths within a scene
 - `scene_id` derivation must be deterministic for equivalent input sets
 
+### Scene Identifier Generation
+
+Default `scene_id` generation MUST use a SHA1 hash of normalized relative image paths.
+
+Algorithm:
+1. normalize each image path relative to `dataset_root`
+2. convert to POSIX string representation
+3. sort paths lexicographically
+4. join paths with newline separators
+5. compute SHA1 digest of the resulting string and keep the first 12 hex chars
+
+Reference:
+
+```python
+scene_id = sha1(
+    "\n".join(
+        sorted(str(path.relative_to(dataset_root).as_posix()) for path in images)
+    ).encode("utf-8")
+).hexdigest()[:12]
+```
+
+Rationale:
+- prevents collisions across directories (for example `foo/a.jpg` vs `bar/a.jpg`)
+- deterministic across machines
+- stable under identical datasets
+
+Implementations MAY provide an explicit `scene_id_strategy` hook, but the default
+algorithm above MUST be used unless explicitly configured otherwise.
+
 ## Validity Requirements
 
 When reconstruction is enabled, a scene is reconstruction-eligible only if:
@@ -109,6 +138,24 @@ Phase B implementation sequence:
 
 Constraint:
 - no behavior change to current pipelines until reconstruction is enabled
+
+## Reconstruction Feature Gate
+
+Scene-level reconstruction is controlled by configuration flag:
+
+`lux_depth_v3.enable_reconstruction`
+
+Default value:
+- `enable_reconstruction = false`
+
+Behavior:
+- when `false`:
+  - scene groups are computed
+  - per-image pipeline executes unchanged
+  - reconstruction stage is skipped
+- when `true`:
+  - reconstruction is attempted for eligible scenes
+  - scenes that fail eligibility fall back to per-image behavior
 
 ## Alternatives Considered
 
