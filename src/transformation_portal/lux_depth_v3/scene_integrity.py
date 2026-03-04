@@ -6,6 +6,10 @@ import hashlib
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence
 
+import numpy as np
+
+from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams
+
 from ..ingest.canonical_json import dumps_json
 from .io_atomic import atomic_write_bytes
 from .manifest import compute_file_sha256
@@ -15,6 +19,11 @@ from .security import sanitize_path_component_nonlossy
 
 SCENE_MANIFEST_SCHEMA = "tp.scene_manifest.v1"
 SCENE_FINGERPRINT_SCHEMA = "tp.scene_fingerprint.v1"
+MAX_FOCAL_LENGTH = 10_000.0
+MAX_BASELINE = 1_000.0
+MIN_BASELINE = 1e-4
+DEFAULT_MAX_FORWARD_ANGLE_DEG = 60.0
+DEFAULT_MIN_PAIR_FRACTION = 0.3
 
 
 def scene_manifest_artifact_path(*, scene_id: str, output_dir: Path) -> Path:
@@ -81,6 +90,9 @@ def build_scene_manifest(
     }
     if camera_sidecar_payload:
         manifest["camera_sidecar"] = camera_sidecar_payload
+    camera_normalization = context.metadata.get("camera_normalization")
+    if isinstance(camera_normalization, Mapping):
+        manifest["camera_normalization"] = dict(camera_normalization)
     return manifest
 
 
@@ -172,6 +184,187 @@ def verify_scene_integrity(
             actual_digest = index_entry.get("sha256")
             if isinstance(expected_digest, str) and actual_digest != expected_digest:
                 raise RuntimeError(f"Scene integrity error: artifact hash mismatch for {relative_path}")
+
+
+def _frustum_overlap_ok_pair(
+    first: CameraWithProvenance,
+    second: CameraWithProvenance,
+    *,
+    max_forward_angle_deg: float,
+    require_mutual_facing: bool,
+) -> bool:
+    """Fast geometric proxy that estimates whether two cameras observe the same scene."""
+    rotation_a = np.asarray(first.params.extrinsics[:3, :3], dtype=np.float32)
+    translation_a = np.asarray(first.params.extrinsics[:3, 3], dtype=np.float32)
+    rotation_b = np.asarray(second.params.extrinsics[:3, :3], dtype=np.float32)
+    translation_b = np.asarray(second.params.extrinsics[:3, 3], dtype=np.float32)
+
+    forward_axis = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+    forward_a = rotation_a.T @ forward_axis
+    forward_b = rotation_b.T @ forward_axis
+    norm_a = float(np.linalg.norm(forward_a))
+    norm_b = float(np.linalg.norm(forward_b))
+    if norm_a <= 1e-8 or norm_b <= 1e-8:
+        return False
+    forward_a = forward_a / norm_a
+    forward_b = forward_b / norm_b
+
+    center_a = -rotation_a.T @ translation_a
+    center_b = -rotation_b.T @ translation_b
+    baseline = center_b - center_a
+    baseline_norm = float(np.linalg.norm(baseline))
+    if baseline_norm <= 1e-6:
+        return False
+    baseline_dir = baseline / baseline_norm
+
+    cosine_threshold = float(np.cos(np.deg2rad(max_forward_angle_deg)))
+    if float(forward_a @ forward_b) < cosine_threshold:
+        return False
+
+    if not require_mutual_facing:
+        return True
+    return bool(float(forward_a @ baseline_dir) > 0.0 and float(forward_b @ (-baseline_dir)) > 0.0)
+
+
+def _camera_graph_connected(*, num_cameras: int, overlap_matrix: Mapping[tuple[int, int], bool]) -> bool:
+    """Require a connected overlap graph to avoid disjoint multi-scene reconstructions."""
+    if num_cameras <= 1:
+        return True
+
+    graph: Dict[int, set[int]] = {index: set() for index in range(num_cameras)}
+    for (left, right), overlap_ok in overlap_matrix.items():
+        if overlap_ok:
+            graph[left].add(right)
+            graph[right].add(left)
+
+    visited: set[int] = set()
+    queue = [0]
+    while queue:
+        node = queue.pop(0)
+        if node in visited:
+            continue
+        visited.add(node)
+        queue.extend(neighbor for neighbor in graph[node] if neighbor not in visited)
+    return len(visited) == num_cameras
+
+
+def check_camera_geometry_sanity(
+    cameras: Sequence[CameraWithProvenance],
+    *,
+    min_pair_fraction: float = DEFAULT_MIN_PAIR_FRACTION,
+    max_forward_angle_deg: float = DEFAULT_MAX_FORWARD_ANGLE_DEG,
+    require_mutual_facing: bool = False,
+) -> None:
+    """Detect degenerate/exploded camera geometry before reconstruction."""
+    if len(cameras) < 2:
+        raise ValueError("Reconstruction requires >=2 cameras")
+
+    translations: list[np.ndarray] = []
+    for camera in cameras:
+        intrinsics = np.asarray(camera.params.intrinsics, dtype=np.float32)
+        rotation = np.asarray(camera.params.extrinsics[:3, :3], dtype=np.float32)
+        translation = np.asarray(camera.params.extrinsics[:3, 3], dtype=np.float32)
+
+        if not np.allclose(rotation @ rotation.T, np.eye(3, dtype=np.float32), atol=1e-2):
+            raise ValueError("Invalid rotation matrix")
+        if not np.isfinite(translation).all():
+            raise ValueError("Camera translation contains NaN/Inf")
+        focal_length_x = float(intrinsics[0, 0])
+        if focal_length_x <= 0.0 or focal_length_x > MAX_FOCAL_LENGTH:
+            raise ValueError("Suspicious focal length")
+        translations.append(translation)
+
+    stacked_translations = np.stack(translations).astype(np.float32)
+    spread = float(np.linalg.norm(stacked_translations.max(axis=0) - stacked_translations.min(axis=0)))
+    if spread < MIN_BASELINE:
+        raise ValueError("All cameras occupy same position")
+
+    baselines = [
+        float(np.linalg.norm(stacked_translations[i] - stacked_translations[j]))
+        for i in range(len(stacked_translations))
+        for j in range(i + 1, len(stacked_translations))
+    ]
+    baseline_array = np.asarray(baselines, dtype=np.float32)
+    if float(np.median(baseline_array)) < MIN_BASELINE:
+        raise ValueError("Degenerate camera baseline")
+    if float(np.max(baseline_array)) > MAX_BASELINE:
+        raise ValueError("Camera translation explosion detected")
+
+    overlap_matrix: Dict[tuple[int, int], bool] = {}
+    valid_pairs = 0
+    overlap_pairs = 0
+    for left in range(len(cameras)):
+        for right in range(left + 1, len(cameras)):
+            overlap_ok = _frustum_overlap_ok_pair(
+                cameras[left],
+                cameras[right],
+                max_forward_angle_deg=max_forward_angle_deg,
+                require_mutual_facing=require_mutual_facing,
+            )
+            overlap_matrix[(left, right)] = overlap_ok
+            valid_pairs += 1
+            if overlap_ok:
+                overlap_pairs += 1
+
+    if valid_pairs == 0:
+        raise ValueError("No valid camera pairs available for overlap check")
+    overlap_score = float(overlap_pairs / valid_pairs)
+    if overlap_score < float(min_pair_fraction):
+        raise ValueError(
+            "Insufficient frustum overlap for reconstruction "
+            f"(score={overlap_score:.3f}, threshold={float(min_pair_fraction):.3f})"
+        )
+    if not _camera_graph_connected(num_cameras=len(cameras), overlap_matrix=overlap_matrix):
+        raise ValueError("Camera overlap graph disconnected")
+
+
+def normalize_camera_poses(
+    cameras: Sequence[CameraWithProvenance],
+) -> tuple[tuple[CameraWithProvenance, ...], Dict[str, Any]]:
+    """Center and scale camera translations so median baseline is approximately 1.0."""
+    if len(cameras) < 2:
+        raise ValueError("Degenerate camera baseline during normalization")
+
+    translations = np.stack([camera.params.extrinsics[:3, 3].astype(np.float32) for camera in cameras]).astype(np.float32)
+    center = translations.mean(axis=0).astype(np.float32)
+    centered = translations - center
+    baselines = [
+        float(np.linalg.norm(centered[i] - centered[j])) for i in range(len(centered)) for j in range(i + 1, len(centered))
+    ]
+    median_baseline = float(np.median(np.asarray(baselines, dtype=np.float32)))
+    if not np.isfinite(median_baseline) or median_baseline <= 1e-6:
+        raise ValueError("Degenerate camera baseline during normalization")
+
+    scale = float(1.0 / median_baseline)
+    normalized_translations = (centered * scale).astype(np.float32)
+
+    normalized_cameras: list[CameraWithProvenance] = []
+    for camera, translation in zip(cameras, normalized_translations):
+        extrinsics = np.asarray(camera.params.extrinsics, dtype=np.float32).copy()
+        extrinsics[:3, 3] = translation
+        distortion = (
+            np.asarray(camera.params.distortion, dtype=np.float32).copy() if camera.params.distortion is not None else None
+        )
+        normalized_cameras.append(
+            CameraWithProvenance(
+                params=CameraParams(
+                    intrinsics=np.asarray(camera.params.intrinsics, dtype=np.float32).copy(),
+                    extrinsics=extrinsics,
+                    width=int(camera.params.width),
+                    height=int(camera.params.height),
+                    distortion=distortion,
+                    camera_id=camera.params.camera_id,
+                ),
+                provenance=camera.provenance,
+            )
+        )
+
+    return tuple(normalized_cameras), {
+        "center": [float(value) for value in center.tolist()],
+        "scale": scale,
+        "median_baseline": median_baseline,
+        "method": "centered_median_baseline",
+    }
 
 
 def compute_scene_fingerprint(

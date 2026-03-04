@@ -12,13 +12,17 @@ from unittest.mock import Mock, patch
 import pytest
 from PIL import Image
 
-from transformation_portal.depth.backends.protocol import LicenseRestrictionError
 from transformation_portal.lux_depth_v3.batch_stats import compute_batch_runtime_stats
 from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
 from transformation_portal.lux_depth_v3.orchestrator import ApexStrictGateError, EnhanceOrchestrator
 from transformation_portal.lux_depth_v3.scene_context import CameraProvenance, CameraWithProvenance
-from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams
+from transformation_portal.spatial_ai.reconstruction.contracts import (
+    CameraParams,
+)
+from transformation_portal.spatial_ai.reconstruction.contracts import (
+    LicenseRestrictionError as ReconstructionLicenseRestrictionError,
+)
 
 
 class TestBatchRuntimeStats:
@@ -570,7 +574,7 @@ class TestEnhanceBatch:
                     patch.object(orchestrator, "enhance_image", side_effect=_mock_enhance_image),
                 ):
                     orchestrator.run_scene_reconstruction_fn = Mock()
-                    with pytest.raises(LicenseRestrictionError, match="non_commercial_ok=True"):
+                    with pytest.raises(ReconstructionLicenseRestrictionError, match="non_commercial_ok=True"):
                         orchestrator.enhance_batch(input_dir)
 
                 assert orchestrator.run_scene_reconstruction_fn.call_count == 0
@@ -625,7 +629,7 @@ class TestEnhanceBatch:
                     patch.object(orchestrator, "enhance_image", side_effect=_mock_enhance_image),
                 ):
                     orchestrator.run_scene_reconstruction_fn = Mock()
-                    with pytest.raises(LicenseRestrictionError, match="accept_research_tools_license=True"):
+                    with pytest.raises(ReconstructionLicenseRestrictionError, match="accept_research_tools_license=True"):
                         orchestrator.enhance_batch(input_dir)
 
                 assert orchestrator.run_scene_reconstruction_fn.call_count == 0

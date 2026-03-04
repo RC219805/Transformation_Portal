@@ -86,8 +86,15 @@ from .reconstruction_runner import (
     write_scene_debug_bundle,
 )
 from .scene_context import SceneContext
-from .scene_groups import build_scene_groups
-from .scene_integrity import build_scene_manifest, compute_scene_fingerprint, verify_scene_integrity, write_scene_manifest
+from .scene_groups import SceneGroup, build_scene_groups
+from .scene_integrity import (
+    build_scene_manifest,
+    check_camera_geometry_sanity,
+    compute_scene_fingerprint,
+    normalize_camera_poses,
+    verify_scene_integrity,
+    write_scene_manifest,
+)
 from .scene_preflight import validate_scene_preflight, write_scene_preflight_artifact
 from .security import HashMode, sanitize_file_stem, sanitize_path_component_nonlossy
 from .v2_runner import V2Runner, find_v2_report
@@ -3153,18 +3160,18 @@ class EnhanceOrchestrator:
     def _run_scene_reconstruction_stage(
         self,
         *,
-        scene_groups: List[Any],
+        scene_groups: List[SceneGroup],
         results: List[Dict[str, Any]],
         dataset_root: Path,
     ) -> None:
         """Run gated scene-level reconstruction for eligible grouped scenes."""
         if not bool(getattr(self.config, "non_commercial_ok", False)):
-            raise LicenseRestrictionError(
+            raise ReconstructionLicenseRestrictionError(
                 "Scene reconstruction requires non_commercial_ok=True due to "
                 "Inria 3D Gaussian Splatting non-commercial license terms."
             )
         if not bool(getattr(self.config, "accept_research_tools_license", False)):
-            raise LicenseRestrictionError(
+            raise ReconstructionLicenseRestrictionError(
                 "Scene reconstruction requires accept_research_tools_license=True "
                 "to acknowledge research-only tool licensing constraints."
             )
@@ -3211,6 +3218,16 @@ class EnhanceOrchestrator:
                     scene.scene_id,
                 )
                 continue
+            try:
+                check_camera_geometry_sanity(cameras)
+                cameras, camera_normalization = normalize_camera_poses(cameras)
+            except ValueError as exc:
+                logger.warning(
+                    "Skipping reconstruction for scene %s: camera geometry validation failed (%s)",
+                    scene.scene_id,
+                    exc,
+                )
+                continue
             preflight_result = validate_scene_preflight(scene=scene, cameras=cameras)
             preflight_path = write_scene_preflight_artifact(
                 scene_id=scene.scene_id,
@@ -3230,7 +3247,10 @@ class EnhanceOrchestrator:
                 scene=scene,
                 dataset_root=dataset_root,
                 cameras=cameras,
-                metadata={"grouping_mode": str(getattr(self.config, "grouping_mode", "single"))},
+                metadata={
+                    "grouping_mode": str(getattr(self.config, "grouping_mode", "single")),
+                    "camera_normalization": camera_normalization,
+                },
             )
 
             segmentation_artifact_paths = tuple(

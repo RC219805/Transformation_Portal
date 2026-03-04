@@ -6,10 +6,7 @@ import hashlib
 from dataclasses import dataclass
 from itertools import groupby
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional, Sequence, Tuple
-
-if TYPE_CHECKING:
-    from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams
+from typing import List, Sequence, Tuple
 
 
 @dataclass(frozen=True)
@@ -17,13 +14,12 @@ class SceneGroup:
     """
     Logical grouping of images that belong to the same reconstruction scene.
 
-    Current behavior: 1 image per group (no behavior change).
-    Future: multi-view grouping + camera parameters.
+    Current behavior: deterministic scene IDs and image grouping only.
+    Camera resolution is handled by SceneContext/camera loader stages.
     """
 
     scene_id: str
     images: Tuple[Path, ...]
-    cameras: Optional[Tuple["CameraParams", ...]] = None
 
 
 def _normalize_relative_path(path: Path, dataset_root: Path) -> str:

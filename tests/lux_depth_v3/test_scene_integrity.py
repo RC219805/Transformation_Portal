@@ -11,7 +11,9 @@ from transformation_portal.lux_depth_v3.scene_context import CameraProvenance, C
 from transformation_portal.lux_depth_v3.scene_groups import SceneGroup, compute_scene_id
 from transformation_portal.lux_depth_v3.scene_integrity import (
     build_scene_manifest,
+    check_camera_geometry_sanity,
     compute_scene_fingerprint,
+    normalize_camera_poses,
     verify_scene_integrity,
 )
 from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams
@@ -194,3 +196,51 @@ def test_scene_fingerprint_ignores_non_identity_manifest_fields(tmp_path: Path):
     )
 
     assert baseline_fp == mutated_fp
+
+
+def test_check_camera_geometry_sanity_accepts_connected_overlap_graph(tmp_path: Path):
+    sidecar_path = tmp_path / "scene_cameras.json"
+    sidecar_path.write_text('{"schema":"tp.scene_cameras.v1","scenes":{}}', encoding="utf-8")
+    cameras = (_camera(0.0, sidecar_path), _camera(0.2, sidecar_path), _camera(0.4, sidecar_path))
+
+    check_camera_geometry_sanity(cameras)
+
+
+def test_check_camera_geometry_sanity_rejects_disconnected_overlap_graph(tmp_path: Path):
+    sidecar_path = tmp_path / "scene_cameras.json"
+    sidecar_path.write_text('{"schema":"tp.scene_cameras.v1","scenes":{}}', encoding="utf-8")
+    first = _camera(0.0, sidecar_path)
+    second = _camera(0.2, sidecar_path)
+    third = _camera(0.4, sidecar_path)
+
+    backward_extrinsics = np.eye(4, dtype=np.float32)
+    backward_extrinsics[:3, :3] = np.diag([-1.0, 1.0, -1.0])
+    backward_extrinsics[0, 3] = 0.8
+    disconnected = CameraWithProvenance(
+        params=CameraParams(
+            intrinsics=third.params.intrinsics.copy(),
+            extrinsics=backward_extrinsics,
+            width=third.params.width,
+            height=third.params.height,
+        ),
+        provenance=third.provenance,
+    )
+
+    with pytest.raises(ValueError, match="overlap graph disconnected|frustum overlap"):
+        check_camera_geometry_sanity((first, second, disconnected))
+
+
+def test_normalize_camera_poses_centers_and_scales_baseline(tmp_path: Path):
+    sidecar_path = tmp_path / "scene_cameras.json"
+    sidecar_path.write_text('{"schema":"tp.scene_cameras.v1","scenes":{}}', encoding="utf-8")
+    cameras = (_camera(2.0, sidecar_path), _camera(6.0, sidecar_path))
+
+    normalized, metadata = normalize_camera_poses(cameras)
+
+    first_tx = float(normalized[0].params.extrinsics[0, 3])
+    second_tx = float(normalized[1].params.extrinsics[0, 3])
+    assert pytest.approx(first_tx, rel=1e-6) == -0.5
+    assert pytest.approx(second_tx, rel=1e-6) == 0.5
+    assert metadata["method"] == "centered_median_baseline"
+    assert pytest.approx(float(metadata["scale"]), rel=1e-6) == 0.25
+    assert pytest.approx(float(metadata["median_baseline"]), rel=1e-6) == 4.0
