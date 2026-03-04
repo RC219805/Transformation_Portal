@@ -203,7 +203,11 @@ def test_check_camera_geometry_sanity_accepts_connected_overlap_graph(tmp_path: 
     sidecar_path.write_text('{"schema":"tp.scene_cameras.v1","scenes":{}}', encoding="utf-8")
     cameras = (_camera(0.0, sidecar_path), _camera(0.2, sidecar_path), _camera(0.4, sidecar_path))
 
-    check_camera_geometry_sanity(cameras)
+    health = check_camera_geometry_sanity(cameras)
+    assert health["largest_component"] == 3
+    assert health["num_components"] == 1
+    assert 0.0 <= float(health["risk_score"]) <= 1.0
+    assert float(health["pair_overlap_fraction"]) >= 0.3
 
 
 def test_check_camera_geometry_sanity_rejects_disconnected_overlap_graph(tmp_path: Path):
@@ -244,3 +248,32 @@ def test_normalize_camera_poses_centers_and_scales_baseline(tmp_path: Path):
     assert metadata["method"] == "centered_median_baseline"
     assert pytest.approx(float(metadata["scale"]), rel=1e-6) == 0.25
     assert pytest.approx(float(metadata["median_baseline"]), rel=1e-6) == 4.0
+
+
+def test_build_scene_manifest_includes_dataset_health_hash(tmp_path: Path):
+    output_root = tmp_path / "output"
+    segmentation_artifact = output_root / "segmentation" / "scene_a_masks.npz"
+    segmentation_artifact.parent.mkdir(parents=True, exist_ok=True)
+    segmentation_artifact.write_bytes(b"segmentation")
+
+    sidecar_path = tmp_path / "scene_cameras.json"
+    sidecar_path.write_text('{"schema":"tp.scene_cameras.v1","scenes":{}}', encoding="utf-8")
+    context = _context(tmp_path, sidecar_path)
+    health = check_camera_geometry_sanity(context.cameras)
+    context = SceneContext.build(
+        scene=SceneGroup(scene_id=context.scene_id, images=context.images),
+        dataset_root=context.dataset_root,
+        cameras=context.cameras,
+        metadata={"grouping_mode": "parent_dir", "dataset_health": health},
+    )
+
+    scene_manifest = build_scene_manifest(
+        context=context,
+        output_root=output_root,
+        segmentation_artifact_paths=(segmentation_artifact,),
+        camera_sidecar_path=sidecar_path,
+    )
+
+    assert "dataset_health" in scene_manifest
+    assert "dataset_health_hash" in scene_manifest
+    assert len(str(scene_manifest["dataset_health_hash"])) == 64

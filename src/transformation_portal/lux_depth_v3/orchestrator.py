@@ -3219,7 +3219,26 @@ class EnhanceOrchestrator:
                 )
                 continue
             try:
-                check_camera_geometry_sanity(cameras)
+                dataset_health = check_camera_geometry_sanity(cameras)
+                threshold_raw = os.getenv("TP_RECONSTRUCTION_RISK_THRESHOLD", "0.65")
+                try:
+                    risk_threshold = float(threshold_raw)
+                except ValueError:
+                    logger.warning(
+                        "Invalid TP_RECONSTRUCTION_RISK_THRESHOLD=%r; using default 0.65",
+                        threshold_raw,
+                    )
+                    risk_threshold = 0.65
+                risk_score = float(dataset_health["risk_score"])
+                if risk_score > risk_threshold:
+                    message = (
+                        f"Dataset risk score {risk_score:.3f} exceeds threshold "
+                        f"{risk_threshold:.3f} for scene {scene.scene_id}"
+                    )
+                    scene_results[0]["reconstruction_risk_gate_message"] = message
+                    scene_results[0]["reconstruction_dataset_health"] = dataset_health
+                    logger.warning("RECONSTRUCTION_DATASET_RISK_GATE: %s", message)
+                    continue
                 cameras, camera_normalization = normalize_camera_poses(cameras)
             except ValueError as exc:
                 logger.warning(
@@ -3250,6 +3269,7 @@ class EnhanceOrchestrator:
                 metadata={
                     "grouping_mode": str(getattr(self.config, "grouping_mode", "single")),
                     "camera_normalization": camera_normalization,
+                    "dataset_health": dataset_health,
                 },
             )
 

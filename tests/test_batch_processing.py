@@ -756,6 +756,101 @@ class TestEnhanceBatch:
                 assert orchestrator.run_scene_reconstruction_fn.call_count == 0
                 assert not any(result.get("reconstruction_report_path") for result in results)
 
+    def test_enhance_batch_skips_scene_reconstruction_when_risk_gate_exceeded(self, batch_temp_workspace, monkeypatch):
+        """Reconstruction gate must skip when dataset risk score exceeds configured threshold."""
+        import numpy as np
+
+        config = EnhanceConfig(
+            model_variant=ModelVariant.METRIC_LARGE,
+            enable_v2=False,
+            enable_parallel_processing=False,
+            emit_run_card=False,
+            enable_reconstruction=True,
+            grouping_mode="parent_dir",
+            cameras_sidecar_path="dummy.json",
+            non_commercial_ok=True,
+            accept_research_tools_license=True,
+        )
+        monkeypatch.setenv("TP_RECONSTRUCTION_RISK_THRESHOLD", "-0.10")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry") as mock_registry_class:
+                mock_backend = Mock()
+                mock_backend.ensure_available.return_value = None
+                mock_backend.name = "da3"
+
+                mock_registry = Mock()
+                mock_registry.get_backend.return_value = mock_backend
+                mock_registry_class.return_value = mock_registry
+
+                orchestrator = EnhanceOrchestrator(
+                    config=config,
+                    output_root=tmpdir_path,
+                )
+
+                input_dir = batch_temp_workspace["input_dir"]
+                discovered = [
+                    input_dir / "scene_a" / "view_1.jpg",
+                    input_dir / "scene_a" / "view_2.jpg",
+                ]
+
+                def _mock_enhance_image(image_input, input_root=None):  # noqa: ARG001
+                    return {
+                        "status": "ok",
+                        "image": str(image_input.path),
+                        "runtime_s": 1.0,
+                    }
+
+                with (
+                    patch("transformation_portal.lux_depth_v3.orchestrator.discover_images", return_value=discovered),
+                    patch.object(orchestrator, "enhance_image", side_effect=_mock_enhance_image),
+                    patch(
+                        "transformation_portal.lux_depth_v3.orchestrator.load_scene_cameras",
+                        return_value=(
+                            CameraWithProvenance(
+                                params=CameraParams(
+                                    intrinsics=np.array(
+                                        [[1000.0, 0.0, 32.0], [0.0, 1000.0, 32.0], [0.0, 0.0, 1.0]],
+                                        dtype=np.float32,
+                                    ),
+                                    extrinsics=np.eye(4, dtype=np.float32),
+                                    width=64,
+                                    height=64,
+                                ),
+                                provenance=CameraProvenance(source="sidecar", confidence="high", file="a.json"),
+                            ),
+                            CameraWithProvenance(
+                                params=CameraParams(
+                                    intrinsics=np.array(
+                                        [[1000.0, 0.0, 32.0], [0.0, 1000.0, 32.0], [0.0, 0.0, 1.0]],
+                                        dtype=np.float32,
+                                    ),
+                                    extrinsics=np.array(
+                                        [
+                                            [1.0, 0.0, 0.0, 0.1],
+                                            [0.0, 1.0, 0.0, 0.0],
+                                            [0.0, 0.0, 1.0, 0.0],
+                                            [0.0, 0.0, 0.0, 1.0],
+                                        ],
+                                        dtype=np.float32,
+                                    ),
+                                    width=64,
+                                    height=64,
+                                ),
+                                provenance=CameraProvenance(source="sidecar", confidence="high", file="a.json"),
+                            ),
+                        ),
+                    ),
+                ):
+                    orchestrator.run_scene_reconstruction_fn = Mock()
+                    results = orchestrator.enhance_batch(input_dir)
+
+                assert orchestrator.run_scene_reconstruction_fn.call_count == 0
+                risk_messages = [result.get("reconstruction_risk_gate_message") for result in results]
+                assert any(isinstance(message, str) and "exceeds threshold" in message for message in risk_messages)
+
     def test_enhance_batch_skips_scene_reconstruction_when_preflight_invalid(self, batch_temp_workspace):
         """Reconstruction gate must skip scenes when scene preflight validation fails."""
         config = EnhanceConfig(
@@ -807,7 +902,7 @@ class TestEnhanceBatch:
                     dtype=np.float32,
                 )
                 extrinsics = np.eye(4, dtype=np.float32)
-                degenerate_cameras = (
+                preflight_invalid_cameras = (
                     CameraWithProvenance(
                         params=CameraParams(
                             intrinsics=intrinsics.copy(),
@@ -820,9 +915,17 @@ class TestEnhanceBatch:
                     CameraWithProvenance(
                         params=CameraParams(
                             intrinsics=intrinsics.copy(),
-                            extrinsics=extrinsics.copy(),
-                            width=64,
-                            height=64,
+                            extrinsics=np.array(
+                                [
+                                    [1.0, 0.0, 0.0, 0.1],
+                                    [0.0, 1.0, 0.0, 0.0],
+                                    [0.0, 0.0, 1.0, 0.0],
+                                    [0.0, 0.0, 0.0, 1.0],
+                                ],
+                                dtype=np.float32,
+                            ),
+                            width=2048,
+                            height=2048,
                         ),
                         provenance=CameraProvenance(source="sidecar", confidence="high", file="a.json"),
                     ),
@@ -833,7 +936,7 @@ class TestEnhanceBatch:
                     patch.object(orchestrator, "enhance_image", side_effect=_mock_enhance_image),
                     patch(
                         "transformation_portal.lux_depth_v3.orchestrator.load_scene_cameras",
-                        return_value=degenerate_cameras,
+                        return_value=preflight_invalid_cameras,
                     ),
                 ):
                     orchestrator.run_scene_reconstruction_fn = Mock()
