@@ -280,6 +280,7 @@ class EnhanceConfig:
     cameras_sidecar_path: Optional[str] = None  # Path to tp.scene_cameras.v1 sidecar JSON
     reconstruction_iterations: int = 1000
     reconstruction_tier: str = "apex_research"
+    emit_scene_debug_bundle: bool = False  # Emit per-scene debug bundle for reconstruction triage
 
     @property
     def enable_pbr(self) -> bool:

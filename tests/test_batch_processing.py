@@ -350,6 +350,7 @@ class TestEnhanceBatch:
             grouping_mode="parent_dir",
             non_commercial_ok=True,
             accept_research_tools_license=True,
+            emit_scene_debug_bundle=True,
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -463,6 +464,20 @@ class TestEnhanceBatch:
                 ]
                 assert len(scene_manifest_paths) == 1
                 assert Path(scene_manifest_paths[0]).exists()
+                debug_manifest_paths = [
+                    result.get("reconstruction_debug_manifest_path")
+                    for result in results
+                    if result.get("reconstruction_debug_manifest_path")
+                ]
+                debug_cameras_paths = [
+                    result.get("reconstruction_debug_cameras_path")
+                    for result in results
+                    if result.get("reconstruction_debug_cameras_path")
+                ]
+                assert len(debug_manifest_paths) == 1
+                assert len(debug_cameras_paths) == 1
+                assert Path(debug_manifest_paths[0]).exists()
+                assert Path(debug_cameras_paths[0]).exists()
 
     def test_enhance_batch_raises_reconstruction_license_restriction_when_not_acknowledged(self, batch_temp_workspace):
         """Reconstruction must fail closed when non-commercial license flags are not acknowledged."""

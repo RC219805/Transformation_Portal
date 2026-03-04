@@ -438,6 +438,56 @@ def test_collect_run_card_artifacts_includes_reconstruction_scene_manifest(tmp_p
     assert artifacts_by_path["reconstruction/abc123_scene_manifest.json"]["artifact_type"] == "reconstruction_scene_manifest"
 
 
+def test_collect_run_card_artifacts_includes_reconstruction_debug_bundle_artifacts(tmp_path: Path):
+    output_root = tmp_path / "output"
+    manifests_dir = output_root / "manifests"
+    logs_dir = output_root / "logs"
+    v2_dir = output_root / "v2"
+    reconstruction_debug_dir = output_root / "reconstruction" / "abc123" / "debug"
+
+    manifests_dir.mkdir(parents=True, exist_ok=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    v2_dir.mkdir(parents=True, exist_ok=True)
+    reconstruction_debug_dir.mkdir(parents=True, exist_ok=True)
+
+    debug_scene_manifest = reconstruction_debug_dir / "scene_manifest.json"
+    debug_scene_manifest.write_text("{}", encoding="utf-8")
+    debug_cameras = reconstruction_debug_dir / "cameras.json"
+    debug_cameras.write_text("[]", encoding="utf-8")
+    debug_preview = reconstruction_debug_dir / "reprojection_preview.png"
+    debug_preview.write_bytes(b"png")
+
+    orch = object.__new__(EnhanceOrchestrator)
+    orch.manifests_dir = manifests_dir
+    orch.logs_dir = logs_dir
+    orch.v2_dir = v2_dir
+
+    result = {
+        "status": "ok",
+        "reconstruction_debug_manifest_path": str(debug_scene_manifest),
+        "reconstruction_debug_cameras_path": str(debug_cameras),
+        "reconstruction_debug_preview_path": str(debug_preview),
+    }
+    artifact_paths = orch._collect_run_card_artifact_paths([result])
+    artifact_index = _build_artifact_index(output_root, artifact_paths)
+    artifacts_by_path = {entry["relative_path"]: entry for entry in artifact_index}
+
+    assert "reconstruction/abc123/debug/scene_manifest.json" in artifacts_by_path
+    assert "reconstruction/abc123/debug/cameras.json" in artifacts_by_path
+    assert "reconstruction/abc123/debug/reprojection_preview.png" in artifacts_by_path
+    assert (
+        artifacts_by_path["reconstruction/abc123/debug/scene_manifest.json"]["artifact_type"]
+        == "reconstruction_debug_scene_manifest_json"
+    )
+    assert (
+        artifacts_by_path["reconstruction/abc123/debug/cameras.json"]["artifact_type"] == "reconstruction_debug_cameras_json"
+    )
+    assert (
+        artifacts_by_path["reconstruction/abc123/debug/reprojection_preview.png"]["artifact_type"]
+        == "reconstruction_debug_preview_png"
+    )
+
+
 def test_apex_v2_depth_handoff_missing_raises_strict_gate(tmp_path: Path):
     depth_path = tmp_path / "depth" / "image_depth.png"
     depth_path.parent.mkdir(parents=True, exist_ok=True)

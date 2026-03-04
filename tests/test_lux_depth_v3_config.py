@@ -86,6 +86,8 @@ class TestEnhanceConfig:
         assert config.reconstruction_iterations == 1000
         assert hasattr(config, "reconstruction_tier")
         assert config.reconstruction_tier == "apex_research"
+        assert hasattr(config, "emit_scene_debug_bundle")
+        assert config.emit_scene_debug_bundle is False
 
     @pytest.mark.parametrize("mode", ["fail", "skip", "v2-auto"])
     def test_enhance_config_accepts_valid_depth_fallback(self, mode):

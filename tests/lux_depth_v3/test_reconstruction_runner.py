@@ -11,6 +11,7 @@ from transformation_portal.lux_depth_v3.reconstruction_runner import (
     diagnostics_artifact_path,
     manifest_artifact_path,
     run_scene_reconstruction,
+    write_scene_debug_bundle,
 )
 from transformation_portal.lux_depth_v3.scene_context import CameraProvenance, CameraWithProvenance, SceneContext
 from transformation_portal.lux_depth_v3.scene_groups import SceneGroup, compute_scene_id
@@ -170,3 +171,37 @@ def test_run_scene_reconstruction_raises_on_degenerate_camera_baseline(tmp_path:
             iterations=50,
             tier="apex_research",
         )
+
+
+def test_write_scene_debug_bundle_writes_manifest_cameras_and_inputs(tmp_path: Path):
+    sidecar_path = tmp_path / "scene_cameras.json"
+    sidecar_path.write_text("{}", encoding="utf-8")
+    context = _context_with_cameras(
+        tmp_path,
+        cameras=(
+            _camera_with_provenance(2.0),
+            _camera_with_provenance(6.0),
+        ),
+    )
+
+    segmentation_artifact = tmp_path / "segmentation" / "scene_a_masks.npz"
+    segmentation_artifact.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(segmentation_artifact, wall=np.ones((64, 64), dtype=np.float32))
+
+    scene_manifest = {
+        "schema": "tp.scene_manifest.v1",
+        "scene_id": context.scene_id,
+        "images": [{"path": str(path), "sha256": "dummy"} for path in context.images],
+        "cameras": [{"signature": "abc123"} for _ in context.cameras],
+        "segmentation_artifacts": [{"path": str(segmentation_artifact), "sha256": "dummy"}],
+    }
+    debug_paths = write_scene_debug_bundle(
+        context=context,
+        segmentation_artifact_paths=(segmentation_artifact, segmentation_artifact),
+        scene_manifest=scene_manifest,
+        output_dir=tmp_path / "out",
+    )
+
+    assert debug_paths["scene_manifest_path"].exists()
+    assert debug_paths["cameras_path"].exists()
+    assert (tmp_path / "out" / "debug" / "inputs" / context.images[0].name).exists()

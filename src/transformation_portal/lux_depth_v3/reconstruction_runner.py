@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
+import shutil
 from itertools import combinations
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict, Mapping, Sequence
 
+import cv2 as _cv2
 import numpy as np
 
 from transformation_portal.spatial_ai.reconstruction.contracts import Scene3D
@@ -135,6 +137,142 @@ def _write_scene_diagnostics(
     ).encode("utf-8")
     atomic_write_bytes(diagnostics_path, diagnostics_bytes)
     return diagnostics_path
+
+
+def write_scene_debug_bundle(
+    *,
+    context: SceneContext,
+    segmentation_artifact_paths: Sequence[Path],
+    scene_manifest: Mapping[str, Any],
+    output_dir: Path,
+) -> Dict[str, Path]:
+    """Write scene debug bundle assets for visual inspection and offline triage.
+
+    Bundle layout:
+    - debug/scene_manifest.json
+    - debug/cameras.json
+    - debug/inputs/<image_name>
+    - debug/segmentation_overlay/<image_stem>_overlay.png (best-effort)
+    - debug/reprojection_preview.png (best-effort contact sheet)
+    """
+    debug_dir = output_dir / "debug"
+    inputs_dir = debug_dir / "inputs"
+    overlays_dir = debug_dir / "segmentation_overlay"
+    debug_dir.mkdir(parents=True, exist_ok=True)
+    inputs_dir.mkdir(parents=True, exist_ok=True)
+    overlays_dir.mkdir(parents=True, exist_ok=True)
+
+    scene_manifest_path = debug_dir / "scene_manifest.json"
+    scene_manifest_bytes = (
+        dumps_json(
+            dict(scene_manifest),
+            sort_keys=True,
+            indent=2,
+            allow_nan=False,
+        )
+        + "\n"
+    ).encode("utf-8")
+    atomic_write_bytes(scene_manifest_path, scene_manifest_bytes)
+
+    cameras_payload = [
+        {
+            "intrinsics": camera.params.intrinsics.tolist(),
+            "extrinsics": camera.params.extrinsics.tolist(),
+            "width": int(camera.params.width),
+            "height": int(camera.params.height),
+            "distortion": camera.params.distortion.tolist() if camera.params.distortion is not None else None,
+            "camera_id": camera.params.camera_id,
+            "provenance": {
+                "source": camera.provenance.source,
+                "confidence": camera.provenance.confidence,
+                "file": camera.provenance.file,
+            },
+        }
+        for camera in context.cameras
+    ]
+    cameras_path = debug_dir / "cameras.json"
+    cameras_bytes = (
+        dumps_json(
+            cameras_payload,
+            sort_keys=True,
+            indent=2,
+            allow_nan=False,
+        )
+        + "\n"
+    ).encode("utf-8")
+    atomic_write_bytes(cameras_path, cameras_bytes)
+
+    copied_input_paths: list[Path] = []
+    for image_path in context.images:
+        if not image_path.exists():
+            continue
+        destination = inputs_dir / image_path.name
+        shutil.copy2(image_path, destination)
+        copied_input_paths.append(destination)
+
+    reprojection_preview_path = debug_dir / "reprojection_preview.png"
+    for image_path, mask_artifact_path in zip(context.images, segmentation_artifact_paths):
+        if not image_path.exists() or not mask_artifact_path.exists():
+            continue
+        image = _cv2.imread(str(image_path), _cv2.IMREAD_COLOR)
+        if image is None:
+            continue
+        union_mask = _load_union_mask(mask_artifact_path)
+        if union_mask is None:
+            continue
+        if union_mask.shape != image.shape[:2]:
+            union_mask = _cv2.resize(
+                union_mask.astype(np.uint8),
+                (image.shape[1], image.shape[0]),
+                interpolation=_cv2.INTER_NEAREST,
+            ).astype(bool)
+        overlay = image.copy()
+        overlay[union_mask] = (0, 255, 0)
+        blended = _cv2.addWeighted(image, 0.7, overlay, 0.3, 0)
+        _cv2.imwrite(str(overlays_dir / f"{image_path.stem}_overlay.png"), blended)
+
+    preview_images = []
+    for image_path in copied_input_paths[:4]:
+        image = _cv2.imread(str(image_path), _cv2.IMREAD_COLOR)
+        if image is not None:
+            preview_images.append(image)
+    if preview_images:
+        target_height = min(image.shape[0] for image in preview_images)
+        resized = [
+            _cv2.resize(
+                image,
+                (max(1, int(round(image.shape[1] * (target_height / image.shape[0])))), target_height),
+                interpolation=_cv2.INTER_AREA,
+            )
+            for image in preview_images
+        ]
+        contact_sheet = np.concatenate(resized, axis=1)
+        _cv2.imwrite(str(reprojection_preview_path), contact_sheet)
+
+    output_paths = {
+        "scene_manifest_path": scene_manifest_path,
+        "cameras_path": cameras_path,
+    }
+    if reprojection_preview_path.exists():
+        output_paths["reprojection_preview_path"] = reprojection_preview_path
+    return output_paths
+
+
+def _load_union_mask(mask_artifact_path: Path) -> np.ndarray | None:
+    """Load segmentation NPZ and return union mask as boolean array."""
+    try:
+        with np.load(mask_artifact_path, allow_pickle=False) as payload:
+            mask_arrays = [np.asarray(payload[key], dtype=np.float32) for key in sorted(payload.files)]
+    except Exception:
+        return None
+    if not mask_arrays:
+        return None
+    union_mask = np.zeros(mask_arrays[0].shape, dtype=bool)
+    for mask in mask_arrays:
+        if mask.shape != union_mask.shape:
+            return None
+        union_mask |= mask > 0.0
+    return union_mask
 
 
 def run_scene_reconstruction(

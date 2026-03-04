@@ -79,7 +79,12 @@ from .pbr import generate_pbr_maps
 from .pbr_writer import write_pbr_maps
 from .postprocessing import Postprocessor
 from .provenance import ExiftoolNotFoundError, ProvenanceError, capture_provenance
-from .reconstruction_runner import diagnostics_artifact_path, manifest_artifact_path, run_scene_reconstruction
+from .reconstruction_runner import (
+    diagnostics_artifact_path,
+    manifest_artifact_path,
+    run_scene_reconstruction,
+    write_scene_debug_bundle,
+)
 from .scene_context import SceneContext
 from .scene_groups import build_scene_groups
 from .scene_integrity import build_scene_manifest, compute_scene_fingerprint, verify_scene_integrity, write_scene_manifest
@@ -413,6 +418,16 @@ def _infer_artifact_type(relative_path: str) -> str:
         return "pbr_aux"
 
     if rel.startswith("reconstruction/"):
+        if "/debug/" in rel:
+            if name == "scene_manifest.json":
+                return "reconstruction_debug_scene_manifest_json"
+            if name == "cameras.json":
+                return "reconstruction_debug_cameras_json"
+            if name == "reprojection_preview.png":
+                return "reconstruction_debug_preview_png"
+            if name.endswith("_overlay.png"):
+                return "reconstruction_debug_overlay_png"
+            return "reconstruction_debug_aux"
         if name.endswith("_scene_manifest.json"):
             return "reconstruction_scene_manifest"
         if name.endswith("_manifest.json"):
@@ -3260,6 +3275,22 @@ class EnhanceOrchestrator:
                 )
                 scene_results[0]["reconstruction_scene_manifest_path"] = str(scene_manifest_path)
                 scene_results[0]["reconstruction_scene_fingerprint"] = scene_fingerprint
+                if bool(getattr(self.config, "emit_scene_debug_bundle", False)):
+                    debug_paths = write_scene_debug_bundle(
+                        context=context,
+                        segmentation_artifact_paths=segmentation_artifact_paths,
+                        scene_manifest=scene_manifest,
+                        output_dir=reconstruction_output_dir,
+                    )
+                    debug_scene_manifest = debug_paths.get("scene_manifest_path")
+                    if isinstance(debug_scene_manifest, Path) and debug_scene_manifest.exists():
+                        scene_results[0]["reconstruction_debug_manifest_path"] = str(debug_scene_manifest)
+                    debug_cameras = debug_paths.get("cameras_path")
+                    if isinstance(debug_cameras, Path) and debug_cameras.exists():
+                        scene_results[0]["reconstruction_debug_cameras_path"] = str(debug_cameras)
+                    debug_preview = debug_paths.get("reprojection_preview_path")
+                    if isinstance(debug_preview, Path) and debug_preview.exists():
+                        scene_results[0]["reconstruction_debug_preview_path"] = str(debug_preview)
 
                 report_path = self._maybe_use_reconstruction_cache(
                     scene_id=scene.scene_id,
@@ -3350,6 +3381,9 @@ class EnhanceOrchestrator:
                 "segmentation_mask_path",
                 "reconstruction_preflight_path",
                 "reconstruction_scene_manifest_path",
+                "reconstruction_debug_manifest_path",
+                "reconstruction_debug_cameras_path",
+                "reconstruction_debug_preview_path",
                 "reconstruction_manifest_path",
                 "reconstruction_report_path",
                 "reconstruction_diagnostics_path",
