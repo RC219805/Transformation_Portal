@@ -82,6 +82,7 @@ from .provenance import ExiftoolNotFoundError, ProvenanceError, capture_provenan
 from .reconstruction_runner import diagnostics_artifact_path, run_scene_reconstruction
 from .scene_context import SceneContext
 from .scene_groups import build_scene_groups
+from .scene_preflight import validate_scene_preflight, write_scene_preflight_artifact
 from .security import HashMode, sanitize_file_stem, sanitize_path_component_nonlossy
 from .v2_runner import V2Runner, find_v2_report
 
@@ -413,6 +414,8 @@ def _infer_artifact_type(relative_path: str) -> str:
     if rel.startswith("reconstruction/"):
         if name.endswith("_reconstruction_report.json"):
             return "reconstruction_report"
+        if name.endswith("_preflight.json"):
+            return "reconstruction_preflight_json"
         if name.endswith("_diagnostics.json"):
             return "reconstruction_diagnostics_json"
         return "reconstruction_aux"
@@ -3188,6 +3191,20 @@ class EnhanceOrchestrator:
                     scene.scene_id,
                 )
                 continue
+            preflight_result = validate_scene_preflight(scene=scene, cameras=cameras)
+            preflight_path = write_scene_preflight_artifact(
+                scene_id=scene.scene_id,
+                result=preflight_result,
+                output_dir=self.reconstruction_dir,
+            )
+            scene_results[0]["reconstruction_preflight_path"] = str(preflight_path)
+            if not preflight_result.valid:
+                logger.warning(
+                    "Skipping reconstruction for scene %s: preflight failed (%s)",
+                    scene.scene_id,
+                    preflight_result.reason,
+                )
+                continue
 
             context = SceneContext.build(
                 scene=scene,
@@ -3248,6 +3265,7 @@ class EnhanceOrchestrator:
                 "v2_report_path",
                 "v2_output_path",
                 "segmentation_mask_path",
+                "reconstruction_preflight_path",
                 "reconstruction_report_path",
                 "reconstruction_diagnostics_path",
             ):

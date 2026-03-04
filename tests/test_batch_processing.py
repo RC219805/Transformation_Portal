@@ -18,6 +18,7 @@ from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVarian
 from transformation_portal.lux_depth_v3.input_manager import ImageInput
 from transformation_portal.lux_depth_v3.orchestrator import ApexStrictGateError, EnhanceOrchestrator
 from transformation_portal.lux_depth_v3.scene_context import CameraProvenance, CameraWithProvenance
+from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams
 
 
 class TestBatchRuntimeStats:
@@ -721,6 +722,94 @@ class TestEnhanceBatch:
 
                 assert orchestrator.run_scene_reconstruction_fn.call_count == 0
                 assert not any(result.get("reconstruction_report_path") for result in results)
+
+    def test_enhance_batch_skips_scene_reconstruction_when_preflight_invalid(self, batch_temp_workspace):
+        """Reconstruction gate must skip scenes when scene preflight validation fails."""
+        config = EnhanceConfig(
+            model_variant=ModelVariant.METRIC_LARGE,
+            enable_v2=False,
+            enable_parallel_processing=False,
+            emit_run_card=False,
+            enable_reconstruction=True,
+            grouping_mode="parent_dir",
+            cameras_sidecar_path="dummy.json",
+            non_commercial_ok=True,
+            accept_research_tools_license=True,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry") as mock_registry_class:
+                mock_backend = Mock()
+                mock_backend.ensure_available.return_value = None
+                mock_backend.name = "da3"
+
+                mock_registry = Mock()
+                mock_registry.get_backend.return_value = mock_backend
+                mock_registry_class.return_value = mock_registry
+
+                orchestrator = EnhanceOrchestrator(
+                    config=config,
+                    output_root=tmpdir_path,
+                )
+
+                input_dir = batch_temp_workspace["input_dir"]
+                discovered = [
+                    input_dir / "scene_a" / "view_1.jpg",
+                    input_dir / "scene_a" / "view_2.jpg",
+                ]
+
+                def _mock_enhance_image(image_input, input_root=None):  # noqa: ARG001
+                    return {
+                        "status": "ok",
+                        "image": str(image_input.path),
+                        "runtime_s": 1.0,
+                    }
+
+                import numpy as np
+
+                intrinsics = np.array(
+                    [[1000.0, 0.0, 32.0], [0.0, 1000.0, 32.0], [0.0, 0.0, 1.0]],
+                    dtype=np.float32,
+                )
+                extrinsics = np.eye(4, dtype=np.float32)
+                degenerate_cameras = (
+                    CameraWithProvenance(
+                        params=CameraParams(
+                            intrinsics=intrinsics.copy(),
+                            extrinsics=extrinsics.copy(),
+                            width=64,
+                            height=64,
+                        ),
+                        provenance=CameraProvenance(source="sidecar", confidence="high", file="a.json"),
+                    ),
+                    CameraWithProvenance(
+                        params=CameraParams(
+                            intrinsics=intrinsics.copy(),
+                            extrinsics=extrinsics.copy(),
+                            width=64,
+                            height=64,
+                        ),
+                        provenance=CameraProvenance(source="sidecar", confidence="high", file="a.json"),
+                    ),
+                )
+
+                with (
+                    patch("transformation_portal.lux_depth_v3.orchestrator.discover_images", return_value=discovered),
+                    patch.object(orchestrator, "enhance_image", side_effect=_mock_enhance_image),
+                    patch(
+                        "transformation_portal.lux_depth_v3.orchestrator.load_scene_cameras",
+                        return_value=degenerate_cameras,
+                    ),
+                ):
+                    orchestrator.run_scene_reconstruction_fn = Mock()
+                    results = orchestrator.enhance_batch(input_dir)
+
+                assert orchestrator.run_scene_reconstruction_fn.call_count == 0
+                assert not any(result.get("reconstruction_report_path") for result in results)
+                preflight_paths = [result.get("reconstruction_preflight_path") for result in results]
+                assert any(path for path in preflight_paths if isinstance(path, str) and Path(path).exists())
 
     def test_batch_manifest_structure(self, batch_temp_workspace):
         """Test that batch manifest has correct structure."""
