@@ -274,6 +274,13 @@ class EnhanceConfig:
     emit_report: bool = True  # Emit processing report
     emit_run_card: bool = True  # Emit run card for reproducibility
 
+    # Phase B1: optional scene-level reconstruction (off by default)
+    enable_reconstruction: bool = False
+    grouping_mode: str = "single"  # Options: single, parent_dir
+    cameras_sidecar_path: Optional[str] = None  # Path to tp.scene_cameras.v1 sidecar JSON
+    reconstruction_iterations: int = 1000
+    reconstruction_tier: str = "apex_research"
+
     @property
     def enable_pbr(self) -> bool:
         """Alias for generate_pbr (backward compatibility)."""

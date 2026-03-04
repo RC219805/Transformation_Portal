@@ -1,10 +1,15 @@
-"""Scene-group scaffolding for future multi-view reconstruction."""
+"""Scene-group utilities for deterministic multi-view reconstruction grouping."""
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
+from itertools import groupby
 from pathlib import Path
-from typing import List, Tuple
+from typing import TYPE_CHECKING, List, Optional, Sequence, Tuple
+
+if TYPE_CHECKING:
+    from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams
 
 
 @dataclass(frozen=True)
@@ -18,23 +23,75 @@ class SceneGroup:
 
     scene_id: str
     images: Tuple[Path, ...]
+    cameras: Optional[Tuple["CameraParams", ...]] = None
 
 
-def build_scene_groups(images: List[Path]) -> List[SceneGroup]:
+def _normalize_relative_path(path: Path, dataset_root: Path) -> str:
+    """Normalize path relative to dataset root with stable cross-platform formatting."""
+    root_resolved = dataset_root.resolve()
+    path_resolved = path.resolve()
+    try:
+        rel = path_resolved.relative_to(root_resolved)
+    except ValueError:
+        # Fall back to absolute normalized path when input is outside dataset root.
+        rel = path_resolved
+    return rel.as_posix().lower()
+
+
+def _compute_scene_id(images: Tuple[Path, ...], dataset_root: Path) -> str:
+    """Compute deterministic scene id from normalized relative image paths."""
+    normalized = [_normalize_relative_path(p, dataset_root) for p in images]
+    payload = "\n".join(sorted(normalized)).encode("utf-8")
+    return hashlib.sha1(payload, usedforsecurity=False).hexdigest()[:12]
+
+
+def _group_key(path: Path, dataset_root: Path) -> str:
+    """Group key for parent-directory grouping mode."""
+    normalized = _normalize_relative_path(path, dataset_root)
+    if "/" not in normalized:
+        return ""
+    return normalized.rsplit("/", 1)[0]
+
+
+def build_scene_groups(
+    images: Sequence[Path],
+    dataset_root: Path,
+    grouping_mode: str = "single",
+) -> List[SceneGroup]:
     """
-    Phase A scaffold: preserve existing per-image processing.
+    Build deterministic scene groups from image paths.
 
-    Each image forms its own scene group.
+    Modes:
+    - single: each image forms its own scene (default, inert behavior)
+    - parent_dir: group images by normalized relative parent directory
     """
-    groups = []
+    mode = grouping_mode.strip().lower()
+    image_list = [Path(img) for img in images]
 
-    for img in images:
-        scene_id = img.with_suffix("").as_posix()
-        groups.append(
-            SceneGroup(
-                scene_id=scene_id,
-                images=(img,),
+    if mode == "single":
+        groups: List[SceneGroup] = []
+        for img in image_list:
+            group_images = (img,)
+            groups.append(
+                SceneGroup(
+                    scene_id=_compute_scene_id(group_images, dataset_root),
+                    images=group_images,
+                )
             )
-        )
+        return groups
 
-    return groups
+    if mode == "parent_dir":
+        # Stable ordering regardless of caller order.
+        sorted_images = sorted(image_list, key=lambda p: _normalize_relative_path(p, dataset_root))
+        groups: List[SceneGroup] = []
+        for _, grouped_iter in groupby(sorted_images, key=lambda p: _group_key(p, dataset_root)):
+            grouped_images = tuple(grouped_iter)
+            groups.append(
+                SceneGroup(
+                    scene_id=_compute_scene_id(grouped_images, dataset_root),
+                    images=grouped_images,
+                )
+            )
+        return groups
+
+    raise ValueError(f"Unknown grouping_mode '{grouping_mode}'. Expected one of: single, parent_dir")
