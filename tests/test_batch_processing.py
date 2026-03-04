@@ -276,6 +276,63 @@ class TestEnhanceBatch:
                     for failure in failures:
                         assert "error" in failure
 
+    def test_enhance_batch_scene_group_bridge_preserves_output_parity(self, batch_temp_workspace):
+        """Scene-group iterator bridge must preserve sorted per-image processing order and outputs."""
+        config = EnhanceConfig(
+            model_variant=ModelVariant.METRIC_LARGE,
+            enable_v2=False,
+            enable_parallel_processing=False,
+            emit_run_card=False,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+
+            with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry") as mock_registry_class:
+                mock_backend = Mock()
+                mock_backend.ensure_available.return_value = None
+                mock_backend.name = "da3"
+
+                mock_registry = Mock()
+                mock_registry.get_backend.return_value = mock_backend
+                mock_registry_class.return_value = mock_registry
+
+                orchestrator = EnhanceOrchestrator(
+                    config=config,
+                    output_root=tmpdir_path,
+                )
+
+                discovered = [
+                    batch_temp_workspace["input_dir"] / "test_2.jpg",
+                    batch_temp_workspace["input_dir"] / "test_0.jpg",
+                    batch_temp_workspace["input_dir"] / "test_1.jpg",
+                ]
+                expected_order = sorted(discovered)
+
+                def _mock_enhance_image(image_input, input_root=None):  # noqa: ARG001
+                    return {
+                        "status": "ok",
+                        "image": str(image_input.path),
+                        "runtime_s": 1.0,
+                    }
+
+                from transformation_portal.lux_depth_v3.scene_groups import build_scene_groups as real_build_scene_groups
+
+                with (
+                    patch("transformation_portal.lux_depth_v3.orchestrator.discover_images", return_value=discovered),
+                    patch(
+                        "transformation_portal.lux_depth_v3.orchestrator.build_scene_groups",
+                        wraps=real_build_scene_groups,
+                    ) as mock_build_scene_groups,
+                    patch.object(orchestrator, "enhance_image", side_effect=_mock_enhance_image) as mock_enhance_image,
+                ):
+                    results = orchestrator.enhance_batch(batch_temp_workspace["input_dir"])
+
+                mock_build_scene_groups.assert_called_once_with(expected_order)
+                called_order = [call.args[0].path for call in mock_enhance_image.call_args_list]
+                assert called_order == expected_order
+                assert [result["image"] for result in results] == [str(path) for path in expected_order]
+
     def test_batch_manifest_structure(self, batch_temp_workspace):
         """Test that batch manifest has correct structure."""
         config = EnhanceConfig(

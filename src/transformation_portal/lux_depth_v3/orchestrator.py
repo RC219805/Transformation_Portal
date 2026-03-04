@@ -75,6 +75,7 @@ from .pbr import generate_pbr_maps
 from .pbr_writer import write_pbr_maps
 from .postprocessing import Postprocessor
 from .provenance import ExiftoolNotFoundError, ProvenanceError, capture_provenance
+from .scene_groups import build_scene_groups
 from .security import HashMode, sanitize_file_stem, sanitize_path_component_nonlossy
 from .v2_runner import V2Runner, find_v2_report
 
@@ -2960,8 +2961,10 @@ class EnhanceOrchestrator:
         discovery_config = DiscoveryConfig(strict_mode=self.config.strict_inputs)
         images = discover_images(input_dir, discovery_config, image_extensions, output_dir=self.output_root)
 
-        # Phase 2: Use parallel batch processing if enabled
-        image_inputs = [ImageInput(img) for img in sorted(images)]
+        # Inert scene-group bridge: preserve existing per-image behavior and order.
+        sorted_images = sorted(images)
+        scene_groups = build_scene_groups(sorted_images)
+        image_inputs = [ImageInput(img) for scene in scene_groups for img in scene.images]
 
         if self._use_parallel and len(image_inputs) >= 4:
             logger.info(f"Using parallel batch processing for {len(image_inputs)} images")
