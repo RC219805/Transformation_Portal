@@ -79,7 +79,7 @@ from .pbr import generate_pbr_maps
 from .pbr_writer import write_pbr_maps
 from .postprocessing import Postprocessor
 from .provenance import ExiftoolNotFoundError, ProvenanceError, capture_provenance
-from .reconstruction_runner import run_scene_reconstruction
+from .reconstruction_runner import diagnostics_artifact_path, run_scene_reconstruction
 from .scene_context import SceneContext
 from .scene_groups import build_scene_groups
 from .security import HashMode, sanitize_file_stem, sanitize_path_component_nonlossy
@@ -413,6 +413,8 @@ def _infer_artifact_type(relative_path: str) -> str:
     if rel.startswith("reconstruction/"):
         if name.endswith("_reconstruction_report.json"):
             return "reconstruction_report"
+        if name.endswith("_diagnostics.json"):
+            return "reconstruction_diagnostics_json"
         return "reconstruction_aux"
 
     return "artifact"
@@ -3191,6 +3193,7 @@ class EnhanceOrchestrator:
                 scene=scene,
                 dataset_root=dataset_root,
                 cameras=cameras,
+                metadata={"grouping_mode": str(getattr(self.config, "grouping_mode", "single"))},
             )
 
             try:
@@ -3214,7 +3217,17 @@ class EnhanceOrchestrator:
 
             scene_results[0]["reconstruction_report_path"] = str(report_path)
             scene_results[0]["reconstruction_scene_id"] = scene.scene_id
-            logger.info("Scene reconstruction completed: scene_id=%s report=%s", scene.scene_id, report_path)
+            diagnostics_path = diagnostics_artifact_path(scene_id=scene.scene_id, output_dir=self.reconstruction_dir)
+            if diagnostics_path.exists():
+                scene_results[0]["reconstruction_diagnostics_path"] = str(diagnostics_path)
+            else:
+                logger.warning("Scene diagnostics missing for %s: %s", scene.scene_id, diagnostics_path)
+            logger.info(
+                "Scene reconstruction completed: scene_id=%s report=%s diagnostics=%s",
+                scene.scene_id,
+                report_path,
+                diagnostics_path,
+            )
 
     def _collect_run_card_artifact_paths(
         self, results: List[Dict[str, Any]], batch_manifest_path: Optional[Path] = None
@@ -3236,6 +3249,7 @@ class EnhanceOrchestrator:
                 "v2_output_path",
                 "segmentation_mask_path",
                 "reconstruction_report_path",
+                "reconstruction_diagnostics_path",
             ):
                 direct_path_value = result.get(direct_path_key)
                 if isinstance(direct_path_value, str) and direct_path_value:

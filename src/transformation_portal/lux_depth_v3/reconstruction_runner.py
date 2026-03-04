@@ -58,6 +58,73 @@ def _normalize_scene_scale(scene: Scene3D) -> Dict[str, float | str]:
     return scale_metadata
 
 
+def diagnostics_artifact_path(*, scene_id: str, output_dir: Path) -> Path:
+    """Compute deterministic diagnostics artifact path for a scene."""
+    safe_scene_id = sanitize_path_component_nonlossy(scene_id)
+    return output_dir / f"{safe_scene_id}_diagnostics.json"
+
+
+def _scene_geometry_stats(scene: Scene3D) -> Dict[str, float | int | list[float]]:
+    """Compute compact geometry diagnostics for diffable scene introspection."""
+    positions = scene.splats.positions
+    bbox_min = positions.min(axis=0).astype(np.float32)
+    bbox_max = positions.max(axis=0).astype(np.float32)
+    bbox_diag = float(np.linalg.norm((bbox_max - bbox_min).astype(np.float32)))
+    return {
+        "point_count": int(scene.splats.num_gaussians),
+        "bbox_min": [float(v) for v in bbox_min.tolist()],
+        "bbox_max": [float(v) for v in bbox_max.tolist()],
+        "bbox_diag": bbox_diag,
+    }
+
+
+def _write_scene_diagnostics(
+    *,
+    scene: Scene3D,
+    context: SceneContext,
+    output_dir: Path,
+    scale_metadata: Dict[str, float | str],
+) -> Path:
+    """Write deterministic scene diagnostics artifact."""
+    baselines = [float(np.linalg.norm(a.extrinsics[:3, 3] - b.extrinsics[:3, 3])) for a, b in combinations(scene.cameras, 2)]
+    baseline_array = np.asarray(baselines, dtype=np.float32)
+    diagnostics_payload: Dict[str, object] = {
+        "schema": "tp.scene_diagnostics.v1",
+        "scene_id": context.scene_id,
+        "inputs": {
+            "image_count": len(context.images),
+            "grouping_mode": context.metadata.get("grouping_mode"),
+        },
+        "cameras": {
+            "count": len(scene.cameras),
+            "baseline_median": float(np.median(baseline_array)),
+            "baseline_min": float(np.min(baseline_array)),
+            "baseline_max": float(np.max(baseline_array)),
+            "sources": [camera.provenance.source for camera in context.cameras],
+            "confidences": [camera.provenance.confidence for camera in context.cameras],
+        },
+        "geometry": _scene_geometry_stats(scene),
+        "scale": scale_metadata,
+        "quality": {
+            "rmse": float(scene.rmse),
+            "iterations": int(scene.iteration),
+            "convergence": scene.convergence,
+        },
+    }
+    diagnostics_path = diagnostics_artifact_path(scene_id=context.scene_id, output_dir=output_dir)
+    diagnostics_bytes = (
+        dumps_json(
+            diagnostics_payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+        + "\n"
+    ).encode("utf-8")
+    atomic_write_bytes(diagnostics_path, diagnostics_bytes)
+    return diagnostics_path
+
+
 def run_scene_reconstruction(
     *,
     context: SceneContext,
@@ -79,6 +146,12 @@ def run_scene_reconstruction(
         gamma=1.0,
     )
     scale_metadata = _normalize_scene_scale(reconstructed_scene)
+    diagnostics_path = _write_scene_diagnostics(
+        scene=reconstructed_scene,
+        context=context,
+        output_dir=output_dir,
+        scale_metadata=scale_metadata,
+    )
 
     camera_sources = [camera.provenance.source for camera in context.cameras]
     camera_confidences = [camera.provenance.confidence for camera in context.cameras]
@@ -98,6 +171,7 @@ def run_scene_reconstruction(
         "convergence": reconstructed_scene.convergence,
         "num_gaussians": int(reconstructed_scene.splats.num_gaussians),
         "scene_scale": scale_metadata,
+        "diagnostics_path": str(diagnostics_path),
     }
     if camera_provenance_files:
         payload["camera_provenance_files"] = camera_provenance_files

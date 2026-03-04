@@ -310,6 +310,38 @@ def test_collect_run_card_artifacts_includes_reconstruction_report(tmp_path: Pat
     assert artifacts_by_path["reconstruction/abc123_reconstruction_report.json"]["artifact_type"] == "reconstruction_report"
 
 
+def test_collect_run_card_artifacts_includes_reconstruction_diagnostics(tmp_path: Path):
+    output_root = tmp_path / "output"
+    manifests_dir = output_root / "manifests"
+    logs_dir = output_root / "logs"
+    v2_dir = output_root / "v2"
+    reconstruction_dir = output_root / "reconstruction"
+
+    manifests_dir.mkdir(parents=True, exist_ok=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    v2_dir.mkdir(parents=True, exist_ok=True)
+    reconstruction_dir.mkdir(parents=True, exist_ok=True)
+
+    diagnostics_artifact = reconstruction_dir / "abc123_diagnostics.json"
+    diagnostics_artifact.write_text("{}", encoding="utf-8")
+
+    orch = object.__new__(EnhanceOrchestrator)
+    orch.manifests_dir = manifests_dir
+    orch.logs_dir = logs_dir
+    orch.v2_dir = v2_dir
+
+    result = {
+        "status": "ok",
+        "reconstruction_diagnostics_path": str(diagnostics_artifact),
+    }
+    artifact_paths = orch._collect_run_card_artifact_paths([result])
+    artifact_index = _build_artifact_index(output_root, artifact_paths)
+    artifacts_by_path = {entry["relative_path"]: entry for entry in artifact_index}
+
+    assert "reconstruction/abc123_diagnostics.json" in artifacts_by_path
+    assert artifacts_by_path["reconstruction/abc123_diagnostics.json"]["artifact_type"] == "reconstruction_diagnostics_json"
+
+
 def test_apex_v2_depth_handoff_missing_raises_strict_gate(tmp_path: Path):
     depth_path = tmp_path / "depth" / "image_depth.png"
     depth_path.parent.mkdir(parents=True, exist_ok=True)

@@ -7,7 +7,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from transformation_portal.lux_depth_v3.reconstruction_runner import run_scene_reconstruction
+from transformation_portal.lux_depth_v3.reconstruction_runner import diagnostics_artifact_path, run_scene_reconstruction
 from transformation_portal.lux_depth_v3.scene_context import CameraProvenance, CameraWithProvenance, SceneContext
 from transformation_portal.lux_depth_v3.scene_groups import SceneGroup, compute_scene_id
 from transformation_portal.spatial_ai.reconstruction.contracts import CameraParams, GaussianSplat, Scene3D
@@ -67,6 +67,7 @@ def _context_with_cameras(tmp_path: Path, cameras: tuple[CameraWithProvenance, .
         scene=scene,
         dataset_root=dataset_root,
         cameras=cameras,
+        metadata={"grouping_mode": "parent_dir"},
     )
 
 
@@ -99,11 +100,24 @@ def test_run_scene_reconstruction_normalizes_scale_and_writes_metadata(tmp_path:
         )
 
     payload = json.loads(report_path.read_text(encoding="utf-8"))
+    diagnostics_path = diagnostics_artifact_path(scene_id=context.scene_id, output_dir=tmp_path / "out")
+    diagnostics_payload = json.loads(diagnostics_path.read_text(encoding="utf-8"))
+
+    assert diagnostics_path.exists()
+    assert payload["diagnostics_path"] == str(diagnostics_path)
     assert payload["scene_scale"]["method"] == "median_baseline"
     assert pytest.approx(payload["scene_scale"]["scale_factor"], rel=1e-6) == 0.25
     assert pytest.approx(payload["scene_scale"]["baseline_before"], rel=1e-6) == 4.0
     assert pytest.approx(payload["scene_scale"]["baseline_after"], rel=1e-6) == 1.0
     assert 0.1 < payload["scene_scale"]["baseline_after"] < 10.0
+    assert diagnostics_payload["schema"] == "tp.scene_diagnostics.v1"
+    assert diagnostics_payload["inputs"]["image_count"] == 2
+    assert diagnostics_payload["inputs"]["grouping_mode"] == "parent_dir"
+    assert diagnostics_payload["cameras"]["count"] == 2
+    assert pytest.approx(diagnostics_payload["cameras"]["baseline_median"], rel=1e-6) == 1.0
+    assert diagnostics_payload["geometry"]["point_count"] == 2
+    assert diagnostics_payload["scale"]["method"] == "median_baseline"
+    assert pytest.approx(diagnostics_payload["scale"]["scale_factor"], rel=1e-6) == 0.25
 
     assert pytest.approx(float(reconstructed_scene.splats.positions[0, 0]), rel=1e-6) == 0.5
     assert pytest.approx(float(reconstructed_scene.cameras[0].extrinsics[0, 3]), rel=1e-6) == 0.5
