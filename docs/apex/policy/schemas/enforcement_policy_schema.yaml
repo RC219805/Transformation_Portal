@@ -1,0 +1,82 @@
+# Schema: Enforcement Policy
+# File: enforcement_policy.yaml
+
+schema_enforcement_policy:
+  type: object
+  required:
+    - schema_version
+    - evidence_gates
+    - statistical_methods
+    - sample_size_requirements
+  properties:
+    schema_version:
+      type: string
+      pattern: "^\\d+\\.\\d+\\.\\d+$"
+
+    evidence_gates:
+      type: object
+      properties:
+        shadow_mode:
+          $ref: "#/definitions/evidence_gate"
+        enforce_mode:
+          $ref: "#/definitions/evidence_gate"
+
+    statistical_methods:
+      type: object
+      properties:
+        distribution_comparison:
+          type: object
+          properties:
+            method:
+              type: string
+              enum: ["mann_whitney_u", "bootstrap_ci", "welch_t"]
+            alpha:
+              type: number
+              minimum: 0.0
+              maximum: 1.0
+
+        outlier_detection:
+          type: object
+          properties:
+            method:
+              type: string
+              enum: ["median_mad", "iqr", "zscore"]
+            threshold:
+              type: number
+              minimum: 0.0
+
+    sample_size_requirements:
+      type: object
+      properties:
+        p50:
+          type: integer
+          minimum: 1
+        p95:
+          type: integer
+          minimum: 1
+        p99:
+          type: integer
+          minimum: 1
+
+definitions:
+  evidence_gate:
+    type: object
+    required:
+      - description
+      - min_sample_size
+      - allow_synthetic_data
+    properties:
+      description:
+        type: string
+      min_sample_size:
+        type: integer
+        minimum: 1
+      allow_synthetic_data:
+        type: boolean
+      required_baseline_age_days:
+        type: integer
+        minimum: 1
+      confidence_level:
+        type: number
+        minimum: 0.0
+        maximum: 1.0

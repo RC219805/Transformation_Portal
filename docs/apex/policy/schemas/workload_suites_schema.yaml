@@ -1,0 +1,134 @@
+# Schema: Workload Suites
+# File: workload_suites.yaml
+
+schema_workload_suites:
+  type: object
+  required:
+    - schema_version
+    - golden_suite
+    - canary_suite
+    - fuzz_suite
+  properties:
+    schema_version:
+      type: string
+      pattern: "^\\d+\\.\\d+\\.\\d+$"
+
+    golden_suite:
+      $ref: "#/definitions/workload_suite"
+
+    canary_suite:
+      $ref: "#/definitions/workload_suite"
+
+    fuzz_suite:
+      $ref: "#/definitions/fuzz_suite"
+
+    ci_lanes:
+      type: object
+      additionalProperties:
+        type: object
+        properties:
+          workload:
+            type: string
+          mode:
+            type: string
+            enum: ["synthetic", "real"]
+          max_duration_min:
+            type: integer
+            minimum: 1
+          sample_size:
+            type: [string, integer]
+          backends:
+            type: array
+            items:
+              type: string
+
+definitions:
+  workload_suite:
+    type: object
+    required:
+      - description
+      - fixture_dir
+      - change_policy
+      - usage
+    properties:
+      description:
+        type: string
+      fixture_dir:
+        type: string
+      images:
+        type: array
+        items:
+          oneOf:
+            - type: string  # Simple path (e.g., for canary/fuzz suites)
+            - type: object  # Structured metadata (e.g., for golden suite)
+              required:
+                - name
+                - path
+              properties:
+                name:
+                  type: string
+                  description: "Image identifier (e.g., pool_luxury_4k.jpg)"
+                path:
+                  type: string
+                  description: "Relative path from fixture_dir"
+                scene_type:
+                  type: string
+                  description: "Scene category (e.g., pool, aerial, interior)"
+                dimensions:
+                  type: array
+                  items:
+                    type: integer
+                  minItems: 2
+                  maxItems: 2
+                pixel_count:
+                  type: integer
+                  minimum: 1
+                characteristics:
+                  type: array
+                  items:
+                    type: string
+                rationale:
+                  type: string
+      size:
+        type: integer
+        minimum: 1
+      selection_criteria:
+        type: array
+        items:
+          type: string
+      change_policy:
+        type: object
+        properties:
+          requires_adr:
+            type: boolean
+          requires_pr:
+            type: boolean
+          approval:
+            type: string
+          min_notice_days:
+            type: integer
+            minimum: 0
+      usage:
+        type: array
+        items:
+          type: string
+
+  fuzz_suite:
+    type: object
+    required:
+      - description
+      - generation_script
+      - usage
+    properties:
+      description:
+        type: string
+      generation_script:
+        type: string
+      scenarios:
+        type: array
+        items:
+          type: string
+      usage:
+        type: array
+        items:
+          type: string

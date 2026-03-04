@@ -1,0 +1,137 @@
+# Schema: Performance Budgets
+# File: performance_budgets.yaml
+
+schema_performance_budgets:
+  type: object
+  required:
+    - schema_version
+    - effective_date
+    - review_date
+    - policy_owner
+    - budgets
+  properties:
+    schema_version:
+      type: string
+      pattern: "^\\d+\\.\\d+\\.\\d+$"
+      description: "Semantic version of this policy schema"
+
+    effective_date:
+      type: string
+      format: date
+      description: "When this policy becomes active (ISO 8601 date)"
+
+    review_date:
+      type: string
+      format: date
+      description: "When this policy must be reviewed (quarterly recommended)"
+
+    policy_owner:
+      type: string
+      description: "GitHub username responsible for this policy"
+
+    baseline:
+      type: object
+      properties:
+        source:
+          type: string
+          enum: ["ledger", "synthetic"]
+        minimum_sample_size:
+          type: integer
+          minimum: 1
+        confidence_level:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+
+    budgets:
+      type: array
+      items:
+        type: object
+        required:
+          - workflow_version
+          - bucket_name
+          - stability_tier
+          - thresholds
+          - enforcement
+        properties:
+          workflow_version:
+            type: string
+            enum: ["v1", "v2"]
+
+          bucket_name:
+            type: string
+            description: "Must match bucket names in DEFAULT_BUCKETS"
+
+          stability_tier:
+            type: string
+            enum: ["stable", "canary", "experimental"]
+
+          thresholds:
+            type: object
+            required:
+              - p50_sec
+              - p95_sec
+              - max_regression_pct
+            properties:
+              p50_sec:
+                type: number
+                minimum: 0
+              p95_sec:
+                type: number
+                minimum: 0
+              max_regression_pct:
+                type: number
+                minimum: 0
+              warn_regression_pct:
+                type: number
+                minimum: 0
+
+          enforcement:
+            type: object
+            required:
+              - mode
+              - effective_from
+            properties:
+              mode:
+                type: string
+                enum: ["shadow", "enforce", "disabled"]
+              effective_from:
+                type: string
+                format: date
+              review_required:
+                type: boolean
+
+          notes:
+            type: string
+            description: "Optional rationale and evidence links"
+
+    tier_policies:
+      type: object
+      properties:
+        stable:
+          $ref: "#/definitions/tier_policy"
+        canary:
+          $ref: "#/definitions/tier_policy"
+        experimental:
+          $ref: "#/definitions/tier_policy"
+
+definitions:
+  tier_policy:
+    type: object
+    required:
+      - description
+      - required_baseline_days
+      - min_sample_size
+      - max_change_frequency
+    properties:
+      description:
+        type: string
+      required_baseline_days:
+        type: integer
+        minimum: 1
+      min_sample_size:
+        type: integer
+        minimum: 1
+      max_change_frequency:
+        type: string
+        enum: ["weekly", "monthly", "quarterly"]

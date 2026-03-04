@@ -1,0 +1,106 @@
+# Schema: Governance Rules
+# File: governance_rules.yaml
+
+schema_governance_rules:
+  type: object
+  required:
+    - schema_version
+    - waivers
+    - budget_changes
+    - incidents
+  properties:
+    schema_version:
+      type: string
+      pattern: "^\\d+\\.\\d+\\.\\d+$"
+
+    waivers:
+      type: object
+      required:
+        - allowed_scopes
+        - required_fields
+        - labels
+        - expiry
+      properties:
+        allowed_scopes:
+          type: array
+          items:
+            type: string
+            enum: ["single_bucket", "single_zone", "workflow_version"]
+
+        required_fields:
+          type: array
+          items:
+            type: string
+
+        labels:
+          type: object
+          properties:
+            pr_label:
+              type: string
+            tracking_label:
+              type: string
+
+        expiry:
+          type: object
+          properties:
+            default_days:
+              type: integer
+              minimum: 1
+            max_days:
+              type: integer
+              minimum: 1
+            auto_close_on_expiry:
+              type: boolean
+
+    budget_changes:
+      type: object
+      properties:
+        required_evidence:
+          type: array
+          items:
+            type: string
+        required_review:
+          type: object
+          properties:
+            label:
+              type: string
+            min_approvers:
+              type: integer
+              minimum: 1
+        documentation:
+          type: object
+          properties:
+            changelog_required:
+              type: boolean
+            adr_required_for_major_changes:
+              type: boolean
+
+    incidents:
+      type: object
+      properties:
+        triggers:
+          type: array
+          items:
+            type: object
+            properties:
+              condition:
+                type: string
+              severity:
+                type: string
+                enum: ["low", "medium", "high", "critical"]
+              auto_create_issue:
+                type: boolean
+
+        issue_template:
+          type: object
+          properties:
+            title_format:
+              type: string
+            labels:
+              type: array
+              items:
+                type: string
+            assignees:
+              type: array
+              items:
+                type: string
