@@ -99,7 +99,7 @@ echo -e "\n${BLUE}[2/7] Flake8 (Critical Errors)${NC}"
 echo -e "${YELLOW}→ Running flake8 with CI configuration...${NC}"
 echo -e "${YELLOW}   Checks: E9 (syntax), F63 (invalid), F7 (syntax), F82 (undefined)${NC}"
 
-if flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics; then
+if flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=.venv,__pycache__,.git,.tox,.mypy_cache,.pytest_cache,build,dist,*.egg-info; then
     echo -e "${GREEN}✓ Flake8 passed (no critical errors)${NC}"
 else
     echo -e "${RED}✗ Flake8 found critical errors${NC}"
