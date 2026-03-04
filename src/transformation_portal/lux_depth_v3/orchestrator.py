@@ -792,18 +792,10 @@ class EnhanceOrchestrator:
         # Injectable seam for lightweight reconstruction tests.
         self.run_scene_reconstruction_fn: Callable[..., Path] = run_scene_reconstruction
 
-        # Per-batch / per-image state (set during enhance_batch)
-        self._backend_metadata: BackendSelectionMetadata = BackendSelectionMetadata(
-            requested_backend=None,
-            resolved_backend="pending",
-            resolution_status="pending",
-            resolution_reason=None,
-            model_id="",
-            device=config.depth_device,
-            attempts=[],
-        )
+        # Per-batch / per-image state (set during enhance_batch).
+        # Preserve backend selection resolved in _initialize_depth_backend().
         self._active_batch_id: Optional[str] = None
-        self._active_backend_metadata: Optional[BackendSelectionMetadata] = None
+        self._active_backend_metadata: Optional[BackendSelectionMetadata] = self._backend_metadata
         self._active_depth_attempts: List[Dict[str, Any]] = []
         self._active_selected_attempt_index: Optional[int] = None
 
